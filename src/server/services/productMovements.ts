@@ -32,6 +32,8 @@ export const productMovementPaymentStatuses = [
   "NOT_APPLICABLE",
 ] as const;
 
+export const productMovementArchiveModes = ["ACTIVE", "ARCHIVED", "ALL"] as const;
+
 export const productMovementSortKeys = [
   "date",
   "type",
@@ -44,6 +46,7 @@ export const productMovementSortKeys = [
 
 export type ProductMovementDocumentType = (typeof productMovementDocumentTypes)[number];
 export type ProductMovementPaymentStatus = (typeof productMovementPaymentStatuses)[number];
+export type ProductMovementArchiveMode = (typeof productMovementArchiveModes)[number];
 export type ProductMovementSortKey = (typeof productMovementSortKeys)[number];
 
 export type ProductMovementJournalInput = {
@@ -59,6 +62,7 @@ export type ProductMovementJournalInput = {
   authorSearch?: string | null;
   senderSearch?: string | null;
   recipientSearch?: string | null;
+  archiveMode?: ProductMovementArchiveMode | null;
   page?: number;
   pageSize?: number;
   sortBy?: ProductMovementSortKey;
@@ -234,6 +238,7 @@ const toNumberOrNull = (value: Prisma.Decimal | number | string | null) => {
 const roundMoney = (value: number) => Math.round(value * 100) / 100;
 
 const editableStockDocumentTypes = new Set(["STOCK_RECEIVING", "TRANSFER", "WRITE_OFF"]);
+const stockDocumentArchiveReferenceType = "STOCK_DOCUMENT_ARCHIVE";
 const stockReceivingArchiveReferenceType = "STOCK_RECEIVING_ARCHIVE";
 
 const isEditableStockDocumentType = (
@@ -834,20 +839,8 @@ const buildBaseConditions = async (
   const baseConditions: Prisma.Sql[] = [
     Prisma.sql`p."organizationId" = ${user.organizationId}`,
     Prisma.sql`s."organizationId" = ${user.organizationId}`,
+    Prisma.sql`COALESCE(m."referenceType", '') <> ${stockDocumentArchiveReferenceType}`,
     Prisma.sql`COALESCE(m."referenceType", '') <> ${stockReceivingArchiveReferenceType}`,
-    Prisma.sql`
-      NOT (
-        m."referenceType" = 'STOCK_RECEIVING'
-        AND EXISTS (
-          SELECT 1
-          FROM "StockMovement" archive_m
-          INNER JOIN "Store" archive_s ON archive_s."id" = archive_m."storeId"
-          WHERE archive_m."referenceType" = ${stockReceivingArchiveReferenceType}
-            AND archive_m."referenceId" = m."referenceId"
-            AND archive_s."organizationId" = s."organizationId"
-        )
-      )
-    `,
   ];
 
   if (!userHasAllStoreAccess(user)) {
@@ -906,6 +899,31 @@ export const listProductMovementJournal = async (
   finalConditions.push(...buildTextFilterCondition('"authorName"', input.authorSearch));
   finalConditions.push(...buildTextFilterCondition('"senderName"', input.senderSearch));
   finalConditions.push(...buildTextFilterCondition('"recipientName"', input.recipientSearch));
+  const archiveExistsCondition = Prisma.sql`
+    EXISTS (
+      SELECT 1
+      FROM "StockMovement" archive_m
+      INNER JOIN "Store" archive_s ON archive_s."id" = archive_m."storeId"
+      WHERE archive_s."organizationId" = ${user.organizationId}
+        AND (
+          (
+            archive_m."referenceType" = ${stockDocumentArchiveReferenceType}
+            AND archive_m."referenceId" = movement_enriched."id"
+          )
+          OR (
+            movement_enriched."documentType" = 'STOCK_RECEIVING'
+            AND archive_m."referenceType" = ${stockReceivingArchiveReferenceType}
+            AND archive_m."referenceId" = movement_enriched."documentReferenceId"
+          )
+        )
+    )
+  `;
+  const archiveMode = input.archiveMode ?? "ACTIVE";
+  if (archiveMode === "ACTIVE") {
+    finalConditions.push(Prisma.sql`NOT ${archiveExistsCondition}`);
+  } else if (archiveMode === "ARCHIVED") {
+    finalConditions.push(archiveExistsCondition);
+  }
 
   const cte = buildProductMovementJournalCte(buildWhereSql(baseConditions));
   const finalWhereSql = buildWhereSql(finalConditions);

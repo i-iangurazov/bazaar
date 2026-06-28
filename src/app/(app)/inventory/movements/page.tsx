@@ -90,6 +90,7 @@ const statusOptions = [
 ] as const;
 
 const paymentStatusOptions = ["PAID", "PARTIAL", "UNPAID", "REFUNDED", "NOT_APPLICABLE"] as const;
+const archiveModeOptions = ["ACTIVE", "ARCHIVED", "ALL"] as const;
 const sortOptions = ["date", "type", "status", "amount", "positions", "author", "store"] as const;
 
 type SortKey = (typeof sortOptions)[number];
@@ -145,6 +146,7 @@ const ProductMovementsPage = () => {
     Object.values(CustomerOrderStatus),
     allValue,
   );
+  const archiveMode = parseOption(searchParams.get("archiveMode"), archiveModeOptions, "ACTIVE");
   const senderSearch = searchParams.get("senderSearch") ?? "";
   const recipientSearch = searchParams.get("recipientSearch") ?? "";
   const authorSearch = searchParams.get("authorSearch") ?? "";
@@ -157,6 +159,7 @@ const ProductMovementsPage = () => {
   const hasSecondaryFilters =
     paymentStatus !== allValue ||
     orderStatus !== allValue ||
+    archiveMode !== "ACTIVE" ||
     Boolean(senderSearch.trim()) ||
     Boolean(recipientSearch.trim()) ||
     Boolean(authorSearch.trim());
@@ -211,6 +214,7 @@ const ProductMovementsPage = () => {
       status: status === allValue ? undefined : status,
       paymentStatus: paymentStatus === allValue ? undefined : paymentStatus,
       orderStatus: orderStatus === allValue ? undefined : orderStatus,
+      archiveMode,
       senderSearch: senderSearch.trim() || undefined,
       recipientSearch: recipientSearch.trim() || undefined,
       authorSearch: authorSearch.trim() || undefined,
@@ -228,9 +232,9 @@ const ProductMovementsPage = () => {
   const [archiveReason, setArchiveReason] = useState("");
   const archiveReasonTrimmed = archiveReason.trim();
 
-  const archiveMutation = trpc.inventory.archiveStockReceivingDocument.useMutation({
+  const archiveMutation = trpc.inventory.archiveProductMovementDocument.useMutation({
     onSuccess: async () => {
-      toast({ variant: "success", description: t("archiveReceivingSuccess") });
+      toast({ variant: "success", description: t("archiveDocumentSuccess") });
       setArchiveTarget(null);
       setArchiveReason("");
       await trpcUtils.inventory.list.invalidate();
@@ -252,6 +256,7 @@ const ProductMovementsPage = () => {
       status: null,
       paymentStatus: null,
       orderStatus: null,
+      archiveMode: null,
       senderSearch: null,
       recipientSearch: null,
       authorSearch: null,
@@ -268,6 +273,7 @@ const ProductMovementsPage = () => {
     value ? t(`status.${value}`) : tCommon("notAvailable");
   const paymentStatusLabel = (value?: string | null) =>
     value ? t(`payment.${value}`) : tCommon("notAvailable");
+  const archiveModeLabel = (value: string) => t(`archiveMode.${value}`);
   const sortLabel = (value: string) => t(`sort.${value}`);
   const formatDateInput = (value: string) => {
     const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -296,6 +302,7 @@ const ProductMovementsPage = () => {
     status !== allValue ||
     paymentStatus !== allValue ||
     orderStatus !== allValue ||
+    archiveMode !== "ACTIVE" ||
     Boolean(senderSearch.trim()) ||
     Boolean(recipientSearch.trim()) ||
     Boolean(authorSearch.trim()) ||
@@ -304,6 +311,7 @@ const ProductMovementsPage = () => {
   const secondaryFilterCount = [
     paymentStatus !== allValue,
     orderStatus !== allValue,
+    archiveMode !== "ACTIVE",
     Boolean(senderSearch.trim()),
     Boolean(recipientSearch.trim()),
     Boolean(authorSearch.trim()),
@@ -431,14 +439,17 @@ const ProductMovementsPage = () => {
       </Button>
     );
     const archiveButton =
-      movement.documentType === "STOCK_RECEIVING" ? (
+      archiveMode === "ACTIVE" &&
+      (movement.documentType === "STOCK_RECEIVING" ||
+        movement.documentType === "TRANSFER" ||
+        movement.documentType === "WRITE_OFF") ? (
         <Button
           type="button"
           variant={layout === "desktop" ? "ghost" : "secondary"}
           size={layout === "desktop" ? "icon" : undefined}
-          aria-label={t("archiveReceiving")}
-          title={t("archiveReceiving")}
-          data-testid="movement-archive-receiving-button"
+          aria-label={t("archiveDocument")}
+          title={t("archiveDocument")}
+          data-testid="movement-archive-button"
           className={layout === "mobile" ? "w-full justify-center" : undefined}
           onClick={() => {
             setArchiveTarget(movement);
@@ -447,7 +458,7 @@ const ProductMovementsPage = () => {
           disabled={archiveMutation.isLoading}
         >
           <ArchiveIcon className="h-4 w-4" aria-hidden />
-          {layout === "mobile" ? t("archiveReceiving") : null}
+          {layout === "mobile" ? t("archiveDocument") : null}
         </Button>
       ) : null;
 
@@ -797,7 +808,7 @@ const ProductMovementsPage = () => {
       </div>
       {additionalFiltersOpen ? (
         <div className="rounded-xl border border-border/60 bg-card/80 p-3 shadow-sm">
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
             <div className="space-y-1">
               <Label>{t("paymentStatus")}</Label>
               <Select
@@ -814,6 +825,26 @@ const ProductMovementsPage = () => {
                   {paymentStatusOptions.map((option) => (
                     <SelectItem key={option} value={option}>
                       {paymentStatusLabel(option)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>{t("archiveFilter")}</Label>
+              <Select
+                value={archiveMode}
+                onValueChange={(value) => {
+                  setFilterParam("archiveMode", value === "ACTIVE" ? null : value);
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={archiveModeLabel("ACTIVE")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {archiveModeOptions.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {archiveModeLabel(option)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1053,24 +1084,24 @@ const ProductMovementsPage = () => {
             setArchiveReason("");
           }
         }}
-        title={t("archiveReceivingTitle")}
-        subtitle={t("archiveReceivingDescription", {
+        title={t("archiveDocumentTitle")}
+        subtitle={t("archiveDocumentDescription", {
           number: archiveTarget?.documentNumber || archiveTarget?.documentId || "",
         })}
         className="max-w-xl"
       >
         <div className="space-y-2">
-          <Label htmlFor="archive-receiving-reason">{t("archiveReceivingReason")}</Label>
+          <Label htmlFor="archive-document-reason">{t("archiveDocumentReason")}</Label>
           <Textarea
-            id="archive-receiving-reason"
+            id="archive-document-reason"
             value={archiveReason}
             onChange={(event) => setArchiveReason(event.target.value)}
-            placeholder={t("archiveReceivingReasonPlaceholder")}
+            placeholder={t("archiveDocumentReasonPlaceholder")}
             rows={4}
             disabled={archiveMutation.isLoading}
           />
           {!archiveReasonTrimmed ? (
-            <p className="text-xs text-danger">{t("archiveReceivingReasonRequired")}</p>
+            <p className="text-xs text-danger">{t("archiveDocumentReasonRequired")}</p>
           ) : null}
         </div>
         <ModalFooter className="mt-6">
@@ -1100,7 +1131,7 @@ const ProductMovementsPage = () => {
               });
             }}
           >
-            {archiveMutation.isLoading ? tCommon("loading") : t("archiveReceivingSubmit")}
+            {archiveMutation.isLoading ? tCommon("loading") : t("archiveDocumentSubmit")}
           </Button>
         </ModalFooter>
       </Modal>

@@ -53,6 +53,7 @@ type ReceivingLine = {
   unitCostInput: string;
   quantityInput: string;
   duplicateHint?: boolean;
+  storeWarning?: "notAssigned";
 };
 
 type ReceivingInputField = "quantity" | "unitCost";
@@ -222,6 +223,7 @@ export const InventoryReceivingPage = ({
     focusedElement?: ReceivingDraftFocus | null;
   } | null>(null);
   const handledCreatedProductRef = useRef("");
+  const storeRefreshSequenceRef = useRef(0);
 
   const selectedStore = stores.find((store) => store.id === storeId) ?? null;
   const enableSku = selectedStore?.enableSku ?? true;
@@ -313,9 +315,74 @@ export const InventoryReceivingPage = ({
     if (nextStoreId === storeId) {
       return;
     }
+    const linesToRefresh = lines;
+    const refreshSequence = storeRefreshSequenceRef.current + 1;
+    storeRefreshSequenceRef.current = refreshSequence;
     setStoreId(nextStoreId);
-    setLines([]);
     setSearch("");
+    if (!linesToRefresh.length) {
+      return;
+    }
+    toast({ variant: "success", description: t("receivingStoreChangedRecalculated") });
+
+    const refreshLinesForStore = async () => {
+      const nextStore = stores.find((store) => store.id === nextStoreId);
+      const nextEnableSku = nextStore?.enableSku ?? true;
+      const nextEnableBarcode = nextStore?.enableBarcode ?? true;
+      const uniqueProductIds = Array.from(new Set(linesToRefresh.map((line) => line.productId)));
+      const fetchedResults = await Promise.all(
+        uniqueProductIds.map(async (productId) => {
+          try {
+            return await trpcUtils.inventory.searchProducts.fetch({
+              storeId: nextStoreId,
+              productId,
+              limit: 100,
+            });
+          } catch {
+            return [];
+          }
+        }),
+      );
+      if (storeRefreshSequenceRef.current !== refreshSequence) {
+        return;
+      }
+
+      const resultByKey = new Map<string, SearchResult>();
+      fetchedResults.flat().forEach((result) => {
+        resultByKey.set(lineKey(result.product.id, result.snapshot.variantId), result);
+      });
+      let missingCount = 0;
+      setLines((current) =>
+        current.map((line) => {
+          const result = resultByKey.get(line.key);
+          if (!result) {
+            missingCount += 1;
+            return {
+              ...line,
+              currentStock: 0,
+              storeWarning: "notAssigned" as const,
+            };
+          }
+          const imageUrl =
+            result.product.images?.[0]?.url ?? result.product.photoUrl ?? null;
+          return {
+            ...line,
+            productName: result.product.name,
+            variantName: result.variant?.name ?? null,
+            sku: nextEnableSku ? result.product.sku : "",
+            barcode: nextEnableBarcode ? result.primaryBarcode : null,
+            imageUrl: imageUrl && !imageUrl.startsWith("data:image/") ? imageUrl : null,
+            currentStock: result.snapshot.onHand,
+            storeWarning: undefined,
+          };
+        }),
+      );
+      if (missingCount > 0) {
+        toast({ variant: "info", description: t("receivingStoreChangedMissingProducts") });
+      }
+    };
+
+    void refreshLinesForStore();
   };
 
   const getPreviewUrl = useCallback((result: SearchResult) => {
@@ -1186,6 +1253,11 @@ export const InventoryReceivingPage = ({
                           {line.duplicateHint ? (
                             <p className="whitespace-normal break-words text-xs leading-snug text-warning">
                               {t("receivingDuplicateHint")}
+                            </p>
+                          ) : null}
+                          {line.storeWarning === "notAssigned" ? (
+                            <p className="whitespace-normal break-words text-xs leading-snug text-warning">
+                              {t("receivingLineStoreWarning")}
                             </p>
                           ) : null}
                         </div>

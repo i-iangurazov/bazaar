@@ -523,6 +523,7 @@ export const receiveStock = async (input: ReceiveStockInput): Promise<StockAdjus
           note: input.note ?? undefined,
           actorId: input.actorId,
           organizationId: input.organizationId,
+          allowNegativeStock: true,
         });
 
         const lot = await applyStockLotAdjustment(tx, {
@@ -816,6 +817,7 @@ export const postStockReceiving = async (
             actorId: input.actorId,
             organizationId: input.organizationId,
             movementDate: input.date ?? null,
+            allowNegativeStock: true,
           });
 
           await updateProductCost(tx, {
@@ -1519,9 +1521,11 @@ export type EditStockMovementDocumentInput = {
   user?: StoreAccessUser;
 };
 
+const STOCK_DOCUMENT_ARCHIVE_REFERENCE_TYPE = "STOCK_DOCUMENT_ARCHIVE";
 const STOCK_RECEIVING_ARCHIVE_REFERENCE_TYPE = "STOCK_RECEIVING_ARCHIVE";
 
-export type ArchiveStockReceivingDocumentInput = {
+export type ArchiveStockMovementDocumentInput = {
+  documentType: "STOCK_RECEIVING" | "TRANSFER" | "WRITE_OFF";
   referenceType: string;
   referenceId: string;
   reason: string;
@@ -1890,6 +1894,7 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
                 note: reason,
                 actorId: input.actorId,
                 organizationId: input.organizationId,
+                allowNegativeStock: qtyDelta > 0,
               });
               if (desiredLine && qtyDelta > 0 && unitCostKgs !== null) {
                 await updateProductCost(tx, {
@@ -2112,16 +2117,27 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
   };
 };
 
-export const archiveStockReceivingDocument = async (
-  input: ArchiveStockReceivingDocumentInput,
+const stockMovementDocumentArchiveKey = (input: {
+  documentType: "STOCK_RECEIVING" | "TRANSFER" | "WRITE_OFF";
+  referenceType: string;
+  referenceId: string;
+}) => `${input.documentType}:${input.referenceType}:${input.referenceId}`;
+
+export const archiveStockMovementDocument = async (
+  input: ArchiveStockMovementDocumentInput,
 ) => {
-  if (input.referenceType !== "STOCK_RECEIVING") {
+  if (
+    (input.documentType === "STOCK_RECEIVING" && input.referenceType !== "STOCK_RECEIVING") ||
+    (input.documentType === "TRANSFER" && input.referenceType !== "TRANSFER") ||
+    (input.documentType === "WRITE_OFF" && input.referenceType !== "WRITE_OFF")
+  ) {
     throw new AppError("productMovementDocumentUnsupported", "BAD_REQUEST", 400);
   }
   const reason = input.reason.trim();
   if (!reason) {
-    throw new AppError("receivingArchiveReasonRequired", "BAD_REQUEST", 400);
+    throw new AppError("productMovementArchiveReasonRequired", "BAD_REQUEST", 400);
   }
+  const archiveReferenceId = stockMovementDocumentArchiveKey(input);
 
   const logger = getLogger(input.requestId);
   const result = await prisma.$transaction(async (tx) => {
@@ -2129,7 +2145,7 @@ export const archiveStockReceivingDocument = async (
       tx,
       {
         key: input.idempotencyKey,
-        route: "inventory.productMovement.archiveReceiving",
+        route: "inventory.productMovement.archiveDocument",
         userId: input.actorId,
       },
       async () => {
@@ -2145,14 +2161,26 @@ export const archiveStockReceivingDocument = async (
 
         const existingArchive = await tx.stockMovement.findFirst({
           where: {
-            referenceType: STOCK_RECEIVING_ARCHIVE_REFERENCE_TYPE,
-            referenceId: input.referenceId,
             store: { organizationId: input.organizationId },
+            OR: [
+              {
+                referenceType: STOCK_DOCUMENT_ARCHIVE_REFERENCE_TYPE,
+                referenceId: archiveReferenceId,
+              },
+              ...(input.documentType === "STOCK_RECEIVING"
+                ? [
+                    {
+                      referenceType: STOCK_RECEIVING_ARCHIVE_REFERENCE_TYPE,
+                      referenceId: input.referenceId,
+                    },
+                  ]
+                : []),
+            ],
           },
           select: { id: true },
         });
         if (existingArchive) {
-          throw new AppError("stockReceivingAlreadyArchived", "CONFLICT", 409);
+          throw new AppError("productMovementDocumentAlreadyArchived", "CONFLICT", 409);
         }
 
         const movements = await tx.stockMovement.findMany({
@@ -2168,98 +2196,72 @@ export const archiveStockReceivingDocument = async (
         }
 
         const storeIds = Array.from(new Set(movements.map((movement) => movement.storeId)));
-        if (storeIds.length !== 1) {
-          throw new AppError("productMovementDocumentUnsupported", "CONFLICT", 409);
-        }
-        const storeId = storeIds[0]!;
         if (input.user) {
-          await assertUserCanAccessStore(tx, input.user, storeId);
+          await Promise.all(
+            storeIds.map((storeId) => assertUserCanAccessStore(tx, input.user!, storeId)),
+          );
         }
 
-        const lines = Array.from(aggregateStockDocumentLines(movements, "STOCK_RECEIVING").values());
+        const lines = Array.from(aggregateStockDocumentLines(movements, input.documentType).values());
         if (!lines.length) {
           throw new AppError("productMovementDocumentNotFound", "NOT_FOUND", 404);
         }
+        const markerSource =
+          movements.find(
+            (movement) =>
+              movement.productId === lines[0]?.productId &&
+              (movement.variantId ?? null) === (lines[0]?.variantId ?? null),
+          ) ?? movements[0]!;
 
-        const changedItems: Array<{
-          storeId: string;
-          productId: string;
-          variantId: string | null;
-          onHand: number;
-        }> = [];
-
-        for (const [index, line] of lines.entries()) {
-          try {
-            const reversal = await applyStockMovement(tx, {
-              storeId,
-              productId: line.productId,
-              variantId: line.variantId,
-              qtyDelta: -line.quantity,
-              type: StockMovementType.ADJUSTMENT,
-              referenceType: STOCK_RECEIVING_ARCHIVE_REFERENCE_TYPE,
-              referenceId: input.referenceId,
-              linePosition: index + 1,
-              unitCostKgs: line.unitCostKgs,
-              lineTotalKgs:
-                line.lineTotalKgs !== null ? -Math.abs(line.lineTotalKgs) : null,
-              note: `Архивирование оприходования: ${reason}`,
-              actorId: input.actorId,
-              organizationId: input.organizationId,
-            });
-            changedItems.push({
-              storeId,
-              productId: line.productId,
-              variantId: line.variantId,
-              onHand: reversal.snapshot.onHand,
-            });
-          } catch (error) {
-            if (error instanceof AppError && error.message === "insufficientStock") {
-              throw new AppError("stockReceivingArchiveInsufficientStock", "CONFLICT", 409);
-            }
-            throw error;
-          }
-        }
+        const marker = await tx.stockMovement.create({
+          data: {
+            storeId: markerSource.storeId,
+            productId: markerSource.productId,
+            variantId: markerSource.variantId ?? undefined,
+            type: StockMovementType.ADJUSTMENT,
+            qtyDelta: 0,
+            linePosition: 0,
+            referenceType: STOCK_DOCUMENT_ARCHIVE_REFERENCE_TYPE,
+            referenceId: archiveReferenceId,
+            note: `Архивировано: ${reason}`,
+            createdById: input.actorId,
+          },
+        });
 
         await writeAuditLog(tx, {
           organizationId: input.organizationId,
           actorId: input.actorId,
-          action: "INVENTORY_RECEIVING_ARCHIVE",
+          action: "INVENTORY_DOCUMENT_ARCHIVE",
           entity: "StockMovementDocument",
           entityId: `${input.referenceType}:${input.referenceId}`,
           before: toJson({
-            documentType: "STOCK_RECEIVING",
+            documentType: input.documentType,
             referenceType: input.referenceType,
             referenceId: input.referenceId,
-            storeId,
+            storeIds,
             lines,
           }),
           after: toJson({
-            documentType: "STOCK_RECEIVING",
-            referenceType: STOCK_RECEIVING_ARCHIVE_REFERENCE_TYPE,
-            referenceId: input.referenceId,
-            storeId,
+            documentType: input.documentType,
+            archiveReferenceType: STOCK_DOCUMENT_ARCHIVE_REFERENCE_TYPE,
+            archiveReferenceId,
+            archiveMovementId: marker.id,
+            storeIds,
             reason,
             archivedBy: input.actorId,
             archivedAt: new Date().toISOString(),
-            lines: lines.map((line) => ({
-              ...line,
-              quantity: -line.quantity,
-              lineTotalKgs:
-                line.lineTotalKgs !== null ? -Math.abs(line.lineTotalKgs) : null,
-            })),
           }),
           requestId: input.requestId,
         });
 
         return {
-          documentType: "STOCK_RECEIVING" as const,
+          documentType: input.documentType,
           referenceType: input.referenceType,
           referenceId: input.referenceId,
           archived: true,
           reason,
           lineCount: lines.length,
           totalQuantity: lines.reduce((sum, line) => sum + line.quantity, 0),
-          changedItems,
         };
       },
     );
@@ -2267,39 +2269,19 @@ export const archiveStockReceivingDocument = async (
     return { ...archiveResult, replayed };
   });
 
-  if (!result.replayed) {
-    result.changedItems.forEach((item) => {
-      eventBus.publish({
-        type: "inventory.updated",
-        payload: { storeId: item.storeId, productId: item.productId, variantId: item.variantId },
-      });
-    });
-    await Promise.all(
-      result.changedItems.map((item) =>
-        maybeEmitLowStock({
-          storeId: item.storeId,
-          productId: item.productId,
-          variantId: item.variantId,
-          onHand: item.onHand,
-          requestId: input.requestId,
-        }),
-      ),
-    );
-  }
-
   logger.info(
     {
+      documentType: input.documentType,
       referenceId: input.referenceId,
       lineCount: result.lineCount,
       totalQuantity: result.totalQuantity,
     },
-    "stock receiving archived",
+    "stock movement document archived",
   );
 
   return {
     ...result,
     replayed: undefined,
-    changedItems: undefined,
   };
 };
 

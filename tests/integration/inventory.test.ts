@@ -274,7 +274,53 @@ describeDb("inventory service", () => {
     await assertSnapshotMatchesLedger(store.id, secondProduct.id);
   });
 
-  it("archives a receiving document with reversal movements and hides it from Product Movement", async () => {
+  it("posts receiving when stock remains negative after a positive receipt", async () => {
+    const { org, store, product, adminUser } = await seedBase();
+
+    await prisma.store.update({
+      where: { id: store.id },
+      data: { allowNegativeStock: true },
+    });
+    await adjustStock({
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: -50,
+      reason: "negative stock setup",
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "req-receiving-negative-setup",
+      idempotencyKey: "receiving-negative-setup-1",
+    });
+    await prisma.store.update({
+      where: { id: store.id },
+      data: { allowNegativeStock: false },
+    });
+
+    const result = await postStockReceiving({
+      storeId: store.id,
+      referenceNumber: "RCV-NEGATIVE-1",
+      lines: [{ productId: product.id, quantity: 25, unitCost: 10 }],
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "req-receiving-negative-post",
+      idempotencyKey: "receiving-negative-post-1",
+    });
+
+    expect(result.lines[0]?.onHand).toBe(-25);
+    const snapshot = await prisma.inventorySnapshot.findUnique({
+      where: {
+        storeId_productId_variantKey: {
+          storeId: store.id,
+          productId: product.id,
+          variantKey: "BASE",
+        },
+      },
+    });
+    expect(snapshot?.onHand).toBe(-25);
+    await assertSnapshotMatchesLedger(store.id, product.id);
+  });
+
+  it("archives a receiving document without changing stock and hides it from active Product Movement", async () => {
     const { org, store, product, adminUser } = await seedBase();
     const caller = createTestCaller({
       id: adminUser.id,
@@ -292,7 +338,7 @@ describeDb("inventory service", () => {
     });
     const documentKey = `STOCK_RECEIVING:STOCK_RECEIVING:${receiving.receivingId}`;
 
-    const archived = await caller.inventory.archiveStockReceivingDocument({
+    const archived = await caller.inventory.archiveProductMovementDocument({
       documentKey,
       reason: "created by mistake",
       idempotencyKey: "receiving-archive-save-1",
@@ -301,16 +347,16 @@ describeDb("inventory service", () => {
     expect(archived.archived).toBe(true);
     expect(archived.totalQuantity).toBe(5);
 
-    const reversal = await prisma.stockMovement.findMany({
+    const marker = await prisma.stockMovement.findMany({
       where: {
-        referenceType: "STOCK_RECEIVING_ARCHIVE",
-        referenceId: receiving.receivingId,
+        referenceType: "STOCK_DOCUMENT_ARCHIVE",
+        referenceId: documentKey,
       },
     });
-    expect(reversal).toHaveLength(1);
-    expect(reversal[0]?.type).toBe(StockMovementType.ADJUSTMENT);
-    expect(reversal[0]?.qtyDelta).toBe(-5);
-    expect(Number(reversal[0]?.lineTotalKgs)).toBe(-60);
+    expect(marker).toHaveLength(1);
+    expect(marker[0]?.type).toBe(StockMovementType.ADJUSTMENT);
+    expect(marker[0]?.qtyDelta).toBe(0);
+    expect(Number(marker[0]?.lineTotalKgs ?? 0)).toBe(0);
 
     const snapshot = await prisma.inventorySnapshot.findUnique({
       where: {
@@ -321,7 +367,7 @@ describeDb("inventory service", () => {
         },
       },
     });
-    expect(snapshot?.onHand).toBe(0);
+    expect(snapshot?.onHand).toBe(5);
 
     const journal = await caller.inventory.productMovements({
       type: "STOCK_RECEIVING",
@@ -330,55 +376,18 @@ describeDb("inventory service", () => {
       pageSize: 25,
     });
     expect(journal.items).toHaveLength(0);
-    await expect(caller.inventory.productMovementDocument({ documentKey })).resolves.toBeNull();
-    await assertSnapshotMatchesLedger(store.id, product.id);
-  });
-
-  it("blocks receiving archive when current stock is insufficient to reverse it", async () => {
-    const { org, store, product, adminUser } = await seedBase();
-    const caller = createTestCaller({
-      id: adminUser.id,
-      email: adminUser.email,
-      role: adminUser.role,
-      organizationId: org.id,
-      isOrgOwner: adminUser.isOrgOwner,
+    const archivedJournal = await caller.inventory.productMovements({
+      type: "STOCK_RECEIVING",
+      search: receiving.receivingId,
+      archiveMode: "ARCHIVED",
+      page: 1,
+      pageSize: 25,
     });
-
-    const receiving = await caller.inventory.postStockReceiving({
-      storeId: store.id,
-      referenceNumber: "RCV-ARCHIVE-BLOCK",
-      lines: [{ productId: product.id, quantity: 5, unitCost: 10 }],
-      idempotencyKey: "receiving-archive-block-post-1",
+    expect(archivedJournal.items).toHaveLength(1);
+    await expect(caller.inventory.productMovementDocument({ documentKey })).resolves.toMatchObject({
+      id: documentKey,
+      totalQuantity: 5,
     });
-    await adjustStock({
-      storeId: store.id,
-      productId: product.id,
-      qtyDelta: -3,
-      reason: "consumed after receiving",
-      actorId: adminUser.id,
-      organizationId: org.id,
-      requestId: "req-receiving-archive-block-adjust",
-      idempotencyKey: "receiving-archive-block-adjust-1",
-    });
-
-    await expect(
-      caller.inventory.archiveStockReceivingDocument({
-        documentKey: `STOCK_RECEIVING:STOCK_RECEIVING:${receiving.receivingId}`,
-        reason: "created by mistake",
-        idempotencyKey: "receiving-archive-block-save-1",
-      }),
-    ).rejects.toMatchObject({ message: "stockReceivingArchiveInsufficientStock" });
-
-    const snapshot = await prisma.inventorySnapshot.findUnique({
-      where: {
-        storeId_productId_variantKey: {
-          storeId: store.id,
-          productId: product.id,
-          variantKey: "BASE",
-        },
-      },
-    });
-    expect(snapshot?.onHand).toBe(2);
     await assertSnapshotMatchesLedger(store.id, product.id);
   });
 

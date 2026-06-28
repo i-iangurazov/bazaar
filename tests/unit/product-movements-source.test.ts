@@ -106,6 +106,7 @@ describe("product movement journal source", () => {
     const receivingPageSource = await readSource("src/app/(app)/inventory/receiving/page.tsx");
     const transferPageSource = await readSource("src/app/(app)/inventory/transfers/page.tsx");
     const writeOffPageSource = await readSource("src/app/(app)/inventory/write-offs/page.tsx");
+    const serviceSource = await readSource("src/server/services/productMovements.ts");
     const receivingWorkflowSource = await readSource(
       "src/components/inventory/receiving-workflow.tsx",
     );
@@ -158,9 +159,10 @@ describe("product movement journal source", () => {
     expect(pageSource).not.toContain('rowTestId="movement-edit-line"');
     expect(pageSource).not.toContain('data-testid="movement-edit-save"');
     expect(pageSource).not.toContain('data-testid="movement-edit-modal"');
-    expect(pageSource).toContain("archiveStockReceivingDocument.useMutation");
-    expect(pageSource).toContain("archiveReceivingTitle");
-    expect(pageSource).toContain('data-testid="movement-archive-receiving-button"');
+    expect(pageSource).toContain("archiveProductMovementDocument.useMutation");
+    expect(pageSource).toContain("archiveDocumentTitle");
+    expect(pageSource).toContain('data-testid="movement-archive-button"');
+    expect(serviceSource).toContain('productMovementArchiveModes = ["ACTIVE", "ARCHIVED", "ALL"]');
   });
 
   it("keeps Bazaar blue mapped into the shadcn-style sidebar foundation", async () => {

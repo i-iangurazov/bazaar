@@ -13,7 +13,7 @@ import { logProfileSection } from "@/server/profiling/perf";
 import { toTRPCError } from "@/server/trpc/errors";
 import {
   adjustStock,
-  archiveStockReceivingDocument,
+  archiveStockMovementDocument,
   bulkSetOnHand,
   editStockMovementDocument,
   postStockReceiving,
@@ -32,6 +32,7 @@ import {
   decodeProductMovementDocumentKey,
   getProductMovementDocument,
   listProductMovementJournal,
+  productMovementArchiveModes,
   productMovementDocumentTypes,
   productMovementPaymentStatuses,
   productMovementSortKeys,
@@ -58,6 +59,7 @@ const inventorySortKeySchema = z.enum([
 const inventorySortDirectionSchema = z.enum(["asc", "desc"]);
 const productMovementDocumentTypeSchema = z.enum(productMovementDocumentTypes);
 const productMovementPaymentStatusSchema = z.enum(productMovementPaymentStatuses);
+const productMovementArchiveModeSchema = z.enum(productMovementArchiveModes);
 const productMovementSortKeySchema = z.enum(productMovementSortKeys);
 const writeOffReasonSchema = z.enum(WRITE_OFF_REASONS);
 type InventorySortKey = z.infer<typeof inventorySortKeySchema>;
@@ -793,6 +795,7 @@ export const inventoryRouter = router({
           authorSearch: z.string().trim().max(120).optional(),
           senderSearch: z.string().trim().max(160).optional(),
           recipientSearch: z.string().trim().max(160).optional(),
+          archiveMode: productMovementArchiveModeSchema.optional(),
           page: z.number().int().min(1).optional(),
           pageSize: z.number().int().min(10).max(100).optional(),
           sortBy: productMovementSortKeySchema.optional(),
@@ -1101,12 +1104,12 @@ export const inventoryRouter = router({
       }
     }),
 
-  archiveStockReceivingDocument: managerProcedure
+  archiveProductMovementDocument: managerProcedure
     .use(rateLimit({ windowMs: 10_000, max: 20, prefix: "inventory-receiving-archive" }))
     .input(
       z.object({
         documentKey: z.string().min(1).max(300),
-        reason: z.string().trim().min(1, "receivingArchiveReasonRequired").max(500),
+        reason: z.string().trim().min(1, "productMovementArchiveReasonRequired").max(500),
         idempotencyKey: z.string().min(8),
       }),
     )
@@ -1117,13 +1120,16 @@ export const inventoryRouter = router({
           throw new TRPCError({ code: "BAD_REQUEST", message: "productMovementDocumentInvalid" });
         }
         if (
-          decoded.documentType !== "STOCK_RECEIVING" ||
-          decoded.documentReferenceType !== "STOCK_RECEIVING"
+          (decoded.documentType !== "STOCK_RECEIVING" ||
+            decoded.documentReferenceType !== "STOCK_RECEIVING") &&
+          (decoded.documentType !== "TRANSFER" || decoded.documentReferenceType !== "TRANSFER") &&
+          (decoded.documentType !== "WRITE_OFF" || decoded.documentReferenceType !== "WRITE_OFF")
         ) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "productMovementDocumentUnsupported" });
         }
 
-        return await archiveStockReceivingDocument({
+        return await archiveStockMovementDocument({
+          documentType: decoded.documentType as "STOCK_RECEIVING" | "TRANSFER" | "WRITE_OFF",
           referenceType: decoded.documentReferenceType,
           referenceId: decoded.documentReferenceId,
           reason: input.reason,
