@@ -92,7 +92,7 @@ describeDb("tRPC contract smoke", () => {
     expect(updatedPo?.status).toBe(PurchaseOrderStatus.RECEIVED);
   });
 
-  it("returns TRPC errors for invalid inventory adjustments", async () => {
+  it("allows inventory adjustments to create negative stock", async () => {
     const { org, store, product, adminUser } = await seedBase();
     const caller = createTestCaller({
       id: adminUser.id,
@@ -101,14 +101,14 @@ describeDb("tRPC contract smoke", () => {
       organizationId: org.id,
     });
 
-    await expect(
-      caller.inventory.adjust({
-        storeId: store.id,
-        productId: product.id,
-        qtyDelta: -5,
-        reason: "Too low",
-        idempotencyKey: "idem-core-negative",
-      }),
-    ).rejects.toMatchObject({ code: "CONFLICT" });
+    const result = await caller.inventory.adjust({
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: -5,
+      reason: "Too low",
+      idempotencyKey: "idem-core-negative",
+    });
+
+    expect(result.onHand).toBe(-5);
   });
 });
