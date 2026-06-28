@@ -1109,7 +1109,7 @@ export const inventoryRouter = router({
     .input(
       z.object({
         documentKey: z.string().min(1).max(300),
-        reason: z.string().trim().min(1, "productMovementArchiveReasonRequired").max(500),
+        reason: z.string().trim().max(500).optional().nullable(),
         idempotencyKey: z.string().min(8),
       }),
     )

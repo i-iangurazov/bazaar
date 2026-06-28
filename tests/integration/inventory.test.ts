@@ -340,7 +340,6 @@ describeDb("inventory service", () => {
 
     const archived = await caller.inventory.archiveProductMovementDocument({
       documentKey,
-      reason: "created by mistake",
       idempotencyKey: "receiving-archive-save-1",
     });
 
@@ -357,6 +356,7 @@ describeDb("inventory service", () => {
     expect(marker[0]?.type).toBe(StockMovementType.ADJUSTMENT);
     expect(marker[0]?.qtyDelta).toBe(0);
     expect(Number(marker[0]?.lineTotalKgs ?? 0)).toBe(0);
+    expect(marker[0]?.note).toBe("Архивировано");
 
     const snapshot = await prisma.inventorySnapshot.findUnique({
       where: {

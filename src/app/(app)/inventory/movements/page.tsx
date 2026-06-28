@@ -31,7 +31,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
 import {
@@ -44,6 +43,7 @@ import {
   DownloadIcon,
   EditIcon,
   EmptyIcon,
+  PrintIcon,
   ReceiveIcon,
   SearchIcon,
   SortIcon,
@@ -116,6 +116,9 @@ const normalizeOptionalParam = (value: string) => {
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
 };
+
+const shortDocumentReference = (documentId: string) =>
+  documentId.replace(/[^a-z0-9]/gi, "").slice(0, 8).toUpperCase() || documentId.slice(0, 8);
 
 const ProductMovementsPage = () => {
   const t = useTranslations("inventory.movementJournal");
@@ -229,14 +232,11 @@ const ProductMovementsPage = () => {
 
   type MovementRow = (typeof items)[number];
   const [archiveTarget, setArchiveTarget] = useState<MovementRow | null>(null);
-  const [archiveReason, setArchiveReason] = useState("");
-  const archiveReasonTrimmed = archiveReason.trim();
 
   const archiveMutation = trpc.inventory.archiveProductMovementDocument.useMutation({
     onSuccess: async () => {
       toast({ variant: "success", description: t("archiveDocumentSuccess") });
       setArchiveTarget(null);
-      setArchiveReason("");
       await trpcUtils.inventory.list.invalidate();
       await trpcUtils.inventory.productMovements.invalidate();
       await trpcUtils.inventory.productMovementDocument.invalidate();
@@ -388,6 +388,12 @@ const ProductMovementsPage = () => {
     t(`editUnavailable.${reason}`);
 
   const renderActions = (movement: MovementRow, layout: "desktop" | "mobile" = "desktop") => {
+    const isPrintableStockDocument =
+      movement.documentType === "STOCK_RECEIVING" ||
+      movement.documentType === "TRANSFER" ||
+      movement.documentType === "WRITE_OFF";
+    const isPostedStockDocument =
+      isPrintableStockDocument && (movement.status === "POSTED" || !movement.status);
     const viewButton = movement.detailUrl ? (
       <Button
         variant={layout === "desktop" ? "ghost" : "secondary"}
@@ -438,11 +444,31 @@ const ProductMovementsPage = () => {
         {layout === "mobile" ? editDisabledReasonLabel(disabledReason) : null}
       </Button>
     );
+    const printButton =
+      movement.id && isPrintableStockDocument ? (
+        <Button
+          variant={layout === "desktop" ? "ghost" : "secondary"}
+          size={layout === "desktop" ? "icon" : undefined}
+          asChild
+          aria-label={t("printDocument")}
+          title={t("printDocument")}
+          className={layout === "mobile" ? "w-full justify-center" : undefined}
+        >
+          <Link
+            href={`/inventory/movements/${encodeURIComponent(movement.id)}/print?${new URLSearchParams(
+              { auto: "1", returnTo: safeCurrentJournalHref },
+            ).toString()}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <PrintIcon className="h-4 w-4" aria-hidden />
+            {layout === "mobile" ? t("printDocument") : null}
+          </Link>
+        </Button>
+      ) : null;
     const archiveButton =
       archiveMode === "ACTIVE" &&
-      (movement.documentType === "STOCK_RECEIVING" ||
-        movement.documentType === "TRANSFER" ||
-        movement.documentType === "WRITE_OFF") ? (
+      isPostedStockDocument ? (
         <Button
           type="button"
           variant={layout === "desktop" ? "ghost" : "secondary"}
@@ -453,7 +479,6 @@ const ProductMovementsPage = () => {
           className={layout === "mobile" ? "w-full justify-center" : undefined}
           onClick={() => {
             setArchiveTarget(movement);
-            setArchiveReason("");
           }}
           disabled={archiveMutation.isLoading}
         >
@@ -472,13 +497,14 @@ const ProductMovementsPage = () => {
       >
         {viewButton ?? <span className="text-muted-foreground">{tCommon("notAvailable")}</span>}
         {editButton}
+        {printButton}
         {archiveButton}
       </div>
     );
   };
 
   const renderDocument = (movement: MovementRow) => {
-    const documentNumber = movement.documentNumber || movement.documentId;
+    const documentNumber = movement.documentNumber || shortDocumentReference(movement.documentId);
     return (
       <div className="min-w-0">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -1081,36 +1107,18 @@ const ProductMovementsPage = () => {
         onOpenChange={(open) => {
           if (!open && !archiveMutation.isLoading) {
             setArchiveTarget(null);
-            setArchiveReason("");
           }
         }}
         title={t("archiveDocumentTitle")}
-        subtitle={t("archiveDocumentDescription", {
-          number: archiveTarget?.documentNumber || archiveTarget?.documentId || "",
-        })}
-        className="max-w-xl"
+        subtitle={t("archiveDocumentDescription")}
+        className="max-w-md"
       >
-        <div className="space-y-2">
-          <Label htmlFor="archive-document-reason">{t("archiveDocumentReason")}</Label>
-          <Textarea
-            id="archive-document-reason"
-            value={archiveReason}
-            onChange={(event) => setArchiveReason(event.target.value)}
-            placeholder={t("archiveDocumentReasonPlaceholder")}
-            rows={4}
-            disabled={archiveMutation.isLoading}
-          />
-          {!archiveReasonTrimmed ? (
-            <p className="text-xs text-danger">{t("archiveDocumentReasonRequired")}</p>
-          ) : null}
-        </div>
         <ModalFooter className="mt-6">
           <Button
             type="button"
             variant="secondary"
             onClick={() => {
               setArchiveTarget(null);
-              setArchiveReason("");
             }}
             disabled={archiveMutation.isLoading}
           >
@@ -1119,14 +1127,13 @@ const ProductMovementsPage = () => {
           <Button
             type="button"
             variant="danger"
-            disabled={!archiveTarget || !archiveReasonTrimmed || archiveMutation.isLoading}
+            disabled={!archiveTarget || archiveMutation.isLoading}
             onClick={() => {
-              if (!archiveTarget || !archiveReasonTrimmed) {
+              if (!archiveTarget) {
                 return;
               }
               archiveMutation.mutate({
                 documentKey: archiveTarget.id,
-                reason: archiveReasonTrimmed,
                 idempotencyKey: crypto.randomUUID(),
               });
             }}

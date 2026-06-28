@@ -52,7 +52,11 @@ const ProductMovementDocumentPage = () => {
   const document = documentQuery.data ?? null;
 
   const documentTypeLabel = (value: string) => t(`type.${value}`);
-  const documentNumber = document?.documentNumber || document?.documentId || "";
+  const shortDocumentReference = (documentId: string) =>
+    documentId.replace(/[^a-z0-9]/gi, "").slice(0, 8).toUpperCase() || documentId.slice(0, 8);
+  const documentNumber = document
+    ? document.documentNumber || shortDocumentReference(document.documentId)
+    : "";
   const isPrintableDocument =
     document?.documentType === "STOCK_RECEIVING" ||
     document?.documentType === "RECEIVE" ||

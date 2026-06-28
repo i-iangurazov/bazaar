@@ -161,8 +161,15 @@ describe("product movement journal source", () => {
     expect(pageSource).not.toContain('data-testid="movement-edit-modal"');
     expect(pageSource).toContain("archiveProductMovementDocument.useMutation");
     expect(pageSource).toContain("archiveDocumentTitle");
+    expect(pageSource).toContain("archiveDocumentDescription");
     expect(pageSource).toContain('data-testid="movement-archive-button"');
+    expect(pageSource).toContain("printDocument");
+    expect(pageSource).toContain("shortDocumentReference");
+    expect(pageSource).not.toContain("archiveReason");
+    expect(pageSource).not.toContain("Textarea");
+    expect(pageSource).not.toContain("archiveDocumentReason");
     expect(serviceSource).toContain('productMovementArchiveModes = ["ACTIVE", "ARCHIVED", "ALL"]');
+    expect(serviceSource).toContain("normalizeProductMovementDocumentNumber");
   });
 
   it("keeps Bazaar blue mapped into the shadcn-style sidebar foundation", async () => {

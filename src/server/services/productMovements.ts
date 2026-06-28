@@ -301,8 +301,29 @@ const buildProductMovementDocumentLabel = (input: {
   documentNumber?: string | null;
   documentId: string;
 }) => {
-  const number = input.documentNumber?.trim() || input.documentId;
+  const number = normalizeProductMovementDocumentNumber(input.documentNumber, input.documentId)
+    ?? buildShortProductMovementDocumentReference(input.documentId);
   return `${documentTypeFallbackLabels[input.documentType] ?? documentTypeFallbackLabels.OTHER} #${number}`;
+};
+
+const uuidLikePattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const buildShortProductMovementDocumentReference = (documentId: string) =>
+  documentId.replace(/[^a-z0-9]/gi, "").slice(0, 8).toUpperCase() || documentId.slice(0, 8);
+
+const normalizeProductMovementDocumentNumber = (
+  documentNumber: string | null | undefined,
+  documentId: string,
+) => {
+  const trimmed = documentNumber?.trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (trimmed === documentId && uuidLikePattern.test(documentId)) {
+    return null;
+  }
+  return trimmed;
 };
 
 const buildMovementDocumentTypeSql = (referenceTypeSql: Prisma.Sql, movementTypeSql: Prisma.Sql) =>
@@ -622,7 +643,7 @@ const normalizeProductMovementJournalRow = (
     id,
     documentId: row.documentId,
     documentType: row.documentType,
-    documentNumber: row.documentNumber,
+    documentNumber: normalizeProductMovementDocumentNumber(row.documentNumber, row.documentId),
     isPosSale: row.isPosSale,
     documentLabel: buildProductMovementDocumentLabel({
       documentType: row.documentType,

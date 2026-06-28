@@ -1528,7 +1528,7 @@ export type ArchiveStockMovementDocumentInput = {
   documentType: "STOCK_RECEIVING" | "TRANSFER" | "WRITE_OFF";
   referenceType: string;
   referenceId: string;
-  reason: string;
+  reason?: string | null;
   actorId: string;
   organizationId: string;
   requestId: string;
@@ -2133,10 +2133,7 @@ export const archiveStockMovementDocument = async (
   ) {
     throw new AppError("productMovementDocumentUnsupported", "BAD_REQUEST", 400);
   }
-  const reason = input.reason.trim();
-  if (!reason) {
-    throw new AppError("productMovementArchiveReasonRequired", "BAD_REQUEST", 400);
-  }
+  const reason = input.reason?.trim() || null;
   const archiveReferenceId = stockMovementDocumentArchiveKey(input);
 
   const logger = getLogger(input.requestId);
@@ -2223,7 +2220,7 @@ export const archiveStockMovementDocument = async (
             linePosition: 0,
             referenceType: STOCK_DOCUMENT_ARCHIVE_REFERENCE_TYPE,
             referenceId: archiveReferenceId,
-            note: `Архивировано: ${reason}`,
+            note: reason ? `Архивировано: ${reason}` : "Архивировано",
             createdById: input.actorId,
           },
         });
