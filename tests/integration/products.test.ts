@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import * as XLSX from "xlsx";
 
 import {
   arrangeClothingCategoriesWithAi,
@@ -13,6 +12,7 @@ import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 import { prisma } from "@/server/db/prisma";
 import { createTestCaller } from "../helpers/context";
 import { adjustStock } from "@/server/services/inventory";
+import { parseCsvTextRows } from "@/lib/fileExport";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
 
@@ -1312,16 +1312,8 @@ describeDb("products", () => {
     });
 
     const csv = await caller.products.exportCsv({ storeId: store.id });
-    const workbook = XLSX.read(csv, { type: "string" });
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json<string[]>(sheet, {
-      header: 1,
-      raw: false,
-      blankrows: false,
-    });
-    const header = (rows[0] ?? []).map((cell, index) =>
-      index === 0 ? cell.replace(/^\uFEFF/, "") : cell,
-    );
+    const rows = parseCsvTextRows(csv);
+    const header = rows[0] ?? [];
     const exported = rows.find((row) => row[0] === "SKU-EXPORT-1");
 
     expect(header).toEqual([

@@ -1,4 +1,5 @@
 const spreadsheetFormulaPattern = /^[=+\-@]/;
+const csvDelimiter = ";";
 
 export const sanitizeSpreadsheetValue = (value: unknown) => {
   if (value === null || value === undefined) {
@@ -16,7 +17,7 @@ export const sanitizeSpreadsheetValue = (value: unknown) => {
 
 const escapeValue = (value: unknown) => {
   const str = sanitizeSpreadsheetValue(value);
-  if (/[\",\n]/.test(str)) {
+  if (str.includes(csvDelimiter) || /[\"\r\n]/.test(str)) {
     return `"${str.replace(/\"/g, "\"\"")}"`;
   }
   return str;
@@ -24,8 +25,8 @@ const escapeValue = (value: unknown) => {
 
 export const toCsv = (header: string[], rows: Array<Record<string, unknown>>, keys: string[]) => {
   const lines = [
-    header.map(escapeValue).join(","),
-    ...rows.map((row) => keys.map((key) => escapeValue(row[key])).join(",")),
+    header.map(escapeValue).join(csvDelimiter),
+    ...rows.map((row) => keys.map((key) => escapeValue(row[key])).join(csvDelimiter)),
   ];
   const bom = "\ufeff";
   return `${bom}${lines.join("\r\n")}`;

@@ -109,7 +109,10 @@ describeDb("exports", () => {
       expect(job.fileName?.endsWith(".csv")).toBe(true);
       expect(csv.startsWith("\ufeff")).toBe(true);
       const header = csv.replace(/^\ufeff/, "").split(/\r?\n/)[0]?.trim();
-      expect(header).toBe(headers[type]);
+      const expectedHeader = headers[type].replaceAll(",", ";");
+      expect(header).toBe(expectedHeader);
+      expect(header?.split(";")).toHaveLength(headers[type].split(",").length);
+      expect(header).not.toContain("Дата,Магазин");
     }
   }, 60_000);
 
@@ -255,7 +258,7 @@ describeDb("exports", () => {
     );
     expect(download.fileSize).toBe(Buffer.byteLength(csv));
     expect(csv.startsWith("\ufeff")).toBe(true);
-    expect(csv).toContain("ID организации,Код магазина,Артикул,Товар");
+    expect(csv).toContain("ID организации;Код магазина;Артикул;Товар");
 
     const refreshed = await caller.exports.get({ jobId: created.id });
     expect(refreshed?.downloadAvailable).toBe(true);

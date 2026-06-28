@@ -2,12 +2,14 @@ import * as XLSX from "xlsx";
 
 export type DownloadFormat = "csv" | "xlsx";
 
+const csvDelimiter = ";";
+
 const escapeCsvValue = (value: unknown) => {
   if (value === null || value === undefined) {
     return "";
   }
   const str = sanitizeSpreadsheetValue(value);
-  if (/[",\n]/.test(str)) {
+  if (str.includes(csvDelimiter) || /["\r\n]/.test(str)) {
     return `"${str.replace(/"/g, "\"\"")}"`;
   }
   return str;
@@ -36,7 +38,7 @@ const triggerDownload = (blob: Blob, fileName: string) => {
 };
 
 const buildCsv = (rows: string[][]) => {
-  const lines = rows.map((row) => row.map((value) => escapeCsvValue(value)).join(","));
+  const lines = rows.map((row) => row.map((value) => escapeCsvValue(value)).join(csvDelimiter));
   return `\ufeff${lines.join("\r\n")}`;
 };
 
@@ -74,12 +76,60 @@ export const downloadTableFile = (input: {
 };
 
 export const parseCsvTextRows = (csv: string) => {
-  const workbook = XLSX.read(csv, { type: "string", raw: false });
-  const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  const rows = XLSX.utils.sheet_to_json<string[]>(sheet, {
-    header: 1,
-    raw: false,
-    blankrows: false,
-  });
-  return rows.map((row) => row.map((cell) => String(cell ?? "")));
+  const text = csv.replace(/^\ufeff/, "");
+  const firstLine = text.split(/\r?\n/, 1)[0] ?? "";
+  const countOutsideQuotes = (delimiter: string) => {
+    let count = 0;
+    let inQuotes = false;
+    for (let index = 0; index < firstLine.length; index += 1) {
+      const char = firstLine[index];
+      if (char === '"') {
+        if (inQuotes && firstLine[index + 1] === '"') {
+          index += 1;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (!inQuotes && char === delimiter) {
+        count += 1;
+      }
+    }
+    return count;
+  };
+  const delimiter = countOutsideQuotes(";") >= countOutsideQuotes(",") ? ";" : ",";
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let value = "";
+  let inQuotes = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (char === '"') {
+      if (inQuotes && text[index + 1] === '"') {
+        value += '"';
+        index += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (!inQuotes && char === delimiter) {
+      row.push(value);
+      value = "";
+    } else if (!inQuotes && (char === "\n" || char === "\r")) {
+      row.push(value);
+      rows.push(row);
+      row = [];
+      value = "";
+      if (char === "\r" && text[index + 1] === "\n") {
+        index += 1;
+      }
+    } else {
+      value += char;
+    }
+  }
+
+  if (value || row.length) {
+    row.push(value);
+    rows.push(row);
+  }
+
+  return rows.filter((cells) => cells.some((cell) => cell.length > 0));
 };

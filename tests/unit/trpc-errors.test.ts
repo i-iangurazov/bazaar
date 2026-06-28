@@ -5,7 +5,10 @@ import { ExportType } from "@prisma/client";
 
 import { AppError } from "@/server/services/errors";
 import { toTRPCError } from "@/server/trpc/errors";
-import { sanitizeSpreadsheetValue as sanitizeClientSpreadsheetValue } from "@/lib/fileExport";
+import {
+  parseCsvTextRows,
+  sanitizeSpreadsheetValue as sanitizeClientSpreadsheetValue,
+} from "@/lib/fileExport";
 import { sanitizeSpreadsheetValue as sanitizeServerSpreadsheetValue, toCsv } from "@/server/services/csv";
 
 describe("toTRPCError", () => {
@@ -472,8 +475,41 @@ describe("spreadsheet formula sanitization", () => {
       ["name", "notes"],
     );
 
+    expect(csv.startsWith("\ufeff")).toBe(true);
+    expect(csv.split(/\r?\n/)[0]).toBe("\ufeffname;notes");
     expect(csv).toContain("'=HYPERLINK");
     expect(csv).toContain("'+cmd");
+  });
+
+  it("uses semicolon-delimited CSV so Excel opens report columns separately", () => {
+    const csv = toCsv(
+      ["Дата", "Магазин", "Продано шт.", "Операций"],
+      [
+        {
+          date: "2026-06-09",
+          store: "Мега Комфорт",
+          totalQty: 272,
+          movementCount: 58,
+        },
+      ],
+      ["date", "store", "totalQty", "movementCount"],
+    );
+
+    const [header, row] = csv.replace(/^\ufeff/, "").split(/\r?\n/);
+    expect(header).toBe("Дата;Магазин;Продано шт.;Операций");
+    expect(row).toBe("2026-06-09;Мега Комфорт;272;58");
+    expect(header?.split(";")).toHaveLength(4);
+  });
+
+  it("parses semicolon-delimited CSV back into separate columns", () => {
+    const rows = parseCsvTextRows(
+      "\ufeffДата;Магазин;Продано шт.;Операций\r\n2026-06-09;Мега Комфорт;272;58",
+    );
+
+    expect(rows).toEqual([
+      ["Дата", "Магазин", "Продано шт.", "Операций"],
+      ["2026-06-09", "Мега Комфорт", "272", "58"],
+    ]);
   });
 
   it("applies consistent sanitization helpers for server and client exports", () => {
