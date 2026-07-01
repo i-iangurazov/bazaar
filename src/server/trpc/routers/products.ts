@@ -115,6 +115,7 @@ export const productsRouter = router({
         user: ctx.user,
         query: input.q,
         storeId: input.storeId,
+        limit: input.limit,
       }),
     ),
 

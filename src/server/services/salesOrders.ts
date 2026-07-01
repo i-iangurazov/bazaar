@@ -20,6 +20,7 @@ import { upsertCustomerFromOrderTx } from "@/server/services/customers";
 import { processEmailAutomationTrigger } from "@/server/services/emailMarketing";
 import {
   sendOrderConfirmationEmail,
+  sendOrderCancellationEmail,
   sendOrderTrackingEmail,
   type OrderEmailSendResult,
 } from "@/server/services/orderEmails";
@@ -395,7 +396,9 @@ export const getSalesOrderMetrics = async (input: {
       ...(input.storeId
         ? { storeId: input.storeId }
         : input.storeIds
-          ? { storeId: { in: input.storeIds.length ? input.storeIds : ["__no_accessible_store__"] } }
+          ? {
+              storeId: { in: input.storeIds.length ? input.storeIds : ["__no_accessible_store__"] },
+            }
           : {}),
       completedAt: {
         gte: input.dateFrom,
@@ -641,17 +644,6 @@ export const createCustomerOrderDraft = async (input: {
       source: CustomerOrderSource.MANUAL,
     },
   });
-  void processEmailAutomationTrigger({
-    organizationId: input.organizationId,
-    storeId: result.storeId,
-    customerOrderId: result.id,
-    trigger: EmailAutomationTrigger.ORDER_CREATED,
-  }).catch((error: unknown) => {
-    getLogger(input.requestId).error(
-      { error, customerOrderId: result.id, storeId: result.storeId },
-      "email automation order-created trigger failed",
-    );
-  });
   return result;
 };
 
@@ -725,8 +717,6 @@ export const updateCustomerOrderTracking = async (input: {
   actorId: string;
   requestId: string;
 }) => {
-  let shouldSendTrackingEmail = false;
-
   const order = await prisma.$transaction(async (tx) => {
     const before = await tx.customerOrder.findUnique({ where: { id: input.customerOrderId } });
     if (!before) {
@@ -740,14 +730,6 @@ export const updateCustomerOrderTracking = async (input: {
     const nextTrackingCarrier = normalizeOptionalText(input.trackingCarrier);
     const nextTrackingUrl = normalizeOptionalText(input.trackingUrl);
     const nextTrackingStatus = normalizeOptionalText(input.trackingStatus);
-    const changed =
-      normalizeOptionalText(before.trackingNumber) !== nextTrackingNumber ||
-      normalizeOptionalText(before.trackingCarrier) !== nextTrackingCarrier ||
-      normalizeOptionalText(before.trackingUrl) !== nextTrackingUrl ||
-      normalizeOptionalText(before.trackingStatus) !== nextTrackingStatus;
-
-    shouldSendTrackingEmail = changed && Boolean(nextTrackingNumber);
-
     const updated = await tx.customerOrder.update({
       where: { id: before.id },
       data: {
@@ -784,30 +766,7 @@ export const updateCustomerOrderTracking = async (input: {
     return serializeOrder(updated);
   });
 
-  let trackingEmail:
-    | OrderEmailSendResult
-    | { status: "failed"; reason: "sendFailed" }
-    | null = null;
-
-  if (shouldSendTrackingEmail) {
-    try {
-      trackingEmail = await sendOrderTrackingEmail({
-        organizationId: input.organizationId,
-        customerOrderId: input.customerOrderId,
-        triggeredById: input.actorId,
-        force: true,
-        throwOnMissingEmail: false,
-      });
-    } catch (error) {
-      getLogger(input.requestId).warn(
-        { error, customerOrderId: input.customerOrderId },
-        "tracking email send failed after order tracking update",
-      );
-      trackingEmail = { status: "failed", reason: "sendFailed" };
-    }
-  }
-
-  return { order, trackingEmail };
+  return { order, trackingEmail: null };
 };
 
 export const sendCustomerOrderEmail = async (input: {
@@ -1074,37 +1033,44 @@ const updateOrderStatus = async (input: {
       newStatus: result.newStatus,
     },
   });
-  void processEmailAutomationTrigger({
-    organizationId: input.organizationId,
-    storeId: result.order.storeId,
-    customerOrderId: result.order.id,
-    trigger: EmailAutomationTrigger.ORDER_STATUS_CHANGED,
-    oldStatus: result.oldStatus,
-    newStatus: result.newStatus,
-  }).catch((error: unknown) => {
-    getLogger(input.requestId).error(
-      {
-        error,
-        customerOrderId: result.order.id,
-        storeId: result.order.storeId,
-        oldStatus: result.oldStatus,
-        newStatus: result.newStatus,
-      },
-      "email automation order-status trigger failed",
-    );
-  });
-  if (result.newStatus === CustomerOrderStatus.CONFIRMED) {
-    void sendOrderConfirmationEmail({
+  if (
+    result.newStatus !== CustomerOrderStatus.CONFIRMED &&
+    result.newStatus !== CustomerOrderStatus.CANCELED
+  ) {
+    void processEmailAutomationTrigger({
       organizationId: input.organizationId,
+      storeId: result.order.storeId,
       customerOrderId: result.order.id,
-      triggeredById: input.actorId,
-      throwOnMissingEmail: false,
+      trigger: EmailAutomationTrigger.ORDER_STATUS_CHANGED,
+      oldStatus: result.oldStatus,
+      newStatus: result.newStatus,
     }).catch((error: unknown) => {
+      getLogger(input.requestId).error(
+        {
+          error,
+          customerOrderId: result.order.id,
+          storeId: result.order.storeId,
+          oldStatus: result.oldStatus,
+          newStatus: result.newStatus,
+        },
+        "email automation order-status trigger failed",
+      );
+    });
+  }
+  if (result.newStatus === CustomerOrderStatus.CONFIRMED) {
+    try {
+      await sendOrderConfirmationEmail({
+        organizationId: input.organizationId,
+        customerOrderId: result.order.id,
+        triggeredById: input.actorId,
+        throwOnMissingEmail: false,
+      });
+    } catch (error: unknown) {
       getLogger(input.requestId).error(
         { error, customerOrderId: result.order.id, storeId: result.order.storeId },
         "order confirmation email send failed",
       );
-    });
+    }
   }
   return result.order;
 };
@@ -1131,16 +1097,34 @@ export const markCustomerOrderReady = (input: {
     to: CustomerOrderStatus.READY,
   });
 
-export const cancelCustomerOrder = (input: {
+export const cancelCustomerOrder = async (input: {
   customerOrderId: string;
   organizationId: string;
   actorId: string;
   requestId: string;
-}) =>
-  updateOrderStatus({
+}) => {
+  const order = await updateOrderStatus({
     ...input,
     to: CustomerOrderStatus.CANCELED,
   });
+  let cancellationEmail: OrderEmailSendResult | { status: "failed"; reason: "sendFailed" } | null =
+    null;
+  try {
+    cancellationEmail = await sendOrderCancellationEmail({
+      organizationId: input.organizationId,
+      customerOrderId: order.id,
+      triggeredById: input.actorId,
+      throwOnMissingEmail: false,
+    });
+  } catch (error: unknown) {
+    getLogger(input.requestId).error(
+      { error, customerOrderId: order.id, storeId: order.storeId },
+      "order cancellation email send failed",
+    );
+    cancellationEmail = { status: "failed", reason: "sendFailed" };
+  }
+  return { order, cancellationEmail };
+};
 
 export const completeCustomerOrder = async (input: {
   customerOrderId: string;

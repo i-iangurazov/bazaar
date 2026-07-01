@@ -92,8 +92,23 @@ const SalesOrdersPage = () => {
   });
 
   const cancelMutation = trpc.salesOrders.cancel.useMutation({
-    onSuccess: async () => {
+    onSuccess: async (result) => {
       await listQuery.refetch();
+      if (result.cancellationEmail?.status === "sent") {
+        toast({ variant: "success", description: t("cancelSuccessEmailSent") });
+        return;
+      }
+      if (
+        result.cancellationEmail?.status === "skipped" &&
+        result.cancellationEmail.reason === "missingEmail"
+      ) {
+        toast({ variant: "info", description: t("cancelSuccessEmailSkipped") });
+        return;
+      }
+      if (result.cancellationEmail?.status === "failed") {
+        toast({ variant: "error", description: t("cancelSuccessEmailFailed") });
+        return;
+      }
       toast({ variant: "success", description: t("cancelSuccess") });
     },
     onError: (error) => {

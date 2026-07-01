@@ -80,7 +80,7 @@ const NewSalesOrderPage = () => {
   const selectedStore = storesQuery.data?.find((store) => store.id === storeId) ?? null;
 
   const productSearchQuery = trpc.products.searchQuick.useQuery(
-    { q: lineSearch.trim(), storeId: storeId || undefined },
+    { q: lineSearch.trim(), storeId: storeId || undefined, limit: 25 },
     { enabled: lineSearch.trim().length >= 1 },
   );
 

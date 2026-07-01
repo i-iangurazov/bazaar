@@ -555,12 +555,14 @@ export const searchQuickProducts = async ({
   user,
   query,
   storeId,
+  limit,
 }: {
   prisma: PrismaDbClient;
   organizationId: string;
   user?: StoreAccessUser;
   query: string;
   storeId?: string;
+  limit?: number;
 }) => {
   const trimmed = query.trim();
   const normalized = normalizeScanValue(query);
@@ -569,6 +571,8 @@ export const searchQuickProducts = async ({
     return [];
   }
 
+  const resultLimit = Math.min(Math.max(limit ?? 20, 1), 50);
+  const candidateLimit = Math.min(Math.max(resultLimit * 10, 100), 500);
   const fuzzyNeedle = trimmed || exactNeedle;
   const barcodeNeedle = normalized || fuzzyNeedle;
   const fuzzyNeedleLower = fuzzyNeedle.toLowerCase();
@@ -600,7 +604,7 @@ export const searchQuickProducts = async ({
           select: productPreviewSelect,
         },
       },
-      take: 10,
+      take: resultLimit,
     }),
     prisma.product.findMany({
       where: {
@@ -610,7 +614,7 @@ export const searchQuickProducts = async ({
         sku: { equals: exactNeedle, mode: "insensitive" },
       },
       select: productPreviewSelect,
-      take: 10,
+      take: resultLimit,
     }),
     prisma.product.findMany({
       where: {
@@ -650,7 +654,7 @@ export const searchQuickProducts = async ({
         },
       },
       orderBy: { name: "asc" },
-      take: 40,
+      take: candidateLimit,
     }),
   ]);
 
@@ -708,7 +712,7 @@ export const searchQuickProducts = async ({
     });
   });
 
-  const orderedProducts = Array.from(items.values()).slice(0, 10);
+  const orderedProducts = Array.from(items.values()).slice(0, resultLimit);
   const priceOverrides =
     storeId && orderedProducts.length
       ? await prisma.storePrice.findMany({

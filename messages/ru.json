@@ -4336,6 +4336,9 @@
     "completeSuccess": "Заказ завершен и товары списаны.",
     "cancel": "Отменить",
     "cancelSuccess": "Заказ отменен.",
+    "cancelSuccessEmailSent": "Заказ отменен. Письмо об отмене отправлено.",
+    "cancelSuccessEmailSkipped": "Заказ отменен. Письмо об отмене пропущено, потому что email клиента не указан.",
+    "cancelSuccessEmailFailed": "Заказ отменен, но письмо об отмене отправить не удалось.",
     "confirmSubmit": "Подтвердить заказ клиента?",
     "confirmMarkReady": "Отметить заказ как готовый к выдаче?",
     "confirmComplete": "Завершить заказ и списать товары со склада?",
@@ -5665,7 +5668,7 @@
     "filters": {
       "title": "Период и фильтры",
       "store": "Магазин",
-      "register": "Касса",
+      "register": "Касса / POS / Register",
       "allRegisters": "Все кассы",
       "cashier": "Кассир",
       "allCashiers": "Все кассиры",

@@ -293,6 +293,66 @@ describeDb("analytics", () => {
       ],
     });
 
+    const otherRegister = await prisma.posRegister.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Back Desk",
+        code: "BACK",
+      },
+    });
+    const otherShift = await prisma.registerShift.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        registerId: otherRegister.id,
+        openedById: cashierUser.id,
+        openedAt: new Date("2026-06-20T05:30:00.000Z"),
+      },
+    });
+    const otherSale = await prisma.customerOrder.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        registerId: otherRegister.id,
+        shiftId: otherShift.id,
+        number: "POS-AN-2",
+        status: CustomerOrderStatus.COMPLETED,
+        isPosSale: true,
+        isHeld: false,
+        subtotalKgs: new Prisma.Decimal(500),
+        discountKgs: new Prisma.Decimal(0),
+        totalKgs: new Prisma.Decimal(500),
+        completedAt,
+        createdAt: completedAt,
+        createdById: cashierUser.id,
+        customerName: "Other Register Customer",
+      },
+    });
+    await prisma.customerOrderLine.create({
+      data: {
+        customerOrderId: otherSale.id,
+        productId: product.id,
+        variantKey: "BASE",
+        qty: 5,
+        unitPriceKgs: new Prisma.Decimal(100),
+        lineTotalKgs: new Prisma.Decimal(500),
+      },
+    });
+    await prisma.salePayment.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        shiftId: otherShift.id,
+        customerOrderId: otherSale.id,
+        method: PosPaymentMethod.CARD,
+        amountKgs: new Prisma.Decimal(500),
+        isRefund: false,
+        createdById: cashierUser.id,
+        createdAt: completedAt,
+      },
+    });
+
     const adminCaller = createTestCaller({
       id: adminUser.id,
       email: adminUser.email,
@@ -322,6 +382,20 @@ describeDb("analytics", () => {
     expect(overview.totals.paymentBreakdown.CARD).toBe(200);
     expect(overview.totals.refundBreakdown.CASH).toBe(100);
 
+    const allRegistersInput = {
+      storeId: store.id,
+      cashierId: cashierUser.id,
+      dateFrom: "2026-06-20",
+      dateTo: "2026-06-20",
+    };
+    const allRegistersOverview = await adminCaller.analytics.salesOverview(allRegistersInput);
+    expect(allRegistersOverview.totals).toMatchObject({
+      grossSalesKgs: 800,
+      netSalesKgs: 700,
+      receiptCount: 2,
+      averageReceiptKgs: 400,
+    });
+
     const options = await adminCaller.analytics.salesFilterOptions(input);
     expect(options.categories).toContain("Accessories");
 
@@ -346,6 +420,23 @@ describeDb("analytics", () => {
       netRevenueKgs: 200,
       stockRemaining: 7,
       receiptCount: 1,
+    });
+
+    const allRegisterProducts = await adminCaller.analytics.soldProducts({
+      ...allRegistersInput,
+      search: "123456",
+      page: 1,
+      pageSize: 25,
+    });
+    expect(allRegisterProducts.items[0]).toMatchObject({
+      productId: product.id,
+      quantitySold: 8,
+      quantityReturned: 1,
+      netQuantity: 7,
+      grossRevenueKgs: 800,
+      returnedRevenueKgs: 100,
+      netRevenueKgs: 700,
+      receiptCount: 2,
     });
 
     const dayDetail = await adminCaller.analytics.salesDayDetail({

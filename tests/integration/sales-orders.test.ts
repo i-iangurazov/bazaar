@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  EmailAutomationStatus,
+  EmailAutomationTrigger,
   CustomerOrderEmailStatus,
   CustomerOrderEmailType,
   CustomerOrderStatus,
@@ -93,7 +95,67 @@ describeDb("sales orders", () => {
     });
   });
 
-  it("auto-sends tracking email only when tracking details change", async () => {
+  it("sends one confirmation email on confirm without order automation duplicate", async () => {
+    const { org, store, product, adminUser } = await seedBase();
+
+    await prisma.emailAutomation.createMany({
+      data: [
+        {
+          organizationId: org.id,
+          storeId: store.id,
+          trigger: EmailAutomationTrigger.ORDER_CREATED,
+          status: EmailAutomationStatus.ACTIVE,
+          name: "Legacy order created",
+          subject: "Order {{orderNumber}} accepted",
+        },
+        {
+          organizationId: org.id,
+          storeId: store.id,
+          trigger: EmailAutomationTrigger.ORDER_STATUS_CHANGED,
+          status: EmailAutomationStatus.ACTIVE,
+          name: "Legacy status changed",
+          subject: "Order {{orderNumber}} status changed",
+        },
+      ],
+    });
+
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+      isOrgOwner: true,
+    });
+
+    const order = await caller.salesOrders.createDraft({
+      storeId: store.id,
+      customerName: "Confirm Client",
+      customerEmail: "confirm@example.com",
+      lines: [{ productId: product.id, qty: 1 }],
+    });
+
+    expect(
+      await prisma.emailAutomationDelivery.count({ where: { customerOrderId: order.id } }),
+    ).toBe(0);
+
+    await caller.salesOrders.confirm({ customerOrderId: order.id });
+
+    const logs = await prisma.customerOrderEmailLog.findMany({
+      where: { customerOrderId: order.id, type: CustomerOrderEmailType.CONFIRMATION },
+    });
+    const deliveries = await prisma.emailAutomationDelivery.findMany({
+      where: { customerOrderId: order.id },
+    });
+
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toMatchObject({
+      status: CustomerOrderEmailStatus.SENT,
+      recipientEmail: "confirm@example.com",
+    });
+    expect(deliveries).toHaveLength(0);
+  });
+
+  it("saves tracking without sending and sends tracking email explicitly", async () => {
     const { org, store, product, adminUser } = await seedBase();
 
     const caller = createTestCaller({
@@ -119,17 +181,27 @@ describeDb("sales orders", () => {
         trackingUrl: "https://track.example.com/TRK-1",
         trackingStatus: "Shipped",
       }),
-    ).resolves.toMatchObject({ trackingEmail: { status: "sent" } });
+    ).resolves.toMatchObject({ trackingEmail: null });
+
+    let dbOrder = await prisma.customerOrder.findUniqueOrThrow({ where: { id: order.id } });
+    let sentLogs = await prisma.customerOrderEmailLog.findMany({
+      where: {
+        customerOrderId: order.id,
+        type: CustomerOrderEmailType.TRACKING,
+        status: CustomerOrderEmailStatus.SENT,
+      },
+    });
+
+    expect(dbOrder.trackingNumber).toBe("TRK-1");
+    expect(dbOrder.trackingEmailSentAt).toBeNull();
+    expect(sentLogs).toHaveLength(0);
 
     await expect(
-      caller.salesOrders.updateTracking({
+      caller.salesOrders.sendEmail({
         customerOrderId: order.id,
-        trackingNumber: "TRK-1",
-        trackingCarrier: "Courier",
-        trackingUrl: "https://track.example.com/TRK-1",
-        trackingStatus: "Shipped",
+        type: CustomerOrderEmailType.TRACKING,
       }),
-    ).resolves.toMatchObject({ trackingEmail: null });
+    ).resolves.toMatchObject({ status: "sent", recipientEmail: "tracking@example.com" });
 
     await expect(
       caller.salesOrders.updateTracking({
@@ -139,10 +211,10 @@ describeDb("sales orders", () => {
         trackingUrl: "https://track.example.com/TRK-1",
         trackingStatus: "In transit",
       }),
-    ).resolves.toMatchObject({ trackingEmail: { status: "sent" } });
+    ).resolves.toMatchObject({ trackingEmail: null });
 
-    const dbOrder = await prisma.customerOrder.findUniqueOrThrow({ where: { id: order.id } });
-    const sentLogs = await prisma.customerOrderEmailLog.findMany({
+    dbOrder = await prisma.customerOrder.findUniqueOrThrow({ where: { id: order.id } });
+    sentLogs = await prisma.customerOrderEmailLog.findMany({
       where: {
         customerOrderId: order.id,
         type: CustomerOrderEmailType.TRACKING,
@@ -154,7 +226,83 @@ describeDb("sales orders", () => {
     expect(dbOrder.trackingNumber).toBe("TRK-1");
     expect(dbOrder.trackingStatus).toBe("In transit");
     expect(dbOrder.trackingEmailSentAt).toBeInstanceOf(Date);
-    expect(sentLogs).toHaveLength(2);
+    expect(sentLogs).toHaveLength(1);
+
+    const missingTrackingOrder = await caller.salesOrders.createDraft({
+      storeId: store.id,
+      customerName: "Missing Tracking Client",
+      customerEmail: "missing-tracking@example.com",
+      lines: [{ productId: product.id, qty: 1 }],
+    });
+
+    await expect(
+      caller.salesOrders.sendEmail({
+        customerOrderId: missingTrackingOrder.id,
+        type: CustomerOrderEmailType.TRACKING,
+      }),
+    ).rejects.toMatchObject({ message: "trackingNumberMissing" });
+  });
+
+  it("sends and logs cancellation email once", async () => {
+    const { org, store, product, adminUser } = await seedBase();
+
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+      isOrgOwner: true,
+    });
+
+    const order = await caller.salesOrders.createDraft({
+      storeId: store.id,
+      customerName: "Cancel Client",
+      customerEmail: "cancel@example.com",
+      lines: [{ productId: product.id, qty: 1 }],
+    });
+
+    const result = await caller.salesOrders.cancel({ customerOrderId: order.id });
+    expect(result.cancellationEmail).toMatchObject({
+      status: "sent",
+      recipientEmail: "cancel@example.com",
+    });
+
+    await expect(caller.salesOrders.cancel({ customerOrderId: order.id })).rejects.toMatchObject({
+      message: "invalidTransition",
+    });
+
+    const logs = await prisma.customerOrderEmailLog.findMany({
+      where: { customerOrderId: order.id, type: CustomerOrderEmailType.CANCELLATION },
+    });
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toMatchObject({
+      status: CustomerOrderEmailStatus.SENT,
+      recipientEmail: "cancel@example.com",
+    });
+
+    const noEmailOrder = await caller.salesOrders.createDraft({
+      storeId: store.id,
+      customerName: "No Email Client",
+      customerEmail: null,
+      lines: [{ productId: product.id, qty: 1 }],
+    });
+
+    const noEmailResult = await caller.salesOrders.cancel({ customerOrderId: noEmailOrder.id });
+    expect(noEmailResult.cancellationEmail).toMatchObject({
+      status: "skipped",
+      reason: "missingEmail",
+      recipientEmail: null,
+    });
+
+    const skippedLogs = await prisma.customerOrderEmailLog.findMany({
+      where: { customerOrderId: noEmailOrder.id, type: CustomerOrderEmailType.CANCELLATION },
+    });
+    expect(skippedLogs).toHaveLength(1);
+    expect(skippedLogs[0]).toMatchObject({
+      status: CustomerOrderEmailStatus.SKIPPED,
+      recipientEmail: null,
+      errorMessage: "customerEmailMissing",
+    });
   });
 
   it("sends follow-up emails from the registered job idempotently", async () => {
@@ -262,7 +410,10 @@ describeDb("sales orders", () => {
       isOrgOwner: true,
     });
 
-    const order = await caller.salesOrders.createDraft({ storeId: store.id, customerName: "Client A" });
+    const order = await caller.salesOrders.createDraft({
+      storeId: store.id,
+      customerName: "Client A",
+    });
     await caller.salesOrders.addLine({
       customerOrderId: order.id,
       productId: product.id,
@@ -322,7 +473,10 @@ describeDb("sales orders", () => {
       isOrgOwner: true,
     });
 
-    const order = await caller.salesOrders.createDraft({ storeId: store.id, customerName: "Client B" });
+    const order = await caller.salesOrders.createDraft({
+      storeId: store.id,
+      customerName: "Client B",
+    });
     await caller.salesOrders.addLine({
       customerOrderId: order.id,
       productId: product.id,
@@ -380,7 +534,11 @@ describeDb("sales orders", () => {
     });
 
     const order = await adminCaller.salesOrders.createDraft({ storeId: store.id });
-    await adminCaller.salesOrders.addLine({ customerOrderId: order.id, productId: product.id, qty: 1 });
+    await adminCaller.salesOrders.addLine({
+      customerOrderId: order.id,
+      productId: product.id,
+      qty: 1,
+    });
     await adminCaller.salesOrders.confirm({ customerOrderId: order.id });
     await adminCaller.salesOrders.markReady({ customerOrderId: order.id });
 
@@ -398,7 +556,9 @@ describeDb("sales orders", () => {
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
 
-    await expect(staffCaller.salesOrders.cancel({ customerOrderId: order.id })).rejects.toMatchObject({
+    await expect(
+      staffCaller.salesOrders.cancel({ customerOrderId: order.id }),
+    ).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
   });

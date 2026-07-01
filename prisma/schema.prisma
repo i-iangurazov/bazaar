@@ -424,6 +424,7 @@ enum CustomerOrderEmailType {
   CONFIRMATION
   TRACKING
   FOLLOW_UP
+  CANCELLATION
 }
 
 enum CustomerOrderEmailStatus {

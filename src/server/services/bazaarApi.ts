@@ -3,7 +3,6 @@ import {
   CustomerOrderSource,
   CustomerOrderStatus,
   CustomerSource,
-  EmailAutomationTrigger,
   type Prisma,
 } from "@prisma/client";
 
@@ -23,7 +22,6 @@ import {
   upsertCustomerFromOrderTx,
 } from "@/server/services/customers";
 import { AppError } from "@/server/services/errors";
-import { processEmailAutomationTrigger } from "@/server/services/emailMarketing";
 import { toJson } from "@/server/services/json";
 import { sendOrderConfirmationEmail } from "@/server/services/orderEmails";
 
@@ -779,17 +777,6 @@ export const createBazaarApiOrder = async (input: {
       storeId: result.storeId,
       source: CustomerOrderSource.API,
     },
-  });
-  void processEmailAutomationTrigger({
-    organizationId: input.organizationId,
-    storeId: result.storeId,
-    customerOrderId: result.id,
-    trigger: EmailAutomationTrigger.ORDER_CREATED,
-  }).catch((error: unknown) => {
-    getLogger().error(
-      { error, customerOrderId: result.id, storeId: result.storeId },
-      "email automation API order-created trigger failed",
-    );
   });
   void sendOrderConfirmationEmail({
     organizationId: input.organizationId,

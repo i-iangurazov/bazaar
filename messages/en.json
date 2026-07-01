@@ -4336,6 +4336,9 @@
     "completeSuccess": "Order completed and stock written off.",
     "cancel": "Cancel",
     "cancelSuccess": "Order canceled.",
+    "cancelSuccessEmailSent": "Order canceled. Cancellation email sent.",
+    "cancelSuccessEmailSkipped": "Order canceled. Cancellation email was skipped because the customer email is missing.",
+    "cancelSuccessEmailFailed": "Order canceled, but the cancellation email could not be sent.",
     "confirmSubmit": "Confirm customer order?",
     "confirmMarkReady": "Mark order as ready for pickup?",
     "confirmComplete": "Complete order and write off stock?",
@@ -5667,7 +5670,7 @@
     "filters": {
       "title": "Period and filters",
       "store": "Store",
-      "register": "Register",
+      "register": "Касса / POS / Register",
       "allRegisters": "All registers",
       "cashier": "Cashier",
       "allCashiers": "All cashiers",

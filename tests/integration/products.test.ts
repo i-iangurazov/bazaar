@@ -978,6 +978,65 @@ describeDb("products", () => {
     expect(item?.effectivePriceKgs).toBe(777);
   });
 
+  it("quick search finds products by contains name, sku, barcode, Cyrillic and Latin", async () => {
+    const { org, store, adminUser, baseUnit } = await seedBase();
+
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+      isOrgOwner: true,
+    });
+
+    const apple = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-search-quick-apple",
+      sku: "APPLE-QUICK-1",
+      name: "Apple Quick Search",
+      baseUnitId: baseUnit.id,
+      storeId: store.id,
+      barcodes: ["1112223334445"],
+    });
+    const latin = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-search-quick-latin",
+      sku: "LAT-MID-001",
+      name: "Winter Boots Delta",
+      baseUnitId: baseUnit.id,
+      storeId: store.id,
+      barcodes: ["9876543210123"],
+    });
+    const cyrillic = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-search-quick-cyrillic",
+      sku: "CYR-BAG-001",
+      name: "Рюкзак городской Зеленый",
+      baseUnitId: baseUnit.id,
+      storeId: store.id,
+      barcodes: ["2223334445556"],
+    });
+
+    const searchIds = async (q: string) =>
+      (
+        await caller.products.searchQuick({
+          q,
+          storeId: store.id,
+          limit: 25,
+        })
+      ).map((product) => product.id);
+
+    await expect(searchIds("Apple")).resolves.toContain(apple.id);
+    await expect(searchIds("Delta")).resolves.toContain(latin.id);
+    await expect(searchIds("MID-001")).resolves.toContain(latin.id);
+    await expect(searchIds("987654321")).resolves.toContain(latin.id);
+    await expect(searchIds("город")).resolves.toContain(cyrillic.id);
+    await expect(searchIds("winter")).resolves.toContain(latin.id);
+  });
+
   it("normalizes scanned barcode input while keeping org scoping", async () => {
     const { org, store, adminUser, managerUser, baseUnit } = await seedBase();
     await grantStoreAccess(org.id, managerUser.id, store.id);

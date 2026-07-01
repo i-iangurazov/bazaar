@@ -159,7 +159,7 @@ const SalesOrderDetailPage = () => {
   const lineQtyInputRef = useRef<HTMLInputElement | null>(null);
 
   const productSearchQuery = trpc.products.searchQuick.useQuery(
-    { q: lineSearch.trim(), storeId: orderStore?.id },
+    { q: lineSearch.trim(), storeId: orderStore?.id, limit: 25 },
     {
       enabled: lineDialogMode === "add" && Boolean(orderStore?.id) && lineSearch.trim().length >= 1,
     },
@@ -205,23 +205,17 @@ const SalesOrderDetailPage = () => {
     },
   });
 
-  const updateTrackingMutation = trpc.salesOrders.updateTracking.useMutation({
-    onSuccess: async (result) => {
+  const saveTrackingMutation = trpc.salesOrders.updateTracking.useMutation({
+    onSuccess: async () => {
       await refetchAll();
-      if (result.trackingEmail?.status === "sent") {
-        toast({ variant: "success", description: t("trackingUpdatedEmailSent") });
-        return;
-      }
-      if (result.trackingEmail?.status === "skipped") {
-        toast({ variant: "info", description: t("trackingUpdatedEmailSkipped") });
-        return;
-      }
-      if (result.trackingEmail?.status === "failed") {
-        toast({ variant: "error", description: t("trackingUpdatedEmailFailed") });
-        return;
-      }
       toast({ variant: "success", description: t("trackingUpdated") });
     },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+
+  const saveTrackingBeforeSendMutation = trpc.salesOrders.updateTracking.useMutation({
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
@@ -306,8 +300,23 @@ const SalesOrderDetailPage = () => {
   });
 
   const cancelMutation = trpc.salesOrders.cancel.useMutation({
-    onSuccess: async () => {
+    onSuccess: async (result) => {
       await refetchAll();
+      if (result.cancellationEmail?.status === "sent") {
+        toast({ variant: "success", description: t("cancelSuccessEmailSent") });
+        return;
+      }
+      if (
+        result.cancellationEmail?.status === "skipped" &&
+        result.cancellationEmail.reason === "missingEmail"
+      ) {
+        toast({ variant: "info", description: t("cancelSuccessEmailSkipped") });
+        return;
+      }
+      if (result.cancellationEmail?.status === "failed") {
+        toast({ variant: "error", description: t("cancelSuccessEmailFailed") });
+        return;
+      }
       toast({ variant: "success", description: t("cancelSuccess") });
     },
     onError: (error) => {
@@ -367,17 +376,43 @@ const SalesOrderDetailPage = () => {
     });
   };
 
+  const optionalFormValue = (value?: string | null) => {
+    const normalized = value?.trim();
+    return normalized ? normalized : null;
+  };
+
+  const customerFormChanged = () =>
+    Boolean(
+      order &&
+      (optionalFormValue(customerName) !== optionalFormValue(order.customerName) ||
+        optionalFormValue(customerEmail) !== optionalFormValue(order.customerEmail) ||
+        optionalFormValue(customerPhone) !== optionalFormValue(order.customerPhone) ||
+        optionalFormValue(customerAddress) !== optionalFormValue(order.customerAddress) ||
+        optionalFormValue(notes) !== optionalFormValue(order.notes)),
+    );
+
+  const trackingFormChanged = () =>
+    Boolean(
+      order &&
+      (optionalFormValue(trackingNumber) !== optionalFormValue(order.trackingNumber) ||
+        optionalFormValue(trackingCarrier) !== optionalFormValue(order.trackingCarrier) ||
+        optionalFormValue(trackingUrl) !== optionalFormValue(order.trackingUrl) ||
+        optionalFormValue(trackingStatus) !== optionalFormValue(order.trackingStatus)),
+    );
+
+  const trackingMutationInput = (customerOrderId: string) => ({
+    customerOrderId,
+    trackingNumber: optionalFormValue(trackingNumber),
+    trackingCarrier: optionalFormValue(trackingCarrier),
+    trackingUrl: optionalFormValue(trackingUrl),
+    trackingStatus: optionalFormValue(trackingStatus),
+  });
+
   const handleSaveTracking = async () => {
     if (!order) {
       return;
     }
-    await updateTrackingMutation.mutateAsync({
-      customerOrderId: order.id,
-      trackingNumber: trackingNumber.trim() || null,
-      trackingCarrier: trackingCarrier.trim() || null,
-      trackingUrl: trackingUrl.trim() || null,
-      trackingStatus: trackingStatus.trim() || null,
-    });
+    await saveTrackingMutation.mutateAsync(trackingMutationInput(order.id));
   };
 
   const handleSendEmail = async (type: ManualOrderEmailType) => {
@@ -387,6 +422,37 @@ const SalesOrderDetailPage = () => {
     await sendEmailMutation.mutateAsync({
       customerOrderId: order.id,
       type,
+    });
+  };
+
+  const handleSendTrackingEmail = async () => {
+    if (!order) {
+      return;
+    }
+    if (!trackingNumber.trim()) {
+      toast({ variant: "error", description: tErrors("trackingNumberMissing") });
+      return;
+    }
+    if (!customerEmail.trim() && !order.customerEmail?.trim()) {
+      toast({ variant: "error", description: tErrors("customerEmailMissing") });
+      return;
+    }
+    if (customerFormChanged()) {
+      await setCustomerMutation.mutateAsync({
+        customerOrderId: order.id,
+        customerName: optionalFormValue(customerName),
+        customerEmail: optionalFormValue(customerEmail),
+        customerPhone: optionalFormValue(customerPhone),
+        customerAddress: optionalFormValue(customerAddress),
+        notes: optionalFormValue(notes),
+      });
+    }
+    if (trackingFormChanged()) {
+      await saveTrackingBeforeSendMutation.mutateAsync(trackingMutationInput(order.id));
+    }
+    await sendEmailMutation.mutateAsync({
+      customerOrderId: order.id,
+      type: CustomerOrderEmailType.TRACKING,
     });
   };
 
@@ -472,8 +538,11 @@ const SalesOrderDetailPage = () => {
 
   const lineActionsDisabled =
     addLineMutation.isLoading || updateLineMutation.isLoading || removeLineMutation.isLoading;
-  const trackingActionsDisabled = !canFinalize || updateTrackingMutation.isLoading;
-  const trackingNumberTrimmed = trackingNumber.trim();
+  const trackingActionsDisabled =
+    !canFinalize ||
+    saveTrackingMutation.isLoading ||
+    saveTrackingBeforeSendMutation.isLoading ||
+    sendEmailMutation.isLoading;
   const formatOptionalDate = (value?: Date | null) =>
     value ? formatDate(value, locale) : tCommon("notAvailable");
 
@@ -778,10 +847,10 @@ const SalesOrderDetailPage = () => {
                 <div className="flex flex-wrap justify-end gap-2">
                   <Button
                     variant="secondary"
-                    onClick={() => void handleSendEmail(CustomerOrderEmailType.TRACKING)}
-                    disabled={!trackingNumberTrimmed || sendEmailMutation.isLoading}
+                    onClick={() => void handleSendTrackingEmail()}
+                    disabled={trackingActionsDisabled}
                   >
-                    {sendEmailMutation.isLoading ? (
+                    {sendEmailMutation.isLoading || saveTrackingBeforeSendMutation.isLoading ? (
                       <Spinner className="h-4 w-4" />
                     ) : (
                       <SendIcon className="h-4 w-4" aria-hidden />
@@ -793,7 +862,7 @@ const SalesOrderDetailPage = () => {
                     onClick={() => void handleSaveTracking()}
                     disabled={trackingActionsDisabled}
                   >
-                    {updateTrackingMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
+                    {saveTrackingMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
                     {t("saveTracking")}
                   </Button>
                 </div>

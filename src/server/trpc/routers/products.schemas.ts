@@ -139,6 +139,7 @@ export const findProductByBarcodeInputSchema = z.object({
 export const searchQuickProductsInputSchema = z.object({
   q: z.string(),
   storeId: z.string().optional(),
+  limit: z.number().int().min(1).max(50).optional(),
 });
 
 export const productsByIdsInputSchema = z.object({

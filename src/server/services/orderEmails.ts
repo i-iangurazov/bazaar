@@ -10,6 +10,7 @@ import {
   normalizeCurrencyCode,
   normalizeCurrencyRateKgsPerUnit,
 } from "@/lib/currency";
+import { defaultTimeZone } from "@/lib/timezone";
 import { prisma } from "@/server/db/prisma";
 import { getLogger } from "@/server/logging";
 import { sendTransactionalEmail } from "@/server/services/email";
@@ -42,6 +43,7 @@ type OrderEmailRecord = {
   createdAt: Date;
   confirmedAt: Date | null;
   completedAt: Date | null;
+  canceledAt: Date | null;
   subtotalKgs: Prisma.Decimal;
   totalKgs: Prisma.Decimal;
   currencyCode: string | null;
@@ -68,6 +70,14 @@ export type OrderEmailSendResult = {
   recipientEmail?: string | null;
 };
 
+export type OrderEmailLanguage = "en" | "ru";
+
+const defaultOrderEmailLanguage: OrderEmailLanguage = "en";
+const dateLocaleByLanguage: Record<OrderEmailLanguage, string> = {
+  en: "en-US",
+  ru: "ru-RU",
+};
+
 const trimToNull = (value?: string | null) => {
   const normalized = value?.trim();
   return normalized ? normalized : null;
@@ -85,11 +95,15 @@ const escapeHtml = (value: string) =>
 
 const formatOptional = (value?: string | null, fallback = "-") => trimToNull(value) ?? fallback;
 
-const formatDate = (value?: Date | null) =>
+export const formatOrderEmailDate = (
+  value?: Date | null,
+  language: OrderEmailLanguage = defaultOrderEmailLanguage,
+) =>
   value
-    ? new Intl.DateTimeFormat("ru-KG", {
+    ? new Intl.DateTimeFormat(dateLocaleByLanguage[language], {
         dateStyle: "medium",
         timeStyle: "short",
+        timeZone: defaultTimeZone,
       }).format(value)
     : "-";
 
@@ -106,7 +120,7 @@ const formatMoney = (valueKgs: Prisma.Decimal | number, order: OrderEmailRecord)
   const { currencyCode, currencyRateKgsPerUnit } = resolveCurrency(order);
   const value = convertFromKgs(Number(valueKgs), currencyRateKgsPerUnit, currencyCode);
   try {
-    return new Intl.NumberFormat("ru-KG", {
+    return new Intl.NumberFormat(dateLocaleByLanguage[defaultOrderEmailLanguage], {
       style: "currency",
       currency: currencyCode,
       maximumFractionDigits: 2,
@@ -116,10 +130,7 @@ const formatMoney = (valueKgs: Prisma.Decimal | number, order: OrderEmailRecord)
   }
 };
 
-const getOrderForEmail = async (input: {
-  organizationId: string;
-  customerOrderId: string;
-}) => {
+const getOrderForEmail = async (input: { organizationId: string; customerOrderId: string }) => {
   const order = await prisma.customerOrder.findFirst({
     where: {
       id: input.customerOrderId,
@@ -202,6 +213,9 @@ const updateSentTimestamp = (input: {
       data: { trackingEmailSentAt: input.sentAt },
     });
   }
+  if (input.type === CustomerOrderEmailType.CANCELLATION) {
+    return Promise.resolve();
+  }
   return prisma.customerOrder.update({
     where: { id: input.orderId },
     data: { followUpEmailSentAt: input.sentAt },
@@ -214,6 +228,9 @@ const alreadySentAt = (order: OrderEmailRecord, type: CustomerOrderEmailType) =>
   }
   if (type === CustomerOrderEmailType.TRACKING) {
     return order.trackingEmailSentAt;
+  }
+  if (type === CustomerOrderEmailType.CANCELLATION) {
+    return null;
   }
   return order.followUpEmailSentAt;
 };
@@ -278,7 +295,7 @@ const buildConfirmationPayload = (order: OrderEmailRecord, recipientEmail: strin
     `Hello ${customerName},`,
     "",
     `Your order ${order.number} has been received by ${order.store.name}.`,
-    `Order date: ${formatDate(order.confirmedAt ?? order.createdAt)}`,
+    `Order date: ${formatOrderEmailDate(order.confirmedAt ?? order.createdAt)}`,
     `Status: ${order.status}`,
     `Customer: ${customerName}`,
     `Delivery/pickup: ${formatOptional(order.customerAddress)}`,
@@ -296,7 +313,7 @@ const buildConfirmationPayload = (order: OrderEmailRecord, recipientEmail: strin
     body: `
       <dl style="margin:0;color:#111827;">
         <dt style="color:#6b7280;font-size:12px;">Order date</dt>
-        <dd style="margin:0 0 10px;">${escapeHtml(formatDate(order.confirmedAt ?? order.createdAt))}</dd>
+        <dd style="margin:0 0 10px;">${escapeHtml(formatOrderEmailDate(order.confirmedAt ?? order.createdAt))}</dd>
         <dt style="color:#6b7280;font-size:12px;">Customer</dt>
         <dd style="margin:0 0 10px;">${escapeHtml(customerName)}</dd>
         <dt style="color:#6b7280;font-size:12px;">Delivery/pickup</dt>
@@ -317,6 +334,56 @@ const buildConfirmationPayload = (order: OrderEmailRecord, recipientEmail: strin
       { name: "order_id", value: order.id },
     ],
     idempotencyKey: `customer-order-confirmation-${order.id}`,
+  };
+};
+
+const buildCancellationPayload = (order: OrderEmailRecord, recipientEmail: string) => {
+  const subject = `Order ${order.number} canceled`;
+  const customerName = formatOptional(order.customerName, "Customer");
+  const canceledAt = formatOrderEmailDate(order.canceledAt ?? new Date());
+  const statusLabel = "Canceled";
+  const text = [
+    `Hello ${customerName},`,
+    "",
+    `Your order ${order.number} from ${order.store.name} was canceled.`,
+    `Status: ${statusLabel}`,
+    `Canceled at: ${canceledAt}`,
+    "",
+    "If a payment has already been captured, refund handling will follow the store policy.",
+    "",
+    "Order summary:",
+    buildLinesText(order),
+    "",
+    `Total: ${formatMoney(order.totalKgs, order)}`,
+  ].join("\n");
+
+  const html = emailFrame({
+    storeName: order.store.name,
+    title: `Order ${order.number} canceled`,
+    intro: `Hello ${customerName}, your order was canceled.`,
+    body: `
+      <dl style="margin:0;color:#111827;">
+        <dt style="color:#6b7280;font-size:12px;">Status</dt>
+        <dd style="margin:0 0 10px;font-weight:700;">${escapeHtml(statusLabel)}</dd>
+        <dt style="color:#6b7280;font-size:12px;">Canceled at</dt>
+        <dd style="margin:0 0 10px;">${escapeHtml(canceledAt)}</dd>
+      </dl>
+      <p style="margin:0 0 16px;color:#374151;">If a payment has already been captured, refund handling will follow the store policy.</p>
+      ${buildLinesHtml(order)}
+      <p style="margin:16px 0 0;font-size:18px;font-weight:700;color:#111827;">Total: ${escapeHtml(formatMoney(order.totalKgs, order))}</p>
+    `,
+  });
+
+  return {
+    to: recipientEmail,
+    subject,
+    text,
+    html,
+    tags: [
+      { name: "kind", value: "order_cancellation" },
+      { name: "order_id", value: order.id },
+    ],
+    idempotencyKey: `customer-order-cancellation-${order.id}`,
   };
 };
 
@@ -426,7 +493,29 @@ const buildEmailPayload = (
   if (type === CustomerOrderEmailType.TRACKING) {
     return buildTrackingPayload(order, recipientEmail);
   }
+  if (type === CustomerOrderEmailType.CANCELLATION) {
+    return buildCancellationPayload(order, recipientEmail);
+  }
   return buildFollowUpPayload(order, recipientEmail);
+};
+
+const hasSentEmail = async (order: OrderEmailRecord, type: CustomerOrderEmailType) => {
+  const sentAt = alreadySentAt(order, type);
+  if (sentAt) {
+    return true;
+  }
+  if (type !== CustomerOrderEmailType.CANCELLATION) {
+    return false;
+  }
+  const sentLog = await prisma.customerOrderEmailLog.findFirst({
+    where: {
+      customerOrderId: order.id,
+      type,
+      status: CustomerOrderEmailStatus.SENT,
+    },
+    select: { id: true },
+  });
+  return Boolean(sentLog);
 };
 
 const sendOrderEmail = async (input: {
@@ -439,7 +528,7 @@ const sendOrderEmail = async (input: {
 }): Promise<OrderEmailSendResult> => {
   const order = await getOrderForEmail(input);
 
-  if (!input.force && alreadySentAt(order, input.type)) {
+  if (!input.force && (await hasSentEmail(order, input.type))) {
     return {
       status: "skipped",
       reason: "alreadySent",
@@ -541,6 +630,18 @@ export const sendOrderFollowUpEmail = (input: {
   sendOrderEmail({
     ...input,
     type: CustomerOrderEmailType.FOLLOW_UP,
+  });
+
+export const sendOrderCancellationEmail = (input: {
+  organizationId: string;
+  customerOrderId: string;
+  triggeredById?: string | null;
+  force?: boolean;
+  throwOnMissingEmail?: boolean;
+}) =>
+  sendOrderEmail({
+    ...input,
+    type: CustomerOrderEmailType.CANCELLATION,
   });
 
 const followUpDelayMs = 7 * 24 * 60 * 60 * 1000;
