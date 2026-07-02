@@ -654,7 +654,7 @@ export const getAdminMetrics = async (input: AdminMetricsInput) => {
         SELECT
           COUNT(DISTINCT orders.id)::integer AS orders,
           COALESCE(SUM(lines."lineTotalKgs"), 0)::numeric AS revenue_kgs,
-          COALESCE(SUM(lines.quantity), 0)::numeric AS sold_qty,
+          COALESCE(SUM(lines.qty), 0)::numeric AS sold_qty,
           COALESCE(SUM(lines."lineCostTotalKgs"), 0)::numeric AS line_cost_kgs
         FROM "CustomerOrder" orders
         LEFT JOIN "CustomerOrderLine" lines ON lines."customerOrderId" = orders.id
