@@ -5076,8 +5076,8 @@
     "flagUpdatedAt": "Обновлено: {date}"
   },
   "adminMetrics": {
-    "title": "Метрики внедрения",
-    "subtitle": "Прогресс онбординга и ключевые сигналы.",
+    "title": "Метрики бизнеса",
+    "subtitle": "Текущая стоимость остатков, потенциальная прибыль и операционные предупреждения",
     "empty": "Нет данных для отображения.",
     "onboardingTitle": "Онбординг",
     "completed": "Завершен",
@@ -5116,6 +5116,114 @@
     "topStockoutsTitle": "Топ дефицитных позиций",
     "stockoutOnHand": "Остаток: {count}",
     "topStockoutsEmpty": "Дефицитных позиций нет.",
+    "filters": {
+      "store": "Магазин",
+      "category": "Категория",
+      "productSearch": "Поиск товара",
+      "allStores": "Все магазины",
+      "allCategories": "Все категории",
+      "searchPlaceholder": "Название, SKU или штрихкод",
+      "archived": "Архивные",
+      "archivedDescription": "Учитывать удаленные товары",
+      "archivedAria": "Учитывать архивные товары",
+      "storeFallback": "Магазин"
+    },
+    "kpi": {
+      "totalQty": "Общее количество",
+      "totalQtyHint": "Остатки по фильтру: {store}",
+      "costValue": "Себестоимость остатков",
+      "noCostHint": "Без себестоимости: {count}",
+      "retailValue": "Продажная стоимость",
+      "noPriceHint": "Без цены: {count}",
+      "profit": "Потенциальная прибыль",
+      "profitHint": "Только позиции с ценой и себестоимостью",
+      "margin": "Потенциальная маржа",
+      "marginHint": "Рассчитано по {count} позициям"
+    },
+    "attention": {
+      "title": "Требует внимания",
+      "subtitle": "Эти карточки фильтруют таблицу товаров ниже.",
+      "updating": "Обновление"
+    },
+    "sections": {
+      "byStores": "По магазинам",
+      "sales30d": "Продажи за 30 дней",
+      "byCategories": "По категориям",
+      "productValues": "Товары по стоимости"
+    },
+    "columns": {
+      "store": "Магазин",
+      "stock": "Остаток",
+      "cost": "Себестоимость",
+      "costValue": "Себестоимость",
+      "retailValue": "Продажная",
+      "profit": "Прибыль",
+      "issues": "Проблемы",
+      "category": "Категория",
+      "products": "Товаров",
+      "margin": "Маржа",
+      "product": "Товар",
+      "skuBarcode": "SKU / штрихкод",
+      "price": "Цена",
+      "warnings": "Предупреждения"
+    },
+    "sales": {
+      "revenue": "Выручка",
+      "receipts": "Чеков",
+      "soldQty": "Продано единиц",
+      "grossProfit": "Валовая прибыль",
+      "margin": "Маржа",
+      "note": "Продажи используют выбранный магазин. Категория и поиск применяются только к текущей оценке остатков."
+    },
+    "table": {
+      "emptyStock": "Нет остатков по выбранным фильтрам",
+      "emptyCategories": "Категории не найдены",
+      "emptyProducts": "Товары по выбранным фильтрам не найдены",
+      "productRowsSummary": "{count} строк, страница {page} из {totalPages}",
+      "productRowsFallback": "Пагинированная таблица остатков",
+      "archive": "Архив",
+      "noSku": "Нет SKU",
+      "noBarcode": "Нет штрихкода",
+      "descending": "По убыванию",
+      "ascending": "По возрастанию",
+      "snapshotUpdated": "Снимок обновлен {date} · API {ms} мс",
+      "dataUpdating": "Данные обновляются",
+      "previous": "Назад",
+      "next": "Вперед"
+    },
+    "warnings": {
+      "all": "Все товары",
+      "noCost": "Без себестоимости",
+      "noPrice": "Без цены продажи",
+      "noImage": "Без изображения",
+      "negativeStock": "Отрицательный остаток",
+      "lowStock": "Ниже минимума",
+      "unassigned": "Не привязан к магазину"
+    },
+    "warningDescriptions": {
+      "all": "Без фильтра по предупреждениям",
+      "noCost": "Исключены из точной себестоимости и маржи",
+      "noPrice": "Исключены из точной продажной стоимости",
+      "noImage": "Карточкам товара нужно изображение",
+      "negativeStock": "Остаток меньше нуля, требуется проверка движений",
+      "lowStock": "Остаток на уровне минимума или ниже",
+      "unassigned": "Есть остаток без активной привязки к магазину"
+    },
+    "sort": {
+      "retailValue": "Продажная стоимость",
+      "costValue": "Себестоимость",
+      "profit": "Потенциальная прибыль",
+      "stockQty": "Количество",
+      "margin": "Маржа",
+      "warnings": "Предупреждения",
+      "product": "Товар",
+      "store": "Магазин"
+    },
+    "badges": {
+      "costShort": "Себ. {count}",
+      "priceShort": "Цена {count}",
+      "ok": "OK"
+    },
     "eventLabels": {
       "onboarding_started": "Онбординг начат",
       "onboarding_completed": "Онбординг завершен",

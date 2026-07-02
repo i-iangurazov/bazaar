@@ -5078,8 +5078,8 @@
     "flagUpdatedAt": "Flag updated at {date}"
   },
   "adminMetrics": {
-    "title": "Admin metrics",
-    "subtitle": "Admin metrics overview",
+    "title": "Business metrics",
+    "subtitle": "Current inventory value, potential profit, and operational warnings",
     "empty": "No admin metrics.",
     "onboardingTitle": "Onboarding",
     "completed": "Completed",
@@ -5118,6 +5118,114 @@
     "topStockoutsTitle": "Top stockouts",
     "stockoutOnHand": "Stockout on hand {count}",
     "topStockoutsEmpty": "No top stockouts.",
+    "filters": {
+      "store": "Store",
+      "category": "Category",
+      "productSearch": "Product search",
+      "allStores": "All stores",
+      "allCategories": "All categories",
+      "searchPlaceholder": "Name, SKU, or barcode",
+      "archived": "Archived",
+      "archivedDescription": "Include deleted products",
+      "archivedAria": "Include archived products",
+      "storeFallback": "Store"
+    },
+    "kpi": {
+      "totalQty": "Total stock quantity",
+      "totalQtyHint": "Stock for filter: {store}",
+      "costValue": "Inventory cost value",
+      "noCostHint": "Without cost: {count}",
+      "retailValue": "Inventory retail value",
+      "noPriceHint": "Without price: {count}",
+      "profit": "Potential gross profit",
+      "profitHint": "Only rows with both price and cost",
+      "margin": "Potential margin",
+      "marginHint": "Calculated on {count} rows"
+    },
+    "attention": {
+      "title": "Needs attention",
+      "subtitle": "These cards filter the product table below.",
+      "updating": "Updating"
+    },
+    "sections": {
+      "byStores": "By store",
+      "sales30d": "Sales for 30 days",
+      "byCategories": "By category",
+      "productValues": "Products by value"
+    },
+    "columns": {
+      "store": "Store",
+      "stock": "Stock",
+      "cost": "Cost",
+      "costValue": "Cost value",
+      "retailValue": "Retail value",
+      "profit": "Profit",
+      "issues": "Issues",
+      "category": "Category",
+      "products": "Products",
+      "margin": "Margin",
+      "product": "Product",
+      "skuBarcode": "SKU / barcode",
+      "price": "Price",
+      "warnings": "Warnings"
+    },
+    "sales": {
+      "revenue": "Revenue",
+      "receipts": "Receipts",
+      "soldQty": "Units sold",
+      "grossProfit": "Gross profit",
+      "margin": "Margin",
+      "note": "Sales use the selected store. Category and search apply only to the current inventory valuation."
+    },
+    "table": {
+      "emptyStock": "No stock found for the selected filters",
+      "emptyCategories": "No categories found",
+      "emptyProducts": "No products found for the selected filters",
+      "productRowsSummary": "{count} rows, page {page} of {totalPages}",
+      "productRowsFallback": "Paginated inventory table",
+      "archive": "Archived",
+      "noSku": "No SKU",
+      "noBarcode": "No barcode",
+      "descending": "Descending",
+      "ascending": "Ascending",
+      "snapshotUpdated": "Snapshot updated {date} · API {ms} ms",
+      "dataUpdating": "Data is updating",
+      "previous": "Previous",
+      "next": "Next"
+    },
+    "warnings": {
+      "all": "All products",
+      "noCost": "No cost",
+      "noPrice": "No sale price",
+      "noImage": "No image",
+      "negativeStock": "Negative stock",
+      "lowStock": "Below minimum",
+      "unassigned": "Not assigned to store"
+    },
+    "warningDescriptions": {
+      "all": "No warning filter",
+      "noCost": "Excluded from exact cost value and margin",
+      "noPrice": "Excluded from exact retail value",
+      "noImage": "Product cards need an image",
+      "negativeStock": "Stock is below zero and needs movement review",
+      "lowStock": "Stock is at or below the minimum",
+      "unassigned": "Stock exists without an active store assignment"
+    },
+    "sort": {
+      "retailValue": "Retail value",
+      "costValue": "Cost value",
+      "profit": "Potential profit",
+      "stockQty": "Quantity",
+      "margin": "Margin",
+      "warnings": "Warnings",
+      "product": "Product",
+      "store": "Store"
+    },
+    "badges": {
+      "costShort": "Cost {count}",
+      "priceShort": "Price {count}",
+      "ok": "OK"
+    },
     "eventLabels": {
       "onboarding_started": "Onboarding started",
       "onboarding_completed": "Onboarding completed",

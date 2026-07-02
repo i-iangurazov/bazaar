@@ -5075,8 +5075,8 @@
     "flagUpdatedAt": "Жаңыртылганы: {date}"
   },
   "adminMetrics": {
-    "title": "Колдонуу метрикалары",
-    "subtitle": "Онбординг жана негизги көрсөткүчтөр.",
+    "title": "Бизнес метрикалары",
+    "subtitle": "Учурдагы запас баасы, мүмкүн болгон пайда жана операциялык эскертүүлөр",
     "empty": "Маалымат жок.",
     "onboardingTitle": "Онбординг",
     "completed": "Аяктады",
@@ -5115,6 +5115,114 @@
     "topStockoutsTitle": "Дефицит позициялар топу",
     "stockoutOnHand": "Калдык: {count}",
     "topStockoutsEmpty": "Дефицит позициялар табылган жок.",
+    "filters": {
+      "store": "Дүкөн",
+      "category": "Категория",
+      "productSearch": "Товар издөө",
+      "allStores": "Бардык дүкөндөр",
+      "allCategories": "Бардык категориялар",
+      "searchPlaceholder": "Аталышы, SKU же штрихкод",
+      "archived": "Архив",
+      "archivedDescription": "Өчүрүлгөн товарларды кошуу",
+      "archivedAria": "Архивдеги товарларды кошуу",
+      "storeFallback": "Дүкөн"
+    },
+    "kpi": {
+      "totalQty": "Жалпы калдык саны",
+      "totalQtyHint": "Фильтр боюнча калдык: {store}",
+      "costValue": "Калдыктын өздүк наркы",
+      "noCostHint": "Өздүк наркы жок: {count}",
+      "retailValue": "Калдыктын сатуу баасы",
+      "noPriceHint": "Баасы жок: {count}",
+      "profit": "Мүмкүн болгон пайда",
+      "profitHint": "Баасы жана өздүк наркы бар позициялар гана",
+      "margin": "Мүмкүн болгон маржа",
+      "marginHint": "{count} позиция боюнча эсептелди"
+    },
+    "attention": {
+      "title": "Көңүл буруу керек",
+      "subtitle": "Бул карточкалар төмөнкү товар таблицасын фильтрлейт.",
+      "updating": "Жаңыртылууда"
+    },
+    "sections": {
+      "byStores": "Дүкөндөр боюнча",
+      "sales30d": "30 күндүк сатуулар",
+      "byCategories": "Категориялар боюнча",
+      "productValues": "Баалуулук боюнча товарлар"
+    },
+    "columns": {
+      "store": "Дүкөн",
+      "stock": "Калдык",
+      "cost": "Өздүк нарк",
+      "costValue": "Өздүк нарк",
+      "retailValue": "Сатуу баасы",
+      "profit": "Пайда",
+      "issues": "Маселелер",
+      "category": "Категория",
+      "products": "Товарлар",
+      "margin": "Маржа",
+      "product": "Товар",
+      "skuBarcode": "SKU / штрихкод",
+      "price": "Баа",
+      "warnings": "Эскертүүлөр"
+    },
+    "sales": {
+      "revenue": "Түшүм",
+      "receipts": "Чектер",
+      "soldQty": "Сатылган даана",
+      "grossProfit": "Валдык пайда",
+      "margin": "Маржа",
+      "note": "Сатуулар тандалган дүкөндү колдонот. Категория жана издөө учурдагы запас баасына гана колдонулат."
+    },
+    "table": {
+      "emptyStock": "Тандалган фильтрлер боюнча калдык жок",
+      "emptyCategories": "Категориялар табылган жок",
+      "emptyProducts": "Тандалган фильтрлер боюнча товарлар табылган жок",
+      "productRowsSummary": "{count} сап, {page}-бет / {totalPages}",
+      "productRowsFallback": "Запастын баракталган таблицасы",
+      "archive": "Архив",
+      "noSku": "SKU жок",
+      "noBarcode": "Штрихкод жок",
+      "descending": "Кемүү боюнча",
+      "ascending": "Өсүү боюнча",
+      "snapshotUpdated": "Снимок жаңырды {date} · API {ms} мс",
+      "dataUpdating": "Маалымат жаңыртылууда",
+      "previous": "Артка",
+      "next": "Алга"
+    },
+    "warnings": {
+      "all": "Бардык товарлар",
+      "noCost": "Өздүк наркы жок",
+      "noPrice": "Сатуу баасы жок",
+      "noImage": "Сүрөтү жок",
+      "negativeStock": "Терс калдык",
+      "lowStock": "Минимумдан төмөн",
+      "unassigned": "Дүкөнгө байланган эмес"
+    },
+    "warningDescriptions": {
+      "all": "Эскертүү боюнча фильтр жок",
+      "noCost": "Так өздүк нарк жана маржа эсебине кирбейт",
+      "noPrice": "Так сатуу баасы эсебине кирбейт",
+      "noImage": "Товар карточкасына сүрөт керек",
+      "negativeStock": "Калдык нөлдөн төмөн, кыймылдарды текшерүү керек",
+      "lowStock": "Калдык минимумга жетти же андан төмөн",
+      "unassigned": "Активдүү дүкөн байланышы жок калдык бар"
+    },
+    "sort": {
+      "retailValue": "Сатуу баасы",
+      "costValue": "Өздүк нарк",
+      "profit": "Мүмкүн болгон пайда",
+      "stockQty": "Саны",
+      "margin": "Маржа",
+      "warnings": "Эскертүүлөр",
+      "product": "Товар",
+      "store": "Дүкөн"
+    },
+    "badges": {
+      "costShort": "Нарк {count}",
+      "priceShort": "Баа {count}",
+      "ok": "OK"
+    },
     "eventLabels": {
       "onboarding_started": "Онбординг башталды",
       "onboarding_completed": "Онбординг аяктады",
