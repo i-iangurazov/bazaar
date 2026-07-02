@@ -13,7 +13,10 @@ describeDb("admin metrics", () => {
   });
 
   it("aggregates inventory valuation and filters product rows by warnings and search", async () => {
-    const { org, store, supplier, baseUnit, adminUser } = await seedBase({ plan: "BUSINESS" });
+    const { org, store, supplier, baseUnit, adminUser } = await seedBase({
+      plan: "BUSINESS",
+      allowNegativeStock: true,
+    });
     const secondStore = await prisma.store.create({
       data: {
         organizationId: org.id,
@@ -114,7 +117,7 @@ describeDb("admin metrics", () => {
           productId: product.id,
           variantKey: "BASE",
           onHand: stockQty,
-          allowNegativeStock: false,
+          allowNegativeStock: stockQty < 0,
         },
       });
 
