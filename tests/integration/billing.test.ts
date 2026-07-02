@@ -42,6 +42,15 @@ describeDb("billing", () => {
         maxUsers: 5,
         maxProducts: 1000,
       });
+      expect(
+        Object.fromEntries(
+          summary.planCatalog.map((plan) => [plan.planTier, plan.limits.maxStores]),
+        ),
+      ).toEqual({
+        STARTER: 1,
+        BUSINESS: 5,
+        ENTERPRISE: 15,
+      });
       expect(summary.featureFlags.exports).toBe(false);
       expect(summary.featureFlags.analytics).toBe(false);
       expect(summary.featureFlags.priceTags).toBe(true);

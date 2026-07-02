@@ -81,7 +81,9 @@ import { parseMoneyInput } from "@/lib/moneyInput";
 import { getQzTrayBinding, printPdfBlobViaQzTray, qzTrayErrorMessageKey } from "@/lib/qzTrayPrint";
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
 import {
+  addPosPaymentDraftRow,
   createDefaultPosPaymentDraft,
+  removePosPaymentDraftRow,
   type PosPaymentAutoFillState,
   type PosPaymentDraft,
   reconcilePosPaymentDraftsForSaleTotal,
@@ -2601,16 +2603,21 @@ const PosSellPage = () => {
   );
 
   const addPaymentRow = () => {
-    setPayments((current) => {
-      const syncedCurrent =
-        current.length === 1 ? [{ ...current[0], amount: cartDisplayTotalDraft }] : current;
-      return [...syncedCurrent, createDefaultPosPaymentDraft()];
-    });
+    setPayments((current) =>
+      addPosPaymentDraftRow({
+        currentPayments: current,
+        displayTotalAmount: cartDisplayTotalDraft,
+      }),
+    );
   };
 
   const removePaymentRow = (index: number) => {
     setPayments((current) =>
-      current.length <= 1 ? current : current.filter((_, i) => i !== index),
+      removePosPaymentDraftRow({
+        currentPayments: current,
+        index,
+        displayTotalAmount: cartDisplayTotalDraft,
+      }),
     );
   };
 

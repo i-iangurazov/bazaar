@@ -18,6 +18,57 @@ export const createDefaultPosPaymentDraft = (amount = ""): PosPaymentDraft => ({
   providerRef: "",
 });
 
+const PAYMENT_METHOD_ORDER = [
+  PosPaymentMethod.CASH,
+  PosPaymentMethod.CARD,
+  PosPaymentMethod.TRANSFER,
+  PosPaymentMethod.OTHER,
+] as const;
+
+const nextPaymentMethod = (payments: PosPaymentDraft[]) =>
+  PAYMENT_METHOD_ORDER.find((method) => payments.every((payment) => payment.method !== method)) ??
+  PosPaymentMethod.CARD;
+
+export const addPosPaymentDraftRow = (input: {
+  currentPayments: PosPaymentDraft[];
+  displayTotalAmount: string;
+}): PosPaymentDraft[] => {
+  const currentPayments = input.currentPayments.length
+    ? input.currentPayments
+    : [createDefaultPosPaymentDraft(input.displayTotalAmount)];
+  const materializedPayments =
+    currentPayments.length === 1
+      ? [{ ...currentPayments[0]!, amount: input.displayTotalAmount }]
+      : currentPayments;
+
+  return [
+    ...materializedPayments,
+    {
+      ...createDefaultPosPaymentDraft(),
+      method: nextPaymentMethod(materializedPayments),
+    },
+  ];
+};
+
+export const removePosPaymentDraftRow = (input: {
+  currentPayments: PosPaymentDraft[];
+  index: number;
+  displayTotalAmount: string;
+}): PosPaymentDraft[] => {
+  if (input.currentPayments.length <= 1) {
+    return input.currentPayments;
+  }
+
+  const nextPayments = input.currentPayments.filter((_, index) => index !== input.index);
+  if (nextPayments.length === 1) {
+    return [{ ...nextPayments[0]!, amount: input.displayTotalAmount }];
+  }
+
+  return nextPayments.length
+    ? nextPayments
+    : [createDefaultPosPaymentDraft(input.displayTotalAmount)];
+};
+
 export const reconcilePosPaymentDraftsForSaleTotal = (input: {
   currentPayments: PosPaymentDraft[];
   saleId: string;

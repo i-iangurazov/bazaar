@@ -41,12 +41,12 @@ const PLAN_LIMITS: Record<PlanCode, PlanLimits> = {
     maxActiveUsers: 5,
   },
   BUSINESS: {
-    maxStores: 3,
+    maxStores: 5,
     maxProducts: 5000,
     maxActiveUsers: 10,
   },
   ENTERPRISE: {
-    maxStores: 10,
+    maxStores: 15,
     maxProducts: 20000,
     maxActiveUsers: 20,
   },

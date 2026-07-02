@@ -1,3 +1,4 @@
+import type { OrganizationPlan } from "@prisma/client";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { prisma } from "@/server/db/prisma";
@@ -11,8 +12,12 @@ describeDb("plan limits", () => {
     await resetDatabase();
   });
 
-  it("starter cannot create second store", async () => {
-    const { org, adminUser } = await seedBase({ plan: "STARTER" });
+  it.each([
+    { plan: "STARTER" as OrganizationPlan, limit: 1, message: "planLimitStores1" },
+    { plan: "BUSINESS" as OrganizationPlan, limit: 5, message: "planLimitStores5" },
+    { plan: "ENTERPRISE" as OrganizationPlan, limit: 15, message: "planLimitStores15" },
+  ])("$plan cannot create more than $limit stores", async ({ plan, limit, message }) => {
+    const { org, adminUser } = await seedBase({ plan });
 
     const caller = createTestCaller({
       id: adminUser.id,
@@ -21,14 +26,23 @@ describeDb("plan limits", () => {
       organizationId: org.id,
     });
 
+    for (let index = 2; index <= limit; index += 1) {
+      await caller.stores.create({
+        name: `Limit store ${index}`,
+        code: `LIM-${plan}-${index}`,
+        allowNegativeStock: false,
+        trackExpiryLots: false,
+      });
+    }
+
     await expect(
       caller.stores.create({
         name: "Overflow store",
-        code: "OVR-1",
+        code: `OVR-${plan}`,
         allowNegativeStock: false,
         trackExpiryLots: false,
       }),
-    ).rejects.toMatchObject({ code: "CONFLICT", message: "planLimitStores" });
+    ).rejects.toMatchObject({ code: "CONFLICT", message });
   });
 
   it("starter cannot exceed 1000 products", async () => {

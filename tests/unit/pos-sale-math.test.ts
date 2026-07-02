@@ -118,4 +118,29 @@ describe("POS sale math", () => {
       }).status,
     ).toBe("paymentMismatch");
   });
+
+  it("blocks empty or zero rows in split-payment mode", () => {
+    expect(
+      buildPosPaymentSubmitPayload({
+        payments: [
+          { method: PosPaymentMethod.CASH, amount: "100", providerRef: "" },
+          { method: PosPaymentMethod.CARD, amount: "", providerRef: "" },
+        ],
+        cartTotalKgs: 100,
+        currencySource: null,
+      }).status,
+    ).toBe("paymentRequired");
+
+    expect(
+      buildPosPaymentSubmitPayload({
+        payments: [
+          { method: PosPaymentMethod.CASH, amount: "40", providerRef: "" },
+          { method: PosPaymentMethod.TRANSFER, amount: "0", providerRef: "" },
+          { method: PosPaymentMethod.CARD, amount: "60", providerRef: "" },
+        ],
+        cartTotalKgs: 100,
+        currencySource: null,
+      }).status,
+    ).toBe("paymentRequired");
+  });
 });

@@ -109,6 +109,7 @@ export const buildPosPaymentSubmitPayload = (input: {
       ]
     : currentPayments;
 
+  let hasInvalidSplitPayment = false;
   const payments = isSinglePaymentSale
     ? cartTotalMinorUnits > 0
       ? [
@@ -123,6 +124,7 @@ export const buildPosPaymentSubmitPayload = (input: {
         .map((payment) => {
           const displayAmount = parseMoneyInput(payment.amount);
           if (displayAmount === null) {
+            hasInvalidSplitPayment = true;
             return null;
           }
 
@@ -130,6 +132,7 @@ export const buildPosPaymentSubmitPayload = (input: {
             roundPosMoney(displayMoneyToKgs(displayAmount, input.currencySource)),
           );
           if (amountKgs === null || amountKgs <= 0) {
+            hasInvalidSplitPayment = true;
             return null;
           }
 
@@ -147,7 +150,8 @@ export const buildPosPaymentSubmitPayload = (input: {
   );
 
   const status =
-    cartTotalMinorUnits > 0 && !payments.length
+    cartTotalMinorUnits > 0 &&
+    (!payments.length || (!isSinglePaymentSale && hasInvalidSplitPayment))
       ? "paymentRequired"
       : paymentTotalMinorUnits !== cartTotalMinorUnits
         ? "paymentMismatch"

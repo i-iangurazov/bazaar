@@ -148,7 +148,7 @@ export const assertCapacity = async (input: {
   if (count + input.add > limit) {
     const errorKey =
       input.kind === "stores"
-        ? "planLimitStores"
+        ? `planLimitStores${limit}`
         : input.kind === "users"
           ? "planLimitUsers"
           : "planLimitProducts";

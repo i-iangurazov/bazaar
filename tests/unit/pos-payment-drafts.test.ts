@@ -2,8 +2,10 @@ import { PosPaymentMethod } from "@prisma/client";
 import { describe, expect, it } from "vitest";
 
 import {
+  addPosPaymentDraftRow,
   createDefaultPosPaymentDraft,
   reconcilePosPaymentDraftsForSaleTotal,
+  removePosPaymentDraftRow,
 } from "@/lib/posPaymentDrafts";
 
 describe("POS payment draft autofill", () => {
@@ -116,5 +118,30 @@ describe("POS payment draft autofill", () => {
 
     expect(result.payments).toEqual([createDefaultPosPaymentDraft("10")]);
     expect(result.autoFill).toEqual({ saleId: "sale-usd", totalKgs: 895, displayTotal: 10 });
+  });
+
+  it("materializes the displayed single-payment total before adding a split row", () => {
+    expect(
+      addPosPaymentDraftRow({
+        currentPayments: [{ method: PosPaymentMethod.CASH, amount: "", providerRef: "" }],
+        displayTotalAmount: "10000",
+      }),
+    ).toEqual([
+      { method: PosPaymentMethod.CASH, amount: "10000", providerRef: "" },
+      { method: PosPaymentMethod.CARD, amount: "", providerRef: "" },
+    ]);
+  });
+
+  it("keeps a single remaining payment synced to the current total after removing a split row", () => {
+    expect(
+      removePosPaymentDraftRow({
+        currentPayments: [
+          { method: PosPaymentMethod.CASH, amount: "4000", providerRef: "" },
+          { method: PosPaymentMethod.CARD, amount: "6000", providerRef: "" },
+        ],
+        index: 1,
+        displayTotalAmount: "10000",
+      }),
+    ).toEqual([{ method: PosPaymentMethod.CASH, amount: "10000", providerRef: "" }]);
   });
 });
