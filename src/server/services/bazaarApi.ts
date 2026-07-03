@@ -15,6 +15,7 @@ import { resolveCurrencySnapshot } from "@/lib/currencyDisplay";
 import { prisma } from "@/server/db/prisma";
 import { eventBus } from "@/server/events/eventBus";
 import { getLogger } from "@/server/logging";
+import { getRedisPublisher } from "@/server/redis";
 import { writeAuditLog } from "@/server/services/audit";
 import {
   normalizeCustomerEmail,
@@ -27,6 +28,19 @@ import { sendOrderConfirmationEmail } from "@/server/services/orderEmails";
 
 const API_TOKEN_PREFIX = "bz_live_";
 const API_KEY_LAST_USED_UPDATE_INTERVAL_MS = 10 * 60 * 1000;
+const DEFAULT_API_AUTH_CACHE_TTL_SECONDS = 30 * 60;
+const DEFAULT_API_PRODUCTS_CACHE_TTL_SECONDS = 30 * 60;
+
+type CacheEntry<T> = {
+  expiresAt: number;
+  value: T;
+};
+
+const globalForBazaarApiCache = globalThis as typeof globalThis & {
+  __bazaarApiMemoryCache?: Map<string, CacheEntry<unknown>>;
+};
+
+const memoryCache = (globalForBazaarApiCache.__bazaarApiMemoryCache ??= new Map());
 
 const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 const toMoney = (value: Prisma.Decimal | number | null | undefined) =>
@@ -40,6 +54,61 @@ const variantKeyFrom = (variantId?: string | null) => variantId ?? "BASE";
 
 const tokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
 const createRawToken = () => `${API_TOKEN_PREFIX}${randomBytes(32).toString("base64url")}`;
+const cacheDigest = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
+
+const positiveIntFromEnv = (name: string, fallback: number) => {
+  const raw = process.env[name];
+  const value = raw ? Number(raw) : NaN;
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
+};
+
+const apiAuthCacheTtlSeconds = () =>
+  positiveIntFromEnv("BAZAAR_API_AUTH_CACHE_TTL_SECONDS", DEFAULT_API_AUTH_CACHE_TTL_SECONDS);
+
+const apiProductsCacheTtlSeconds = () =>
+  positiveIntFromEnv("BAZAAR_API_PRODUCTS_CACHE_TTL_SECONDS", DEFAULT_API_PRODUCTS_CACHE_TTL_SECONDS);
+
+const readCache = async <T>(key: string): Promise<T | null> => {
+  const memoryEntry = memoryCache.get(key) as CacheEntry<T> | undefined;
+  if (memoryEntry) {
+    if (memoryEntry.expiresAt > Date.now()) {
+      return memoryEntry.value;
+    }
+    memoryCache.delete(key);
+  }
+
+  try {
+    const redis = getRedisPublisher();
+    if (!redis) return null;
+    const raw = await redis.get(key);
+    if (!raw) return null;
+    const entry = JSON.parse(raw) as CacheEntry<T>;
+    if (entry.expiresAt <= Date.now()) {
+      void redis.del(key).catch(() => undefined);
+      return null;
+    }
+    memoryCache.set(key, entry as CacheEntry<unknown>);
+    return entry.value;
+  } catch {
+    return null;
+  }
+};
+
+const writeCache = async <T>(key: string, value: T, ttlSeconds: number): Promise<void> => {
+  const entry: CacheEntry<T> = {
+    expiresAt: Date.now() + ttlSeconds * 1000,
+    value,
+  };
+  memoryCache.set(key, entry as CacheEntry<unknown>);
+
+  try {
+    const redis = getRedisPublisher();
+    if (!redis) return;
+    await redis.set(key, JSON.stringify(entry), "EX", ttlSeconds);
+  } catch {
+    // Cache writes are best-effort; API correctness must not depend on Redis.
+  }
+};
 
 const nextSalesOrderNumber = async (tx: Prisma.TransactionClient, organizationId: string) => {
   const counter = await tx.organizationCounter.upsert({
@@ -49,6 +118,76 @@ const nextSalesOrderNumber = async (tx: Prisma.TransactionClient, organizationId
     select: { salesOrderNumber: true },
   });
   return `SO-${String(counter.salesOrderNumber).padStart(6, "0")}`;
+};
+
+type BazaarApiAuthContext = {
+  apiKeyId: string;
+  organizationId: string;
+  storeId: string;
+  store: {
+    id: string;
+    name: string;
+    currencyCode: string | null;
+    currencyRateKgsPerUnit: Prisma.Decimal | number | string | null;
+  };
+};
+
+type BazaarApiProductsResult = {
+  store: { id: string; name: string };
+  currencyCode: string;
+  currencyRateKgsPerUnit: number;
+  page: number;
+  pageSize: number;
+  total: number;
+  items: Array<{
+    id: string;
+    sku: string | null;
+    name: string;
+    category: string | null;
+    categories: string[];
+    description: string | null;
+    unit: string | null;
+    baseUnit: { id: string; code: string; labelRu: string | null; labelKg: string | null } | null;
+    supplier: { id: string; name: string } | null;
+    isBundle: boolean;
+    barcodes: string[];
+    packs: Array<{
+      id: string;
+      packName: string;
+      packBarcode: string | null;
+      multiplierToBase: number;
+      allowInPurchasing: boolean;
+      allowInReceiving: boolean;
+    }>;
+    createdAt: string;
+    updatedAt: string;
+    price: number;
+    priceKgs: number;
+    stockQty: number;
+    pcs: number;
+    stockByVariant: Array<{ variantKey: string; stockQty: number; pcs: number }>;
+    images: string[];
+    imageObjects: Array<{
+      id: string | null;
+      url: string;
+      position: number;
+      isPrimary: boolean;
+      isAiGenerated: boolean;
+    }>;
+    variants: Array<{
+      id: string;
+      sku: string | null;
+      name: string | null;
+      attributes: Prisma.JsonValue;
+      attributeValues: Array<{ key: string; value: Prisma.JsonValue }>;
+      createdAt: string;
+      updatedAt: string;
+      price: number;
+      priceKgs: number;
+      stockQty: number;
+      pcs: number;
+    }>;
+  }>;
 };
 
 const ensureStoreAccess = async (organizationId: string, storeId: string) => {
@@ -185,9 +324,18 @@ export const authenticateBazaarApiRequest = async (request: Request) => {
   if (!token) {
     throw new AppError("apiUnauthorized", "UNAUTHORIZED", 401);
   }
+  const hashedToken = tokenHash(token);
+  const shouldUseAuthCache = request.method.toUpperCase() === "GET";
+  const authCacheKey = `bazaar-api:auth:v1:${hashedToken}`;
+  if (shouldUseAuthCache) {
+    const cached = await readCache<BazaarApiAuthContext>(authCacheKey);
+    if (cached) {
+      return cached;
+    }
+  }
 
   const apiKey = await prisma.bazaarApiKey.findUnique({
-    where: { tokenHash: tokenHash(token) },
+    where: { tokenHash: hashedToken },
     select: {
       id: true,
       organizationId: true,
@@ -222,12 +370,16 @@ export const authenticateBazaarApiRequest = async (request: Request) => {
       .catch(() => undefined);
   }
 
-  return {
+  const authContext: BazaarApiAuthContext = {
     apiKeyId: apiKey.id,
     organizationId: apiKey.organizationId,
     storeId: apiKey.storeId,
     store: apiKey.store,
   };
+  if (shouldUseAuthCache) {
+    void writeCache(authCacheKey, authContext, apiAuthCacheTtlSeconds());
+  }
+  return authContext;
 };
 
 export const listBazaarApiProducts = async (input: {
@@ -236,16 +388,28 @@ export const listBazaarApiProducts = async (input: {
   search?: string | null;
   page?: number;
   pageSize?: number;
-}) => {
+}): Promise<BazaarApiProductsResult> => {
+  const page = Math.max(1, Math.trunc(input.page ?? 1));
+  const pageSize = Math.min(100, Math.max(1, Math.trunc(input.pageSize ?? 50)));
+  const search = normalizeOptionalText(input.search);
+  const productsCacheKey = `bazaar-api:products:v1:${cacheDigest({
+    organizationId: input.organizationId,
+    storeId: input.storeId,
+    search,
+    page,
+    pageSize,
+  })}`;
+  const cached = await readCache<BazaarApiProductsResult>(productsCacheKey);
+  if (cached) {
+    return cached;
+  }
+
   const store = await ensureStoreAccess(input.organizationId, input.storeId);
   const currencyCode = normalizeCurrencyCode(store.currencyCode);
   const currencyRateKgsPerUnit = normalizeCurrencyRateKgsPerUnit(
     Number(store.currencyRateKgsPerUnit),
     currencyCode,
   );
-  const page = Math.max(1, Math.trunc(input.page ?? 1));
-  const pageSize = Math.min(100, Math.max(1, Math.trunc(input.pageSize ?? 50)));
-  const search = normalizeOptionalText(input.search);
   const where: Prisma.ProductWhereInput = {
     organizationId: input.organizationId,
     isDeleted: false,
@@ -371,7 +535,7 @@ export const listBazaarApiProducts = async (input: {
     stockByProductVariant.set(key, (stockByProductVariant.get(key) ?? 0) + snapshot.onHand);
   }
 
-  return {
+  const result: BazaarApiProductsResult = {
     store: { id: store.id, name: store.name },
     currencyCode,
     currencyRateKgsPerUnit,
@@ -457,6 +621,8 @@ export const listBazaarApiProducts = async (input: {
       };
     }),
   };
+  await writeCache(productsCacheKey, result, apiProductsCacheTtlSeconds());
+  return result;
 };
 
 const normalizeBazaarApiCustomerInput = (input: {
