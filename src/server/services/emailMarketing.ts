@@ -1815,6 +1815,7 @@ export const searchEmailMarketingProducts = async (input: {
   search?: string | null;
   category?: string | null;
   limit?: number;
+  includeIds?: string[];
 }) => {
   await assertUserCanAccessStore(prisma, input.user, input.storeId);
   const brand = await getStoreBrand({
@@ -1823,67 +1824,97 @@ export const searchEmailMarketingProducts = async (input: {
   });
   const search = trimOptional(input.search);
   const category = trimOptional(input.category);
-  const products = await prisma.product.findMany({
-    where: {
-      organizationId: input.user.organizationId,
-      isDeleted: false,
-      storeProducts: {
-        some: {
-          organizationId: input.user.organizationId,
-          storeId: input.storeId,
-          isActive: true,
-        },
-      },
-      ...(category ? { OR: [{ category }, { categories: { has: category } }] } : {}),
-      ...(search
-        ? {
-            OR: [
-              { name: { contains: search, mode: "insensitive" } },
-              ...(brand.store.enableSku
-                ? [{ sku: { contains: search, mode: "insensitive" as const } }]
-                : []),
-              ...(brand.store.enableBarcode
-                ? [
-                    {
-                      barcodes: {
-                        some: { value: { contains: search, mode: "insensitive" as const } },
-                      },
-                    },
-                  ]
-                : []),
-            ],
-          }
-        : {}),
-    },
-    select: {
-      id: true,
-      name: true,
-      sku: true,
-      category: true,
-      categories: true,
-      description: true,
-      photoUrl: true,
-      basePriceKgs: true,
-      barcodes: { select: { value: true }, take: 1 },
-      images: {
-        where: { url: { not: { startsWith: "data:image/" } } },
-        select: { url: true },
-        orderBy: { position: "asc" },
-        take: 1,
-      },
-      storePrices: {
-        where: {
-          organizationId: input.user.organizationId,
-          storeId: input.storeId,
-          variantKey: "BASE",
-        },
-        select: { priceKgs: true },
-        take: 1,
+  const includeIds = Array.from(new Set((input.includeIds ?? []).filter(Boolean)));
+  const productScopeWhere: Prisma.ProductWhereInput = {
+    organizationId: input.user.organizationId,
+    isDeleted: false,
+    storeProducts: {
+      some: {
+        organizationId: input.user.organizationId,
+        storeId: input.storeId,
+        isActive: true,
       },
     },
-    orderBy: [{ name: "asc" }, { id: "asc" }],
-    take: Math.min(50, Math.max(1, input.limit ?? 20)),
+  };
+  const categoryFilter: Prisma.ProductWhereInput | null = category
+    ? { OR: [{ category }, { categories: { has: category } }] }
+    : null;
+  const searchFilter: Prisma.ProductWhereInput | null = search
+    ? {
+        OR: [
+          { name: { contains: search, mode: "insensitive" } },
+          ...(brand.store.enableSku
+            ? [{ sku: { contains: search, mode: "insensitive" as const } }]
+            : []),
+          ...(brand.store.enableBarcode
+            ? [
+                {
+                  barcodes: {
+                    some: { value: { contains: search, mode: "insensitive" as const } },
+                  },
+                },
+              ]
+            : []),
+        ],
+      }
+    : null;
+  const buildWhere = (filters: Prisma.ProductWhereInput[]): Prisma.ProductWhereInput => ({
+    ...productScopeWhere,
+    ...(filters.length ? { AND: filters } : {}),
   });
+  const baseFilters = categoryFilter ? [categoryFilter] : [];
+  const baseWhere = buildWhere(baseFilters);
+  const productSelect = {
+    id: true,
+    name: true,
+    sku: true,
+    category: true,
+    categories: true,
+    description: true,
+    photoUrl: true,
+    basePriceKgs: true,
+    barcodes: { select: { value: true }, take: 1 },
+    images: {
+      where: { url: { not: { startsWith: "data:image/" } } },
+      select: { url: true },
+      orderBy: { position: "asc" as const },
+      take: 1,
+    },
+    storePrices: {
+      where: {
+        organizationId: input.user.organizationId,
+        storeId: input.storeId,
+        variantKey: "BASE",
+      },
+      select: { priceKgs: true },
+      take: 1,
+    },
+  } satisfies Prisma.ProductSelect;
+  const searchWhere = buildWhere(searchFilter ? [...baseFilters, searchFilter] : baseFilters);
+
+  const [searchProducts, includedProducts] = await Promise.all([
+    prisma.product.findMany({
+      where: searchWhere,
+      select: productSelect,
+      orderBy: [{ name: "asc" }, { id: "asc" }],
+      take: Math.min(50, Math.max(1, input.limit ?? 20)),
+    }),
+    includeIds.length
+      ? prisma.product.findMany({
+          where: {
+            ...baseWhere,
+            id: { in: includeIds },
+          },
+          select: productSelect,
+          orderBy: [{ name: "asc" }, { id: "asc" }],
+        })
+      : Promise.resolve([]),
+  ]);
+  const productById = new Map(searchProducts.map((product) => [product.id, product]));
+  for (const product of includedProducts) {
+    productById.set(product.id, product);
+  }
+  const products = Array.from(productById.values());
 
   return {
     store: {

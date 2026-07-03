@@ -360,6 +360,7 @@ export const emailMarketingRouter = router({
         search: z.string().max(200).optional().nullable(),
         category: z.string().max(180).optional().nullable(),
         limit: z.number().int().min(1).max(50).optional(),
+        includeIds: z.array(z.string().min(1)).max(500).optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
@@ -370,6 +371,7 @@ export const emailMarketingRouter = router({
           search: input.search,
           category: input.category,
           limit: input.limit,
+          includeIds: input.includeIds,
         });
       } catch (error) {
         throw toTRPCError(error);

@@ -381,25 +381,6 @@ const SalesOrderDetailPage = () => {
     return normalized ? normalized : null;
   };
 
-  const customerFormChanged = () =>
-    Boolean(
-      order &&
-      (optionalFormValue(customerName) !== optionalFormValue(order.customerName) ||
-        optionalFormValue(customerEmail) !== optionalFormValue(order.customerEmail) ||
-        optionalFormValue(customerPhone) !== optionalFormValue(order.customerPhone) ||
-        optionalFormValue(customerAddress) !== optionalFormValue(order.customerAddress) ||
-        optionalFormValue(notes) !== optionalFormValue(order.notes)),
-    );
-
-  const trackingFormChanged = () =>
-    Boolean(
-      order &&
-      (optionalFormValue(trackingNumber) !== optionalFormValue(order.trackingNumber) ||
-        optionalFormValue(trackingCarrier) !== optionalFormValue(order.trackingCarrier) ||
-        optionalFormValue(trackingUrl) !== optionalFormValue(order.trackingUrl) ||
-        optionalFormValue(trackingStatus) !== optionalFormValue(order.trackingStatus)),
-    );
-
   const trackingMutationInput = (customerOrderId: string) => ({
     customerOrderId,
     trackingNumber: optionalFormValue(trackingNumber),
@@ -429,26 +410,40 @@ const SalesOrderDetailPage = () => {
     if (!order) {
       return;
     }
-    if (!trackingNumber.trim()) {
+    const customerInput = {
+      customerOrderId: order.id,
+      customerName: optionalFormValue(customerName),
+      customerEmail: optionalFormValue(customerEmail),
+      customerPhone: optionalFormValue(customerPhone),
+      customerAddress: optionalFormValue(customerAddress),
+      notes: optionalFormValue(notes),
+    };
+    const trackingInput = trackingMutationInput(order.id);
+    const shouldSaveCustomer =
+      customerInput.customerName !== optionalFormValue(order.customerName) ||
+      customerInput.customerEmail !== optionalFormValue(order.customerEmail) ||
+      customerInput.customerPhone !== optionalFormValue(order.customerPhone) ||
+      customerInput.customerAddress !== optionalFormValue(order.customerAddress) ||
+      customerInput.notes !== optionalFormValue(order.notes);
+    const shouldSaveTracking =
+      trackingInput.trackingNumber !== optionalFormValue(order.trackingNumber) ||
+      trackingInput.trackingCarrier !== optionalFormValue(order.trackingCarrier) ||
+      trackingInput.trackingUrl !== optionalFormValue(order.trackingUrl) ||
+      trackingInput.trackingStatus !== optionalFormValue(order.trackingStatus);
+
+    if (!trackingInput.trackingNumber) {
       toast({ variant: "error", description: tErrors("trackingNumberMissing") });
       return;
     }
-    if (!customerEmail.trim() && !order.customerEmail?.trim()) {
+    if (!customerInput.customerEmail) {
       toast({ variant: "error", description: tErrors("customerEmailMissing") });
       return;
     }
-    if (customerFormChanged()) {
-      await setCustomerMutation.mutateAsync({
-        customerOrderId: order.id,
-        customerName: optionalFormValue(customerName),
-        customerEmail: optionalFormValue(customerEmail),
-        customerPhone: optionalFormValue(customerPhone),
-        customerAddress: optionalFormValue(customerAddress),
-        notes: optionalFormValue(notes),
-      });
+    if (shouldSaveCustomer) {
+      await setCustomerMutation.mutateAsync(customerInput);
     }
-    if (trackingFormChanged()) {
-      await saveTrackingBeforeSendMutation.mutateAsync(trackingMutationInput(order.id));
+    if (shouldSaveTracking) {
+      await saveTrackingBeforeSendMutation.mutateAsync(trackingInput);
     }
     await sendEmailMutation.mutateAsync({
       customerOrderId: order.id,

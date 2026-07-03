@@ -753,6 +753,7 @@ export const EmailMarketingWorkspace = () => {
   const [selectedCustomerIds, setSelectedCustomerIds] = useState<string[]>([]);
   const [customerSearch, setCustomerSearch] = useState("");
   const [customerPage, setCustomerPage] = useState(1);
+  const [productSearch, setProductSearch] = useState("");
   const [previewMode, setPreviewMode] = useState<PreviewMode>("desktop");
   const [previewOpen, setPreviewOpen] = useState(false);
   const [testOpen, setTestOpen] = useState(false);
@@ -775,6 +776,18 @@ export const EmailMarketingWorkspace = () => {
   const storesQuery = trpc.stores.list.useQuery();
   const stores = useMemo(() => storesQuery.data ?? [], [storesQuery.data]);
   const selectedStore = stores.find((store) => store.id === storeId) ?? null;
+  const selectedBlock = blocks.find((block) => block.id === selectedBlockId) ?? blocks[0] ?? null;
+  const selectedProductIdsForQuery = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          blocks.flatMap((block) =>
+            block.type === "products" ? (block.productIds ?? []).filter(Boolean) : [],
+          ),
+        ),
+      ),
+    [blocks],
+  );
 
   useEffect(() => {
     if (!storeId && stores.length) setStoreId(stores[0]?.id ?? "");
@@ -811,11 +824,18 @@ export const EmailMarketingWorkspace = () => {
   const productsQuery = trpc.emailMarketing.products.useQuery(
     {
       storeId,
-      search: "",
+      search: productSearch.trim() || null,
       category: null,
-      limit: 40,
+      limit: productSearch.trim() ? 25 : 40,
+      includeIds: selectedProductIdsForQuery,
     },
-    { enabled: Boolean(storeId && builderOpen) },
+    {
+      enabled: Boolean(
+        storeId &&
+          builderOpen &&
+          (selectedBlock?.type === "products" || selectedProductIdsForQuery.length > 0),
+      ),
+    },
   );
 
   const selectedSender = useMemo(
@@ -827,7 +847,6 @@ export const EmailMarketingWorkspace = () => {
   const currentSenderReady = senderIdentityId ? selectedSender?.status === "VERIFIED" : defaultSenderReady;
   const currentSenderLabel = selectedSender?.fromEmail ?? defaultSender?.fromEmail ?? "Bazaar KG";
 
-  const selectedBlock = blocks.find((block) => block.id === selectedBlockId) ?? blocks[0] ?? null;
   const selectedBlockIndex = selectedBlock ? blocks.findIndex((block) => block.id === selectedBlock.id) : -1;
   const productItems = useMemo(() => productsQuery.data?.items ?? [], [productsQuery.data?.items]);
   const selectedProductMap = useMemo(
@@ -1665,6 +1684,9 @@ export const EmailMarketingWorkspace = () => {
                   <BlockSettings
                     block={selectedBlock}
                     products={productItems}
+                    productSearch={productSearch}
+                    setProductSearch={setProductSearch}
+                    productsLoading={productsQuery.isLoading}
                     update={(patch) => updateBlock(selectedBlock.id, patch)}
                   />
                 ) : (
@@ -2395,10 +2417,24 @@ const AlignmentControl = ({
 const BlockSettings = ({
   block,
   products,
+  productSearch,
+  setProductSearch,
+  productsLoading,
   update,
 }: {
   block: CampaignBlock;
-  products: Array<{ id: string; name: string; imageUrl?: string | null; priceText?: string | null; hasImage?: boolean }>;
+  products: Array<{
+    id: string;
+    name: string;
+    sku?: string | null;
+    barcode?: string | null;
+    imageUrl?: string | null;
+    priceText?: string | null;
+    hasImage?: boolean;
+  }>;
+  productSearch: string;
+  setProductSearch: (value: string) => void;
+  productsLoading: boolean;
   update: (patch: Partial<CampaignBlock>) => void;
 }) => {
   if (block.type === "header") {
@@ -2468,7 +2504,11 @@ const BlockSettings = ({
   }
   if (block.type === "products") {
     const selected = new Set(block.productIds ?? []);
-    const selectedProducts = products.filter((product) => selected.has(product.id));
+    const productById = new Map(products.map((product) => [product.id, product]));
+    const selectedProducts = (block.productIds ?? []).flatMap((id) => {
+      const product = productById.get(id);
+      return product ? [product] : [];
+    });
     return (
       <div className="space-y-3">
         <AlignmentControl value={block.alignment} onChange={(alignment) => update({ alignment })} />
@@ -2492,6 +2532,20 @@ const BlockSettings = ({
             ))}
           </div>
         ) : null}
+        <Field label="Поиск товаров">
+          <div className="relative">
+            <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+            <Input
+              value={productSearch}
+              onChange={(event) => setProductSearch(event.target.value)}
+              className="pl-9 pr-9"
+              placeholder="Название, SKU или штрихкод"
+            />
+            {productsLoading ? (
+              <Spinner className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            ) : null}
+          </div>
+        </Field>
         <div className="max-h-72 space-y-2 overflow-y-auto">
           {products.map((product) => (
             <button
@@ -2514,12 +2568,18 @@ const BlockSettings = ({
                 imageClassName="h-full w-full object-cover"
                 fallback={<span className="text-[10px] text-muted-foreground">Фото</span>}
               />
-              <span className="min-w-0"><span className="block truncate font-semibold">{product.name}</span><span className="text-xs text-muted-foreground">{product.priceText ?? "Нет цены"}</span></span>
+              <span className="min-w-0">
+                <span className="block truncate font-semibold">{product.name}</span>
+                <span className="block truncate text-xs text-muted-foreground">
+                  {[product.sku, product.barcode].filter(Boolean).join(" · ") || "Без SKU/штрихкода"}
+                </span>
+                <span className="text-xs text-muted-foreground">{product.priceText ?? "Нет цены"}</span>
+              </span>
             </button>
           ))}
           {!products.length ? (
             <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
-              Товары магазина не найдены.
+              {productSearch.trim() ? "По запросу ничего не найдено." : "Товары магазина не найдены."}
             </div>
           ) : null}
         </div>

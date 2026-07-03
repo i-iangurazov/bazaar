@@ -44,6 +44,10 @@ describe("integration source structure", () => {
     expect(emailWorkspace).toContain("{ storeId, source }");
     expect(emailWorkspace).toContain("trpc.emailMarketing.customers.useQuery");
     expect(emailWorkspace).toContain("trpc.emailMarketing.products.useQuery");
+    expect(emailWorkspace).toContain("productSearch");
+    expect(emailWorkspace).toContain("search: productSearch.trim() || null");
+    expect(emailWorkspace).toContain("includeIds: selectedProductIdsForQuery");
+    expect(emailWorkspace).toContain("Название, SKU или штрихкод");
     expect(emailWorkspace).toContain("trpc.emailMarketing.preview.useMutation");
     expect(emailWorkspace).toContain("trpc.emailMarketing.sendTest.useMutation");
     expect(emailWorkspace).toContain("trpc.emailMarketing.history.useQuery");
@@ -85,6 +89,7 @@ describe("integration source structure", () => {
     expect(emailRouter).toContain("storeId");
     expect(emailRouter).toContain("source: sourceSchema");
     expect(emailRouter).toContain("includeSelectableIds: z.boolean().optional()");
+    expect(emailRouter).toContain("includeIds: z.array(z.string().min(1)).max(500).optional()");
     expect(emailRouter).toContain("logoGallery: managerProcedure");
     expect(emailRouter).toContain("senders: managerProcedure");
     expect(emailRouter).toContain("sendCampaign: managerProcedure");
