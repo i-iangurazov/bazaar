@@ -231,6 +231,7 @@ describeDb("bazaar api integration", () => {
     });
     const request = () =>
       new Request("http://localhost/api/bazaar/v1/products", {
+        method: "POST",
         headers: { authorization: `Bearer ${token}` },
       });
 
@@ -246,7 +247,9 @@ describeDb("bazaar api integration", () => {
       select: { lastUsedAt: true },
     });
 
-    const oldLastUsedAt = new Date(Date.now() - 11 * 60 * 1000);
+    expect(first.lastUsedAt).toBeInstanceOf(Date);
+
+    const oldLastUsedAt = new Date(first.lastUsedAt!.getTime() - 11 * 60 * 1000);
     await prisma.bazaarApiKey.update({
       where: { id: apiKey.id },
       data: { lastUsedAt: oldLastUsedAt },
@@ -258,7 +261,6 @@ describeDb("bazaar api integration", () => {
       select: { lastUsedAt: true },
     });
 
-    expect(first.lastUsedAt).toBeInstanceOf(Date);
     expect(second.lastUsedAt?.getTime()).toBe(first.lastUsedAt?.getTime());
     expect(refreshed.lastUsedAt?.getTime()).toBeGreaterThan(oldLastUsedAt.getTime());
   });
