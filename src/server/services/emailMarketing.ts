@@ -50,6 +50,7 @@ export type EmailCampaignAudienceInput = {
 };
 
 type EmailBlockAlignment = "left" | "center" | "right";
+type EmailTextFontSize = "small" | "normal" | "large" | "huge";
 
 export type EmailCampaignBlock =
   | {
@@ -76,6 +77,8 @@ export type EmailCampaignBlock =
       type: "text";
       heading?: string | null;
       body?: string | null;
+      bodyBold?: boolean;
+      bodyFontSize?: EmailTextFontSize;
       alignment?: EmailBlockAlignment;
     }
   | {
@@ -419,6 +422,56 @@ export const requireEmailMarketingPublicAppBaseUrl = () => {
     throw new AppError("emailMarketingPublicUrlRequired", "BAD_REQUEST", 400);
   }
   return baseUrl;
+};
+
+type EmailSenderWithDomain = Prisma.EmailSenderIdentityGetPayload<{ include: { domain: true } }>;
+
+const isVerifiedCustomSender = (sender: EmailSenderWithDomain) =>
+  sender.archivedAt === null &&
+  sender.status === EmailSenderIdentityStatus.VERIFIED &&
+  sender.domain?.status === EmailSenderDomainStatus.VERIFIED &&
+  Boolean(sender.domain.verifiedAt) &&
+  emailDomain(sender.fromEmail) === sender.domain.domain;
+
+const primarySenderSortValue = (sender: EmailSenderWithDomain) =>
+  sender.domain?.verifiedAt?.getTime() ?? sender.updatedAt.getTime() ?? sender.createdAt.getTime();
+
+const selectPrimaryVerifiedSender = (senders: EmailSenderWithDomain[]) =>
+  [...senders]
+    .filter(isVerifiedCustomSender)
+    .sort((left, right) => {
+      const verifiedDiff = primarySenderSortValue(right) - primarySenderSortValue(left);
+      if (verifiedDiff !== 0) return verifiedDiff;
+      return right.createdAt.getTime() - left.createdAt.getTime();
+    })[0] ?? null;
+
+export const resolveStorePrimaryVerifiedSender = async (input: {
+  organizationId: string;
+  storeId: string;
+}) => {
+  const senders = await prisma.emailSenderIdentity.findMany({
+    where: {
+      organizationId: input.organizationId,
+      storeId: input.storeId,
+      archivedAt: null,
+      status: EmailSenderIdentityStatus.VERIFIED,
+      domain: { status: EmailSenderDomainStatus.VERIFIED, verifiedAt: { not: null } },
+    },
+    include: { domain: true },
+    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+  });
+  const sender = selectPrimaryVerifiedSender(senders);
+  if (!sender) {
+    return null;
+  }
+  return {
+    id: sender.id,
+    fromEmail: sender.fromEmail,
+    from: formatEmailAddress({ name: sender.displayName, email: sender.fromEmail }),
+    replyTo: sender.replyToEmail,
+    displayName: sender.displayName,
+    demoOnly: false,
+  };
 };
 
 export const resolveEmailMarketingAssetUrl = (value?: string | null) => {
@@ -1258,18 +1311,25 @@ export const listEmailSenderSetup = async (input: {
     }),
   ]);
   const config = getMarketingEmailConfiguration();
+  const primaryCustomSender = selectPrimaryVerifiedSender(senders);
+  const visibleSenders = primaryCustomSender
+    ? senders.filter((sender) => sender.id === primaryCustomSender.id)
+    : senders;
   return {
     domains,
-    senders,
-    defaultSender: {
-      id: "__default__",
-      displayName: "Bazaar",
-      fromEmail: MARKETING_EMAIL_FROM,
-      replyToEmail: null,
-      status: config.ready ? "VERIFIED" : "NOT_CONFIGURED",
-      demoOnly: false,
-      provider: config.provider,
-    },
+    senders: visibleSenders,
+    primarySenderId: primaryCustomSender?.id ?? null,
+    defaultSender: primaryCustomSender
+      ? null
+      : {
+          id: "__default__",
+          displayName: "Bazaar",
+          fromEmail: MARKETING_EMAIL_FROM,
+          replyToEmail: null,
+          status: config.ready ? "VERIFIED" : "NOT_CONFIGURED",
+          demoOnly: false,
+          provider: config.provider,
+        },
   };
 };
 
@@ -1585,21 +1645,24 @@ const resolveCampaignSender = async (input: {
     if (!sender) {
       throw new AppError("emailSenderNotFound", "NOT_FOUND", 404);
     }
-    if (
-      sender.status !== EmailSenderIdentityStatus.VERIFIED ||
-      sender.domain?.status !== EmailSenderDomainStatus.VERIFIED ||
-      emailDomain(sender.fromEmail) !== sender.domain.domain
-    ) {
-      throw new AppError("emailSenderNotVerified", "BAD_REQUEST", 400);
+    if (isVerifiedCustomSender(sender)) {
+      return {
+        id: sender.id,
+        fromEmail: sender.fromEmail,
+        from: formatEmailAddress({ name: sender.displayName, email: sender.fromEmail }),
+        replyTo: sender.replyToEmail,
+        displayName: sender.displayName,
+        demoOnly: false,
+      };
     }
-    return {
-      id: sender.id,
-      fromEmail: sender.fromEmail,
-      from: formatEmailAddress({ name: sender.displayName, email: sender.fromEmail }),
-      replyTo: sender.replyToEmail,
-      displayName: sender.displayName,
-      demoOnly: false,
-    };
+  }
+
+  const primarySender = await resolveStorePrimaryVerifiedSender({
+    organizationId: input.organizationId,
+    storeId: input.storeId,
+  });
+  if (primarySender) {
+    return primarySender;
   }
 
   const config = getMarketingEmailConfiguration();
@@ -1872,6 +1935,7 @@ export const searchEmailMarketingProducts = async (input: {
     categories: true,
     description: true,
     photoUrl: true,
+    createdAt: true,
     basePriceKgs: true,
     barcodes: { select: { value: true }, take: 1 },
     images: {
@@ -1891,12 +1955,15 @@ export const searchEmailMarketingProducts = async (input: {
     },
   } satisfies Prisma.ProductSelect;
   const searchWhere = buildWhere(searchFilter ? [...baseFilters, searchFilter] : baseFilters);
+  const defaultProductOrderBy = search
+    ? [{ name: "asc" as const }, { id: "asc" as const }]
+    : [{ createdAt: "desc" as const }, { id: "desc" as const }];
 
   const [searchProducts, includedProducts] = await Promise.all([
     prisma.product.findMany({
       where: searchWhere,
       select: productSelect,
-      orderBy: [{ name: "asc" }, { id: "asc" }],
+      orderBy: defaultProductOrderBy,
       take: Math.min(50, Math.max(1, input.limit ?? 20)),
     }),
     includeIds.length
@@ -2224,7 +2291,11 @@ const textToHtml = (value: string) =>
     .split(/\n{2,}/)
     .map((part) => part.trim())
     .filter(Boolean)
-    .map((part) => part.replace(/\n/g, "<br />"))
+    .map((part) =>
+      part
+        .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>")
+        .replace(/\n/g, "<br />"),
+    )
     .join("<br /><br />");
 
 const renderButton = (input: { href: string; text: string; color: string; textColor: string }) =>
@@ -2232,6 +2303,16 @@ const renderButton = (input: { href: string; text: string; color: string; textCo
 
 const normalizeBlockAlignment = (alignment?: string | null): EmailBlockAlignment =>
   alignment === "center" || alignment === "right" ? alignment : "left";
+
+const normalizeTextFontSize = (fontSize?: string | null): EmailTextFontSize =>
+  fontSize === "small" || fontSize === "large" || fontSize === "huge" ? fontSize : "normal";
+
+const textFontSizePx: Record<EmailTextFontSize, number> = {
+  small: 13,
+  normal: 15,
+  large: 18,
+  huge: 22,
+};
 
 const imageMarginForAlignment = (alignment: EmailBlockAlignment, bottomMargin = 8) => {
   if (alignment === "center") {
@@ -2343,12 +2424,14 @@ export const renderEmailCampaign = (input: {
 
     if (block.type === "text") {
       const alignment = normalizeBlockAlignment(block.alignment);
+      const bodyFontSize = normalizeTextFontSize(block.bodyFontSize);
+      const bodyWeight = block.bodyBold ? 700 : 400;
       const heading = trimOptional(renderVariables(block.heading, variableContext));
       const body = trimOptional(renderVariables(block.body, variableContext));
       htmlParts.push(`
         <div style="padding:8px 24px 22px;text-align:${alignment};">
           ${heading ? `<h2 style="margin:0 0 10px;color:${textColor};font-size:20px;line-height:1.3;">${escapeHtml(heading)}</h2>` : ""}
-          ${body ? `<div style="color:${mutedTextColor};font-size:15px;line-height:1.65;">${textToHtml(body)}</div>` : ""}
+          ${body ? `<div style="color:${mutedTextColor};font-size:${textFontSizePx[bodyFontSize]}px;line-height:1.65;font-weight:${bodyWeight};">${textToHtml(body)}</div>` : ""}
         </div>
       `);
       textParts.push([heading, body].filter(Boolean).join("\n\n"));

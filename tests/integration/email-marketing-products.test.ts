@@ -77,6 +77,25 @@ describeDb("email marketing product search", () => {
         unit: baseUnit.code,
         sku: "KOF-BISH-01",
         name: "Кофе зерновой Бишкек",
+        createdAt: new Date("2026-02-01T00:00:00.000Z"),
+        storeProducts: {
+          create: {
+            organizationId: org.id,
+            storeId: store.id,
+            isActive: true,
+          },
+        },
+      },
+    });
+    const recent = await prisma.product.create({
+      data: {
+        organizationId: org.id,
+        supplierId: supplier.id,
+        baseUnitId: baseUnit.id,
+        unit: baseUnit.code,
+        sku: "RECENT-NEW",
+        name: "Recently Added Camera",
+        createdAt: new Date("2026-03-01T00:00:00.000Z"),
         storeProducts: {
           create: {
             organizationId: org.id,
@@ -123,6 +142,13 @@ describeDb("email marketing product search", () => {
     await expect(
       caller.emailMarketing.products({ storeId: store.id, search: "зернов", limit: 10 }),
     ).resolves.toMatchObject({ items: [expect.objectContaining({ id: cyrillic.id })] });
+
+    const defaultOrder = await caller.emailMarketing.products({
+      storeId: store.id,
+      search: null,
+      limit: 5,
+    });
+    expect(defaultOrder.items[0]?.id).toBe(recent.id);
 
     const firstPageWithSelected = await caller.emailMarketing.products({
       storeId: store.id,

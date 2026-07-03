@@ -3,6 +3,8 @@ import {
   CustomerSource,
   EmailCampaignRecipientStatus,
   EmailCampaignStatus,
+  EmailSenderDomainStatus,
+  EmailSenderIdentityStatus,
   Role,
 } from "@prisma/client";
 
@@ -16,6 +18,7 @@ import {
 } from "@/server/services/customers";
 import {
   buildEmailUnsubscribeUrl,
+  listEmailSenderSetup,
   previewEmailCampaign,
   sendEmailCampaignToAudience,
   unsubscribeCustomerFromEmailMarketing,
@@ -248,6 +251,126 @@ describeDb("customer database", () => {
     );
     expect(storeCustomers.every((customer) => customer.source === CustomerSource.ORDER)).toBe(true);
     expect(otherStoreCustomers).toHaveLength(0);
+  });
+
+  it("uses a verified custom sender as the only primary sender instead of the Bazaar fallback", async () => {
+    const previousEmailFrom = process.env.EMAIL_FROM;
+    const previousEmailProvider = process.env.EMAIL_PROVIDER;
+    process.env.EMAIL_FROM = MARKETING_EMAIL_FROM;
+    process.env.EMAIL_PROVIDER = "log";
+
+    try {
+      const { org, store, adminUser } = await seedBase({ plan: "BUSINESS" });
+      const user = asCallerUser(adminUser);
+
+      const fallbackSetup = await listEmailSenderSetup({ user, storeId: store.id });
+      expect(fallbackSetup.defaultSender?.fromEmail).toBe(MARKETING_EMAIL_FROM);
+      expect(fallbackSetup.primarySenderId).toBeNull();
+
+      const fallbackPreview = await previewEmailCampaign({
+        user,
+        campaign: {
+          storeId: store.id,
+          source: "ALL",
+          subject: "Store update",
+          body: "New stock is available.",
+          brandColor: "#111827",
+          buttonColor: "#111827",
+        },
+      });
+      expect(fallbackPreview.from).toBe(MARKETING_EMAIL_FROM);
+
+      const pendingDomain = await prisma.emailSenderDomain.create({
+        data: {
+          organizationId: org.id,
+          storeId: store.id,
+          domain: "pendingdomain.com",
+          status: EmailSenderDomainStatus.PENDING,
+          recordsJson: [],
+        },
+      });
+      const pendingSender = await prisma.emailSenderIdentity.create({
+        data: {
+          organizationId: org.id,
+          storeId: store.id,
+          domainId: pendingDomain.id,
+          displayName: "Pending Domain",
+          fromEmail: "no-reply@pendingdomain.com",
+          status: EmailSenderIdentityStatus.PENDING,
+        },
+      });
+      const pendingSetup = await listEmailSenderSetup({ user, storeId: store.id });
+      expect(pendingSetup.defaultSender?.fromEmail).toBe(MARKETING_EMAIL_FROM);
+      expect(pendingSetup.primarySenderId).toBeNull();
+      expect(pendingSetup.senders.map((item) => item.id)).toContain(pendingSender.id);
+
+      const pendingPreview = await previewEmailCampaign({
+        user,
+        campaign: {
+          storeId: store.id,
+          source: "ALL",
+          subject: "Store update",
+          body: "New stock is available.",
+          senderIdentityId: pendingSender.id,
+          brandColor: "#111827",
+          buttonColor: "#111827",
+        },
+      });
+      expect(pendingPreview.from).toBe(MARKETING_EMAIL_FROM);
+
+      const domain = await prisma.emailSenderDomain.create({
+        data: {
+          organizationId: org.id,
+          storeId: store.id,
+          domain: "clientdomain.com",
+          status: EmailSenderDomainStatus.VERIFIED,
+          verifiedAt: new Date("2026-01-01T00:00:00.000Z"),
+          recordsJson: [],
+        },
+      });
+      const sender = await prisma.emailSenderIdentity.create({
+        data: {
+          organizationId: org.id,
+          storeId: store.id,
+          domainId: domain.id,
+          displayName: "Client Domain",
+          fromEmail: "no-reply@clientdomain.com",
+          replyToEmail: "support@clientdomain.com",
+          status: EmailSenderIdentityStatus.VERIFIED,
+        },
+      });
+
+      const customSetup = await listEmailSenderSetup({ user, storeId: store.id });
+      expect(customSetup.defaultSender).toBeNull();
+      expect(customSetup.primarySenderId).toBe(sender.id);
+      expect(customSetup.senders.map((item) => item.id)).toEqual([sender.id]);
+
+      const customPreview = await previewEmailCampaign({
+        user,
+        campaign: {
+          storeId: store.id,
+          source: "ALL",
+          subject: "Store update",
+          body: "New stock is available.",
+          senderIdentityId: null,
+          brandColor: "#111827",
+          buttonColor: "#111827",
+        },
+      });
+      expect(customPreview.from).toBe("no-reply@clientdomain.com");
+      expect(customPreview.sender?.from).toBe("Client Domain <no-reply@clientdomain.com>");
+    } finally {
+      if (previousEmailFrom === undefined) {
+        delete process.env.EMAIL_FROM;
+      } else {
+        process.env.EMAIL_FROM = previousEmailFrom;
+      }
+      if (previousEmailProvider === undefined) {
+        delete process.env.EMAIL_PROVIDER;
+      } else {
+        process.env.EMAIL_PROVIDER = previousEmailProvider;
+      }
+    }
   });
 
   it("builds email audiences from selected-store customers with email and sends from fixed sender", async () => {

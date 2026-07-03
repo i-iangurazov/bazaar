@@ -108,6 +108,7 @@ type TabKey = "campaigns" | "automations" | "senders" | "templates";
 type PreviewMode = "desktop" | "mobile";
 type BuilderMode = "campaign" | "automation";
 type BlockAlignment = "left" | "center" | "right";
+type TextFontSize = "small" | "normal" | "large" | "huge";
 
 const builderDesktopMediaQuery = "(min-width: 1280px) and (pointer: fine)";
 const builderUnavailableMessage =
@@ -190,6 +191,8 @@ type CampaignBlock =
       type: "text";
       heading?: string | null;
       body?: string | null;
+      bodyBold?: boolean;
+      bodyFontSize?: TextFontSize;
       alignment?: BlockAlignment;
     }
   | {
@@ -270,6 +273,12 @@ const blockAlignmentOptions = [
   { value: "center", label: "По центру", icon: AlignCenterIcon },
   { value: "right", label: "Справа", icon: AlignRightIcon },
 ] satisfies Array<{ value: BlockAlignment; label: string; icon: typeof AlignLeftIcon }>;
+const textFontSizeOptions = [
+  { value: "small", label: "Маленький", className: "text-xs" },
+  { value: "normal", label: "Обычный", className: "text-sm" },
+  { value: "large", label: "Большой", className: "text-lg" },
+  { value: "huge", label: "Крупный", className: "text-2xl" },
+] satisfies Array<{ value: TextFontSize; label: string; className: string }>;
 
 const normalizeBlockAlignment = (alignment?: BlockAlignment | null): BlockAlignment =>
   alignment === "center" || alignment === "right" ? alignment : "left";
@@ -287,6 +296,9 @@ const logoAlignmentClassName = (alignment?: BlockAlignment | null) => {
   if (normalized === "right") return "ml-auto";
   return "";
 };
+
+const textFontSizeClassName = (fontSize?: TextFontSize | null) =>
+  textFontSizeOptions.find((option) => option.value === fontSize)?.className ?? "text-sm";
 
 const getBlockAlignment = (block: CampaignBlock): BlockAlignment =>
   "alignment" in block ? normalizeBlockAlignment(block.alignment) : "left";
@@ -363,6 +375,8 @@ const defaultBlocks = (storeName?: string | null): CampaignBlock[] => [
     type: "text",
     heading: "Здравствуйте, {{customerName}}!",
     body: "Расскажите клиентам о новинках, акции или важной новости магазина.",
+    bodyBold: false,
+    bodyFontSize: "normal",
   },
   {
     id: `products-${uid()}`,
@@ -421,6 +435,8 @@ const defaultAutomationBlocks = (trigger?: EmailAutomationTrigger): CampaignBloc
         ? "Заказ {{orderNumber}} теперь: {{orderStatus}}"
         : "Заказ {{orderNumber}} принят",
     body: "Ниже краткая информация по заказу.",
+    bodyBold: false,
+    bodyFontSize: "normal",
   },
 	  {
 	    ...defaultOrderSummaryBlock(),
@@ -441,7 +457,7 @@ const newBlock = (type: CampaignBlock["type"]): CampaignBlock => {
   const id = `${type}-${uid()}`;
   if (type === "header") return { id, type, showLogo: true, showStoreName: true, storeName: "" };
   if (type === "hero") return { id, type, heading: "Новость магазина", subtitle: "", imageUrl: "" };
-  if (type === "text") return { id, type, heading: "", body: "" };
+  if (type === "text") return { id, type, heading: "", body: "", bodyBold: false, bodyFontSize: "normal" };
   if (type === "button") return { id, type, text: "Подробнее", url: "" };
   if (type === "products") {
     return {
@@ -838,14 +854,33 @@ export const EmailMarketingWorkspace = () => {
     },
   );
 
+  const senderOptions = useMemo(() => sendersQuery.data?.senders ?? [], [sendersQuery.data?.senders]);
+  const senderOptionsKey = useMemo(
+    () => senderOptions.map((sender) => sender.id).join(","),
+    [senderOptions],
+  );
+  const primarySenderId = sendersQuery.data?.primarySenderId ?? null;
+  const effectiveSenderIdentityId = senderIdentityId ?? primarySenderId;
   const selectedSender = useMemo(
-    () => sendersQuery.data?.senders.find((sender) => sender.id === senderIdentityId) ?? null,
-    [senderIdentityId, sendersQuery.data?.senders],
+    () => senderOptions.find((sender) => sender.id === effectiveSenderIdentityId) ?? null,
+    [effectiveSenderIdentityId, senderOptions],
   );
   const defaultSender = sendersQuery.data?.defaultSender ?? null;
   const defaultSenderReady = defaultSender?.status === "VERIFIED" || defaultSender?.status === "AVAILABLE";
-  const currentSenderReady = senderIdentityId ? selectedSender?.status === "VERIFIED" : defaultSenderReady;
+  const currentSenderReady = effectiveSenderIdentityId ? selectedSender?.status === "VERIFIED" : defaultSenderReady;
   const currentSenderLabel = selectedSender?.fromEmail ?? defaultSender?.fromEmail ?? "Bazaar KG";
+
+  useEffect(() => {
+    if (!sendersQuery.data) return;
+    if (primarySenderId && senderIdentityId !== primarySenderId) {
+      setSenderIdentityId(primarySenderId);
+      return;
+    }
+    const stateSender = senderOptions.find((sender) => sender.id === senderIdentityId);
+    if (!primarySenderId && senderIdentityId && (!stateSender || stateSender.status !== "VERIFIED")) {
+      setSenderIdentityId(null);
+    }
+  }, [primarySenderId, senderIdentityId, senderOptions, senderOptionsKey, sendersQuery.data]);
 
   const selectedBlockIndex = selectedBlock ? blocks.findIndex((block) => block.id === selectedBlock.id) : -1;
   const productItems = useMemo(() => productsQuery.data?.items ?? [], [productsQuery.data?.items]);
@@ -869,7 +904,7 @@ export const EmailMarketingWorkspace = () => {
       storeId,
       campaignType:
         builderMode === "automation" ? EmailCampaignType.TRANSACTIONAL : EmailCampaignType.MARKETING,
-      senderIdentityId,
+      senderIdentityId: effectiveSenderIdentityId,
       name: campaignName,
       audience: {
         mode: audienceMode,
@@ -921,7 +956,7 @@ export const EmailMarketingWorkspace = () => {
       selectedSender?.displayName,
       selectedSender?.replyToEmail,
       selectedStore?.name,
-      senderIdentityId,
+      effectiveSenderIdentityId,
       source,
       storeId,
       subject,
@@ -1216,7 +1251,7 @@ export const EmailMarketingWorkspace = () => {
     setAudienceMode("segment");
     setAudienceSegment("all");
     setSelectedCustomerIds([]);
-    setSenderIdentityId(sendersQuery.data?.senders.find((sender) => sender.status === "VERIFIED")?.id ?? null);
+    setSenderIdentityId(primarySenderId ?? senderOptions.find((sender) => sender.status === "VERIFIED")?.id ?? null);
     setBuilderOpen(true);
   };
 
@@ -1328,7 +1363,7 @@ export const EmailMarketingWorkspace = () => {
     if (builderMode === "automation" && automationId) {
 	    await updateAutomationMutation.mutateAsync({
 	      automationId,
-	      senderIdentityId,
+	      senderIdentityId: effectiveSenderIdentityId,
 	      subject,
 	      preheader,
 	      brandColor,
@@ -1496,18 +1531,20 @@ export const EmailMarketingWorkspace = () => {
                   </Field>
                   <Field label="Отправитель">
                     <Select
-                      value={senderIdentityId ?? "__none__"}
+                      value={effectiveSenderIdentityId ?? "__none__"}
                       onValueChange={(value) => setSenderIdentityId(value === "__none__" ? null : value)}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Выберите" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__none__">
-                          Bazaar KG{defaultSender?.fromEmail ? ` · ${defaultSender.fromEmail}` : ""}
-                        </SelectItem>
-                        {(sendersQuery.data?.senders ?? []).map((sender) => (
-                          <SelectItem key={sender.id} value={sender.id}>
+                        {defaultSender ? (
+                          <SelectItem value="__none__">
+                            Bazaar KG{defaultSender.fromEmail ? ` · ${defaultSender.fromEmail}` : ""}
+                          </SelectItem>
+                        ) : null}
+                        {senderOptions.map((sender) => (
+                          <SelectItem key={sender.id} value={sender.id} disabled={sender.status !== "VERIFIED"}>
                             {sender.displayName} · {sender.fromEmail}
                           </SelectItem>
                         ))}
@@ -1997,6 +2034,7 @@ export const EmailMarketingWorkspace = () => {
               automations={automationsQuery.data ?? []}
               loading={automationsQuery.isLoading}
               senders={sendersQuery.data?.senders ?? []}
+              primarySenderId={sendersQuery.data?.primarySenderId ?? null}
               builderAvailable={builderDesktopReady}
               onEdit={openAutomation}
               onToggle={(automation) =>
@@ -2227,7 +2265,18 @@ const EmailBlockPreview = ({
     return (
       <div className={cn("px-8 py-5", alignedClassName)}>
         <EditableText value={block.heading} placeholder="Заголовок" selected={selected} className="text-xl font-semibold" onChange={(heading) => onUpdate({ heading })} />
-        <EditableText value={block.body} placeholder="Текст письма" selected={selected} multiline className="mt-2 whitespace-pre-wrap text-sm leading-6" onChange={(body) => onUpdate({ body })} />
+        <EditableText
+          value={block.body}
+          placeholder="Текст письма"
+          selected={selected}
+          multiline
+          className={cn(
+            "mt-2 whitespace-pre-wrap leading-6",
+            textFontSizeClassName(block.bodyFontSize),
+            block.bodyBold && "font-semibold",
+          )}
+          onChange={(body) => onUpdate({ body })}
+        />
       </div>
     );
   }
@@ -2437,6 +2486,26 @@ const BlockSettings = ({
   productsLoading: boolean;
   update: (patch: Partial<CampaignBlock>) => void;
 }) => {
+  const textBodyRef = useRef<HTMLTextAreaElement | null>(null);
+  const applyBodyBold = () => {
+    if (block.type !== "text") return;
+    const textarea = textBodyRef.current;
+    const body = block.body ?? "";
+    if (textarea && textarea.selectionStart !== textarea.selectionEnd) {
+      const selectionStart = textarea.selectionStart;
+      const selectionEnd = textarea.selectionEnd;
+      const selectedText = body.slice(selectionStart, selectionEnd);
+      const nextBody = `${body.slice(0, selectionStart)}**${selectedText}**${body.slice(selectionEnd)}`;
+      update({ body: nextBody });
+      window.requestAnimationFrame(() => {
+        textarea.focus();
+        textarea.setSelectionRange(selectionStart + 2, selectionEnd + 2);
+      });
+      return;
+    }
+    update({ bodyBold: !(block.bodyBold ?? false) });
+  };
+
   if (block.type === "header") {
     return (
       <div className="space-y-3">
@@ -2483,8 +2552,42 @@ const BlockSettings = ({
         <Field label="Заголовок">
           <Input value={block.heading ?? ""} onChange={(event) => update({ heading: event.target.value })} />
         </Field>
+        <div className="grid gap-2 sm:grid-cols-[auto_minmax(0,1fr)]">
+          <Button
+            type="button"
+            size="sm"
+            variant={block.bodyBold ? "primary" : "outline"}
+            aria-pressed={block.bodyBold ?? false}
+            onClick={applyBodyBold}
+          >
+            <span className="font-bold" aria-hidden>B</span>
+            Жирный
+          </Button>
+          <Field label="Размер текста">
+            <Select
+              value={block.bodyFontSize ?? "normal"}
+              onValueChange={(value) => update({ bodyFontSize: value as TextFontSize })}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {textFontSizeOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        </div>
         <Field label="Текст">
-          <Textarea value={block.body ?? ""} onChange={(event) => update({ body: event.target.value })} rows={6} />
+          <Textarea
+            ref={textBodyRef}
+            value={block.body ?? ""}
+            onChange={(event) => update({ body: event.target.value })}
+            rows={6}
+          />
         </Field>
       </div>
     );
@@ -2545,6 +2648,11 @@ const BlockSettings = ({
               <Spinner className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             ) : null}
           </div>
+          <p className="text-xs leading-5 text-muted-foreground">
+            {productSearch.trim()
+              ? "Поиск идет по всем товарам магазина: название, SKU и штрихкод."
+              : "Последние добавленные товары показываются первыми."}
+          </p>
         </Field>
         <div className="max-h-72 space-y-2 overflow-y-auto">
           {products.map((product) => (
@@ -2917,7 +3025,8 @@ const SendersPanel = ({
   onArchive,
 }: {
   data?: {
-    defaultSender: { fromEmail: string; status: string; demoOnly: boolean };
+    defaultSender: { fromEmail: string; status: string; demoOnly: boolean } | null;
+    primarySenderId?: string | null;
     domains: Array<{ id: string; domain: string; status: string; recordsJson: unknown; lastCheckedAt: Date | null; errorMessage: string | null }>;
     senders: Array<{ id: string; displayName: string; fromEmail: string; replyToEmail: string | null; status: string; domainId: string | null }>;
   };
@@ -2980,6 +3089,7 @@ const SendersPanel = ({
                   <p className="truncate text-sm text-muted-foreground">{sender.fromEmail}</p>
                 </div>
                 <div className="flex items-center gap-2">
+                  {data?.primarySenderId === sender.id ? <Badge variant="success">Основной</Badge> : null}
                   <Badge variant={sender.status === "VERIFIED" ? "success" : sender.status === "FAILED" ? "danger" : "warning"}>{senderStatusLabel(sender.status)}</Badge>
                   <Button type="button" size="icon" variant="ghost" onClick={() => onArchive(sender.id)} aria-label="Архивировать"><ArchiveIcon className="h-4 w-4" /></Button>
                 </div>
@@ -3072,6 +3182,7 @@ const AutomationsPanel = ({
   automations,
   loading,
   senders,
+  primarySenderId,
   builderAvailable,
   onEdit,
   onToggle,
@@ -3083,6 +3194,7 @@ const AutomationsPanel = ({
   automations: AutomationDashboardItem[];
   loading: boolean;
   senders: Array<{ id: string; displayName: string; fromEmail: string; status: string }>;
+  primarySenderId?: string | null;
   builderAvailable: boolean;
   onEdit: (automation: AutomationDashboardItem) => void;
   onToggle: (automation: AutomationDashboardItem) => void;
@@ -3113,10 +3225,10 @@ const AutomationsPanel = ({
             </div>
           </div>
           <Field label="Отправитель">
-            <Select value={automation.senderIdentityId ?? "__none__"} onValueChange={(value) => onSender(automation.id, value)}>
+            <Select value={automation.senderIdentityId ?? primarySenderId ?? "__none__"} onValueChange={(value) => onSender(automation.id, value)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="__none__">Не выбран</SelectItem>
+                {primarySenderId ? null : <SelectItem value="__none__">Автоматически: Bazaar KG</SelectItem>}
                 {senders.map((sender) => (
                   <SelectItem key={sender.id} value={sender.id} disabled={sender.status !== "VERIFIED"}>{sender.displayName} · {sender.fromEmail}</SelectItem>
                 ))}

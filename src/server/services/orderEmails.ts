@@ -13,7 +13,8 @@ import {
 import { defaultTimeZone } from "@/lib/timezone";
 import { prisma } from "@/server/db/prisma";
 import { getLogger } from "@/server/logging";
-import { sendTransactionalEmail } from "@/server/services/email";
+import { sendTransactionalEmail, type EmailPayload } from "@/server/services/email";
+import { resolveStorePrimaryVerifiedSender } from "@/server/services/emailMarketing";
 import { AppError } from "@/server/services/errors";
 
 type OrderEmailLine = {
@@ -486,7 +487,7 @@ const buildEmailPayload = (
   type: CustomerOrderEmailType,
   order: OrderEmailRecord,
   recipientEmail: string,
-) => {
+): EmailPayload => {
   if (type === CustomerOrderEmailType.CONFIRMATION) {
     return buildConfirmationPayload(order, recipientEmail);
   }
@@ -565,6 +566,14 @@ const sendOrderEmail = async (input: {
   }
 
   const payload = buildEmailPayload(input.type, order, recipientEmail);
+  const sender = await resolveStorePrimaryVerifiedSender({
+    organizationId: order.organizationId,
+    storeId: order.storeId,
+  });
+  if (sender) {
+    payload.from = sender.from;
+    payload.replyTo = sender.replyTo;
+  }
   if (input.force && payload.idempotencyKey) {
     payload.idempotencyKey = `${payload.idempotencyKey}-${Date.now()}`;
   }

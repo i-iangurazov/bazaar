@@ -286,6 +286,32 @@ describe("email marketing logo rendering", () => {
 	    expect(rendered.text).toContain("Total: 1 200 сом");
 	  });
 
+  it("renders text formatting while escaping unsafe HTML", () => {
+    const rendered = renderEmailCampaign({
+      campaign: {
+        ...testCampaign,
+        blocks: [
+          {
+            id: "formatted-text",
+            type: "text",
+            heading: "Formatted",
+            body: "Normal **bold <tag>** copy",
+            bodyBold: true,
+            bodyFontSize: "large",
+          },
+        ],
+      },
+      store: testStore,
+      logoUrl: null,
+    });
+
+    expect(rendered.html).toContain("font-size:18px");
+    expect(rendered.html).toContain("font-weight:700");
+    expect(rendered.html).toContain("<strong>bold &lt;tag&gt;</strong>");
+    expect(rendered.html).not.toContain("<tag>");
+    expect(rendered.text).toContain("Normal **bold <tag>** copy");
+  });
+
   it("renders persisted edited blocks and omits deleted block content", () => {
     const rendered = renderEmailCampaign({
       campaign: {

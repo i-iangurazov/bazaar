@@ -52,6 +52,7 @@ const audienceSchema = z
   .optional()
   .nullable();
 const blockAlignmentSchema = z.enum(["left", "center", "right"]);
+const textFontSizeSchema = z.enum(["small", "normal", "large", "huge"]);
 
 const headerBlockSchema = z.object({
   id: z.string().min(1),
@@ -79,6 +80,8 @@ const textBlockSchema = z.object({
   type: z.literal("text"),
   heading: z.string().max(180).optional().nullable(),
   body: z.string().max(8_000).optional().nullable(),
+  bodyBold: z.boolean().optional(),
+  bodyFontSize: textFontSizeSchema.optional(),
   alignment: blockAlignmentSchema.optional(),
 });
 
