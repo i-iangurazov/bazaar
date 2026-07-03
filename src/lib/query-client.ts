@@ -58,6 +58,11 @@ const applyHotQueryDefaults = (queryClient: QueryClient) => {
     staleTime: 30_000,
     cacheTime: 10 * 60_000,
   });
+
+  queryClient.setQueryDefaults(getQueryKey(trpc.inventory.searchProducts, undefined, "query"), {
+    staleTime: 5 * 60_000,
+    cacheTime: 15 * 60_000,
+  });
 };
 
 export const createAppQueryClient = () => {
