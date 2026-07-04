@@ -3,6 +3,7 @@ import {
   CustomerOrderSource,
   CustomerOrderStatus,
   CustomerSource,
+  StockMovementType,
   type Prisma,
 } from "@prisma/client";
 
@@ -23,6 +24,7 @@ import {
   upsertCustomerFromOrderTx,
 } from "@/server/services/customers";
 import { AppError } from "@/server/services/errors";
+import { applyStockMovement } from "@/server/services/inventory";
 import { toJson } from "@/server/services/json";
 import { sendOrderConfirmationEmail } from "@/server/services/orderEmails";
 
@@ -49,8 +51,15 @@ const normalizeOptionalText = (value?: string | null) => {
   const normalized = value?.trim();
   return normalized ? normalized : null;
 };
+const normalizeExternalId = (value?: string | null) => normalizeOptionalText(value)?.replace(/\s+/g, " ") ?? null;
 const customerEmailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const variantKeyFrom = (variantId?: string | null) => variantId ?? "BASE";
+const bazaarApiExternalIdNote = (externalId: string) => `Bazaar API externalId: ${externalId}`;
+const bazaarApiStockImpactingStatuses = new Set<CustomerOrderStatus>([
+  CustomerOrderStatus.CONFIRMED,
+  CustomerOrderStatus.READY,
+  CustomerOrderStatus.COMPLETED,
+]);
 
 const tokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
 const createRawToken = () => `${API_TOKEN_PREFIX}${randomBytes(32).toString("base64url")}`;
@@ -188,6 +197,59 @@ type BazaarApiProductsResult = {
       pcs: number;
     }>;
   }>;
+};
+
+type BazaarApiOrderStockLine = {
+  productId: string;
+  variantId: string | null;
+  qty: number;
+  unitCostKgs: Prisma.Decimal | number | null;
+  lineTotalKgs: Prisma.Decimal | number;
+};
+
+type BazaarApiOrderForStock = {
+  id: string;
+  number: string;
+  storeId: string;
+  lines: BazaarApiOrderStockLine[];
+};
+
+const applyBazaarApiOrderStockDeduction = async (
+  tx: Prisma.TransactionClient,
+  input: {
+    organizationId: string;
+    order: BazaarApiOrderForStock;
+  },
+) => {
+  const existingSaleMovement = await tx.stockMovement.findFirst({
+    where: {
+      referenceType: "CustomerOrder",
+      referenceId: input.order.id,
+      type: StockMovementType.SALE,
+    },
+    select: { id: true },
+  });
+  if (existingSaleMovement) {
+    return;
+  }
+
+  for (const [index, line] of input.order.lines.entries()) {
+    await applyStockMovement(tx, {
+      storeId: input.order.storeId,
+      productId: line.productId,
+      variantId: line.variantId,
+      qtyDelta: -line.qty,
+      type: StockMovementType.SALE,
+      referenceType: "CustomerOrder",
+      referenceId: input.order.id,
+      linePosition: index,
+      unitCostKgs: line.unitCostKgs === null ? null : toMoney(line.unitCostKgs),
+      lineTotalKgs: toMoney(line.lineTotalKgs),
+      note: `Bazaar API order ${input.order.number}`,
+      organizationId: input.organizationId,
+      allowNegativeStock: true,
+    });
+  }
 };
 
 const ensureStoreAccess = async (organizationId: string, storeId: string) => {
@@ -775,6 +837,8 @@ export const createBazaarApiOrder = async (input: {
   externalId?: string | null;
   lines: Array<{ productId: string; variantId?: string | null; qty: number }>;
 }) => {
+  const externalId = normalizeExternalId(input.externalId);
+  const externalIdNote = externalId ? bazaarApiExternalIdNote(externalId) : null;
   const normalizedLines = Array.from(
     input.lines.reduce((map, line) => {
       const productId = line.productId.trim();
@@ -811,6 +875,44 @@ export const createBazaarApiOrder = async (input: {
     });
     if (!store || store.organizationId !== input.organizationId) {
       throw new AppError("storeNotFound", "NOT_FOUND", 404);
+    }
+
+    if (externalIdNote) {
+      const lockKey = `bazaar-api-order:${input.organizationId}:${input.storeId}:${externalId}`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
+      const existingOrder = await tx.customerOrder.findFirst({
+        where: {
+          organizationId: input.organizationId,
+          storeId: input.storeId,
+          source: CustomerOrderSource.API,
+          notes: { contains: externalIdNote },
+        },
+        select: {
+          id: true,
+          number: true,
+          storeId: true,
+          status: true,
+          totalKgs: true,
+          lines: {
+            select: {
+              productId: true,
+              variantId: true,
+              qty: true,
+              unitCostKgs: true,
+              lineTotalKgs: true,
+            },
+          },
+        },
+      });
+      if (existingOrder) {
+        if (bazaarApiStockImpactingStatuses.has(existingOrder.status)) {
+          await applyBazaarApiOrderStockDeduction(tx, {
+            organizationId: input.organizationId,
+            order: existingOrder,
+          });
+        }
+        return { order: existingOrder, replayed: true };
+      }
     }
 
     const productIds = Array.from(new Set(normalizedLines.map((line) => line.productId)));
@@ -902,7 +1004,7 @@ export const createBazaarApiOrder = async (input: {
 
     const subtotal = roundMoney(lines.reduce((sum, line) => sum + line.lineTotalKgs, 0));
     const number = await nextSalesOrderNumber(tx, input.organizationId);
-    const notes = [normalizeOptionalText(input.comment), normalizeOptionalText(input.externalId)]
+    const notes = [normalizeOptionalText(input.comment), externalIdNote]
       .filter(Boolean)
       .join("\n");
     const order = await tx.customerOrder.create({
@@ -923,7 +1025,26 @@ export const createBazaarApiOrder = async (input: {
         ...resolveCurrencySnapshot(store),
         lines: { create: lines },
       },
-      select: { id: true, number: true, storeId: true, status: true, totalKgs: true },
+      select: {
+        id: true,
+        number: true,
+        storeId: true,
+        status: true,
+        totalKgs: true,
+        lines: {
+          select: {
+            productId: true,
+            variantId: true,
+            qty: true,
+            unitCostKgs: true,
+            lineTotalKgs: true,
+          },
+        },
+      },
+    });
+    await applyBazaarApiOrderStockDeduction(tx, {
+      organizationId: input.organizationId,
+      order,
     });
     await upsertCustomerFromOrderTx(tx, {
       organizationId: input.organizationId,
@@ -933,32 +1054,34 @@ export const createBazaarApiOrder = async (input: {
       customerPhone: input.customerPhone,
       customerAddress: input.customerAddress,
     });
-    return order;
+    return { order, replayed: false };
   });
 
-  eventBus.publish({
-    type: "customerOrder.created",
-    payload: {
-      customerOrderId: result.id,
-      storeId: result.storeId,
-      source: CustomerOrderSource.API,
-    },
-  });
-  void sendOrderConfirmationEmail({
-    organizationId: input.organizationId,
-    customerOrderId: result.id,
-    throwOnMissingEmail: false,
-  }).catch((error: unknown) => {
-    getLogger().error(
-      { error, customerOrderId: result.id, storeId: result.storeId },
-      "API order confirmation email send failed",
-    );
-  });
+  if (!result.replayed) {
+    eventBus.publish({
+      type: "customerOrder.created",
+      payload: {
+        customerOrderId: result.order.id,
+        storeId: result.order.storeId,
+        source: CustomerOrderSource.API,
+      },
+    });
+    void sendOrderConfirmationEmail({
+      organizationId: input.organizationId,
+      customerOrderId: result.order.id,
+      throwOnMissingEmail: false,
+    }).catch((error: unknown) => {
+      getLogger().error(
+        { error, customerOrderId: result.order.id, storeId: result.order.storeId },
+        "API order confirmation email send failed",
+      );
+    });
+  }
 
   return {
-    id: result.id,
-    number: result.number,
-    status: result.status,
-    totalKgs: Number(result.totalKgs),
+    id: result.order.id,
+    number: result.order.number,
+    status: result.order.status,
+    totalKgs: Number(result.order.totalKgs),
   };
 };

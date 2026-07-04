@@ -1,4 +1,4 @@
-import { AttributeType } from "@prisma/client";
+import { AttributeType, CustomerOrderStatus, StockMovementType } from "@prisma/client";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { POST as createBazaarApiCustomerPost } from "@/app/api/bazaar/v1/customers/route";
@@ -10,6 +10,7 @@ import {
   listBazaarApiProducts,
 } from "@/server/services/bazaarApi";
 import { adjustStock } from "@/server/services/inventory";
+import { cancelCustomerOrder } from "@/server/services/salesOrders";
 
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 
@@ -218,6 +219,194 @@ describeDb("bazaar api integration", () => {
       variantKey: "BASE",
       qty: 2,
     });
+  });
+
+  it("applies stock movements for API orders and restores stock once on cancellation", async () => {
+    const { org, store, product, supplier, baseUnit, adminUser } = await seedBase();
+    const secondProduct = await prisma.product.create({
+      data: {
+        organizationId: org.id,
+        supplierId: supplier.id,
+        baseUnitId: baseUnit.id,
+        unit: baseUnit.code,
+        sku: "API-STOCK-2",
+        name: "API Stock Product 2",
+        basePriceKgs: 400,
+        storeProducts: {
+          create: {
+            organizationId: org.id,
+            storeId: store.id,
+            isActive: true,
+          },
+        },
+      },
+    });
+    const otherStore = await prisma.store.create({
+      data: {
+        organizationId: org.id,
+        name: "Other Store",
+        code: "OTH",
+      },
+    });
+    await prisma.storeProduct.create({
+      data: {
+        organizationId: org.id,
+        storeId: otherStore.id,
+        productId: product.id,
+        isActive: true,
+      },
+    });
+
+    await adjustStock({
+      organizationId: org.id,
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 10,
+      reason: "seed API stock product 1",
+      actorId: adminUser.id,
+      requestId: "seed-api-stock-1",
+      idempotencyKey: "seed-api-stock-1",
+    });
+    await adjustStock({
+      organizationId: org.id,
+      storeId: store.id,
+      productId: secondProduct.id,
+      qtyDelta: 8,
+      reason: "seed API stock product 2",
+      actorId: adminUser.id,
+      requestId: "seed-api-stock-2",
+      idempotencyKey: "seed-api-stock-2",
+    });
+    await adjustStock({
+      organizationId: org.id,
+      storeId: otherStore.id,
+      productId: product.id,
+      qtyDelta: 20,
+      reason: "seed other store stock",
+      actorId: adminUser.id,
+      requestId: "seed-api-stock-other-store",
+      idempotencyKey: "seed-api-stock-other-store",
+    });
+
+    const order = await createBazaarApiOrder({
+      organizationId: org.id,
+      storeId: store.id,
+      externalId: "API-STOCK-ORDER-1",
+      lines: [
+        { productId: product.id, qty: 3 },
+        { productId: secondProduct.id, qty: 2 },
+      ],
+    });
+
+    const stockAfterCreate = await prisma.inventorySnapshot.findMany({
+      where: { storeId: { in: [store.id, otherStore.id] }, productId: { in: [product.id, secondProduct.id] } },
+      orderBy: [{ storeId: "asc" }, { productId: "asc" }],
+    });
+    const onHand = (storeId: string, productId: string) =>
+      stockAfterCreate.find((snapshot) => snapshot.storeId === storeId && snapshot.productId === productId)?.onHand;
+    expect(onHand(store.id, product.id)).toBe(7);
+    expect(onHand(store.id, secondProduct.id)).toBe(6);
+    expect(onHand(otherStore.id, product.id)).toBe(20);
+
+    const saleMovements = await prisma.stockMovement.findMany({
+      where: {
+        referenceType: "CustomerOrder",
+        referenceId: order.id,
+        type: StockMovementType.SALE,
+      },
+      orderBy: { linePosition: "asc" },
+    });
+    expect(saleMovements.map((movement) => movement.qtyDelta)).toEqual([-3, -2]);
+    expect(saleMovements.every((movement) => movement.storeId === store.id)).toBe(true);
+
+    const duplicate = await createBazaarApiOrder({
+      organizationId: org.id,
+      storeId: store.id,
+      externalId: "API-STOCK-ORDER-1",
+      lines: [
+        { productId: product.id, qty: 3 },
+        { productId: secondProduct.id, qty: 2 },
+      ],
+    });
+    expect(duplicate.id).toBe(order.id);
+    await expect(
+      prisma.stockMovement.count({
+        where: {
+          referenceType: "CustomerOrder",
+          referenceId: order.id,
+          type: StockMovementType.SALE,
+        },
+      }),
+    ).resolves.toBe(2);
+    await expect(
+      prisma.inventorySnapshot.findUnique({
+        where: {
+          storeId_productId_variantKey: {
+            storeId: store.id,
+            productId: product.id,
+            variantKey: "BASE",
+          },
+        },
+      }),
+    ).resolves.toMatchObject({ onHand: 7 });
+
+    const cancellation = await cancelCustomerOrder({
+      customerOrderId: order.id,
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "cancel-api-stock-order",
+    });
+    expect(cancellation.order.status).toBe(CustomerOrderStatus.CANCELED);
+
+    await expect(
+      prisma.inventorySnapshot.findUnique({
+        where: {
+          storeId_productId_variantKey: {
+            storeId: store.id,
+            productId: product.id,
+            variantKey: "BASE",
+          },
+        },
+      }),
+    ).resolves.toMatchObject({ onHand: 10 });
+    await expect(
+      prisma.inventorySnapshot.findUnique({
+        where: {
+          storeId_productId_variantKey: {
+            storeId: store.id,
+            productId: secondProduct.id,
+            variantKey: "BASE",
+          },
+        },
+      }),
+    ).resolves.toMatchObject({ onHand: 8 });
+    const returnMovements = await prisma.stockMovement.findMany({
+      where: {
+        referenceType: "CustomerOrder",
+        referenceId: order.id,
+        type: StockMovementType.RETURN,
+      },
+      orderBy: { linePosition: "asc" },
+    });
+    expect(returnMovements.map((movement) => movement.qtyDelta)).toEqual([3, 2]);
+
+    await expect(
+      cancelCustomerOrder({
+        customerOrderId: order.id,
+        organizationId: org.id,
+        actorId: adminUser.id,
+        requestId: "cancel-api-stock-order-again",
+      }),
+    ).rejects.toMatchObject({ message: "invalidTransition" });
+    await expect(
+      prisma.stockMovement.count({
+        where: {
+          referenceType: "CustomerOrder",
+          referenceId: order.id,
+          type: StockMovementType.RETURN,
+        },
+      }),
+    ).resolves.toBe(2);
   });
 
   it("throttles API key last-used writes during request bursts", async () => {

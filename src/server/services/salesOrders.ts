@@ -55,6 +55,57 @@ const normalizeOptionalText = (value?: string | null) => {
   return normalized ? normalized : null;
 };
 
+const restoreCustomerOrderStockOnCancel = async (
+  tx: Prisma.TransactionClient,
+  input: {
+    order: { id: string; number: string; storeId: string };
+    organizationId: string;
+    actorId: string;
+  },
+) => {
+  const existingRestoreMovement = await tx.stockMovement.findFirst({
+    where: {
+      referenceType: "CustomerOrder",
+      referenceId: input.order.id,
+      type: StockMovementType.RETURN,
+    },
+    select: { id: true },
+  });
+  if (existingRestoreMovement) {
+    return 0;
+  }
+
+  const saleMovements = await tx.stockMovement.findMany({
+    where: {
+      referenceType: "CustomerOrder",
+      referenceId: input.order.id,
+      type: StockMovementType.SALE,
+      qtyDelta: { lt: 0 },
+    },
+    orderBy: [{ linePosition: "asc" }, { createdAt: "asc" }],
+  });
+
+  for (const movement of saleMovements) {
+    await applyStockMovement(tx, {
+      storeId: input.order.storeId,
+      productId: movement.productId,
+      variantId: movement.variantId,
+      qtyDelta: Math.abs(movement.qtyDelta),
+      type: StockMovementType.RETURN,
+      referenceType: "CustomerOrder",
+      referenceId: input.order.id,
+      linePosition: movement.linePosition,
+      unitCostKgs: movement.unitCostKgs === null ? null : toMoney(movement.unitCostKgs),
+      lineTotalKgs: toMoney(movement.lineTotalKgs),
+      note: `Cancellation ${input.order.number}`,
+      actorId: input.actorId,
+      organizationId: input.organizationId,
+    });
+  }
+
+  return saleMovements.length;
+};
+
 const nextSalesOrderNumber = async (
   tx: Prisma.TransactionClient,
   organizationId: string,
@@ -983,6 +1034,10 @@ const updateOrderStatus = async (input: {
   to: CustomerOrderStatus;
 }) => {
   const result = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`
+      SELECT id FROM "CustomerOrder" WHERE id = ${input.customerOrderId} FOR UPDATE
+    `;
+
     const order = await tx.customerOrder.findUnique({
       where: { id: input.customerOrderId },
       include: { lines: { select: { id: true } } },
@@ -1010,6 +1065,18 @@ const updateOrderStatus = async (input: {
         canceledAt: input.to === CustomerOrderStatus.CANCELED ? new Date() : order.canceledAt,
       },
     });
+
+    if (input.to === CustomerOrderStatus.CANCELED) {
+      await restoreCustomerOrderStockOnCancel(tx, {
+        order: {
+          id: order.id,
+          number: order.number,
+          storeId: order.storeId,
+        },
+        organizationId: input.organizationId,
+        actorId: input.actorId,
+      });
+    }
 
     await writeAuditLog(tx, {
       organizationId: input.organizationId,
