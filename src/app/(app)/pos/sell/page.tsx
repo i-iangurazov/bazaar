@@ -1370,14 +1370,16 @@ const PosSellPage = () => {
 
   useEffect(() => {
     if (!sale) {
-      setDiscountDraft("");
+      if (!hasLocalCartLines) {
+        setDiscountDraft("");
+      }
       return;
     }
     if (discountEditorOpen) {
       return;
     }
     setDiscountDraft(String(displayMoneyFromKgs(sale.discountKgs ?? 0, currencySource)));
-  }, [currencySource, discountEditorOpen, sale?.discountKgs, sale?.id, sale]);
+  }, [currencySource, discountEditorOpen, hasLocalCartLines, sale?.discountKgs, sale?.id, sale]);
 
   useEffect(() => {
     setSaleId(null);
@@ -2176,27 +2178,40 @@ const PosSellPage = () => {
 
   const handleUpdateDiscount = async () => {
     if (!saleId) {
-      return;
+      return false;
     }
     const raw = discountDraft.trim();
     const amount = raw.length ? Number(raw.replace(/\s+/g, "").replace(",", ".")) : 0;
     if (!Number.isFinite(amount) || amount < 0) {
       toast({ variant: "error", description: t("sell.discountInvalid") });
-      return;
+      return false;
     }
     const discountKgs = roundMoney(displayMoneyToKgs(amount, currencySource));
     if (discountKgs > cartSubtotalKgs) {
       toast({ variant: "error", description: t("sell.discountTooLarge") });
-      return;
+      return false;
     }
     if (Math.abs(discountKgs - (sale?.discountKgs ?? 0)) < 0.009) {
-      return;
+      return true;
     }
     try {
-      await updateDiscountMutation.mutateAsync({ saleId, discountKgs });
+      const updatedDiscount = await updateDiscountMutation.mutateAsync({ saleId, discountKgs });
+      trpcUtils.pos.sales.get.setData({ saleId }, (currentSale) =>
+        currentSale
+          ? {
+              ...currentSale,
+              subtotalKgs: updatedDiscount.subtotalKgs,
+              discountKgs: updatedDiscount.discountKgs,
+              totalKgs: updatedDiscount.totalKgs,
+            }
+          : currentSale,
+      );
+      setDiscountDraft(String(displayMoneyFromKgs(updatedDiscount.discountKgs, currencySource)));
       await trpcUtils.pos.sales.get.invalidate({ saleId });
+      return true;
     } catch {
       // handled by mutation onError
+      return false;
     }
   };
 
@@ -5889,6 +5904,53 @@ const PosSellPage = () => {
         void trackCartSyncPromise(handleRemoveLine(lineId));
       };
 
+      const openMobileDiscountEditor = () => {
+        if (!saleId || !hasCartLines || isLineBusy || completeMutation.isLoading) {
+          return;
+        }
+        setDiscountDraft(String(displayMoneyFromKgs(cartDiscountKgs, currencySource)));
+        setDiscountEditorOpen(true);
+      };
+
+      const closeMobileDiscountEditor = () => {
+        setDiscountEditorOpen(false);
+        setDiscountDraft(String(displayMoneyFromKgs(sale?.discountKgs ?? 0, currencySource)));
+      };
+
+      const handleMobileApplyDiscount = async () => {
+        const applied = await handleUpdateDiscount();
+        if (applied) {
+          setDiscountEditorOpen(false);
+        }
+      };
+
+      const handleMobileRemoveDiscount = async () => {
+        if (!saleId) {
+          return;
+        }
+        try {
+          setDiscountDraft("0");
+          const updatedDiscount = await updateDiscountMutation.mutateAsync({
+            saleId,
+            discountKgs: 0,
+          });
+          trpcUtils.pos.sales.get.setData({ saleId }, (currentSale) =>
+            currentSale
+              ? {
+                  ...currentSale,
+                  subtotalKgs: updatedDiscount.subtotalKgs,
+                  discountKgs: updatedDiscount.discountKgs,
+                  totalKgs: updatedDiscount.totalKgs,
+                }
+              : currentSale,
+          );
+          await trpcUtils.pos.sales.get.invalidate({ saleId });
+          setDiscountEditorOpen(false);
+        } catch {
+          // handled by mutation onError
+        }
+      };
+
       const activeLineInputValue = () => {
         if (!activeLine) {
           return "";
@@ -6217,6 +6279,7 @@ const PosSellPage = () => {
                 icon: <TagIcon className="h-5 w-5" aria-hidden />,
                 label: t("sell.discount"),
                 value: cartDiscountKgs > 0 ? formatSaleMoney(cartDiscountKgs) : "0%",
+                action: openMobileDiscountEditor,
               })}
             </div>
           ) : null}
@@ -6400,7 +6463,16 @@ const PosSellPage = () => {
                   </div>
                   <div className="flex justify-between gap-3 text-slate-400">
                     <span>{t("sell.discount")}</span>
-                    <span className="text-white">{formatSaleMoney(cartDiscountKgs)}</span>
+                    <button
+                      type="button"
+                      className="rounded px-1 text-right font-semibold text-primary disabled:text-white disabled:opacity-60"
+                      onClick={openMobileDiscountEditor}
+                      disabled={!saleId || !hasCartLines || isLineBusy || completeMutation.isLoading}
+                    >
+                      {cartDiscountKgs > 0
+                        ? formatSaleMoney(cartDiscountKgs)
+                        : `+ ${t("sell.addDiscount")}`}
+                    </button>
                   </div>
                   <div className="flex items-end justify-between gap-3 border-t border-slate-700 pt-2.5">
                     <span className="text-[15px] font-semibold text-white">{t("sell.amountDue")}</span>
@@ -6780,6 +6852,123 @@ const PosSellPage = () => {
         </div>
       );
 
+      const renderMobileDiscountSheet = () => {
+        if (!discountEditorOpen) {
+          return null;
+        }
+        const canRemoveDiscount = cartDiscountKgs > 0 || (sale?.discountKgs ?? 0) > 0;
+        return (
+          <div className="fixed inset-0 z-[85] md:hidden">
+            <button
+              type="button"
+              className="absolute inset-0 bg-black/70"
+              onClick={closeMobileDiscountEditor}
+              aria-label={tCommon("close")}
+            />
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-label={t("sell.saleDiscount")}
+              className="absolute inset-x-0 bottom-0 rounded-t-[20px] bg-slate-950 px-3 pb-[calc(0.75rem_+_env(safe-area-inset-bottom))] pt-3 text-white shadow-2xl"
+              data-testid="pos-mobile-discount-sheet"
+            >
+              <div className="mx-auto h-1 w-12 rounded-full bg-[#5b5b62]" />
+              <form
+                className="mt-4 space-y-4"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void handleMobileApplyDiscount();
+                }}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="text-[17px] font-semibold leading-none">
+                      {t("sell.saleDiscount")}
+                    </h2>
+                    <p className="mt-1.5 text-[13px] text-slate-400">
+                      {t("sell.subtotal")}: {formatSaleMoney(cartSubtotalKgs)}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-slate-800 text-slate-200"
+                    onClick={closeMobileDiscountEditor}
+                    aria-label={tCommon("close")}
+                  >
+                    <CloseIcon className="h-4 w-4" aria-hidden />
+                  </button>
+                </div>
+
+                <label className="block space-y-2">
+                  <span className="text-[13px] font-semibold text-slate-300">
+                    {t("sell.discount")}
+                  </span>
+                  <div className="grid grid-cols-[minmax(0,1fr)_72px] gap-2">
+                    <Input
+                      value={discountDraft}
+                      onChange={(event) => setDiscountDraft(event.target.value)}
+                      aria-label={t("sell.saleDiscount")}
+                      placeholder={t("sell.discountPlaceholder")}
+                      inputMode="decimal"
+                      disabled={isLineBusy || completeMutation.isLoading}
+                      className="h-12 border-slate-700 bg-slate-950 text-right text-[18px] font-semibold text-white"
+                      data-testid="pos-mobile-discount-input"
+                      autoFocus
+                    />
+                    <span className="flex h-12 items-center justify-center rounded-md border border-slate-700 bg-slate-900 px-2 text-xs font-semibold text-slate-300">
+                      {discountCurrencyCode}
+                    </span>
+                  </div>
+                </label>
+
+                <div className="rounded-[12px] border border-slate-800 bg-slate-900/70 p-3">
+                  <div className="flex justify-between gap-3 text-[13px] text-slate-400">
+                    <span>{t("sell.discount")}</span>
+                    <span className="text-white">{formatSaleMoney(cartDiscountKgs)}</span>
+                  </div>
+                  <div className="mt-2 flex items-end justify-between gap-3 border-t border-slate-800 pt-2">
+                    <span className="text-[14px] font-semibold text-white">{t("sell.amountDue")}</span>
+                    <span className="text-[19px] font-bold text-white">
+                      {formatSaleMoney(cartTotalKgs)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  {canRemoveDiscount ? (
+                    <button
+                      type="button"
+                      className="min-h-11 rounded-[11px] bg-[#2b1717] px-3 text-[14px] font-semibold text-[#ff8a8a] disabled:opacity-50"
+                      onClick={() => void handleMobileRemoveDiscount()}
+                      disabled={isLineBusy || completeMutation.isLoading}
+                      data-testid="pos-mobile-discount-remove"
+                    >
+                      {tCommon("delete")}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="min-h-11 rounded-[11px] bg-slate-800 px-3 text-[14px] font-semibold text-slate-200"
+                      onClick={closeMobileDiscountEditor}
+                    >
+                      {tCommon("cancel")}
+                    </button>
+                  )}
+                  <button
+                    type="submit"
+                    className="min-h-11 rounded-[11px] bg-primary px-3 text-[14px] font-semibold text-white disabled:opacity-50"
+                    disabled={!saleId || isLineBusy || completeMutation.isLoading}
+                    data-testid="pos-mobile-discount-apply"
+                  >
+                    {updateDiscountMutation.isLoading ? tCommon("loading") : t("sell.applyDiscount")}
+                  </button>
+                </div>
+              </form>
+            </section>
+          </div>
+        );
+      };
+
       const renderLineItemSheet = () =>
         activeLine ? (
           <div className="fixed inset-0 z-[80] md:hidden">
@@ -6896,6 +7085,7 @@ const PosSellPage = () => {
             : mobileScreen === "scanner"
               ? renderScannerScreen()
               : renderSaleScreen()}
+          {renderMobileDiscountSheet()}
           {renderLineItemSheet()}
           {MobileCustomerSheet()}
           {CustomerEditModal()}

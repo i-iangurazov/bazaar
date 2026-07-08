@@ -212,6 +212,7 @@ type CampaignBlock =
       showButton?: boolean;
       buttonText?: string | null;
       buttonUrl?: string | null;
+      productButtonUrls?: Record<string, string>;
       layout?: "one" | "two";
       alignment?: BlockAlignment;
     }
@@ -300,6 +301,12 @@ const logoAlignmentClassName = (alignment?: BlockAlignment | null) => {
 const textFontSizeClassName = (fontSize?: TextFontSize | null) =>
   textFontSizeOptions.find((option) => option.value === fontSize)?.className ?? "text-sm";
 
+const productButtonUrlForPreview = (
+  block: Extract<CampaignBlock, { type: "products" }>,
+  productId: string,
+) =>
+  (block.productButtonUrls?.[productId]?.trim() || block.buttonUrl?.trim() || "").trim();
+
 const getBlockAlignment = (block: CampaignBlock): BlockAlignment =>
   "alignment" in block ? normalizeBlockAlignment(block.alignment) : "left";
 
@@ -387,6 +394,7 @@ const defaultBlocks = (storeName?: string | null): CampaignBlock[] => [
     showDescription: true,
     showButton: true,
     buttonText: "Подробнее",
+    productButtonUrls: {},
     layout: "two",
   },
   {
@@ -469,6 +477,7 @@ const newBlock = (type: CampaignBlock["type"]): CampaignBlock => {
       showDescription: true,
       showButton: true,
       buttonText: "Подробнее",
+      productButtonUrls: {},
       layout: "two",
     };
   }
@@ -2300,6 +2309,7 @@ const EmailBlockPreview = ({
       <div className={cn("grid gap-3 px-6 py-5", block.layout === "one" ? "grid-cols-1" : "sm:grid-cols-2")}>
         {ids.length ? ids.map((id) => {
           const product = products.get(id);
+          const buttonHref = productButtonUrlForPreview(block, id);
           return (
             <div key={id} className={cn("rounded-md border p-3", alignedClassName)} style={{ borderColor }}>
               {block.showImage === false ? null : (
@@ -2321,9 +2331,24 @@ const EmailBlockPreview = ({
                 <p className="text-sm text-muted-foreground">{product?.priceText ?? "Цена не указана"}</p>
               )}
               {block.showButton === false ? null : (
-                <span className="mt-3 inline-flex rounded-md px-3 py-1.5 text-xs font-semibold" style={{ backgroundColor: buttonColor, color: buttonTextColor }}>
-                  {block.buttonText || "Подробнее"}
-                </span>
+                buttonHref ? (
+                  <a
+                    href={buttonHref}
+                    onClick={(event) => event.preventDefault()}
+                    className="mt-3 inline-flex rounded-md px-3 py-1.5 text-xs font-semibold no-underline hover:no-underline"
+                    style={{ backgroundColor: buttonColor, color: buttonTextColor }}
+                    data-email-product-button-url={buttonHref}
+                  >
+                    {block.buttonText || "Подробнее"}
+                  </a>
+                ) : (
+                  <span
+                    className="mt-3 inline-flex rounded-md px-3 py-1.5 text-xs font-semibold"
+                    style={{ backgroundColor: buttonColor, color: buttonTextColor }}
+                  >
+                    {block.buttonText || "Подробнее"}
+                  </span>
+                )
               )}
             </div>
           );
@@ -2612,6 +2637,23 @@ const BlockSettings = ({
       const product = productById.get(id);
       return product ? [product] : [];
     });
+    const updateProductButtonUrl = (productId: string, value: string) => {
+      const next = { ...(block.productButtonUrls ?? {}) };
+      if (value.trim()) {
+        next[productId] = value;
+      } else {
+        delete next[productId];
+      }
+      update({ productButtonUrls: Object.keys(next).length ? next : {} });
+    };
+    const removeSelectedProduct = (productId: string) => {
+      const nextUrls = { ...(block.productButtonUrls ?? {}) };
+      delete nextUrls[productId];
+      update({
+        productIds: (block.productIds ?? []).filter((id) => id !== productId),
+        productButtonUrls: Object.keys(nextUrls).length ? nextUrls : {},
+      });
+    };
     return (
       <div className="space-y-3">
         <AlignmentControl value={block.alignment} onChange={(alignment) => update({ alignment })} />
@@ -2619,18 +2661,30 @@ const BlockSettings = ({
           <div className="space-y-2 rounded-md border border-border bg-muted/20 p-2">
             <p className="text-xs font-semibold text-muted-foreground">Выбранные товары</p>
             {selectedProducts.map((product) => (
-              <div key={product.id} className="flex items-center justify-between gap-2 rounded bg-background px-2 py-1.5 text-sm">
-                <span className="min-w-0 truncate">{product.name}</span>
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="ghost"
-                  className="h-7 w-7 shrink-0 text-danger hover:text-danger"
-                  onClick={() => update({ productIds: (block.productIds ?? []).filter((id) => id !== product.id) })}
-                  aria-label={`Убрать ${product.name}`}
-                >
-                  <DeleteIcon className="h-3.5 w-3.5" aria-hidden />
-                </Button>
+              <div key={product.id} className="rounded bg-background px-2 py-2 text-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="min-w-0 truncate font-semibold">{product.name}</span>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7 shrink-0 text-danger hover:text-danger"
+                    onClick={() => removeSelectedProduct(product.id)}
+                    aria-label={`Убрать ${product.name}`}
+                  >
+                    <DeleteIcon className="h-3.5 w-3.5" aria-hidden />
+                  </Button>
+                </div>
+                <label className="mt-2 block space-y-1">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    Ссылка кнопки товара
+                  </span>
+                  <Input
+                    value={block.productButtonUrls?.[product.id] ?? ""}
+                    onChange={(event) => updateProductButtonUrl(product.id, event.target.value)}
+                    placeholder={block.buttonUrl?.trim() || "https://example.com/product"}
+                  />
+                </label>
               </div>
             ))}
           </div>
@@ -2662,10 +2716,17 @@ const BlockSettings = ({
               className={cn("flex w-full gap-3 rounded-md border p-2 text-left text-sm", selected.has(product.id) ? "border-primary bg-primary/5" : "border-border")}
               onClick={() => {
                 const ids = block.productIds ?? [];
+                const nextUrls = { ...(block.productButtonUrls ?? {}) };
                 update({
                   productIds: ids.includes(product.id)
                     ? ids.filter((id) => id !== product.id)
                     : [...ids, product.id].slice(0, 12),
+                  productButtonUrls: ids.includes(product.id)
+                    ? (() => {
+                        delete nextUrls[product.id];
+                        return Object.keys(nextUrls).length ? nextUrls : {};
+                      })()
+                    : nextUrls,
                 });
               }}
             >

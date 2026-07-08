@@ -103,6 +103,7 @@ const productsBlockSchema = z.object({
   showButton: z.boolean().optional(),
   buttonText: z.string().max(80).optional().nullable(),
   buttonUrl: z.string().max(500).optional().nullable(),
+  productButtonUrls: z.record(z.string().max(500)).optional(),
   layout: z.enum(["one", "two"]).optional(),
   alignment: blockAlignmentSchema.optional(),
 });

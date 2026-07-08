@@ -448,6 +448,143 @@ describe("email marketing logo rendering", () => {
     expect(hidden.text).not.toContain("Hidden product description");
   });
 
+  it("renders different custom links for standalone email buttons", () => {
+    const rendered = renderEmailCampaign({
+      campaign: {
+        ...testCampaign,
+        blocks: [
+          {
+            id: "button-1",
+            type: "button",
+            text: "Shop now",
+            url: "https://client.example.com",
+          },
+          {
+            id: "button-2",
+            type: "button",
+            text: "Open sale",
+            url: "https://client.example.com/sale",
+          },
+        ],
+      },
+      store: testStore,
+      logoUrl: null,
+    });
+
+    expect(rendered.html).toContain('href="https://client.example.com/"');
+    expect(rendered.html).toContain('href="https://client.example.com/sale"');
+    expect(rendered.text).toContain("Shop now: https://client.example.com/");
+    expect(rendered.text).toContain("Open sale: https://client.example.com/sale");
+  });
+
+  it("renders per-product custom CTA links in product blocks", () => {
+    const productsById = new Map([
+      [
+        "product-1",
+        {
+          id: "product-1",
+          name: "Product A",
+          description: null,
+          imageUrl: null,
+          priceKgs: 1000,
+          priceText: "1 000 сом",
+          currencyCode: "KGS",
+          publicUrl: "https://bazaar.kg/catalog/a",
+        },
+      ],
+      [
+        "product-2",
+        {
+          id: "product-2",
+          name: "Product B",
+          description: null,
+          imageUrl: null,
+          priceKgs: 2000,
+          priceText: "2 000 сом",
+          currencyCode: "KGS",
+          publicUrl: "https://bazaar.kg/catalog/b",
+        },
+      ],
+    ]);
+    const rendered = renderEmailCampaign({
+      campaign: {
+        ...testCampaign,
+        blocks: [
+          {
+            id: "products",
+            type: "products",
+            productIds: ["product-1", "product-2"],
+            showImage: false,
+            showDescription: false,
+            showPrice: true,
+            showButton: true,
+            buttonText: "Подробнее",
+            buttonUrl: "https://client.example.com/default",
+            productButtonUrls: {
+              "product-1": "https://client.example.com/product-a",
+              "product-2": "https://client.example.com/sale/product-b",
+            },
+          },
+        ],
+      },
+      store: testStore,
+      logoUrl: null,
+      productsById,
+    });
+
+    expect(rendered.html).toContain('href="https://client.example.com/product-a"');
+    expect(rendered.html).toContain('href="https://client.example.com/sale/product-b"');
+    expect(rendered.html).not.toContain("https://client.example.com/default");
+    expect(rendered.html).not.toContain("https://bazaar.kg/catalog/a");
+    expect(rendered.text).toContain("Подробнее: https://client.example.com/product-a");
+    expect(rendered.text).toContain("Подробнее: https://client.example.com/sale/product-b");
+  });
+
+  it("does not replace an invalid product CTA override with a fallback URL", () => {
+    const productsById = new Map([
+      [
+        "product-1",
+        {
+          id: "product-1",
+          name: "Product A",
+          description: null,
+          imageUrl: null,
+          priceKgs: 1000,
+          priceText: "1 000 сом",
+          currencyCode: "KGS",
+          publicUrl: "https://bazaar.kg/catalog/a",
+        },
+      ],
+    ]);
+    const rendered = renderEmailCampaign({
+      campaign: {
+        ...testCampaign,
+        blocks: [
+          {
+            id: "products",
+            type: "products",
+            productIds: ["product-1"],
+            showImage: false,
+            showDescription: false,
+            showPrice: true,
+            showButton: true,
+            buttonText: "Подробнее",
+            productButtonUrls: {
+              "product-1": "javascript:alert(1)",
+            },
+          },
+        ],
+      },
+      store: testStore,
+      logoUrl: null,
+      productsById,
+    });
+
+    expect(rendered.html).not.toContain("javascript:alert");
+    expect(rendered.html).not.toContain("https://bazaar.kg/catalog/a");
+    expect(rendered.text).not.toContain("https://bazaar.kg/catalog/a");
+  });
+
   it("flags localhost image URLs before test or final email send", () => {
     const campaign = {
       ...testCampaign,

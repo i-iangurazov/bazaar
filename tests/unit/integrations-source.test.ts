@@ -61,6 +61,9 @@ describe("integration source structure", () => {
     expect(emailWorkspace).toContain("Последние добавленные товары показываются первыми.");
     expect(emailWorkspace).toContain("Жирный");
     expect(emailWorkspace).toContain("Размер текста");
+    expect(emailWorkspace).toContain("productButtonUrls");
+    expect(emailWorkspace).toContain("Ссылка кнопки товара");
+    expect(emailWorkspace).toContain("data-email-product-button-url");
     expect(emailWorkspace).toContain("DndContext");
     expect(emailWorkspace).toContain("SortableContext");
     expect(emailWorkspace).toContain("logoStoreId");
@@ -83,6 +86,7 @@ describe("integration source structure", () => {
     expect(emailRouter).toContain('z.enum(["left", "center", "right"])');
     expect(emailRouter).toContain("bodyBold: z.boolean().optional()");
     expect(emailRouter).toContain("bodyFontSize: textFontSizeSchema.optional()");
+    expect(emailRouter).toContain("productButtonUrls: z.record");
     expect(emailRouter).toContain("summaryText: z.string().max(500).optional().nullable()");
     expect(emailRouter).toContain("fontFamily: z.nativeEnum(EmailCampaignFontFamily).optional()");
     expect(emailWorkspace).toContain('includeSelectableIds: audienceMode === "manual"');
@@ -119,6 +123,8 @@ describe("integration source structure", () => {
     expect(emailService).toContain("defaultSender: primaryCustomSender");
     expect(emailService).toContain('{ createdAt: "desc" as const }');
     expect(emailService).toContain("font-size:${textFontSizePx[bodyFontSize]}px");
+    expect(emailService).toContain("resolveProductButtonUrl");
+    expect(emailService).toContain('productButtonUrls?.[input.product.id]');
     expect(emailDeliveryService).toContain("ready: hasProvider");
     expect(emailService).toContain("processEmailAutomationTrigger");
     expect(imageStudioPage).toContain('<TableContainer className="bazaar-admin-table-shell">');

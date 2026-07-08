@@ -279,6 +279,13 @@ describe("pos entry navigation", () => {
     expect(pageSource).not.toContain("key={`${line.id}:mobile-price:${line.unitPriceKgs}`}");
     expect(pageSource).toContain("handleUpdateLinePrice(");
     expect(pageSource).toContain('t("sell.saleDiscount")');
+    expect(pageSource).toContain("const renderMobileDiscountSheet = () =>");
+    expect(pageSource).toContain("openMobileDiscountEditor");
+    expect(pageSource).toContain('data-testid="pos-mobile-discount-sheet"');
+    expect(pageSource).toContain('data-testid="pos-mobile-discount-input"');
+    expect(pageSource).toContain("{renderMobileDiscountSheet()}");
+    expect(pageSource).toContain("if (!hasLocalCartLines) {\n        setDiscountDraft(\"\");");
+    expect(pageSource).toContain("subtotalKgs: updatedDiscount.subtotalKgs");
     expect(pageSource).toContain("handleComplete");
     expect(pageSource).toContain('handleReceiptPdf("print", "precheck")');
   });

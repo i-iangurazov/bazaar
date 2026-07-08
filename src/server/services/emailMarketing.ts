@@ -98,6 +98,7 @@ export type EmailCampaignBlock =
       showButton?: boolean;
       buttonText?: string | null;
       buttonUrl?: string | null;
+      productButtonUrls?: Record<string, string>;
       layout?: "one" | "two";
       alignment?: EmailBlockAlignment;
     }
@@ -2074,6 +2075,28 @@ const assertEmailImagesPublic = (input: {
   }
 };
 
+const resolveProductButtonUrl = (input: {
+  block: Extract<EmailCampaignBlock, { type: "products" }>;
+  product: EmailMarketingProduct;
+  store: EmailMarketingStore;
+  baseUrl?: string | null;
+}) => {
+  const customProductUrl = trimOptional(input.block.productButtonUrls?.[input.product.id]);
+  if (customProductUrl) {
+    return resolveEmailLinkUrl(customProductUrl, input.baseUrl);
+  }
+  const sharedBlockUrl = trimOptional(input.block.buttonUrl);
+  if (sharedBlockUrl) {
+    return resolveEmailLinkUrl(sharedBlockUrl, input.baseUrl);
+  }
+  return (
+    resolveEmailLinkUrl(input.product.publicUrl, input.baseUrl) ??
+    (input.store.bazaarCatalog?.status === BazaarCatalogStatus.PUBLISHED
+      ? resolveEmailLinkUrl(input.store.bazaarCatalog.publicUrlPath, input.baseUrl)
+      : null)
+  );
+};
+
 const collectWarnings = (input: {
   campaign: NormalizedEmailCampaign;
   store: EmailMarketingStore;
@@ -2155,16 +2178,16 @@ const collectWarnings = (input: {
             blockId: block.id,
           });
         }
-        const hasButtonUrl =
-          resolveEmailLinkUrl(block.buttonUrl, input.baseUrl) ||
-          product.publicUrl ||
-          (input.store.bazaarCatalog?.status === BazaarCatalogStatus.PUBLISHED
-            ? resolveEmailLinkUrl(input.store.bazaarCatalog.publicUrlPath, input.baseUrl)
-            : null);
+        const hasButtonUrl = resolveProductButtonUrl({
+          block,
+          product,
+          store: input.store,
+          baseUrl: input.baseUrl,
+        });
         if ((block.showButton ?? true) && !hasButtonUrl) {
           warnings.push({
             code: "productLinkMissing",
-            message: `Для товара "${product.name}" нет публичной ссылки. Укажите ссылку блока или отключите кнопку.`,
+            message: `Укажите ссылку для кнопки товара "${product.name}".`,
             blockId: block.id,
           });
         }
@@ -2464,14 +2487,14 @@ export const renderEmailCampaign = (input: {
       const showButton = block.showButton ?? true;
       const buttonText =
         trimOptional(renderVariables(block.buttonText, variableContext)) ?? "Подробнее";
-      const blockUrl = resolveEmailLinkUrl(block.buttonUrl, input.baseUrl);
-      const catalogUrl =
-        input.store.bazaarCatalog?.status === BazaarCatalogStatus.PUBLISHED
-          ? resolveEmailLinkUrl(input.store.bazaarCatalog.publicUrlPath, input.baseUrl)
-          : null;
       const layout = block.layout === "one" ? "one" : "two";
       const cells = selectedProducts.map((product) => {
-        const href = blockUrl ?? product.publicUrl ?? catalogUrl;
+        const href = resolveProductButtonUrl({
+          block,
+          product,
+          store: input.store,
+          baseUrl: input.baseUrl,
+        });
         return `
           <td style="width:${layout === "two" ? "50%" : "100%"};padding:8px;vertical-align:top;">
             <div style="border:1px solid ${borderColor};padding:14px;background:${contentBackgroundColor};text-align:${alignment};">
@@ -2512,15 +2535,22 @@ export const renderEmailCampaign = (input: {
         `);
         textParts.push(
           selectedProducts
-            .map((product) =>
-              [
+            .map((product) => {
+              const href = resolveProductButtonUrl({
+                block,
+                product,
+                store: input.store,
+                baseUrl: input.baseUrl,
+              });
+              return [
                 product.name,
                 showDescription ? product.description : null,
                 showPrice ? product.priceText : null,
+                showButton && href ? `${buttonText}: ${href}` : null,
               ]
                 .filter(Boolean)
-                .join(" - "),
-            )
+                .join(" - ");
+            })
             .join("\n"),
         );
       }
