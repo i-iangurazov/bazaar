@@ -11,6 +11,7 @@ import {
   convertFromKgs,
   normalizeCurrencyCode,
   normalizeCurrencyRateKgsPerUnit,
+  type SupportedCurrencyCode,
 } from "@/lib/currency";
 import { resolveCurrencySnapshot } from "@/lib/currencyDisplay";
 import { prisma } from "@/server/db/prisma";
@@ -76,6 +77,76 @@ const apiAuthCacheTtlSeconds = () =>
 
 const apiProductsCacheTtlSeconds = () =>
   positiveIntFromEnv("BAZAAR_API_PRODUCTS_CACHE_TTL_SECONDS", DEFAULT_API_PRODUCTS_CACHE_TTL_SECONDS);
+
+export type BazaarApiPublicOrderStatus =
+  | "NEW"
+  | "CONFIRMED"
+  | "READY_FOR_PICKUP"
+  | "COMPLETED"
+  | "CANCELLED";
+
+const publicStatusByInternalStatus = {
+  [CustomerOrderStatus.DRAFT]: "NEW",
+  [CustomerOrderStatus.CONFIRMED]: "CONFIRMED",
+  [CustomerOrderStatus.READY]: "READY_FOR_PICKUP",
+  [CustomerOrderStatus.COMPLETED]: "COMPLETED",
+  [CustomerOrderStatus.CANCELED]: "CANCELLED",
+} satisfies Record<CustomerOrderStatus, BazaarApiPublicOrderStatus>;
+
+const internalStatusByPublicStatus = new Map<string, CustomerOrderStatus>(
+  Object.entries(publicStatusByInternalStatus).map(([internalStatus, publicStatus]) => [
+    publicStatus,
+    internalStatus as CustomerOrderStatus,
+  ]),
+);
+
+const publicOrderStatusLabels = {
+  NEW: "Новый",
+  CONFIRMED: "Подтвержден",
+  READY_FOR_PICKUP: "Готов к выдаче",
+  COMPLETED: "Завершен",
+  CANCELLED: "Отменен",
+} satisfies Record<BazaarApiPublicOrderStatus, string>;
+
+export const mapBazaarApiOrderStatus = (status: CustomerOrderStatus) => {
+  const publicStatus = publicStatusByInternalStatus[status];
+  return {
+    status: publicStatus,
+    statusLabel: publicOrderStatusLabels[publicStatus],
+    internalStatus: status,
+  };
+};
+
+export const bazaarApiPublicOrderStatuses = Object.values(publicStatusByInternalStatus);
+
+const normalizeBazaarApiOrderStatusFilter = (status?: string | null) => {
+  const normalized = normalizeOptionalText(status)?.toUpperCase();
+  if (!normalized) {
+    return null;
+  }
+  const publicStatus = internalStatusByPublicStatus.get(normalized);
+  if (publicStatus) {
+    return publicStatus;
+  }
+  if (normalized === "CANCELED") {
+    return CustomerOrderStatus.CANCELED;
+  }
+  if (Object.values(CustomerOrderStatus).includes(normalized as CustomerOrderStatus)) {
+    return normalized as CustomerOrderStatus;
+  }
+  throw new AppError("invalidInput", "BAD_REQUEST", 400);
+};
+
+const extractBazaarApiExternalId = (notes?: string | null) => {
+  if (!notes) {
+    return null;
+  }
+  const line = notes
+    .split(/\r?\n/)
+    .map((entry) => entry.trim())
+    .find((entry) => entry.startsWith(`${bazaarApiExternalIdNote("")}`));
+  return normalizeExternalId(line?.slice(bazaarApiExternalIdNote("").length) ?? null);
+};
 
 const readCache = async <T>(key: string): Promise<T | null> => {
   const memoryEntry = memoryCache.get(key) as CacheEntry<T> | undefined;
@@ -212,6 +283,204 @@ type BazaarApiOrderForStock = {
   number: string;
   storeId: string;
   lines: BazaarApiOrderStockLine[];
+};
+
+const bazaarApiOrderSelect = {
+  id: true,
+  number: true,
+  status: true,
+  source: true,
+  storeId: true,
+  customerName: true,
+  customerEmail: true,
+  customerPhone: true,
+  customerAddress: true,
+  trackingNumber: true,
+  trackingCarrier: true,
+  trackingUrl: true,
+  trackingStatus: true,
+  subtotalKgs: true,
+  discountKgs: true,
+  totalKgs: true,
+  currencyCode: true,
+  currencyRateKgsPerUnit: true,
+  notes: true,
+  confirmedAt: true,
+  readyAt: true,
+  completedAt: true,
+  canceledAt: true,
+  createdAt: true,
+  updatedAt: true,
+  store: {
+    select: {
+      id: true,
+      name: true,
+    },
+  },
+  lines: {
+    select: {
+      productId: true,
+      variantId: true,
+      qty: true,
+      unitPriceKgs: true,
+      lineTotalKgs: true,
+      product: {
+        select: {
+          name: true,
+          sku: true,
+        },
+      },
+      variant: {
+        select: {
+          name: true,
+          sku: true,
+        },
+      },
+    },
+    orderBy: { id: "asc" },
+  },
+  payments: {
+    select: {
+      method: true,
+      amountKgs: true,
+      isRefund: true,
+    },
+    orderBy: { createdAt: "asc" },
+  },
+} satisfies Prisma.CustomerOrderSelect;
+
+type BazaarApiOrderRecord = Prisma.CustomerOrderGetPayload<{
+  select: typeof bazaarApiOrderSelect;
+}>;
+
+const convertOrderMoney = (
+  valueKgs: Prisma.Decimal | number | null | undefined,
+  currencyRateKgsPerUnit: number,
+  currencyCode: SupportedCurrencyCode,
+) => roundMoney(convertFromKgs(toMoney(valueKgs), currencyRateKgsPerUnit, currencyCode));
+
+const resolveBazaarApiOrderPayment = (order: BazaarApiOrderRecord) => {
+  const paidKgs = roundMoney(
+    order.payments.reduce((sum, payment) => {
+      const amount = toMoney(payment.amountKgs);
+      return payment.isRefund ? sum - amount : sum + amount;
+    }, 0),
+  );
+  const totalKgs = roundMoney(toMoney(order.totalKgs));
+  const methods = Array.from(
+    new Set(order.payments.filter((payment) => !payment.isRefund).map((payment) => payment.method)),
+  );
+  const status =
+    paidKgs <= 0
+      ? "UNPAID"
+      : paidKgs + 0.01 < totalKgs
+        ? "PARTIALLY_PAID"
+        : "PAID";
+
+  return {
+    status,
+    method: methods.length === 1 ? methods[0] : methods.length > 1 ? "MIXED" : null,
+    methods,
+    paidKgs,
+  };
+};
+
+const resolveBazaarApiFulfillmentStatus = (order: BazaarApiOrderRecord) => {
+  const trackingStatus = normalizeOptionalText(order.trackingStatus);
+  if (trackingStatus) {
+    return trackingStatus;
+  }
+  if (order.status === CustomerOrderStatus.CANCELED) {
+    return "CANCELLED";
+  }
+  if (order.status === CustomerOrderStatus.COMPLETED) {
+    return "COMPLETED";
+  }
+  if (order.status === CustomerOrderStatus.READY) {
+    return "READY_FOR_PICKUP";
+  }
+  return "PENDING";
+};
+
+const serializeBazaarApiOrder = (order: BazaarApiOrderRecord) => {
+  const currencyCode = normalizeCurrencyCode(order.currencyCode);
+  const currencyRateKgsPerUnit = normalizeCurrencyRateKgsPerUnit(
+    Number(order.currencyRateKgsPerUnit),
+    currencyCode,
+  );
+  const status = mapBazaarApiOrderStatus(order.status);
+  return {
+    id: order.id,
+    orderNumber: order.number,
+    externalOrderId: extractBazaarApiExternalId(order.notes),
+    ...status,
+    createdAt: order.createdAt.toISOString(),
+    updatedAt: order.updatedAt.toISOString(),
+    confirmedAt: order.confirmedAt?.toISOString() ?? null,
+    readyAt: order.readyAt?.toISOString() ?? null,
+    cancelledAt: order.canceledAt?.toISOString() ?? null,
+    canceledAt: order.canceledAt?.toISOString() ?? null,
+    completedAt: order.completedAt?.toISOString() ?? null,
+    customer: {
+      name: order.customerName,
+      phone: order.customerPhone,
+      email: order.customerEmail,
+      address: order.customerAddress,
+    },
+    store: {
+      id: order.store.id,
+      name: order.store.name,
+    },
+    items: order.lines.map((line) => ({
+      productId: line.productId,
+      variantId: line.variantId,
+      name: line.variant?.name ?? line.product.name,
+      sku: line.variant?.sku ?? line.product.sku,
+      quantity: line.qty,
+      price: convertOrderMoney(line.unitPriceKgs, currencyRateKgsPerUnit, currencyCode),
+      priceKgs: roundMoney(toMoney(line.unitPriceKgs)),
+      total: convertOrderMoney(line.lineTotalKgs, currencyRateKgsPerUnit, currencyCode),
+      totalKgs: roundMoney(toMoney(line.lineTotalKgs)),
+    })),
+    totals: {
+      subtotal: convertOrderMoney(order.subtotalKgs, currencyRateKgsPerUnit, currencyCode),
+      subtotalKgs: roundMoney(toMoney(order.subtotalKgs)),
+      discount: convertOrderMoney(order.discountKgs, currencyRateKgsPerUnit, currencyCode),
+      discountKgs: roundMoney(toMoney(order.discountKgs)),
+      shipping: 0,
+      shippingKgs: 0,
+      total: convertOrderMoney(order.totalKgs, currencyRateKgsPerUnit, currencyCode),
+      totalKgs: roundMoney(toMoney(order.totalKgs)),
+      currencyCode,
+      currencyRateKgsPerUnit,
+    },
+    payment: resolveBazaarApiOrderPayment(order),
+    fulfillment: {
+      status: resolveBazaarApiFulfillmentStatus(order),
+      trackingNumber: order.trackingNumber,
+      trackingUrl: order.trackingUrl,
+      carrier: order.trackingCarrier,
+    },
+  };
+};
+
+const serializeBazaarApiOrderSummary = (order: BazaarApiOrderRecord) => {
+  const currencyCode = normalizeCurrencyCode(order.currencyCode);
+  const currencyRateKgsPerUnit = normalizeCurrencyRateKgsPerUnit(
+    Number(order.currencyRateKgsPerUnit),
+    currencyCode,
+  );
+  return {
+    id: order.id,
+    orderNumber: order.number,
+    externalOrderId: extractBazaarApiExternalId(order.notes),
+    ...mapBazaarApiOrderStatus(order.status),
+    createdAt: order.createdAt.toISOString(),
+    updatedAt: order.updatedAt.toISOString(),
+    total: convertOrderMoney(order.totalKgs, currencyRateKgsPerUnit, currencyCode),
+    totalKgs: roundMoney(toMoney(order.totalKgs)),
+    currencyCode,
+  };
 };
 
 const applyBazaarApiOrderStockDeduction = async (
@@ -685,6 +954,99 @@ export const listBazaarApiProducts = async (input: {
   };
   await writeCache(productsCacheKey, result, apiProductsCacheTtlSeconds());
   return result;
+};
+
+export const getBazaarApiOrder = async (input: {
+  organizationId: string;
+  storeId: string;
+  identifier: string;
+}) => {
+  const identifier = normalizeOptionalText(input.identifier);
+  if (!identifier) {
+    throw new AppError("invalidInput", "BAD_REQUEST", 400);
+  }
+
+  const externalId = normalizeExternalId(identifier);
+  const order = await prisma.customerOrder.findFirst({
+    where: {
+      organizationId: input.organizationId,
+      storeId: input.storeId,
+      source: CustomerOrderSource.API,
+      OR: [
+        { id: identifier },
+        { number: identifier },
+        ...(externalId ? [{ notes: { contains: bazaarApiExternalIdNote(externalId) } }] : []),
+      ],
+    },
+    select: bazaarApiOrderSelect,
+  });
+  if (!order) {
+    throw new AppError("orderNotFound", "NOT_FOUND", 404);
+  }
+
+  return serializeBazaarApiOrder(order);
+};
+
+export const listBazaarApiOrders = async (input: {
+  organizationId: string;
+  storeId: string;
+  status?: string | null;
+  orderNumber?: string | null;
+  externalOrderId?: string | null;
+  dateFrom?: Date | null;
+  dateTo?: Date | null;
+  storeIdFilter?: string | null;
+  limit?: number | null;
+  cursor?: string | null;
+}) => {
+  const requestedStoreId = normalizeOptionalText(input.storeIdFilter);
+  const limit = Math.min(100, Math.max(1, Math.trunc(input.limit ?? 50)));
+  const status = normalizeBazaarApiOrderStatusFilter(input.status);
+  const orderNumber = normalizeOptionalText(input.orderNumber);
+  const externalOrderId = normalizeExternalId(input.externalOrderId);
+  const cursor = normalizeOptionalText(input.cursor);
+
+  if (input.dateFrom && input.dateTo && input.dateFrom > input.dateTo) {
+    throw new AppError("invalidInput", "BAD_REQUEST", 400);
+  }
+
+  if (requestedStoreId && requestedStoreId !== input.storeId) {
+    return { data: [], pagination: { nextCursor: null } };
+  }
+
+  const where: Prisma.CustomerOrderWhereInput = {
+    organizationId: input.organizationId,
+    storeId: input.storeId,
+    source: CustomerOrderSource.API,
+    ...(status ? { status } : {}),
+    ...(orderNumber ? { number: orderNumber } : {}),
+    ...(externalOrderId ? { notes: { contains: bazaarApiExternalIdNote(externalOrderId) } } : {}),
+    ...(input.dateFrom || input.dateTo
+      ? {
+          createdAt: {
+            ...(input.dateFrom ? { gte: input.dateFrom } : {}),
+            ...(input.dateTo ? { lte: input.dateTo } : {}),
+          },
+        }
+      : {}),
+  };
+
+  const orders = await prisma.customerOrder.findMany({
+    where,
+    select: bazaarApiOrderSelect,
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    take: limit + 1,
+  });
+  const page = orders.slice(0, limit);
+  const hasNextPage = orders.length > limit;
+
+  return {
+    data: page.map(serializeBazaarApiOrderSummary),
+    pagination: {
+      nextCursor: hasNextPage ? (page[page.length - 1]?.id ?? null) : null,
+    },
+  };
 };
 
 const normalizeBazaarApiCustomerInput = (input: {

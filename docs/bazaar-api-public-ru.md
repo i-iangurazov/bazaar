@@ -52,6 +52,8 @@ HTTP статус: `401`.
 | --- | --- | --- |
 | `GET` | `/products` | Получение товаров, цен, остатков, изображений и вариантов |
 | `POST` | `/orders` | Создание заказа во внутренней системе BAZAAR |
+| `GET` | `/orders` | Получение списка API-заказов и их статусов |
+| `GET` | `/orders/{id}` | Получение одного API-заказа по ID, номеру или externalId |
 | `POST` | `/customers` | Создание или обновление клиента |
 
 ## GET /products
@@ -264,6 +266,159 @@ HTTP статус при успешном создании: `201`.
 - Если email и телефон клиента не переданы, отдельная карточка клиента не создаётся.
 - Валютный snapshot магазина сохраняется в заказе на момент создания.
 
+## GET /orders
+
+Возвращает список API-заказов магазина, к которому привязан API-ключ.
+
+```http
+GET /api/bazaar/v1/orders?status=CONFIRMED&dateFrom=2026-06-01&dateTo=2026-06-30&limit=50
+```
+
+### Query параметры
+
+| Параметр | Тип | Обязательный | Описание |
+| --- | --- | --- | --- |
+| `status` | string | Нет | Публичный статус: `NEW`, `CONFIRMED`, `READY_FOR_PICKUP`, `COMPLETED`, `CANCELLED` |
+| `orderNumber` | string | Нет | Номер заказа, например `SO-000054` |
+| `externalOrderId` | string | Нет | `externalId`, переданный в `POST /orders` |
+| `dateFrom` | string | Нет | Начало периода по `createdAt` |
+| `dateTo` | string | Нет | Конец периода по `createdAt` |
+| `storeId` | string | Нет | Должен совпадать с магазином API-ключа |
+| `limit` | number | Нет | Размер страницы. По умолчанию `50`, максимум `100` |
+| `cursor` | string | Нет | Курсор следующей страницы из `pagination.nextCursor` |
+
+### Пример запроса
+
+```bash
+curl -X GET "https://bazaar.kg/api/bazaar/v1/orders?status=CONFIRMED&limit=50" \
+  -H "Authorization: Bearer <API_KEY>"
+```
+
+### Пример ответа
+
+```json
+{
+  "data": [
+    {
+      "id": "order_123",
+      "orderNumber": "SO-000001",
+      "externalOrderId": "MARKET-10001",
+      "status": "CONFIRMED",
+      "statusLabel": "Подтвержден",
+      "internalStatus": "CONFIRMED",
+      "createdAt": "2026-06-04T10:00:00.000Z",
+      "updatedAt": "2026-06-04T10:00:00.000Z",
+      "total": 3000,
+      "totalKgs": 3000,
+      "currencyCode": "KGS"
+    }
+  ],
+  "pagination": {
+    "nextCursor": null
+  }
+}
+```
+
+## GET /orders/{id}
+
+Возвращает один API-заказ по ID BAZAAR, номеру заказа или `externalId`.
+
+```http
+GET /api/bazaar/v1/orders/SO-000001
+```
+
+### Примеры запроса
+
+```bash
+curl -X GET "https://bazaar.kg/api/bazaar/v1/orders/SO-000001" \
+  -H "Authorization: Bearer <API_KEY>"
+
+curl -X GET "https://bazaar.kg/api/bazaar/v1/orders/MARKET-10001" \
+  -H "Authorization: Bearer <API_KEY>"
+```
+
+### Пример ответа
+
+```json
+{
+  "order": {
+    "id": "order_123",
+    "orderNumber": "SO-000001",
+    "externalOrderId": "MARKET-10001",
+    "status": "CONFIRMED",
+    "statusLabel": "Подтвержден",
+    "internalStatus": "CONFIRMED",
+    "createdAt": "2026-06-04T10:00:00.000Z",
+    "updatedAt": "2026-06-04T10:00:00.000Z",
+    "cancelledAt": null,
+    "completedAt": null,
+    "customer": {
+      "name": "Ivan Ivanov",
+      "phone": "+996555111222",
+      "email": "ivan@example.com",
+      "address": "Bishkek, Manas 10"
+    },
+    "store": {
+      "id": "store_123",
+      "name": "Main Store"
+    },
+    "items": [
+      {
+        "productId": "product_123",
+        "variantId": null,
+        "name": "Coffee 250g",
+        "sku": "COFFEE-250",
+        "quantity": 2,
+        "price": 1500,
+        "priceKgs": 1500,
+        "total": 3000,
+        "totalKgs": 3000
+      }
+    ],
+    "totals": {
+      "subtotal": 3000,
+      "discount": 0,
+      "shipping": 0,
+      "total": 3000,
+      "currencyCode": "KGS"
+    },
+    "payment": {
+      "status": "UNPAID",
+      "method": null,
+      "methods": []
+    },
+    "fulfillment": {
+      "status": "PENDING",
+      "trackingNumber": null,
+      "trackingUrl": null,
+      "carrier": null
+    }
+  }
+}
+```
+
+Если заказ не найден или недоступен для API-ключа:
+
+```json
+{
+  "error": "ORDER_NOT_FOUND"
+}
+```
+
+HTTP статус: `404`.
+
+### Статусы заказов
+
+Поле `status` стабильно для внешних интеграций. Поле `internalStatus` передаётся для диагностики.
+
+| Внутренний статус | Public API status | Описание |
+| --- | --- | --- |
+| `DRAFT` | `NEW` | Новый заказ |
+| `CONFIRMED` | `CONFIRMED` | Подтвержден |
+| `READY` | `READY_FOR_PICKUP` | Готов к выдаче |
+| `COMPLETED` | `COMPLETED` | Завершен |
+| `CANCELED` | `CANCELLED` | Отменен |
+
 ## POST /customers
 
 Создаёт нового клиента или обновляет существующего клиента в магазине.
@@ -352,6 +507,7 @@ HTTP статус при обновлении: `200`.
 | `400` | `salesOrderEmpty` | Заказ без строк |
 | `401` | `apiUnauthorized` | Не передан, неверный или отозван API-ключ |
 | `404` | `storeNotFound` | Магазин для API-ключа не найден |
+| `404` | `ORDER_NOT_FOUND` | Заказ не найден или недоступен для API-ключа |
 | `404` | `productNotFound` | Товар не найден или недоступен в магазине API-ключа |
 | `404` | `variantNotFound` | Вариант товара не найден или не относится к указанному товару |
 | `500` | `genericMessage` | Внутренняя ошибка сервера |
@@ -362,6 +518,7 @@ HTTP статус при обновлении: `200`.
 - API-ключ нельзя передавать в query string; используйте только заголовок `Authorization`.
 - Один API-ключ даёт доступ только к одному магазину.
 - `GET /products` возвращает максимум `100` товаров на страницу.
+- `GET /orders` возвращает максимум `100` заказов на страницу.
 - `POST /orders` принимает максимум `500` строк заказа.
 - API отдаёт только активные товары, доступные в магазине.
 - API не отдаёт себестоимость, бухгалтерские и другие закрытые внутренние поля.
@@ -376,4 +533,5 @@ HTTP статус при обновлении: `200`.
 3. Маркетплейс сохраняет у себя `productId` и, при наличии вариантов, `variantId`.
 4. При новом заказе маркетплейс вызывает `POST /orders`.
 5. BAZAAR создаёт подтверждённый заказ и сохраняет данные клиента.
-6. Маркетплейс повторно читает `GET /products` для обновления остатков и цен.
+6. Маркетплейс вызывает `GET /orders/{id}` или `GET /orders?externalOrderId=...`, чтобы получить актуальный статус заказа.
+7. Маркетплейс повторно читает `GET /products` для обновления остатков и цен.

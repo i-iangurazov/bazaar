@@ -146,6 +146,83 @@ const orderResponse = `{
   }
 }`;
 
+const orderDetailResponse = `{
+  "order": {
+    "id": "order_123",
+    "orderNumber": "SO-000001",
+    "externalOrderId": "MARKET-10001",
+    "status": "CONFIRMED",
+    "statusLabel": "Подтвержден",
+    "internalStatus": "CONFIRMED",
+    "createdAt": "2026-06-04T10:00:00.000Z",
+    "updatedAt": "2026-06-04T10:00:00.000Z",
+    "cancelledAt": null,
+    "completedAt": null,
+    "customer": {
+      "name": "Ivan Ivanov",
+      "phone": "+996555111222",
+      "email": "ivan@example.com",
+      "address": "Bishkek, Manas 10"
+    },
+    "store": {
+      "id": "store_123",
+      "name": "Main Store"
+    },
+    "items": [
+      {
+        "productId": "product_123",
+        "variantId": null,
+        "name": "Coffee 250g",
+        "sku": "COFFEE-250",
+        "quantity": 2,
+        "price": 1500,
+        "priceKgs": 1500,
+        "total": 3000,
+        "totalKgs": 3000
+      }
+    ],
+    "totals": {
+      "subtotal": 3000,
+      "discount": 0,
+      "shipping": 0,
+      "total": 3000,
+      "currencyCode": "KGS"
+    },
+    "payment": {
+      "status": "UNPAID",
+      "method": null,
+      "methods": []
+    },
+    "fulfillment": {
+      "status": "PENDING",
+      "trackingNumber": null,
+      "trackingUrl": null,
+      "carrier": null
+    }
+  }
+}`;
+
+const orderListResponse = `{
+  "data": [
+    {
+      "id": "order_123",
+      "orderNumber": "SO-000001",
+      "externalOrderId": "MARKET-10001",
+      "status": "CONFIRMED",
+      "statusLabel": "Подтвержден",
+      "internalStatus": "CONFIRMED",
+      "createdAt": "2026-06-04T10:00:00.000Z",
+      "updatedAt": "2026-06-04T10:00:00.000Z",
+      "total": 3000,
+      "totalKgs": 3000,
+      "currencyCode": "KGS"
+    }
+  ],
+  "pagination": {
+    "nextCursor": null
+  }
+}`;
+
 const customerRequest = `{
   "name": "Ivan Ivanov",
   "email": "ivan@example.com",
@@ -197,6 +274,20 @@ const endpoints = [
     icon: SalesOrdersIcon,
   },
   {
+    method: "GET",
+    path: "/orders",
+    title: "Статусы заказов",
+    description: "Список API-заказов с фильтрами по статусу, датам и внешнему ID.",
+    icon: SalesOrdersIcon,
+  },
+  {
+    method: "GET",
+    path: "/orders/{id}",
+    title: "Заказ по ID",
+    description: "Получение статуса и деталей по ID, номеру заказа или externalId.",
+    icon: SalesOrdersIcon,
+  },
+  {
     method: "POST",
     path: "/customers",
     title: "Синхронизация клиентов",
@@ -237,6 +328,25 @@ const orderFields = [
   ["lines[].qty", "number", "Да", "Целое число, минимум 1."],
 ];
 
+const orderListQueryParams = [
+  ["status", "string", "Нет", "Публичный статус: NEW, CONFIRMED, READY_FOR_PICKUP, COMPLETED, CANCELLED."],
+  ["orderNumber", "string", "Нет", "Номер заказа, например SO-000001."],
+  ["externalOrderId", "string", "Нет", "externalId, переданный при POST /orders."],
+  ["dateFrom", "string", "Нет", "Дата/время начала периода по createdAt."],
+  ["dateTo", "string", "Нет", "Дата/время конца периода по createdAt."],
+  ["storeId", "string", "Нет", "Должен совпадать с магазином API-ключа; другие магазины не возвращаются."],
+  ["limit", "number", "Нет", "Размер страницы. По умолчанию 50, максимум 100."],
+  ["cursor", "string", "Нет", "Курсор следующей страницы из pagination.nextCursor."],
+];
+
+const orderStatusRows = [
+  ["DRAFT", "NEW", "Новый заказ"],
+  ["CONFIRMED", "CONFIRMED", "Подтвержден"],
+  ["READY", "READY_FOR_PICKUP", "Готов к выдаче"],
+  ["COMPLETED", "COMPLETED", "Завершен"],
+  ["CANCELED", "CANCELLED", "Отменен"],
+];
+
 const customerFields = [
   ["name", "string", "Да", "От 1 до 160 символов."],
   ["email", "string", "Да", "Валидный email, до 254 символов."],
@@ -250,6 +360,7 @@ const errors = [
   ["400", "salesOrderEmpty", "Заказ без строк."],
   ["401", "apiUnauthorized", "Не передан, неверный или отозван API-ключ."],
   ["404", "storeNotFound", "Магазин для API-ключа не найден."],
+  ["404", "ORDER_NOT_FOUND", "Заказ не найден или недоступен для API-ключа."],
   ["404", "productNotFound", "Товар не найден или недоступен в магазине API-ключа."],
   ["404", "variantNotFound", "Вариант товара не найден или не относится к указанному товару."],
   ["500", "genericMessage", "Внутренняя ошибка сервера."],
@@ -491,7 +602,7 @@ Content-Type: application/json`}</CodeBlock>
           </p>
         </Section>
 
-        <Section id="orders" eyebrow="Endpoint" title="POST /orders">
+        <Section id="orders" eyebrow="Endpoint" title="Заказы">
           <p className="text-slate-700">
             Создаёт заказ в BAZAAR для магазина, к которому привязан API-ключ.
           </p>
@@ -529,6 +640,50 @@ Content-Type: application/json`}</CodeBlock>
             <li>Если email и телефон клиента не переданы, отдельная карточка клиента не создаётся.</li>
             <li>Валютный snapshot магазина сохраняется в заказе на момент создания.</li>
           </ul>
+
+          <div className="space-y-4 border-t border-slate-200 pt-6">
+            <h3 className="text-xl font-semibold text-slate-950">GET /orders</h3>
+            <p className="text-slate-700">
+              Возвращает список API-заказов магазина с фильтрами и cursor-пагинацией.
+            </p>
+            <div className="flex flex-wrap items-center gap-3 rounded-md border border-slate-200 bg-slate-50 p-4">
+              <MethodBadge method="GET" />
+              <code className="break-all text-sm text-slate-900">
+                /api/bazaar/v1/orders?status=CONFIRMED&amp;limit=50
+              </code>
+            </div>
+            <DataTable headers={["Параметр", "Тип", "Обязательный", "Описание"]} rows={orderListQueryParams} />
+            <CodeBlock>{`curl -X GET "${baseUrl}/orders?status=CONFIRMED&dateFrom=2026-06-01&dateTo=2026-06-30" \\
+  -H "Authorization: Bearer <API_KEY>"`}</CodeBlock>
+            <CodeBlock>{orderListResponse}</CodeBlock>
+          </div>
+
+          <div className="space-y-4 border-t border-slate-200 pt-6">
+            <h3 className="text-xl font-semibold text-slate-950">GET /orders/{"{id}"}</h3>
+            <p className="text-slate-700">
+              Возвращает один API-заказ по ID BAZAAR, номеру заказа или <code>externalId</code>,
+              переданному при создании.
+            </p>
+            <div className="flex flex-wrap items-center gap-3 rounded-md border border-slate-200 bg-slate-50 p-4">
+              <MethodBadge method="GET" />
+              <code className="break-all text-sm text-slate-900">/api/bazaar/v1/orders/SO-000001</code>
+            </div>
+            <CodeBlock>{`curl -X GET "${baseUrl}/orders/SO-000001" \\
+  -H "Authorization: Bearer <API_KEY>"
+
+curl -X GET "${baseUrl}/orders/MARKET-10001" \\
+  -H "Authorization: Bearer <API_KEY>"`}</CodeBlock>
+            <CodeBlock>{orderDetailResponse}</CodeBlock>
+          </div>
+
+          <div className="space-y-4 border-t border-slate-200 pt-6">
+            <h3 className="text-xl font-semibold text-slate-950">Публичные статусы</h3>
+            <p className="text-slate-700">
+              Поле <code>status</code> стабильно для внешних интеграций. Поле{" "}
+              <code>internalStatus</code> передаётся только для диагностики.
+            </p>
+            <DataTable headers={["Internal", "Public API", "Описание"]} rows={orderStatusRows} />
+          </div>
         </Section>
 
         <Section id="customers" eyebrow="Endpoint" title="POST /customers">

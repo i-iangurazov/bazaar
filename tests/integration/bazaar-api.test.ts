@@ -1,7 +1,12 @@
-import { AttributeType, CustomerOrderStatus, StockMovementType } from "@prisma/client";
+import { AttributeType, CustomerOrderStatus, Role, StockMovementType } from "@prisma/client";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { POST as createBazaarApiCustomerPost } from "@/app/api/bazaar/v1/customers/route";
+import {
+  GET as listBazaarApiOrdersGet,
+  POST as createBazaarApiOrderPost,
+} from "@/app/api/bazaar/v1/orders/route";
+import { GET as getBazaarApiOrderGet } from "@/app/api/bazaar/v1/orders/[id]/route";
 import { prisma } from "@/server/db/prisma";
 import {
   authenticateBazaarApiRequest,
@@ -219,6 +224,291 @@ describeDb("bazaar api integration", () => {
       variantKey: "BASE",
       qty: 2,
     });
+  });
+
+  it("keeps POST orders compatible and exposes order status read endpoints with the same API key", async () => {
+    const { org, store, product, adminUser } = await seedBase();
+    const { token } = await createBazaarApiKey({
+      organizationId: org.id,
+      storeId: store.id,
+      actorId: adminUser.id,
+      requestId: "bazaar-api-status-key",
+      name: "status-reader",
+    });
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { basePriceKgs: 750 },
+    });
+
+    const headers = {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    };
+    const createResponse = await createBazaarApiOrderPost(
+      new Request("http://localhost/api/bazaar/v1/orders", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          externalId: "EXT-STATUS-1",
+          customerName: "Status Customer",
+          customerEmail: "status.customer@example.com",
+          customerPhone: "+996555333444",
+          lines: [{ productId: product.id, qty: 2 }],
+        }),
+      }),
+    );
+    const createPayload = await createResponse.json();
+
+    expect(createResponse.status).toBe(201);
+    expect(createPayload.order).toMatchObject({
+      id: expect.any(String),
+      number: expect.stringMatching(/^SO-\d{6}$/),
+      status: CustomerOrderStatus.CONFIRMED,
+      totalKgs: 1500,
+    });
+
+    const getByIdResponse = await getBazaarApiOrderGet(
+      new Request(`http://localhost/api/bazaar/v1/orders/${createPayload.order.id}`, {
+        method: "GET",
+        headers: { authorization: `Bearer ${token}` },
+      }),
+      { params: { id: createPayload.order.id } },
+    );
+    const getByIdPayload = await getByIdResponse.json();
+
+    expect(getByIdResponse.status).toBe(200);
+    expect(getByIdPayload.order).toMatchObject({
+      id: createPayload.order.id,
+      orderNumber: createPayload.order.number,
+      externalOrderId: "EXT-STATUS-1",
+      status: "CONFIRMED",
+      statusLabel: "Подтвержден",
+      internalStatus: CustomerOrderStatus.CONFIRMED,
+      customer: {
+        name: "Status Customer",
+        email: "status.customer@example.com",
+      },
+      store: {
+        id: store.id,
+        name: store.name,
+      },
+      totals: {
+        total: 1500,
+        totalKgs: 1500,
+        currencyCode: "KGS",
+      },
+      payment: {
+        status: "UNPAID",
+        method: null,
+      },
+      fulfillment: {
+        status: "PENDING",
+      },
+    });
+    expect(getByIdPayload.order.items).toEqual([
+      expect.objectContaining({
+        productId: product.id,
+        name: product.name,
+        sku: product.sku,
+        quantity: 2,
+        price: 750,
+        total: 1500,
+      }),
+    ]);
+
+    const getByNumberResponse = await getBazaarApiOrderGet(
+      new Request(`http://localhost/api/bazaar/v1/orders/${createPayload.order.number}`, {
+        method: "GET",
+        headers: { authorization: `Bearer ${token}` },
+      }),
+      { params: { id: createPayload.order.number } },
+    );
+    await expect(getByNumberResponse.json()).resolves.toMatchObject({
+      order: { id: createPayload.order.id, status: "CONFIRMED" },
+    });
+
+    const getByExternalIdResponse = await getBazaarApiOrderGet(
+      new Request("http://localhost/api/bazaar/v1/orders/EXT-STATUS-1", {
+        method: "GET",
+        headers: { authorization: `Bearer ${token}` },
+      }),
+      { params: { id: "EXT-STATUS-1" } },
+    );
+    await expect(getByExternalIdResponse.json()).resolves.toMatchObject({
+      order: { id: createPayload.order.id, externalOrderId: "EXT-STATUS-1" },
+    });
+
+    const listResponse = await listBazaarApiOrdersGet(
+      new Request(
+        "http://localhost/api/bazaar/v1/orders?status=CONFIRMED&externalOrderId=EXT-STATUS-1&limit=1",
+        {
+          method: "GET",
+          headers: { authorization: `Bearer ${token}` },
+        },
+      ),
+    );
+    const listPayload = await listResponse.json();
+
+    expect(listResponse.status).toBe(200);
+    expect(listPayload).toMatchObject({
+      data: [
+        {
+          id: createPayload.order.id,
+          orderNumber: createPayload.order.number,
+          externalOrderId: "EXT-STATUS-1",
+          status: "CONFIRMED",
+          internalStatus: CustomerOrderStatus.CONFIRMED,
+          total: 1500,
+          totalKgs: 1500,
+        },
+      ],
+      pagination: { nextCursor: null },
+    });
+
+    const dateRangeResponse = await listBazaarApiOrdersGet(
+      new Request("http://localhost/api/bazaar/v1/orders?dateFrom=2000-01-01&dateTo=2999-12-31", {
+        method: "GET",
+        headers: { authorization: `Bearer ${token}` },
+      }),
+    );
+    const dateRangePayload = await dateRangeResponse.json();
+    expect(dateRangePayload.data.map((order: { id: string }) => order.id)).toContain(
+      createPayload.order.id,
+    );
+
+    const cancellation = await cancelCustomerOrder({
+      customerOrderId: createPayload.order.id,
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "bazaar-api-status-cancel",
+    });
+    expect(cancellation.order.status).toBe(CustomerOrderStatus.CANCELED);
+
+    const cancelledResponse = await getBazaarApiOrderGet(
+      new Request(`http://localhost/api/bazaar/v1/orders/${createPayload.order.id}`, {
+        method: "GET",
+        headers: { authorization: `Bearer ${token}` },
+      }),
+      { params: { id: createPayload.order.id } },
+    );
+    await expect(cancelledResponse.json()).resolves.toMatchObject({
+      order: {
+        status: "CANCELLED",
+        internalStatus: CustomerOrderStatus.CANCELED,
+        fulfillment: { status: "CANCELLED" },
+      },
+    });
+  });
+
+  it("paginates API order lists and maps completed orders", async () => {
+    const { org, store, product, adminUser } = await seedBase();
+    const { token } = await createBazaarApiKey({
+      organizationId: org.id,
+      storeId: store.id,
+      actorId: adminUser.id,
+      requestId: "bazaar-api-pagination-key",
+      name: "pagination-reader",
+    });
+    await prisma.product.update({ where: { id: product.id }, data: { basePriceKgs: 100 } });
+    const first = await createBazaarApiOrder({
+      organizationId: org.id,
+      storeId: store.id,
+      externalId: "PAGE-1",
+      lines: [{ productId: product.id, qty: 1 }],
+    });
+    const second = await createBazaarApiOrder({
+      organizationId: org.id,
+      storeId: store.id,
+      externalId: "PAGE-2",
+      lines: [{ productId: product.id, qty: 1 }],
+    });
+    await prisma.customerOrder.update({
+      where: { id: second.id },
+      data: { status: CustomerOrderStatus.COMPLETED, completedAt: new Date() },
+    });
+
+    const firstPageResponse = await listBazaarApiOrdersGet(
+      new Request("http://localhost/api/bazaar/v1/orders?limit=1", {
+        method: "GET",
+        headers: { authorization: `Bearer ${token}` },
+      }),
+    );
+    const firstPage = await firstPageResponse.json();
+    expect(firstPage.data).toHaveLength(1);
+    expect(firstPage.pagination.nextCursor).toEqual(expect.any(String));
+
+    const secondPageResponse = await listBazaarApiOrdersGet(
+      new Request(`http://localhost/api/bazaar/v1/orders?limit=1&cursor=${firstPage.pagination.nextCursor}`, {
+        method: "GET",
+        headers: { authorization: `Bearer ${token}` },
+      }),
+    );
+    const secondPage = await secondPageResponse.json();
+    expect(secondPage.data).toHaveLength(1);
+    expect([first.id, second.id]).toEqual(
+      expect.arrayContaining([firstPage.data[0].id, secondPage.data[0].id]),
+    );
+
+    const completedResponse = await listBazaarApiOrdersGet(
+      new Request("http://localhost/api/bazaar/v1/orders?status=COMPLETED", {
+        method: "GET",
+        headers: { authorization: `Bearer ${token}` },
+      }),
+    );
+    await expect(completedResponse.json()).resolves.toMatchObject({
+      data: [expect.objectContaining({ id: second.id, status: "COMPLETED" })],
+    });
+  });
+
+  it("rejects invalid keys and hides orders from other organizations", async () => {
+    const { org, store, product, adminUser } = await seedBase();
+    const otherOrg = await prisma.organization.create({ data: { name: "Other Org" } });
+    const otherStore = await prisma.store.create({
+      data: { organizationId: otherOrg.id, name: "Other Store", code: "OTH" },
+    });
+    const otherAdmin = await prisma.user.create({
+      data: {
+        organizationId: otherOrg.id,
+        email: "other-admin@test.local",
+        name: "Other Admin",
+        passwordHash: "hash",
+        role: Role.ADMIN,
+        isOrgOwner: true,
+        emailVerifiedAt: new Date(),
+      },
+    });
+    const { token: otherToken } = await createBazaarApiKey({
+      organizationId: otherOrg.id,
+      storeId: otherStore.id,
+      actorId: otherAdmin.id,
+      requestId: "bazaar-api-other-org-key",
+      name: "other-org-reader",
+    });
+    const order = await createBazaarApiOrder({
+      organizationId: org.id,
+      storeId: store.id,
+      externalId: "SCOPED-1",
+      lines: [{ productId: product.id, qty: 1 }],
+    });
+
+    const invalidResponse = await listBazaarApiOrdersGet(
+      new Request("http://localhost/api/bazaar/v1/orders", {
+        method: "GET",
+        headers: { authorization: "Bearer not-a-real-token" },
+      }),
+    );
+    await expect(invalidResponse.json()).resolves.toEqual({ message: "apiUnauthorized" });
+    expect(invalidResponse.status).toBe(401);
+
+    const otherOrgResponse = await getBazaarApiOrderGet(
+      new Request(`http://localhost/api/bazaar/v1/orders/${order.id}`, {
+        method: "GET",
+        headers: { authorization: `Bearer ${otherToken}` },
+      }),
+      { params: { id: order.id } },
+    );
+    await expect(otherOrgResponse.json()).resolves.toEqual({ error: "ORDER_NOT_FOUND" });
+    expect(otherOrgResponse.status).toBe(404);
   });
 
   it("applies stock movements for API orders and restores stock once on cancellation", async () => {

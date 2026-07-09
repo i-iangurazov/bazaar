@@ -48,7 +48,7 @@ Admin product surfaces use different payloads by design:
 - product export uses the export service
 - product duplication reads from the source product in the database, so it is not limited by list pagination and preserves unit/base unit data such as `pcs`
 
-## Order Endpoint
+## Order Endpoints
 
 `POST /api/bazaar/v1/orders`
 
@@ -58,6 +58,41 @@ Orders are created for the token store only.
 - Orders store currency snapshots from the store.
 - Customer name/email/phone from the order upserts the customer database for that same store.
 - If both email and phone are missing, no customer row is created.
+- Existing API order creation still returns `{ order: { id, number, status, totalKgs } }`.
+
+`GET /api/bazaar/v1/orders`
+
+Lists API-created orders for the token store only. Supported filters:
+
+- `status`: public status (`NEW`, `CONFIRMED`, `READY_FOR_PICKUP`, `COMPLETED`, `CANCELLED`) or existing internal status for compatibility
+- `orderNumber`: exact BAZAAR order number such as `SO-000054`
+- `externalOrderId`: exact `externalId` passed to `POST /orders`
+- `dateFrom` / `dateTo`: created-at range
+- `storeId`: optional, but it must match the API key store; other stores return no rows
+- `limit`: 1-100, default 50
+- `cursor`: `pagination.nextCursor` from the previous response
+
+The response is `{ data, pagination: { nextCursor } }`.
+
+`GET /api/bazaar/v1/orders/{id}`
+
+Returns one API-created order for the token store by:
+
+- BAZAAR order ID
+- order number, for example `SO-000054`
+- external order ID passed as `externalId` to `POST /orders`
+
+Not found or cross-store/cross-org access returns `404` with `{ "error": "ORDER_NOT_FOUND" }`.
+
+Public order status mapping:
+
+| Internal status | Public API status |
+| --- | --- |
+| `DRAFT` | `NEW` |
+| `CONFIRMED` | `CONFIRMED` |
+| `READY` | `READY_FOR_PICKUP` |
+| `COMPLETED` | `COMPLETED` |
+| `CANCELED` | `CANCELLED` |
 
 ## Store-Scope Rules
 
