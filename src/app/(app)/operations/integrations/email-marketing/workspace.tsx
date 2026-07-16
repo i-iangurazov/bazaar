@@ -137,6 +137,7 @@ type CampaignDashboardItem = {
   senderIdentity?: { displayName: string; fromEmail: string } | null;
   recipientCount: number;
   sentCount: number;
+  deliveredCount: number;
   failedCount: number;
   updatedAt: Date | string | number;
   createdAt: Date | string | number;
@@ -3036,9 +3037,10 @@ const CampaignsDashboard = ({
                 </div>
                 <Badge variant={campaignStatusVariant(campaign.status)}>{campaignStatusLabel(campaign.status)}</Badge>
               </div>
-              <div className="mt-4 grid gap-2 text-sm sm:grid-cols-3">
+              <div className="mt-4 grid gap-2 text-sm sm:grid-cols-4">
                 <Metric label="Аудитория" value={campaign.recipientCount} />
                 <Metric label="Принято провайдером" value={campaign.sentCount} />
+                <Metric label="Доставлено" value={campaign.deliveredCount} />
                 <Metric label="Ошибки" value={campaign.failedCount} />
               </div>
               {campaign.status === EmailCampaignStatus.SENDING ? (

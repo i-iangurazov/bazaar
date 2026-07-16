@@ -19,6 +19,7 @@ import {
 import {
   buildEmailUnsubscribeUrl,
   deliverPendingEmailCampaigns,
+  handleResendEmailWebhook,
   listEmailSenderSetup,
   previewEmailCampaign,
   sendEmailCampaignToAudience,
@@ -691,6 +692,130 @@ describeDb("customer database", () => {
         status: EmailCampaignStatus.SENT,
         sentCount: 3,
         failedCount: 0,
+      });
+    } finally {
+      if (previousEmailFrom === undefined) {
+        delete process.env.EMAIL_FROM;
+      } else {
+        process.env.EMAIL_FROM = previousEmailFrom;
+      }
+      if (previousEmailProvider === undefined) {
+        delete process.env.EMAIL_PROVIDER;
+      } else {
+        process.env.EMAIL_PROVIDER = previousEmailProvider;
+      }
+      if (previousNextAuthUrl === undefined) {
+        delete process.env.NEXTAUTH_URL;
+      } else {
+        process.env.NEXTAUTH_URL = previousNextAuthUrl;
+      }
+      if (previousNextAuthSecret === undefined) {
+        delete process.env.NEXTAUTH_SECRET;
+      } else {
+        process.env.NEXTAUTH_SECRET = previousNextAuthSecret;
+      }
+    }
+  });
+
+  it("updates delivered and bounced counts from Resend webhook events", async () => {
+    const previousEmailFrom = process.env.EMAIL_FROM;
+    const previousEmailProvider = process.env.EMAIL_PROVIDER;
+    const previousNextAuthUrl = process.env.NEXTAUTH_URL;
+    const previousNextAuthSecret = process.env.NEXTAUTH_SECRET;
+    process.env.EMAIL_FROM = MARKETING_EMAIL_FROM;
+    process.env.EMAIL_PROVIDER = "log";
+    process.env.NEXTAUTH_URL = "https://app.bazaar.test";
+    process.env.NEXTAUTH_SECRET = "test-nextauth-secret";
+
+    try {
+      const { org, store, adminUser } = await seedBase({ plan: "BUSINESS" });
+      const user = asCallerUser(adminUser);
+      await prisma.customer.createMany({
+        data: ["delivered@example.com", "bounced@example.com"].map((email, index) => ({
+          organizationId: org.id,
+          storeId: store.id,
+          name: `Webhook Customer ${index + 1}`,
+          email,
+          source: CustomerSource.MANUAL,
+        })),
+      });
+
+      const queued = await sendEmailCampaignToAudience({
+        user,
+        actorId: adminUser.id,
+        requestId: "email-campaign-webhook-queue",
+        campaign: {
+          storeId: store.id,
+          source: "ALL",
+          subject: "Webhook update",
+          body: "New stock is available.",
+          brandColor: "#111827",
+          buttonColor: "#111827",
+        },
+      });
+
+      await deliverPendingEmailCampaigns({
+        organizationId: org.id,
+        campaignId: queued.campaign.id,
+        batchSize: 2,
+      });
+      const recipients = await prisma.emailCampaignRecipient.findMany({
+        where: { campaignId: queued.campaign.id },
+        orderBy: { email: "asc" },
+      });
+      const bounced = recipients.find((recipient) => recipient.email === "bounced@example.com");
+      const delivered = recipients.find((recipient) => recipient.email === "delivered@example.com");
+      expect(bounced?.providerMessageId).toBeTruthy();
+      expect(delivered?.providerMessageId).toBeTruthy();
+
+      await expect(
+        handleResendEmailWebhook({
+          webhookEventId: "evt-delivered",
+          event: {
+            type: "email.delivered",
+            created_at: "2026-07-17T00:00:00.000Z",
+            data: {
+              email_id: delivered?.providerMessageId ?? "",
+              to: ["delivered@example.com"],
+              subject: "Webhook update",
+            },
+          },
+        }),
+      ).resolves.toMatchObject({ processed: true, delivered: 1 });
+
+      await expect(
+        handleResendEmailWebhook({
+          webhookEventId: "evt-bounced",
+          event: {
+            type: "email.bounced",
+            created_at: "2026-07-17T00:01:00.000Z",
+            data: {
+              email_id: bounced?.providerMessageId ?? "",
+              to: ["bounced@example.com"],
+              subject: "Webhook update",
+              bounce: {
+                type: "Permanent",
+                subType: "Suppressed",
+                message: "Recipient address rejected.",
+              },
+            },
+          },
+        }),
+      ).resolves.toMatchObject({ processed: true, delivered: 1, failed: 1 });
+
+      await expect(
+        prisma.emailCampaign.findUniqueOrThrow({ where: { id: queued.campaign.id } }),
+      ).resolves.toMatchObject({
+        status: EmailCampaignStatus.PARTIAL,
+        sentCount: 2,
+        deliveredCount: 1,
+        failedCount: 1,
+      });
+      await expect(
+        prisma.emailCampaignRecipient.findUniqueOrThrow({ where: { id: bounced?.id ?? "" } }),
+      ).resolves.toMatchObject({
+        status: EmailCampaignRecipientStatus.FAILED,
+        providerStatus: "bounced",
       });
     } finally {
       if (previousEmailFrom === undefined) {

@@ -545,59 +545,59 @@ model User {
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
-  organization                  Organization?             @relation(fields: [organizationId], references: [id])
+  organization                  Organization?                     @relation(fields: [organizationId], references: [id])
   auditLogs                     AuditLog[]
   idempotencyKeys               IdempotencyKey[]
-  purchaseOrdersCreated         PurchaseOrder[]           @relation("purchaseOrdersCreated")
-  purchaseOrdersUpdated         PurchaseOrder[]           @relation("purchaseOrdersUpdated")
-  customerOrdersCreated         CustomerOrder[]           @relation("customerOrdersCreated")
-  customerOrdersUpdated         CustomerOrder[]           @relation("customerOrdersUpdated")
-  customerOrderEmailLogs        CustomerOrderEmailLog[]    @relation("customerOrderEmailLogsTriggered")
-  customersCreated              Customer[]                @relation("customersCreated")
-  emailCampaignsCreated         EmailCampaign[]           @relation("emailCampaignsCreated")
-  emailMarketingLogosUpdated    EmailMarketingLogo[]      @relation("emailMarketingLogoUpdatedBy")
-  stockCountsCreated            StockCount[]              @relation("stockCountCreatedBy")
-  stockCountsApplied            StockCount[]              @relation("stockCountAppliedBy")
-  storePricesUpdated            StorePrice[]              @relation("storePricesUpdated")
+  purchaseOrdersCreated         PurchaseOrder[]                   @relation("purchaseOrdersCreated")
+  purchaseOrdersUpdated         PurchaseOrder[]                   @relation("purchaseOrdersUpdated")
+  customerOrdersCreated         CustomerOrder[]                   @relation("customerOrdersCreated")
+  customerOrdersUpdated         CustomerOrder[]                   @relation("customerOrdersUpdated")
+  customerOrderEmailLogs        CustomerOrderEmailLog[]           @relation("customerOrderEmailLogsTriggered")
+  customersCreated              Customer[]                        @relation("customersCreated")
+  emailCampaignsCreated         EmailCampaign[]                   @relation("emailCampaignsCreated")
+  emailMarketingLogosUpdated    EmailMarketingLogo[]              @relation("emailMarketingLogoUpdatedBy")
+  stockCountsCreated            StockCount[]                      @relation("stockCountCreatedBy")
+  stockCountsApplied            StockCount[]                      @relation("stockCountAppliedBy")
+  storePricesUpdated            StorePrice[]                      @relation("storePricesUpdated")
   stockMovements                StockMovement[]
-  importBatchesCreated          ImportBatch[]             @relation("importBatchesCreated")
-  importBatchesRolledBack       ImportBatch[]             @relation("importBatchesRolledBack")
-  importRollbackReportsCreated  ImportRollbackReport[]    @relation("importRollbackReportsCreated")
-  impersonationSessionsCreated  ImpersonationSession[]    @relation("impersonationsCreated")
-  impersonationSessionsTargeted ImpersonationSession[]    @relation("impersonationsTargeted")
-  deadLetterJobsResolved        DeadLetterJob[]           @relation("deadLetterResolvedBy")
-  productEventsCreated          ProductEvent[]            @relation("productEventsCreatedBy")
+  importBatchesCreated          ImportBatch[]                     @relation("importBatchesCreated")
+  importBatchesRolledBack       ImportBatch[]                     @relation("importBatchesRolledBack")
+  importRollbackReportsCreated  ImportRollbackReport[]            @relation("importRollbackReportsCreated")
+  impersonationSessionsCreated  ImpersonationSession[]            @relation("impersonationsCreated")
+  impersonationSessionsTargeted ImpersonationSession[]            @relation("impersonationsTargeted")
+  deadLetterJobsResolved        DeadLetterJob[]                   @relation("deadLetterResolvedBy")
+  productEventsCreated          ProductEvent[]                    @relation("productEventsCreatedBy")
   storeFeatureFlagsUpdated      StoreFeatureFlag[]
-  inviteTokensCreated           InviteToken[]             @relation("inviteCreatedBy")
+  inviteTokensCreated           InviteToken[]                     @relation("inviteCreatedBy")
   authTokens                    AuthToken[]
-  complianceProfilesUpdated     StoreComplianceProfile[]  @relation("complianceUpdatedBy")
-  exportJobsRequested           ExportJob[]               @relation("exportRequestedBy")
-  bakaiStoreExportJobsRequested BakaiStoreExportJob[]     @relation("bakaiStoreExportRequestedBy")
-  oMarketExportJobsRequested    OMarketExportJob[]        @relation("oMarketExportRequestedBy")
-  periodClosesCreated           PeriodClose[]             @relation("periodClosedBy")
-  diagnosticsReportsCreated     DiagnosticsReport[]       @relation("diagnosticsCreatedBy")
-  planUpgradeRequestsCreated    PlanUpgradeRequest[]      @relation("planUpgradeRequestedBy")
-  planUpgradeRequestsReviewed   PlanUpgradeRequest[]      @relation("planUpgradeReviewedBy")
-  registerShiftsOpened          RegisterShift[]           @relation("posShiftsOpened")
-  registerShiftsClosed          RegisterShift[]           @relation("posShiftsClosed")
-  salePaymentsCreated           SalePayment[]             @relation("salePaymentsCreated")
-  cashDrawerMovementsCreated    CashDrawerMovement[]      @relation("cashDrawerMovementsCreated")
-  saleReturnsCreated            SaleReturn[]              @relation("saleReturnsCreated")
-  saleReturnsCompleted          SaleReturn[]              @relation("saleReturnsCompleted")
-  kkmPairingCodesCreated        KkmConnectorPairingCode[] @relation("kkmPairingCodeCreatedBy")
-  storePrinterSettingsUpdated   StorePrinterSettings[]    @relation("storePrinterSettingsUpdatedBy")
-  refundRequestsCreated         RefundRequest[]           @relation("refundRequestsCreatedBy")
-  refundRequestsReviewed        RefundRequest[]           @relation("refundRequestsReviewedBy")
-  bazaarCatalogsUpdated         BazaarCatalog[]           @relation("bazaarCatalogUpdatedBy")
-  bazaarApiKeysCreated          BazaarApiKey[]            @relation("bazaarApiKeyCreatedBy")
-  mMarketExportJobsRequested    MMarketExportJob[]        @relation("mMarketExportRequestedBy")
-  productImageStudioJobsCreated ProductImageStudioJob[]   @relation("productImageStudioRequestedBy")
+  complianceProfilesUpdated     StoreComplianceProfile[]          @relation("complianceUpdatedBy")
+  exportJobsRequested           ExportJob[]                       @relation("exportRequestedBy")
+  bakaiStoreExportJobsRequested BakaiStoreExportJob[]             @relation("bakaiStoreExportRequestedBy")
+  oMarketExportJobsRequested    OMarketExportJob[]                @relation("oMarketExportRequestedBy")
+  periodClosesCreated           PeriodClose[]                     @relation("periodClosedBy")
+  diagnosticsReportsCreated     DiagnosticsReport[]               @relation("diagnosticsCreatedBy")
+  planUpgradeRequestsCreated    PlanUpgradeRequest[]              @relation("planUpgradeRequestedBy")
+  planUpgradeRequestsReviewed   PlanUpgradeRequest[]              @relation("planUpgradeReviewedBy")
+  registerShiftsOpened          RegisterShift[]                   @relation("posShiftsOpened")
+  registerShiftsClosed          RegisterShift[]                   @relation("posShiftsClosed")
+  salePaymentsCreated           SalePayment[]                     @relation("salePaymentsCreated")
+  cashDrawerMovementsCreated    CashDrawerMovement[]              @relation("cashDrawerMovementsCreated")
+  saleReturnsCreated            SaleReturn[]                      @relation("saleReturnsCreated")
+  saleReturnsCompleted          SaleReturn[]                      @relation("saleReturnsCompleted")
+  kkmPairingCodesCreated        KkmConnectorPairingCode[]         @relation("kkmPairingCodeCreatedBy")
+  storePrinterSettingsUpdated   StorePrinterSettings[]            @relation("storePrinterSettingsUpdatedBy")
+  refundRequestsCreated         RefundRequest[]                   @relation("refundRequestsCreatedBy")
+  refundRequestsReviewed        RefundRequest[]                   @relation("refundRequestsReviewedBy")
+  bazaarCatalogsUpdated         BazaarCatalog[]                   @relation("bazaarCatalogUpdatedBy")
+  bazaarApiKeysCreated          BazaarApiKey[]                    @relation("bazaarApiKeyCreatedBy")
+  mMarketExportJobsRequested    MMarketExportJob[]                @relation("mMarketExportRequestedBy")
+  productImageStudioJobsCreated ProductImageStudioJob[]           @relation("productImageStudioRequestedBy")
   productDescriptionJobsCreated ProductDescriptionGenerationJob[] @relation("productDescriptionGenerationRequestedBy")
-  markingCodeCaptures           MarkingCodeCapture[]      @relation("markingCapturedBy")
-  ettnReferencesCreated         EttnReference[]           @relation("ettnReferenceCreatedBy")
-  esfReferencesCreated          EsfReference[]            @relation("esfReferenceCreatedBy")
+  markingCodeCaptures           MarkingCodeCapture[]              @relation("markingCapturedBy")
+  ettnReferencesCreated         EttnReference[]                   @relation("ettnReferenceCreatedBy")
+  esfReferencesCreated          EsfReference[]                    @relation("esfReferenceCreatedBy")
   storeAccesses                 UserStoreAccess[]
-  storeProductsAssigned         StoreProduct[]            @relation("storeProductsAssignedBy")
+  storeProductsAssigned         StoreProduct[]                    @relation("storeProductsAssignedBy")
   guideState                    UserGuideState?
 
   @@index([organizationId, isActive])
@@ -664,8 +664,8 @@ model Store {
   createdAt                 DateTime         @default(now())
   updatedAt                 DateTime         @updatedAt
 
-  organization                Organization                 @relation(fields: [organizationId], references: [id])
-  productCatalog             ProductCatalog?               @relation(fields: [productCatalogId], references: [id], onDelete: Restrict)
+  organization                Organization                      @relation(fields: [organizationId], references: [id])
+  productCatalog              ProductCatalog?                   @relation(fields: [productCatalogId], references: [id], onDelete: Restrict)
   inventorySnapshots          InventorySnapshot[]
   stockMovements              StockMovement[]
   reorderPolicies             ReorderPolicy[]
@@ -1199,7 +1199,7 @@ model OMarketIncludedProduct {
 }
 
 model OMarketProductSyncState {
-  id                  String                @id @default(cuid())
+  id                  String                 @id @default(cuid())
   orgId               String
   storeId             String?
   productId           String
@@ -1207,9 +1207,9 @@ model OMarketProductSyncState {
   lastSyncedAt        DateTime?
   lastSyncStatus      OMarketLastSyncStatus?
   lastPayloadChecksum String?
-  lastErrorSummary    String?               @db.Text
-  createdAt           DateTime              @default(now())
-  updatedAt           DateTime              @updatedAt
+  lastErrorSummary    String?                @db.Text
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
 
   organization Organization @relation(fields: [orgId], references: [id])
   store        Store?       @relation(fields: [storeId], references: [id], onDelete: SetNull)
@@ -1360,9 +1360,9 @@ model Product {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization           Organization                 @relation(fields: [organizationId], references: [id])
-  supplier               Supplier?                    @relation(fields: [supplierId], references: [id])
-  baseUnit               Unit                         @relation(fields: [baseUnitId], references: [id])
+  organization           Organization                          @relation(fields: [organizationId], references: [id])
+  supplier               Supplier?                             @relation(fields: [supplierId], references: [id])
+  baseUnit               Unit                                  @relation(fields: [baseUnitId], references: [id])
   barcodes               ProductBarcode[]
   packs                  ProductPack[]
   variants               ProductVariant[]
@@ -1371,8 +1371,8 @@ model Product {
   reorderPolicies        ReorderPolicy[]
   forecastSnapshots      ForecastSnapshot[]
   purchaseOrderLines     PurchaseOrderLine[]
-  bundleComponents       ProductBundleComponent[]     @relation("bundleComponents")
-  bundleParents          ProductBundleComponent[]     @relation("bundleParents")
+  bundleComponents       ProductBundleComponent[]              @relation("bundleComponents")
+  bundleParents          ProductBundleComponent[]              @relation("bundleParents")
   stockCounts            StockCountLine[]
   stockLots              StockLot[]
   storePrices            StorePrice[]
@@ -1704,52 +1704,52 @@ model PurchaseOrderLine {
 }
 
 model CustomerOrder {
-  id                     String              @id @default(cuid())
-  organizationId         String
-  storeId                String
-  registerId             String?
-  shiftId                String?
-  number                 String
-  status                 CustomerOrderStatus @default(DRAFT)
-  source                 CustomerOrderSource @default(MANUAL)
-  isPosSale              Boolean             @default(false)
-  customerName           String?
-  customerEmail          String?
-  customerPhone          String?
-  customerAddress        String?
+  id                      String              @id @default(cuid())
+  organizationId          String
+  storeId                 String
+  registerId              String?
+  shiftId                 String?
+  number                  String
+  status                  CustomerOrderStatus @default(DRAFT)
+  source                  CustomerOrderSource @default(MANUAL)
+  isPosSale               Boolean             @default(false)
+  customerName            String?
+  customerEmail           String?
+  customerPhone           String?
+  customerAddress         String?
   confirmationEmailSentAt DateTime?
-  trackingNumber         String?
-  trackingCarrier        String?
-  trackingUrl            String?
-  trackingStatus         String?
-  trackingAddedAt        DateTime?
-  trackingEmailSentAt    DateTime?
-  followUpEmailSentAt    DateTime?
-  subtotalKgs            Decimal             @default(0) @db.Decimal(12, 2)
-  discountKgs            Decimal             @default(0) @db.Decimal(12, 2)
-  totalKgs               Decimal             @default(0) @db.Decimal(12, 2)
-  currencyCode           String?
-  currencyRateKgsPerUnit Decimal?            @db.Decimal(18, 6)
-  notes                  String?
-  isHeld                 Boolean             @default(false)
-  heldAt                 DateTime?
-  heldById               String?
-  isDebt                 Boolean             @default(false)
-  debtCustomerName       String?
-  debtSettledAt          DateTime?
-  debtSettledById        String?
-  kkmStatus              PosKkmStatus        @default(NOT_SENT)
-  kkmReceiptId           String?
-  kkmRawJson             Json?
-  confirmedAt            DateTime?
-  readyAt                DateTime?
-  completedAt            DateTime?
-  canceledAt             DateTime?
-  completedEventId       String?             @unique
-  createdById            String?
-  updatedById            String?
-  createdAt              DateTime            @default(now())
-  updatedAt              DateTime            @updatedAt
+  trackingNumber          String?
+  trackingCarrier         String?
+  trackingUrl             String?
+  trackingStatus          String?
+  trackingAddedAt         DateTime?
+  trackingEmailSentAt     DateTime?
+  followUpEmailSentAt     DateTime?
+  subtotalKgs             Decimal             @default(0) @db.Decimal(12, 2)
+  discountKgs             Decimal             @default(0) @db.Decimal(12, 2)
+  totalKgs                Decimal             @default(0) @db.Decimal(12, 2)
+  currencyCode            String?
+  currencyRateKgsPerUnit  Decimal?            @db.Decimal(18, 6)
+  notes                   String?
+  isHeld                  Boolean             @default(false)
+  heldAt                  DateTime?
+  heldById                String?
+  isDebt                  Boolean             @default(false)
+  debtCustomerName        String?
+  debtSettledAt           DateTime?
+  debtSettledById         String?
+  kkmStatus               PosKkmStatus        @default(NOT_SENT)
+  kkmReceiptId            String?
+  kkmRawJson              Json?
+  confirmedAt             DateTime?
+  readyAt                 DateTime?
+  completedAt             DateTime?
+  canceledAt              DateTime?
+  completedEventId        String?             @unique
+  createdById             String?
+  updatedById             String?
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
 
   organization              Organization              @relation(fields: [organizationId], references: [id])
   store                     Store                     @relation(fields: [storeId], references: [id])
@@ -1851,6 +1851,7 @@ model EmailCampaign {
   logoImageId            String?
   recipientCount         Int                     @default(0)
   sentCount              Int                     @default(0)
+  deliveredCount         Int                     @default(0)
   failedCount            Int                     @default(0)
   sentAt                 DateTime?
   archivedAt             DateTime?
@@ -1897,17 +1898,24 @@ model EmailMarketingLogo {
 }
 
 model EmailCampaignRecipient {
-  id                String                       @id @default(cuid())
-  organizationId    String
-  campaignId        String
-  customerId        String
-  email             String
-  status            EmailCampaignRecipientStatus @default(PENDING)
-  providerMessageId String?
-  errorMessage      String?                      @db.Text
-  sentAt            DateTime?
-  createdAt         DateTime                     @default(now())
-  updatedAt         DateTime                     @updatedAt
+  id                  String                       @id @default(cuid())
+  organizationId      String
+  campaignId          String
+  customerId          String
+  email               String
+  status              EmailCampaignRecipientStatus @default(PENDING)
+  providerMessageId   String?
+  providerStatus      String?
+  errorMessage        String?                      @db.Text
+  sentAt              DateTime?
+  deliveredAt         DateTime?
+  bouncedAt           DateTime?
+  complainedAt        DateTime?
+  lastProviderEvent   String?
+  lastProviderEventId String?
+  lastProviderEventAt DateTime?
+  createdAt           DateTime                     @default(now())
+  updatedAt           DateTime                     @updatedAt
 
   organization Organization  @relation(fields: [organizationId], references: [id])
   campaign     EmailCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
@@ -1918,6 +1926,8 @@ model EmailCampaignRecipient {
   @@index([customerId])
   @@index([email])
   @@index([providerMessageId])
+  @@index([campaignId, deliveredAt])
+  @@index([lastProviderEventId])
 }
 
 model EmailSenderDomain {
