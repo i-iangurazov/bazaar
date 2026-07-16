@@ -538,7 +538,7 @@ const parseBlocks = (value: unknown, fallbackBody?: string | null): CampaignBloc
 const campaignStatusLabel = (status: EmailCampaignStatus) => {
   if (status === EmailCampaignStatus.DRAFT) return "Черновик";
   if (status === EmailCampaignStatus.SENDING) return "Отправляется";
-  if (status === EmailCampaignStatus.SENT) return "Отправлена";
+  if (status === EmailCampaignStatus.SENT) return "Передана провайдеру";
   if (status === EmailCampaignStatus.PARTIAL) return "Частично";
   return "Ошибка";
 };
@@ -828,6 +828,10 @@ export const EmailMarketingWorkspace = () => {
   );
   const hasSendingCampaigns = useMemo(
     () => (historyQuery.data ?? []).some((campaign) => campaign.status === EmailCampaignStatus.SENDING),
+    [historyQuery.data],
+  );
+  const sendingCampaignId = useMemo(
+    () => (historyQuery.data ?? []).find((campaign) => campaign.status === EmailCampaignStatus.SENDING)?.id ?? null,
     [historyQuery.data],
   );
   const { refetch: refetchCampaignHistory } = historyQuery;
@@ -1139,6 +1143,13 @@ export const EmailMarketingWorkspace = () => {
     },
     onError: (error) => toast({ variant: "error", description: translateError(tErrors, error) }),
   });
+  const autoResumeCampaignMutation = trpc.emailMarketing.resumeCampaign.useMutation({
+    onSuccess: async () => {
+      await Promise.all([utils.emailMarketing.history.invalidate(), utils.emailMarketing.overview.invalidate()]);
+    },
+    onError: (error) => toast({ variant: "error", description: translateError(tErrors, error) }),
+  });
+  const { mutate: autoResumeCampaign, isLoading: autoResumeCampaignLoading } = autoResumeCampaignMutation;
   const updateAutomationMutation = trpc.emailMarketing.updateAutomation.useMutation({
     onSuccess: async () => {
       await utils.emailMarketing.automations.invalidate();
@@ -1155,6 +1166,22 @@ export const EmailMarketingWorkspace = () => {
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
+
+  useEffect(() => {
+    if (!sendingCampaignId || sendCampaignMutation.isLoading || resumeCampaignMutation.isLoading || autoResumeCampaignLoading) {
+      return;
+    }
+    const timeout = window.setTimeout(() => {
+      autoResumeCampaign({ campaignId: sendingCampaignId });
+    }, 1_000);
+    return () => window.clearTimeout(timeout);
+  }, [
+    autoResumeCampaign,
+    autoResumeCampaignLoading,
+    resumeCampaignMutation.isLoading,
+    sendCampaignMutation.isLoading,
+    sendingCampaignId,
+  ]);
 
   const scrollBlockIntoView = (id: string) => {
     window.setTimeout(() => {
@@ -3011,12 +3038,12 @@ const CampaignsDashboard = ({
               </div>
               <div className="mt-4 grid gap-2 text-sm sm:grid-cols-3">
                 <Metric label="Аудитория" value={campaign.recipientCount} />
-                <Metric label="Отправлено" value={campaign.sentCount} />
+                <Metric label="Принято провайдером" value={campaign.sentCount} />
                 <Metric label="Ошибки" value={campaign.failedCount} />
               </div>
               {campaign.status === EmailCampaignStatus.SENDING ? (
                 <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                  Обработано {campaign.sentCount + campaign.failedCount} из {campaign.recipientCount}. Если прогресс стоит, нажмите продолжить.
+                  Обработано {campaign.sentCount + campaign.failedCount} из {campaign.recipientCount}. Отправка продолжается автоматически.
                 </p>
               ) : null}
               <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

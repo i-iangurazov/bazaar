@@ -16,11 +16,16 @@ export const runEmailCampaignSendJob = async (payload?: JobPayload): Promise<Job
     payload && typeof payload === "object" && "batchSize" in payload
       ? Number((payload as Record<string, unknown>).batchSize)
       : null;
+  const maxBatches =
+    payload && typeof payload === "object" && "maxBatches" in payload
+      ? Number((payload as Record<string, unknown>).maxBatches)
+      : null;
 
   const result = await deliverPendingEmailCampaigns({
     organizationId,
     campaignId,
     batchSize: Number.isFinite(batchSize) ? batchSize : null,
+    maxBatches: Number.isFinite(maxBatches) ? maxBatches : null,
   });
   return {
     job: EMAIL_CAMPAIGN_SEND_JOB_NAME,
@@ -28,6 +33,7 @@ export const runEmailCampaignSendJob = async (payload?: JobPayload): Promise<Job
     details: {
       organizationId,
       campaignId,
+      maxBatches,
       ...result,
     },
   };

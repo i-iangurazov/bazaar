@@ -3236,10 +3236,19 @@ type DeliverEmailCampaignResult = {
 };
 
 const EMAIL_CAMPAIGN_DELIVERY_BATCH_SIZE = 100;
+const EMAIL_CAMPAIGN_DELIVERY_MAX_BATCHES_PER_RUN = 50;
 
 const normalizeDeliveryBatchSize = (value?: number | null) => {
   const numeric = Math.trunc(value ?? EMAIL_CAMPAIGN_DELIVERY_BATCH_SIZE);
   return Math.min(100, Math.max(1, Number.isFinite(numeric) ? numeric : EMAIL_CAMPAIGN_DELIVERY_BATCH_SIZE));
+};
+
+const normalizeDeliveryBatchCount = (value?: number | null) => {
+  const numeric = Math.trunc(value ?? EMAIL_CAMPAIGN_DELIVERY_MAX_BATCHES_PER_RUN);
+  return Math.min(
+    100,
+    Math.max(1, Number.isFinite(numeric) ? numeric : EMAIL_CAMPAIGN_DELIVERY_MAX_BATCHES_PER_RUN),
+  );
 };
 
 const updateEmailCampaignDeliverySummary = async (input: {
@@ -3679,13 +3688,16 @@ export const deliverPendingEmailCampaigns = async (input?: {
   campaignId?: string | null;
   maxCampaigns?: number | null;
   batchSize?: number | null;
+  maxBatches?: number | null;
 }) => {
   const results: DeliverEmailCampaignResult[] = [];
+  const pendingByCampaign = new Map<string, number>();
   const requestedMaxCampaigns = Math.trunc(input?.maxCampaigns ?? 5);
   const maxCampaigns = Math.min(
     10,
     Math.max(1, Number.isFinite(requestedMaxCampaigns) ? requestedMaxCampaigns : 5),
   );
+  let remainingBatches = normalizeDeliveryBatchCount(input?.maxBatches);
   const campaignId = input?.campaignId?.trim() || null;
   const organizationId = input?.organizationId?.trim() || null;
   const campaigns = await prisma.emailCampaign.findMany({
@@ -3700,20 +3712,29 @@ export const deliverPendingEmailCampaigns = async (input?: {
   });
 
   for (const next of campaigns) {
-    results.push(
-      await deliverEmailCampaign({
+    while (remainingBatches > 0) {
+      const result = await deliverEmailCampaign({
         organizationId: next.organizationId,
         campaignId: next.id,
         maxRecipients: input?.batchSize,
-      }),
-    );
+      });
+      results.push(result);
+      pendingByCampaign.set(result.campaignId, result.pending);
+      remainingBatches -= 1;
+      if (result.pending <= 0) {
+        break;
+      }
+    }
+    if (remainingBatches <= 0) {
+      break;
+    }
   }
   return {
     processed: results.length,
     sent: results.reduce((total, result) => total + result.sent, 0),
     failed: results.reduce((total, result) => total + result.failed, 0),
     skipped: results.reduce((total, result) => total + result.skipped, 0),
-    pending: results.reduce((total, result) => total + result.pending, 0),
+    pending: Array.from(pendingByCampaign.values()).reduce((total, pending) => total + pending, 0),
     campaigns: results.map((result) => result.campaignId),
   };
 };
@@ -3721,6 +3742,7 @@ export const deliverPendingEmailCampaigns = async (input?: {
 export const continueEmailCampaignDelivery = async (input: {
   user: StoreAccessUser;
   campaignId: string;
+  maxBatches?: number | null;
 }) => {
   const campaign = await prisma.emailCampaign.findFirst({
     where: {
@@ -3741,6 +3763,7 @@ export const continueEmailCampaignDelivery = async (input: {
     organizationId: input.user.organizationId,
     campaignId: campaign.id,
     maxCampaigns: 1,
+    maxBatches: input.maxBatches,
   });
 };
 

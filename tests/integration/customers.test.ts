@@ -578,6 +578,7 @@ describeDb("customer database", () => {
         organizationId: org.id,
         campaignId: queued.campaign.id,
         batchSize: 2,
+        maxBatches: 1,
       });
       expect(firstBatch).toMatchObject({
         processed: 1,
@@ -597,10 +598,90 @@ describeDb("customer database", () => {
         organizationId: org.id,
         campaignId: queued.campaign.id,
         batchSize: 2,
+        maxBatches: 1,
       });
       expect(secondBatch).toMatchObject({
         processed: 1,
         sent: 1,
+        failed: 0,
+        pending: 0,
+      });
+      await expect(
+        prisma.emailCampaign.findUniqueOrThrow({ where: { id: queued.campaign.id } }),
+      ).resolves.toMatchObject({
+        status: EmailCampaignStatus.SENT,
+        sentCount: 3,
+        failedCount: 0,
+      });
+    } finally {
+      if (previousEmailFrom === undefined) {
+        delete process.env.EMAIL_FROM;
+      } else {
+        process.env.EMAIL_FROM = previousEmailFrom;
+      }
+      if (previousEmailProvider === undefined) {
+        delete process.env.EMAIL_PROVIDER;
+      } else {
+        process.env.EMAIL_PROVIDER = previousEmailProvider;
+      }
+      if (previousNextAuthUrl === undefined) {
+        delete process.env.NEXTAUTH_URL;
+      } else {
+        process.env.NEXTAUTH_URL = previousNextAuthUrl;
+      }
+      if (previousNextAuthSecret === undefined) {
+        delete process.env.NEXTAUTH_SECRET;
+      } else {
+        process.env.NEXTAUTH_SECRET = previousNextAuthSecret;
+      }
+    }
+  });
+
+  it("drains queued email campaigns autonomously across multiple batches by default", async () => {
+    const previousEmailFrom = process.env.EMAIL_FROM;
+    const previousEmailProvider = process.env.EMAIL_PROVIDER;
+    const previousNextAuthUrl = process.env.NEXTAUTH_URL;
+    const previousNextAuthSecret = process.env.NEXTAUTH_SECRET;
+    process.env.EMAIL_FROM = MARKETING_EMAIL_FROM;
+    process.env.EMAIL_PROVIDER = "log";
+    process.env.NEXTAUTH_URL = "https://app.bazaar.test";
+    process.env.NEXTAUTH_SECRET = "test-nextauth-secret";
+
+    try {
+      const { org, store, adminUser } = await seedBase({ plan: "BUSINESS" });
+      const user = asCallerUser(adminUser);
+      await prisma.customer.createMany({
+        data: ["one@example.com", "two@example.com", "three@example.com"].map((email, index) => ({
+          organizationId: org.id,
+          storeId: store.id,
+          name: `Auto Batch Customer ${index + 1}`,
+          email,
+          source: CustomerSource.MANUAL,
+        })),
+      });
+
+      const queued = await sendEmailCampaignToAudience({
+        user,
+        actorId: adminUser.id,
+        requestId: "email-campaign-auto-batch-queue",
+        campaign: {
+          storeId: store.id,
+          source: "ALL",
+          subject: "Auto batch update",
+          body: "New stock is available.",
+          brandColor: "#111827",
+          buttonColor: "#111827",
+        },
+      });
+
+      const delivery = await deliverPendingEmailCampaigns({
+        organizationId: org.id,
+        campaignId: queued.campaign.id,
+        batchSize: 2,
+      });
+      expect(delivery).toMatchObject({
+        processed: 2,
+        sent: 3,
         failed: 0,
         pending: 0,
       });

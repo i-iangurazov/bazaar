@@ -197,6 +197,8 @@ const campaignInputSchema = z.object({
   blocks: z.array(blockSchema).max(30).optional().nullable(),
 });
 
+const EMAIL_CAMPAIGN_SEND_MAX_BATCHES_PER_ACTION = 50;
+
 const kickEmailCampaignDelivery = async (input: {
   user: Parameters<typeof continueEmailCampaignDelivery>[0]["user"];
   campaignId: string;
@@ -205,6 +207,7 @@ const kickEmailCampaignDelivery = async (input: {
     return await continueEmailCampaignDelivery({
       user: input.user,
       campaignId: input.campaignId,
+      maxBatches: EMAIL_CAMPAIGN_SEND_MAX_BATCHES_PER_ACTION,
     });
   } catch (error) {
     return {
@@ -493,6 +496,7 @@ export const emailMarketingRouter = router({
         return await continueEmailCampaignDelivery({
           user: ctx.user,
           campaignId: input.campaignId,
+          maxBatches: EMAIL_CAMPAIGN_SEND_MAX_BATCHES_PER_ACTION,
         });
       } catch (error) {
         throw toTRPCError(error);
