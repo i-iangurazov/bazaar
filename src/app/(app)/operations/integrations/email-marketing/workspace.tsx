@@ -826,6 +826,11 @@ export const EmailMarketingWorkspace = () => {
     { storeId, limit: 50 },
     { enabled: Boolean(storeId) },
   );
+  const hasSendingCampaigns = useMemo(
+    () => (historyQuery.data ?? []).some((campaign) => campaign.status === EmailCampaignStatus.SENDING),
+    [historyQuery.data],
+  );
+  const { refetch: refetchCampaignHistory } = historyQuery;
   const sendersQuery = trpc.emailMarketing.senders.useQuery(
     { storeId },
     { enabled: Boolean(storeId) },
@@ -834,6 +839,7 @@ export const EmailMarketingWorkspace = () => {
     { storeId },
     { enabled: Boolean(storeId) },
   );
+  const { refetch: refetchEmailMarketingOverview } = overviewQuery;
   const logoGalleryQuery = trpc.emailMarketing.logoGallery.useQuery();
   const customersQuery = trpc.emailMarketing.customers.useQuery(
     {
@@ -890,6 +896,15 @@ export const EmailMarketingWorkspace = () => {
       setSenderIdentityId(null);
     }
   }, [primarySenderId, senderIdentityId, senderOptions, senderOptionsKey, sendersQuery.data]);
+
+  useEffect(() => {
+    if (!hasSendingCampaigns) return;
+    const interval = window.setInterval(() => {
+      void refetchCampaignHistory();
+      void refetchEmailMarketingOverview();
+    }, 5_000);
+    return () => window.clearInterval(interval);
+  }, [hasSendingCampaigns, refetchCampaignHistory, refetchEmailMarketingOverview]);
 
   const selectedBlockIndex = selectedBlock ? blocks.findIndex((block) => block.id === selectedBlock.id) : -1;
   const productItems = useMemo(() => productsQuery.data?.items ?? [], [productsQuery.data?.items]);
@@ -1073,7 +1088,13 @@ export const EmailMarketingWorkspace = () => {
       setConfirmOpen(false);
       setBuilderOpen(false);
       await Promise.all([utils.emailMarketing.history.invalidate(), utils.emailMarketing.overview.invalidate()]);
-      toast({ variant: "success", description: `Кампания поставлена в очередь. Получателей: ${result.recipientCount}.` });
+      const sentNow = result.delivery?.sent ?? 0;
+      toast({
+        variant: "success",
+        description: sentNow > 0
+          ? `Отправка началась. Уже отправлено: ${sentNow}.`
+          : `Кампания поставлена в очередь. Получателей: ${result.recipientCount}.`,
+      });
     },
     onError: (error) => toast({ variant: "error", description: translateError(tErrors, error) }),
   });
@@ -1102,6 +1123,19 @@ export const EmailMarketingWorkspace = () => {
     onSuccess: async () => {
       await utils.emailMarketing.history.invalidate();
       toast({ variant: "success", description: "Черновик удален." });
+    },
+    onError: (error) => toast({ variant: "error", description: translateError(tErrors, error) }),
+  });
+  const resumeCampaignMutation = trpc.emailMarketing.resumeCampaign.useMutation({
+    onSuccess: async (result) => {
+      await Promise.all([utils.emailMarketing.history.invalidate(), utils.emailMarketing.overview.invalidate()]);
+      toast({
+        variant: result.sent > 0 ? "success" : "info",
+        description:
+          result.pending > 0
+            ? `Отправлено еще: ${result.sent}. Осталось в очереди: ${result.pending}.`
+            : `Отправка обработана. Отправлено: ${result.sent}, ошибок: ${result.failed}.`,
+      });
     },
     onError: (error) => toast({ variant: "error", description: translateError(tErrors, error) }),
   });
@@ -2017,6 +2051,8 @@ export const EmailMarketingWorkspace = () => {
               onDuplicate={(campaignId) => duplicateMutation.mutate({ campaignId })}
               onArchive={(campaignId) => archiveMutation.mutate({ campaignId })}
               onDelete={(campaignId) => deleteDraftMutation.mutate({ campaignId })}
+              onResume={(campaignId) => resumeCampaignMutation.mutate({ campaignId })}
+              resumingCampaignId={resumeCampaignMutation.variables?.campaignId ?? null}
             />
           </TabsPanel>
         ) : null}
@@ -2927,6 +2963,8 @@ const CampaignsDashboard = ({
   onDuplicate,
   onArchive,
   onDelete,
+  onResume,
+  resumingCampaignId,
 }: {
   campaigns: CampaignDashboardItem[];
   loading: boolean;
@@ -2937,6 +2975,8 @@ const CampaignsDashboard = ({
   onDuplicate: (campaignId: string) => void;
   onArchive: (campaignId: string) => void;
   onDelete: (campaignId: string) => void;
+  onResume: (campaignId: string) => void;
+  resumingCampaignId?: string | null;
 }) => (
   <Card className="bazaar-admin-surface">
     <CardHeader className="bazaar-admin-section-header flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -2974,19 +3014,42 @@ const CampaignsDashboard = ({
                 <Metric label="Отправлено" value={campaign.sentCount} />
                 <Metric label="Ошибки" value={campaign.failedCount} />
               </div>
+              {campaign.status === EmailCampaignStatus.SENDING ? (
+                <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                  Обработано {campaign.sentCount + campaign.failedCount} из {campaign.recipientCount}. Если прогресс стоит, нажмите продолжить.
+                </p>
+              ) : null}
               <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0 text-xs text-muted-foreground">
                   <p className="truncate">{campaign.senderIdentity?.fromEmail ?? "Bazaar KG"}</p>
                   <p>{formatDateTime(campaign.updatedAt ?? campaign.createdAt, locale)}</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  {campaign.status === EmailCampaignStatus.SENDING ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => onResume(campaign.id)}
+                      disabled={resumingCampaignId === campaign.id}
+                    >
+                      <StatusSuccessIcon className="h-4 w-4" aria-hidden />
+                      {resumingCampaignId === campaign.id ? "Отправляем..." : "Продолжить"}
+                    </Button>
+                  ) : null}
                   <Button
                     type="button"
                     size="sm"
                     variant="secondary"
                     onClick={() => onEdit(campaign)}
-                    disabled={!builderAvailable}
-                    title={!builderAvailable ? builderUnavailableMessage : undefined}
+                    disabled={!builderAvailable || campaign.status === EmailCampaignStatus.SENDING}
+                    title={
+                      campaign.status === EmailCampaignStatus.SENDING
+                        ? "Кампания отправляется"
+                        : !builderAvailable
+                          ? builderUnavailableMessage
+                          : undefined
+                    }
                   >
                     <EditIcon className="h-4 w-4" aria-hidden />
                     Редактировать

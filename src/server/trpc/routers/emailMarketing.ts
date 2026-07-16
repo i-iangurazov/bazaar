@@ -14,6 +14,7 @@ import {
   archiveEmailCampaign,
   archiveEmailSenderIdentity,
   checkEmailSenderDomain,
+  continueEmailCampaignDelivery,
   createEmailSenderIdentity,
   deleteEmailCampaignDraft,
   duplicateEmailCampaign,
@@ -31,8 +32,6 @@ import {
   testEmailAutomation,
   updateEmailAutomation,
 } from "@/server/services/emailMarketing";
-import { runJob } from "@/server/jobs";
-import { EMAIL_CAMPAIGN_SEND_JOB_NAME } from "@/server/jobs/emailMarketing";
 import { toTRPCError } from "@/server/trpc/errors";
 import { managerProcedure, rateLimit, router } from "@/server/trpc/trpc";
 
@@ -197,6 +196,28 @@ const campaignInputSchema = z.object({
   logoStoreId: z.string().trim().min(1).optional().nullable(),
   blocks: z.array(blockSchema).max(30).optional().nullable(),
 });
+
+const kickEmailCampaignDelivery = async (input: {
+  user: Parameters<typeof continueEmailCampaignDelivery>[0]["user"];
+  campaignId: string;
+}) => {
+  try {
+    return await continueEmailCampaignDelivery({
+      user: input.user,
+      campaignId: input.campaignId,
+    });
+  } catch (error) {
+    return {
+      processed: 0,
+      sent: 0,
+      failed: 0,
+      skipped: 0,
+      pending: 0,
+      campaigns: [input.campaignId],
+      error: error instanceof Error ? error.message : "emailCampaignDeliveryKickFailed",
+    };
+  }
+};
 
 export const emailMarketingRouter = router({
   logoGallery: managerProcedure.query(async ({ ctx }) => {
@@ -433,12 +454,11 @@ export const emailMarketingRouter = router({
           requestId: ctx.requestId,
           campaign: input,
         });
-        void runJob(EMAIL_CAMPAIGN_SEND_JOB_NAME, {
-          organizationId: ctx.user.organizationId,
+        const delivery = await kickEmailCampaignDelivery({
+          user: ctx.user,
           campaignId: result.campaign.id,
-          requestId: ctx.requestId,
         });
-        return result;
+        return { ...result, delivery };
       } catch (error) {
         throw toTRPCError(error);
       }
@@ -455,12 +475,25 @@ export const emailMarketingRouter = router({
           requestId: ctx.requestId,
           campaignId: input.campaignId,
         });
-        void runJob(EMAIL_CAMPAIGN_SEND_JOB_NAME, {
-          organizationId: ctx.user.organizationId,
+        const delivery = await kickEmailCampaignDelivery({
+          user: ctx.user,
           campaignId: result.campaign.id,
-          requestId: ctx.requestId,
         });
-        return result;
+        return { ...result, delivery };
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  resumeCampaign: managerProcedure
+    .use(rateLimit({ windowMs: 60_000, max: 30, prefix: "email-marketing-resume" }))
+    .input(z.object({ campaignId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await continueEmailCampaignDelivery({
+          user: ctx.user,
+          campaignId: input.campaignId,
+        });
       } catch (error) {
         throw toTRPCError(error);
       }

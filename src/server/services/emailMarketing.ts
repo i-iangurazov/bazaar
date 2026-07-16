@@ -3231,7 +3231,80 @@ type DeliverEmailCampaignResult = {
   sent: number;
   failed: number;
   skipped: number;
+  pending: number;
   recipientCount: number;
+};
+
+const EMAIL_CAMPAIGN_DELIVERY_BATCH_SIZE = 100;
+
+const normalizeDeliveryBatchSize = (value?: number | null) => {
+  const numeric = Math.trunc(value ?? EMAIL_CAMPAIGN_DELIVERY_BATCH_SIZE);
+  return Math.min(100, Math.max(1, Number.isFinite(numeric) ? numeric : EMAIL_CAMPAIGN_DELIVERY_BATCH_SIZE));
+};
+
+const updateEmailCampaignDeliverySummary = async (input: {
+  campaignId: string;
+  errorMessage?: string | null;
+}) => {
+  const statusCounts = await prisma.emailCampaignRecipient.groupBy({
+    by: ["status"],
+    where: { campaignId: input.campaignId },
+    _count: { _all: true },
+  });
+  const countByStatus = new Map(statusCounts.map((row) => [row.status, row._count._all]));
+  const totalSent = countByStatus.get(EmailCampaignRecipientStatus.SENT) ?? 0;
+  const totalFailed = countByStatus.get(EmailCampaignRecipientStatus.FAILED) ?? 0;
+  const totalSkipped = countByStatus.get(EmailCampaignRecipientStatus.SKIPPED) ?? 0;
+  const totalPending = countByStatus.get(EmailCampaignRecipientStatus.PENDING) ?? 0;
+  const failedOrSkipped = totalFailed + totalSkipped;
+  const finalStatus =
+    totalPending > 0
+      ? EmailCampaignStatus.SENDING
+      : failedOrSkipped === 0
+        ? EmailCampaignStatus.SENT
+        : totalSent > 0
+          ? EmailCampaignStatus.PARTIAL
+          : EmailCampaignStatus.FAILED;
+
+  const updated = await prisma.emailCampaign.update({
+    where: { id: input.campaignId },
+    data: {
+      status: finalStatus,
+      sentCount: totalSent,
+      failedCount: failedOrSkipped,
+      sentAt: totalPending === 0 && totalSent > 0 ? new Date() : undefined,
+      errorMessage:
+        finalStatus === EmailCampaignStatus.SENT || finalStatus === EmailCampaignStatus.SENDING
+          ? null
+          : (input.errorMessage ?? "emailCampaignPartialOrFullFailure"),
+    },
+  });
+
+  return {
+    campaign: updated,
+    sent: totalSent,
+    failed: totalFailed,
+    skipped: totalSkipped,
+    pending: totalPending,
+    failedOrSkipped,
+  };
+};
+
+const failPendingEmailCampaignRecipients = async (input: {
+  campaignId: string;
+  errorMessage: string;
+}) => {
+  await prisma.emailCampaignRecipient.updateMany({
+    where: { campaignId: input.campaignId, status: EmailCampaignRecipientStatus.PENDING },
+    data: {
+      status: EmailCampaignRecipientStatus.FAILED,
+      errorMessage: input.errorMessage,
+    },
+  });
+  return updateEmailCampaignDeliverySummary({
+    campaignId: input.campaignId,
+    errorMessage: input.errorMessage,
+  });
 };
 
 const campaignRecordToInput = (campaign: {
@@ -3294,7 +3367,9 @@ const campaignRecordToInput = (campaign: {
 export const deliverEmailCampaign = async (input: {
   organizationId: string;
   campaignId: string;
+  maxRecipients?: number | null;
 }): Promise<DeliverEmailCampaignResult> => {
+  const batchSize = normalizeDeliveryBatchSize(input.maxRecipients);
   const campaign = await prisma.emailCampaign.findFirst({
     where: {
       id: input.campaignId,
@@ -3338,6 +3413,7 @@ export const deliverEmailCampaign = async (input: {
           },
         },
         orderBy: { createdAt: "asc" },
+        take: batchSize,
       },
     },
   });
@@ -3348,7 +3424,20 @@ export const deliverEmailCampaign = async (input: {
       sent: 0,
       failed: 0,
       skipped: 0,
+      pending: 0,
       recipientCount: 0,
+    };
+  }
+
+  if (!campaign.recipients.length) {
+    const summary = await updateEmailCampaignDeliverySummary({ campaignId: campaign.id });
+    return {
+      campaignId: campaign.id,
+      sent: 0,
+      failed: 0,
+      skipped: 0,
+      pending: summary.pending,
+      recipientCount: summary.campaign.recipientCount,
     };
   }
 
@@ -3358,115 +3447,92 @@ export const deliverEmailCampaign = async (input: {
     getEmailUnsubscribeSecret();
   } catch (error) {
     const message = error instanceof Error ? error.message : "emailCampaignConfigurationFailed";
-    await prisma.emailCampaign.update({
-      where: { id: campaign.id },
-      data: {
-        status: EmailCampaignStatus.FAILED,
-        errorMessage: message,
-        failedCount: campaign.recipients.length,
-      },
-    });
-    await prisma.emailCampaignRecipient.updateMany({
-      where: { campaignId: campaign.id, status: EmailCampaignRecipientStatus.PENDING },
-      data: {
-        status: EmailCampaignRecipientStatus.FAILED,
-        errorMessage: message,
-      },
+    const summary = await failPendingEmailCampaignRecipients({
+      campaignId: campaign.id,
+      errorMessage: message,
     });
     return {
       campaignId: campaign.id,
       sent: 0,
-      failed: campaign.recipients.length,
+      failed: summary.failed,
       skipped: 0,
+      pending: summary.pending,
       recipientCount: campaign.recipientCount,
     };
   }
 
   const campaignInput = campaignRecordToInput(campaign);
-  const sender = await resolveCampaignSender({
+  const senderResult = await resolveCampaignSender({
     organizationId: campaign.organizationId,
     storeId: campaign.storeId,
     senderIdentityId: campaign.senderIdentityId,
     senderDisplayName: campaign.senderDisplayName,
     replyToEmail: campaign.replyToEmail,
     requireVerified: true,
-  }).catch(async (error) => {
-    const message = error instanceof Error ? error.message : "emailSenderRequired";
-    await prisma.emailCampaign.update({
-      where: { id: campaign.id },
-      data: {
-        status: EmailCampaignStatus.FAILED,
+  }).then(
+    (sender) => ({ ok: true as const, sender }),
+    async (error) => {
+      const message = error instanceof Error ? error.message : "emailSenderRequired";
+      const summary = await failPendingEmailCampaignRecipients({
+        campaignId: campaign.id,
         errorMessage: message,
-        failedCount: campaign.recipients.length,
-      },
-    });
-    await prisma.emailCampaignRecipient.updateMany({
-      where: { campaignId: campaign.id, status: EmailCampaignRecipientStatus.PENDING },
-      data: { status: EmailCampaignRecipientStatus.FAILED, errorMessage: message },
-    });
-    return null;
-  });
-  if (!sender) {
+      });
+      return { ok: false as const, summary };
+    },
+  );
+  if (!senderResult.ok) {
     return {
       campaignId: campaign.id,
       sent: 0,
-      failed: campaign.recipients.length,
+      failed: senderResult.summary.failed,
       skipped: 0,
+      pending: senderResult.summary.pending,
       recipientCount: campaign.recipientCount,
     };
   }
+  const sender = senderResult.sender;
   const logoUrl = resolveEmailMarketingAssetUrl(campaign.logoImage?.url) ?? null;
-  const productsById = await loadEmailMarketingProductsByIds({
+  const productsResult = await loadEmailMarketingProductsByIds({
     organizationId: campaign.organizationId,
     store: campaign.store,
     productIds: selectedProductIdsFromBlocks(campaignInput.blocks),
     requireAll: true,
-  }).catch(async (error) => {
-    const message = error instanceof Error ? error.message : "emailCampaignProductInvalid";
-    await prisma.emailCampaign.update({
-      where: { id: campaign.id },
-      data: {
-        status: EmailCampaignStatus.FAILED,
+  }).then(
+    (productsById) => ({ ok: true as const, productsById }),
+    async (error) => {
+      const message = error instanceof Error ? error.message : "emailCampaignProductInvalid";
+      const summary = await failPendingEmailCampaignRecipients({
+        campaignId: campaign.id,
         errorMessage: message,
-        failedCount: campaign.recipients.length,
-      },
-    });
-    await prisma.emailCampaignRecipient.updateMany({
-      where: { campaignId: campaign.id, status: EmailCampaignRecipientStatus.PENDING },
-      data: { status: EmailCampaignRecipientStatus.FAILED, errorMessage: message },
-    });
-    return null;
-  });
-  if (!productsById) {
+      });
+      return { ok: false as const, summary };
+    },
+  );
+  if (!productsResult.ok) {
     return {
       campaignId: campaign.id,
       sent: 0,
-      failed: campaign.recipients.length,
+      failed: productsResult.summary.failed,
       skipped: 0,
+      pending: productsResult.summary.pending,
       recipientCount: campaign.recipientCount,
     };
   }
+  const productsById = productsResult.productsById;
   try {
     assertEmailImagesPublic({ campaign: campaignInput, productsById, logoUrl });
   } catch (error) {
     const message = error instanceof Error ? error.message : "emailCampaignImagePublicUrlRequired";
-    await prisma.emailCampaign.update({
-      where: { id: campaign.id },
-      data: {
-        status: EmailCampaignStatus.FAILED,
-        errorMessage: message,
-        failedCount: campaign.recipients.length,
-      },
-    });
-    await prisma.emailCampaignRecipient.updateMany({
-      where: { campaignId: campaign.id, status: EmailCampaignRecipientStatus.PENDING },
-      data: { status: EmailCampaignRecipientStatus.FAILED, errorMessage: message },
+    const summary = await failPendingEmailCampaignRecipients({
+      campaignId: campaign.id,
+      errorMessage: message,
     });
     return {
       campaignId: campaign.id,
       sent: 0,
-      failed: campaign.recipients.length,
+      failed: summary.failed,
       skipped: 0,
+      pending: summary.pending,
       recipientCount: campaign.recipientCount,
     };
   }
@@ -3590,36 +3656,8 @@ export const deliverEmailCampaign = async (input: {
   }
   await flushBatch();
 
-  const statusCounts = await prisma.emailCampaignRecipient.groupBy({
-    by: ["status"],
-    where: { campaignId: campaign.id },
-    _count: { _all: true },
-  });
-  const countByStatus = new Map(statusCounts.map((row) => [row.status, row._count._all]));
-  const totalSent = countByStatus.get(EmailCampaignRecipientStatus.SENT) ?? 0;
-  const totalFailed = countByStatus.get(EmailCampaignRecipientStatus.FAILED) ?? 0;
-  const totalSkipped = countByStatus.get(EmailCampaignRecipientStatus.SKIPPED) ?? 0;
-  const totalPending = countByStatus.get(EmailCampaignRecipientStatus.PENDING) ?? 0;
-  const failedOrSkipped = totalFailed + totalSkipped + totalPending;
-  const finalStatus =
-    failedOrSkipped === 0
-      ? EmailCampaignStatus.SENT
-      : totalSent > 0
-        ? EmailCampaignStatus.PARTIAL
-        : EmailCampaignStatus.FAILED;
-
-  const updated = await prisma.emailCampaign.update({
-    where: { id: campaign.id },
-    data: {
-      status: finalStatus,
-      sentCount: totalSent,
-      failedCount: failedOrSkipped,
-      sentAt: totalSent > 0 ? new Date() : null,
-      errorMessage:
-        finalStatus === EmailCampaignStatus.SENT ? null : "emailCampaignPartialOrFullFailure",
-    },
-  });
-  if (sender.id && totalSent > 0) {
+  const summary = await updateEmailCampaignDeliverySummary({ campaignId: campaign.id });
+  if (sender.id && summary.sent > 0) {
     await prisma.emailSenderIdentity.update({
       where: { id: sender.id },
       data: { lastUsedAt: new Date() },
@@ -3627,29 +3665,46 @@ export const deliverEmailCampaign = async (input: {
   }
 
   return {
-    campaignId: updated.id,
+    campaignId: summary.campaign.id,
     sent,
     failed,
     skipped,
-    recipientCount: updated.recipientCount,
+    pending: summary.pending,
+    recipientCount: summary.campaign.recipientCount,
   };
 };
 
-export const deliverPendingEmailCampaigns = async () => {
+export const deliverPendingEmailCampaigns = async (input?: {
+  organizationId?: string | null;
+  campaignId?: string | null;
+  maxCampaigns?: number | null;
+  batchSize?: number | null;
+}) => {
   const results: DeliverEmailCampaignResult[] = [];
-  for (let index = 0; index < 50; index += 1) {
-    const next = await prisma.emailCampaign.findFirst({
-      where: { status: EmailCampaignStatus.SENDING },
-      select: { id: true, organizationId: true },
-      orderBy: { createdAt: "asc" },
-    });
-    if (!next) {
-      break;
-    }
+  const requestedMaxCampaigns = Math.trunc(input?.maxCampaigns ?? 5);
+  const maxCampaigns = Math.min(
+    10,
+    Math.max(1, Number.isFinite(requestedMaxCampaigns) ? requestedMaxCampaigns : 5),
+  );
+  const campaignId = input?.campaignId?.trim() || null;
+  const organizationId = input?.organizationId?.trim() || null;
+  const campaigns = await prisma.emailCampaign.findMany({
+    where: {
+      status: EmailCampaignStatus.SENDING,
+      ...(organizationId ? { organizationId } : {}),
+      ...(campaignId ? { id: campaignId } : {}),
+    },
+    select: { id: true, organizationId: true },
+    orderBy: { createdAt: "asc" },
+    take: campaignId ? 1 : maxCampaigns,
+  });
+
+  for (const next of campaigns) {
     results.push(
       await deliverEmailCampaign({
         organizationId: next.organizationId,
         campaignId: next.id,
+        maxRecipients: input?.batchSize,
       }),
     );
   }
@@ -3658,8 +3713,35 @@ export const deliverPendingEmailCampaigns = async () => {
     sent: results.reduce((total, result) => total + result.sent, 0),
     failed: results.reduce((total, result) => total + result.failed, 0),
     skipped: results.reduce((total, result) => total + result.skipped, 0),
+    pending: results.reduce((total, result) => total + result.pending, 0),
     campaigns: results.map((result) => result.campaignId),
   };
+};
+
+export const continueEmailCampaignDelivery = async (input: {
+  user: StoreAccessUser;
+  campaignId: string;
+}) => {
+  const campaign = await prisma.emailCampaign.findFirst({
+    where: {
+      id: input.campaignId,
+      organizationId: input.user.organizationId,
+      archivedAt: null,
+    },
+    select: { id: true, storeId: true, status: true },
+  });
+  if (!campaign) {
+    throw new AppError("emailCampaignNotFound", "NOT_FOUND", 404);
+  }
+  await assertUserCanAccessStore(prisma, input.user, campaign.storeId);
+  if (campaign.status !== EmailCampaignStatus.SENDING) {
+    throw new AppError("emailCampaignNotSending", "CONFLICT", 409);
+  }
+  return deliverPendingEmailCampaigns({
+    organizationId: input.user.organizationId,
+    campaignId: campaign.id,
+    maxCampaigns: 1,
+  });
 };
 
 export const listEmailCampaigns = async (input: {
