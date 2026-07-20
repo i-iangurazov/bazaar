@@ -20,6 +20,7 @@ import {
   isDescriptionGenerationJobRunning,
   ProductDescriptionGenerationProgress,
 } from "@/components/product-description-generation-progress";
+import { ProductDuplicateDialog } from "@/components/products/product-duplicate-dialog";
 import { SavedTableViews } from "@/components/saved-table-views";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -3107,19 +3108,6 @@ const ProductsPage = () => {
     }
   };
 
-  const openDuplicateCreateFlow = (copyImages: boolean) => {
-    if (!duplicateTarget) {
-      return;
-    }
-    persistProductsReturnState();
-    const href = buildProductListLaunchedHref("/products/new", {
-      duplicateFrom: duplicateTarget.id,
-      copyImages: copyImages ? "1" : "0",
-    });
-    setDuplicateTarget(null);
-    router.push(href);
-  };
-
   const newProductHref = buildProductListLaunchedHref("/products/new");
   const newBundleHref = buildProductListLaunchedHref("/products/new", { type: "bundle" });
   const productCreateStoreQuery = storeId ? `storeId=${encodeURIComponent(storeId)}` : "";
@@ -5732,36 +5720,16 @@ const ProductsPage = () => {
           </Form>
         </Modal>
       ) : null}
-      <Modal
+      <ProductDuplicateDialog
         open={Boolean(duplicateTarget)}
         onOpenChange={(open) => {
           if (!open) {
             setDuplicateTarget(null);
           }
         }}
-        title={t("duplicateDialogTitle")}
-        subtitle={duplicateTarget?.name}
-        mobileSheet
-      >
-        <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">{t("duplicateDialogText")}</p>
-          <ModalFooter>
-            <Button type="button" variant="ghost" onClick={() => setDuplicateTarget(null)}>
-              {tCommon("cancel")}
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => openDuplicateCreateFlow(false)}
-            >
-              {t("duplicateWithoutPhotos")}
-            </Button>
-            <Button type="button" onClick={() => openDuplicateCreateFlow(true)}>
-              {t("duplicateWithPhotos")}
-            </Button>
-          </ModalFooter>
-        </div>
-      </Modal>
+        productId={duplicateTarget?.id ?? ""}
+        productName={duplicateTarget?.name ?? ""}
+      />
       {confirmDialog}
     </div>
   );

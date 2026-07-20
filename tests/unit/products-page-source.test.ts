@@ -78,7 +78,9 @@ describe("index page source layout", () => {
 
     expect(pageSource).toContain("const handleBulkGenerateDescriptionsForCurrentFilter = async (");
     expect(pageSource).toContain("overwriteExisting: options.overwriteExisting ?? true");
-    expect(pageSource).toContain("handleBulkGenerateDescriptionsForCurrentFilter({\n                          overwriteExisting: false,");
+    expect(pageSource).toContain(
+      "handleBulkGenerateDescriptionsForCurrentFilter({\n                          overwriteExisting: false,",
+    );
     expect(pageHeaderStart).toBeGreaterThan(-1);
     expect(tableCardStart).toBeGreaterThan(-1);
     expect(filteredActionStart).toBeGreaterThan(pageHeaderStart);
@@ -165,6 +167,9 @@ describe("index page source layout", () => {
     const productReadSource = await readSource("src/server/services/products/read.ts");
     const productSchemasSource = await readSource("src/server/trpc/routers/products.schemas.ts");
     const productMutationsSource = await readSource("src/server/services/products/mutations.ts");
+    const duplicateDialogSource = await readSource(
+      "src/components/products/product-duplicate-dialog.tsx",
+    );
 
     expect(storeRouterSource).toContain("updateProductSettings");
     expect(storeRouterSource).toContain("adminOrOrgOwnerProcedure");
@@ -178,8 +183,12 @@ describe("index page source layout", () => {
     expect(detailSource).toContain("minStock: selectedSettingsStore?.minStock");
     expect(detailSource).toContain("selectedSettingsStore?.minStock");
     expect(detailSource).toContain("handleSaveStoreVariantOnHand");
-    expect(listSource).toContain("duplicateDialogTitle");
-    expect(listSource).toContain('copyImages: copyImages ? "1" : "0"');
+    expect(listSource).toContain("<ProductDuplicateDialog");
+    expect(detailSource).toContain("<ProductDuplicateDialog");
+    expect(duplicateDialogSource).toContain("copyInventory");
+    expect(duplicateDialogSource).toContain("copyVariants: true");
+    expect(duplicateDialogSource).toContain("copyInventory: false");
+    expect(duplicateDialogSource).toContain('router.push(result.status === "ARCHIVED"');
     expect(listSource).toContain('buildProductListLaunchedHref("/products/new"');
     expect(listSource).toContain('params.set("returnTo", productsListReturnPath)');
     expect(formSource).toContain("enableSimilarProductCheck &&");
@@ -190,7 +199,9 @@ describe("index page source layout", () => {
     );
     expect(formSource).toContain("!enableSku || !variant.sku?.trim()");
     expect(productServiceSource).toContain("copyImages ? source.photoUrl : null");
-    expect(productServiceSource).toContain("sku: null");
+    expect(productServiceSource).toContain('referenceType: "PRODUCT_DUPLICATE"');
+    expect(productServiceSource).toContain("copiedVariantIdBySourceId");
+    expect(productServiceSource).toContain("omittedBarcodesCount");
     expect(productServiceSource).toContain("minStock?: number | null");
     expect(productServiceSource).toContain("minStock: input.minStock");
     expect(productServiceSource).toContain("source.reorderPolicies.filter");

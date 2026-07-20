@@ -2502,8 +2502,19 @@ export const duplicateProduct = async (input: {
   actorId: string;
   requestId: string;
   productId: string;
+  name?: string | null;
   sku?: string | null;
+  status?: "ACTIVE" | "ARCHIVED";
   copyImages?: boolean;
+  copyInventory?: boolean;
+  copyDescription?: boolean;
+  copyCategory?: boolean;
+  copyOtherDetails?: boolean;
+  copyPrice?: boolean;
+  copyCost?: boolean;
+  copyVariants?: boolean;
+  copyCharacteristics?: boolean;
+  copySku?: boolean;
   storeId?: string | null;
 }) => {
   return prisma.$transaction(async (tx) => {
@@ -2513,7 +2524,9 @@ export const duplicateProduct = async (input: {
       where: { id: input.productId },
       include: {
         packs: true,
+        barcodes: { select: { value: true } },
         images: true,
+        complianceFlags: true,
         variants: {
           where: { isActive: true },
           select: {
@@ -2536,10 +2549,27 @@ export const duplicateProduct = async (input: {
           },
         },
         storePrices: {
-          where: { variantKey: "BASE" },
           select: {
             storeId: true,
+            variantId: true,
+            variantKey: true,
             priceKgs: true,
+          },
+        },
+        productCosts: {
+          select: {
+            variantId: true,
+            variantKey: true,
+            avgCostKgs: true,
+            costBasisQty: true,
+          },
+        },
+        inventorySnapshots: {
+          select: {
+            storeId: true,
+            variantId: true,
+            variantKey: true,
+            onHand: true,
           },
         },
         reorderPolicies: {
@@ -2567,6 +2597,20 @@ export const duplicateProduct = async (input: {
     }
 
     const copyImages = input.copyImages ?? true;
+    const copyInventory = input.copyInventory ?? false;
+    const copyMinimumStock = input.copyInventory === undefined ? true : copyInventory;
+    const copyDescription = input.copyDescription ?? true;
+    const copyCategory = input.copyCategory ?? true;
+    const copyOtherDetails = input.copyOtherDetails ?? true;
+    const copyPrice = input.copyPrice ?? true;
+    const copyCost = input.copyCost ?? false;
+    const copyVariants = input.copyVariants ?? true;
+    const copyCharacteristics = input.copyCharacteristics ?? true;
+    const copySku = input.copySku ?? true;
+    if (copyInventory && !copyVariants && source.variants.length) {
+      throw new AppError("duplicateInventoryRequiresVariants", "BAD_REQUEST", 400);
+    }
+
     const requestedStoreId = input.storeId?.trim() || null;
     const assignmentStores = requestedStoreId
       ? await resolveProductCatalogStoresForStore(tx, {
@@ -2575,30 +2619,37 @@ export const duplicateProduct = async (input: {
         })
       : source.storeProducts.map((row) => row.store);
 
-    const nextSku = await resolveDuplicateSku(tx, {
-      organizationId: input.organizationId,
-      sourceSku: source.sku,
-      requestedSku: input.sku,
-    });
+    const nextSku =
+      copySku || input.sku
+        ? await resolveDuplicateSku(tx, {
+            organizationId: input.organizationId,
+            sourceSku: source.sku,
+            requestedSku: input.sku,
+          })
+        : await resolveCreateSku(tx, { organizationId: input.organizationId });
+    const duplicateName = input.name?.trim() || `${source.name} (Copy)`;
 
     const duplicate = await tx.product.create({
       data: {
         organizationId: input.organizationId,
-        supplierId: source.supplierId,
+        supplierId: copyOtherDetails ? source.supplierId : null,
         sku: nextSku,
-        name: source.name,
-        category: source.category,
-        categories: source.categories.length
-          ? source.categories
-          : source.category
-            ? [source.category]
-            : [],
+        name: duplicateName,
+        category: copyCategory ? source.category : null,
+        categories: copyCategory
+          ? source.categories.length
+            ? source.categories
+            : source.category
+              ? [source.category]
+              : []
+          : [],
         unit: source.unit,
         baseUnitId: source.baseUnitId,
-        basePriceKgs: source.basePriceKgs,
-        description: source.description,
+        basePriceKgs: copyPrice ? source.basePriceKgs : null,
+        description: copyDescription ? source.description : null,
         photoUrl: copyImages ? source.photoUrl : null,
-        isBundle: source.isBundle,
+        isDeleted: input.status === "ARCHIVED",
+        isBundle: copyOtherDetails ? source.isBundle : false,
       },
     });
 
@@ -2613,6 +2664,7 @@ export const duplicateProduct = async (input: {
           productId: duplicate.id,
           url: image.url,
           position: image.position,
+          isAiGenerated: image.isAiGenerated,
         };
       });
       await tx.productImage.createMany({
@@ -2620,7 +2672,7 @@ export const duplicateProduct = async (input: {
       });
     }
 
-    if (source.packs.length) {
+    if (copyOtherDetails && source.packs.length) {
       await tx.productPack.createMany({
         data: source.packs.map((pack) => ({
           organizationId: input.organizationId,
@@ -2634,32 +2686,60 @@ export const duplicateProduct = async (input: {
       });
     }
 
+    const copiedVariantSkuSet = new Set<string>();
+    const copiedVariantSku = (sourceSku: string | null, index: number) => {
+      if (!copySku || !sourceSku?.trim()) {
+        return null;
+      }
+      const base = `${sourceSku.trim()}-COPY`;
+      let candidate = base;
+      let suffix = 2;
+      while (copiedVariantSkuSet.has(candidate)) {
+        candidate = `${base}-${suffix}`;
+        suffix += 1;
+      }
+      copiedVariantSkuSet.add(candidate);
+      return candidate || `VARIANT-COPY-${index + 1}`;
+    };
     const attributeDefinitions = await loadAttributeDefinitions(tx, input.organizationId);
-    if (source.variants.length) {
-      await createVariants(
-        tx,
-        duplicate.id,
-        source.variants.map((variant) => ({
-          imageId: copyImages ? copiedImageIdBySourceId.get(variant.imageId ?? "") : null,
-          name: variant.name,
-          sku: null,
-          attributes:
-            variant.attributes && typeof variant.attributes === "object"
-              ? (variant.attributes as Record<string, unknown>)
-              : {},
-        })),
-        input.organizationId,
-        attributeDefinitions,
-        buildProductImageReferenceMap(
-          source.images.flatMap((image) => {
-            const copiedId = copiedImageIdBySourceId.get(image.id);
-            return copiedId
-              ? [{ id: copiedId, url: image.url, sourceUrl: image.url, position: image.position }]
-              : [];
-          }),
-        ),
-      );
-    }
+    const copiedVariants =
+      copyVariants && source.variants.length
+        ? await createVariants(
+            tx,
+            duplicate.id,
+            source.variants.map((variant, index) => ({
+              imageId: copyImages ? copiedImageIdBySourceId.get(variant.imageId ?? "") : null,
+              name: variant.name,
+              sku: copiedVariantSku(variant.sku, index),
+              attributes:
+                copyCharacteristics && variant.attributes && typeof variant.attributes === "object"
+                  ? (variant.attributes as Record<string, unknown>)
+                  : {},
+            })),
+            input.organizationId,
+            attributeDefinitions,
+            buildProductImageReferenceMap(
+              source.images.flatMap((image) => {
+                const copiedId = copiedImageIdBySourceId.get(image.id);
+                return copiedId
+                  ? [
+                      {
+                        id: copiedId,
+                        url: image.url,
+                        sourceUrl: image.url,
+                        position: image.position,
+                      },
+                    ]
+                  : [];
+              }),
+            ),
+          )
+        : [];
+    const copiedVariantIdBySourceId = new Map(
+      source.variants
+        .map((variant, index) => [variant.id, copiedVariants[index]?.id])
+        .filter((entry): entry is [string, string] => Boolean(entry[1])),
+    );
 
     await createInitialStoreAssignments(tx, {
       organizationId: input.organizationId,
@@ -2669,26 +2749,37 @@ export const duplicateProduct = async (input: {
     });
 
     const assignedStoreIds = new Set(assignmentStores.map((store) => store.id));
-    const copiedBaseStorePrices = source.storePrices.filter((price) =>
-      assignedStoreIds.has(price.storeId),
-    );
-    if (copiedBaseStorePrices.length) {
+    const copiedStorePrices = copyPrice
+      ? source.storePrices.filter(
+          (price) =>
+            assignedStoreIds.has(price.storeId) &&
+            (price.variantKey === "BASE" || copiedVariantIdBySourceId.has(price.variantKey)),
+        )
+      : [];
+    if (copiedStorePrices.length) {
       await tx.storePrice.createMany({
-        data: copiedBaseStorePrices.map((price) => ({
-          organizationId: input.organizationId,
-          storeId: price.storeId,
-          productId: duplicate.id,
-          variantKey: "BASE",
-          priceKgs: price.priceKgs,
-          updatedById: input.actorId,
-        })),
+        data: copiedStorePrices.map((price) => {
+          const copiedVariantId =
+            price.variantKey === "BASE"
+              ? null
+              : (copiedVariantIdBySourceId.get(price.variantKey) ?? null);
+          return {
+            organizationId: input.organizationId,
+            storeId: price.storeId,
+            productId: duplicate.id,
+            variantId: copiedVariantId,
+            variantKey: copiedVariantId ?? "BASE",
+            priceKgs: price.priceKgs,
+            updatedById: input.actorId,
+          };
+        }),
         skipDuplicates: true,
       });
     }
 
-    const copiedReorderPolicies = source.reorderPolicies.filter((policy) =>
-      assignedStoreIds.has(policy.storeId),
-    );
+    const copiedReorderPolicies = copyMinimumStock
+      ? source.reorderPolicies.filter((policy) => assignedStoreIds.has(policy.storeId))
+      : [];
     if (copiedReorderPolicies.length) {
       await tx.reorderPolicy.createMany({
         data: copiedReorderPolicies.map((policy) => ({
@@ -2704,7 +2795,19 @@ export const duplicateProduct = async (input: {
       });
     }
 
-    if (source.isBundle && source.bundleComponents.length) {
+    if (copyOtherDetails && source.complianceFlags) {
+      await tx.productComplianceFlags.create({
+        data: {
+          organizationId: input.organizationId,
+          productId: duplicate.id,
+          requiresMarking: source.complianceFlags.requiresMarking,
+          requiresEttn: source.complianceFlags.requiresEttn,
+          markingType: source.complianceFlags.markingType,
+        },
+      });
+    }
+
+    if (copyOtherDetails && source.isBundle && source.bundleComponents.length) {
       await syncBundleComponents(tx, {
         organizationId: input.organizationId,
         productId: duplicate.id,
@@ -2718,6 +2821,80 @@ export const duplicateProduct = async (input: {
     }
 
     await ensureBaseSnapshots(tx, input.organizationId, duplicate.id, assignmentStores);
+    for (const store of assignmentStores) {
+      await ensureVariantSnapshots(tx, {
+        store,
+        productId: duplicate.id,
+        variants: copiedVariants,
+      });
+    }
+
+    if (copyCost && source.productCosts.length) {
+      const copiedCosts = source.productCosts.flatMap((cost) => {
+        const copiedVariantId =
+          cost.variantKey === "BASE"
+            ? null
+            : (copiedVariantIdBySourceId.get(cost.variantKey) ?? null);
+        if (cost.variantKey !== "BASE" && !copiedVariantId) {
+          return [];
+        }
+        return [
+          {
+            organizationId: input.organizationId,
+            productId: duplicate.id,
+            variantId: copiedVariantId,
+            variantKey: copiedVariantId ?? "BASE",
+            avgCostKgs: cost.avgCostKgs,
+            costBasisQty: copyInventory ? cost.costBasisQty : 0,
+          },
+        ];
+      });
+      if (copiedCosts.length) {
+        await tx.productCost.createMany({ data: copiedCosts, skipDuplicates: true });
+      }
+    }
+
+    let copiedInventoryRows = 0;
+    if (copyInventory) {
+      for (const snapshot of source.inventorySnapshots) {
+        if (!assignedStoreIds.has(snapshot.storeId)) {
+          continue;
+        }
+        const copiedVariantId = snapshot.variantId
+          ? (copiedVariantIdBySourceId.get(snapshot.variantId) ?? null)
+          : null;
+        if (snapshot.variantId && !copiedVariantId) {
+          continue;
+        }
+        const variantKey = copiedVariantId ?? "BASE";
+        await tx.inventorySnapshot.update({
+          where: {
+            storeId_productId_variantKey: {
+              storeId: snapshot.storeId,
+              productId: duplicate.id,
+              variantKey,
+            },
+          },
+          data: { onHand: snapshot.onHand, onOrder: 0 },
+        });
+        copiedInventoryRows += 1;
+        if (snapshot.onHand !== 0) {
+          await tx.stockMovement.create({
+            data: {
+              storeId: snapshot.storeId,
+              productId: duplicate.id,
+              variantId: copiedVariantId,
+              type: StockMovementType.ADJUSTMENT,
+              qtyDelta: snapshot.onHand,
+              referenceType: "PRODUCT_DUPLICATE",
+              referenceId: duplicate.id,
+              note: `Copied inventory from ${source.sku}`,
+              createdById: input.actorId,
+            },
+          });
+        }
+      }
+    }
 
     await writeAuditLog(tx, {
       organizationId: input.organizationId,
@@ -2733,7 +2910,11 @@ export const duplicateProduct = async (input: {
     return {
       productId: duplicate.id,
       sku: duplicate.sku,
+      status: input.status ?? "ACTIVE",
       copiedBarcodes: false,
+      omittedBarcodesCount: source.barcodes.length,
+      copiedVariantsCount: copiedVariants.length,
+      copiedInventoryRows,
     };
   });
 };

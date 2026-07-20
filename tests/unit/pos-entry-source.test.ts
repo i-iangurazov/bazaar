@@ -200,7 +200,9 @@ describe("pos entry navigation", () => {
     expect(pageSource).toContain("if (activeDraft?.id) {\n      handleResumeActiveDraft();");
     expect(pageSource).toContain("sale.status === CustomerOrderStatus.DRAFT");
     expect(pageSource).toContain("sale.status === CustomerOrderStatus.COMPLETED");
-    expect(migrationSource).toContain('DROP INDEX IF EXISTS "CustomerOrder_pos_active_draft_unique"');
+    expect(migrationSource).toContain(
+      'DROP INDEX IF EXISTS "CustomerOrder_pos_active_draft_unique"',
+    );
     expect(migrationSource).toContain('"isHeld" = false');
   });
 
@@ -284,7 +286,7 @@ describe("pos entry navigation", () => {
     expect(pageSource).toContain('data-testid="pos-mobile-discount-sheet"');
     expect(pageSource).toContain('data-testid="pos-mobile-discount-input"');
     expect(pageSource).toContain("{renderMobileDiscountSheet()}");
-    expect(pageSource).toContain("if (!hasLocalCartLines) {\n        setDiscountDraft(\"\");");
+    expect(pageSource).toContain('if (!hasLocalCartLines) {\n        setDiscountDraft("");');
     expect(pageSource).toContain("subtotalKgs: updatedDiscount.subtotalKgs");
     expect(pageSource).toContain("handleComplete");
     expect(pageSource).toContain('handleReceiptPdf("print", "precheck")');
@@ -328,10 +330,12 @@ describe("pos entry navigation", () => {
     );
     expect(pageSource).toContain("keepPreviousData: !useImmediateCatalogSearch");
     expect(pageSource).toContain("refetchOnWindowFocus: false");
-    expect(handleAddLineBlock.indexOf("pendingAddProductIdsRef.current.has(productId)")).toBeLessThan(
-      handleAddLineBlock.indexOf("applyOptimisticAdd(productForCart"),
+    expect(
+      handleAddLineBlock.indexOf("pendingAddProductIdsRef.current.has(productId)"),
+    ).toBeLessThan(handleAddLineBlock.indexOf("applyOptimisticAdd(productForCart"));
+    expect(handleAddLineBlock).toContain(
+      "const shouldIncrementExisting = options.incrementExisting ?? true;",
     );
-    expect(handleAddLineBlock).toContain("const shouldIncrementExisting = options.incrementExisting ?? true;");
     expect(handleAddLineBlock).toContain(
       "applyOptimisticAdd(productForCart, { incrementExisting: shouldIncrementExisting });",
     );
@@ -343,6 +347,30 @@ describe("pos entry navigation", () => {
     );
     expect(pageSource).toContain("const isPendingProduct = mobilePendingProductId === product.id;");
     expect(pageSource).toContain("data-product-id={product.id}");
+  });
+
+  it("shows real product identity in the mobile catalog and guards active receipts on back", async () => {
+    const pageSource = await readSource("src/app/(app)/pos/sell/page.tsx");
+    const mobileCatalogBlock = pageSource.slice(
+      pageSource.indexOf("const renderCatalogScreen"),
+      pageSource.indexOf("const renderScannerScreen"),
+    );
+
+    expect(mobileCatalogBlock).toContain("{product.name}");
+    expect(mobileCatalogBlock).toContain("product.sku?.trim()");
+    expect(mobileCatalogBlock).toContain("product.barcodes?.[0]?.value?.trim()");
+    expect(mobileCatalogBlock).toContain('t("sell.mobile.freePriceProduct")');
+    expect(mobileCatalogBlock).not.toContain(
+      'const productName = priceKgs === null ? t("sell.mobile.freePriceProduct") : product.name;',
+    );
+    expect(pageSource).toContain("const hasMobileNavigationRisk =");
+    expect(pageSource).toContain("const requestMobileExit = useCallback");
+    expect(pageSource).toContain('window.addEventListener("popstate", handlePopState)');
+    expect(pageSource).toContain('window.addEventListener("beforeunload", handleBeforeUnload)');
+    expect(pageSource).toContain("open={mobileExitConfirmationOpen}");
+    expect(pageSource).toContain('title={t("sell.mobile.exitTitle")}');
+    expect(pageSource).toContain("onClick={requestMobileExit}");
+    expect(pageSource).toContain("return isPhoneScreen ? MobilePosView() : DesktopPosSaleView();");
   });
 
   it("renders cashier products as readable rows with in-cart quantity controls", async () => {
@@ -394,7 +422,9 @@ describe("pos entry navigation", () => {
     expect(serviceSource).toContain("orderTotalMinorUnits > 0 && !normalizedPayments.length");
     expect(serviceSource).toContain("paymentTotalMinorUnits !== orderTotalMinorUnits");
     expect(routerSource).toContain("posCheckoutClientStateSchema");
-    expect(serviceSource).toContain("visibleCartLineCount: input.clientState?.visibleCartLineCount");
+    expect(serviceSource).toContain(
+      "visibleCartLineCount: input.clientState?.visibleCartLineCount",
+    );
     expect(serviceSource).toContain("serverLineCount: sale.lines.length");
     expect(serviceSource).toContain("idempotencyKey: input.idempotencyKey");
     expect(serviceSource).toContain("backendStack");

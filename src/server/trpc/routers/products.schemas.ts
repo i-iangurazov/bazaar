@@ -245,12 +245,33 @@ export const inlineUpdateProductInputSchema = z.object({
   patch: inlineUpdatePatchSchema,
 });
 
-export const duplicateProductInputSchema = z.object({
-  productId: z.string(),
-  sku: z.string().min(2).optional(),
-  copyImages: z.boolean().optional(),
-  storeId: z.string().optional(),
-});
+export const duplicateProductInputSchema = z
+  .object({
+    productId: z.string().min(1),
+    name: z.string().trim().min(2).max(300).optional(),
+    sku: z.string().min(2).optional(),
+    status: z.enum(["ACTIVE", "ARCHIVED"]).optional(),
+    copyImages: z.boolean().optional(),
+    copyInventory: z.boolean().optional(),
+    copyDescription: z.boolean().optional(),
+    copyCategory: z.boolean().optional(),
+    copyOtherDetails: z.boolean().optional(),
+    copyPrice: z.boolean().optional(),
+    copyCost: z.boolean().optional(),
+    copyVariants: z.boolean().optional(),
+    copyCharacteristics: z.boolean().optional(),
+    copySku: z.boolean().optional(),
+    storeId: z.string().optional(),
+  })
+  .superRefine((input, ctx) => {
+    if (input.copyInventory && input.copyVariants === false) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["copyVariants"],
+        message: "duplicateInventoryRequiresVariants",
+      });
+    }
+  });
 
 export const generateProductBarcodeInputSchema = z.object({
   productId: z.string().min(1),

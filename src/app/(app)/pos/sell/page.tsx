@@ -21,7 +21,7 @@ import {
   Storefront,
   User as UserGlyph,
 } from "@phosphor-icons/react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 
 import {
@@ -78,6 +78,7 @@ import {
 } from "@/lib/currencyDisplay";
 import { formatDateTime, formatNumber } from "@/lib/i18nFormat";
 import { parseMoneyInput } from "@/lib/moneyInput";
+import { hasMobilePosNavigationRisk } from "@/lib/mobilePosNavigationGuard";
 import { getQzTrayBinding, printPdfBlobViaQzTray, qzTrayErrorMessageKey } from "@/lib/qzTrayPrint";
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
 import {
@@ -407,7 +408,7 @@ const PosProductButton = memo(function PosProductButton({
           activateProduct();
         }
       }}
-      className={`group grid w-full cursor-pointer grid-cols-[64px_minmax(0,1fr)] items-center gap-3 rounded-md border border-border bg-card text-left shadow-sm transition hover:border-primary/50 hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-disabled:cursor-not-allowed aria-disabled:opacity-60 sm:grid-cols-[64px_minmax(0,1fr)_auto] dark:hover:bg-accent/40 ${
+      className={`group grid w-full cursor-pointer grid-cols-[64px_minmax(0,1fr)] items-center gap-3 rounded-md border border-border bg-card text-left shadow-sm transition hover:border-primary/50 hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-disabled:cursor-not-allowed aria-disabled:opacity-60 dark:hover:bg-accent/40 sm:grid-cols-[64px_minmax(0,1fr)_auto] ${
         variant === "mobile" ? "min-h-20 p-2" : "min-h-[92px] p-3"
       }`}
     >
@@ -516,6 +517,7 @@ const PosSellPage = () => {
   const tErrors = useTranslations("errors");
   const tMovementJournal = useTranslations("inventory.movementJournal");
   const locale = useLocale();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const trpcUtils = trpc.useUtils();
   const { toast } = useToast();
@@ -620,6 +622,7 @@ const PosSellPage = () => {
   const [mobileLineInputMode, setMobileLineInputMode] = useState<"price" | "qty">("qty");
   const [mobileKeypadReplaceNext, setMobileKeypadReplaceNext] = useState(true);
   const [mobileComment, setMobileComment] = useState("");
+  const [mobileExitConfirmationOpen, setMobileExitConfirmationOpen] = useState(false);
   const [isPhoneScreen, setIsPhoneScreen] = useState<boolean | null>(null);
   const lineSearchInputRef = useRef<HTMLInputElement | null>(null);
   const paymentsSectionRef = useRef<HTMLDivElement | null>(null);
@@ -640,6 +643,11 @@ const PosSellPage = () => {
   const lineSyncInFlightRef = useRef<Set<string>>(new Set());
   const lineSyncPendingRef = useRef<Set<string>>(new Set());
   const cartSessionVersionRef = useRef(0);
+  const mobileNavigationRiskRef = useRef(false);
+  const mobileHistoryGuardActiveRef = useRef(false);
+  const mobileHistoryCleanupRef = useRef(false);
+  const mobileExitConfirmedRef = useRef(false);
+  const mobileExitHrefRef = useRef("/pos");
   const visibleProductsRef = useRef<PosCatalogProduct[]>([]);
   const autoPrintedSaleIdRef = useRef<string | null>(null);
   const paymentsRef = useRef<PosPaymentDraft[]>(payments);
@@ -1228,7 +1236,8 @@ const PosSellPage = () => {
       shiftQuery.data?.store ?? selectedRegister?.store ?? null,
     ),
   );
-  const saleLines: PosCartLine[] = optimisticSaleLines ?? (sale?.lines as PosCartLine[] | undefined) ?? [];
+  const saleLines: PosCartLine[] =
+    optimisticSaleLines ?? (sale?.lines as PosCartLine[] | undefined) ?? [];
   const hasCartLines = saleLines.length > 0;
   const cartSubtotalKgs = calculateCartSubtotalKgs(saleLines);
   const discountDraftActive = discountEditorOpen || discountDraft.trim().length > 0;
@@ -1248,6 +1257,14 @@ const PosSellPage = () => {
   const cartTotalKgs = roundMoney(Math.max(0, cartSubtotalKgs - cartDiscountKgs));
   const cartDisplayTotal = roundMoney(displayMoneyFromKgs(cartTotalKgs, currencySource));
   const cartDisplayTotalDraft = Number.isFinite(cartDisplayTotal) ? String(cartDisplayTotal) : "";
+  const hasMobileNavigationRisk = hasMobilePosNavigationRisk({
+    cartLineCount: saleLines.length,
+    payments,
+    discountKgs: cartDiscountKgs,
+    comment: mobileComment,
+    hasCustomer: Boolean(selectedCustomer),
+    sellInDebt,
+  });
   const saleIdForPaymentInit = sale?.id ?? (saleId && hasCartLines ? saleId : undefined);
   const saleTotalForPaymentInit = hasCartLines ? cartTotalKgs : sale?.totalKgs;
   const saleCustomerName = sale?.customerName ?? null;
@@ -1256,6 +1273,90 @@ const PosSellPage = () => {
   const saleCustomerAddress = sale?.customerAddress ?? null;
   const saleMarkingEnabled = sale?.store.complianceProfile?.enableMarking ?? false;
   const saleMarkingMode = sale?.store.complianceProfile?.markingMode;
+
+  mobileNavigationRiskRef.current = hasMobileNavigationRisk;
+  mobileExitHrefRef.current = `/pos${registerId ? `?registerId=${registerId}` : ""}`;
+
+  const requestMobileExit = useCallback(() => {
+    if (isPhoneScreen && mobileNavigationRiskRef.current) {
+      setMobileExitConfirmationOpen(true);
+      return;
+    }
+    router.push(mobileExitHrefRef.current);
+  }, [isPhoneScreen, router]);
+
+  const confirmMobileExit = useCallback(() => {
+    setMobileExitConfirmationOpen(false);
+    if (mobileHistoryGuardActiveRef.current && typeof window !== "undefined") {
+      mobileExitConfirmedRef.current = true;
+      window.history.back();
+      return;
+    }
+    router.replace(mobileExitHrefRef.current);
+  }, [router]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    if (!isPhoneScreen) {
+      if (mobileHistoryGuardActiveRef.current) {
+        mobileHistoryGuardActiveRef.current = false;
+        window.history.back();
+      }
+      return;
+    }
+
+    const handlePopState = () => {
+      if (mobileExitConfirmedRef.current) {
+        mobileExitConfirmedRef.current = false;
+        mobileHistoryGuardActiveRef.current = false;
+        router.replace(mobileExitHrefRef.current);
+        return;
+      }
+      if (mobileHistoryCleanupRef.current) {
+        mobileHistoryCleanupRef.current = false;
+        mobileHistoryGuardActiveRef.current = false;
+        return;
+      }
+      if (!mobileNavigationRiskRef.current) {
+        return;
+      }
+
+      window.history.pushState({ bazaarMobilePosGuard: true }, "", window.location.href);
+      mobileHistoryGuardActiveRef.current = true;
+      setMobileExitConfirmationOpen(true);
+    };
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!mobileNavigationRiskRef.current) {
+        return;
+      }
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [isPhoneScreen, router]);
+
+  useEffect(() => {
+    if (!isPhoneScreen || typeof window === "undefined") {
+      return;
+    }
+    if (hasMobileNavigationRisk && !mobileHistoryGuardActiveRef.current) {
+      window.history.pushState({ bazaarMobilePosGuard: true }, "", window.location.href);
+      mobileHistoryGuardActiveRef.current = true;
+      return;
+    }
+    if (!hasMobileNavigationRisk && mobileHistoryGuardActiveRef.current) {
+      mobileHistoryCleanupRef.current = true;
+      window.history.back();
+    }
+  }, [hasMobileNavigationRisk, isPhoneScreen]);
 
   useEffect(() => {
     if (!mobilePendingProductId) {
@@ -1808,7 +1909,8 @@ const PosSellPage = () => {
         if (
           !shouldIncrementExisting &&
           currentLineBeforeServerAdd &&
-          (currentLineBeforeServerAdd.serverLineId || !isOptimisticLineId(currentLineBeforeServerAdd.id))
+          (currentLineBeforeServerAdd.serverLineId ||
+            !isOptimisticLineId(currentLineBeforeServerAdd.id))
         ) {
           return true;
         }
@@ -3964,9 +4066,7 @@ const PosSellPage = () => {
               </div>
             </>
           ) : (
-            <div className="bazaar-admin-empty min-h-40">
-              {t("history.empty")}
-            </div>
+            <div className="bazaar-admin-empty min-h-40">{t("history.empty")}</div>
           )}
 
           <div className="flex flex-col gap-2 border-t border-border pt-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
@@ -5789,7 +5889,7 @@ const PosSellPage = () => {
     if (mobileRedesignActive) {
       const showMobileRegisterPanel = !registerId || !selectedRegister || !hasOpenShift;
       const activeLine = mobileActiveLineId
-        ? saleLines.find((line) => line.id === mobileActiveLineId) ??
+        ? (saleLines.find((line) => line.id === mobileActiveLineId) ??
           saleLines.find((line) => line.serverLineId === mobileActiveLineId) ??
           saleLines.find((line) => {
             const remoteLineId = optimisticLineServerIdsRef.current[mobileActiveLineId];
@@ -5797,7 +5897,7 @@ const PosSellPage = () => {
               remoteLineId && (line.id === remoteLineId || line.serverLineId === remoteLineId),
             );
           }) ??
-          null
+          null)
         : null;
       const documentDate = new Date(sale?.createdAt ?? Date.now());
       const documentDateLabel = new Intl.DateTimeFormat(locale, {
@@ -5956,7 +6056,9 @@ const PosSellPage = () => {
           return "";
         }
         if (mobileLineInputMode === "price") {
-          return lineInputDrafts[activeLine.id]?.price ?? formatSaleMoneyDraft(activeLine.unitPriceKgs);
+          return (
+            lineInputDrafts[activeLine.id]?.price ?? formatSaleMoneyDraft(activeLine.unitPriceKgs)
+          );
         }
         return lineInputDrafts[activeLine.id]?.qty ?? String(activeLine.qty);
       };
@@ -5989,7 +6091,10 @@ const PosSellPage = () => {
             updateActiveLineInput(String(next));
           } else {
             const current = Math.trunc(Number(activeLineInputValue() || activeLine.qty));
-            const next = Math.max(1, (Number.isFinite(current) ? current : 1) + (key === "+" ? 1 : -1));
+            const next = Math.max(
+              1,
+              (Number.isFinite(current) ? current : 1) + (key === "+" ? 1 : -1),
+            );
             updateActiveLineInput(String(next));
           }
           setMobileKeypadReplaceNext(true);
@@ -6018,7 +6123,8 @@ const PosSellPage = () => {
         }
 
         const nextValue =
-          baseValue === "0" || (mobileLineInputMode === "qty" && baseValue === "1" && mobileKeypadReplaceNext)
+          baseValue === "0" ||
+          (mobileLineInputMode === "qty" && baseValue === "1" && mobileKeypadReplaceNext)
             ? key
             : `${baseValue}${key}`;
         updateActiveLineInput(nextValue);
@@ -6031,13 +6137,14 @@ const PosSellPage = () => {
             className="grid min-h-[68px] grid-cols-[40px_minmax(0,1fr)_58px] items-end gap-2 px-3 pb-3"
             style={{ paddingTop: "calc(0.55rem + env(safe-area-inset-top))" }}
           >
-            <Link
-              href={`/pos${registerId ? `?registerId=${registerId}` : ""}`}
+            <button
+              type="button"
               className="grid h-10 w-10 place-items-center text-white no-underline hover:no-underline"
+              onClick={requestMobileExit}
               aria-label={tCommon("back")}
             >
               <BackIcon className="h-6 w-6" aria-hidden />
-            </Link>
+            </button>
             <h1 className="truncate text-[19px] font-semibold leading-none tracking-normal">
               {t("entry.sell")}
             </h1>
@@ -6098,10 +6205,10 @@ const PosSellPage = () => {
       }) => {
         const content = (
           <>
-            <span className="grid h-8 w-8 shrink-0 place-items-center text-slate-400">
-              {icon}
-            </span>
-            <span className={cn("min-w-0 flex-1 text-[14px] leading-none", muted && "text-slate-400")}>
+            <span className="grid h-8 w-8 shrink-0 place-items-center text-slate-400">{icon}</span>
+            <span
+              className={cn("min-w-0 flex-1 text-[14px] leading-none", muted && "text-slate-400")}
+            >
               {label}
             </span>
             {value !== undefined ? (
@@ -6109,7 +6216,9 @@ const PosSellPage = () => {
                 {value}
               </span>
             ) : null}
-            {chevron ? <ChevronRightIcon className="h-5 w-5 shrink-0 text-slate-400" aria-hidden /> : null}
+            {chevron ? (
+              <ChevronRightIcon className="h-5 w-5 shrink-0 text-slate-400" aria-hidden />
+            ) : null}
           </>
         );
 
@@ -6335,11 +6444,15 @@ const PosSellPage = () => {
       const renderMobileLines = () =>
         hasCartLines ? (
           <section className="border-y border-slate-800 bg-slate-950/95 px-3 py-3">
-            <h2 className="mb-2 text-[15px] font-semibold text-primary">{t("sell.mobile.products")}</h2>
+            <h2 className="mb-2 text-[15px] font-semibold text-primary">
+              {t("sell.mobile.products")}
+            </h2>
             <div className="divide-y divide-slate-800">
               {saleLines.map((line) => {
                 const lineDiscountKgs = lineDiscountById.get(line.id) ?? 0;
-                const lineNetTotalKgs = roundMoney(Math.max(0, line.lineTotalKgs - lineDiscountKgs));
+                const lineNetTotalKgs = roundMoney(
+                  Math.max(0, line.lineTotalKgs - lineDiscountKgs),
+                );
                 return (
                   <button
                     key={line.id}
@@ -6467,7 +6580,9 @@ const PosSellPage = () => {
                       type="button"
                       className="rounded px-1 text-right font-semibold text-primary disabled:text-white disabled:opacity-60"
                       onClick={openMobileDiscountEditor}
-                      disabled={!saleId || !hasCartLines || isLineBusy || completeMutation.isLoading}
+                      disabled={
+                        !saleId || !hasCartLines || isLineBusy || completeMutation.isLoading
+                      }
                     >
                       {cartDiscountKgs > 0
                         ? formatSaleMoney(cartDiscountKgs)
@@ -6475,7 +6590,9 @@ const PosSellPage = () => {
                     </button>
                   </div>
                   <div className="flex items-end justify-between gap-3 border-t border-slate-700 pt-2.5">
-                    <span className="text-[15px] font-semibold text-white">{t("sell.amountDue")}</span>
+                    <span className="text-[15px] font-semibold text-white">
+                      {t("sell.amountDue")}
+                    </span>
                     <span className="text-[19px] font-bold text-white" data-testid="pos-cart-total">
                       {formatSaleMoney(cartTotalKgs)}
                     </span>
@@ -6483,7 +6600,10 @@ const PosSellPage = () => {
                 </div>
               </section>
 
-              <section ref={paymentsSectionRef} className="border-y border-slate-800 bg-slate-950/95 px-3 py-3">
+              <section
+                ref={paymentsSectionRef}
+                className="border-y border-slate-800 bg-slate-950/95 px-3 py-3"
+              >
                 <div className="flex items-center justify-between gap-3">
                   <h2 className="text-[15px] font-semibold leading-none text-primary">
                     {t("sell.paymentsTitle")}
@@ -6531,13 +6651,18 @@ const PosSellPage = () => {
 
                     <div className="mt-4 space-y-2">
                       {payments.map((payment, index) => (
-                        <div key={`${index}-${payment.method}`} className="grid grid-cols-[1fr_1fr_44px] gap-2">
+                        <div
+                          key={`${index}-${payment.method}`}
+                          className="grid grid-cols-[1fr_1fr_44px] gap-2"
+                        >
                           <Select
                             value={payment.method}
                             onValueChange={(value) =>
                               setPayments((current) =>
                                 current.map((item, itemIndex) =>
-                                  itemIndex === index ? { ...item, method: value as PosPaymentMethod } : item,
+                                  itemIndex === index
+                                    ? { ...item, method: value as PosPaymentMethod }
+                                    : item,
                                 ),
                               )
                             }
@@ -6546,10 +6671,18 @@ const PosSellPage = () => {
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value={PosPaymentMethod.CASH}>{t("payments.cash")}</SelectItem>
-                              <SelectItem value={PosPaymentMethod.CARD}>{t("payments.card")}</SelectItem>
-                              <SelectItem value={PosPaymentMethod.TRANSFER}>{t("payments.transfer")}</SelectItem>
-                              <SelectItem value={PosPaymentMethod.OTHER}>{t("payments.other")}</SelectItem>
+                              <SelectItem value={PosPaymentMethod.CASH}>
+                                {t("payments.cash")}
+                              </SelectItem>
+                              <SelectItem value={PosPaymentMethod.CARD}>
+                                {t("payments.card")}
+                              </SelectItem>
+                              <SelectItem value={PosPaymentMethod.TRANSFER}>
+                                {t("payments.transfer")}
+                              </SelectItem>
+                              <SelectItem value={PosPaymentMethod.OTHER}>
+                                {t("payments.other")}
+                              </SelectItem>
                             </SelectContent>
                           </Select>
                           <Input
@@ -6561,7 +6694,9 @@ const PosSellPage = () => {
                               }
                               setPayments((current) =>
                                 current.map((item, itemIndex) =>
-                                  itemIndex === index ? { ...item, amount: event.target.value } : item,
+                                  itemIndex === index
+                                    ? { ...item, amount: event.target.value }
+                                    : item,
                                 ),
                               );
                             }}
@@ -6576,7 +6711,9 @@ const PosSellPage = () => {
                             size="icon"
                             className="h-11 w-11"
                             onClick={() => removePaymentRow(index)}
-                            disabled={payments.length <= 1 || isLineBusy || completeMutation.isLoading}
+                            disabled={
+                              payments.length <= 1 || isLineBusy || completeMutation.isLoading
+                            }
                             aria-label={tCommon("delete")}
                           >
                             <DeleteIcon className="h-4 w-4" aria-hidden />
@@ -6584,7 +6721,12 @@ const PosSellPage = () => {
                         </div>
                       ))}
                       <div className="flex items-center justify-between gap-3">
-                        <Button type="button" variant="secondary" className="h-11" onClick={addPaymentRow}>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="h-11"
+                          onClick={addPaymentRow}
+                        >
                           {t("sell.addPayment")}
                         </Button>
                         {showPaymentTotalSummary ? (
@@ -6738,7 +6880,9 @@ const PosSellPage = () => {
                 <div>
                   <EmptyIcon className="mx-auto h-8 w-8" aria-hidden />
                   <p className="mt-3 text-base">
-                    {hasSearchTerm || selectedCategory ? t("sell.noSearchResults") : t("sell.catalogEmpty")}
+                    {hasSearchTerm || selectedCategory
+                      ? t("sell.noSearchResults")
+                      : t("sell.catalogEmpty")}
                   </p>
                 </div>
               </div>
@@ -6749,7 +6893,12 @@ const PosSellPage = () => {
                 {visibleProducts.map((product) => {
                   const priceKgs = product.effectivePriceKgs ?? product.basePriceKgs ?? null;
                   const primaryImage = product.images?.[0]?.url ?? product.photoUrl;
-                  const productName = priceKgs === null ? t("sell.mobile.freePriceProduct") : product.name;
+                  const productIdentifier = [
+                    enableSku ? product.sku?.trim() : null,
+                    enableBarcode ? product.barcodes?.[0]?.value?.trim() : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ");
                   const isPendingProduct = mobilePendingProductId === product.id;
                   return (
                     <button
@@ -6769,17 +6918,28 @@ const PosSellPage = () => {
                       <span className="grid h-10 w-10 place-items-center overflow-hidden rounded-[10px] bg-slate-800 text-slate-300">
                         {primaryImage ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={primaryImage} alt={product.name} className="h-full w-full object-cover" />
+                          <img
+                            src={primaryImage}
+                            alt={product.name}
+                            className="h-full w-full object-cover"
+                          />
                         ) : (
                           <EmptyIcon className="h-5 w-5" aria-hidden />
                         )}
                       </span>
                       <span className="min-w-0">
                         <span className="line-clamp-2 text-[14px] font-semibold leading-tight text-white">
-                          {productName}
+                          {product.name}
                         </span>
+                        {productIdentifier ? (
+                          <span className="mt-0.5 block truncate text-[11px] leading-tight text-slate-400">
+                            {productIdentifier}
+                          </span>
+                        ) : null}
                         <span className="mt-0.5 block text-[12px] font-semibold leading-none text-slate-300">
-                          {priceKgs === null ? formatSaleMoney(0) : formatSaleMoney(priceKgs)}
+                          {priceKgs === null
+                            ? t("sell.mobile.freePriceProduct")
+                            : formatSaleMoney(priceKgs)}
                         </span>
                       </span>
                       <span className="text-right text-[13px] font-semibold text-slate-300">
@@ -6821,7 +6981,9 @@ const PosSellPage = () => {
               <div className="mx-auto grid h-20 w-20 place-items-center rounded-full border border-slate-800 bg-slate-950">
                 <BarcodeIcon className="h-9 w-9 text-primary" aria-hidden />
               </div>
-              <h1 className="mt-4 text-[15px] font-semibold">{t("sell.mobile.scannerUnavailableTitle")}</h1>
+              <h1 className="mt-4 text-[15px] font-semibold">
+                {t("sell.mobile.scannerUnavailableTitle")}
+              </h1>
               <p className="mt-2 text-[13px] leading-5 text-slate-400">
                 {t("sell.mobile.scannerUnavailableDescription")}
               </p>
@@ -6927,7 +7089,9 @@ const PosSellPage = () => {
                     <span className="text-white">{formatSaleMoney(cartDiscountKgs)}</span>
                   </div>
                   <div className="mt-2 flex items-end justify-between gap-3 border-t border-slate-800 pt-2">
-                    <span className="text-[14px] font-semibold text-white">{t("sell.amountDue")}</span>
+                    <span className="text-[14px] font-semibold text-white">
+                      {t("sell.amountDue")}
+                    </span>
                     <span className="text-[19px] font-bold text-white">
                       {formatSaleMoney(cartTotalKgs)}
                     </span>
@@ -6960,7 +7124,9 @@ const PosSellPage = () => {
                     disabled={!saleId || isLineBusy || completeMutation.isLoading}
                     data-testid="pos-mobile-discount-apply"
                   >
-                    {updateDiscountMutation.isLoading ? tCommon("loading") : t("sell.applyDiscount")}
+                    {updateDiscountMutation.isLoading
+                      ? tCommon("loading")
+                      : t("sell.applyDiscount")}
                   </button>
                 </div>
               </form>
@@ -6989,7 +7155,9 @@ const PosSellPage = () => {
                 <h2 className="line-clamp-2 text-[15px] font-semibold leading-tight">
                   {activeLine.product.name}
                 </h2>
-                <p className="mt-1 truncate text-[13px] text-slate-400">{activeLine.product.name}</p>
+                <p className="mt-1 truncate text-[13px] text-slate-400">
+                  {activeLine.product.name}
+                </p>
               </div>
 
               <div className="mt-3 space-y-2.5">
@@ -7008,7 +7176,8 @@ const PosSellPage = () => {
                     {t("sell.mobile.salePrice")}
                   </span>
                   <span className="text-[19px] font-semibold" data-testid="pos-line-price">
-                    {lineInputDrafts[activeLine.id]?.price ?? formatSaleMoneyDraft(activeLine.unitPriceKgs)}
+                    {lineInputDrafts[activeLine.id]?.price ??
+                      formatSaleMoneyDraft(activeLine.unitPriceKgs)}
                   </span>
                 </button>
                 <button
@@ -7056,16 +7225,18 @@ const PosSellPage = () => {
               </button>
 
               <div className="mt-3 grid grid-cols-4 gap-2.5">
-                {["1", "2", "3", "+", "4", "5", "6", "-", "7", "8", "9", "=", ",", "0"].map((key) => (
-                  <button
-                    key={key}
-                    type="button"
-                    className="h-11 rounded-[7px] bg-slate-800 text-[19px] font-semibold text-white"
-                    onClick={() => handleMobileKeypadPress(key)}
-                  >
-                    {key}
-                  </button>
-                ))}
+                {["1", "2", "3", "+", "4", "5", "6", "-", "7", "8", "9", "=", ",", "0"].map(
+                  (key) => (
+                    <button
+                      key={key}
+                      type="button"
+                      className="h-11 rounded-[7px] bg-slate-800 text-[19px] font-semibold text-white"
+                      onClick={() => handleMobileKeypadPress(key)}
+                    >
+                      {key}
+                    </button>
+                  ),
+                )}
                 <button
                   type="button"
                   className="col-span-2 h-11 rounded-[7px] bg-primary text-[19px] font-semibold text-white"
@@ -7087,6 +7258,26 @@ const PosSellPage = () => {
               : renderSaleScreen()}
           {renderMobileDiscountSheet()}
           {renderLineItemSheet()}
+          <Modal
+            open={mobileExitConfirmationOpen}
+            onOpenChange={setMobileExitConfirmationOpen}
+            title={t("sell.mobile.exitTitle")}
+            subtitle={t("sell.mobile.exitDescription")}
+            mobileSheet
+          >
+            <ModalFooter>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setMobileExitConfirmationOpen(false)}
+              >
+                {t("sell.mobile.exitStay")}
+              </Button>
+              <Button type="button" variant="danger" onClick={confirmMobileExit}>
+                {t("sell.mobile.exitLeave")}
+              </Button>
+            </ModalFooter>
+          </Modal>
           {MobileCustomerSheet()}
           {CustomerEditModal()}
           {ReceiptJournalModal()}

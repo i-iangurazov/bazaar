@@ -18,6 +18,7 @@ import {
   ProductEditorSaveBar,
 } from "@/components/product-editor-layout";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
+import { ProductDuplicateDialog } from "@/components/products/product-duplicate-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -373,27 +374,6 @@ const ProductDetailPage = () => {
         receivingDraftKey,
       })
     : "/products";
-  const openDuplicateCreateFlow = (copyImages: boolean) => {
-    const params = new URLSearchParams({
-      duplicateFrom: productId,
-      copyImages: copyImages ? "1" : "0",
-    });
-    const nextStoreId = pricingStoreId || returnStoreId || selectedSettingsStore?.storeId || "";
-    if (nextStoreId) {
-      params.set("storeId", nextStoreId);
-    }
-    if (returnTo) {
-      params.set("returnTo", returnTo);
-    }
-    if (returnSource) {
-      params.set("returnSource", returnSource);
-    }
-    if (receivingDraftKey) {
-      params.set("receivingDraftKey", receivingDraftKey);
-    }
-    setDuplicateDialogOpen(false);
-    router.push(`/products/new?${params.toString()}`);
-  };
   const updateMutation = trpc.products.update.useMutation({
     onSuccess: async () => {
       const refreshes: Promise<unknown>[] = [
@@ -2501,32 +2481,12 @@ const ProductDetailPage = () => {
           </FormActions>
         </div>
       </Modal>
-      <Modal
+      <ProductDuplicateDialog
         open={duplicateDialogOpen}
         onOpenChange={setDuplicateDialogOpen}
-        title={t("duplicateDialogTitle")}
-        subtitle={productQuery.data.name}
-        mobileSheet
-      >
-        <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">{t("duplicateDialogText")}</p>
-          <FormActions>
-            <Button type="button" variant="ghost" onClick={() => setDuplicateDialogOpen(false)}>
-              {tCommon("cancel")}
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => openDuplicateCreateFlow(false)}
-            >
-              {t("duplicateWithoutPhotos")}
-            </Button>
-            <Button type="button" onClick={() => openDuplicateCreateFlow(true)}>
-              {t("duplicateWithPhotos")}
-            </Button>
-          </FormActions>
-        </div>
-      </Modal>
+        productId={productId}
+        productName={productQuery.data.name}
+      />
       {confirmDialog}
     </ProductEditorPage>
   );

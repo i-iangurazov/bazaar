@@ -364,7 +364,7 @@ describeDb("products", () => {
     expect(noPhotoProduct.photoUrl).toBeNull();
     expect(noPhotoProduct.images).toHaveLength(0);
     expect(noPhotoProduct.barcodes).toHaveLength(0);
-    expect(noPhotoProduct.variants[0]?.sku).toBeNull();
+    expect(noPhotoProduct.variants[0]?.sku).toBe("DUP-SOURCE-L-COPY");
     expect(noPhotoProduct.inventorySnapshots.find((row) => row.storeId === store.id)?.onHand).toBe(
       0,
     );
@@ -413,6 +413,223 @@ describeDb("products", () => {
     await expect(
       prisma.inventorySnapshot.findMany({ where: { productId: duplicate.productId } }),
     ).resolves.toHaveLength(0);
+  });
+
+  it("duplicates selected variant data and store-scoped inventory transactionally", async () => {
+    const { org, store, adminUser, baseUnit } = await seedBase();
+    const secondStore = await prisma.store.create({
+      data: {
+        organizationId: org.id,
+        name: "Duplicate Branch",
+        code: "DUP-BRANCH",
+      },
+    });
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+    });
+    const source = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-product-advanced-duplicate-source",
+      sku: "ADV-DUP-1",
+      name: "Advanced Duplicate Source",
+      category: "Footwear",
+      categories: ["Footwear", "Summer"],
+      baseUnitId: baseUnit.id,
+      basePriceKgs: 150,
+      avgCostKgs: 90,
+      storeId: store.id,
+      minStock: 3,
+      description: "Source description",
+      images: [{ url: `/uploads/product-images/${org.id}/advanced-duplicate.webp`, position: 0 }],
+      barcodes: ["ADV-DUP-BARCODE"],
+      variants: [
+        { name: "Small", sku: "ADV-DUP-S", attributes: { size: "S" }, initialOnHand: 2 },
+        { name: "Large", sku: "ADV-DUP-L", attributes: { size: "L" }, initialOnHand: 5 },
+      ],
+    });
+    const sourceVariants = await prisma.productVariant.findMany({
+      where: { productId: source.id },
+      orderBy: { name: "asc" },
+    });
+    const sourceVariantByName = new Map(sourceVariants.map((variant) => [variant.name, variant]));
+    const sourceLarge = sourceVariantByName.get("Large")!;
+    const sourceSmall = sourceVariantByName.get("Small")!;
+
+    await prisma.storeProduct.create({
+      data: {
+        organizationId: org.id,
+        storeId: secondStore.id,
+        productId: source.id,
+        assignedById: adminUser.id,
+      },
+    });
+    await prisma.inventorySnapshot.createMany({
+      data: [
+        {
+          storeId: secondStore.id,
+          productId: source.id,
+          variantKey: "BASE",
+          onHand: 0,
+        },
+        {
+          storeId: secondStore.id,
+          productId: source.id,
+          variantId: sourceSmall.id,
+          variantKey: sourceSmall.id,
+          onHand: 7,
+        },
+        {
+          storeId: secondStore.id,
+          productId: source.id,
+          variantId: sourceLarge.id,
+          variantKey: sourceLarge.id,
+          onHand: 11,
+        },
+      ],
+    });
+    await prisma.reorderPolicy.create({
+      data: {
+        storeId: secondStore.id,
+        productId: source.id,
+        minStock: 6,
+        leadTimeDays: 8,
+        reviewPeriodDays: 9,
+        safetyStockDays: 4,
+      },
+    });
+    await prisma.productCost.create({
+      data: {
+        organizationId: org.id,
+        productId: source.id,
+        variantId: sourceLarge.id,
+        variantKey: sourceLarge.id,
+        avgCostKgs: 95,
+        costBasisQty: 16,
+      },
+    });
+    await prisma.storePrice.createMany({
+      data: [
+        {
+          organizationId: org.id,
+          storeId: store.id,
+          productId: source.id,
+          variantId: sourceSmall.id,
+          variantKey: sourceSmall.id,
+          priceKgs: 160,
+          updatedById: adminUser.id,
+        },
+        {
+          organizationId: org.id,
+          storeId: secondStore.id,
+          productId: source.id,
+          variantId: sourceLarge.id,
+          variantKey: sourceLarge.id,
+          priceKgs: 175,
+          updatedById: adminUser.id,
+        },
+      ],
+    });
+
+    const result = await caller.products.duplicate({
+      productId: source.id,
+      name: "Advanced Duplicate Copy",
+      status: "ACTIVE",
+      copyImages: true,
+      copyInventory: true,
+      copyDescription: true,
+      copyCategory: true,
+      copyOtherDetails: true,
+      copyPrice: true,
+      copyCost: true,
+      copyVariants: true,
+      copyCharacteristics: true,
+      copySku: true,
+    });
+    const duplicate = await prisma.product.findUniqueOrThrow({
+      where: { id: result.productId },
+      include: {
+        barcodes: true,
+        images: true,
+        inventorySnapshots: true,
+        productCosts: true,
+        reorderPolicies: true,
+        storePrices: true,
+        storeProducts: true,
+        variants: true,
+      },
+    });
+    const copiedVariantByName = new Map(
+      duplicate.variants.map((variant) => [variant.name, variant]),
+    );
+    const copiedLarge = copiedVariantByName.get("Large")!;
+    const copiedSmall = copiedVariantByName.get("Small")!;
+    const copiedStock = new Map(
+      duplicate.inventorySnapshots.map((snapshot) => [
+        `${snapshot.storeId}:${snapshot.variantId ?? "BASE"}`,
+        snapshot.onHand,
+      ]),
+    );
+
+    expect(duplicate.name).toBe("Advanced Duplicate Copy");
+    expect(duplicate.sku).toBe("ADV-DUP-1-COPY");
+    expect(duplicate.description).toBe("Source description");
+    expect(duplicate.categories).toEqual(["Footwear", "Summer"]);
+    expect(duplicate.images).toHaveLength(1);
+    expect(duplicate.barcodes).toHaveLength(0);
+    expect(result.omittedBarcodesCount).toBe(1);
+    expect(copiedSmall.sku).toBe("ADV-DUP-S-COPY");
+    expect(copiedSmall.attributes).toEqual({ size: "S" });
+    expect(copiedStock.get(`${store.id}:${copiedSmall.id}`)).toBe(2);
+    expect(copiedStock.get(`${store.id}:${copiedLarge.id}`)).toBe(5);
+    expect(copiedStock.get(`${secondStore.id}:${copiedSmall.id}`)).toBe(7);
+    expect(copiedStock.get(`${secondStore.id}:${copiedLarge.id}`)).toBe(11);
+    expect(duplicate.storeProducts).toHaveLength(2);
+    expect(duplicate.reorderPolicies.find((policy) => policy.storeId === store.id)?.minStock).toBe(
+      3,
+    );
+    expect(
+      duplicate.reorderPolicies.find((policy) => policy.storeId === secondStore.id)?.minStock,
+    ).toBe(6);
+    expect(
+      duplicate.productCosts
+        .find((cost) => cost.variantId === copiedLarge.id)
+        ?.avgCostKgs.toNumber(),
+    ).toBe(95);
+    expect(
+      duplicate.storePrices
+        .find((price) => price.storeId === secondStore.id && price.variantId === copiedLarge.id)
+        ?.priceKgs.toNumber(),
+    ).toBe(175);
+    await expect(
+      prisma.stockMovement.count({
+        where: { productId: duplicate.id, referenceType: "PRODUCT_DUPLICATE" },
+      }),
+    ).resolves.toBe(4);
+
+    const noInventoryResult = await caller.products.duplicate({
+      productId: source.id,
+      name: "Advanced Duplicate No Inventory",
+      copyInventory: false,
+      copyVariants: true,
+    });
+    const noInventorySnapshots = await prisma.inventorySnapshot.findMany({
+      where: { productId: noInventoryResult.productId },
+    });
+    expect(noInventorySnapshots.every((snapshot) => snapshot.onHand === 0)).toBe(true);
+
+    const noVariantsResult = await caller.products.duplicate({
+      productId: source.id,
+      name: "Advanced Duplicate No Variants",
+      copyInventory: false,
+      copyVariants: false,
+    });
+    await expect(
+      prisma.productVariant.count({ where: { productId: noVariantsResult.productId } }),
+    ).resolves.toBe(0);
   });
 
   it("stores multiple categories and keeps the first one as primary", async () => {

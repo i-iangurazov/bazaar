@@ -208,7 +208,23 @@ export const duplicateProductMutation = async ({
   input,
   ...ctx
 }: ProductMutationContext & {
-  input: { productId: string; sku?: string; copyImages?: boolean; storeId?: string };
+  input: {
+    productId: string;
+    name?: string;
+    sku?: string;
+    status?: "ACTIVE" | "ARCHIVED";
+    copyImages?: boolean;
+    copyInventory?: boolean;
+    copyDescription?: boolean;
+    copyCategory?: boolean;
+    copyOtherDetails?: boolean;
+    copyPrice?: boolean;
+    copyCost?: boolean;
+    copyVariants?: boolean;
+    copyCharacteristics?: boolean;
+    copySku?: boolean;
+    storeId?: string;
+  };
 }) => {
   try {
     return await duplicateProduct({
@@ -216,8 +232,19 @@ export const duplicateProductMutation = async ({
       actorId: ctx.actorId,
       requestId: ctx.requestId,
       productId: input.productId,
+      name: input.name,
       sku: input.sku,
+      status: input.status,
       copyImages: input.copyImages,
+      copyInventory: input.copyInventory,
+      copyDescription: input.copyDescription,
+      copyCategory: input.copyCategory,
+      copyOtherDetails: input.copyOtherDetails,
+      copyPrice: input.copyPrice,
+      copyCost: input.copyCost,
+      copyVariants: input.copyVariants,
+      copyCharacteristics: input.copyCharacteristics,
+      copySku: input.copySku,
       storeId: input.storeId,
     });
   } catch (error) {
