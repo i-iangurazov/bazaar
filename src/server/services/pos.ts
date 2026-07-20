@@ -619,6 +619,7 @@ const selectPosSaleDraftSummary = {
   customerEmail: true,
   customerPhone: true,
   customerAddress: true,
+  notes: true,
   isHeld: true,
   heldAt: true,
 } satisfies Prisma.CustomerOrderSelect;
@@ -2094,6 +2095,7 @@ export const getActivePosSaleDraft = async (input: {
       customerEmail: true,
       customerPhone: true,
       customerAddress: true,
+      notes: true,
       isHeld: true,
       heldAt: true,
     },
@@ -2369,6 +2371,66 @@ export const updatePosSaleCustomer = async (input: {
         customerPhone: updated.customerPhone,
         customerAddress: updated.customerAddress,
       }),
+      requestId: input.requestId,
+    });
+
+    return updated;
+  });
+};
+
+export const updatePosSaleNotes = async (input: {
+  organizationId: string;
+  saleId: string;
+  notes?: string | null;
+  actorId: string;
+  user?: StoreAccessUser;
+  requestId: string;
+}) => {
+  return prisma.$transaction(async (tx) => {
+    const sale = await tx.customerOrder.findFirst({
+      where: {
+        id: input.saleId,
+        organizationId: input.organizationId,
+        isPosSale: true,
+      },
+      select: {
+        id: true,
+        status: true,
+        storeId: true,
+        notes: true,
+      },
+    });
+    if (!sale) {
+      throw new AppError("posSaleNotFound", "NOT_FOUND", 404);
+    }
+    if (input.user) {
+      await assertUserCanAccessStore(tx, input.user, sale.storeId);
+    }
+    if (sale.status !== CustomerOrderStatus.DRAFT) {
+      throw new AppError("posSaleNotEditable", "CONFLICT", 409);
+    }
+
+    const notes = input.notes?.trim() || null;
+    const updated = await tx.customerOrder.update({
+      where: { id: sale.id },
+      data: {
+        notes,
+        updatedById: input.actorId,
+      },
+      select: {
+        id: true,
+        notes: true,
+      },
+    });
+
+    await writeAuditLog(tx, {
+      organizationId: input.organizationId,
+      actorId: input.actorId,
+      action: "POS_SALE_NOTES_UPDATE",
+      entity: "CustomerOrder",
+      entityId: sale.id,
+      before: toJson({ notes: sale.notes }),
+      after: toJson({ notes: updated.notes }),
       requestId: input.requestId,
     });
 

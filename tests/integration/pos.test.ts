@@ -231,10 +231,13 @@ describeDb("pos", () => {
 
     const sale = await caller.pos.sales.createDraft({ registerId: register.id });
     await caller.pos.sales.addLine({ saleId: sale.id, productId: product.id, qty: 2 });
+    await caller.pos.sales.updateDiscount({ saleId: sale.id, discountKgs: 25 });
+    await caller.pos.sales.updateNotes({ saleId: sale.id, notes: "Mobile held receipt note" });
 
     const held = await caller.pos.sales.holdDraft({ saleId: sale.id });
     expect(held.isHeld).toBe(true);
     expect(held.lineCount).toBe(1);
+    expect(held.notes).toBe("Mobile held receipt note");
 
     const activeAfterHold = await caller.pos.sales.activeDraft({ registerId: register.id });
     expect(activeAfterHold).toBeNull();
@@ -268,6 +271,7 @@ describeDb("pos", () => {
     expect(heldOnly.items).toHaveLength(1);
     expect(heldOnly.items[0]?.id).toBe(sale.id);
     expect(heldOnly.items[0]?.isHeld).toBe(true);
+    expect(heldOnly.items[0]?.notes).toBe("Mobile held receipt note");
 
     const activeOnlyAfterHold = await caller.pos.sales.list({
       registerId: register.id,
@@ -314,6 +318,7 @@ describeDb("pos", () => {
       registerId: register.id,
     });
     expect(resumed.isHeld).toBe(false);
+    expect(resumed.notes).toBe("Mobile held receipt note");
     const canceledNewSale = await prisma.customerOrder.findUnique({ where: { id: nextSale.id } });
     expect(canceledNewSale?.status).toBe("CANCELED");
 
@@ -332,12 +337,27 @@ describeDb("pos", () => {
     const saleDetail = await caller.pos.sales.get({ saleId: sale.id });
     expect(saleDetail?.lines).toHaveLength(1);
     expect(saleDetail?.lines[0]?.qty).toBe(2);
-    expect(Number(saleDetail?.totalKgs ?? 0)).toBe(250);
+    expect(Number(saleDetail?.discountKgs ?? 0)).toBe(25);
+    expect(Number(saleDetail?.totalKgs ?? 0)).toBe(225);
+    expect(saleDetail?.notes).toBe("Mobile held receipt note");
 
-    await caller.pos.sales.cancelDraft({ saleId: sale.id });
+    await caller.pos.sales.complete({
+      saleId: sale.id,
+      idempotencyKey: "pos-held-resumed-complete-1",
+      payments: [{ method: PosPaymentMethod.CASH, amountKgs: 225 }],
+    });
+    const completedResumedSale = await prisma.customerOrder.findUnique({
+      where: { id: sale.id },
+      include: { payments: true },
+    });
+    expect(completedResumedSale?.status).toBe("COMPLETED");
+    expect(completedResumedSale?.isHeld).toBe(false);
+    expect(completedResumedSale?.payments).toHaveLength(1);
+    expect(await caller.pos.sales.activeDraft({ registerId: register.id })).toBeNull();
+
     await caller.pos.shifts.close({
       shiftId: shift.id,
-      closingCashCountedKgs: 0,
+      closingCashCountedKgs: 225,
       idempotencyKey: "pos-close-held-cleared-1",
     });
 

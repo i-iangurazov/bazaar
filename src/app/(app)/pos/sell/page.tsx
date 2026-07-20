@@ -77,6 +77,10 @@ import {
   resolveCurrency,
 } from "@/lib/currencyDisplay";
 import { formatDateTime, formatNumber } from "@/lib/i18nFormat";
+import {
+  resolveMobilePosCompletionAttempt,
+  type MobilePosCompletionAttempt,
+} from "@/lib/mobilePosState";
 import { parseMoneyInput } from "@/lib/moneyInput";
 import { hasMobilePosNavigationRisk } from "@/lib/mobilePosNavigationGuard";
 import { getQzTrayBinding, printPdfBlobViaQzTray, qzTrayErrorMessageKey } from "@/lib/qzTrayPrint";
@@ -656,6 +660,8 @@ const PosSellPage = () => {
     totalKgs: null,
   });
   const completeSubmitInFlightRef = useRef(false);
+  const completionAttemptRef = useRef<MobilePosCompletionAttempt | null>(null);
+  const mobileCommentHydratedSaleIdRef = useRef<string | null>(null);
   const receiptEditDeepLinkRef = useRef<string | null>(null);
   const isFromMovements = searchParams.get("from") === "movements";
   const movementReturnHref = searchParams.get("returnTo") ?? "/inventory/movements";
@@ -906,6 +912,7 @@ const PosSellPage = () => {
     pendingCartMutationCountRef.current = 0;
     draftCreationRef.current = null;
     completeSubmitInFlightRef.current = false;
+    completionAttemptRef.current = null;
     optimisticLineServerIdsRef.current = {};
     removedOptimisticLineIdsRef.current.clear();
   }, []);
@@ -975,6 +982,8 @@ const PosSellPage = () => {
       setMobileActiveLineId(null);
       setMobilePendingProductId(null);
       setMobilePendingLineInputMode("qty");
+      setMobileComment("");
+      mobileCommentHydratedSaleIdRef.current = null;
       setOptimisticSaleLines(null);
       clearCartRuntimeSyncState();
       setLineInputDrafts({});
@@ -1015,6 +1024,8 @@ const PosSellPage = () => {
       setMobileActiveLineId(null);
       setMobilePendingProductId(null);
       setMobilePendingLineInputMode("qty");
+      setMobileComment("");
+      mobileCommentHydratedSaleIdRef.current = null;
       setOptimisticSaleLines(null);
       clearCartRuntimeSyncState();
       setLineInputDrafts({});
@@ -1025,6 +1036,9 @@ const PosSellPage = () => {
         trpcUtils.pos.sales.list.invalidate(),
         shiftQuery.refetch(),
       ]).catch(() => undefined);
+      if (isPhoneScreen === true) {
+        setReceiptJournalOpen(true);
+      }
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
@@ -1036,7 +1050,9 @@ const PosSellPage = () => {
       clearActiveDraftCache();
       setLastCompletedSale(null);
       setAutoReceiptStatus("idle");
-      setMobileCheckoutOpen(true);
+      setMobileCheckoutOpen(false);
+      setMobileScreen("sale");
+      setMobileSaleTab("document");
       setDiscountEditorOpen(false);
       setCustomerSelectorOpen(false);
       setCustomerSearch("");
@@ -1056,6 +1072,8 @@ const PosSellPage = () => {
       clearCartRuntimeSyncState();
       setLineInputDrafts({});
       paymentAutoFillRef.current = { saleId: null, totalKgs: null };
+      setMobileComment(result.notes ?? "");
+      mobileCommentHydratedSaleIdRef.current = result.id;
       setSaleId(result.id);
       setReceiptJournalOpen(false);
       setJournalDetailSaleId(null);
@@ -1093,6 +1111,17 @@ const PosSellPage = () => {
         saleId ? trpcUtils.pos.sales.get.invalidate({ saleId }) : Promise.resolve(),
         activeDraftQuery.refetch(),
       ]);
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+
+  const updateNotesMutation = trpc.pos.sales.updateNotes.useMutation({
+    onSuccess: (result) => {
+      trpcUtils.pos.sales.get.setData({ saleId: result.id }, (current) =>
+        current ? { ...current, notes: result.notes } : current,
+      );
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
@@ -1177,55 +1206,7 @@ const PosSellPage = () => {
     }
   }, []);
 
-  const completeMutation = trpc.pos.sales.complete.useMutation({
-    onSuccess: async (result) => {
-      clearActiveDraftCache();
-      setLastCompletedSale({
-        id: result.id,
-        number: result.number,
-        kkmStatus: result.kkmStatus,
-      });
-      setAutoReceiptStatus("idle");
-      setSaleId(null);
-      setPayments([createDefaultPosPaymentDraft()]);
-      setDiscountDraft("");
-      setDiscountEditorOpen(false);
-      setSellInDebt(false);
-      setDebtFullName("");
-      setSelectedCustomer(null);
-      setCustomerSelectorOpen(false);
-      setCustomerSearch("");
-      setCustomerCreateOpen(false);
-      setNewCustomerEmail("");
-      setNewCustomerAddress("");
-      setCustomerEditOpen(false);
-      setMobileCheckoutOpen(true);
-      setMobileScreen("sale");
-      setMobileSaleTab("payment");
-      setMobileActiveLineId(null);
-      setMobilePendingProductId(null);
-      setMobilePendingLineInputMode("qty");
-      setOptimisticSaleLines(null);
-      clearCartRuntimeSyncState();
-      setLineInputDrafts({});
-      paymentAutoFillRef.current = { saleId: null, totalKgs: null };
-      void Promise.all([
-        shiftQuery.refetch(),
-        activeDraftQuery.refetch(),
-        trpcUtils.pos.sales.list.invalidate(),
-      ]).catch(() => undefined);
-    },
-    onError: (error) => {
-      toast({ variant: "error", description: translateError(tErrors, error) });
-      const targetSaleId = saleId;
-      setOptimisticSaleLines(null);
-      clearCartRuntimeSyncState();
-      if (targetSaleId) {
-        void trpcUtils.pos.sales.get.invalidate({ saleId: targetSaleId }).catch(() => undefined);
-      }
-      void activeDraftQuery.refetch().catch(() => undefined);
-    },
-  });
+  const completeMutation = trpc.pos.sales.complete.useMutation();
 
   const sale = saleQuery.data;
   const activeDraft = activeDraftQuery.data;
@@ -1407,6 +1388,8 @@ const PosSellPage = () => {
     clearCartRuntimeSyncState();
     setLineInputDrafts({});
     paymentAutoFillRef.current = { saleId: null, totalKgs: null };
+    setMobileComment(activeDraft.notes ?? "");
+    mobileCommentHydratedSaleIdRef.current = activeDraft.id;
     setSaleId(activeDraft.id);
   }, [
     activeDraft?.customerAddress,
@@ -1414,6 +1397,7 @@ const PosSellPage = () => {
     activeDraft?.customerName,
     activeDraft?.customerPhone,
     activeDraft?.id,
+    activeDraft?.notes,
     clearCartRuntimeSyncState,
     completeMutation.isLoading,
     lastCompletedSale,
@@ -1518,6 +1502,7 @@ const PosSellPage = () => {
     setMobileLineInputMode("qty");
     setMobileKeypadReplaceNext(true);
     setMobileComment("");
+    mobileCommentHydratedSaleIdRef.current = null;
     autoPrintedSaleIdRef.current = null;
   }, [clearCartRuntimeSyncState, registerId, setOptimisticSaleLines, setPayments]);
 
@@ -1593,6 +1578,14 @@ const PosSellPage = () => {
   }, [sale?.id, saleCustomerAddress, saleCustomerEmail, saleCustomerName, saleCustomerPhone]);
 
   useEffect(() => {
+    if (!sale?.id || mobileCommentHydratedSaleIdRef.current === sale.id) {
+      return;
+    }
+    setMobileComment(sale.notes ?? "");
+    mobileCommentHydratedSaleIdRef.current = sale.id;
+  }, [sale?.id, sale?.notes]);
+
+  useEffect(() => {
     if (!sale?.lines?.length) {
       setMarkingInput({});
       return;
@@ -1607,6 +1600,7 @@ const PosSellPage = () => {
     removeLineMutation.isLoading ||
     updateDiscountMutation.isLoading ||
     updateCustomerMutation.isLoading ||
+    updateNotesMutation.isLoading ||
     upsertMarkingCodesMutation.isLoading ||
     cancelDraftMutation.isLoading ||
     holdDraftMutation.isLoading ||
@@ -2555,6 +2549,100 @@ const PosSellPage = () => {
     }
   }, [flushPendingLineSyncs, waitForCartSync]);
 
+  const persistMobileComment = async (targetSaleId: string) => {
+    if (isPhoneScreen !== true) {
+      return;
+    }
+    const notes = mobileComment.trim() || null;
+    const persistedNotes = sale?.id === targetSaleId ? sale.notes?.trim() || null : null;
+    if (notes === persistedNotes) {
+      return;
+    }
+    await updateNotesMutation.mutateAsync({ saleId: targetSaleId, notes });
+    mobileCommentHydratedSaleIdRef.current = targetSaleId;
+  };
+
+  const handleConfirmedCompletion = async (result: {
+    id: string;
+    number: string;
+    kkmStatus: "NOT_SENT" | "SENT" | "FAILED";
+  }) => {
+    clearActiveDraftCache();
+    setLastCompletedSale(result);
+    setAutoReceiptStatus("idle");
+    setSaleId(null);
+    setPayments([createDefaultPosPaymentDraft()]);
+    setDiscountDraft("");
+    setDiscountEditorOpen(false);
+    setSellInDebt(false);
+    setDebtFullName("");
+    setSelectedCustomer(null);
+    setCustomerSelectorOpen(false);
+    setCustomerSearch("");
+    setCustomerCreateOpen(false);
+    setNewCustomerEmail("");
+    setNewCustomerAddress("");
+    setCustomerEditOpen(false);
+    setMobileCheckoutOpen(true);
+    setMobileScreen("sale");
+    setMobileSaleTab("payment");
+    setMobileActiveLineId(null);
+    setMobilePendingProductId(null);
+    setMobilePendingLineInputMode("qty");
+    setMobileComment("");
+    mobileCommentHydratedSaleIdRef.current = null;
+    setOptimisticSaleLines(null);
+    clearCartRuntimeSyncState();
+    setLineInputDrafts({});
+    paymentAutoFillRef.current = { saleId: null, totalKgs: null };
+    void Promise.all([
+      shiftQuery.refetch(),
+      activeDraftQuery.refetch(),
+      trpcUtils.pos.sales.list.invalidate(),
+    ]).catch(() => undefined);
+  };
+
+  const reconcileCompletionFailure = async (targetSaleId: string) => {
+    let activeDraftId: string | null = null;
+    try {
+      const activeResult = await activeDraftQuery.refetch();
+      activeDraftId = activeResult.data?.id ?? null;
+    } catch {
+      // Preserve the local cart if the active-draft refresh is unavailable.
+    }
+
+    const candidateIds = Array.from(
+      new Set([targetSaleId, activeDraftId].filter(Boolean)),
+    ) as string[];
+    for (const candidateId of candidateIds) {
+      try {
+        await trpcUtils.pos.sales.get.invalidate({ saleId: candidateId });
+        const reconciledSale = await trpcUtils.pos.sales.get.fetch({ saleId: candidateId });
+        if (!reconciledSale) {
+          continue;
+        }
+        if (reconciledSale.status === CustomerOrderStatus.COMPLETED) {
+          await handleConfirmedCompletion({
+            id: reconciledSale.id,
+            number: reconciledSale.number,
+            kkmStatus: reconciledSale.kkmStatus,
+          });
+          return true;
+        }
+        if (reconciledSale.status === CustomerOrderStatus.DRAFT && !reconciledSale.isHeld) {
+          setSaleId(reconciledSale.id);
+          setOptimisticSaleLines(reconciledSale.lines as PosCartLine[]);
+          setMobileComment(reconciledSale.notes ?? mobileComment);
+          mobileCommentHydratedSaleIdRef.current = reconciledSale.id;
+          return false;
+        }
+      } catch {
+        // Try the server's active draft next; never clear local state on reconciliation failure.
+      }
+    }
+    return false;
+  };
+
   const handleComplete = async () => {
     const targetSaleId = saleId;
     if (
@@ -2605,6 +2693,23 @@ const PosSellPage = () => {
         }
       }
       const currentCartTotalKgs = roundMoney(Math.max(0, currentSubtotalKgs - currentDiscountKgs));
+      try {
+        await persistMobileComment(targetSaleId);
+      } catch {
+        return;
+      }
+
+      const completionAttempt =
+        isPhoneScreen === true
+          ? resolveMobilePosCompletionAttempt({
+              current: completionAttemptRef.current,
+              saleId: targetSaleId,
+              createIdempotencyKey,
+            })
+          : { saleId: targetSaleId, idempotencyKey: createIdempotencyKey() };
+      if (isPhoneScreen === true) {
+        completionAttemptRef.current = completionAttempt;
+      }
 
       if (sellInDebt) {
         const normalizedDebtName = debtFullName.trim().replace(/\s+/g, " ");
@@ -2612,9 +2717,9 @@ const PosSellPage = () => {
           toast({ variant: "error", description: t("sell.debtNameRequired") });
           return;
         }
-        await completeMutation.mutateAsync({
+        const result = await completeMutation.mutateAsync({
           saleId: targetSaleId,
-          idempotencyKey: createIdempotencyKey(),
+          idempotencyKey: completionAttempt.idempotencyKey,
           debtCustomerName: normalizedDebtName,
           payments: [],
           clientState: {
@@ -2622,6 +2727,7 @@ const PosSellPage = () => {
             visibleCartTotalKgs: currentCartTotalKgs,
           },
         });
+        await handleConfirmedCompletion(result);
         return;
       }
 
@@ -2662,9 +2768,9 @@ const PosSellPage = () => {
         return;
       }
 
-      await completeMutation.mutateAsync({
+      const result = await completeMutation.mutateAsync({
         saleId: targetSaleId,
-        idempotencyKey: createIdempotencyKey(),
+        idempotencyKey: completionAttempt.idempotencyKey,
         debtCustomerName: null,
         payments: paymentPayload.payments,
         clientState: {
@@ -2672,8 +2778,23 @@ const PosSellPage = () => {
           visibleCartTotalKgs: currentCartTotalKgs,
         },
       });
-    } catch {
-      // handled by mutation onError
+      await handleConfirmedCompletion(result);
+    } catch (error) {
+      if (isPhoneScreen === true) {
+        const completedOnServer = await reconcileCompletionFailure(targetSaleId);
+        if (!completedOnServer) {
+          toast({ variant: "error", description: t("sell.mobile.completionFailedPreserved") });
+        }
+      } else {
+        toast({
+          variant: "error",
+          description: translateError(tErrors, error as never),
+        });
+        setOptimisticSaleLines(null);
+        clearCartRuntimeSyncState();
+        void trpcUtils.pos.sales.get.invalidate({ saleId: targetSaleId }).catch(() => undefined);
+        void activeDraftQuery.refetch().catch(() => undefined);
+      }
     } finally {
       completeSubmitInFlightRef.current = false;
     }
@@ -2686,6 +2807,12 @@ const PosSellPage = () => {
 
     try {
       await flushAllPendingCartSync();
+    } catch {
+      return;
+    }
+
+    try {
+      await persistMobileComment(saleId);
     } catch {
       return;
     }
@@ -3664,7 +3791,7 @@ const PosSellPage = () => {
               disabled={!registerId || resumeHeldDraftMutation.isLoading}
             >
               {resumeHeldDraftMutation.isLoading ? <Spinner className="h-3.5 w-3.5" /> : null}
-              {t("sell.editReceipt")}
+              {isPhoneScreen === true ? t("sell.resumeHeldReceipt") : t("sell.editReceipt")}
             </Button>
           ) : (
             <Button
@@ -6499,6 +6626,11 @@ const PosSellPage = () => {
             <input
               value={mobileComment}
               onChange={(event) => setMobileComment(event.target.value)}
+              onBlur={() => {
+                if (saleId) {
+                  void persistMobileComment(saleId).catch(() => undefined);
+                }
+              }}
               placeholder={t("sell.mobile.commentPlaceholder")}
               className="min-w-0 flex-1 border-0 bg-transparent text-[15px] text-white shadow-none outline-none ring-0 placeholder:text-slate-400 focus:outline-none focus:ring-0 focus-visible:ring-0"
             />
@@ -6545,7 +6677,36 @@ const PosSellPage = () => {
               : "pb-[calc(5.5rem_+_env(safe-area-inset-bottom))]",
           )}
         >
-          {!hasCartLines ? (
+          {lastCompletedSale ? (
+            <div className="grid min-h-[calc(100dvh-224px)] place-items-start px-4 pt-9">
+              <section className="w-full border border-success/30 bg-success/10 p-4 text-center">
+                <h2 className="text-lg font-semibold text-white">{t("sell.saleCompletedTitle")}</h2>
+                <p className="mt-2 text-sm text-slate-300">
+                  {t("sell.completeSuccess", { number: lastCompletedSale.number })}
+                </p>
+                <div className="mt-4 grid gap-2">
+                  <Button
+                    type="button"
+                    className="h-12"
+                    onClick={() => {
+                      setLastCompletedSale(null);
+                      setMobileSaleTab("document");
+                    }}
+                  >
+                    {t("sell.newSale")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="h-12"
+                    onClick={() => setReceiptJournalOpen(true)}
+                  >
+                    {t("sell.receiptJournal")}
+                  </Button>
+                </div>
+              </section>
+            </div>
+          ) : !hasCartLines ? (
             <>
               <div className="grid min-h-[calc(100dvh-224px)] place-items-start justify-center pt-9">
                 <p className="text-[14px] leading-none text-slate-400">
@@ -6556,9 +6717,9 @@ const PosSellPage = () => {
                 <button
                   type="button"
                   className="min-h-[50px] w-full rounded-[12px] bg-primary text-[15px] font-semibold text-white"
-                  onClick={addPaymentRow}
+                  onClick={() => setMobileSaleTab("document")}
                 >
-                  {t("sell.addPayment")}
+                  {t("sell.newSale")}
                 </button>
               </div>
             </>

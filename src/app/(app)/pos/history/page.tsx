@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { CustomerOrderStatus, PosPaymentMethod } from "@prisma/client";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 
@@ -28,6 +28,7 @@ import {
   type CurrencySource,
 } from "@/lib/currencyDisplay";
 import { formatDateTime } from "@/lib/i18nFormat";
+import { mergeMobilePosReceiptHistory } from "@/lib/mobilePosState";
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
@@ -49,6 +50,8 @@ const PosHistoryPage = () => {
   const tErrors = useTranslations("errors");
   const locale = useLocale();
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const trpcUtils = trpc.useUtils();
   const { data: session } = useSession();
   const { toast } = useToast();
 
@@ -61,6 +64,8 @@ const PosHistoryPage = () => {
   );
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<PosPaymentMethod | "ALL">("ALL");
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [isPhoneScreen, setIsPhoneScreen] = useState<boolean | null>(null);
+  const [resumeConflictOpen, setResumeConflictOpen] = useState(false);
   const [detailSaleId, setDetailSaleId] = useState<string | null>(null);
   const [returnSaleId, setReturnSaleId] = useState<string | null>(null);
   const [returnQtyByLine, setReturnQtyByLine] = useState<Record<string, string>>({});
@@ -76,6 +81,18 @@ const PosHistoryPage = () => {
   const registerExists = (registersQuery.data ?? []).some((item) => item.id === registerId);
   const canLoadRegisterScopedData = Boolean(registerId) && registerExists;
   const canLoadCurrentShift = canLoadRegisterScopedData && Boolean(selectedRegister?.isActive);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      setIsPhoneScreen(false);
+      return;
+    }
+    const phoneQuery = window.matchMedia("(max-width: 767px)");
+    const updatePhoneScreen = () => setIsPhoneScreen(phoneQuery.matches);
+    updatePhoneScreen();
+    phoneQuery.addEventListener("change", updatePhoneScreen);
+    return () => phoneQuery.removeEventListener("change", updatePhoneScreen);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -129,6 +146,27 @@ const PosHistoryPage = () => {
     { enabled: canLoadRegisterScopedData, refetchOnWindowFocus: true },
   );
 
+  const heldSalesQuery = trpc.pos.sales.list.useQuery(
+    {
+      registerId: registerId || undefined,
+      statuses: [CustomerOrderStatus.DRAFT],
+      heldState: "held",
+      search: search.trim() || undefined,
+      dateFrom: dateFrom ? new Date(`${dateFrom}T00:00:00`) : undefined,
+      dateTo: dateTo ? new Date(`${dateTo}T23:59:59`) : undefined,
+      page: 1,
+      pageSize: 30,
+    },
+    {
+      enabled:
+        isPhoneScreen === true &&
+        canLoadRegisterScopedData &&
+        statusFilter === CustomerOrderStatus.COMPLETED,
+      refetchOnMount: "always",
+      refetchOnWindowFocus: true,
+    },
+  );
+
   const saleDetailQuery = trpc.pos.sales.get.useQuery(
     { saleId: returnSaleId ?? "" },
     { enabled: Boolean(returnSaleId), refetchOnWindowFocus: true },
@@ -165,6 +203,29 @@ const PosHistoryPage = () => {
         });
       }
       await Promise.all([salesQuery.refetch(), saleDetailQuery.refetch()]);
+    },
+    onError: (error) => {
+      if (error.message === "posActiveDraftExists") {
+        setResumeConflictOpen(true);
+        return;
+      }
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+
+  const resumeHeldDraftMutation = trpc.pos.sales.resumeHeldDraft.useMutation({
+    onSuccess: async (result) => {
+      setDetailSaleId(null);
+      await Promise.all([
+        trpcUtils.pos.sales.list.invalidate(),
+        trpcUtils.pos.sales.activeDraft.invalidate({ registerId }),
+        trpcUtils.pos.sales.get.invalidate({ saleId: result.id }),
+      ]);
+      toast({
+        variant: "success",
+        description: t("sell.resumeHeldReceiptSuccess", { number: result.number }),
+      });
+      router.push(`/pos/sell?registerId=${encodeURIComponent(registerId)}`);
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
@@ -243,15 +304,38 @@ const PosHistoryPage = () => {
     return parts.join(" · ") || tCommon("notAvailable");
   };
 
+  const mobileHistorySales = useMemo(
+    () =>
+      isPhoneScreen === true && statusFilter === CustomerOrderStatus.COMPLETED
+        ? mergeMobilePosReceiptHistory(
+            salesQuery.data?.items ?? [],
+            heldSalesQuery.data?.items ?? [],
+          )
+        : (salesQuery.data?.items ?? []),
+    [heldSalesQuery.data?.items, isPhoneScreen, salesQuery.data?.items, statusFilter],
+  );
+
   const visibleSales = useMemo(
     () =>
-      (salesQuery.data?.items ?? []).filter(
+      mobileHistorySales.filter(
         (sale) =>
           paymentMethodFilter === "ALL" ||
           (sale.payments ?? []).some((payment) => payment.method === paymentMethodFilter),
       ),
-    [paymentMethodFilter, salesQuery.data?.items],
+    [mobileHistorySales, paymentMethodFilter],
   );
+  const mobileHistoryLoading =
+    salesQuery.isLoading ||
+    (isPhoneScreen === true &&
+      statusFilter === CustomerOrderStatus.COMPLETED &&
+      heldSalesQuery.isLoading);
+
+  const handleResumeHeldReceipt = (saleId: string) => {
+    if (!registerId || resumeHeldDraftMutation.isLoading) {
+      return;
+    }
+    resumeHeldDraftMutation.mutate({ saleId, registerId });
+  };
 
   const setTodayFilter = () => {
     const today = formatDateInput(new Date());
@@ -542,120 +626,146 @@ const PosHistoryPage = () => {
             </div>
           ) : null}
 
-          {canLoadRegisterScopedData && salesQuery.isLoading ? (
+          {canLoadRegisterScopedData && mobileHistoryLoading ? (
             <div className="flex min-h-24 items-center justify-center gap-2 border border-border bg-card text-sm text-muted-foreground">
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
           ) : null}
 
-          {visibleSales.map((sale) => {
-            const saleCurrencySource = currencySourceWithFallback(sale, sale.store);
-            const paymentSummary = salePaymentSummary(sale, saleCurrencySource);
-            const canReturn =
-              sale.status === CustomerOrderStatus.COMPLETED &&
-              !((sale.returnedTotalKgs ?? 0) > 0 && sale.returnedTotalKgs >= sale.totalKgs - 0.009);
+          {!mobileHistoryLoading
+            ? visibleSales.map((sale) => {
+                const saleCurrencySource = currencySourceWithFallback(sale, sale.store);
+                const paymentSummary = salePaymentSummary(sale, saleCurrencySource);
+                const isHeldReceipt = sale.status === CustomerOrderStatus.DRAFT && sale.isHeld;
+                const canReturn =
+                  sale.status === CustomerOrderStatus.COMPLETED &&
+                  !(
+                    (sale.returnedTotalKgs ?? 0) > 0 &&
+                    sale.returnedTotalKgs >= sale.totalKgs - 0.009
+                  );
 
-            return (
-              <article key={sale.id} className="rounded-md border border-border bg-card p-3 shadow-sm">
-                <button
-                  type="button"
-                  className="w-full text-left"
-                  onClick={() => setDetailSaleId(sale.id)}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-base font-semibold text-foreground">
-                        {sale.number}
-                      </p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        {formatDateTime(sale.createdAt, locale)}
-                      </p>
-                    </div>
-                    <p className="shrink-0 text-base font-semibold text-foreground">
-                      {formatKgsMoney(sale.totalKgs, locale, saleCurrencySource)}
-                    </p>
-                  </div>
-
-                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                    <div>
-                      <p className="text-muted-foreground">{t("history.customer")}</p>
-                      <p className="truncate font-medium text-foreground">
-                        {sale.customerName ?? t("history.walkInCustomer")}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">{t("history.paymentMethod")}</p>
-                      <p className="truncate font-medium text-foreground">{paymentSummary}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">{t("history.store")}</p>
-                      <p className="truncate font-medium text-foreground">{sale.store.name}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">{t("history.register")}</p>
-                      <p className="truncate font-medium text-foreground">
-                        {sale.register?.name ?? tCommon("notAvailable")}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <Badge variant={statusBadgeVariant(sale.status)}>
-                      {statusLabel(sale.status)}
-                    </Badge>
-                    <span
-                      className={`inline-flex items-center px-2.5 py-1 text-xs font-semibold ${kkmStatusClassName(
-                        sale.kkmStatus,
-                      )}`}
+                return (
+                  <article
+                    key={sale.id}
+                    className="rounded-md border border-border bg-card p-3 shadow-sm"
+                  >
+                    <button
+                      type="button"
+                      className="w-full text-left"
+                      onClick={() =>
+                        isHeldReceipt ? handleResumeHeldReceipt(sale.id) : setDetailSaleId(sale.id)
+                      }
+                      disabled={isHeldReceipt && resumeHeldDraftMutation.isLoading}
                     >
-                      {kkmStatusLabel(sale.kkmStatus)}
-                    </span>
-                  </div>
-                </button>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-base font-semibold text-foreground">
+                            {sale.number}
+                          </p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {formatDateTime(sale.createdAt, locale)}
+                          </p>
+                        </div>
+                        <p className="shrink-0 text-base font-semibold text-foreground">
+                          {formatKgsMoney(sale.totalKgs, locale, saleCurrencySource)}
+                        </p>
+                      </div>
 
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="h-10"
-                    onClick={() => setDetailSaleId(sale.id)}
-                  >
-                    <ViewIcon className="h-4 w-4" aria-hidden />
-                    {t("history.openDetails")}
-                  </Button>
-                  <Button
-                    type="button"
-                    className="h-10"
-                    onClick={() => {
-                      void handleReceiptPdf(sale.id, "print", "precheck");
-                    }}
-                    disabled={Boolean(receiptAction)}
-                  >
-                    {receiptAction?.saleId === sale.id &&
-                    receiptAction.mode === "print" &&
-                    receiptAction.kind === "precheck" ? (
-                      <Spinner className="h-4 w-4" />
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <p className="text-muted-foreground">{t("history.customer")}</p>
+                          <p className="truncate font-medium text-foreground">
+                            {sale.customerName ?? t("history.walkInCustomer")}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">{t("history.paymentMethod")}</p>
+                          <p className="truncate font-medium text-foreground">{paymentSummary}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">{t("history.store")}</p>
+                          <p className="truncate font-medium text-foreground">{sale.store.name}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">{t("history.register")}</p>
+                          <p className="truncate font-medium text-foreground">
+                            {sale.register?.name ?? tCommon("notAvailable")}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <Badge variant={statusBadgeVariant(sale.status)}>
+                          {isHeldReceipt ? t("sell.heldReceipt") : statusLabel(sale.status)}
+                        </Badge>
+                        {!isHeldReceipt ? (
+                          <span
+                            className={`inline-flex items-center px-2.5 py-1 text-xs font-semibold ${kkmStatusClassName(
+                              sale.kkmStatus,
+                            )}`}
+                          >
+                            {kkmStatusLabel(sale.kkmStatus)}
+                          </span>
+                        ) : null}
+                      </div>
+                    </button>
+
+                    {isHeldReceipt ? (
+                      <Button
+                        type="button"
+                        className="mt-3 h-11 w-full"
+                        onClick={() => handleResumeHeldReceipt(sale.id)}
+                        disabled={resumeHeldDraftMutation.isLoading}
+                      >
+                        {resumeHeldDraftMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
+                        {t("sell.resumeHeldReceipt")}
+                      </Button>
                     ) : (
-                      <PrintIcon className="h-4 w-4" aria-hidden />
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="h-10"
+                          onClick={() => setDetailSaleId(sale.id)}
+                        >
+                          <ViewIcon className="h-4 w-4" aria-hidden />
+                          {t("history.openDetails")}
+                        </Button>
+                        <Button
+                          type="button"
+                          className="h-10"
+                          onClick={() => {
+                            void handleReceiptPdf(sale.id, "print", "precheck");
+                          }}
+                          disabled={Boolean(receiptAction)}
+                        >
+                          {receiptAction?.saleId === sale.id &&
+                          receiptAction.mode === "print" &&
+                          receiptAction.kind === "precheck" ? (
+                            <Spinner className="h-4 w-4" />
+                          ) : (
+                            <PrintIcon className="h-4 w-4" aria-hidden />
+                          )}
+                          {t("history.printReceipt")}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="col-span-2 h-10"
+                          onClick={() => setReturnSaleId(sale.id)}
+                          disabled={!canReturn}
+                        >
+                          {t("history.return")}
+                        </Button>
+                      </div>
                     )}
-                    {t("history.printReceipt")}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="col-span-2 h-10"
-                    onClick={() => setReturnSaleId(sale.id)}
-                    disabled={!canReturn}
-                  >
-                    {t("history.return")}
-                  </Button>
-                </div>
-              </article>
-            );
-          })}
+                  </article>
+                );
+              })
+            : null}
 
-          {canLoadRegisterScopedData && !salesQuery.isLoading && !visibleSales.length ? (
+          {canLoadRegisterScopedData && !mobileHistoryLoading && !visibleSales.length ? (
             <div className="rounded-md border border-border bg-card p-4 text-sm text-muted-foreground">
               {t("history.empty")}
             </div>
@@ -1037,6 +1147,29 @@ const PosHistoryPage = () => {
           </section>
         </div>
       ) : null}
+
+      <Modal
+        open={resumeConflictOpen}
+        onOpenChange={setResumeConflictOpen}
+        title={t("sell.draftDetectedTitle")}
+        subtitle={tErrors("posActiveDraftExists")}
+        mobileSheet
+      >
+        <ModalFooter>
+          <Button type="button" variant="secondary" onClick={() => setResumeConflictOpen(false)}>
+            {tCommon("cancel")}
+          </Button>
+          <Button
+            type="button"
+            onClick={() => {
+              setResumeConflictOpen(false);
+              router.push(`/pos/sell?registerId=${encodeURIComponent(registerId)}`);
+            }}
+          >
+            {t("sell.resumeDraft")}
+          </Button>
+        </ModalFooter>
+      </Modal>
 
       {detailSaleId ? (
         <div className="fixed inset-0 z-[65] md:hidden">

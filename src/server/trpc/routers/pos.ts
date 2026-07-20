@@ -52,6 +52,7 @@ import {
   settlePosDebt,
   upsertSaleLineMarkingCodes,
   updatePosSaleCustomer,
+  updatePosSaleNotes,
   updatePosRegister,
   updatePosSaleDiscount,
   updatePosSaleLine,
@@ -660,6 +661,28 @@ export const posRouter = router({
             organizationId: ctx.user.organizationId,
             saleId: input.saleId,
             customerId: input.customerId,
+            actorId: ctx.user.id,
+            user: ctx.user,
+            requestId: ctx.requestId,
+          });
+        } catch (error) {
+          throw toTRPCError(error);
+        }
+      }),
+
+    updateNotes: cashierProcedure
+      .input(
+        z.object({
+          saleId: z.string().min(1),
+          notes: z.string().max(2_000).optional().nullable(),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        try {
+          return await updatePosSaleNotes({
+            organizationId: ctx.user.organizationId,
+            saleId: input.saleId,
+            notes: input.notes,
             actorId: ctx.user.id,
             user: ctx.user,
             requestId: ctx.requestId,
