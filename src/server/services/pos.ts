@@ -1265,8 +1265,11 @@ export const getPosEntry = async (input: {
     };
   }
 
-  const selectedRegister =
-    registers.find((register) => register.id === input.registerId) ?? registers[0] ?? null;
+  const selectedRegister = input.registerId
+    ? (registers.find((register) => register.id === input.registerId) ?? null)
+    : registers.length === 1
+      ? (registers[0] ?? null)
+      : null;
 
   const currentShift = selectedRegister?.openShift
     ? await getCurrentRegisterShift({
@@ -2253,6 +2256,7 @@ export const resumeHeldPosSaleDraft = async (input: {
       data: {
         registerId: shift.registerId,
         shiftId: shift.id,
+        createdById: input.actorId,
         isHeld: false,
         heldAt: null,
         heldById: null,
@@ -4235,6 +4239,7 @@ export const completePosSale = async (input: {
               status: CustomerOrderStatus.COMPLETED,
               completedAt: new Date(),
               completedEventId: input.idempotencyKey,
+              createdById: input.actorId,
               isDebt: Boolean(debtCustomerName),
               debtCustomerName,
               customerName: debtCustomerName ?? sale.customerName,

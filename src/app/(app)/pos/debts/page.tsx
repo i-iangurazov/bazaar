@@ -2,7 +2,6 @@
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 
 import { PageHeader } from "@/components/page-header";
@@ -30,9 +29,8 @@ import { currencySourceWithFallback, formatKgsMoney } from "@/lib/currencyDispla
 import { formatDateTime } from "@/lib/i18nFormat";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
+import { usePosRegisterSelection } from "@/lib/usePosRegisterSelection";
 import { useSse } from "@/lib/useSse";
-
-const selectedRegisterKey = "pos:selected-register";
 const pageSize = 30;
 
 const createIdempotencyKey = () => {
@@ -47,16 +45,22 @@ const PosDebtsPage = () => {
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const locale = useLocale();
-  const searchParams = useSearchParams();
   const { toast } = useToast();
 
-  const [registerId, setRegisterId] = useState(searchParams.get("registerId") ?? "");
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
   const normalizedSearch = deferredSearch.trim().replace(/\s+/g, " ");
 
   const registersQuery = trpc.pos.registers.list.useQuery();
+  const {
+    registerId,
+    selectRegister,
+    issue: registerSelectionIssue,
+  } = usePosRegisterSelection({
+    registers: registersQuery.data ?? [],
+    registersReady: registersQuery.data !== undefined,
+  });
   const selectedRegister = useMemo(
     () => (registersQuery.data ?? []).find((item) => item.id === registerId) ?? null,
     [registerId, registersQuery.data],
@@ -65,38 +69,11 @@ const PosDebtsPage = () => {
   const canLoadRegisterScopedData = Boolean(registerId) && registerExists;
 
   useEffect(() => {
-    if (typeof window === "undefined") {
+    if (!registerSelectionIssue) {
       return;
     }
-    if (registerId) {
-      window.localStorage.setItem(selectedRegisterKey, registerId);
-      return;
-    }
-    const saved = window.localStorage.getItem(selectedRegisterKey);
-    if (saved) {
-      setRegisterId(saved);
-    }
-  }, [registerId]);
-
-  useEffect(() => {
-    if (registerId || !registersQuery.data?.[0]) {
-      return;
-    }
-    setRegisterId(registersQuery.data[0].id);
-  }, [registerId, registersQuery.data]);
-
-  useEffect(() => {
-    if (!registerId || !registersQuery.data?.length) {
-      return;
-    }
-    if (registerExists) {
-      return;
-    }
-    setRegisterId("");
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem(selectedRegisterKey);
-    }
-  }, [registerExists, registerId, registersQuery.data]);
+    toast({ description: t("entry.registerUnavailable") });
+  }, [registerSelectionIssue, t, toast]);
 
   useEffect(() => {
     setPage(1);
@@ -190,7 +167,7 @@ const PosDebtsPage = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <Select value={registerId} onValueChange={setRegisterId}>
+            <Select value={registerId} onValueChange={selectRegister}>
               <SelectTrigger className="w-full md:max-w-md" aria-label={t("entry.register")}>
                 <SelectValue placeholder={t("entry.selectRegister")} />
               </SelectTrigger>

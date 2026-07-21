@@ -22,6 +22,7 @@ import {
   User as UserGlyph,
 } from "@phosphor-icons/react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 
 import {
@@ -109,9 +110,8 @@ import {
 } from "@/lib/scanning/scanRouter";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
+import { usePosRegisterSelection } from "@/lib/usePosRegisterSelection";
 import { cn } from "@/lib/utils";
-
-const selectedRegisterKey = "pos:selected-register";
 const keyboardScanResetMs = 300;
 const keyboardScanMaxLength = 128;
 
@@ -524,9 +524,9 @@ const PosSellPage = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const trpcUtils = trpc.useUtils();
+  const { data: session } = useSession();
   const { toast } = useToast();
 
-  const [registerId, setRegisterId] = useState(searchParams.get("registerId") ?? "");
   const [saleId, setSaleId] = useState<string | null>(null);
   const [lineSearch, setLineSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
@@ -684,30 +684,25 @@ const PosSellPage = () => {
   }, [setPayments, t, toast]);
 
   const registersQuery = trpc.pos.registers.list.useQuery();
+  const {
+    registerId,
+    selectRegister,
+    issue: registerSelectionIssue,
+    isReady: registerSelectionReady,
+  } = usePosRegisterSelection({
+    registers: registersQuery.data ?? [],
+    registersReady: registersQuery.data !== undefined,
+  });
   const selectedRegister = (registersQuery.data ?? []).find((item) => item.id === registerId);
   const enableSku = selectedRegister?.store.enableSku ?? true;
   const enableBarcode = selectedRegister?.store.enableBarcode ?? true;
 
   useEffect(() => {
-    if (typeof window === "undefined") {
+    if (!registerSelectionIssue) {
       return;
     }
-    if (registerId) {
-      window.localStorage.setItem(selectedRegisterKey, registerId);
-      return;
-    }
-    const saved = window.localStorage.getItem(selectedRegisterKey);
-    if (saved) {
-      setRegisterId(saved);
-    }
-  }, [registerId]);
-
-  useEffect(() => {
-    if (registerId || !registersQuery.data?.[0]) {
-      return;
-    }
-    setRegisterId(registersQuery.data[0].id);
-  }, [registerId, registersQuery.data]);
+    toast({ description: t("entry.registerUnavailable") });
+  }, [registerSelectionIssue, t, toast]);
 
   useEffect(() => {
     const receiptId = searchParams.get("receiptId");
@@ -747,7 +742,7 @@ const PosSellPage = () => {
 
   const shiftQuery = trpc.pos.shifts.current.useQuery(
     { registerId },
-    { enabled: Boolean(registerId), refetchOnWindowFocus: true },
+    { enabled: Boolean(registerSelectionReady && registerId), refetchOnWindowFocus: true },
   );
 
   const hasLocalCartLines = Boolean(optimisticSaleLines?.length);
@@ -1270,6 +1265,19 @@ const PosSellPage = () => {
     hasCustomer: Boolean(selectedCustomer),
     sellInDebt,
   });
+  const handleRegisterChange = useCallback(
+    (nextRegisterId: string) => {
+      if (nextRegisterId === registerId) {
+        return;
+      }
+      if (saleId || hasMobileNavigationRisk) {
+        toast({ description: t("sell.registerChangeBlockedActiveSale") });
+        return;
+      }
+      selectRegister(nextRegisterId);
+    },
+    [hasMobileNavigationRisk, registerId, saleId, selectRegister, t, toast],
+  );
   const saleIdForPaymentInit = sale?.id ?? (saleId && hasCartLines ? saleId : undefined);
   const saleTotalForPaymentInit = hasCartLines ? cartTotalKgs : sale?.totalKgs;
   const saleCustomerName = sale?.customerName ?? null;
@@ -3579,12 +3587,22 @@ const PosSellPage = () => {
   const selectedRegisterLabel = selectedRegister
     ? `${selectedRegister.store.name} / ${selectedRegister.name}`
     : t("entry.selectRegister");
+  const currentCashierName =
+    session?.user?.name || session?.user?.email || tCommon("notAvailable");
+  const currentCashierLabel = t("sell.currentCashier", { name: currentCashierName });
   const shiftOpenedLabel = shiftQuery.data?.openedAt
     ? new Intl.DateTimeFormat(locale, {
         dateStyle: "medium",
         timeStyle: "short",
       }).format(new Date(shiftQuery.data.openedAt))
     : null;
+  const shiftOpenedContextLabel =
+    shiftOpenedLabel && shiftQuery.data?.openedBy?.name
+      ? t("sell.shiftOpenedByContext", {
+          name: shiftQuery.data.openedBy.name,
+          time: shiftOpenedLabel,
+        })
+      : null;
   const paymentTotalLabel = formatKgsMoney(totalPaymentKgs, locale, currencySource);
   const paymentDeltaKgs = hasCartLines ? roundMoney(totalPaymentKgs - cartTotalKgs) : 0;
   const showPaymentTotalSummary = Boolean(
@@ -4910,9 +4928,9 @@ const PosSellPage = () => {
             >
               {hasOpenShift ? t("entry.shiftOpen") : t("entry.shiftClosed")}
             </Badge>
-            <Select value={registerId} onValueChange={setRegisterId}>
+            <Select value={registerId} onValueChange={handleRegisterChange}>
               <SelectTrigger
-                aria-label={t("entry.register")}
+                aria-label={t("entry.changeRegister")}
                 className="h-8 min-w-0 flex-1 border-0 bg-transparent px-0 text-left text-sm font-semibold shadow-none focus:ring-0"
               >
                 <SelectValue placeholder={selectedRegisterLabel} />
@@ -5230,8 +5248,8 @@ const PosSellPage = () => {
             <footer className="grid min-h-12 grid-cols-[1fr_auto_1fr] items-center border-t border-border bg-card px-4 py-2 text-sm text-muted-foreground">
               <span aria-hidden />
               <div className="max-w-full truncate text-center">
-                {selectedRegisterLabel}
-                {shiftOpenedLabel ? ` / ${shiftOpenedLabel}` : ""}
+                {t("entry.register")}: {selectedRegisterLabel} · {currentCashierLabel}
+                {shiftOpenedContextLabel ? ` · ${shiftOpenedContextLabel}` : ""}
               </div>
               <span className="h-3 w-3 justify-self-end rounded-md bg-success" aria-hidden />
             </footer>
@@ -6336,6 +6354,14 @@ const PosSellPage = () => {
               ) : null}
             </button>
           </div>
+          <div className="border-t border-slate-800 bg-slate-950 px-3 py-2 text-[11px] leading-4 text-slate-400">
+            <p className="break-words">
+              {t("entry.register")}: {selectedRegisterLabel} · {currentCashierLabel}
+            </p>
+            {shiftOpenedContextLabel ? (
+              <p className="break-words">{shiftOpenedContextLabel}</p>
+            ) : null}
+          </div>
         </header>
       );
 
@@ -6398,8 +6424,11 @@ const PosSellPage = () => {
             <label className="text-sm font-semibold uppercase tracking-wide text-slate-400">
               {t("entry.register")}
             </label>
-            <Select value={registerId} onValueChange={setRegisterId}>
-              <SelectTrigger className="mt-2 h-12 border-slate-700 bg-slate-950 text-base text-white">
+            <Select value={registerId} onValueChange={handleRegisterChange}>
+              <SelectTrigger
+                aria-label={t("entry.changeRegister")}
+                className="mt-2 h-12 border-slate-700 bg-slate-950 text-base text-white"
+              >
                 <SelectValue placeholder={t("entry.selectRegister")} />
               </SelectTrigger>
               <SelectContent>
@@ -6410,6 +6439,11 @@ const PosSellPage = () => {
                 ))}
               </SelectContent>
             </Select>
+            {registerSelectionIssue ? (
+              <p role="alert" className="mt-2 text-sm text-amber-300">
+                {t("entry.registerUnavailable")}
+              </p>
+            ) : null}
             {!hasOpenShift && registerId ? (
               <Button asChild className="mt-3 h-11 w-full">
                 <Link href={`/pos?registerId=${registerId}`}>{t("sell.openShiftFirst")}</Link>
@@ -7507,6 +7541,15 @@ const PosSellPage = () => {
             </Button>
           </div>
 
+          <div className="mt-2 text-xs leading-5 text-muted-foreground">
+            <p className="break-words">
+              {t("entry.register")}: {selectedRegisterLabel} · {currentCashierLabel}
+            </p>
+            {shiftOpenedContextLabel ? (
+              <p className="break-words">{shiftOpenedContextLabel}</p>
+            ) : null}
+          </div>
+
           <div className="mt-3 flex items-center gap-2">
             <Button
               type="button"
@@ -7545,8 +7588,8 @@ const PosSellPage = () => {
             <section className="bazaar-admin-surface p-3">
               <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground">{t("entry.register")}</label>
-                <Select value={registerId} onValueChange={setRegisterId}>
-                  <SelectTrigger aria-label={t("entry.register")} className="h-11">
+                <Select value={registerId} onValueChange={handleRegisterChange}>
+                  <SelectTrigger aria-label={t("entry.changeRegister")} className="h-11">
                     <SelectValue placeholder={t("entry.selectRegister")} />
                   </SelectTrigger>
                   <SelectContent>
@@ -7557,6 +7600,11 @@ const PosSellPage = () => {
                     ))}
                   </SelectContent>
                 </Select>
+                {registerSelectionIssue ? (
+                  <p role="alert" className="text-sm text-warning">
+                    {t("entry.registerUnavailable")}
+                  </p>
+                ) : null}
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 {shiftOpenedLabel ? <span>{shiftOpenedLabel}</span> : null}

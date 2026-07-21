@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 
@@ -30,9 +30,8 @@ import {
 import { formatDateTime } from "@/lib/i18nFormat";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
+import { usePosRegisterSelection } from "@/lib/usePosRegisterSelection";
 import { useSse } from "@/lib/useSse";
-
-const selectedRegisterKey = "pos:selected-register";
 
 const createIdempotencyKey = () => {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -47,18 +46,26 @@ const PosEntryPage = () => {
   const tErrors = useTranslations("errors");
   const locale = useLocale();
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { data: session } = useSession();
   const { toast } = useToast();
 
-  const [registerId, setRegisterId] = useState<string>(searchParams.get("registerId") ?? "");
   const [openShiftDialogOpen, setOpenShiftDialogOpen] = useState(false);
   const [openingCash, setOpeningCash] = useState("");
   const [openingNote, setOpeningNote] = useState("");
 
+  const registersQuery = trpc.pos.registers.list.useQuery();
+  const {
+    registerId,
+    selectRegister,
+    issue: registerSelectionIssue,
+    isReady: registerSelectionReady,
+  } = usePosRegisterSelection({
+    registers: registersQuery.data ?? [],
+    registersReady: registersQuery.data !== undefined,
+  });
   const entryQuery = trpc.pos.entry.useQuery(
     { registerId: registerId || undefined },
-    { refetchOnWindowFocus: true },
+    { enabled: registerSelectionReady && Boolean(registerId), refetchOnWindowFocus: true },
   );
 
   const openShiftMutation = trpc.pos.shifts.open.useMutation({
@@ -76,38 +83,22 @@ const PosEntryPage = () => {
   });
 
   useEffect(() => {
-    if (typeof window === "undefined") {
+    if (!registerSelectionIssue) {
       return;
     }
-    if (registerId) {
-      window.localStorage.setItem(selectedRegisterKey, registerId);
-      return;
-    }
-    const saved = window.localStorage.getItem(selectedRegisterKey);
-    if (saved) {
-      setRegisterId(saved);
-    }
-  }, [registerId]);
-
-  useEffect(() => {
-    if (registerId || !entryQuery.data?.selectedRegister?.id) {
-      return;
-    }
-    setRegisterId(entryQuery.data.selectedRegister.id);
-  }, [registerId, entryQuery.data?.selectedRegister?.id]);
+    toast({ description: t("entry.registerUnavailable") });
+  }, [registerSelectionIssue, t, toast]);
 
   const role = session?.user?.role;
+  const currentCashierName =
+    session?.user?.name || session?.user?.email || tCommon("notAvailable");
   const canManageRegisters = role === "ADMIN" || role === "MANAGER";
   const selectedRegister = useMemo(() => {
-    if (!entryQuery.data?.registers?.length) {
+    if (!registersQuery.data?.length) {
       return null;
     }
-    return (
-      entryQuery.data.registers.find((item) => item.id === registerId) ??
-      entryQuery.data.registers[0] ??
-      null
-    );
-  }, [entryQuery.data?.registers, registerId]);
+    return registersQuery.data.find((item) => item.id === registerId) ?? null;
+  }, [registerId, registersQuery.data]);
 
   const openShift = entryQuery.data?.currentShift;
   const previousClosedShift = entryQuery.data?.previousClosedShift ?? null;
@@ -180,27 +171,35 @@ const PosEntryPage = () => {
                   : t("entry.selectRegister")}
               </p>
             </div>
-            {entryQuery.isLoading ? <Spinner className="mt-1 h-5 w-5 text-muted-foreground" /> : null}
+            {registersQuery.isLoading || entryQuery.isLoading ? (
+              <Spinner className="mt-1 h-5 w-5 text-muted-foreground" />
+            ) : null}
           </div>
 
-          {(entryQuery.data?.registers?.length ?? 0) > 1 ? (
+          {(registersQuery.data?.length ?? 0) > 1 ||
+          (!registerId && (registersQuery.data?.length ?? 0) > 0) ? (
             <div className="mt-4">
-              <Select value={registerId} onValueChange={setRegisterId}>
+              <Select value={registerId} onValueChange={selectRegister}>
                 <SelectTrigger aria-label={t("entry.register")} className="h-12">
                   <SelectValue placeholder={t("entry.selectRegister")} />
                 </SelectTrigger>
                 <SelectContent>
-                  {(entryQuery.data?.registers ?? []).map((item) => (
+                  {(registersQuery.data ?? []).map((item) => (
                     <SelectItem key={item.id} value={item.id}>
                       {item.store.name} · {item.name} ({item.code})
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {registerSelectionIssue ? (
+                <p role="alert" className="mt-2 text-sm text-warning">
+                  {t("entry.registerUnavailable")}
+                </p>
+              ) : null}
             </div>
           ) : null}
 
-          {!entryQuery.isLoading && !(entryQuery.data?.registers?.length ?? 0) ? (
+          {!registersQuery.isLoading && !(registersQuery.data?.length ?? 0) ? (
             <div className="bazaar-admin-empty mt-4 min-h-[8rem] gap-2 text-sm">
               {t("entry.noRegisters")}
               {canManageRegisters ? (
@@ -226,7 +225,9 @@ const PosEntryPage = () => {
             <Button
               className="mt-4 h-14 w-full text-base"
               onClick={() => setOpenShiftDialogOpen(true)}
-              disabled={entryQuery.isLoading || openShiftMutation.isLoading}
+              disabled={
+                registersQuery.isLoading || entryQuery.isLoading || openShiftMutation.isLoading
+              }
             >
               {openShiftMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
               {t("entry.openShift")}
@@ -246,6 +247,16 @@ const PosEntryPage = () => {
               <p className="text-xs text-muted-foreground">{t("entry.openingCash")}</p>
               <p className="mt-1 text-sm font-semibold text-foreground">
                 {formatStoreMoney(openShift.openingCashKgs)}
+              </p>
+            </div>
+            <div className="bazaar-admin-info-tile">
+              <p className="text-xs text-muted-foreground">{t("sell.cashier")}</p>
+              <p className="mt-1 text-sm font-semibold text-foreground">{currentCashierName}</p>
+            </div>
+            <div className="bazaar-admin-info-tile">
+              <p className="text-xs text-muted-foreground">{t("entry.openedBy")}</p>
+              <p className="mt-1 text-sm font-semibold text-foreground">
+                {openShift.openedBy.name}
               </p>
             </div>
           </div>
@@ -323,25 +334,31 @@ const PosEntryPage = () => {
                     : t("entry.selectRegister")}
                 </p>
               </div>
-              {(entryQuery.data?.registers?.length ?? 0) > 1 ? (
+              {(registersQuery.data?.length ?? 0) > 1 ||
+              (!registerId && (registersQuery.data?.length ?? 0) > 0) ? (
                 <div className="w-full sm:max-w-xs">
-                  <Select value={registerId} onValueChange={setRegisterId}>
+                  <Select value={registerId} onValueChange={selectRegister}>
                     <SelectTrigger aria-label={t("entry.register")}>
                       <SelectValue placeholder={t("entry.selectRegister")} />
                     </SelectTrigger>
                     <SelectContent>
-                      {(entryQuery.data?.registers ?? []).map((item) => (
+                      {(registersQuery.data ?? []).map((item) => (
                         <SelectItem key={item.id} value={item.id}>
                           {item.store.name} · {item.name} ({item.code})
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  {registerSelectionIssue ? (
+                    <p role="alert" className="mt-2 text-sm text-warning">
+                      {t("entry.registerUnavailable")}
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
             </div>
 
-            {!entryQuery.isLoading && !(entryQuery.data?.registers?.length ?? 0) ? (
+            {!registersQuery.isLoading && !(registersQuery.data?.length ?? 0) ? (
               <div className="bazaar-admin-empty min-h-[8rem] items-start p-4 text-left">
                 <p className="text-sm text-muted-foreground">{t("entry.noRegisters")}</p>
                 {canManageRegisters ? (
@@ -440,6 +457,10 @@ const PosEntryPage = () => {
                     <p className="text-sm font-medium text-foreground">
                       {formatStoreMoney(openShift.openingCashKgs)}
                     </p>
+                  </div>
+                  <div className="bazaar-admin-info-tile">
+                    <p className="text-xs text-muted-foreground">{t("sell.cashier")}</p>
+                    <p className="text-sm font-medium text-foreground">{currentCashierName}</p>
                   </div>
                   <div className="bazaar-admin-info-tile">
                     <p className="text-xs text-muted-foreground">{t("entry.openedBy")}</p>

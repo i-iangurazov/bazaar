@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { CashDrawerMovementType } from "@prisma/client";
-import { useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 
 import { PageHeader } from "@/components/page-header";
@@ -31,8 +30,7 @@ import { formatDateTime } from "@/lib/i18nFormat";
 import { buildHeldReceiptResumeHref } from "@/lib/mobilePosState";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
-
-const selectedRegisterKey = "pos:selected-register";
+import { usePosRegisterSelection } from "@/lib/usePosRegisterSelection";
 
 const createIdempotencyKey = () => {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -46,10 +44,8 @@ const PosShiftsPage = () => {
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const locale = useLocale();
-  const searchParams = useSearchParams();
   const { toast } = useToast();
 
-  const [registerId, setRegisterId] = useState(searchParams.get("registerId") ?? "");
   const [countedCash, setCountedCash] = useState("");
   const [closeNote, setCloseNote] = useState("");
   const [closeConfirmed, setCloseConfirmed] = useState(false);
@@ -60,44 +56,25 @@ const PosShiftsPage = () => {
   const [cashType, setCashType] = useState<CashDrawerMovementType>(CashDrawerMovementType.PAY_IN);
 
   const registersQuery = trpc.pos.registers.list.useQuery({ status: "all" });
+  const {
+    registerId,
+    selectRegister,
+    issue: registerSelectionIssue,
+  } = usePosRegisterSelection({
+    registers: registersQuery.data ?? [],
+    registersReady: registersQuery.data !== undefined,
+  });
   const selectedRegister = (registersQuery.data ?? []).find((item) => item.id === registerId);
   const registerExists = (registersQuery.data ?? []).some((item) => item.id === registerId);
   const canLoadRegisterScopedData = Boolean(registerId) && registerExists;
   const canOpenNewShift = canLoadRegisterScopedData && Boolean(selectedRegister?.isActive);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
+    if (!registerSelectionIssue) {
       return;
     }
-    if (registerId) {
-      window.localStorage.setItem(selectedRegisterKey, registerId);
-      return;
-    }
-    const saved = window.localStorage.getItem(selectedRegisterKey);
-    if (saved) {
-      setRegisterId(saved);
-    }
-  }, [registerId]);
-
-  useEffect(() => {
-    if (registerId || !registersQuery.data?.[0]) {
-      return;
-    }
-    setRegisterId(registersQuery.data[0].id);
-  }, [registerId, registersQuery.data]);
-
-  useEffect(() => {
-    if (!registerId || !registersQuery.data?.length) {
-      return;
-    }
-    if (registerExists) {
-      return;
-    }
-    setRegisterId("");
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem(selectedRegisterKey);
-    }
-  }, [registerExists, registerId, registersQuery.data]);
+    toast({ description: t("entry.registerUnavailable") });
+  }, [registerSelectionIssue, t, toast]);
 
   const currentShiftQuery = trpc.pos.shifts.current.useQuery(
     { registerId },
@@ -307,7 +284,7 @@ const PosShiftsPage = () => {
           <CardTitle>{t("entry.register")}</CardTitle>
         </CardHeader>
         <CardContent>
-          <Select value={registerId} onValueChange={setRegisterId}>
+          <Select value={registerId} onValueChange={selectRegister}>
             <SelectTrigger aria-label={t("entry.register")}>
               <SelectValue placeholder={t("entry.selectRegister")} />
             </SelectTrigger>

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { CustomerOrderStatus, PosPaymentMethod } from "@prisma/client";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 
@@ -32,8 +32,7 @@ import { mergeMobilePosReceiptHistory } from "@/lib/mobilePosState";
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
-
-const selectedRegisterKey = "pos:selected-register";
+import { usePosRegisterSelection } from "@/lib/usePosRegisterSelection";
 
 const formatDateInput = (value: Date) => value.toISOString().slice(0, 10);
 
@@ -49,13 +48,11 @@ const PosHistoryPage = () => {
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const locale = useLocale();
-  const searchParams = useSearchParams();
   const router = useRouter();
   const trpcUtils = trpc.useUtils();
   const { data: session } = useSession();
   const { toast } = useToast();
 
-  const [registerId, setRegisterId] = useState(searchParams.get("registerId") ?? "");
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -77,6 +74,14 @@ const PosHistoryPage = () => {
   } | null>(null);
 
   const registersQuery = trpc.pos.registers.list.useQuery({ status: "all" });
+  const {
+    registerId,
+    selectRegister,
+    issue: registerSelectionIssue,
+  } = usePosRegisterSelection({
+    registers: registersQuery.data ?? [],
+    registersReady: registersQuery.data !== undefined,
+  });
   const selectedRegister = (registersQuery.data ?? []).find((item) => item.id === registerId);
   const registerExists = (registersQuery.data ?? []).some((item) => item.id === registerId);
   const canLoadRegisterScopedData = Boolean(registerId) && registerExists;
@@ -95,38 +100,11 @@ const PosHistoryPage = () => {
   }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
+    if (!registerSelectionIssue) {
       return;
     }
-    if (registerId) {
-      window.localStorage.setItem(selectedRegisterKey, registerId);
-      return;
-    }
-    const saved = window.localStorage.getItem(selectedRegisterKey);
-    if (saved) {
-      setRegisterId(saved);
-    }
-  }, [registerId]);
-
-  useEffect(() => {
-    if (registerId || !registersQuery.data?.[0]) {
-      return;
-    }
-    setRegisterId(registersQuery.data[0].id);
-  }, [registerId, registersQuery.data]);
-
-  useEffect(() => {
-    if (!registerId || !registersQuery.data?.length) {
-      return;
-    }
-    if (registerExists) {
-      return;
-    }
-    setRegisterId("");
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem(selectedRegisterKey);
-    }
-  }, [registerExists, registerId, registersQuery.data]);
+    toast({ description: t("entry.registerUnavailable") });
+  }, [registerSelectionIssue, t, toast]);
 
   const currentShiftQuery = trpc.pos.shifts.current.useQuery(
     { registerId },
@@ -564,7 +542,7 @@ const PosHistoryPage = () => {
         </section>
 
         <section className="space-y-3 border border-border bg-card p-3 shadow-sm">
-          <Select value={registerId} onValueChange={setRegisterId}>
+          <Select value={registerId} onValueChange={selectRegister}>
             <SelectTrigger aria-label={t("entry.register")} className="h-11">
               <SelectValue placeholder={t("entry.selectRegister")} />
             </SelectTrigger>
@@ -779,7 +757,7 @@ const PosHistoryPage = () => {
             <CardTitle>{t("entry.register")}</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2">
-            <Select value={registerId} onValueChange={setRegisterId}>
+            <Select value={registerId} onValueChange={selectRegister}>
               <SelectTrigger aria-label={t("entry.register")}>
                 <SelectValue placeholder={t("entry.selectRegister")} />
               </SelectTrigger>

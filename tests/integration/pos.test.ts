@@ -21,6 +21,49 @@ describeDb("pos", () => {
     await resetDatabase();
   });
 
+  it("does not choose the first register when several are accessible", async () => {
+    const { org, store, cashierUser } = await seedBase({ plan: "BUSINESS" });
+    const [registerA, registerB] = await Promise.all([
+      prisma.posRegister.create({
+        data: {
+          organizationId: org.id,
+          storeId: store.id,
+          name: "Register A",
+          code: "A",
+        },
+      }),
+      prisma.posRegister.create({
+        data: {
+          organizationId: org.id,
+          storeId: store.id,
+          name: "Register B",
+          code: "B",
+        },
+      }),
+    ]);
+    const caller = createTestCaller({
+      id: cashierUser.id,
+      email: cashierUser.email,
+      role: cashierUser.role,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+
+    const unresolved = await caller.pos.entry();
+    expect(unresolved.registers).toHaveLength(2);
+    expect(unresolved.selectedRegister).toBeNull();
+    expect(unresolved.currentShift).toBeNull();
+
+    const explicit = await caller.pos.entry({ registerId: registerB.id });
+    expect(explicit.selectedRegister?.id).toBe(registerB.id);
+
+    const invalid = await caller.pos.entry({ registerId: "inaccessible-register" });
+    expect(invalid.selectedRegister).toBeNull();
+    expect(invalid.registers.map((register) => register.id)).toEqual(
+      expect.arrayContaining([registerA.id, registerB.id]),
+    );
+  });
+
   it("reuses existing draft for cashier and register", async () => {
     const { org, store, cashierUser } = await seedBase({ plan: "BUSINESS" });
 
@@ -363,6 +406,83 @@ describeDb("pos", () => {
 
     const closedShift = await prisma.registerShift.findUnique({ where: { id: shift.id } });
     expect(closedShift?.status).toBe("CLOSED");
+  });
+
+  it("keeps the shift opener separate and attributes a resumed sale to the completing cashier", async () => {
+    const { org, store, product, cashierUser, adminUser } = await seedBase({ plan: "BUSINESS" });
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { basePriceKgs: 150 },
+    });
+    const register = await prisma.posRegister.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Shared register",
+        code: "SHARED",
+      },
+    });
+    const openerCaller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+      isOrgOwner: true,
+    });
+    const cashierCaller = createTestCaller({
+      id: cashierUser.id,
+      email: cashierUser.email,
+      role: cashierUser.role,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+
+    const shift = await openerCaller.pos.shifts.open({
+      registerId: register.id,
+      openingCashKgs: 0,
+      idempotencyKey: "pos-shared-shift-open-1",
+    });
+    const heldSale = await openerCaller.pos.sales.createDraft({ registerId: register.id });
+    await openerCaller.pos.sales.addLine({
+      saleId: heldSale.id,
+      productId: product.id,
+      qty: 1,
+    });
+    await openerCaller.pos.sales.holdDraft({ saleId: heldSale.id });
+
+    await cashierCaller.pos.sales.resumeHeldDraft({
+      saleId: heldSale.id,
+      registerId: register.id,
+    });
+    expect((await cashierCaller.pos.sales.activeDraft({ registerId: register.id }))?.id).toBe(
+      heldSale.id,
+    );
+
+    await cashierCaller.pos.sales.complete({
+      saleId: heldSale.id,
+      idempotencyKey: "pos-shared-shift-complete-1",
+      payments: [{ method: PosPaymentMethod.CASH, amountKgs: 150 }],
+    });
+
+    const [persistedShift, persistedSale, journal] = await Promise.all([
+      prisma.registerShift.findUnique({ where: { id: shift.id } }),
+      prisma.customerOrder.findUnique({
+        where: { id: heldSale.id },
+        include: { payments: true },
+      }),
+      cashierCaller.pos.sales.list({
+        registerId: register.id,
+        statuses: ["COMPLETED"],
+        page: 1,
+        pageSize: 25,
+      }),
+    ]);
+
+    expect(persistedShift?.openedById).toBe(adminUser.id);
+    expect(persistedSale?.createdById).toBe(cashierUser.id);
+    expect(persistedSale?.updatedById).toBe(cashierUser.id);
+    expect(persistedSale?.payments[0]?.createdById).toBe(cashierUser.id);
+    expect(journal.items[0]?.cashier?.id).toBe(cashierUser.id);
   });
 
   it("allows receipt registry only for manager and above", async () => {
