@@ -3,14 +3,14 @@
 ## Audit boundary and method
 
 - Baseline: `4d7c9b33218b584334ca62f7a816f8997f144a10` on `hardening/agent-3-commerce`.
-- Scope: sales orders, purchase orders, customers, suppliers, Bazaar API, order email actions, Email Marketing, sender domains, M-Market, Bakai Store, O! Market, AI descriptions/specifications, export validation, and integration job lifecycle.
+- Scope: sales orders, purchase orders, customers, suppliers, Bazaar API and developer documentation, Bazaar public catalogue/checkout, order email actions, Email Marketing, sender domains, M-Market, Bakai Store, O! Market, Product Image Studio, AI descriptions/specifications, export validation, and integration job lifecycle.
 - Method: static route/service/router/schema/test inspection only. No application code, schema, configuration, or test files were changed.
 - Runtime status: browser QA, live database reproduction, external-provider calls, Preview deployment, screenshots, responsive/theme checks, console/network inspection, and performance measurements are `NOT_RUN`. External APIs were not called and no database was mutated.
 - Evidence: durable source references are recorded in each defect below. No evidence exists only under ignored `tmp/`.
 
 ## Summary
 
-Static inspection found 20 defects: 12 P0, 5 P1, and 3 P2. The highest-risk findings are API-order stock being deducted twice when the order is completed, cached revoked API credentials remaining usable, cross-store customer leakage, missing purchase-order and marketplace server authorization/store scope, optional/ambiguous API idempotency, and a UI labelled as a return flow that creates an ordinary sale.
+Static inspection found 27 defects: 15 P0, 7 P1, and 5 P2. The highest-risk findings are API-order stock being deducted twice when the order is completed, cached revoked API credentials remaining usable, cross-store customer leakage, missing purchase-order and integration server authorization/store scope, unsafe API/public-checkout retries, an SSRF-capable public image proxy, stale public prices/products, and a UI labelled as a return flow that creates an ordinary sale.
 
 ## Owned route and UI inventory
 
@@ -30,10 +30,14 @@ Static inspection found 20 defects: 12 P0, 5 P1, and 3 P2. The highest-risk find
 | `/suppliers/new` | Entry route into supplier creation. | `src/app/(app)/suppliers/new/page.tsx` |
 | `/operations/integrations` | Integration landing/cards and navigation. | `src/app/(app)/operations/integrations/page.tsx` |
 | `/operations/integrations/bazaar-api` | Accessible-store selector; API-key list/create/revoke; one-time token display; API usage examples. | `src/app/(app)/operations/integrations/bazaar-api/page.tsx` |
+| `/operations/integrations/bazaar-catalog` | Accessible-store selector; catalogue publish/draft settings; title/accent/font/header/logo form and preview; public link; server-paginated product visibility table/cards with search/filter/selection; legacy API-key management procedures in the same router. | `src/app/(app)/operations/integrations/bazaar-catalog/page.tsx` |
 | `/operations/integrations/email-marketing` | Campaign workspace; builder blocks; preview; customer audience and product pickers; sender/domain setup; logo upload/gallery; drafts/history/automation controls; test/send/resume/archive/delete. | `src/app/(app)/operations/integrations/email-marketing/page.tsx`, `workspace.tsx`, `builder-utils.ts` |
 | `/operations/integrations/m-market` | Connection/token; branch mappings; selected-product table; preflight; AI description/spec/category/template actions; all/ready-only export; job history/error report. | `src/app/(app)/operations/integrations/m-market/page.tsx` |
 | `/operations/integrations/bakai-store` | Connection mode/token; workbook template upload/download; stock and branch mappings; product selection; AI descriptions; workbook/API preflight; export/API sync; jobs/workbook/error reports. | `src/app/(app)/operations/integrations/bakai-store/page.tsx` |
 | `/operations/integrations/o-market` | Connection/token/base URL; store/category mappings; product selection; preflight; product export/ready-only/stock-price/full sync; jobs/error report. | `src/app/(app)/operations/integrations/o-market/page.tsx` |
+| `/operations/integrations/product-image-studio` | Visually disabled “soon” surface that still loads job/overview data; source upload; optional product selection; fixed preset controls; generate/retry; source/output preview; save/set primary; job history. | `src/app/(app)/operations/integrations/product-image-studio/page.tsx` |
+| `/developers/bazaar-api` | Public, indexable, static Russian API v1 documentation; authentication, products, orders, customers, statuses, errors, limits, cURL/examples, integration flow. | `src/app/developers/bazaar-api/page.tsx` |
+| `/c/[slug]` | Public client catalogue; loading/error/retry/empty states; language control; local search/category collapse; product/variant/quantity cart; checkout modal/form/success; responsive mobile cart bar. | `src/app/c/[slug]/page.tsx`, `src/components/catalog/public-catalog-page.tsx` |
 
 Product-page AI entry points are adjacent owned behavior, not ownership of the full `/products` route: availability, one-product generation, bulk generation, asynchronous generation progress, and failed-item retry in `src/server/trpc/routers/products.ts`.
 
@@ -45,6 +49,12 @@ Product-page AI entry points are adjacent owned behavior, not ownership of the f
 | `/api/bazaar/v1/orders` | GET, POST | API-key order listing and order creation with immediate stock deduction. |
 | `/api/bazaar/v1/orders/[id]` | GET | API order lookup by internal ID, number, or external ID. |
 | `/api/bazaar/v1/customers` | POST | API-key customer creation/upsert. |
+| `/api/public/catalog/[slug]` | GET | Public published catalogue payload. |
+| `/api/public/catalog/[slug]/checkout` | POST | Unauthenticated public confirmed-order/customer creation. |
+| `/api/public/catalog/image` | GET | Unauthenticated managed-image fetch/transform/cache proxy. |
+| `/api/bazaar-catalog/logo` | POST | Authenticated catalogue logo upload. |
+| `/api/product-image-studio/upload` | POST | Authenticated source-image proxy upload. |
+| `/api/product-image-studio/jobs/[id]/image` | GET | Authenticated source/output job image proxy. |
 | `/api/purchase-orders/[id]/pdf` | GET | Authenticated PO PDF/print artifact. |
 | `/api/email-marketing/logo` | POST | Marketing logo upload. |
 | `/api/email-marketing/unsubscribe` | GET, POST | Signed unsubscribe landing/action. |
@@ -63,10 +73,12 @@ Product-page AI entry points are adjacent owned behavior, not ownership of the f
 - `customers`: `list`, `detail`, `create`, `update`, `delete`, `previewImport`, `importRows`.
 - `suppliers`: `list`, `create`, `update`, `delete`, `bulkDelete`.
 - `bazaarApi`: `listStores`, `apiKeys`, `createApiKey`, `revokeApiKey`.
+- `bazaarCatalog`: `listStores`, `getSettings`, `products`, `updateProducts`, `apiKeys`, `createApiKey`, `revokeApiKey`, `upsert`.
 - `emailMarketing`: `logoGallery`, `senders`, `createSender`, `checkSenderDomain`, `archiveSender`, `overview`, `preview`, `audiencePreview`, `customers`, `products`, `sendTest`, `saveDraft`, `send`, `sendCampaign`, `resumeCampaign`, `duplicateCampaign`, `archiveCampaign`, `deleteCampaignDraft`, `history`, `detail`, `automations`, `updateAutomation`, `testAutomation`.
 - `mMarket`: `overview`, `settings`, `revealToken`, `validateLocal`, `saveConnection`, `saveBranchMappings`, `products`, `listIds`, `updateProducts`, `preflight`, `bulkGenerateDescriptions`, `startDescriptionGenerationJob`, `bulkAutofillSpecs`, `bulkCreateBaseTemplates`, `assignMissingCategory`, `exportNow`, `exportReadyNow`, `jobs`, `getJob`.
 - `bakaiStore`: `overview`, `settings`, `revealToken`, `saveSettings`, `testConnection`, `saveMappings`, `saveBranchMappings`, `products`, `listIds`, `updateProducts`, `startDescriptionGenerationJob`, `preflight`, `apiPreflight`, `exportNow`, `exportReadyNow`, `apiSyncNow`, `apiSyncReadyNow`, `jobs`, `getJob`.
 - `oMarket`: `overview`, `settings`, `revealToken`, `saveSettings`, `testConnection`, `saveStoreMappings`, `saveCategoryMappings`, `products`, `listIds`, `updateProducts`, `preflight`, `exportNow`, `exportReadyNow`, `syncStockPriceNow`, `fullSyncNow`, `jobs`, `getJob`.
+- `productImageStudio`: `overview`, `jobs`, `job`, `create`, `retry`, `saveToProduct`.
 - Adjacent `products` AI procedures: `descriptionGenerationAvailability`, `generateDescription`, `bulkGenerateDescriptions`, `startDescriptionGenerationJob`, `descriptionGenerationJob`, `retryDescriptionGenerationJobFailed`.
 
 ## Background job inventory and lifecycle audit
@@ -79,6 +91,7 @@ Product-page AI entry points are adjacent owned behavior, not ownership of the f
 | Bakai workbook export/API sync | `QUEUED/RUNNING/DONE/FAILED`; two service-local registered jobs, started in-process. | Only stale `RUNNING` rows time out. A stale `QUEUED` row is considered active and can block later requests. |
 | O! Market export/sync | `QUEUED/RUNNING/DONE/FAILED`; one service-local registered job, started in-process. | Only stale `RUNNING` rows time out. A stale `QUEUED` row is considered active and can block later requests. |
 | Product description generation | Job `QUEUED/PROCESSING/DONE/DONE_WITH_ERRORS/FAILED/CANCELLED`; items `PENDING/PROCESSING/SUCCESS/FAILED/SKIPPED/CANCELLED`; service-local registration and in-process start. | Contains stale queued/processing recovery and failed-item retry, but the generic job route does not import/register this worker in a fresh runtime. |
+| Product Image Studio | `QUEUED/PROCESSING/SUCCEEDED/FAILED`; service-local registration; create/retry synchronously await the registered provider job inside the tRPC request. | Provider fetch has no timeout, no stale `PROCESSING` recovery exists, and the generic job route does not statically register this worker. Concurrent dedupe is check-then-create without a unique key. |
 
 ## RBAC and scoping inventory
 
@@ -89,7 +102,10 @@ Product-page AI entry points are adjacent owned behavior, not ownership of the f
 | Customers | `manageCustomers`: Admin, Manager. | Router role gate exists, but list/detail/dedupe/recent orders leak across a store-limited manager's store boundary (HARD-A3-006). |
 | Integration UI | `manageIntegrations`: Admin, Manager. | Marketplace read procedures/artifact GETs use generic authentication and marketplace store selection validates organization ownership only (HARD-A3-008). |
 | Bazaar API key management | Admin/Manager UI and router; accessible-store checks. | Key creation/list scope is present; cached authentication bypasses revocation temporarily (HARD-A3-002). |
+| Bazaar Catalogue management | `manageIntegrations`: Admin, Manager. | Mutations are Manager/Admin and store-scoped, but catalogue reads use generic `protectedProcedure`; the page itself explicitly treats Staff as view-capable (HARD-A3-008). |
 | Email Marketing | Manager/Admin procedures with per-store checks in core services. | Primary store checks are present; idempotency/suppression/content-validation gaps remain. |
+| Product Image Studio | `manageIntegrations`: Admin, Manager. | Mutations/uploads are Manager/Admin, but overview/job records and job image artifacts are readable by any authenticated organization user (HARD-A3-008). |
+| Developer docs/public catalogue | Intentionally public. | Public checkout/proxy boundaries have idempotency, cache, abuse, and SSRF defects; no authenticated role applies. |
 
 ## Relevant data-model inventory
 
@@ -99,6 +115,7 @@ Product-page AI entry points are adjacent owned behavior, not ownership of the f
 - Email: `EmailCampaign`, `EmailCampaignRecipient`, `EmailMarketingLogo`, `EmailSenderDomain`, `EmailSenderIdentity`, `EmailAutomation`, `EmailAutomationDelivery`.
 - Marketplaces: `MMarketIntegration`, `MMarketBranchMapping`, `MMarketExportJob`, `MMarketIncludedProduct`; `BakaiStoreIntegration`, `BakaiStoreStockMapping`, `BakaiStoreBranchMapping`, `BakaiStoreExportJob`, `BakaiStoreIncludedProduct`, `BakaiStoreProductSyncState`; `OMarketIntegration`, `OMarketStoreMapping`, `OMarketCategoryMapping`, `OMarketExportJob`, `OMarketIncludedProduct`, `OMarketProductSyncState`.
 - AI/catalog inputs: `ProductDescriptionGenerationJob`, `ProductDescriptionGenerationItem`, `Product`, `StoreProduct`, `ProductVariant`, `StorePrice`, `ProductCost`, `AttributeDefinition`, `CategoryAttributeTemplate`, `VariantAttributeValue`.
+- Public catalogue/image tooling: `BazaarCatalog`, `BazaarCatalogImage`, `BazaarCatalogHiddenProduct`, `BazaarCatalogStatus`, `BazaarCatalogFontFamily`, `BazaarCatalogHeaderStyle`, `ProductImageStudioJob`, `ProductImageStudioJobStatus`, `ProductImage`, plus the order/customer/price/stock models above.
 - Shared governance: `Organization`, `Store`, `User`, `UserStoreAccess`, `AuditLog`, `DeadLetterJob`.
 
 ## Defects
@@ -181,7 +198,7 @@ Product-page AI entry points are adjacent owned behavior, not ownership of the f
 ### HARD-A3-006 — Customer records, dedupe, and order history cross store boundaries
 
 - **ID:** HARD-A3-006
-- **Route:** `/customers`; customer import; all order-to-customer upserts
+- **Route:** `/customers`; customer import; Bazaar API and `/c/[slug]` checkout; all order-to-customer upserts
 - **Feature:** Customer privacy, store-scoped dedupe, metrics, recent orders
 - **Severity:** P0
 - **Role:** Store-limited Manager
@@ -191,7 +208,7 @@ Product-page AI entry points are adjacent owned behavior, not ownership of the f
 - **Actual:** List/detail searches the whole organization, recent orders are not scoped to accessible stores, and order upsert can update Store B's customer instead of creating Store A's.
 - **Root cause hypothesis:** Confirmed static root cause: `storeId` is validated but omitted from customer lookup/list/detail matching queries; dedupe helpers accept only organization ID.
 - **Files/components:** `src/server/services/customers.ts`, `src/server/trpc/routers/customers.ts`, `tests/integration/customers.test.ts`, `docs/customer-database-plan.md`
-- **Evidence:** `customers.ts:266-348`, `427-541`, and `1035-1090` omit store scope from lookup/list/detail/recent orders/upsert. The design contract explicitly requires same-store matching and isolation (`customer-database-plan.md:19-46`, `86`, `106-109`), while current tests assert organization-wide dedupe/shared visibility.
+- **Evidence:** `customers.ts:266-348`, `427-541`, and `1035-1090` omit store scope from lookup/list/detail/recent orders/upsert. API and public catalogue checkout both call this helper (`bazaarApi.ts:1411-1418`; `bazaarCatalog.ts:1119-1125`). The design contract explicitly requires same-store matching and isolation (`customer-database-plan.md:19-46`, `86`, `106-109`), while current tests assert organization-wide dedupe/shared visibility. Public developer docs also promise that API customer updates stay in the key's store (`developers/bazaar-api/page.tsx:632-640`).
 
 ### HARD-A3-007 — Purchase-order and supplier authorization is only enforced in navigation
 
@@ -208,20 +225,20 @@ Product-page AI entry points are adjacent owned behavior, not ownership of the f
 - **Files/components:** `src/lib/roleAccess.ts`, `src/server/trpc/routers/purchaseOrders.ts`, `src/server/trpc/routers/suppliers.ts`, `src/server/services/purchaseOrders.ts`, `src/app/api/purchase-orders/[id]/pdf/route.ts`
 - **Evidence:** `roleAccess.ts:39-83` and `106-124` reserve PO/supplier UI for Admin/Manager. PO `list/listIds/getById` use `protectedProcedure` and organization-only filters (`purchaseOrders.ts:23-142`); mutations pass organization but no actor store assertion (`144-365`). Supplier `list` is protected (`suppliers.ts:12-18`). PDF checks only token organization (`route.ts:116-147`).
 
-### HARD-A3-008 — Marketplace server APIs and artifacts bypass integration/store permissions
+### HARD-A3-008 — Integration server APIs and artifacts bypass route permissions
 
 - **ID:** HARD-A3-008
-- **Route:** `/operations/integrations/{m-market,bakai-store,o-market}` and their artifact endpoints
-- **Feature:** Integration RBAC, mappings, selected products, provider responses, exports
+- **Route:** `/operations/integrations/{bazaar-catalog,m-market,bakai-store,o-market,product-image-studio}` and artifact endpoints
+- **Feature:** Integration RBAC, catalogue/product/job data, mappings, provider responses, exports and generated images
 - **Severity:** P0
 - **Role:** Staff/Cashier; store-limited Manager
 - **Viewport:** API / all UI viewports
-- **Reproduction:** As Staff/Cashier call marketplace overview/settings/products/preflight/jobs/getJob or download a known job artifact; as a Store A manager submit Store B to marketplace mutations.
+- **Reproduction:** As Staff/Cashier call catalogue/marketplace/Image Studio protected read procedures or download a known job artifact/image; as a Store A manager submit Store B to marketplace mutations.
 - **Expected:** Integration access requires Admin/Manager and every store-specific read/write is limited to accessible stores.
-- **Actual:** Multiple procedures and artifact GETs require only authentication/organization; service store resolution accepts any organization store.
-- **Root cause hypothesis:** Confirmed static root cause: the UI route uses `manageIntegrations`, but marketplace routers use `protectedProcedure`, download routes check only organization, and service context helpers do not receive the user.
-- **Files/components:** `src/lib/roleAccess.ts`, `src/server/trpc/routers/mMarket.ts`, `bakaiStore.ts`, `oMarket.ts`, corresponding services, and marketplace artifact routes
-- **Evidence:** Integration UI is gated at `roleAccess.ts:119`. Protected reads appear at `mMarket.ts:29-43,112-160,186-194,339-367`, `bakaiStore.ts:28-42,140-185,242-260,328-356`, and `oMarket.ts:24-37,138-180,212-231,302-320`. Store helpers validate only organization (`services/mMarket.ts:359-385`, `bakaiStore.ts:761-787`, `oMarket.ts:498-523`). Artifact routes query by `token.organizationId` without role/store assertions.
+- **Actual:** Multiple procedures and artifact GETs require only authentication/organization; service store resolution accepts any organization store. Catalogue page code even declares Staff view access despite the global Admin/Manager route gate.
+- **Root cause hypothesis:** Confirmed static root cause: the UI route uses `manageIntegrations`, but domain routers use `protectedProcedure`, download routes check only organization, and marketplace service context helpers do not receive the user.
+- **Files/components:** `src/lib/roleAccess.ts`; Bazaar Catalogue, marketplace, and Product Image Studio pages/routers/services/artifact routes
+- **Evidence:** Integration UI is gated at `roleAccess.ts:119`. Bazaar Catalogue reads use `protectedProcedure` (`bazaarCatalog.ts` router `24-79`) and the page sets `canView` for Staff (`page.tsx:191-197`). Protected marketplace reads appear at `mMarket.ts:29-43,112-160,186-194,339-367`, `bakaiStore.ts:28-42,140-185,242-260,328-356`, and `oMarket.ts:24-37,138-180,212-231,302-320`. Image Studio overview/jobs/job use `protectedProcedure` (`productImageStudio.ts` router `18-55`), and its image route checks only organization (`jobs/[id]/image/route.ts:52-75`). Marketplace store helpers validate only organization (`services/mMarket.ts:359-385`, `bakaiStore.ts:761-787`, `oMarket.ts:498-523`).
 
 ### HARD-A3-009 — Manual sales orders accept products not assigned to the order store
 
@@ -346,17 +363,17 @@ Product-page AI entry points are adjacent owned behavior, not ownership of the f
 ### HARD-A3-017 — API order confirmation email is fire-and-forget
 
 - **ID:** HARD-A3-017
-- **Route:** `POST /api/bazaar/v1/orders`
+- **Route:** `POST /api/bazaar/v1/orders`; `POST /api/public/catalog/[slug]/checkout`
 - **Feature:** Order confirmation email delivery/recovery
 - **Severity:** P1
 - **Role:** API key/customer
 - **Viewport:** API
-- **Reproduction:** Create an API order and recycle the serverless request runtime immediately after the response/transaction; inspect the email log and delivery.
+- **Reproduction:** Create an API or public catalogue order and recycle the serverless request runtime immediately after the response/transaction; inspect the email log and delivery.
 - **Expected:** The committed order has a durable outbox/job with observable retry or a synchronous recorded outcome.
 - **Actual:** Email sending is detached from the request with an unawaited promise; failure is only logged and has no durable retry state.
 - **Root cause hypothesis:** Static deployment-risk root cause: a serverless request lifetime is being used as a background worker.
-- **Files/components:** `src/server/services/bazaarApi.ts`, `src/server/services/orderEmails.ts`, email/job infrastructure
-- **Evidence:** `bazaarApi.ts:1422-1440` publishes the event and calls `void sendOrderConfirmationEmail(...).catch(...)` after commit. No outbox/queued email record is created in this path. Runtime fault-injection remains `NOT_RUN`.
+- **Files/components:** `src/server/services/bazaarApi.ts`, `src/server/services/bazaarCatalog.ts`, `src/server/services/orderEmails.ts`, email/job infrastructure
+- **Evidence:** `bazaarApi.ts:1422-1440` and `bazaarCatalog.ts:1130-1147` publish events and call `void sendOrderConfirmationEmail(...).catch(...)` after commit. No outbox/queued email record is created in either path. Runtime fault-injection remains `NOT_RUN`.
 
 ### HARD-A3-018 — Invalid custom button URLs can be sent with the button silently omitted
 
@@ -403,6 +420,111 @@ Product-page AI entry points are adjacent owned behavior, not ownership of the f
 - **Files/components:** Bazaar API route handlers and shared error/logging adapter
 - **Evidence:** `src/app/api/bazaar/v1/orders/route.ts:117-120,144-147` returns arbitrary `Error.message`; the products/customers/order-detail route handlers use the same pattern.
 
+### HARD-A3-021 — Public catalogue checkout can create duplicate confirmed orders
+
+- **ID:** HARD-A3-021
+- **Route:** `POST /api/public/catalog/[slug]/checkout`; `/c/[slug]`
+- **Feature:** Public checkout idempotency, abuse control, audit and email side effects
+- **Severity:** P0
+- **Role:** Unauthenticated public visitor
+- **Viewport:** API / all public catalogue viewports
+- **Reproduction:** Submit a valid checkout, simulate a lost response, then retry the same payload; or send two concurrent identical POSTs.
+- **Expected:** One logical checkout creates one order/customer effect/email; retries resolve to the original order, and abusive repeated submissions are application-rate-limited.
+- **Actual:** Every accepted request creates another `CONFIRMED` order, updates customer counters, publishes another event, and starts another confirmation email; the route has no idempotency key or application-level rate limit.
+- **Root cause hypothesis:** Confirmed static root cause: the public mutation accepts only customer/cart fields and directly executes unconditional order creation; no persisted operation key, uniqueness guard, rate-limit wrapper, or audit entry is present.
+- **Files/components:** `src/app/api/public/catalog/[slug]/checkout/route.ts`, `src/server/services/bazaarCatalog.ts`, `src/components/catalog/public-catalog-page.tsx`, order/customer/email models
+- **Evidence:** Checkout schema and client request contain no operation key (`checkout/route.ts:9-42`; `public-catalog-page.tsx:470-505`). Service `bazaarCatalog.ts:903-952,1090-1147` unconditionally creates the confirmed order/customer effects and fire-and-forget email. Repository search finds no `withIdempotency` or `rateLimit` in this flow and no checkout audit log.
+
+### HARD-A3-022 — Public catalogue can display one price and create the order at another
+
+- **ID:** HARD-A3-022
+- **Route:** `GET /api/public/catalog/[slug]`; `/c/[slug]`; public checkout
+- **Feature:** Public product/price cache consistency
+- **Severity:** P0
+- **Role:** Public visitor; Manager/Admin changes product/price
+- **Viewport:** API / all public catalogue viewports
+- **Reproduction:** Warm a published catalogue, change a product name/image/archive/assignment or store price, reload and checkout within the 60-second cache TTL.
+- **Expected:** Product eligibility and the price shown in the cart match the price/order accepted at checkout, or checkout returns an explicit price-change conflict requiring confirmation.
+- **Actual:** The public payload can remain stale, while checkout performs fresh database price/eligibility reads; the created order can therefore differ from what the visitor saw and approved.
+- **Root cause hypothesis:** Confirmed static root cause: public payload cache invalidation is wired to catalogue visibility/settings and organization-store settings only, not normal product, store-price, image, archive, or assignment mutations.
+- **Files/components:** `src/server/services/bazaarCatalog.ts`, product/price/image/store-assignment services, public catalogue client
+- **Evidence:** Cache TTL/read/write are `bazaarCatalog.ts:33,120-148,723-735,883-900`. Checkout re-reads products/prices at `980-1088`. Invalidation calls exist only in catalogue visibility (`504-557`), catalogue settings (`622-650`), and `orgSettings.ts:212`; repository search found no product/store-price mutation invalidation.
+
+### HARD-A3-023 — Public catalogue sends the full product catalogue to every client
+
+- **ID:** HARD-A3-023
+- **Route:** `GET /api/public/catalog/[slug]`; `/c/[slug]`
+- **Feature:** Large-catalogue pagination/search/performance
+- **Severity:** P2
+- **Role:** Public visitor
+- **Viewport:** All, highest risk on mobile
+- **Reproduction:** Publish a store with thousands of active products/variants and load the public catalogue on a constrained mobile connection.
+- **Expected:** Server pagination/incremental loading and server search bound response/query/render work.
+- **Actual:** One GET loads every product and variant; the client performs search/category grouping and renders from the full payload.
+- **Root cause hypothesis:** Confirmed static root cause: the public query has no cursor/page/take and the client API contract contains the complete product array.
+- **Files/components:** `src/server/services/bazaarCatalog.ts`, `src/app/api/public/catalog/[slug]/route.ts`, `src/components/catalog/public-catalog-page.tsx`
+- **Evidence:** Product query `bazaarCatalog.ts:767-806` has no `take/skip`; payload contains every product at `843-900`. Client filters/grouping operate over `catalog.products` (`public-catalog-page.tsx:272-337`). No large-catalog performance or pagination test exists.
+
+### HARD-A3-024 — Product Image Studio can hang requests and leave jobs permanently processing
+
+- **ID:** HARD-A3-024
+- **Route:** `/operations/integrations/product-image-studio`; `productImageStudio.create/retry`
+- **Feature:** AI image job lifecycle, timeout, recovery and deduplication
+- **Severity:** P1
+- **Role:** Manager/Admin
+- **Viewport:** API / all integration viewports
+- **Reproduction:** Make the provider request hang or terminate the request runtime after the job changes to `PROCESSING`; separately issue concurrent identical creates.
+- **Expected:** The request only enqueues durably, provider calls have timeouts, stale queued/processing jobs recover, and concurrent duplicate submissions coalesce atomically.
+- **Actual:** Create synchronously awaits the provider job with no fetch timeout; interrupted `PROCESSING` jobs have no recovery and cannot use the retry mutation; concurrent check-then-create can create duplicate provider work/cost.
+- **Root cause hypothesis:** Confirmed static root cause: provider execution is awaited in the request, job claiming/recovery is not a durable worker lifecycle, and dedupe has neither transaction lock nor unique operation key.
+- **Files/components:** `src/server/services/productImageStudio.ts`, `src/server/trpc/routers/productImageStudio.ts`, `src/server/jobs/index.ts`, `ProductImageStudioJob`
+- **Evidence:** Active-job check/create are separate operations (`productImageStudio.ts:910-958`) followed by awaited `runJob` (`975-979`). Provider `fetch` has no `signal` (`471-617`). Processor marks `PROCESSING` at `1137-1167`, but no stale status query/update exists; retry permits only `FAILED/SUCCEEDED` (`982-1018`). Registration is a service import side effect (`1284-1286`) absent from the central registry.
+
+### HARD-A3-025 — Catalogue publication and logo/settings mutations lack audit history
+
+- **ID:** HARD-A3-025
+- **Route:** `/operations/integrations/bazaar-catalog`; `POST /api/bazaar-catalog/logo`
+- **Feature:** Publish/unpublish, branding configuration and mutation audit
+- **Severity:** P1
+- **Role:** Manager/Admin
+- **Viewport:** API / all integration viewports
+- **Reproduction:** Publish/unpublish a catalogue, change its title/theme/logo, then query the organization's `AuditLog` for the action and before/after state.
+- **Expected:** Every externally visible configuration mutation records actor, request, target store/catalog, and before/after state.
+- **Actual:** Visibility changes are audited, but catalogue upsert and logo-image creation have no audit entry; upsert does not even receive `requestId`.
+- **Root cause hypothesis:** Confirmed static root cause: audit logging was implemented only for product visibility, not for settings/logo mutations.
+- **Files/components:** `src/server/trpc/routers/bazaarCatalog.ts`, `src/server/services/bazaarCatalog.ts`, `src/app/api/bazaar-catalog/logo/route.ts`, `AuditLog`
+- **Evidence:** Router upsert forwards actor but no request ID (`bazaarCatalog.ts:167-196`). Service upsert/logo creation at `bazaarCatalog.ts:564-693` contains no `writeAuditLog`; repository search finds the only service audit call at `541` for visibility.
+
+### HARD-A3-026 — Public catalogue image proxy permits server-side requests to arbitrary hosts
+
+- **ID:** HARD-A3-026
+- **Route:** `GET /api/public/catalog/image`
+- **Feature:** Public image optimization proxy and SSRF boundary
+- **Severity:** P0
+- **Role:** Unauthenticated public caller
+- **Viewport:** API
+- **Reproduction:** Request `/api/public/catalog/image?url=http://127.0.0.1/uploads/imported-products/probe&w=120` or use another attacker-chosen host with a managed-looking path.
+- **Expected:** Only the configured application/storage origin is accepted; loopback, link-local, private, and unapproved external hosts are rejected before fetch.
+- **Actual:** The proxy treats the parsed pathname as proof that the full URL is managed, then server-fetches the attacker-selected URL; non-image responses can also be returned as bytes.
+- **Root cause hypothesis:** Confirmed static root cause: managed-path recognition is applied independently of origin, and the route uses raw `fetch` instead of the existing DNS/IP/redirect-safe remote image downloader.
+- **Files/components:** `src/app/api/public/catalog/image/route.ts`, `src/server/services/productImageStorage.ts`
+- **Evidence:** Route `31-58` accepts a URL when any derived pathname passes `isManagedProductImageUrl`, then raw-fetches it at `81-103`. `isManagedProductImageUrl` is prefix-only (`productImageStorage.ts:865-881`). The same service contains private-IP/DNS/redirect enforcement at `700-863`, but this public route does not use it. No image-proxy SSRF test exists.
+
+### HARD-A3-027 — `/retails/` catalogue images are routed into a proxy that rejects them
+
+- **ID:** HARD-A3-027
+- **Route:** `/c/[slug]`; `GET /api/public/catalog/image`
+- **Feature:** Public product image rendering
+- **Severity:** P2
+- **Role:** Public visitor
+- **Viewport:** All
+- **Reproduction:** Publish a product whose image URL pathname contains `/retails/` and load its public product card.
+- **Expected:** The image renders directly or the proxy consistently recognizes and transforms it.
+- **Actual:** The client classifies `/retails/` as proxyable and uses the proxy URL, but the proxy's managed-prefix policy rejects `/retails/`, producing a broken image.
+- **Root cause hypothesis:** Confirmed static root cause: client and server use different source allowlists and there is no runtime fallback from a failed optimized source to the original URL.
+- **Files/components:** `src/components/catalog/public-catalog-page.tsx`, `src/app/api/public/catalog/image/route.ts`, `src/server/services/productImageStorage.ts`
+- **Evidence:** Client allowlist includes `/retails/` (`public-catalog-page.tsx:159-187`) and prefers that proxy URL (`544-553`). Server accepts only `isManagedProductImageUrl` (`image/route.ts:31-58`), whose prefixes omit `/retails/` (`productImageStorage.ts:865-881`).
+
 ## Coverage matrix
 
 Legend: `PASS` means a static contract was found and no defect was identified in that narrow check; `FAIL` cites a defect; `NOT_RUN` means runtime coverage is still required; `NA` means the dimension does not apply. No route is release-passable from this Phase A audit alone.
@@ -420,11 +542,16 @@ Legend: `PASS` means a static contract was found and no defect was identified in
 | `/suppliers*` | FAIL A3-007 | NOT_RUN | FAIL A3-019 | NA | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
 | `/operations/integrations` | PASS (static route gate) | NOT_RUN | NOT_RUN | NA | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
 | Bazaar API management | PASS (static management scope) | NOT_RUN | FAIL A3-002 | NA | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
+| Bazaar Catalogue management | FAIL A3-008 | NOT_RUN | FAIL A3-025 | NA | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
 | Email Marketing | PASS (static role/store checks) | NOT_RUN | FAIL A3-015/A3-016/A3-018 | NA | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
 | M-Market | FAIL A3-008 | NOT_RUN | FAIL A3-013/A3-014 | FAIL A3-008/A3-014 | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
 | Bakai Store | FAIL A3-008 | NOT_RUN | FAIL A3-013/A3-014 | FAIL A3-008/A3-014 | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
 | O! Market | FAIL A3-008 | NOT_RUN | FAIL A3-013/A3-014 | FAIL A3-008/A3-014 | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
+| Product Image Studio | FAIL A3-008 | NOT_RUN | FAIL A3-024 | NA | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
+| `/developers/bazaar-api` | NA (public) | FAIL A3-003/A3-006 contract drift | NA | NA | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
+| `/c/[slug]` | NA (public) | NOT_RUN | FAIL A3-021/A3-022/A3-023 | FAIL A3-026/A3-027 image proxy | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
 | Bazaar REST API | FAIL A3-002/A3-003 | NOT_RUN | FAIL A3-001/A3-003/A3-005/A3-010/A3-017/A3-020 | NA | NA | NA | NA | NA | NA |
+| Public catalogue APIs | NA (public) | NOT_RUN | FAIL A3-021/A3-022/A3-023 | FAIL A3-026/A3-027 | NA | NA | NA | NA | NA |
 
 Required data states (empty, one, normal, many, negative stock, missing price/cost/image, archived, stale/incomplete job, invalid/deactivated relation), UI states (loading/skeleton/success/empty/validation/API error/retry), every required role, browser console/network, and back-navigation persistence are all `NOT_RUN` unless a static `FAIL` is shown above.
 
@@ -439,14 +566,17 @@ Required data states (empty, one, normal, many, negative stock, missing price/co
 | Email campaigns/senders/automations | Manager and core store checks present. | Content/audience/sender validation exists; links non-blocking. | Campaign+recipients transaction exists. | New send lacks an idempotency key. | Delivery logs/webhook summary exist; complaint suppression missing. | FAIL A3-015/A3-016/A3-018 |
 | Marketplace selections/mappings/exports | UI role gate exists; server reads/store scope incomplete. | Preflight exists. | Job rows/audits persist, provider side effects are external. | Cooldown/random keys are not durable request idempotency; queued recovery incomplete. | Audit/error artifacts present. | FAIL A3-008/A3-013/A3-014 |
 | AI description/spec generation | Manager start; protected progress read; organization/store ownership checks exist. | Product/image/limit checks exist. | Job/items created transactionally. | Failed-item retry exists; dispatch durability incomplete. | Audit/progress present. | FAIL A3-013 |
+| Bazaar Catalogue settings/visibility | Read RBAC is broader than route policy; mutations assert role/store. | Colour/logo/product eligibility validation exists. | Visibility/settings writes are transactional. | No operation idempotency. | Visibility audited; publish/settings/logo are not. | FAIL A3-008/A3-025 |
+| Public catalogue checkout | Public by design; catalogue/product/store eligibility checked. | Customer/phone/email/line validation exists. | Order+customer are transactional. | No idempotency or application rate limit. | Event/email detached; no audit entry. | FAIL A3-006/A3-017/A3-021/A3-022 |
+| Product Image Studio | Write role gate exists; read RBAC is broader than route policy. | File ownership/size/type/dimensions and preset checks exist. | Save-to-product transaction exists. | Dedupe is non-atomic; no stale processing recovery. | Job/create/success/failure/save audits exist. | FAIL A3-008/A3-024 |
 
 ## Existing automated coverage and test gaps
 
-Existing DB-backed suites cover portions of sales orders, purchase orders, Bazaar API, customers, M-Market, Bakai Store, Email Marketing product search, and description jobs. They are environment-gated and were not run in this audit because no isolated Agent 3 database was provisioned. Unit/source tests cover selected PDFs, route source strings, payloads, workbooks, builder utilities, and progress calculations. Source-string tests are not sufficient for critical workflows.
+Existing DB-backed suites cover portions of sales orders, purchase orders, Bazaar API, public catalogue, Product Image Studio, customers, M-Market, Bakai Store, Email Marketing product search, and description jobs. They are environment-gated and were not run in this audit because no isolated Agent 3 database was provisioned. Unit/source tests cover selected PDFs, routes, payloads, catalogue image transformation, workbooks, Image Studio helpers, builder utilities, and progress calculations. Source-string tests are not sufficient for critical workflows.
 
 Critical missing coverage:
 
-1. No owned-route browser E2E exists; the only Playwright file targets Bazaar catalogue.
+1. The only adjacent-route Playwright coverage targets public Bazaar Catalogue and is environment-skipped. Its checkout test fills name/phone but not the now-required email before submit (`tests/e2e/bazaar-catalog.playwright.mjs:9-29`), so the asserted success path is stale. No browser coverage exists for management catalogue, Image Studio, or developer docs.
 2. API create -> ready -> complete stock exactly-once test, including cancellation after each state.
 3. Cached GET -> revoke key -> immediate denial test, including multi-instance/Redis behavior.
 4. Required request idempotency tests for API orders, sales drafts, normal PO create/submit, and new campaign send.
@@ -461,15 +591,21 @@ Critical missing coverage:
 13. Empty/one/many/archived/missing-data/stale-job states; loading/skeleton/error/retry; filter back-navigation.
 14. All role/viewport/theme combinations, keyboard/accessibility, console/runtime/API errors, and warmed-route performance budgets.
 15. Mock-provider contract tests for Resend, M-Market, Bakai, O! Market, and AI; no live provider calls in automation.
+16. Public checkout retry/concurrency/rate-limit/audit tests and a browser assertion that one submission creates exactly one visible sales order.
+17. Warm public payload -> price/product/archive/image/assignment mutation -> reload/checkout consistency tests.
+18. Large public catalogue pagination/payload/render/performance tests on mobile.
+19. Public image proxy allowlist, private/loopback/link-local/DNS-rebinding/redirect, response-size/MIME, and `/retails/` source tests.
+20. Image Studio provider timeout, request-runtime termination, stale `QUEUED/PROCESSING` recovery, fresh job-runner registration, concurrent dedupe, Staff/Cashier denial, and artifact authorization tests.
+21. Developer documentation contract test against actual request schemas/error bodies/status mapping/idempotency requirements.
 
 ## Proposed implementation batches
 
-1. **P0 stock/order identity:** HARD-A3-001, A3-003, A3-005, A3-009, A3-010. Establish one stock-impact boundary, required durable API idempotency/external ID, exact unique identity, server product-store checks, and cache invalidation. Coordinate inventory writes/cache invalidation with Agent 2.
+1. **P0 stock/order/public security:** HARD-A3-001, A3-003, A3-005, A3-009, A3-010, A3-021, A3-022, A3-026. Establish one stock-impact boundary, durable API/public-checkout idempotency, exact unique identity, server product-store checks, coherent cache invalidation/price confirmation, and a strict public image-origin/SSRF boundary. Coordinate inventory/product writes and cache invalidation with Agent 2.
 2. **P0 authorization/privacy:** HARD-A3-002, A3-006, A3-007, A3-008. Add shared policy assertions, store-scoped queries/artifacts, immediate credential invalidation, and cross-role/cross-store integration tests.
 3. **P0 document safety:** HARD-A3-004, A3-011, A3-012. Add create-operation keys, replace fake return mode with the real return domain flow or remove the entry until complete, and make bulk cancel atomic/reconcilable. Coordinate returns with Agent 1.
-4. **P1 durable jobs:** HARD-A3-013, A3-014. Move dispatch to a durable worker/queue, import/register workers explicitly, recover queued/running jobs, expose retry, and migrate terminal enums/UI to completed-with-errors/timed-out.
+4. **P1 durable jobs:** HARD-A3-013, A3-014, A3-024. Move dispatch to a durable worker/queue, import/register workers explicitly, add provider timeouts, recover queued/processing/running jobs, atomically deduplicate, expose retry, and migrate terminal enums/UI to completed-with-errors/timed-out.
 5. **P1 email reliability/compliance:** HARD-A3-015, A3-016, A3-017. Add send idempotency, durable API-order email outbox, complaint suppression, webhook replay tests, and mocked Resend contract tests.
-6. **P2 validation/table/API polish:** HARD-A3-018, A3-019, A3-020. Block invalid links, complete URL-backed server table contracts, and centralize safe public error mapping.
+6. **P1/P2 catalogue controls and polish:** HARD-A3-025, A3-018, A3-019, A3-020, A3-023, A3-027. Add catalogue settings/logo audit history, block invalid links, complete URL-backed/paginated table and public catalogue contracts, align image source policies, and centralize safe public error mapping.
 
 Each batch must add DB integration tests and browser evidence before Agent 4 verification; source-string tests alone do not close any P0/P1.
 
@@ -479,10 +615,12 @@ Each batch must add DB integration tests and browser evidence before Agent 4 ver
 | --- | --- | --- |
 | Prisma schema/migrations | Dedicated API external ID/idempotency; job terminal states; possibly suppression/outbox records. | Coordinate with Agent 2 for schema/migrations and Agent 4 release/migration gate. Never use `db push`. |
 | Inventory/stock service and cache invalidation | One API/manual order stock-impact contract; Bazaar API price/stock cache eviction. | Agent 2 owns inventory behavior; Agent 3 should provide commerce invariants/tests and coordinate edits. |
+| Product/price/image mutation services | Public catalogue payload invalidation and displayed-price/checkout consistency. | Agent 2 owns product/inventory mutations; reserve shared service edits and add cross-domain regression tests. |
 | Returns/refunds | Remove/replace fake Sales Order return entry with actual return semantics. | Agent 1 owns returns/POS; no unilateral Agent 3 change to Agent 1 business logic. |
 | Auth/RBAC/store-access helpers | PO, customer, marketplace, artifact policy assertions. | Shared auth helper ownership must be reserved before editing; Agent 4 cross-checks RBAC matrix. |
 | Job registry/Redis/queue configuration | Explicit job registration, durable dispatch, stale recovery, retry/dead letter. | Shared platform files require Agent 4 coordination and deployment verification. |
 | Shared query/cache configuration | Immediate auth revocation and product/stock invalidation across instances. | Coordinate with Agent 2 and Agent 4; avoid local-only invalidation. |
+| Public image proxy/storage helpers | Strict configured-origin allowlist, safe redirects/DNS/IP checks, byte limits, and client/server source-policy parity. | Security-sensitive shared storage code; coordinate with Agent 2 product images and Agent 4 release/security gate. |
 | Translations | New error/status/partial/timed-out/return messages across `en/ru/kg`. | Reserve translation files for one agent at a time. |
 | App shell/navigation/shared UI | Potentially hide disabled return entry and surface job partial/retry state. | Agent 4 owns shell/global UI; domain owner supplies behavior and tests. |
 | Package dependencies | A durable queue/outbox library may be proposed after design review. | Agent 4/package owner approval required; no dependency change in Phase A. |
