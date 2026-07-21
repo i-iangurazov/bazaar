@@ -1,11 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  buildHeldReceiptResumeHref,
   mergeMobilePosReceiptHistory,
   resolveMobilePosCompletionAttempt,
 } from "@/lib/mobilePosState";
 
 describe("mobile POS state", () => {
+  it("builds an encoded deep link that resumes the selected held receipt", () => {
+    expect(buildHeldReceiptResumeHref("register / 1", "receipt?2")).toBe(
+      "/pos/sell?registerId=register%20%2F%201&receiptId=receipt%3F2&mode=resume",
+    );
+  });
+
   it("reuses the completion idempotency key until the same sale is confirmed", () => {
     const createIdempotencyKey = vi
       .fn<() => string>()

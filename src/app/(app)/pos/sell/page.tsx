@@ -663,6 +663,7 @@ const PosSellPage = () => {
   const completionAttemptRef = useRef<MobilePosCompletionAttempt | null>(null);
   const mobileCommentHydratedSaleIdRef = useRef<string | null>(null);
   const receiptEditDeepLinkRef = useRef<string | null>(null);
+  const heldReceiptResumeDeepLinkRef = useRef<string | null>(null);
   const isFromMovements = searchParams.get("from") === "movements";
   const movementReturnHref = searchParams.get("returnTo") ?? "/inventory/movements";
 
@@ -1088,11 +1089,34 @@ const PosSellPage = () => {
         trpcUtils.pos.sales.get.invalidate({ saleId: result.id }),
         shiftQuery.refetch(),
       ]);
+      if (searchParams.get("mode") === "resume") {
+        const nextParams = new URLSearchParams(searchParams.toString());
+        nextParams.delete("mode");
+        nextParams.delete("receiptId");
+        router.replace(`/pos/sell${nextParams.size ? `?${nextParams.toString()}` : ""}`);
+      }
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
   });
+
+  useEffect(() => {
+    const receiptId = searchParams.get("receiptId");
+    const mode = searchParams.get("mode");
+    if (mode !== "resume" || !receiptId || !registerId || isPhoneScreen === null) {
+      return;
+    }
+    const deepLinkKey = `${mode}:${registerId}:${receiptId}`;
+    if (
+      heldReceiptResumeDeepLinkRef.current === deepLinkKey ||
+      resumeHeldDraftMutation.isLoading
+    ) {
+      return;
+    }
+    heldReceiptResumeDeepLinkRef.current = deepLinkKey;
+    resumeHeldDraftMutation.mutate({ saleId: receiptId, registerId });
+  }, [isPhoneScreen, registerId, resumeHeldDraftMutation, searchParams]);
 
   const updateCustomerMutation = trpc.pos.sales.updateCustomer.useMutation({
     onSuccess: async (result) => {

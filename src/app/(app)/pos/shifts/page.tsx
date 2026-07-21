@@ -28,6 +28,7 @@ import {
   formatKgsMoney,
 } from "@/lib/currencyDisplay";
 import { formatDateTime } from "@/lib/i18nFormat";
+import { buildHeldReceiptResumeHref } from "@/lib/mobilePosState";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 
@@ -660,9 +661,19 @@ const PosShiftsPage = () => {
                     {heldReceipts.length ? (
                       <div className="mt-3 flex flex-wrap gap-2">
                         {heldReceipts.map((receipt) => (
-                          <Badge key={receipt.id} variant="warning">
-                            {receipt.number}
-                          </Badge>
+                          <Link
+                            key={receipt.id}
+                            href={buildHeldReceiptResumeHref(registerId, receipt.id)}
+                            aria-label={`${t("sell.resumeHeldReceipt")} ${receipt.number}`}
+                            className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          >
+                            <Badge
+                              variant="warning"
+                              className="cursor-pointer transition-colors hover:bg-warning/25"
+                            >
+                              {receipt.number}
+                            </Badge>
+                          </Link>
                         ))}
                       </div>
                     ) : null}

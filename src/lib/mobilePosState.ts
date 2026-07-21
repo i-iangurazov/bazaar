@@ -3,6 +3,9 @@ export type MobilePosCompletionAttempt = {
   idempotencyKey: string;
 };
 
+export const buildHeldReceiptResumeHref = (registerId: string, receiptId: string) =>
+  `/pos/sell?registerId=${encodeURIComponent(registerId)}&receiptId=${encodeURIComponent(receiptId)}&mode=resume`;
+
 export const resolveMobilePosCompletionAttempt = (input: {
   current: MobilePosCompletionAttempt | null;
   saleId: string;
