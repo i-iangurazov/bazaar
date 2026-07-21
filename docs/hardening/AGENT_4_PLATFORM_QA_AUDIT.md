@@ -27,6 +27,7 @@ This document records static route/procedure/service/schema inspection plus read
 | `/admin/jobs` | Dead-letter list/retry/resolve | `adminJobs.list/retry/resolve` | Admin | FAIL — HARD-A4-009, HARD-A4-015 |
 | `/admin/support` | Impersonation, support bundle, feature flags | `adminSupport.*`, `/api/impersonation` | Admin | FAIL — HARD-A4-015 |
 | `/billing` | Plan, limits, usage, upgrade request | `billing.get/requestUpgrade/setPlanDev` | UI route Admin; `billing.get` any authenticated user | FAIL — HARD-A4-002, HARD-A4-015 |
+| `/cash`, `/finance/income`, `/finance/expense` | Cash and finance quick-action destinations | No data procedure or mutation is used by these pages | `viewCash` (Admin/Manager) | FAIL — HARD-A4-019 |
 | `/platform` | Cross-organization billing control | `platformOwner.*` | Platform owner | STATIC_ONLY |
 | `/settings/profile` | User, theme, locale, business profile | `userSettings.*`, `orgSettings.*`, store product settings | All authenticated; business sections Admin/org owner | STATIC_ONLY |
 | `/settings/users` | Users, roles, store assignments, invites, password reset | `users.*`, `invites.*` | Admin | STATIC_ONLY |
@@ -361,6 +362,21 @@ This document records static route/procedure/service/schema inspection plus read
 - Root cause hypothesis: Product code and source-string regression assertions drifted, or real regressions landed without corresponding updates.
 - Files/components: `src/app/(app)/pos/sell/page.tsx`, `tests/unit/pos-entry-source.test.ts`, `src/app/(app)/products/page.tsx`, `tests/unit/mobile-products-source.test.ts`.
 - Evidence: failure assertions at `pos-entry-source.test.ts:177` and `mobile-products-source.test.ts:22`; routed to Agents 1 and 2 for domain root-cause confirmation.
+
+### HARD-A4-019
+
+- ID: HARD-A4-019
+- Route: `/cash`, `/finance/income`, `/finance/expense`
+- Feature: Cash and finance route readiness
+- Severity: P1
+- Role: Admin, Manager
+- Viewport: All
+- Reproduction: Open any of the three routes directly as a role with `viewCash`.
+- Expected: A released cash/income/expense route provides its named workflow, or is hidden and unavailable until that workflow is ready.
+- Actual: Each route renders only a generic card with placeholder strings such as `Card`, `Cash description`, and `Finance income description`; there is no data query, form, mutation, loading state, or error state. The routes are included in middleware/RBAC, and finance actions are offered by the command palette.
+- Root cause hypothesis: Quick-action route scaffolds were shipped and added to navigation/access policy before their business workflows were implemented.
+- Files/components: `src/app/(app)/cash/page.tsx`, `src/app/(app)/finance/income/page.tsx`, `src/app/(app)/finance/expense/page.tsx`, `src/components/command-palette.tsx`, `src/lib/roleAccess.ts`, `messages/en.json`, `messages/ru.json`, `messages/kg.json`.
+- Evidence: Each page contains only `PageHeader` plus a static `Card`; English messages at `messages/en.json:2232-2256` are generic placeholders; `roleAccess.ts:133-134` exposes the routes under `viewCash`; the command palette links income and expense actions to the finance routes.
 
 ## Coverage matrix
 
