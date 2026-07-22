@@ -58,6 +58,7 @@ export const storePricesRouter = router({
           .optional(),
         mode: z.enum(["set", "increasePct", "increaseAbs"]),
         value: z.number(),
+        idempotencyKey: z.string().min(8),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -71,6 +72,7 @@ export const storePricesRouter = router({
           actorId: ctx.user.id,
           organizationId: ctx.user.organizationId,
           requestId: ctx.requestId,
+          idempotencyKey: input.idempotencyKey,
         });
       } catch (error) {
         throw toTRPCError(error);

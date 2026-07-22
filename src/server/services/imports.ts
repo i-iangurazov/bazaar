@@ -1,5 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { PurchaseOrderStatus, StockMovementType } from "@prisma/client";
+import {
+  OperationRequestPrincipalType,
+  PurchaseOrderStatus,
+  StockMovementType,
+} from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
@@ -18,14 +23,24 @@ import {
 } from "@/server/services/products/importMatching";
 import { recordFirstEvent } from "@/server/services/productEvents";
 import { assertCapacity, assertFeatureEnabled } from "@/server/services/planLimits";
+import {
+  OPERATION_TRANSACTION_TIMEOUT_MAX_MS,
+  runOperationRequest,
+} from "@/server/services/operationRequests";
+import { classifyDatabaseOperationFailure } from "@/server/services/databaseOperationFailure";
 
 export type RunProductImportInput = Omit<ImportProductsInput, "batchId"> & {
+  idempotencyKey?: string;
   source?: string;
 };
 
 const resolveImportTransactionTimeout = () => {
   const parsed = Number(process.env.IMPORT_TRANSACTION_TIMEOUT_MS);
-  if (Number.isFinite(parsed) && parsed >= 5_000) {
+  if (
+    Number.isFinite(parsed) &&
+    parsed >= 5_000 &&
+    parsed <= OPERATION_TRANSACTION_TIMEOUT_MAX_MS
+  ) {
     return parsed;
   }
   return 120_000;
@@ -129,7 +144,7 @@ export const runProductImport = async (input: RunProductImportInput) => {
       add: netNewProducts,
     });
   }
-  const result = await prisma.$transaction(async (tx) => {
+  const executeImport = async (tx: Prisma.TransactionClient) => {
     const batch = await tx.importBatch.create({
       data: {
         organizationId: input.organizationId,
@@ -185,8 +200,77 @@ export const runProductImport = async (input: RunProductImportInput) => {
       data: { summary },
     });
 
-    return { batch: updatedBatch, results, summary };
-  }, importTransactionOptions);
+    return {
+      response: { batchId: updatedBatch.id, results, summary },
+      responseStatus: 201,
+      resource: { type: "ImportBatch", id: updatedBatch.id },
+    };
+  };
+  const operation = await runOperationRequest(
+    {
+      organizationId: input.organizationId,
+      storeId: input.storeId ?? null,
+      scope: "products.importCsv",
+      principal: {
+        type: OperationRequestPrincipalType.AUTHENTICATED_USER,
+        id: input.actorId,
+      },
+      idempotencyKey: input.idempotencyKey ?? input.requestId,
+      payload: {
+        version: "products.importCsv.v1",
+        value: toJson({
+          rows: input.rows,
+          source: input.source ?? "csv",
+          storeId: input.storeId ?? null,
+          mode: importMode,
+          updateMask: input.updateMask ?? [],
+          existingBehavior: input.existingBehavior ?? "update",
+          emptyValueBehavior: input.emptyValueBehavior ?? "keep",
+          stockBehavior,
+          rowActions: input.rowActions ?? [],
+        }),
+      },
+      allowedResponsePaths: [
+        "batchId",
+        "results",
+        "results[].sku",
+        "results[].action",
+        "summary",
+        "summary.source",
+        "summary.mode",
+        "summary.updateMask",
+        "summary.existingBehavior",
+        "summary.emptyValueBehavior",
+        "summary.stockBehavior",
+        "summary.targetStoreId",
+        "summary.targetStoreName",
+        "summary.rows",
+        "summary.created",
+        "summary.updated",
+        "summary.skipped",
+        "summary.images",
+        "summary.images.downloaded",
+        "summary.images.fallback",
+        "summary.images.missing",
+      ],
+      transactionOptions: importTransactionOptions,
+      classifyFailure: (error) =>
+        classifyDatabaseOperationFailure(error, "productsImportFailed"),
+    },
+    executeImport,
+  );
+
+  const batch = await prisma.importBatch.findFirst({
+    where: { id: operation.response.batchId, organizationId: input.organizationId },
+  });
+  if (!batch) {
+    throw new AppError("importBatchNotFound", "NOT_FOUND", 404);
+  }
+  const result = {
+    batch,
+    results: operation.response.results,
+    summary: operation.response.summary,
+  };
 
   await recordFirstEvent({
     organizationId: input.organizationId,

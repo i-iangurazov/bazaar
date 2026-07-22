@@ -68,6 +68,7 @@ describeDb("plan limits", () => {
 
     await expect(
       caller.products.create({
+        idempotencyKey: "plan-limit-product-create",
         sku: "SKU-LIMIT-OVER",
         name: "Overflow Product",
         baseUnitId: baseUnit.id,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ColumnDef, OnChangeFn, SortingState } from "@tanstack/react-table";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
@@ -851,9 +851,11 @@ const ProductsPage = () => {
   const inlineCategoryMutation = trpc.products.bulkUpdateCategory.useMutation();
   const inlineStorePriceMutation = trpc.storePrices.upsert.useMutation();
   const inlineInventoryAdjustMutation = trpc.inventory.adjust.useMutation();
+  const bulkPriceOperationRef = useRef<{ signature: string; key: string } | null>(null);
 
   const bulkPriceMutation = trpc.storePrices.bulkUpdate.useMutation({
     onSuccess: (result) => {
+      bulkPriceOperationRef.current = null;
       productsBootstrapQuery.refetch();
       toast({
         variant: "success",
@@ -4791,7 +4793,7 @@ const ProductsPage = () => {
           <form
             className="space-y-4"
             onSubmit={bulkForm.handleSubmit((values) => {
-              bulkPriceMutation.mutate({
+              const payload = {
                 storeId: values.storeId,
                 filter: {
                   search: values.search || undefined,
@@ -4801,7 +4803,13 @@ const ProductsPage = () => {
                 },
                 mode: values.mode,
                 value: values.value,
-              });
+              };
+              const signature = JSON.stringify(payload);
+              const current = bulkPriceOperationRef.current;
+              const idempotencyKey =
+                current?.signature === signature ? current.key : crypto.randomUUID();
+              bulkPriceOperationRef.current = { signature, key: idempotencyKey };
+              bulkPriceMutation.mutate({ ...payload, idempotencyKey });
             })}
           >
             <FormField

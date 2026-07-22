@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -122,9 +122,11 @@ const NewProductPage = () => {
         Boolean(duplicateProductQuery.data?.isBundle),
     },
   );
+  const createOperationRef = useRef<{ signature: string; key: string } | null>(null);
 
   const createMutation = trpc.products.create.useMutation({
     onSuccess: async (product) => {
+      createOperationRef.current = null;
       await Promise.all([
         trpcUtils.products.suggestSku.invalidate(),
         trpcUtils.products.bootstrap.invalidate(),
@@ -438,16 +440,22 @@ const NewProductPage = () => {
               attributeDefinitions={attributesQuery.data ?? []}
               units={unitsQuery.data ?? []}
               onDirtyChange={setProductFormDirty}
-              onSubmit={(values) =>
-                createMutation.mutate({
+              onSubmit={(values) => {
+                const payload = {
                   ...values,
                   storeId: selectedStore.id,
                   sku:
                     !enableSku || (suggestedSku && values.sku.trim() === suggestedSku)
                       ? ""
                       : values.sku,
-                })
-              }
+                };
+                const signature = JSON.stringify(payload);
+                const current = createOperationRef.current;
+                const idempotencyKey =
+                  current?.signature === signature ? current.key : crypto.randomUUID();
+                createOperationRef.current = { signature, key: idempotencyKey };
+                createMutation.mutate({ ...payload, idempotencyKey });
+              }}
               isSubmitting={createMutation.isLoading}
               currencyCode={selectedStore.currencyCode ?? null}
               currencyRateKgsPerUnit={selectedCurrencyRate}

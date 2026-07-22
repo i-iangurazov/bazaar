@@ -1,8 +1,12 @@
+import { OperationRequestPrincipalType, type Prisma } from "@prisma/client";
+
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
 import { writeAuditLog } from "@/server/services/audit";
 import { toJson } from "@/server/services/json";
 import { assignProductToStore, productStoreAssignmentWhere } from "@/server/services/storeAccess";
+import { classifyDatabaseOperationFailure } from "@/server/services/databaseOperationFailure";
+import { runOperationRequest } from "@/server/services/operationRequests";
 
 const resolveVariantKey = (variantId?: string | null) => variantId ?? "BASE";
 
@@ -93,6 +97,7 @@ export const bulkUpdateStorePrices = async (input: {
   organizationId: string;
   actorId: string;
   requestId: string;
+  idempotencyKey?: string;
   filter?: {
     search?: string;
     category?: string;
@@ -101,8 +106,8 @@ export const bulkUpdateStorePrices = async (input: {
   };
   mode: "set" | "increasePct" | "increaseAbs";
   value: number;
-}) =>
-  prisma.$transaction(async (tx) => {
+}) => {
+  const executeBulkUpdate = async (tx: Prisma.TransactionClient) => {
     const store = await tx.store.findUnique({ where: { id: input.storeId } });
     if (!store || store.organizationId !== input.organizationId) {
       throw new AppError("storeNotFound", "NOT_FOUND", 404);
@@ -133,7 +138,11 @@ export const bulkUpdateStorePrices = async (input: {
     });
 
     if (!products.length) {
-      return { updated: 0 };
+      return {
+        response: { updated: 0 },
+        responseStatus: 200,
+        resource: { type: "Store", id: input.storeId },
+      };
     }
 
     const existingPrices = await tx.storePrice.findMany({
@@ -213,5 +222,41 @@ export const bulkUpdateStorePrices = async (input: {
       requestId: input.requestId,
     });
 
-    return { updated };
-  });
+    return {
+      response: { updated },
+      responseStatus: 200,
+      resource: { type: "Store", id: input.storeId },
+    };
+  };
+  const operation = await runOperationRequest<{ updated: number }>(
+    {
+      organizationId: input.organizationId,
+      storeId: input.storeId,
+      scope: "storePrices.bulkUpdate",
+      principal: {
+        type: OperationRequestPrincipalType.AUTHENTICATED_USER,
+        id: input.actorId,
+      },
+      idempotencyKey: input.idempotencyKey ?? input.requestId,
+      payload: {
+        version: "storePrices.bulkUpdate.v1",
+        value: toJson({
+          storeId: input.storeId,
+          filter: {
+            search: input.filter?.search ?? null,
+            category: input.filter?.category ?? null,
+            type: input.filter?.type ?? "all",
+            includeArchived: input.filter?.includeArchived ?? false,
+          },
+          mode: input.mode,
+          value: input.value,
+        }),
+      },
+      allowedResponsePaths: ["updated"],
+      classifyFailure: (error) =>
+        classifyDatabaseOperationFailure(error, "storePricesBulkUpdateFailed"),
+    },
+    executeBulkUpdate,
+  );
+  return operation.response;
+};

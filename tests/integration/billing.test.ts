@@ -118,6 +118,7 @@ describeDb("billing", () => {
     expect(summary?.subscriptionActive).toBe(true);
     await expect(
       caller.products.create({
+        idempotencyKey: "billing-active-paid-create",
         sku: "ACTIVE-PAID-1",
         name: "Active Paid Product",
         baseUnitId: baseUnit.id,
@@ -153,6 +154,7 @@ describeDb("billing", () => {
     expect(summary?.hasAccess).toBe(false);
     await expect(
       caller.products.create({
+        idempotencyKey: "billing-expired-trial-create",
         sku: "EXPIRED-TRIAL-1",
         name: "Expired Trial Product",
         baseUnitId: baseUnit.id,
@@ -188,6 +190,7 @@ describeDb("billing", () => {
     expect(summary?.trialExpired).toBe(false);
     await expect(
       caller.products.create({
+        idempotencyKey: "billing-active-trial-create",
         sku: "ACTIVE-TRIAL-1",
         name: "Active Trial Product",
         baseUnitId: baseUnit.id,
@@ -221,6 +224,7 @@ describeDb("billing", () => {
 
     await expect(
       caller.products.create({
+        idempotencyKey: "billing-past-due-create",
         sku: "PAST-DUE-1",
         name: "Past Due Product",
         baseUnitId: baseUnit.id,
@@ -243,6 +247,7 @@ describeDb("billing", () => {
     expect(ownerApprovedSummary?.trialExpired).toBe(false);
     await expect(
       caller.products.create({
+        idempotencyKey: "billing-owner-approved-create",
         sku: "OWNER-APPROVED-PAID-1",
         name: "Owner Approved Paid Product",
         baseUnitId: baseUnit.id,
@@ -262,6 +267,7 @@ describeDb("billing", () => {
 
     await expect(
       caller.products.create({
+        idempotencyKey: "billing-expired-paid-create",
         sku: "EXPIRED-PAID-1",
         name: "Expired Paid Product",
         baseUnitId: baseUnit.id,

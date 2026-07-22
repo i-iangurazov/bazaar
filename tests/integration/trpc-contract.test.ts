@@ -22,6 +22,7 @@ describeDb("tRPC contract smoke", () => {
     });
 
     const product = await caller.products.create({
+      idempotencyKey: "trpc-contract-product-create",
       sku: "SKU-CORE",
       name: "Core Product",
       baseUnitId: baseUnit.id,
