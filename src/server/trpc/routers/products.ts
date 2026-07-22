@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 
 import { adminProcedure, managerProcedure, protectedProcedure, rateLimit, router } from "@/server/trpc/trpc";
+import { toTRPCError } from "@/server/trpc/errors";
 import {
   archiveProductMutation,
   arrangeClothingCategoriesMutation,
@@ -65,7 +66,15 @@ import {
   startProductDescriptionGenerationJobInputSchema,
   updateProductInputSchema,
 } from "@/server/trpc/routers/products.schemas";
-import { assertUserCanAccessStore } from "@/server/services/storeAccess";
+import {
+  assertUserCanAccessStore,
+  resolveAccessibleStoreIds,
+  userHasAllStoreAccess,
+} from "@/server/services/storeAccess";
+import {
+  assertUserCanAccessProduct,
+  assertUserCanAccessProducts,
+} from "@/server/services/productAccess";
 import {
   getProductDescriptionGenerationJob,
   retryFailedProductDescriptionGenerationItems,
@@ -73,6 +82,26 @@ import {
 } from "@/server/services/productDescriptionGenerationJobs";
 import { isProductDescriptionGenerationConfigured } from "@/server/services/productDescriptions";
 import { isAiDescriptionGenerationEnabled } from "@/lib/featureFlags";
+
+const assertProductAccess = async (
+  ...args: Parameters<typeof assertUserCanAccessProducts>
+) => {
+  try {
+    await assertUserCanAccessProducts(...args);
+  } catch (error) {
+    throw toTRPCError(error);
+  }
+};
+
+const assertSingleProductAccess = async (
+  ...args: Parameters<typeof assertUserCanAccessProduct>
+) => {
+  try {
+    await assertUserCanAccessProduct(...args);
+  } catch (error) {
+    throw toTRPCError(error);
+  }
+};
 
 export const productsRouter = router({
   descriptionGenerationAvailability: protectedProcedure.query(() => ({
@@ -156,13 +185,18 @@ export const productsRouter = router({
 
   duplicateDiagnostics: managerProcedure
     .input(productDuplicateDiagnosticsInputSchema)
-    .query(({ ctx, input }) =>
-      getProductDuplicateDiagnosticsQuery({
+    .query(async ({ ctx, input }) => {
+      if (input.productId) {
+        await assertSingleProductAccess(ctx.prisma, ctx.user, input.productId, {
+          includeArchived: true,
+        });
+      }
+      return getProductDuplicateDiagnosticsQuery({
         prisma: ctx.prisma,
         organizationId: ctx.user.organizationId,
         input,
-      }),
-    ),
+      });
+    }),
 
   byIds: protectedProcedure
     .input(productsByIdsInputSchema)
@@ -212,7 +246,10 @@ export const productsRouter = router({
   create: managerProcedure
     .input(createProductInputSchema)
     .mutation(async ({ ctx, input }) => {
-      if ((input.initialOnHand ?? 0) > 0 && ctx.user.role !== "ADMIN") {
+      const requestsInitialInventory =
+        (input.initialOnHand ?? 0) > 0 ||
+        (input.variants ?? []).some((variant) => (variant.initialOnHand ?? 0) > 0);
+      if (requestsInitialInventory && ctx.user.role !== "ADMIN") {
         throw new TRPCError({ code: "FORBIDDEN", message: "inventoryAdminRequired" });
       }
       if (input.storeId) {
@@ -229,6 +266,7 @@ export const productsRouter = router({
   update: managerProcedure
     .input(updateProductInputSchema)
     .mutation(async ({ ctx, input }) => {
+      await assertSingleProductAccess(ctx.prisma, ctx.user, input.productId);
       if (input.storeId) {
         await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
       }
@@ -242,20 +280,22 @@ export const productsRouter = router({
 
   inlineUpdate: managerProcedure
     .input(inlineUpdateProductInputSchema)
-    .mutation(({ ctx, input }) =>
-      inlineUpdateProductMutation({
+    .mutation(async ({ ctx, input }) => {
+      await assertSingleProductAccess(ctx.prisma, ctx.user, input.productId);
+      return inlineUpdateProductMutation({
         prisma: ctx.prisma,
         organizationId: ctx.user.organizationId,
         actorId: ctx.user.id,
         requestId: ctx.requestId,
         productId: input.productId,
         patch: input.patch,
-      }),
-    ),
+      });
+    }),
 
   duplicate: managerProcedure
     .input(duplicateProductInputSchema)
     .mutation(async ({ ctx, input }) => {
+      await assertSingleProductAccess(ctx.prisma, ctx.user, input.productId);
       if (input.storeId) {
         await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
       }
@@ -271,6 +311,7 @@ export const productsRouter = router({
     .input(assignProductsToStoreInputSchema)
     .mutation(async ({ ctx, input }) => {
       await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+      await assertProductAccess(ctx.prisma, ctx.user, input.productIds);
       return assignProductsToStoreMutation({
         organizationId: ctx.user.organizationId,
         actorId: ctx.user.id,
@@ -281,14 +322,15 @@ export const productsRouter = router({
 
   generateBarcode: managerProcedure
     .input(generateProductBarcodeInputSchema)
-    .mutation(({ ctx, input }) =>
-      generateProductBarcodeMutation({
+    .mutation(async ({ ctx, input }) => {
+      await assertSingleProductAccess(ctx.prisma, ctx.user, input.productId);
+      return generateProductBarcodeMutation({
         organizationId: ctx.user.organizationId,
         actorId: ctx.user.id,
         requestId: ctx.requestId,
         input,
-      }),
-    ),
+      });
+    }),
 
   generateDescription: managerProcedure
     .use(rateLimit({ windowMs: 60_000, max: 6, prefix: "products-description-generate" }))
@@ -303,32 +345,46 @@ export const productsRouter = router({
   bulkGenerateBarcodes: managerProcedure
     .use(rateLimit({ windowMs: 60_000, max: 3, prefix: "products-barcodes-bulk" }))
     .input(bulkGenerateProductBarcodesInputSchema)
-    .mutation(({ ctx, input }) =>
-      bulkGenerateProductBarcodesMutation({
+    .mutation(async ({ ctx, input }) => {
+      if (input.filter?.storeId) {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.filter.storeId);
+      }
+      if (input.filter?.productIds?.length) {
+        await assertProductAccess(ctx.prisma, ctx.user, input.filter.productIds, {
+          includeArchived: input.filter.includeArchived,
+        });
+      }
+      const accessibleStoreIds = userHasAllStoreAccess(ctx.user)
+        ? undefined
+        : await resolveAccessibleStoreIds(ctx.prisma, ctx.user);
+      return bulkGenerateProductBarcodesMutation({
         organizationId: ctx.user.organizationId,
         actorId: ctx.user.id,
         requestId: ctx.requestId,
         input,
-      }),
-    ),
+        accessibleStoreIds,
+      });
+    }),
 
   bulkGenerateDescriptions: managerProcedure
     .use(rateLimit({ windowMs: 60_000, max: 30, prefix: "products-descriptions-bulk" }))
     .input(bulkGenerateProductDescriptionsInputSchema)
-    .mutation(({ ctx, input }) =>
-      bulkGenerateProductDescriptionsMutation({
+    .mutation(async ({ ctx, input }) => {
+      await assertProductAccess(ctx.prisma, ctx.user, input.productIds);
+      return bulkGenerateProductDescriptionsMutation({
         organizationId: ctx.user.organizationId,
         actorId: ctx.user.id,
         requestId: ctx.requestId,
         input,
         logger: ctx.logger,
-      }),
-    ),
+      });
+    }),
 
   startDescriptionGenerationJob: managerProcedure
     .use(rateLimit({ windowMs: 60_000, max: 10, prefix: "products-descriptions-job-start" }))
     .input(startProductDescriptionGenerationJobInputSchema)
     .mutation(async ({ ctx, input }) => {
+      await assertProductAccess(ctx.prisma, ctx.user, input.productIds);
       if (input.storeId) {
         await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
       }
@@ -366,26 +422,28 @@ export const productsRouter = router({
 
   bulkUpdateCategory: managerProcedure
     .input(bulkUpdateProductCategoryInputSchema)
-    .mutation(({ ctx, input }) =>
-      bulkUpdateProductCategoryMutation({
+    .mutation(async ({ ctx, input }) => {
+      await assertProductAccess(ctx.prisma, ctx.user, input.productIds);
+      return bulkUpdateProductCategoryMutation({
         organizationId: ctx.user.organizationId,
         actorId: ctx.user.id,
         requestId: ctx.requestId,
         input,
-      }),
-    ),
+      });
+    }),
 
   arrangeClothingCategories: managerProcedure
     .use(rateLimit({ windowMs: 60_000, max: 30, prefix: "products-category-arrange" }))
     .input(arrangeClothingCategoriesInputSchema)
-    .mutation(({ ctx, input }) =>
-      arrangeClothingCategoriesMutation({
+    .mutation(async ({ ctx, input }) => {
+      await assertProductAccess(ctx.prisma, ctx.user, input.productIds);
+      return arrangeClothingCategoriesMutation({
         organizationId: ctx.user.organizationId,
         actorId: ctx.user.id,
         requestId: ctx.requestId,
         input,
-      }),
-    ),
+      });
+    }),
 
   importCsv: adminProcedure
     .use(rateLimit({ windowMs: 60_000, max: 120, prefix: "products-import" }))
@@ -425,25 +483,29 @@ export const productsRouter = router({
 
   archive: managerProcedure
     .input(archiveProductInputSchema)
-    .mutation(({ ctx, input }) =>
-      archiveProductMutation({
+    .mutation(async ({ ctx, input }) => {
+      await assertSingleProductAccess(ctx.prisma, ctx.user, input.productId);
+      return archiveProductMutation({
         organizationId: ctx.user.organizationId,
         actorId: ctx.user.id,
         requestId: ctx.requestId,
         productId: input.productId,
-      }),
-    ),
+      });
+    }),
 
   restore: managerProcedure
     .input(archiveProductInputSchema)
-    .mutation(({ ctx, input }) =>
-      restoreProductMutation({
+    .mutation(async ({ ctx, input }) => {
+      await assertSingleProductAccess(ctx.prisma, ctx.user, input.productId, {
+        includeArchived: true,
+      });
+      return restoreProductMutation({
         organizationId: ctx.user.organizationId,
         actorId: ctx.user.id,
         requestId: ctx.requestId,
         productId: input.productId,
-      }),
-    ),
+      });
+    }),
 
   deletePermanent: adminProcedure
     .input(deleteProductInputSchema)

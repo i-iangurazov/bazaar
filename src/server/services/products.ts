@@ -31,7 +31,10 @@ import {
 } from "@/server/services/productImageStorage";
 import { generateProductDescriptionFromImages } from "@/server/services/productDescriptions";
 import { normalizeScanValue } from "@/lib/scanning/normalize";
-import { assignProductToStore } from "@/server/services/storeAccess";
+import {
+  assignProductToStore,
+  productStoreAssignmentInWhere,
+} from "@/server/services/storeAccess";
 import { resolveProductCatalogStoresForStore } from "@/server/services/productCatalogs";
 import { getLogger } from "@/server/logging";
 import { applyStockMovement } from "@/server/services/inventory";
@@ -3014,6 +3017,7 @@ export const bulkGenerateProductBarcodes = async (input: {
   requestId: string;
   mode: BarcodeGenerationMode;
   filter?: ProductBulkGenerationFilter;
+  accessibleStoreIds?: string[];
 }) =>
   prisma.$transaction(async (tx) => {
     const productIds = input.filter?.productIds?.map((value) => value.trim()).filter(Boolean) ?? [];
@@ -3059,6 +3063,9 @@ export const bulkGenerateProductBarcodes = async (input: {
       organizationId: input.organizationId,
       ...(input.filter?.includeArchived ? {} : { isDeleted: false }),
       ...(uniqueProductIds.length ? { id: { in: uniqueProductIds } } : {}),
+      ...(input.accessibleStoreIds
+        ? productStoreAssignmentInWhere(input.accessibleStoreIds)
+        : {}),
       ...(filters.length ? { AND: filters } : {}),
     };
 

@@ -222,32 +222,113 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
     await expect(caller.stockCounts.get({ stockCountId: betaCount.id })).resolves.toBeNull();
   });
 
-  it("HARD-A2-002 lets a Store-A-only manager mutate a Store-B-only product and price", async () => {
-    const { org, storeB, productB, managerUser } = await seedTwoStoreScope();
+  it("HARD-A2-002 rejects inaccessible product, assignment, and price ID tampering without writes", async () => {
+    const { org, store, storeB, productB, managerUser } = await seedTwoStoreScope();
     const caller = callerFor(managerUser);
 
-    const updated = await caller.products.inlineUpdate({
-      productId: productB.id,
-      patch: { name: "Unauthorized Store B rename" },
-    });
-    const price = await caller.storePrices.upsert({
-      storeId: storeB.id,
-      productId: productB.id,
-      priceKgs: 3210,
-    });
-
-    expect(updated.name).toBe("Unauthorized Store B rename");
-    expect(Number(price.priceKgs)).toBe(3210);
     await expect(
-      prisma.product.findUniqueOrThrow({ where: { id: productB.id } }),
-    ).resolves.toMatchObject({ name: "Unauthorized Store B rename" });
+      caller.products.inlineUpdate({
+        productId: productB.id,
+        patch: { name: "Unauthorized Store B rename" },
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN", message: "productAccessDenied" });
+    await expect(
+      caller.storePrices.upsert({
+        storeId: storeB.id,
+        productId: productB.id,
+        priceKgs: 3210,
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN", message: "storeAccessDenied" });
+    await expect(
+      caller.storePrices.upsert({
+        storeId: store.id,
+        productId: productB.id,
+        priceKgs: 3210,
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN", message: "productAccessDenied" });
+    await expect(
+      caller.products.assignToStore({ storeId: store.id, productIds: [productB.id] }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN", message: "productAccessDenied" });
+    await expect(caller.products.archive({ productId: productB.id })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: "productAccessDenied",
+    });
+    await expect(
+      caller.products.generateBarcode({ productId: productB.id, mode: "CODE128", force: true }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN", message: "productAccessDenied" });
+    await expect(
+      caller.products.bulkUpdateCategory({
+        productIds: [productB.id],
+        category: "Unauthorized category",
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN", message: "productAccessDenied" });
+    await expect(
+      caller.products.duplicate({ productId: productB.id, name: "Unauthorized duplicate" }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN", message: "productAccessDenied" });
+
+    await expect(prisma.product.findUniqueOrThrow({ where: { id: productB.id } })).resolves.toMatchObject({
+      name: "Restricted Product B",
+      isDeleted: false,
+    });
+    expect(
+      await prisma.storePrice.count({ where: { organizationId: org.id, productId: productB.id } }),
+    ).toBe(0);
+    expect(
+      await prisma.storeProduct.count({
+        where: { storeId: store.id, productId: productB.id, isActive: true },
+      }),
+    ).toBe(0);
+    expect(
+      await prisma.auditLog.count({
+        where: { organizationId: org.id, actorId: managerUser.id, entityId: productB.id },
+      }),
+    ).toBe(0);
+    expect(
+      await prisma.product.count({
+        where: { organizationId: org.id, name: "Unauthorized duplicate" },
+      }),
+    ).toBe(0);
+  });
+
+  it("HARD-A2-002 preserves assigned-product mutations and rejects cross-org product IDs", async () => {
+    const { org, store, product, managerUser } = await seedBase({ plan: "BUSINESS" });
+    const caller = callerFor(managerUser);
+    await expect(
+      caller.products.inlineUpdate({ productId: product.id, patch: { name: "Allowed rename" } }),
+    ).resolves.toMatchObject({ name: "Allowed rename" });
+    await expect(
+      caller.storePrices.upsert({ storeId: store.id, productId: product.id, priceKgs: 444 }),
+    ).resolves.toMatchObject({ updatedById: managerUser.id });
+
+    const betaOrg = await prisma.organization.create({ data: { name: "Product Beta" } });
+    const betaUnit = await prisma.unit.create({
+      data: { organizationId: betaOrg.id, code: "ea", labelRu: "ea", labelKg: "ea" },
+    });
+    const betaProduct = await prisma.product.create({
+      data: {
+        organizationId: betaOrg.id,
+        sku: "BETA-PRODUCT",
+        name: "Beta Product",
+        unit: betaUnit.code,
+        baseUnitId: betaUnit.id,
+      },
+    });
+    await expect(
+      caller.products.inlineUpdate({
+        productId: betaProduct.id,
+        patch: { name: "Cross-org rename" },
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN", message: "productAccessDenied" });
+    await expect(prisma.product.findUniqueOrThrow({ where: { id: betaProduct.id } })).resolves.toMatchObject({
+      name: "Beta Product",
+    });
     await expect(
       prisma.storePrice.findUniqueOrThrow({
         where: {
           organizationId_storeId_productId_variantKey: {
             organizationId: org.id,
-            storeId: storeB.id,
-            productId: productB.id,
+            storeId: store.id,
+            productId: product.id,
             variantKey: "BASE",
           },
         },
@@ -255,42 +336,77 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
     ).resolves.toMatchObject({ updatedById: managerUser.id });
   });
 
-  it("HARD-A2-003 returns Store-B-only prices and costs to a Store-A-only staff user", async () => {
+  it("HARD-A2-003 denies Store-B-only prices and costs to a Store-A-only staff user", async () => {
     const { productB, staffUser } = await seedTwoStoreScope();
     const caller = callerFor(staffUser);
 
-    const pricing = await caller.products.pricing({ productId: productB.id });
-    const storePricing = await caller.products.storePricing({ productId: productB.id });
-
-    expect(pricing).toMatchObject({
-      basePriceKgs: 9876,
-      effectivePriceKgs: 9876,
-      avgCostKgs: 5432,
+    await expect(caller.products.pricing({ productId: productB.id })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      message: "productNotFound",
     });
-    expect(storePricing).toMatchObject({
-      basePriceKgs: 9876,
-      avgCostKgs: 5432,
-      stores: [],
+    await expect(caller.products.storePricing({ productId: productB.id })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      message: "productNotFound",
     });
   });
 
-  it("HARD-A2-004 lets a manager create admin-only stock through a nested variant", async () => {
-    const { org, store, baseUnit, managerUser } = await seedBase({ plan: "BUSINESS" });
-    const caller = callerFor(managerUser);
+  it("HARD-A2-003 preserves pricing reads for a product assigned to the caller's store", async () => {
+    const { org, product, staffUser } = await seedBase({ plan: "BUSINESS" });
+    await prisma.product.update({ where: { id: product.id }, data: { basePriceKgs: 765 } });
+    await prisma.productCost.create({
+      data: {
+        organizationId: org.id,
+        productId: product.id,
+        variantKey: "BASE",
+        avgCostKgs: 432,
+      },
+    });
+    const caller = callerFor(staffUser);
+    await expect(caller.products.pricing({ productId: product.id })).resolves.toMatchObject({
+      basePriceKgs: 765,
+      effectivePriceKgs: 765,
+      avgCostKgs: 432,
+    });
+    await expect(caller.products.storePricing({ productId: product.id })).resolves.toMatchObject({
+      basePriceKgs: 765,
+      avgCostKgs: 432,
+      stores: [expect.objectContaining({ storeId: expect.any(String) })],
+    });
+  });
 
+  it("HARD-A2-004 rejects manager nested initial stock before product or movement creation", async () => {
+    const { store, baseUnit, managerUser } = await seedBase({ plan: "BUSINESS" });
+    const caller = callerFor(managerUser);
+    const marker = `NESTED-${randomUUID().slice(0, 8)}`;
+
+    await expect(
+      caller.products.create({
+        name: "Nested stock authorization probe",
+        storeId: store.id,
+        baseUnitId: baseUnit.id,
+        initialOnHand: 0,
+        variants: [
+          {
+            name: "S",
+            sku: marker,
+            attributes: { size: "S" },
+            initialOnHand: 10,
+          },
+        ],
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN", message: "inventoryAdminRequired" });
+    expect(await prisma.productVariant.count({ where: { sku: marker } })).toBe(0);
+    expect(await prisma.stockMovement.count({ where: { createdById: managerUser.id } })).toBe(0);
+  });
+
+  it("HARD-A2-004 preserves nested initial stock for admins", async () => {
+    const { org, store, baseUnit, adminUser } = await seedBase({ plan: "BUSINESS" });
+    const caller = callerFor(adminUser);
     const created = await caller.products.create({
-      name: "Nested stock authorization probe",
+      name: "Admin nested stock probe",
       storeId: store.id,
       baseUnitId: baseUnit.id,
-      initialOnHand: 0,
-      variants: [
-        {
-          name: "S",
-          sku: `NESTED-${randomUUID().slice(0, 8)}`,
-          attributes: { size: "S" },
-          initialOnHand: 10,
-        },
-      ],
+      variants: [{ name: "S", attributes: { size: "S" }, initialOnHand: 10 }],
     });
     const variant = await prisma.productVariant.findFirstOrThrow({
       where: { productId: created.id },
@@ -318,7 +434,7 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
     expect(created.organizationId).toBe(org.id);
     expect(snapshot.onHand).toBe(10);
     expect(movements.map((movement) => movement.qtyDelta)).toEqual([10]);
-    expect(movements[0]?.createdById).toBe(managerUser.id);
+    expect(movements[0]?.createdById).toBe(adminUser.id);
   });
 
   it("HARD-A2-005 applies identical create and percentage-price requests twice", async () => {

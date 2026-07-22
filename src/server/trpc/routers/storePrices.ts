@@ -4,6 +4,8 @@ import { managerProcedure, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
 import { bulkUpdateStorePrices, upsertStorePrice } from "@/server/services/storePrices";
 import { assertFeatureEnabled } from "@/server/services/planLimits";
+import { assertUserCanAccessStore } from "@/server/services/storeAccess";
+import { assertUserCanAccessProduct } from "@/server/services/productAccess";
 
 const storePricesProcedure = managerProcedure.use(async ({ ctx, next }) => {
   try {
@@ -26,6 +28,8 @@ export const storePricesRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+        await assertUserCanAccessProduct(ctx.prisma, ctx.user, input.productId);
         return await upsertStorePrice({
           storeId: input.storeId,
           productId: input.productId,
@@ -58,6 +62,7 @@ export const storePricesRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
         return await bulkUpdateStorePrices({
           storeId: input.storeId,
           filter: input.filter,
