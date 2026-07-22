@@ -2,6 +2,7 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import type { Logger } from "pino";
 
 import { normalizeScanValue } from "@/lib/scanning/normalize";
+import { hasPermission, permissionForSearchResultType } from "@/lib/roleAccess";
 import { logProfileSection } from "@/server/profiling/perf";
 import { serializeProductPreview } from "@/server/services/products/serializers";
 import {
@@ -151,6 +152,10 @@ export const searchGlobal = async ({
 
   const normalizedScanQuery = normalizeScanValue(query);
   const exactNeedle = normalizedScanQuery || query;
+  const canViewProducts = !user || hasPermission(user, "viewProducts");
+  const canViewSuppliers = !user || hasPermission(user, "viewSuppliers");
+  const canViewStores = !user || hasPermission(user, "viewStores");
+  const canViewPurchaseOrders = !user || hasPermission(user, "viewPurchaseOrders");
   const accessibleStoreIds =
     user && !userHasAllStoreAccess(user)
       ? await resolveAccessibleStoreIds(prisma, user)
@@ -171,7 +176,7 @@ export const searchGlobal = async ({
 
   const exactLookupStartedAt = Date.now();
   const [exactBarcodeMatches, exactSkuMatches, exactStoreCodeMatches] = await Promise.all([
-    normalizedScanQuery
+    normalizedScanQuery && canViewProducts
       ? prisma.productBarcode.findMany({
           where: {
             organizationId,
@@ -186,29 +191,33 @@ export const searchGlobal = async ({
           take: 5,
         })
       : Promise.resolve([]),
-    prisma.product.findMany({
-      where: {
-        organizationId,
-        isDeleted: false,
-        ...productScopeWhere,
-        sku: { equals: exactNeedle, mode: "insensitive" },
-      },
-      select: productSearchSelect,
-      take: 5,
-    }),
-    prisma.store.findMany({
-      where: {
-        organizationId,
-        ...storeScopeWhere,
-        code: { equals: exactNeedle, mode: "insensitive" },
-      },
-      select: {
-        id: true,
-        name: true,
-        code: true,
-      },
-      take: 5,
-    }),
+    canViewProducts
+      ? prisma.product.findMany({
+          where: {
+            organizationId,
+            isDeleted: false,
+            ...productScopeWhere,
+            sku: { equals: exactNeedle, mode: "insensitive" },
+          },
+          select: productSearchSelect,
+          take: 5,
+        })
+      : Promise.resolve([]),
+    canViewStores
+      ? prisma.store.findMany({
+          where: {
+            organizationId,
+            ...storeScopeWhere,
+            code: { equals: exactNeedle, mode: "insensitive" },
+          },
+          select: {
+            id: true,
+            name: true,
+            code: true,
+          },
+          take: 5,
+        })
+      : Promise.resolve([]),
   ]);
   const plan = resolveGlobalSearchPlan({
     query,
@@ -268,7 +277,13 @@ export const searchGlobal = async ({
   });
 
   if (plan.shortCircuitOnExact) {
-    return { results };
+    return {
+      results: user
+        ? results.filter((result) =>
+            hasPermission(user, permissionForSearchResultType(result.type)),
+          )
+        : results,
+    };
   }
 
   const fuzzyProductFilters: Prisma.ProductWhereInput[] = [
@@ -286,20 +301,22 @@ export const searchGlobal = async ({
 
   const queryStartedAt = Date.now();
   const [fuzzyProducts, suppliers, stores, purchaseOrders] = await Promise.all([
-    prisma.product.findMany({
-      where: {
-        organizationId,
-        isDeleted: false,
-        ...productScopeWhere,
-        OR: fuzzyProductFilters,
-      },
-      select: {
-        ...productSearchSelect,
-      },
-      orderBy: [{ sku: "asc" }, { name: "asc" }],
-      take: plan.productOnlyFuzzy ? 32 : 24,
-    }),
-    plan.includeGroupedEntities && !accessibleStoreIds
+    canViewProducts
+      ? prisma.product.findMany({
+          where: {
+            organizationId,
+            isDeleted: false,
+            ...productScopeWhere,
+            OR: fuzzyProductFilters,
+          },
+          select: {
+            ...productSearchSelect,
+          },
+          orderBy: [{ sku: "asc" }, { name: "asc" }],
+          take: plan.productOnlyFuzzy ? 32 : 24,
+        })
+      : Promise.resolve([]),
+    plan.includeGroupedEntities && !accessibleStoreIds && canViewSuppliers
       ? prisma.supplier.findMany({
           where: {
             organizationId,
@@ -314,7 +331,7 @@ export const searchGlobal = async ({
           take: 4,
         })
       : Promise.resolve([]),
-    plan.includeGroupedEntities
+    plan.includeGroupedEntities && canViewStores
       ? prisma.store.findMany({
           where: {
             organizationId,
@@ -333,7 +350,7 @@ export const searchGlobal = async ({
           take: 4,
         })
       : Promise.resolve([]),
-    plan.includePurchaseOrders
+    plan.includePurchaseOrders && canViewPurchaseOrders
       ? prisma.purchaseOrder.findMany({
           where: {
             organizationId,
@@ -449,5 +466,9 @@ export const searchGlobal = async ({
     });
   });
 
-  return { results };
+  return {
+    results: user
+      ? results.filter((result) => hasPermission(user, permissionForSearchResultType(result.type)))
+      : results,
+  };
 };

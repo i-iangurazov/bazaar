@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { protectedProcedure, router, type Context } from "@/server/trpc/trpc";
+import { managerProcedure, router, type Context } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
 import { assertFeatureEnabled } from "@/server/services/planLimits";
 import {
@@ -115,7 +115,7 @@ const resolveSalesAnalyticsScope = async (
 };
 
 export const analyticsRouter = router({
-  salesTrend: protectedProcedure
+  salesTrend: managerProcedure
     .input(
       z.object({
         storeId: z.string().optional(),
@@ -125,7 +125,10 @@ export const analyticsRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
-        await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "analytics" });
+        await assertFeatureEnabled({
+          organizationId: ctx.user.organizationId,
+          feature: "analytics",
+        });
         const storeScope = await resolveAnalyticsStoreScope(ctx, input.storeId);
         return await getSalesTrend({
           organizationId: ctx.user.organizationId,
@@ -137,7 +140,7 @@ export const analyticsRouter = router({
         throw toTRPCError(error);
       }
     }),
-  topProducts: protectedProcedure
+  topProducts: managerProcedure
     .input(
       z.object({
         storeId: z.string().optional(),
@@ -147,7 +150,10 @@ export const analyticsRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
-        await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "analytics" });
+        await assertFeatureEnabled({
+          organizationId: ctx.user.organizationId,
+          feature: "analytics",
+        });
         const storeScope = await resolveAnalyticsStoreScope(ctx, input.storeId);
         return await getTopProducts({
           organizationId: ctx.user.organizationId,
@@ -159,7 +165,7 @@ export const analyticsRouter = router({
         throw toTRPCError(error);
       }
     }),
-  stockoutsLowStock: protectedProcedure
+  stockoutsLowStock: managerProcedure
     .input(
       z.object({
         storeId: z.string().optional(),
@@ -168,7 +174,10 @@ export const analyticsRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
-        await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "analytics" });
+        await assertFeatureEnabled({
+          organizationId: ctx.user.organizationId,
+          feature: "analytics",
+        });
         const storeScope = await resolveAnalyticsStoreScope(ctx, input.storeId);
         return await getStockoutsLowStockSeries({
           organizationId: ctx.user.organizationId,
@@ -179,41 +188,40 @@ export const analyticsRouter = router({
         throw toTRPCError(error);
       }
     }),
-  inventoryValue: protectedProcedure
-    .input(storeScopeSchema)
+  inventoryValue: managerProcedure.input(storeScopeSchema).query(async ({ ctx, input }) => {
+    const storeId = input?.storeId;
+    try {
+      await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "analytics" });
+      const storeScope = await resolveAnalyticsStoreScope(ctx, storeId);
+      return await getInventoryValue({
+        organizationId: ctx.user.organizationId,
+        ...storeScope,
+      });
+    } catch (error) {
+      throw toTRPCError(error);
+    }
+  }),
+  salesOverview: managerProcedure.input(salesAnalyticsBaseInput).query(async ({ ctx, input }) => {
+    try {
+      await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "analytics" });
+      const scope = await resolveSalesAnalyticsScope(ctx, input);
+      return await getSalesAnalyticsOverview({
+        ...scope,
+        dateFrom: input.dateFrom,
+        dateTo: input.dateTo,
+      });
+    } catch (error) {
+      throw toTRPCError(error);
+    }
+  }),
+  salesFilterOptions: managerProcedure
+    .input(salesAnalyticsBaseInput)
     .query(async ({ ctx, input }) => {
-      const storeId = input?.storeId;
       try {
-        await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "analytics" });
-        const storeScope = await resolveAnalyticsStoreScope(ctx, storeId);
-        return await getInventoryValue({
+        await assertFeatureEnabled({
           organizationId: ctx.user.organizationId,
-          ...storeScope,
+          feature: "analytics",
         });
-      } catch (error) {
-        throw toTRPCError(error);
-      }
-    }),
-  salesOverview: protectedProcedure
-    .input(salesAnalyticsBaseInput)
-    .query(async ({ ctx, input }) => {
-      try {
-        await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "analytics" });
-        const scope = await resolveSalesAnalyticsScope(ctx, input);
-        return await getSalesAnalyticsOverview({
-          ...scope,
-          dateFrom: input.dateFrom,
-          dateTo: input.dateTo,
-        });
-      } catch (error) {
-        throw toTRPCError(error);
-      }
-    }),
-  salesFilterOptions: protectedProcedure
-    .input(salesAnalyticsBaseInput)
-    .query(async ({ ctx, input }) => {
-      try {
-        await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "analytics" });
         const scope = await resolveSalesAnalyticsScope(ctx, input);
         return await getSalesAnalyticsFilterOptions({
           ...scope,
@@ -224,7 +232,7 @@ export const analyticsRouter = router({
         throw toTRPCError(error);
       }
     }),
-  soldProducts: protectedProcedure
+  soldProducts: managerProcedure
     .input(
       salesAnalyticsBaseInput.extend({
         category: z.string().optional(),
@@ -235,7 +243,10 @@ export const analyticsRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
-        await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "analytics" });
+        await assertFeatureEnabled({
+          organizationId: ctx.user.organizationId,
+          feature: "analytics",
+        });
         const scope = await resolveSalesAnalyticsScope(ctx, input);
         return await getSoldProductsAnalytics({
           ...scope,
@@ -250,7 +261,7 @@ export const analyticsRouter = router({
         throw toTRPCError(error);
       }
     }),
-  salesDayDetail: protectedProcedure
+  salesDayDetail: managerProcedure
     .input(
       z.object({
         storeId: z.string().optional(),
@@ -261,7 +272,10 @@ export const analyticsRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
-        await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "analytics" });
+        await assertFeatureEnabled({
+          organizationId: ctx.user.organizationId,
+          feature: "analytics",
+        });
         const scope = await resolveSalesAnalyticsScope(ctx, input);
         return await getSalesAnalyticsDayDetail({
           ...scope,
@@ -271,7 +285,7 @@ export const analyticsRouter = router({
         throw toTRPCError(error);
       }
     }),
-  productReceipts: protectedProcedure
+  productReceipts: managerProcedure
     .input(
       salesAnalyticsBaseInput.extend({
         productId: z.string().min(1),
@@ -282,7 +296,10 @@ export const analyticsRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
-        await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "analytics" });
+        await assertFeatureEnabled({
+          organizationId: ctx.user.organizationId,
+          feature: "analytics",
+        });
         const scope = await resolveSalesAnalyticsScope(ctx, input);
         return await listSalesAnalyticsReceipts({
           ...scope,

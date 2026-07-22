@@ -1,9 +1,14 @@
 import { z } from "zod";
 import { ExportType } from "@prisma/client";
 
-import { managerProcedure, protectedProcedure, rateLimit, router, type Context } from "@/server/trpc/trpc";
+import { managerProcedure, rateLimit, router, type Context } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
-import { listExportJobs, requestExport, getExportJob, retryExportJob } from "@/server/services/exports";
+import {
+  listExportJobs,
+  requestExport,
+  getExportJob,
+  retryExportJob,
+} from "@/server/services/exports";
 import { assertFeatureEnabled } from "@/server/services/planLimits";
 import {
   assertUserCanAccessStore,
@@ -22,7 +27,10 @@ const exportRequestSchema = z.object({
 type AuthedContext = Context & { user: NonNullable<Context["user"]> };
 type StoreScope = { storeId?: string; storeIds?: string[] };
 
-const resolveExportStoreScope = async (ctx: AuthedContext, storeId?: string): Promise<StoreScope> => {
+const resolveExportStoreScope = async (
+  ctx: AuthedContext,
+  storeId?: string,
+): Promise<StoreScope> => {
   if (storeId) {
     await assertUserCanAccessStore(ctx.prisma, ctx.user, storeId);
     return { storeId };
@@ -34,7 +42,7 @@ const resolveExportStoreScope = async (ctx: AuthedContext, storeId?: string): Pr
 };
 
 export const exportsRouter = router({
-  list: protectedProcedure
+  list: managerProcedure
     .input(
       z
         .object({
@@ -55,7 +63,7 @@ export const exportsRouter = router({
         throw toTRPCError(error);
       }
     }),
-  get: protectedProcedure.input(z.object({ jobId: z.string() })).query(async ({ ctx, input }) => {
+  get: managerProcedure.input(z.object({ jobId: z.string() })).query(async ({ ctx, input }) => {
     try {
       await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "exports" });
       const storeScope = await resolveExportStoreScope(ctx);
