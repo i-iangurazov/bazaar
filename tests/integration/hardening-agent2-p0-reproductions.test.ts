@@ -695,7 +695,7 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
     });
   });
 
-  it("HARD-A2-007 commits the first ten bulk stock updates before an invalid later chunk fails", async () => {
+  it("HARD-A2-007 rolls back an invalid bulk adjustment and replays a valid batch once", async () => {
     const { org, store, baseUnit, adminUser } = await seedBase({ plan: "BUSINESS" });
     const caller = callerFor(adminUser);
     const snapshotIds: string[] = [];
@@ -724,6 +724,7 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
     }
     const invalidEleventhId = randomUUID();
     const reason = `atomicity-${randomUUID()}`;
+    const invalidIdempotencyKey = `a2-007-${randomUUID()}`;
 
     await expect(
       caller.inventory.bulkSetOnHand({
@@ -731,25 +732,153 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
         snapshotIds: [...snapshotIds, invalidEleventhId],
         targetOnHand: 77,
         reason,
-        idempotencyKey: `a2-007-${randomUUID()}`,
+        idempotencyKey: invalidIdempotencyKey,
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN", message: "inventorySelectionInvalid" });
 
-    const [afterSnapshots, movements, idempotencyRows] = await Promise.all([
+    const [afterSnapshots, movements, failedOperation] = await Promise.all([
       prisma.inventorySnapshot.findMany({
         where: { id: { in: snapshotIds } },
         orderBy: { id: "asc" },
       }),
       prisma.stockMovement.findMany({ where: { storeId: store.id, note: reason } }),
-      prisma.idempotencyKey.findMany({
-        where: { userId: adminUser.id, route: "inventory.bulkSetOnHand" },
+      prisma.operationRequest.findUnique({
+        where: {
+          organizationId_scope_principalKey_idempotencyKey: {
+            organizationId: org.id,
+            scope: "inventory.bulkSetOnHand",
+            principalKey: `user:${adminUser.id}`,
+            idempotencyKey: invalidIdempotencyKey,
+          },
+        },
       }),
     ]);
     expect(afterSnapshots).toHaveLength(10);
-    expect(afterSnapshots.every((snapshot) => snapshot.onHand === 77)).toBe(true);
-    expect(movements).toHaveLength(10);
-    expect(idempotencyRows).toHaveLength(1);
-    expect(idempotencyRows[0]?.key).toMatch(/:0$/);
+    expect(afterSnapshots.map((snapshot) => snapshot.onHand).sort((a, b) => a - b)).toEqual([
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+    ]);
+    expect(movements).toHaveLength(0);
+    expect(failedOperation).toMatchObject({
+      status: OperationRequestStatus.FAILED,
+      storeId: store.id,
+      errorClassification: "SAFE_BEFORE_EFFECTS",
+    });
+
+    const replayReason = `atomicity-valid-${randomUUID()}`;
+    const validInput = {
+      storeId: store.id,
+      snapshotIds,
+      targetOnHand: 77,
+      reason: replayReason,
+      idempotencyKey: `a2-007-valid-${randomUUID()}`,
+    };
+    const first = await caller.inventory.bulkSetOnHand(validInput);
+    const replay = await caller.inventory.bulkSetOnHand(validInput);
+    await expect(
+      caller.inventory.bulkSetOnHand({ ...validInput, targetOnHand: 78 }),
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "operationRequestPayloadMismatch",
+    });
+    const [validSnapshots, validMovements, validOperation] = await Promise.all([
+      prisma.inventorySnapshot.findMany({ where: { id: { in: snapshotIds } } }),
+      prisma.stockMovement.findMany({ where: { storeId: store.id, note: replayReason } }),
+      prisma.operationRequest.findUnique({
+        where: {
+          organizationId_scope_principalKey_idempotencyKey: {
+            organizationId: org.id,
+            scope: "inventory.bulkSetOnHand",
+            principalKey: `user:${adminUser.id}`,
+            idempotencyKey: validInput.idempotencyKey,
+          },
+        },
+      }),
+    ]);
+    expect(replay).toEqual(first);
+    expect(validSnapshots.every((snapshot) => snapshot.onHand === 77)).toBe(true);
+    expect(validMovements).toHaveLength(10);
+    expect(validOperation).toMatchObject({
+      status: OperationRequestStatus.COMPLETED,
+      storeId: store.id,
+      idempotencyKey: validInput.idempotencyKey,
+      response: first,
+    });
+    expect(validOperation?.response).not.toHaveProperty("changedItems");
+  });
+
+  it("HARD-A2-007 binds a bulk operation key to one organization and store", async () => {
+    const { org, store, storeB, product, snapshotB, adminUser } = await seedTwoStoreScope();
+    const caller = callerFor(adminUser);
+    const snapshotA = await prisma.inventorySnapshot.create({
+      data: { storeId: store.id, productId: product.id, variantKey: "BASE", onHand: 2 },
+    });
+    const idempotencyKey = `a2-007-scope-${randomUUID()}`;
+    const reason = `scope-${randomUUID()}`;
+
+    await caller.inventory.bulkSetOnHand({
+      storeId: store.id,
+      snapshotIds: [snapshotA.id],
+      targetOnHand: 9,
+      reason,
+      idempotencyKey,
+    });
+
+    await expect(
+      caller.inventory.bulkSetOnHand({
+        storeId: storeB.id,
+        snapshotIds: [snapshotB.id],
+        targetOnHand: 9,
+        reason,
+        idempotencyKey,
+      }),
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "operationRequestIdentityMismatch",
+    });
+
+    const otherOrganization = await prisma.organization.create({
+      data: { name: "Agent 2 Operation Scope Other Org" },
+    });
+    const otherStore = await prisma.store.create({
+      data: {
+        organizationId: otherOrganization.id,
+        name: "Other Organization Store",
+        code: `OTHER-${randomUUID().slice(0, 8)}`,
+      },
+    });
+    await expect(
+      caller.inventory.bulkSetOnHand({
+        storeId: otherStore.id,
+        snapshotIds: [snapshotB.id],
+        targetOnHand: 9,
+        reason,
+        idempotencyKey,
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN", message: "storeAccessDenied" });
+
+    const [durableA, durableB, scopedOperations, crossStoreMovements] = await Promise.all([
+      prisma.inventorySnapshot.findUniqueOrThrow({ where: { id: snapshotA.id } }),
+      prisma.inventorySnapshot.findUniqueOrThrow({ where: { id: snapshotB.id } }),
+      prisma.operationRequest.findMany({
+        where: {
+          scope: "inventory.bulkSetOnHand",
+          principalKey: `user:${adminUser.id}`,
+          idempotencyKey,
+        },
+      }),
+      prisma.stockMovement.findMany({
+        where: { storeId: storeB.id, note: reason },
+      }),
+    ]);
+    expect(durableA.onHand).toBe(9);
+    expect(durableB.onHand).toBe(5);
+    expect(crossStoreMovements).toHaveLength(0);
+    expect(scopedOperations).toHaveLength(1);
+    expect(scopedOperations[0]).toMatchObject({
+      organizationId: org.id,
+      storeId: store.id,
+      status: OperationRequestStatus.COMPLETED,
+    });
   });
 
   it("HARD-A2-008 archives only the selected store preference", async () => {

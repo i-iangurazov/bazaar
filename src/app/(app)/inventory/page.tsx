@@ -6,6 +6,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type HTMLAttributes,
 } from "react";
@@ -187,8 +188,6 @@ const inventoryTableStateSchema = z.object({
 });
 
 const legacyInventoryPrintModalEnabled = process.env.NODE_ENV !== "production";
-const BULK_ON_HAND_CHUNK_SIZE = 100;
-
 type InventoryTableState = z.infer<typeof inventoryTableStateSchema>;
 type InventoryStockFilter = z.infer<typeof inventoryStockFilterSchema>;
 type InventoryVisibleColumnKey = z.infer<typeof inventoryVisibleColumnSchema>;
@@ -1813,6 +1812,7 @@ const InventoryPage = () => {
   });
 
   const bulkOnHandMutation = trpc.inventory.bulkSetOnHand.useMutation();
+  const bulkOnHandOperationRef = useRef<{ signature: string; key: string } | null>(null);
   const bulkOnHandBusy = bulkOnHandMutation.isLoading || Boolean(bulkOnHandProgress);
 
   const handleBulkOnHandSubmit = async (values: z.infer<typeof bulkOnHandSchema>) => {
@@ -1820,34 +1820,33 @@ const InventoryPage = () => {
       return;
     }
 
-    const snapshotIds = [...selectedSnapshotIds];
+    const snapshotIds = [...selectedSnapshotIds].sort();
     const total = snapshotIds.length;
-    let processedCount = 0;
-    let updatedCount = 0;
+    const payload = {
+      storeId,
+      snapshotIds,
+      targetOnHand: values.targetOnHand,
+      reason: values.reason.trim(),
+    };
+    const signature = JSON.stringify(payload);
+    const current = bulkOnHandOperationRef.current;
+    const idempotencyKey =
+      current?.signature === signature ? current.key : crypto.randomUUID();
+    bulkOnHandOperationRef.current = { signature, key: idempotencyKey };
     setBulkOnHandProgress({ processed: 0, total });
 
     try {
-      for (let index = 0; index < snapshotIds.length; index += BULK_ON_HAND_CHUNK_SIZE) {
-        const chunk = snapshotIds.slice(index, index + BULK_ON_HAND_CHUNK_SIZE);
-        const result = await bulkOnHandMutation.mutateAsync({
-          storeId,
-          snapshotIds: chunk,
-          targetOnHand: values.targetOnHand,
-          reason: values.reason.trim(),
-          idempotencyKey: crypto.randomUUID(),
-        });
-        processedCount += chunk.length;
-        updatedCount += result.updatedCount;
-        setBulkOnHandProgress({ processed: processedCount, total });
-      }
+      const result = await bulkOnHandMutation.mutateAsync({ ...payload, idempotencyKey });
+      setBulkOnHandProgress({ processed: total, total });
 
       await inventoryQuery.refetch();
       await trpcUtils.inventory.searchProducts.invalidate();
+      bulkOnHandOperationRef.current = null;
       bulkOnHandForm.setValue("targetOnHand", 0);
       bulkOnHandForm.setValue("reason", "");
       toast({
         variant: "success",
-        description: t("bulkOnHandSuccess", { count: total, updated: updatedCount }),
+        description: t("bulkOnHandSuccess", { count: total, updated: result.updatedCount }),
       });
       setSelectedIds(new Set());
       setActiveDialog(null);
