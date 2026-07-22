@@ -600,6 +600,14 @@ describeDb("sales orders", () => {
         basePriceKgs: 250,
       },
     });
+    await prisma.storeProduct.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        productId: bundle.id,
+        isActive: true,
+      },
+    });
 
     await prisma.productBundleComponent.createMany({
       data: [
@@ -689,6 +697,14 @@ describeDb("sales orders", () => {
         baseUnitId: baseUnit.id,
         basePriceKgs: 50,
       },
+    });
+    await prisma.storeProduct.createMany({
+      data: [product, bundle].map((soldProduct) => ({
+        organizationId: org.id,
+        storeId: store.id,
+        productId: soldProduct.id,
+        isActive: true,
+      })),
     });
 
     await prisma.productBundleComponent.create({
