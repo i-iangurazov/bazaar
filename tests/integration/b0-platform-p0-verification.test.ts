@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "@/server/db/prisma";
 import { registerJobForTests, runJob } from "@/server/jobs";
 import { resolveExportJobDownload } from "@/server/services/exports";
+import { adjustStock } from "@/server/services/inventory";
 import { createTestCaller } from "../helpers/context";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 
@@ -253,31 +254,57 @@ describeDb("B0 Agent 4 P0 runtime verification", () => {
     ).resolves.toEqual([{ id: unassignedClose.id }]);
   });
 
-  it("A4-007: period-close KGS totals contain quantities instead of movement money", async () => {
-    const { store, product, managerUser } = await seedBase({ plan: "BUSINESS" });
-    const periodStart = new Date("2026-06-01T00:00:00.000Z");
-    const periodEnd = new Date("2026-06-30T23:59:59.999Z");
-    await prisma.stockMovement.createMany({
-      data: [
-        {
-          storeId: store.id,
-          productId: product.id,
-          type: "SALE",
-          qtyDelta: -2,
-          unitCostKgs: new Prisma.Decimal(300),
-          lineTotalKgs: new Prisma.Decimal(600),
-          createdAt: new Date("2026-06-10T08:00:00.000Z"),
-        },
-        {
-          storeId: store.id,
-          productId: product.id,
-          type: "RECEIVE",
-          qtyDelta: 5,
-          unitCostKgs: new Prisma.Decimal(200),
-          lineTotalKgs: new Prisma.Decimal(1000),
-          createdAt: new Date("2026-06-11T08:00:00.000Z"),
-        },
-      ],
+  it("A4-007: period-close uses discounted completed-sale revenue and receiving value", async () => {
+    const { org, store, product, adminUser, managerUser, cashierUser } = await seedBase({
+      plan: "BUSINESS",
+    });
+    const periodStart = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const periodEnd = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { basePriceKgs: new Prisma.Decimal(300) },
+    });
+    await adjustStock({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 2,
+      reason: "seed period-close POS stock",
+      idempotencyKey: "hard-a4-007-stock",
+      requestId: "hard-a4-007-stock",
+    });
+    await prisma.stockMovement.create({
+      data: {
+        storeId: store.id,
+        productId: product.id,
+        type: "RECEIVE",
+        qtyDelta: 5,
+        unitCostKgs: new Prisma.Decimal("200.01"),
+        lineTotalKgs: null,
+      },
+    });
+    const register = await prisma.posRegister.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Period close register",
+        code: "PERIOD-CLOSE",
+      },
+    });
+    const cashierCaller = callerFor(cashierUser);
+    await cashierCaller.pos.shifts.open({
+      registerId: register.id,
+      openingCashKgs: 0,
+      idempotencyKey: "hard-a4-007-shift",
+    });
+    const sale = await cashierCaller.pos.sales.createDraft({ registerId: register.id });
+    await cashierCaller.pos.sales.addLine({ saleId: sale.id, productId: product.id, qty: 2 });
+    await cashierCaller.pos.sales.updateDiscount({ saleId: sale.id, discountKgs: 100 });
+    await cashierCaller.pos.sales.complete({
+      saleId: sale.id,
+      idempotencyKey: "hard-a4-007-sale",
+      payments: [{ method: "CASH", amountKgs: 500 }],
     });
 
     const result = await callerFor(managerUser).periodClose.close({
@@ -287,23 +314,19 @@ describeDb("B0 Agent 4 P0 runtime verification", () => {
     });
 
     expect(result.totals).toMatchObject({
-      salesTotalKgs: 2,
-      purchasesTotalKgs: 5,
-    });
-    expect(result.totals).not.toMatchObject({
-      salesTotalKgs: 600,
-      purchasesTotalKgs: 1000,
+      salesTotalKgs: 500,
+      purchasesTotalKgs: 1000.05,
     });
   });
 
-  it("A4-008: dashboard excludes a current Bishkek business-day sale before UTC midnight", async () => {
+  it("A4-008: dashboard and reports include the current Bishkek day before UTC midnight", async () => {
     const previousTimeZone = process.env.TZ;
     process.env.TZ = "UTC";
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-22T06:00:00.000Z"));
 
     try {
-      const { org, store, adminUser } = await seedBase({ plan: "BUSINESS" });
+      const { org, store, product, adminUser } = await seedBase({ plan: "BUSINESS" });
       await prisma.customerOrder.create({
         data: {
           organizationId: org.id,
@@ -317,6 +340,16 @@ describeDb("B0 Agent 4 P0 runtime verification", () => {
           createdById: adminUser.id,
         },
       });
+      await prisma.stockMovement.create({
+        data: {
+          storeId: store.id,
+          productId: product.id,
+          type: "ADJUSTMENT",
+          qtyDelta: -1,
+          createdById: adminUser.id,
+          createdAt: new Date("2026-07-21T19:30:00.000Z"),
+        },
+      });
 
       const result = await callerFor(adminUser).dashboard.summary({
         storeId: store.id,
@@ -324,7 +357,15 @@ describeDb("B0 Agent 4 P0 runtime verification", () => {
         includeRecentMovements: false,
       });
 
-      expect(result.business.todaySalesKgs).toBe(0);
+      const shrinkage = await callerFor(adminUser).reports.shrinkage({
+        storeId: store.id,
+        dateFrom: "2026-07-22",
+        dateTo: "2026-07-22",
+      });
+
+      expect(result.business.todaySalesKgs).toBe(900);
+      expect(shrinkage).toHaveLength(1);
+      expect(shrinkage[0]).toMatchObject({ storeId: store.id, totalQty: 1 });
     } finally {
       vi.useRealTimers();
       if (previousTimeZone === undefined) {

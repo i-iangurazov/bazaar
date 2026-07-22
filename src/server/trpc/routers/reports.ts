@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { businessDateOnlyEndUtc, businessDateOnlyToUtc } from "@/lib/timezone";
 import { managerProcedure, router, type Context } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
 import { assertFeatureEnabled } from "@/server/services/planLimits";
@@ -22,10 +23,7 @@ const rangeSchema = z.object({
 });
 
 const parseDateOnlyBound = (value: string, endOfDay: boolean) => {
-  const [year, month, day] = value.split("-").map(Number);
-  const date = new Date(year, month - 1, day);
-  date.setHours(endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0, endOfDay ? 999 : 0);
-  return date;
+  return endOfDay ? businessDateOnlyEndUtc(value) : businessDateOnlyToUtc(value);
 };
 
 const resolveRange = (input: { days?: number; dateFrom?: string; dateTo?: string }) => {
