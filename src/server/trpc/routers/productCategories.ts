@@ -14,7 +14,11 @@ import {
   removeProductCategory,
   updateStoreProductCategoryPreference,
 } from "@/server/services/productCategories";
-import { assertUserCanAccessStore } from "@/server/services/storeAccess";
+import { AppError } from "@/server/services/errors";
+import {
+  assertUserCanAccessStore,
+  userHasAllStoreAccess,
+} from "@/server/services/storeAccess";
 
 export const productCategoriesRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -76,6 +80,8 @@ export const productCategoriesRouter = router({
       try {
         if (input.storeId) {
           await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+        } else if (!userHasAllStoreAccess(ctx.user)) {
+          throw new AppError("categoryGlobalRemoveForbidden", "FORBIDDEN", 403);
         }
         return await removeProductCategory({
           organizationId: ctx.user.organizationId,

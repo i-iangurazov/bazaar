@@ -242,6 +242,7 @@ export const createProductCategory = async (input: {
     if (!normalized) {
       throw new AppError("invalidInput", "BAD_REQUEST", 400);
     }
+
     if (input.storeId && !normalizedName) {
       throw new AppError("invalidInput", "BAD_REQUEST", 400);
     }
@@ -431,6 +432,16 @@ export const removeProductCategory = async (input: {
       throw new AppError("invalidInput", "BAD_REQUEST", 400);
     }
 
+    if (input.storeId) {
+      const store = await tx.store.findFirst({
+        where: { id: input.storeId, organizationId: input.organizationId },
+        select: { id: true },
+      });
+      if (!store) {
+        throw new AppError("storeNotFound", "NOT_FOUND", 404);
+      }
+    }
+
     const productCategoryWhere = {
       organizationId: input.organizationId,
       OR: [{ category: normalized }, { categories: { has: normalized } }],
@@ -514,6 +525,51 @@ export const removeProductCategory = async (input: {
 
     if (!category) {
       throw new AppError("categoryNotFound", "NOT_FOUND", 404);
+    }
+
+    if (input.storeId && normalizedName) {
+      const before = await tx.storeCategoryPreference.findUnique({
+        where: {
+          storeId_normalizedName: {
+            storeId: input.storeId,
+            normalizedName,
+          },
+        },
+      });
+      const preference = await tx.storeCategoryPreference.upsert({
+        where: {
+          storeId_normalizedName: {
+            storeId: input.storeId,
+            normalizedName,
+          },
+        },
+        update: {
+          name: normalized,
+          isVisibleInForms: false,
+          isArchived: true,
+        },
+        create: {
+          organizationId: input.organizationId,
+          storeId: input.storeId,
+          name: normalized,
+          normalizedName,
+          isVisibleInForms: false,
+          isArchived: true,
+        },
+      });
+
+      await writeAuditLog(tx, {
+        organizationId: input.organizationId,
+        actorId: input.actorId,
+        action: "STORE_CATEGORY_PREFERENCE_UPDATE",
+        entity: "StoreCategoryPreference",
+        entityId: preference.id,
+        before: before ? toJson(before) : null,
+        after: toJson(preference),
+        requestId: input.requestId,
+      });
+
+      return category;
     }
 
     if (normalizedName) {
