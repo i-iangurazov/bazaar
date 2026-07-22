@@ -129,7 +129,7 @@ export const GuidanceProvider = ({ role, children }: GuidanceProviderProps) => {
     refetchOnWindowFocus: false,
     retry: 1,
   });
-  const billingQuery = trpc.billing.get.useQuery(undefined, {
+  const billingQuery = trpc.billing.features.useQuery(undefined, {
     staleTime: 5 * 60_000,
     refetchOnWindowFocus: false,
     retry: 0,

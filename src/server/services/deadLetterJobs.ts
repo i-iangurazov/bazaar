@@ -4,7 +4,7 @@ import { writeAuditLog } from "@/server/services/audit";
 import { toJson } from "@/server/services/json";
 import { retryJob, type JobPayload } from "@/server/jobs";
 
-export const listDeadLetterJobs = async (input: { organizationId: string }) =>
+export const listDeadLetterJobs = async (input: { organizationId: string | null }) =>
   prisma.deadLetterJob.findMany({
     where: { organizationId: input.organizationId },
     orderBy: { lastErrorAt: "desc" },
@@ -27,11 +27,15 @@ export const retryDeadLetterJob = async (input: {
   jobId: string;
   actorId: string;
   organizationId: string;
+  jobOrganizationId?: string | null;
   requestId: string;
 }) =>
   prisma.$transaction(async (tx) => {
     const job = await tx.deadLetterJob.findFirst({
-      where: { id: input.jobId, organizationId: input.organizationId },
+      where: {
+        id: input.jobId,
+        organizationId: input.jobOrganizationId === null ? null : input.organizationId,
+      },
     });
     if (!job) {
       throw new AppError("jobNotFound", "NOT_FOUND", 404);
@@ -94,11 +98,15 @@ export const resolveDeadLetterJob = async (input: {
   jobId: string;
   actorId: string;
   organizationId: string;
+  jobOrganizationId?: string | null;
   requestId: string;
 }) =>
   prisma.$transaction(async (tx) => {
     const job = await tx.deadLetterJob.findFirst({
-      where: { id: input.jobId, organizationId: input.organizationId },
+      where: {
+        id: input.jobId,
+        organizationId: input.jobOrganizationId === null ? null : input.organizationId,
+      },
     });
     if (!job) {
       throw new AppError("jobNotFound", "NOT_FOUND", 404);

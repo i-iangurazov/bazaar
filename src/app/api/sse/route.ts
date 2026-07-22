@@ -1,4 +1,5 @@
 import { getServerAuthToken } from "@/server/auth/token";
+import { isPlatformOwnerEmail } from "@/server/auth/platformOwner";
 import { prisma } from "@/server/db/prisma";
 import { eventBus } from "@/server/events/eventBus";
 import {
@@ -83,6 +84,39 @@ type EventAccess = {
   allowedStoreIds: Set<string> | null;
 };
 
+const resolveCurrentEventAccess = async (sessionUser: StoreAccessUser) => {
+  const currentUser = await prisma.user.findFirst({
+    where: {
+      id: sessionUser.id,
+      organizationId: sessionUser.organizationId,
+      isActive: true,
+    },
+    select: {
+      id: true,
+      email: true,
+      organizationId: true,
+      role: true,
+      isOrgOwner: true,
+    },
+  });
+  if (!currentUser?.organizationId) {
+    return null;
+  }
+  const accessUser: StoreAccessUser = {
+    id: currentUser.id,
+    organizationId: currentUser.organizationId,
+    role: currentUser.role,
+    isOrgOwner: currentUser.isOrgOwner,
+    isPlatformOwner: isPlatformOwnerEmail(currentUser.email),
+  };
+  return {
+    organizationId: accessUser.organizationId,
+    allowedStoreIds: userHasAllStoreAccess(accessUser)
+      ? null
+      : new Set(await resolveAccessibleStoreIds(prisma, accessUser)),
+  } satisfies EventAccess;
+};
+
 const canReceiveStoreScope = (access: EventAccess, scope: StoreScope | null) =>
   Boolean(
     scope &&
@@ -142,12 +176,10 @@ export const GET = async (request: Request) => {
     isOrgOwner: Boolean((token as { isOrgOwner?: boolean | null }).isOrgOwner),
     isPlatformOwner: Boolean((token as { isPlatformOwner?: boolean | null }).isPlatformOwner),
   };
-  const access: EventAccess = {
-    organizationId: accessUser.organizationId,
-    allowedStoreIds: userHasAllStoreAccess(accessUser)
-      ? null
-      : new Set(await resolveAccessibleStoreIds(prisma, accessUser)),
-  };
+  const initialAccess = await resolveCurrentEventAccess(accessUser);
+  if (!initialAccess) {
+    return new Response("unauthorized", { status: 401 });
+  }
 
   incrementCounter(httpRequestsTotal, { path: "/api/sse" });
 
@@ -158,7 +190,8 @@ export const GET = async (request: Request) => {
       let closed = false;
       incrementGauge(sseConnectionsActive);
       const send = async (event: { type: string; payload: unknown }) => {
-        const allowed = await canReceiveEvent(access, event);
+        const access = await resolveCurrentEventAccess(accessUser);
+        const allowed = access ? await canReceiveEvent(access, event) : false;
         if (!allowed || closed) {
           return;
         }
