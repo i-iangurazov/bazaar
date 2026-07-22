@@ -53,6 +53,7 @@ type CatalogPayload = {
     name: string;
     category: string | null;
     priceKgs: number;
+    quotedUnitPriceKgs: number;
     compareAtPriceKgs: number | null;
     hasDiscount: boolean;
     discountPercentage: number | null;
@@ -62,6 +63,7 @@ type CatalogPayload = {
       id: string;
       name: string;
       priceKgs: number;
+      quotedUnitPriceKgs: number;
       compareAtPriceKgs: number | null;
       hasDiscount: boolean;
       discountPercentage: number | null;
@@ -361,12 +363,14 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
           return null;
         }
         const unitPriceKgs = variant?.priceKgs ?? product.priceKgs;
+        const quotedUnitPriceKgs = variant?.quotedUnitPriceKgs ?? product.quotedUnitPriceKgs;
         return {
           lineKey,
           product,
           variant,
           qty,
           unitPriceKgs,
+          quotedUnitPriceKgs,
           lineTotal: qty * unitPriceKgs,
         };
       })
@@ -379,6 +383,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
           variant: CatalogPayload["products"][number]["variants"][number] | null;
           qty: number;
           unitPriceKgs: number;
+          quotedUnitPriceKgs: number;
           lineTotal: number;
         } => Boolean(item),
       );
@@ -499,6 +504,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
           productId: item.product.id,
           variantId: item.variant?.id ?? null,
           qty: item.qty,
+          quotedUnitPriceKgs: item.quotedUnitPriceKgs,
         })),
       };
       const serializedPayload = JSON.stringify(checkoutPayload);
@@ -522,6 +528,22 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
       const body = (await response.json().catch(() => ({}))) as CheckoutResponse;
       if (!response.ok || !body.order) {
         const key = body.message ?? "genericMessage";
+        if (key === "catalogPriceChanged") {
+          checkoutAttemptRef.current = null;
+          const refreshedResponse = await fetch(
+            `/api/public/catalog/${encodeURIComponent(catalog.slug)}`,
+            { method: "GET", cache: "no-store" },
+          );
+          const refreshedBody = (await refreshedResponse
+            .json()
+            .catch(() => ({}))) as CatalogResponse;
+          if (!refreshedResponse.ok || !("products" in refreshedBody)) {
+            throw new Error(tErrors("genericMessage"));
+          }
+          setCatalog(refreshedBody);
+          setSubmitError(t("checkoutPriceChanged"));
+          return;
+        }
         const message = tErrors.has?.(key) ? tErrors(key) : tErrors("genericMessage");
         throw new Error(message);
       }

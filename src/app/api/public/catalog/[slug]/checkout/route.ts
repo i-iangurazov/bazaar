@@ -17,6 +17,7 @@ const checkoutSchema = z.object({
         productId: z.string().trim().min(1),
         variantId: z.string().trim().min(1).optional().nullable(),
         qty: z.number().int().min(1),
+        quotedUnitPriceKgs: z.number().finite().nonnegative(),
       }),
     )
     .min(1),
@@ -71,6 +72,7 @@ export const POST = async (request: Request, context: { params: { slug: string }
     }
     if (
       message === "catalogScopeChanged" ||
+      message === "catalogPriceChanged" ||
       message === "operationRequestIdentityMismatch" ||
       message === "operationRequestPayloadMismatch" ||
       message === "operationRequestUnavailable" ||

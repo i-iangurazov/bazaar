@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { GET as getBazaarApiProducts } from "@/app/api/bazaar/v1/products/route";
 import { prisma } from "@/server/db/prisma";
+import { getRedisPublisher } from "@/server/redis";
 import {
   authenticateBazaarApiRequest,
   createBazaarApiKey,
@@ -11,6 +12,7 @@ import {
 } from "@/server/services/bazaarApi";
 import { createCustomerOrderDraft } from "@/server/services/salesOrders";
 import { adjustStock } from "@/server/services/inventory";
+import { archiveProduct } from "@/server/services/products";
 import { createPurchaseOrder } from "@/server/services/purchaseOrders";
 import { upsertStorePrice } from "@/server/services/storePrices";
 
@@ -188,7 +190,9 @@ describeDb("B0 Agent 3 access and cache P0 runtime verification", () => {
         email: "store-a@example.com",
       },
     });
-    const crossOrganization = await prisma.organization.create({ data: { name: "Customer Org B" } });
+    const crossOrganization = await prisma.organization.create({
+      data: { name: "Customer Org B" },
+    });
     const crossOrganizationStore = await prisma.store.create({
       data: { organizationId: crossOrganization.id, name: "Org B Store", code: "ORGB" },
     });
@@ -257,8 +261,17 @@ describeDb("B0 Agent 3 access and cache P0 runtime verification", () => {
   });
 
   it("verifies HARD-A3-007: PO and supplier procedures enforce role, store, organization, and ID boundaries", async () => {
-    const { org, store, supplier, product, baseUnit, adminUser, managerUser, staffUser, cashierUser } =
-      await seedBase({ plan: "BUSINESS" });
+    const {
+      org,
+      store,
+      supplier,
+      product,
+      baseUnit,
+      adminUser,
+      managerUser,
+      staffUser,
+      cashierUser,
+    } = await seedBase({ plan: "BUSINESS" });
     const { store: storeB } = await createSecondStoreProduct({
       organizationId: org.id,
       supplierId: supplier.id,
@@ -315,9 +328,9 @@ describeDb("B0 Agent 3 access and cache P0 runtime verification", () => {
     const staffCaller = createTestCaller(asCallerUser(staffUser));
     const cashierCaller = createTestCaller(asCallerUser(cashierUser));
     const managerCaller = createTestCaller(asCallerUser(managerUser));
-    await expect(
-      staffCaller.purchaseOrders.list({ page: 1, pageSize: 25 }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(staffCaller.purchaseOrders.list({ page: 1, pageSize: 25 })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
     await expect(staffCaller.purchaseOrders.getById({ id: po.id })).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
@@ -416,7 +429,9 @@ describeDb("B0 Agent 3 access and cache P0 runtime verification", () => {
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
 
-    const crossOrganization = await prisma.organization.create({ data: { name: "Integration Org B" } });
+    const crossOrganization = await prisma.organization.create({
+      data: { name: "Integration Org B" },
+    });
     const crossOrganizationStore = await prisma.store.create({
       data: { organizationId: crossOrganization.id, name: "Integration Org B Store", code: "IOB" },
     });
@@ -595,7 +610,7 @@ describeDb("B0 Agent 3 access and cache P0 runtime verification", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("reproduces HARD-A3-010: warmed API product data ignores committed price and stock mutations", async () => {
+  it("regresses HARD-A3-010: warmed API product reads stay fresh without Redis", async () => {
     const { org, store, product, adminUser } = await seedBase({ plan: "BUSINESS" });
     await prisma.product.update({ where: { id: product.id }, data: { basePriceKgs: 100 } });
     await adjustStock({
@@ -633,12 +648,41 @@ describeDb("B0 Agent 3 access and cache P0 runtime verification", () => {
       requestId: "b0-a3-010-stock-change",
       idempotencyKey: "b0-a3-010-stock-change-key",
     });
-    const second = await listBazaarApiProducts({
-      organizationId: org.id,
-      storeId: store.id,
-      page: 1,
-      pageSize: 50,
-    });
+    const redis = getRedisPublisher();
+    if (!redis) {
+      throw new Error("HARD-A3-010 requires Agent3 Redis DB13");
+    }
+    const redisGet = vi
+      .spyOn(redis, "get")
+      .mockRejectedValue(new Error("syntheticRedisUnavailable"));
+    const redisSet = vi
+      .spyOn(redis, "set")
+      .mockRejectedValue(new Error("syntheticRedisUnavailable"));
+    let second: Awaited<ReturnType<typeof listBazaarApiProducts>>;
+    let afterArchive: Awaited<ReturnType<typeof listBazaarApiProducts>>;
+    try {
+      second = await listBazaarApiProducts({
+        organizationId: org.id,
+        storeId: store.id,
+        page: 1,
+        pageSize: 50,
+      });
+      await archiveProduct({
+        organizationId: org.id,
+        productId: product.id,
+        actorId: adminUser.id,
+        requestId: "b3-a3-010-archive",
+      });
+      afterArchive = await listBazaarApiProducts({
+        organizationId: org.id,
+        storeId: store.id,
+        page: 1,
+        pageSize: 50,
+      });
+    } finally {
+      redisGet.mockRestore();
+      redisSet.mockRestore();
+    }
     const databasePrice = await prisma.storePrice.findUniqueOrThrow({
       where: {
         organizationId_storeId_productId_variantKey: {
@@ -660,8 +704,9 @@ describeDb("B0 Agent 3 access and cache P0 runtime verification", () => {
     });
     const firstItem = first.items.find((item) => item.id === product.id);
     const secondItem = second.items.find((item) => item.id === product.id);
+    const archivedItem = afterArchive.items.find((item) => item.id === product.id);
 
-    evidence("HARD-A3-010", {
+    evidence("HARD-A3-010-fixed", {
       productId: product.id,
       firstApiPriceKgs: firstItem?.priceKgs,
       secondApiPriceKgs: secondItem?.priceKgs,
@@ -669,12 +714,18 @@ describeDb("B0 Agent 3 access and cache P0 runtime verification", () => {
       firstApiStockQty: firstItem?.stockQty,
       secondApiStockQty: secondItem?.stockQty,
       databaseStockQty: databaseSnapshot.onHand,
-      cacheMode: process.env.REDIS_URL ? "memory-plus-agent3-redis" : "memory-only",
+      archivedProductVisible: Boolean(archivedItem),
+      redisProductReadCalls: redisGet.mock.calls.length,
+      redisProductWriteCalls: redisSet.mock.calls.length,
+      cacheMode: "fail-fresh-database",
     });
 
     expect(firstItem).toMatchObject({ priceKgs: 100, stockQty: 10 });
-    expect(secondItem).toMatchObject({ priceKgs: 100, stockQty: 10 });
+    expect(secondItem).toMatchObject({ priceKgs: 200, stockQty: 7 });
+    expect(archivedItem).toBeUndefined();
     expect(Number(databasePrice.priceKgs)).toBe(200);
     expect(databaseSnapshot.onHand).toBe(7);
+    expect(redisGet).not.toHaveBeenCalled();
+    expect(redisSet).not.toHaveBeenCalled();
   });
 });

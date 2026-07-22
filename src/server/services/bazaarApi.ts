@@ -46,15 +46,9 @@ import type { BazaarCatalogPricingJson } from "@/server/services/bazaarCatalogPr
 
 const API_TOKEN_PREFIX = "bz_live_";
 const API_KEY_LAST_USED_UPDATE_INTERVAL_MS = 10 * 60 * 1000;
-const DEFAULT_API_PRODUCTS_CACHE_TTL_SECONDS = 30 * 60;
-
-type CacheEntry<T> = {
-  expiresAt: number;
-  value: T;
-};
 
 const globalForBazaarApiCache = globalThis as typeof globalThis & {
-  __bazaarApiMemoryCache?: Map<string, CacheEntry<unknown>>;
+  __bazaarApiMemoryCache?: Map<string, unknown>;
 };
 
 const memoryCache = (globalForBazaarApiCache.__bazaarApiMemoryCache ??= new Map());
@@ -119,9 +113,7 @@ const resolveBazaarApiCatalogPrice = (input: {
     currency: "KGS",
   });
   const convert = (value: Prisma.Decimal) =>
-    roundMoney(
-      convertFromKgs(value.toNumber(), input.currencyRateKgsPerUnit, input.currencyCode),
-    );
+    roundMoney(convertFromKgs(value.toNumber(), input.currencyRateKgsPerUnit, input.currencyCode));
   const percentage = effective.discountPercentage;
   const pricing: BazaarCatalogPricingJson = {
     currency: input.currencyCode,
@@ -148,16 +140,6 @@ const resolveBazaarApiCatalogPrice = (input: {
 
 const tokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
 const createRawToken = () => `${API_TOKEN_PREFIX}${randomBytes(32).toString("base64url")}`;
-const cacheDigest = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
-
-const positiveIntFromEnv = (name: string, fallback: number) => {
-  const raw = process.env[name];
-  const value = raw ? Number(raw) : NaN;
-  return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
-};
-
-const apiProductsCacheTtlSeconds = () =>
-  positiveIntFromEnv("BAZAAR_API_PRODUCTS_CACHE_TTL_SECONDS", DEFAULT_API_PRODUCTS_CACHE_TTL_SECONDS);
 
 export type BazaarApiPublicOrderStatus =
   | "NEW"
@@ -295,99 +277,12 @@ const findBazaarApiOrderIdByExternalIdentity = async (
     : null;
 };
 
-const readCache = async <T>(
-  key: string,
-  options?: { useMemory?: boolean },
-): Promise<T | null> => {
-  if (options?.useMemory !== false) {
-    const memoryEntry = memoryCache.get(key) as CacheEntry<T> | undefined;
-    if (memoryEntry) {
-      if (memoryEntry.expiresAt > Date.now()) {
-        return memoryEntry.value;
-      }
-      memoryCache.delete(key);
-    }
-  }
-
-  try {
-    const redis = getRedisPublisher();
-    if (!redis) return null;
-    const raw = await redis.get(key);
-    if (!raw) return null;
-    const entry = JSON.parse(raw) as CacheEntry<T>;
-    if (entry.expiresAt <= Date.now()) {
-      void redis.del(key).catch(() => undefined);
-      return null;
-    }
-    if (options?.useMemory !== false) {
-      memoryCache.set(key, entry as CacheEntry<unknown>);
-    }
-    return entry.value;
-  } catch {
-    return null;
-  }
-};
-
-const writeCache = async <T>(
-  key: string,
-  value: T,
-  ttlSeconds: number,
-  options?: { useMemory?: boolean },
-): Promise<void> => {
-  const entry: CacheEntry<T> = {
-    expiresAt: Date.now() + ttlSeconds * 1000,
-    value,
-  };
-  if (options?.useMemory !== false) {
-    memoryCache.set(key, entry as CacheEntry<unknown>);
-  }
-
-  try {
-    const redis = getRedisPublisher();
-    if (!redis) return;
-    await redis.set(key, JSON.stringify(entry), "EX", ttlSeconds);
-  } catch {
-    // Cache writes are best-effort; API correctness must not depend on Redis.
-  }
-};
-
-const bazaarApiProductsCacheIndexKey = (organizationId: string, storeId: string) =>
-  `bazaar-api:products:index:${organizationId}:${storeId}`;
-
-const registerBazaarApiProductsCacheKey = async (
-  organizationId: string,
-  storeId: string,
-  key: string,
-) => {
-  try {
-    const redis = getRedisPublisher();
-    if (!redis) return;
-    const indexKey = bazaarApiProductsCacheIndexKey(organizationId, storeId);
-    await redis.sadd(indexKey, key);
-    await redis.expire(indexKey, apiProductsCacheTtlSeconds() + 60);
-  } catch {
-    // Cache indexes are best-effort.
-  }
-};
-
 export const invalidateBazaarApiProductsCacheForStore = async (
-  organizationId: string,
-  storeId: string,
+  _organizationId: string,
+  _storeId: string,
 ) => {
-  const prefix = `bazaar-api:products:v1:${organizationId}:${storeId}:`;
-  for (const key of memoryCache.keys()) {
-    if (key.startsWith(prefix)) memoryCache.delete(key);
-  }
-  try {
-    const redis = getRedisPublisher();
-    if (!redis) return;
-    const indexKey = bazaarApiProductsCacheIndexKey(organizationId, storeId);
-    const keys = await redis.smembers(indexKey);
-    if (keys.length) await redis.del(...keys);
-    await redis.del(indexKey);
-  } catch {
-    // Cache invalidation remains best-effort; catalog reads are still source-of-truth backed.
-  }
+  // Correctness-critical product reads are source-of-truth backed, so callers
+  // retain a compatible invalidation hook without a product cache to purge.
 };
 
 const deleteCache = async (key: string): Promise<void> => {
@@ -584,12 +479,7 @@ const resolveBazaarApiOrderPayment = (order: BazaarApiOrderRecord) => {
   const methods = Array.from(
     new Set(order.payments.filter((payment) => !payment.isRefund).map((payment) => payment.method)),
   );
-  const status =
-    paidKgs <= 0
-      ? "UNPAID"
-      : paidKgs + 0.01 < totalKgs
-        ? "PARTIALLY_PAID"
-        : "PAID";
+  const status = paidKgs <= 0 ? "UNPAID" : paidKgs + 0.01 < totalKgs ? "PARTIALLY_PAID" : "PAID";
 
   return {
     status,
@@ -927,22 +817,6 @@ export const listBazaarApiProducts = async (input: {
   const page = Math.max(1, Math.trunc(input.page ?? 1));
   const pageSize = Math.min(100, Math.max(1, Math.trunc(input.pageSize ?? 50)));
   const search = normalizeOptionalText(input.search);
-  const productsCacheKey = `bazaar-api:products:v1:${input.organizationId}:${input.storeId}:${cacheDigest({
-    organizationId: input.organizationId,
-    storeId: input.storeId,
-    search,
-    page,
-    pageSize,
-  })}`;
-  // Product pricing is invalidated from a different serverless function than the
-  // public GET route. Process-local cache entries cannot be purged across instances,
-  // so Redis is the only shared cache for this mutable catalog response.
-  const cached = await readCache<BazaarApiProductsResult>(productsCacheKey, {
-    useMemory: false,
-  });
-  if (cached) {
-    return cached;
-  }
 
   const store = await ensureStoreAccess(input.organizationId, input.storeId);
   const currencyCode = normalizeCurrencyCode(store.currencyCode);
@@ -1191,21 +1065,6 @@ export const listBazaarApiProducts = async (input: {
       };
     }),
   };
-  const nextPricingBoundary = storePrices
-    .flatMap((price) => [price.discountStartsAt, price.discountEndsAt])
-    .filter((value): value is Date => Boolean(value && value.getTime() > pricingNow.getTime()))
-    .sort((left, right) => left.getTime() - right.getTime())[0];
-  const cacheTtlSeconds = nextPricingBoundary
-    ? Math.max(
-        1,
-        Math.min(
-          apiProductsCacheTtlSeconds(),
-          Math.ceil((nextPricingBoundary.getTime() - pricingNow.getTime()) / 1_000),
-        ),
-      )
-    : apiProductsCacheTtlSeconds();
-  await writeCache(productsCacheKey, result, cacheTtlSeconds, { useMemory: false });
-  await registerBazaarApiProductsCacheKey(input.organizationId, input.storeId, productsCacheKey);
   return result;
 };
 

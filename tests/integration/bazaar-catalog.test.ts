@@ -79,7 +79,7 @@ describeDb("bazaar catalog integration", () => {
     });
     await prisma.product.update({
       where: { id: product.id },
-      data: { basePriceKgs: 120 },
+      data: { basePriceKgs: 1_200 },
     });
     await prisma.storePrice.create({
       data: {
@@ -87,7 +87,9 @@ describeDb("bazaar catalog integration", () => {
         storeId: store.id,
         productId: product.id,
         variantKey: "BASE",
-        priceKgs: 95,
+        priceKgs: 950,
+        discountType: "PERCENTAGE",
+        discountPercentage: 20,
       },
     });
 
@@ -98,13 +100,22 @@ describeDb("bazaar catalog integration", () => {
       status: BazaarCatalogStatus.PUBLISHED,
     });
 
+    const publicCatalog = await getPublicBazaarCatalog(saved.catalog.slug);
+    const publicProduct = publicCatalog?.products.find((row) => row.id === product.id);
+
+    expect(publicCatalog?.currencyCode).toBe("USD");
+    expect(publicProduct?.priceKgs).toBe(10);
+    expect(publicProduct?.compareAtPriceKgs).toBe(20);
+    expect(publicProduct?.hasDiscount).toBe(true);
+    expect(publicProduct?.quotedUnitPriceKgs).toBe(760);
+
     const order = await createCatalogCheckoutOrder({
       slug: saved.catalog.slug,
       customerName: "Catalog Customer",
       customerEmail: "catalog.customer@example.com",
       customerPhone: "+996555100200",
       comment: "Доставка вечером",
-      lines: [{ productId: product.id, qty: 3 }],
+      lines: [{ productId: product.id, qty: 3, quotedUnitPriceKgs: 760 }],
     });
 
     const dbOrder = await prisma.customerOrder.findUnique({
@@ -119,10 +130,14 @@ describeDb("bazaar catalog integration", () => {
     expect(dbOrder?.currencyCode).toBe("USD");
     expect(Number(dbOrder?.currencyRateKgsPerUnit ?? 0)).toBe(89.5);
     expect(dbOrder?.customerEmail).toBe("catalog.customer@example.com");
-    expect(Number(dbOrder?.totalKgs ?? 0)).toBe(285);
+    expect(Number(dbOrder?.totalKgs ?? 0)).toBe(2_280);
     expect(dbOrder?.lines).toHaveLength(1);
-    expect(Number(dbOrder?.lines[0]?.unitPriceKgs ?? 0)).toBe(95);
-    expect(Number(dbOrder?.lines[0]?.lineTotalKgs ?? 0)).toBe(285);
+    expect(Number(dbOrder?.lines[0]?.baseUnitPriceKgs ?? 0)).toBe(950);
+    expect(Number(dbOrder?.lines[0]?.unitPriceKgs ?? 0)).toBe(760);
+    expect(dbOrder?.lines[0]?.appliedDiscountType).toBe("PERCENTAGE");
+    expect(Number(dbOrder?.lines[0]?.appliedDiscountPercentage ?? 0)).toBe(20);
+    expect(Number(dbOrder?.lines[0]?.appliedDiscountAmountKgs ?? 0)).toBe(190);
+    expect(Number(dbOrder?.lines[0]?.lineTotalKgs ?? 0)).toBe(2_280);
   });
 
   it("creates customer order line with variant when checkout specifies variantId", async () => {
@@ -160,7 +175,7 @@ describeDb("bazaar catalog integration", () => {
       customerName: "Variant Customer",
       customerEmail: "variant.customer@example.com",
       customerPhone: "+996555888111",
-      lines: [{ productId: product.id, variantId: variant.id, qty: 2 }],
+      lines: [{ productId: product.id, variantId: variant.id, qty: 2, quotedUnitPriceKgs: 210 }],
     });
 
     const dbOrder = await prisma.customerOrder.findUnique({
@@ -209,7 +224,7 @@ describeDb("bazaar catalog integration", () => {
         customerName: "Hidden Product Customer",
         customerEmail: "hidden.customer@example.com",
         customerPhone: "+996555000100",
-        lines: [{ productId: product.id, qty: 1 }],
+        lines: [{ productId: product.id, qty: 1, quotedUnitPriceKgs: 180 }],
       }),
     ).rejects.toMatchObject({
       message: "productNotFound",

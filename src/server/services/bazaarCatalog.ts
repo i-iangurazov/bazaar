@@ -38,7 +38,6 @@ import { getEffectiveProductPrice } from "@/server/services/effectiveProductPric
 const DEFAULT_ACCENT_COLOR = "#2a6be4";
 const DEFAULT_FONT_FAMILY = BazaarCatalogFontFamily.NotoSans;
 const DEFAULT_HEADER_STYLE = BazaarCatalogHeaderStyle.STANDARD;
-const PUBLIC_CACHE_TTL_SECONDS = 60;
 const SLUG_LENGTH = 12;
 const slugAlphabet = "abcdefghjkmnpqrstuvwxyz23456789";
 const accentColorPattern = /^#[0-9a-fA-F]{6}$/;
@@ -126,34 +125,6 @@ const generateUniqueSlug = async (tx: Prisma.TransactionClient) => {
 };
 
 const cacheKeyBySlug = (slug: string) => `bazaar-catalog:public:v3:${slug}`;
-
-const cacheGet = async <T>(key: string): Promise<T | null> => {
-  try {
-    const redis = getRedisPublisher();
-    if (!redis) {
-      return null;
-    }
-    const raw = await redis.get(key);
-    if (!raw) {
-      return null;
-    }
-    return JSON.parse(raw) as T;
-  } catch {
-    return null;
-  }
-};
-
-const cacheSet = async (key: string, value: unknown, ttlSeconds = PUBLIC_CACHE_TTL_SECONDS) => {
-  try {
-    const redis = getRedisPublisher();
-    if (!redis) {
-      return;
-    }
-    await redis.set(key, JSON.stringify(value), "EX", ttlSeconds);
-  } catch {
-    // Public catalog correctness does not depend on Redis availability.
-  }
-};
 
 const cacheDel = async (key: string) => {
   try {
@@ -729,6 +700,7 @@ type PublicCatalogPayload = {
     name: string;
     category: string | null;
     priceKgs: number;
+    quotedUnitPriceKgs: number;
     compareAtPriceKgs: number | null;
     hasDiscount: boolean;
     discountPercentage: number | null;
@@ -738,6 +710,7 @@ type PublicCatalogPayload = {
       id: string;
       name: string;
       priceKgs: number;
+      quotedUnitPriceKgs: number;
       compareAtPriceKgs: number | null;
       hasDiscount: boolean;
       discountPercentage: number | null;
@@ -752,12 +725,6 @@ export const getPublicBazaarCatalog = async (
   const normalizedSlug = slug.trim().toLowerCase();
   if (!normalizedSlug || normalizedSlug.length < 8) {
     return null;
-  }
-
-  const cacheKey = cacheKeyBySlug(normalizedSlug);
-  const cached = await cacheGet<PublicCatalogPayload>(cacheKey);
-  if (cached) {
-    return cached;
   }
 
   const catalog = await prisma.bazaarCatalog.findUnique({
@@ -851,8 +818,14 @@ export const getPublicBazaarCatalog = async (
       })
     : [];
 
-  const basePriceByProductId = new Map(storePrices.filter((price) => price.variantKey === "BASE").map((price) => [price.productId, price]));
-  const priceByProductVariantKey = new Map(storePrices.map((price) => [`${price.productId}:${price.variantKey || "BASE"}`, price]));
+  const basePriceByProductId = new Map(
+    storePrices
+      .filter((price) => price.variantKey === "BASE")
+      .map((price) => [price.productId, price]),
+  );
+  const priceByProductVariantKey = new Map(
+    storePrices.map((price) => [`${price.productId}:${price.variantKey || "BASE"}`, price]),
+  );
 
   const currencyCode = normalizeCurrencyCode(catalog.store.currencyCode);
   const currencyRateKgsPerUnit = normalizeCurrencyRateKgsPerUnit(
@@ -911,9 +884,18 @@ export const getPublicBazaarCatalog = async (
       return {
         id: variant.id,
         name: normalizeOptionalText(variant.name) ?? variant.id.slice(0, 8),
-        priceKgs: roundCatalogPrice(variantPricing.effectivePrice.toNumber(), currencyCode, currencyRateKgsPerUnit),
+        priceKgs: roundCatalogPrice(
+          variantPricing.effectivePrice.toNumber(),
+          currencyCode,
+          currencyRateKgsPerUnit,
+        ),
+        quotedUnitPriceKgs: roundMoney(variantPricing.effectivePrice.toNumber()),
         compareAtPriceKgs: variantPricing.compareAtPrice
-          ? roundCatalogPrice(variantPricing.compareAtPrice.toNumber(), currencyCode, currencyRateKgsPerUnit)
+          ? roundCatalogPrice(
+              variantPricing.compareAtPrice.toNumber(),
+              currencyCode,
+              currencyRateKgsPerUnit,
+            )
           : null,
         hasDiscount: variantPricing.hasActiveDiscount,
         discountPercentage: variantPricing.discountPercentage?.toNumber() ?? null,
@@ -925,9 +907,18 @@ export const getPublicBazaarCatalog = async (
       id: product.id,
       name: product.name,
       category: categoryName,
-      priceKgs: roundCatalogPrice(basePricing.effectivePrice.toNumber(), currencyCode, currencyRateKgsPerUnit),
+      priceKgs: roundCatalogPrice(
+        basePricing.effectivePrice.toNumber(),
+        currencyCode,
+        currencyRateKgsPerUnit,
+      ),
+      quotedUnitPriceKgs: roundMoney(basePricing.effectivePrice.toNumber()),
       compareAtPriceKgs: basePricing.compareAtPrice
-        ? roundCatalogPrice(basePricing.compareAtPrice.toNumber(), currencyCode, currencyRateKgsPerUnit)
+        ? roundCatalogPrice(
+            basePricing.compareAtPrice.toNumber(),
+            currencyCode,
+            currencyRateKgsPerUnit,
+          )
         : null,
       hasDiscount: basePricing.hasActiveDiscount,
       discountPercentage: basePricing.discountPercentage?.toNumber() ?? null,
@@ -953,21 +944,14 @@ export const getPublicBazaarCatalog = async (
     products: payloadProducts,
   };
 
-  const nextPricingBoundary = storePrices
-    .flatMap((price) => [price.discountStartsAt, price.discountEndsAt])
-    .filter((value): value is Date => Boolean(value && value.getTime() > pricingNow.getTime()))
-    .sort((left, right) => left.getTime() - right.getTime())[0];
-  const cacheTtlSeconds = nextPricingBoundary
-    ? Math.max(
-        1,
-        Math.min(
-          PUBLIC_CACHE_TTL_SECONDS,
-          Math.ceil((nextPricingBoundary.getTime() - pricingNow.getTime()) / 1_000),
-        ),
-      )
-    : PUBLIC_CACHE_TTL_SECONDS;
-  await cacheSet(cacheKey, payload, cacheTtlSeconds);
   return payload;
+};
+
+export type CatalogCheckoutLineInput = {
+  productId: string;
+  variantId?: string | null;
+  qty: number;
+  quotedUnitPriceKgs: number;
 };
 
 export type CreateCatalogCheckoutOrderInput = {
@@ -976,7 +960,54 @@ export type CreateCatalogCheckoutOrderInput = {
   customerEmail: string;
   customerPhone: string;
   comment?: string | null;
-  lines: Array<{ productId: string; variantId?: string | null; qty: number }>;
+  lines: CatalogCheckoutLineInput[];
+};
+
+type NormalizedCatalogCheckoutLine = {
+  productId: string;
+  variantId: string | null;
+  variantKey: string;
+  qty: number;
+  quotedUnitPriceKgs: number;
+};
+
+const normalizeCatalogCheckoutLines = (
+  lines: CatalogCheckoutLineInput[],
+): NormalizedCatalogCheckoutLine[] => {
+  const normalized = lines.reduce((map, line) => {
+    const productId = line.productId.trim();
+    const variantId = normalizeOptionalText(line.variantId);
+    const variantKey = variantKeyFrom(variantId);
+    const qty = Math.trunc(line.qty);
+    const quotedUnitPriceKgs = roundMoney(line.quotedUnitPriceKgs);
+    if (!productId || !Number.isFinite(qty) || qty < 1) {
+      throw new AppError("invalidQuantity", "BAD_REQUEST", 400);
+    }
+    if (!Number.isFinite(line.quotedUnitPriceKgs) || quotedUnitPriceKgs < 0) {
+      throw new AppError("invalidInput", "BAD_REQUEST", 400);
+    }
+    const key = `${productId}:${variantKey}`;
+    const existing = map.get(key);
+    if (existing) {
+      if (existing.quotedUnitPriceKgs !== quotedUnitPriceKgs) {
+        throw new AppError("catalogPriceChanged", "CONFLICT", 409);
+      }
+      existing.qty += qty;
+    } else {
+      map.set(key, {
+        productId,
+        variantId,
+        variantKey,
+        qty,
+        quotedUnitPriceKgs,
+      });
+    }
+    return map;
+  }, new Map<string, NormalizedCatalogCheckoutLine>());
+
+  return Array.from(normalized.values()).sort((left, right) =>
+    `${left.productId}:${left.variantKey}`.localeCompare(`${right.productId}:${right.variantKey}`),
+  );
 };
 
 export type TrustedCatalogCheckoutScope = {
@@ -995,30 +1026,7 @@ const createCatalogCheckoutOrderTx = async (
     throw new AppError("invalidInput", "BAD_REQUEST", 400);
   }
 
-  const normalizedLines = Array.from(
-    input.lines.reduce((map, line) => {
-      const productId = line.productId.trim();
-      const variantId = normalizeOptionalText(line.variantId);
-      const variantKey = variantKeyFrom(variantId);
-      const qty = Math.trunc(line.qty);
-      if (!productId || !Number.isFinite(qty) || qty < 1) {
-        throw new AppError("invalidQuantity", "BAD_REQUEST", 400);
-      }
-      const key = `${productId}:${variantKey}`;
-      const existing = map.get(key);
-      if (existing) {
-        existing.qty += qty;
-      } else {
-        map.set(key, {
-          productId,
-          variantId,
-          variantKey,
-          qty,
-        });
-      }
-      return map;
-    }, new Map<string, { productId: string; variantId: string | null; variantKey: string; qty: number }>()),
-  ).map((entry) => entry[1]);
+  const normalizedLines = normalizeCatalogCheckoutLines(input.lines);
 
   if (!normalizedLines.length) {
     throw new AppError("salesOrderEmpty", "BAD_REQUEST", 400);
@@ -1177,6 +1185,10 @@ const createCatalogCheckoutOrderTx = async (
     });
     const basePrice = effective.basePrice.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
     const unitPrice = effective.effectivePrice;
+    const currentUnitPriceKgs = roundMoney(unitPrice.toNumber());
+    if (line.quotedUnitPriceKgs !== currentUnitPriceKgs) {
+      throw new AppError("catalogPriceChanged", "CONFLICT", 409);
+    }
     const lineTotal = unitPrice.mul(line.qty).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
     const unitCost =
       productCostByProductVariantKey.get(`${line.productId}:${line.variantKey}`) ??
@@ -1311,6 +1323,15 @@ export const createCatalogCheckoutOrderOperationForTrustedScope = async (
   if (!slug) {
     throw new AppError("invalidInput", "BAD_REQUEST", 400);
   }
+  const normalizedLines = normalizeCatalogCheckoutLines(input.lines);
+  if (!normalizedLines.length) {
+    throw new AppError("salesOrderEmpty", "BAD_REQUEST", 400);
+  }
+  const normalizedInput: CreateCatalogCheckoutOrderInput = {
+    ...input,
+    slug,
+    lines: normalizedLines,
+  };
 
   let createdResult: CatalogCheckoutOrderResult | null = null;
   const operation = await runOperationRequest<CatalogCheckoutOperationResponse>(
@@ -1324,17 +1345,18 @@ export const createCatalogCheckoutOrderOperationForTrustedScope = async (
       },
       idempotencyKey: input.idempotencyKey,
       payload: {
-        version: "v1",
+        version: "v2",
         value: {
           slug,
           customerName: input.customerName,
           customerEmail: input.customerEmail,
           customerPhone: input.customerPhone,
           comment: input.comment ?? null,
-          lines: input.lines.map((line) => ({
+          lines: normalizedLines.map((line) => ({
             productId: line.productId,
             variantId: line.variantId ?? null,
             qty: line.qty,
+            quotedUnitPriceKgs: line.quotedUnitPriceKgs,
           })),
         },
       },
@@ -1342,7 +1364,7 @@ export const createCatalogCheckoutOrderOperationForTrustedScope = async (
       classifyFailure: classifyCatalogCheckoutOperationFailure,
     },
     async (tx) => {
-      const result = await createCatalogCheckoutOrderTx(tx, input, {
+      const result = await createCatalogCheckoutOrderTx(tx, normalizedInput, {
         catalogId: trustedCatalog.catalogId,
         organizationId: trustedCatalog.organizationId,
         storeId: trustedCatalog.storeId,
