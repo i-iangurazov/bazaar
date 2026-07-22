@@ -136,18 +136,19 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
     await expect(
       caller.stockLots.byProduct({ storeId: storeB.id, productId: productB.id }),
     ).rejects.toMatchObject({ code: "FORBIDDEN", message: "storeAccessDenied" });
-    await expect(caller.stockLots.expiringSoon({ storeId: storeB.id, days: 30 })).rejects.toMatchObject(
-      { code: "FORBIDDEN", message: "storeAccessDenied" },
-    );
+    await expect(
+      caller.stockLots.expiringSoon({ storeId: storeB.id, days: 30 }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN", message: "storeAccessDenied" });
     await expect(
       caller.inventory.productIdsBySnapshotIds({ snapshotIds: [snapshotB.id] }),
     ).resolves.toEqual([]);
     await expect(
       caller.stockCounts.setLineCountedQty({ lineId: lineB.id, countedQty: 8 }),
     ).rejects.toMatchObject({ code: "FORBIDDEN", message: "storeAccessDenied" });
-    await expect(
-      caller.stockCounts.removeLine({ lineId: lineB.id }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN", message: "storeAccessDenied" });
+    await expect(caller.stockCounts.removeLine({ lineId: lineB.id })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: "storeAccessDenied",
+    });
     await expect(
       caller.stockCounts.applyCount({
         stockCountId: countB.id,
@@ -189,6 +190,7 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
     const caller = callerFor(managerUser);
     const count = await caller.stockCounts.create({ storeId: store.id, notes: "allowed" });
     const line = await caller.stockCounts.addOrUpdateLineByScan({
+      idempotencyKey: `a2-001-scan-${randomUUID()}`,
       stockCountId: count.id,
       storeId: store.id,
       barcodeOrQuery: product.sku,
@@ -325,7 +327,9 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
         patch: { name: "Cross-org rename" },
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN", message: "productAccessDenied" });
-    await expect(prisma.product.findUniqueOrThrow({ where: { id: betaProduct.id } })).resolves.toMatchObject({
+    await expect(
+      prisma.product.findUniqueOrThrow({ where: { id: betaProduct.id } }),
+    ).resolves.toMatchObject({
       name: "Beta Product",
     });
     await expect(
@@ -642,11 +646,12 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
     expect(operationRequests.every((request) => request.storeId === store.id)).toBe(true);
   });
 
-  it("HARD-A2-006 increments one stock-count scan twice when the request is replayed", async () => {
+  it("HARD-A2-006 replays one stock-count scan without another increment", async () => {
     const { store, product, managerUser } = await seedBase({ plan: "BUSINESS" });
     const caller = callerFor(managerUser);
     const count = await caller.stockCounts.create({ storeId: store.id, notes: "replay probe" });
     const scan = {
+      idempotencyKey: `a2-006-scan-${randomUUID()}`,
       stockCountId: count.id,
       storeId: store.id,
       barcodeOrQuery: product.sku,
@@ -656,6 +661,12 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
 
     const first = await caller.stockCounts.addOrUpdateLineByScan(scan);
     const second = await caller.stockCounts.addOrUpdateLineByScan(scan);
+    await expect(
+      caller.stockCounts.addOrUpdateLineByScan({ ...scan, countedDelta: 2 }),
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "operationRequestPayloadMismatch",
+    });
     const durable = await prisma.stockCountLine.findUniqueOrThrow({
       where: {
         stockCountId_productId_variantKey: {
@@ -667,9 +678,21 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
     });
 
     expect(first.countedQty).toBe(1);
-    expect(second.countedQty).toBe(2);
-    expect(durable.countedQty).toBe(2);
-    expect(await prisma.idempotencyKey.count({ where: { userId: managerUser.id } })).toBe(0);
+    expect(second.countedQty).toBe(1);
+    expect(durable.countedQty).toBe(1);
+    await expect(
+      prisma.operationRequest.findFirstOrThrow({
+        where: {
+          organizationId: managerUser.organizationId!,
+          principalKey: `user:${managerUser.id}`,
+          scope: "stockCounts.addOrUpdateLineByScan",
+        },
+      }),
+    ).resolves.toMatchObject({
+      status: OperationRequestStatus.COMPLETED,
+      storeId: store.id,
+      idempotencyKey: scan.idempotencyKey,
+    });
   });
 
   it("HARD-A2-007 commits the first ten bulk stock updates before an invalid later chunk fails", async () => {
@@ -761,7 +784,9 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
         where: { storeId_normalizedName: { storeId: storeB.id, normalizedName: normalized } },
       }),
     ).resolves.toMatchObject({ isArchived: false, isVisibleInForms: true });
-    await expect(prisma.productCategory.findUnique({ where: { id: category.id } })).resolves.toMatchObject({
+    await expect(
+      prisma.productCategory.findUnique({ where: { id: category.id } }),
+    ).resolves.toMatchObject({
       id: category.id,
     });
     expect(
@@ -811,7 +836,9 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
       caller.productCategories.remove({ name: marker, storeId: betaStore.id }),
     ).rejects.toMatchObject({ code: "FORBIDDEN", message: "storeAccessDenied" });
 
-    await expect(prisma.productCategory.findUnique({ where: { id: category.id } })).resolves.toMatchObject({
+    await expect(
+      prisma.productCategory.findUnique({ where: { id: category.id } }),
+    ).resolves.toMatchObject({
       id: category.id,
     });
     await expect(
@@ -840,7 +867,9 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
       },
     });
 
-    await expect(callerFor(adminUser).productCategories.remove({ name: marker })).resolves.toMatchObject({
+    await expect(
+      callerFor(adminUser).productCategories.remove({ name: marker }),
+    ).resolves.toMatchObject({
       id: category.id,
     });
     expect(await prisma.productCategory.findUnique({ where: { id: category.id } })).toBeNull();

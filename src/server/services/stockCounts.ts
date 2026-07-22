@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
-import { StockCountStatus, StockMovementType } from "@prisma/client";
+import { OperationRequestPrincipalType, StockCountStatus, StockMovementType } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
@@ -10,6 +10,8 @@ import { writeAuditLog } from "@/server/services/audit";
 import { eventBus } from "@/server/events/eventBus";
 import { toJson } from "@/server/services/json";
 import { normalizeScanValue } from "@/lib/scanning/normalize";
+import { classifyDatabaseOperationFailure } from "@/server/services/databaseOperationFailure";
+import { runOperationRequest } from "@/server/services/operationRequests";
 
 const resolveVariantKey = (variantId?: string | null) => variantId ?? "BASE";
 
@@ -124,87 +126,131 @@ export const addOrUpdateLineByScan = async (input: {
   actorId: string;
   organizationId: string;
   requestId: string;
+  idempotencyKey?: string;
 }) => {
-  return prisma.$transaction(async (tx) => {
-    const count = await tx.stockCount.findUnique({ where: { id: input.stockCountId } });
-    if (!count || count.organizationId !== input.organizationId) {
-      throw new AppError("stockCountNotFound", "NOT_FOUND", 404);
-    }
-    if (count.storeId !== input.storeId) {
-      throw new AppError("stockCountStoreMismatch", "BAD_REQUEST", 400);
-    }
-    if (count.status === StockCountStatus.APPLIED || count.status === StockCountStatus.CANCELLED) {
-      throw new AppError("stockCountLocked", "CONFLICT", 409);
-    }
-
-    const match = await resolveScanMatch(tx, input.organizationId, input.barcodeOrQuery);
-    const variantKey = resolveVariantKey(match.variantId);
-
-    const existing = await tx.stockCountLine.findUnique({
-      where: {
-        stockCountId_productId_variantKey: {
-          stockCountId: input.stockCountId,
-          productId: match.productId,
-          variantKey,
-        },
+  const operation = await runOperationRequest(
+    {
+      organizationId: input.organizationId,
+      storeId: input.storeId,
+      scope: "stockCounts.addOrUpdateLineByScan",
+      principal: {
+        type: OperationRequestPrincipalType.AUTHENTICATED_USER,
+        id: input.actorId,
       },
-    });
+      idempotencyKey: input.idempotencyKey ?? input.requestId,
+      payload: {
+        version: "stockCounts.addOrUpdateLineByScan.v1",
+        value: toJson({
+          stockCountId: input.stockCountId,
+          storeId: input.storeId,
+          barcodeOrQuery: normalizeScanValue(input.barcodeOrQuery),
+          mode: input.mode,
+          countedQty: input.mode === "set" ? (input.countedQty ?? 0) : null,
+          countedDelta: input.mode === "increment" ? (input.countedDelta ?? 1) : null,
+        }),
+      },
+      allowedResponsePaths: ["lineId"],
+      classifyFailure: (error) => classifyDatabaseOperationFailure(error, "stockCountScanFailed"),
+    },
+    async (tx) => {
+      const count = await tx.stockCount.findUnique({ where: { id: input.stockCountId } });
+      if (!count || count.organizationId !== input.organizationId) {
+        throw new AppError("stockCountNotFound", "NOT_FOUND", 404);
+      }
+      if (count.storeId !== input.storeId) {
+        throw new AppError("stockCountStoreMismatch", "BAD_REQUEST", 400);
+      }
+      if (
+        count.status === StockCountStatus.APPLIED ||
+        count.status === StockCountStatus.CANCELLED
+      ) {
+        throw new AppError("stockCountLocked", "CONFLICT", 409);
+      }
 
-    const snapshot = await tx.inventorySnapshot.findUnique({
-      where: {
-        storeId_productId_variantKey: {
+      const match = await resolveScanMatch(tx, input.organizationId, input.barcodeOrQuery);
+      const variantKey = resolveVariantKey(match.variantId);
+
+      const existing = await tx.stockCountLine.findUnique({
+        where: {
+          stockCountId_productId_variantKey: {
+            stockCountId: input.stockCountId,
+            productId: match.productId,
+            variantKey,
+          },
+        },
+      });
+
+      const snapshot = await tx.inventorySnapshot.findUnique({
+        where: {
+          storeId_productId_variantKey: {
+            storeId: input.storeId,
+            productId: match.productId,
+            variantKey,
+          },
+        },
+      });
+
+      const expectedOnHand = existing?.expectedOnHand ?? snapshot?.onHand ?? 0;
+      const baseCounted = existing?.countedQty ?? 0;
+      const incrementBy = input.countedDelta ?? 1;
+      const nextCounted =
+        input.mode === "set" ? (input.countedQty ?? 0) : baseCounted + incrementBy;
+      const deltaQty = nextCounted - expectedOnHand;
+
+      const now = new Date();
+      const line = await tx.stockCountLine.upsert({
+        where: {
+          stockCountId_productId_variantKey: {
+            stockCountId: input.stockCountId,
+            productId: match.productId,
+            variantKey,
+          },
+        },
+        update: {
+          countedQty: nextCounted,
+          deltaQty,
+          barcodeValue: match.barcodeValue ?? undefined,
+          lastScannedAt: now,
+        },
+        create: {
+          stockCountId: input.stockCountId,
           storeId: input.storeId,
           productId: match.productId,
+          variantId: match.variantId ?? undefined,
           variantKey,
+          barcodeValue: match.barcodeValue ?? undefined,
+          expectedOnHand,
+          countedQty: nextCounted,
+          deltaQty,
+          lastScannedAt: now,
         },
-      },
-    });
-
-    const expectedOnHand = existing?.expectedOnHand ?? snapshot?.onHand ?? 0;
-    const baseCounted = existing?.countedQty ?? 0;
-    const incrementBy = input.countedDelta ?? 1;
-    const nextCounted =
-      input.mode === "set" ? (input.countedQty ?? 0) : baseCounted + incrementBy;
-    const deltaQty = nextCounted - expectedOnHand;
-
-    const now = new Date();
-    const line = await tx.stockCountLine.upsert({
-      where: {
-        stockCountId_productId_variantKey: {
-          stockCountId: input.stockCountId,
-          productId: match.productId,
-          variantKey,
-        },
-      },
-      update: {
-        countedQty: nextCounted,
-        deltaQty,
-        barcodeValue: match.barcodeValue ?? undefined,
-        lastScannedAt: now,
-      },
-      create: {
-        stockCountId: input.stockCountId,
-        storeId: input.storeId,
-        productId: match.productId,
-        variantId: match.variantId ?? undefined,
-        variantKey,
-        barcodeValue: match.barcodeValue ?? undefined,
-        expectedOnHand,
-        countedQty: nextCounted,
-        deltaQty,
-        lastScannedAt: now,
-      },
-    });
-
-    if (count.status === StockCountStatus.DRAFT) {
-      await tx.stockCount.update({
-        where: { id: count.id },
-        data: { status: StockCountStatus.IN_PROGRESS, startedAt: count.startedAt ?? new Date() },
       });
-    }
 
-    return line;
+      if (count.status === StockCountStatus.DRAFT) {
+        await tx.stockCount.update({
+          where: { id: count.id },
+          data: {
+            status: StockCountStatus.IN_PROGRESS,
+            startedAt: count.startedAt ?? new Date(),
+          },
+        });
+      }
+
+      return {
+        response: { lineId: line.id },
+        responseStatus: 200,
+        resource: { type: "StockCountLine", id: line.id },
+      };
+    },
+  );
+
+  const line = await prisma.stockCountLine.findUnique({
+    where: { id: operation.response.lineId },
   });
+  if (!line) {
+    throw new AppError("stockCountLineNotFound", "NOT_FOUND", 404);
+  }
+  return line;
 };
 
 export const setLineCountedQty = async (input: {
