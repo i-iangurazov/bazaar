@@ -16,12 +16,18 @@ import {
   StockMovementType,
   type ExportJob,
 } from "@prisma/client";
-import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import {
+  GetObjectCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
 import * as XLSX from "xlsx";
 
 import { prisma } from "@/server/db/prisma";
 import { isProductionRuntime } from "@/server/config/runtime";
 import { AppError } from "@/server/services/errors";
+import { hasPermission } from "@/lib/roleAccess";
 import { writeAuditLog } from "@/server/services/audit";
 import { sanitizeSpreadsheetValue, toCsv } from "@/server/services/csv";
 import { toJson } from "@/server/services/json";
@@ -163,9 +169,7 @@ const shouldUseR2ExportStorage = () => {
   if (explicitProvider) {
     return explicitProvider === "r2";
   }
-  return (
-    isProductionRuntime() && process.env.IMAGE_STORAGE_PROVIDER?.trim().toLowerCase() === "r2"
-  );
+  return isProductionRuntime() && process.env.IMAGE_STORAGE_PROVIDER?.trim().toLowerCase() === "r2";
 };
 
 let exportR2Client: S3Client | null = null;
@@ -223,7 +227,10 @@ const toReadable = (body: unknown): Readable => {
   if (body instanceof Readable) {
     return body;
   }
-  if (body && typeof (body as { transformToWebStream?: unknown }).transformToWebStream === "function") {
+  if (
+    body &&
+    typeof (body as { transformToWebStream?: unknown }).transformToWebStream === "function"
+  ) {
     return Readable.fromWeb(
       (
         body as { transformToWebStream: () => NodeReadableStream<Uint8Array> }
@@ -521,10 +528,7 @@ const buildExportFile = (
   if (format === "xlsx") {
     const workbook = XLSX.utils.book_new();
     const bodyRows = rows.map((row) => keys.map((key) => sanitizeSpreadsheetValue(row[key])));
-    const values = [
-      displayHeader,
-      ...bodyRows,
-    ];
+    const values = [displayHeader, ...bodyRows];
     const worksheet = XLSX.utils.aoa_to_sheet(values);
     worksheet["!cols"] = calculateColumnWidths(displayHeader, bodyRows);
     if (displayHeader.length) {
@@ -2431,6 +2435,9 @@ export const resolveExportJobDownload = async (input: {
   jobId: string;
   user: StoreAccessUser;
 }) => {
+  if (!hasPermission(input.user, "viewReports")) {
+    throw new AppError("forbidden", "FORBIDDEN", 403);
+  }
   let job = await prisma.exportJob.findFirst({
     where: {
       id: input.jobId,
