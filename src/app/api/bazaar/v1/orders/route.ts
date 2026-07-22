@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const orderSchema = z.object({
-  externalId: z.string().trim().max(160).optional().nullable(),
+  externalId: z.string().trim().min(1).max(160).optional().nullable(),
   customerName: z.string().trim().max(160).optional().nullable(),
   customerEmail: z.string().trim().email().max(254).optional().nullable(),
   customerPhone: z.string().trim().max(64).optional().nullable(),
@@ -32,8 +32,8 @@ const ordersQuerySchema = z.object({
   status: z.string().trim().max(64).optional().nullable(),
   orderNumber: z.string().trim().max(80).optional().nullable(),
   number: z.string().trim().max(80).optional().nullable(),
-  externalOrderId: z.string().trim().max(160).optional().nullable(),
-  externalId: z.string().trim().max(160).optional().nullable(),
+  externalOrderId: z.string().trim().min(1).max(160).optional().nullable(),
+  externalId: z.string().trim().min(1).max(160).optional().nullable(),
   dateFrom: z.string().trim().max(80).optional().nullable(),
   dateTo: z.string().trim().max(80).optional().nullable(),
   storeId: z.string().trim().max(128).optional().nullable(),
@@ -47,13 +47,21 @@ const toStatus = (message: string) => {
   }
   if (
     message === "invalidInput" ||
+    message === "invalidExternalOrderId" ||
     message === "invalidQuantity" ||
     message === "salesOrderEmpty"
   ) {
     return 400;
   }
-  if (message === "storeNotFound" || message === "productNotFound" || message === "variantNotFound") {
+  if (
+    message === "storeNotFound" ||
+    message === "productNotFound" ||
+    message === "variantNotFound"
+  ) {
     return 404;
+  }
+  if (message === "externalOrderIdConflict") {
+    return 409;
   }
   return 500;
 };
