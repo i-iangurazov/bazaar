@@ -318,8 +318,12 @@ export const generateProductDescriptionMutation = async ({
 
 export const bulkGenerateProductBarcodesMutation = async ({
   input,
+  accessibleStoreIds,
   ...ctx
-}: ProductMutationContext & { input: BulkGenerateProductBarcodesInput }) => {
+}: ProductMutationContext & {
+  input: BulkGenerateProductBarcodesInput;
+  accessibleStoreIds?: string[];
+}) => {
   try {
     return await bulkGenerateProductBarcodes({
       organizationId: ctx.organizationId,
@@ -327,6 +331,7 @@ export const bulkGenerateProductBarcodesMutation = async ({
       requestId: ctx.requestId,
       mode: input.mode,
       filter: input.filter,
+      accessibleStoreIds,
     });
   } catch (error) {
     throw toTRPCError(error);

@@ -1495,14 +1495,7 @@ export const getProductPricing = async ({
   productId: string;
   storeId?: string;
 }) => {
-  const product = await prisma.product.findUnique({
-    where: { id: productId },
-    select: { id: true, organizationId: true, basePriceKgs: true },
-  });
-  if (!product || product.organizationId !== organizationId) {
-    throw new TRPCError({ code: "NOT_FOUND", message: "productNotFound" });
-  }
-
+  let scopedStoreIds: string[] | undefined;
   if (storeId) {
     if (user) {
       try {
@@ -1519,7 +1512,21 @@ export const getProductPricing = async ({
         throw new TRPCError({ code: "FORBIDDEN", message: "storeAccessDenied" });
       }
     }
+    scopedStoreIds = [storeId];
+  } else if (user) {
+    scopedStoreIds = await resolveAccessibleStoreIds(prisma, user);
+  }
 
+  const product = await prisma.product.findFirst({
+    where: {
+      id: productId,
+      organizationId,
+      ...(scopedStoreIds ? productStoreAssignmentInWhere(scopedStoreIds) : {}),
+    },
+    select: { id: true, organizationId: true, basePriceKgs: true },
+  });
+  if (!product) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "productNotFound" });
   }
 
   const [storePrice, cost] = await Promise.all([
@@ -1567,21 +1574,27 @@ export const getProductStorePricing = async ({
   user?: StoreAccessUser;
   productId: string;
 }) => {
-  const product = await prisma.product.findUnique({
-    where: { id: productId },
+  const accessibleStoreIds = user ? await resolveAccessibleStoreIds(prisma, user) : undefined;
+  const product = await prisma.product.findFirst({
+    where: {
+      id: productId,
+      organizationId,
+      ...(accessibleStoreIds ? productStoreAssignmentInWhere(accessibleStoreIds) : {}),
+    },
     select: {
       id: true,
       organizationId: true,
       basePriceKgs: true,
     },
   });
-  if (!product || product.organizationId !== organizationId) {
+  if (!product) {
     throw new TRPCError({ code: "NOT_FOUND", message: "productNotFound" });
   }
 
   const stores = await prisma.store.findMany({
     where: {
       organizationId,
+      ...(accessibleStoreIds ? { id: { in: accessibleStoreIds } } : {}),
       storeProducts: {
         some: {
           organizationId,
@@ -1589,16 +1602,6 @@ export const getProductStorePricing = async ({
           isActive: true,
         },
       },
-      ...(user && !userHasAllStoreAccess(user)
-        ? {
-            userAccesses: {
-              some: {
-                organizationId,
-                userId: user.id,
-              },
-            },
-          }
-        : {}),
     },
     select: {
       id: true,
