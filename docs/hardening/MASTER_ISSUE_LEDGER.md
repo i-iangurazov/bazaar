@@ -2,9 +2,9 @@
 
 Baseline: `4d7c9b33218b584334ca62f7a816f8997f144a10`
 
-Phase: B0 — runtime P0 verification complete; domain implementation not started
+Phase: B1 — P0-A security/isolation implementation locally complete; Preview gate awaiting explicit deployment authorization
 
-All 46 P0 hypotheses now have runtime evidence and classifications. `HARD-A4-010` is resolved by the approved B0 test-infrastructure guard; the other 45 P0s remain `OPEN` and none is implementation-complete. Browser reproduction, post-fix regression tests, desktop/mobile and theme checks where relevant, runtime-error checks, durable post-fix evidence, and independent Agent 4 verification are still required. The linked agent audit remains the canonical Phase A record; [the Phase B0 summary](./PHASE_B0_SUMMARY.md) is the canonical runtime classification and execution plan.
+All 46 P0 hypotheses have runtime evidence and classifications. `HARD-A4-010` was resolved in B0. All 24 P0-A findings are now `CLOSED` locally through five consolidated root-cause closures and independent Agent 4 verification. The remaining 21 P0 findings belong to P0-B/P0-C/P0-D and remain `OPEN`; no P1/P2 implementation was started. [The Phase B1 summary](./PHASE_B1_SUMMARY.md) records commits, evidence, gates, and the outstanding Preview authorization.
 
 ## Summary
 
@@ -18,7 +18,38 @@ All 46 P0 hypotheses now have runtime evidence and classifications. `HARD-A4-010
 
 ## P0 — release and data-safety blockers
 
-Phase B0 classification total: **46 CONFIRMED, 0 DUPLICATE, 0 DOWNGRADED, 0 FALSE_POSITIVE, 0 BLOCKED_BY_ENVIRONMENT**. `HARD-A4-010` is `B0_RESOLVED`; the remaining 45 are open. Runtime details are in the four `B0_AGENT_*_P0_VERIFICATION.md` reports.
+Phase B0 classification total: **46 CONFIRMED, 0 DUPLICATE, 0 DOWNGRADED, 0 FALSE_POSITIVE, 0 BLOCKED_BY_ENVIRONMENT**. Current state: **25 CLOSED** (`HARD-A4-010` plus 24 P0-A) and **21 OPEN** (P0-B: 15, P0-C: 5, P0-D: 1). Runtime details are in the four `B0_AGENT_*_P0_VERIFICATION.md` reports.
+
+### Phase B1 P0-A closure
+
+Each issue below retains its individual acceptance contract even where one root-cause fix closes several symptoms. `APPROVED` means Agent 4 repeated the exploit/authorization check, the allowed scenario, cross-org/cross-store and direct-API denial, and the no-side-effect assertion on the isolated Agent 4 environment.
+
+| Issue | Root cause group | Owner | State | Agent 4 verdict |
+| --- | --- | --- | --- | --- |
+| HARD-A1-001 | RC-01 | Agent 1 | CLOSED | APPROVED |
+| HARD-A1-002 | RC-01 | Agent 1 | CLOSED | APPROVED |
+| HARD-A1-003 | RC-02 | Agent 1 | CLOSED | APPROVED |
+| HARD-A2-001 | RC-01 | Agent 2 | CLOSED | APPROVED |
+| HARD-A2-002 | RC-04 | Agent 2 | CLOSED | APPROVED |
+| HARD-A2-003 | RC-04 | Agent 2 | CLOSED | APPROVED |
+| HARD-A2-004 | RC-02 | Agent 2 | CLOSED | APPROVED |
+| HARD-A2-008 | RC-06 | Agent 2 | CLOSED | APPROVED |
+| HARD-A2-009 | RC-01 | Agent 2 | CLOSED | APPROVED |
+| HARD-A2-010 | RC-03 | Agent 2 | CLOSED | APPROVED |
+| HARD-A3-002 | RC-03 | Agent 3 | CLOSED | APPROVED |
+| HARD-A3-006 | RC-01 | Agent 3 | CLOSED | APPROVED |
+| HARD-A3-007 | RC-02 | Agent 3 | CLOSED | APPROVED |
+| HARD-A3-008 | RC-02 | Agent 3 | CLOSED | APPROVED |
+| HARD-A3-009 | RC-04 | Agent 3 | CLOSED | APPROVED |
+| HARD-A3-026 | RC-03 | Agent 3 | CLOSED | APPROVED |
+| HARD-A4-001 | RC-02 | Agent 4 | CLOSED | APPROVED; Agent 1 cross-review |
+| HARD-A4-002 | RC-02 | Agent 4 | CLOSED | APPROVED; Agent 1 cross-review |
+| HARD-A4-003 | RC-02 | Agent 4 | CLOSED | APPROVED; Agent 1 cross-review |
+| HARD-A4-004 | RC-02 | Agent 4 | CLOSED | APPROVED; Agent 1 cross-review |
+| HARD-A4-005 | RC-01 | Agent 4 | CLOSED | APPROVED; Agent 1 cross-review |
+| HARD-A4-006 | RC-01 | Agent 4 | CLOSED | APPROVED; Agent 1 cross-review |
+| HARD-A4-009 | RC-03 | Agent 4 | CLOSED | APPROVED; Agent 1 cross-review |
+| HARD-A4-011 | RC-02 | Agent 4 | CLOSED | APPROVED; Agent 1 cross-review |
 
 | ID | Owner | Defect | Canonical evidence |
 | --- | --- | --- | --- |
@@ -138,7 +169,7 @@ Root-cause groups guide implementation batching; they do not remove distinct ver
 ## Release posture
 
 - No P0/P1 is unowned; implementation ownership follows the agent column and the shared-file lock document.
-- `HARD-A4-010` is verified resolved in B0. The other 45 confirmed P0s remain open, and there are no P3-only batches to start ahead of P0/P1.
+- `HARD-A4-010` is verified resolved in B0 and all 24 P0-A findings are locally closed in B1. The remaining 21 P0s stay open for B/C/D; no P1/P2 work has begun.
 - DB-backed execution is ready on four positively identified databases with explicit reset guards; agents must continue using only their assigned database/Redis/storage identities.
-- Browser, responsive, theme, Preview, production, and warmed performance evidence remain `NOT_RUN`; they are post-fix acceptance gates.
+- Local browser/API/DB security evidence is `PASS`; the external Preview deployment and remote smoke remain `BLOCKED_PENDING_USER_AUTHORIZATION`. Theme and performance are outside the P0-A authorization surface and were not expanded into P1/P2 work.
 - External marketplace and email APIs must be mocked in automated tests.

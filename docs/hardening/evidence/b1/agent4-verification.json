@@ -1,0 +1,85 @@
+{
+  "phase": "B1",
+  "scope": "P0-A security and organization/store isolation",
+  "implementationHead": "fa0c48604d85067291f00bf0567b867c4597f585",
+  "generatedAt": "2026-07-22T03:25:00.000Z",
+  "status": "LOCAL_PASS_PREVIEW_PENDING_AUTHORIZATION",
+  "issueTotals": {
+    "approved": 24,
+    "rejected": 0,
+    "needsChanges": 0
+  },
+  "approvedIssues": [
+    "HARD-A1-001",
+    "HARD-A1-002",
+    "HARD-A1-003",
+    "HARD-A2-001",
+    "HARD-A2-002",
+    "HARD-A2-003",
+    "HARD-A2-004",
+    "HARD-A2-008",
+    "HARD-A2-009",
+    "HARD-A2-010",
+    "HARD-A3-002",
+    "HARD-A3-006",
+    "HARD-A3-007",
+    "HARD-A3-008",
+    "HARD-A3-009",
+    "HARD-A3-026",
+    "HARD-A4-001",
+    "HARD-A4-002",
+    "HARD-A4-003",
+    "HARD-A4-004",
+    "HARD-A4-005",
+    "HARD-A4-006",
+    "HARD-A4-009",
+    "HARD-A4-011"
+  ],
+  "verification": {
+    "unitAndIntegration": {
+      "status": "PASS",
+      "files": 168,
+      "tests": 946,
+      "database": "bazaar_hardening_agent4_platform",
+      "migrations": "87/87"
+    },
+    "apiDatabaseSecuritySmoke": {
+      "status": "PASS",
+      "checks": 12,
+      "database": "bazaar_hardening_b1_preview",
+      "evidence": "api-security-smoke.json"
+    },
+    "browserSecuritySmoke": {
+      "status": "PASS",
+      "checks": 12,
+      "roles": ["ADMIN", "MANAGER", "CASHIER", "STAFF"],
+      "viewports": ["1440x1000", "390x844", "414x896"],
+      "evidence": "browser-security-smoke/summary.json"
+    },
+    "ssrf": {
+      "status": "PASS",
+      "unitCases": 42,
+      "liveDeniedCases": 13,
+      "publicImagePositivePathCovered": true
+    },
+    "apiKeyIsolation": {
+      "status": "PASS",
+      "revocationImmediate": true,
+      "storeIdTamperingDenied": true,
+      "foreignResourceResponse": "404 NOT_FOUND",
+      "deniedMutationSideEffects": 0
+    },
+    "releaseGates": {
+      "typecheck": "PASS",
+      "lint": "PASS",
+      "i18n": "PASS",
+      "test": "PASS",
+      "build": "PASS",
+      "gitDiffCheck": "PASS"
+    },
+    "preview": {
+      "status": "BLOCKED_PENDING_USER_AUTHORIZATION",
+      "reason": "External deployment of private source and deployment-specific secrets requires explicit approval"
+    }
+  }
+}

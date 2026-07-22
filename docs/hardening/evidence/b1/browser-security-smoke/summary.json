@@ -1,0 +1,155 @@
+{
+  "phase": "B1",
+  "baseUrl": "http://localhost:3105",
+  "generatedAt": "2026-07-22T03:17:39.424Z",
+  "status": "PASS",
+  "roles": [
+    "ADMIN",
+    "MANAGER",
+    "CASHIER",
+    "STAFF"
+  ],
+  "viewports": [
+    "1440x1000",
+    "390x844",
+    "414x896"
+  ],
+  "results": [
+    {
+      "role": "admin",
+      "requestedPath": "/dashboard",
+      "expectedPath": "/dashboard",
+      "actualPath": "/dashboard",
+      "viewport": "1440x1000",
+      "status": "PASS",
+      "leakedSensitiveValue": false,
+      "problems": [],
+      "screenshot": "admin-dashboard-desktop.png"
+    },
+    {
+      "role": "admin",
+      "requestedPath": "/billing",
+      "expectedPath": "/billing",
+      "actualPath": "/billing",
+      "viewport": "1440x1000",
+      "status": "PASS",
+      "leakedSensitiveValue": false,
+      "problems": [],
+      "screenshot": null
+    },
+    {
+      "role": "manager",
+      "requestedPath": "/dashboard",
+      "expectedPath": "/dashboard",
+      "actualPath": "/dashboard",
+      "viewport": "1440x1000",
+      "status": "PASS",
+      "leakedSensitiveValue": false,
+      "problems": [],
+      "screenshot": "manager-dashboard-desktop.png"
+    },
+    {
+      "role": "manager",
+      "requestedPath": "/operations/integrations",
+      "expectedPath": "/operations/integrations",
+      "actualPath": "/operations/integrations",
+      "viewport": "1440x1000",
+      "status": "PASS",
+      "leakedSensitiveValue": false,
+      "problems": [],
+      "screenshot": null
+    },
+    {
+      "role": "manager",
+      "requestedPath": "/billing",
+      "expectedPath": "/dashboard",
+      "actualPath": "/dashboard",
+      "viewport": "1440x1000",
+      "status": "PASS",
+      "leakedSensitiveValue": false,
+      "problems": [],
+      "screenshot": null
+    },
+    {
+      "role": "manager",
+      "requestedPath": "/settings/store-groups",
+      "expectedPath": "/dashboard",
+      "actualPath": "/dashboard",
+      "viewport": "1440x1000",
+      "status": "PASS",
+      "leakedSensitiveValue": false,
+      "problems": [],
+      "screenshot": null
+    },
+    {
+      "role": "cashier",
+      "requestedPath": "/pos",
+      "expectedPath": "/pos",
+      "actualPath": "/pos",
+      "viewport": "390x844",
+      "status": "PASS",
+      "leakedSensitiveValue": false,
+      "problems": [],
+      "screenshot": "cashier-pos-mobile.png"
+    },
+    {
+      "role": "cashier",
+      "requestedPath": "/dashboard",
+      "expectedPath": "/pos",
+      "actualPath": "/pos",
+      "viewport": "390x844",
+      "status": "PASS",
+      "leakedSensitiveValue": false,
+      "problems": [],
+      "screenshot": null
+    },
+    {
+      "role": "cashier",
+      "requestedPath": "/purchase-orders",
+      "expectedPath": "/pos",
+      "actualPath": "/pos",
+      "viewport": "390x844",
+      "status": "PASS",
+      "leakedSensitiveValue": false,
+      "problems": [],
+      "screenshot": null
+    },
+    {
+      "role": "limited",
+      "requestedPath": "/pos",
+      "expectedPath": "/pos",
+      "actualPath": "/pos",
+      "viewport": "414x896",
+      "status": "PASS",
+      "leakedSensitiveValue": false,
+      "problems": [],
+      "screenshot": null
+    },
+    {
+      "role": "limited",
+      "requestedPath": "/products",
+      "expectedPath": "/pos",
+      "actualPath": "/pos",
+      "viewport": "414x896",
+      "status": "PASS",
+      "leakedSensitiveValue": false,
+      "problems": [],
+      "screenshot": "limited-products-denied-mobile.png"
+    },
+    {
+      "role": "limited",
+      "requestedPath": "/operations/integrations",
+      "expectedPath": "/pos",
+      "actualPath": "/pos",
+      "viewport": "414x896",
+      "status": "PASS",
+      "leakedSensitiveValue": false,
+      "problems": [],
+      "screenshot": null
+    }
+  ],
+  "totals": {
+    "passed": 12,
+    "failed": 0
+  }
+}
