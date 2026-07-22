@@ -5,6 +5,10 @@ import { currencySourceWithFallback, resolveCurrency } from "@/lib/currencyDispl
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
 import { extractFiscalMetadata } from "@/server/services/fiscalReceiptMetadata";
+import {
+  assertUserCanAccessStore,
+  type StoreAccessUser,
+} from "@/server/services/storeAccess";
 
 const toMoney = (value: { toNumber?: () => number } | number | null | undefined) => {
   if (typeof value === "number") {
@@ -24,6 +28,7 @@ const toMoney = (value: { toNumber?: () => number } | number | null | undefined)
 export const buildReceiptPrintPayload = async (input: {
   organizationId: string;
   saleId: string;
+  user: StoreAccessUser;
   locale: string;
   paymentMethodLabels: Record<PosPaymentMethod, string>;
   variant?: ReceiptPrintVariant;
@@ -110,6 +115,7 @@ export const buildReceiptPrintPayload = async (input: {
   if (!sale) {
     throw new AppError("posSaleNotFound", "NOT_FOUND", 404);
   }
+  await assertUserCanAccessStore(prisma, input.user, sale.storeId);
 
   const fiscalReceipt = sale.fiscalReceipts[0] ?? null;
   const rawFiscal = extractFiscalMetadata(sale.kkmRawJson);

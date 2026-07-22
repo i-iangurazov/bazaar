@@ -22,6 +22,11 @@ import {
 } from "@/server/services/fiscalReceiptMetadata";
 import { toJson } from "@/server/services/json";
 import { assertFeatureEnabled } from "@/server/services/planLimits";
+import {
+  assertUserCanAccessStore,
+  resolveAccessibleStoreIds,
+  type StoreAccessUser,
+} from "@/server/services/storeAccess";
 
 const toTokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
 
@@ -100,6 +105,7 @@ export const createConnectorPairingCode = async (input: {
   storeId: string;
   actorId: string;
   requestId: string;
+  user: StoreAccessUser;
 }) => {
   await assertKkmFeatureEnabled(input.organizationId);
 
@@ -110,6 +116,7 @@ export const createConnectorPairingCode = async (input: {
   if (!store) {
     throw new AppError("storeNotFound", "NOT_FOUND", 404);
   }
+  await assertUserCanAccessStore(prisma, input.user, store.id);
 
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
   let created: Awaited<ReturnType<typeof prisma.kkmConnectorPairingCode.create>> | null = null;
@@ -407,10 +414,15 @@ export const listFiscalReceipts = async (input: {
   status?: FiscalReceiptStatus;
   page: number;
   pageSize: number;
+  user: StoreAccessUser;
 }) => {
+  const accessibleStoreIds = await resolveAccessibleStoreIds(prisma, input.user);
+  if (input.storeId && !accessibleStoreIds.includes(input.storeId)) {
+    throw new AppError("storeAccessDenied", "FORBIDDEN", 403);
+  }
   const where = {
     organizationId: input.organizationId,
-    ...(input.storeId ? { storeId: input.storeId } : {}),
+    storeId: input.storeId ?? { in: accessibleStoreIds },
     ...(input.status ? { status: input.status } : {}),
   };
   const [total, items] = await Promise.all([
@@ -441,6 +453,7 @@ export const retryFiscalReceipt = async (input: {
   receiptId: string;
   actorId: string;
   requestId: string;
+  user: StoreAccessUser;
 }) => {
   const receipt = await prisma.fiscalReceipt.findFirst({
     where: { id: input.receiptId, organizationId: input.organizationId },
@@ -448,6 +461,7 @@ export const retryFiscalReceipt = async (input: {
   if (!receipt) {
     throw new AppError("kkmReceiptNotFound", "NOT_FOUND", 404);
   }
+  await assertUserCanAccessStore(prisma, input.user, receipt.storeId);
 
   if (receipt.mode === KkmMode.CONNECTOR) {
     const updated = await prisma.fiscalReceipt.update({
