@@ -2,7 +2,7 @@
 
 Baseline: `4d7c9b33218b584334ca62f7a816f8997f144a10`
 
-Status: Phase A ownership proposal. No implementation lock is active until the four audits are consolidated and the proposed batch is approved on `hardening/integration`.
+Status: Phase B0 infrastructure complete. Domain implementation locks remain inactive until the approved B0 commits are integrated and the first P0 batch is explicitly claimed.
 
 ## Rules
 
@@ -54,7 +54,8 @@ Add one row before starting a shared-file implementation batch.
 
 | State | Batch/issues | Owner | Start commit | Exact files | Required tests | Reviewers | Released commit |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| IN_REVIEW | `B0-DB-SAFETY` / `HARD-A4-010` | Agent 4 | `f308b2b793c2b43d7e46814c3c2007a0927fede7` | `tests/global-setup.ts`, `tests/setup.ts`, `tests/helpers/db.ts`, new guard/tests, `.env.example`, `.github/workflows/ci.yml` | focused guard unit tests, isolated migration/reset proof, CI no-skip policy, full baseline gate | Agent 1 | pending |
+| RELEASED | `B0-DB-SAFETY` / `HARD-A4-010` | Agent 4 | `f308b2b793c2b43d7e46814c3c2007a0927fede7` | `tests/global-setup.ts`, `tests/setup.ts`, `tests/helpers/db.ts`, `tests/helpers/testDatabaseSafety.ts`, `tests/unit/test-database-safety.test.ts`, `.env.example`, `.github/workflows/ci.yml` | 20 focused guard tests, isolated migration/reset proof, CI no-skip policy, full 884-test baseline | Agent 1 — APPROVED | `584c37d`, `d6079b7` |
+| RELEASED | `B0-PLATFORM-P0-EVIDENCE` / `HARD-A4-001..011` | Agent 4 | `f308b2b793c2b43d7e46814c3c2007a0927fede7` | `tests/integration/b0-platform-p0-verification.test.ts`, `tests/integration/b0-platform-sse-p0-verification.test.ts`, `tests/unit/b0-platform-route-access-verification.test.ts`, `docs/hardening/B0_AGENT_4_P0_VERIFICATION.md` | 31 focused evidence/guard tests, Agent 4 isolated DB/Redis, full baseline | Agent 1 — APPROVED after timezone-state and command corrections | `4f1ae32`, `aaad412` |
 | Example only | `HARD-A4-001` | Agent 4 | baseline SHA | `src/lib/roleAccess.ts` | unit + two-role integration + browser denial | affected domain owners | pending |
 
 Allowed states: `PROPOSED`, `CLAIMED`, `IN_REVIEW`, `INTEGRATED`, `RELEASED`.

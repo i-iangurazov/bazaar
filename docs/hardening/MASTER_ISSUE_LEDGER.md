@@ -2,9 +2,9 @@
 
 Baseline: `4d7c9b33218b584334ca62f7a816f8997f144a10`
 
-Phase: A — static/read-only audit
+Phase: B0 — runtime P0 verification complete; domain implementation not started
 
-All entries are `OPEN`. None satisfies the definition of done: browser reproduction, implementation, regression tests, desktop/mobile and theme checks, runtime-error checks, durable evidence, and independent Agent 4 verification are still required. The linked agent audit is the canonical record for reproduction, expected/actual behavior, root-cause hypothesis, files, and evidence.
+All 46 P0 hypotheses now have runtime evidence and classifications. `HARD-A4-010` is resolved by the approved B0 test-infrastructure guard; the other 45 P0s remain `OPEN` and none is implementation-complete. Browser reproduction, post-fix regression tests, desktop/mobile and theme checks where relevant, runtime-error checks, durable post-fix evidence, and independent Agent 4 verification are still required. The linked agent audit remains the canonical Phase A record; [the Phase B0 summary](./PHASE_B0_SUMMARY.md) is the canonical runtime classification and execution plan.
 
 ## Summary
 
@@ -17,6 +17,8 @@ All entries are `OPEN`. None satisfies the definition of done: browser reproduct
 | **Total** | **46** | **17** | **19** | **0** | **82** |
 
 ## P0 — release and data-safety blockers
+
+Phase B0 classification total: **46 CONFIRMED, 0 DUPLICATE, 0 DOWNGRADED, 0 FALSE_POSITIVE, 0 BLOCKED_BY_ENVIRONMENT**. `HARD-A4-010` is `B0_RESOLVED`; the remaining 45 are open. Runtime details are in the four `B0_AGENT_*_P0_VERIFICATION.md` reports.
 
 | ID | Owner | Defect | Canonical evidence |
 | --- | --- | --- | --- |
@@ -67,6 +69,26 @@ All entries are `OPEN`. None satisfies the definition of done: browser reproduct
 | HARD-A4-010 | Agent 4 | The test harness derives one shared DB and truncates it, unsafe for four agents. | [detail](./AGENT_4_PLATFORM_QA_AUDIT.md#hard-a4-010) |
 | HARD-A4-011 | Agent 4 | Store-group and category settings routes are absent from the route guard table. | [detail](./AGENT_4_PLATFORM_QA_AUDIT.md#hard-a4-011) |
 
+## Phase B0 root-cause consolidation
+
+Root-cause groups guide implementation batching; they do not remove distinct verified acceptance contracts. No issue was classified `DUPLICATE`.
+
+| Root Cause Group | Primary Issue | Duplicate Issues | Affected Routes | Owning Agent | Shared Files |
+| --- | --- | --- | --- | --- | --- |
+| RC-01 — effective-store authorization | HARD-A1-001 | None; related A1-002, A2-001/009, A3-006, A4-005/006 | POS APIs/artifacts/SSE, inventory counts/lots/printing, customers, period close | Agents 1–4 by domain; Agent 4 coordinates | store-access/auth helpers, SSE |
+| RC-02 — route/procedure policy parity | HARD-A4-001 | None; related A1-003, A2-004, A3-007/008, A4-002/003/004/011 | POS admin, initial stock, PO/suppliers, integrations, dashboard/analytics, billing, exports, search, settings | Agents 1–4 by route; Agent 4 coordinates | global RBAC, middleware, export auth |
+| RC-03 — sensitive capability/secret boundary | HARD-A3-002 | None; related A2-010, A3-026, A4-009 | API auth, export download, image proxy, dead letters | Agents 2–4 | auth/cache, provider/storage, jobs |
+| RC-04 — product/store eligibility | HARD-A2-002 | None; related A2-003, A3-009 | products, store prices, manual sales orders | Agent 2 primary; Agent 3 order validation | product assignment/store access |
+| RC-05 — durable operation identity | HARD-A3-003 | None; related A2-005/006, A3-004/021 | product/import/count, API/internal/public order and PO create | Agents 2 and 3 | idempotency service; possible schema/migration |
+| RC-06 — atomic destructive batch | HARD-A2-007 | None; related A2-008, A3-012 | bulk inventory, category delete, bulk PO cancel | Agents 2 and 3 | transaction helpers, audit history |
+| RC-07 — stock transition invariant | HARD-A3-001 | None; related A1-005/008 | API order completion, POS returns/sales | Agents 1 and 3; Agent 2 reviews | shared inventory mutation helpers |
+| RC-08 — operational document lifecycle | HARD-A1-004 | None; related A1-006/007, A2-017, A3-011 | POS drafts/shifts/registers, receiving drafts, return mode | Agents 1–3 | scoped persistence, actor/audit attribution |
+| RC-09 — external side-effect claim | HARD-A1-009 | None | POS fiscal retry/worker | Agent 1; Agent 4 job coordination | POS service, job framework |
+| RC-10 — exact external identity | HARD-A3-005 | None | Bazaar API orders | Agent 3 | possible schema/migration |
+| RC-11 — product cache consistency | HARD-A3-010 | None; related A3-022 | Bazaar API, public catalogue/checkout | Agent 3; Agent 2 reviews mutations | query/cache configuration |
+| RC-12 — period money/business time | HARD-A4-007 | None; related A4-008 | dashboard, reports, period close/export | Agent 4 | report/export/time helpers |
+| RC-13 — destructive test identity | HARD-A4-010 | None | test and CI infrastructure | Agent 4; Agent 1 approved | test harness, CI workflow |
+
 ## P1 — major workflow blockers
 
 | ID | Owner | Defect | Canonical evidence |
@@ -116,7 +138,7 @@ All entries are `OPEN`. None satisfies the definition of done: browser reproduct
 ## Release posture
 
 - No P0/P1 is unowned; implementation ownership follows the agent column and the shared-file lock document.
-- No finding is verified closed, and there are no P3-only batches to start ahead of P0/P1.
-- Browser, responsive, theme, Preview, production, provider, and DB-backed evidence remain `NOT_RUN`.
-- Database-backed work is gated by HARD-A4-010. Do not run the current reset/truncation harness concurrently.
+- `HARD-A4-010` is verified resolved in B0. The other 45 confirmed P0s remain open, and there are no P3-only batches to start ahead of P0/P1.
+- DB-backed execution is ready on four positively identified databases with explicit reset guards; agents must continue using only their assigned database/Redis/storage identities.
+- Browser, responsive, theme, Preview, production, and warmed performance evidence remain `NOT_RUN`; they are post-fix acceptance gates.
 - External marketplace and email APIs must be mocked in automated tests.
