@@ -851,7 +851,7 @@ describeDb("Agent 1 P0 runtime verification", () => {
     expect(heldAfter.payments[0]?.createdById).toBe(secondCashier.id);
   });
 
-  it("HARD-A1-005 completes two stale full-quantity returns and over-restores stock/refunds", async () => {
+  it("HARD-A1-005 serializes concurrent full-quantity returns at the source sale line", async () => {
     const { org, store, product, adminUser, managerUser, cashierUser } = await seedBase({
       plan: "BUSINESS",
     });
@@ -909,16 +909,28 @@ describeDb("Agent 1 P0 runtime verification", () => {
         },
       },
     });
-    await approverCaller.pos.returns.complete({
-      saleReturnId: returnOne.id,
-      idempotencyKey: "hard-a1-005-return-one",
-      payments: [{ method: PosPaymentMethod.CASH, amountKgs: 500 }],
+    let readyCount = 0;
+    let releaseStart!: () => void;
+    const startGate = new Promise<void>((resolve) => {
+      releaseStart = resolve;
     });
-    await approverCaller.pos.returns.complete({
-      saleReturnId: returnTwo.id,
-      idempotencyKey: "hard-a1-005-return-two",
-      payments: [{ method: PosPaymentMethod.CASH, amountKgs: 500 }],
-    });
+    const completeAfterStartGate = async (saleReturnId: string, idempotencyKey: string) => {
+      readyCount += 1;
+      if (readyCount === 2) {
+        releaseStart();
+      }
+      await startGate;
+      return approverCaller.pos.returns.complete({
+        saleReturnId,
+        idempotencyKey,
+        payments: [{ method: PosPaymentMethod.CASH, amountKgs: 500 }],
+      });
+    };
+
+    const completions = await Promise.allSettled([
+      completeAfterStartGate(returnOne.id, "hard-a1-005-return-one"),
+      completeAfterStartGate(returnTwo.id, "hard-a1-005-return-two"),
+    ]);
 
     const [returns, returnedQty, refunded, snapshotAfter, returnMovements] = await Promise.all([
       prisma.saleReturn.findMany({
@@ -951,11 +963,19 @@ describeDb("Agent 1 P0 runtime verification", () => {
     ]);
 
     expect(snapshotBefore.onHand).toBe(5);
-    expect(returns.map((item) => item.status)).toEqual(["COMPLETED", "COMPLETED"]);
-    expect(returnedQty._sum.qty).toBe(10);
-    expect(Number(refunded._sum.amountKgs)).toBe(1000);
-    expect(snapshotAfter.onHand).toBe(15);
-    expect(returnMovements.reduce((sum, movement) => sum + movement.qtyDelta, 0)).toBe(10);
+    const fulfilled = completions.filter((item) => item.status === "fulfilled");
+    const rejected = completions.filter((item) => item.status === "rejected");
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]).toMatchObject({
+      reason: { code: "CONFLICT", message: "posReturnQtyExceeded" },
+    });
+    expect(returns.map((item) => item.status).sort()).toEqual(["COMPLETED", "DRAFT"]);
+    expect(returnedQty._sum.qty).toBe(5);
+    expect(Number(refunded._sum.amountKgs)).toBe(500);
+    expect(snapshotAfter.onHand).toBe(10);
+    expect(returnMovements).toHaveLength(1);
+    expect(returnMovements.reduce((sum, movement) => sum + movement.qtyDelta, 0)).toBe(5);
   });
 
   it("HARD-A1-006 closes a shift with an active draft and leaves checkout blocked", async () => {
