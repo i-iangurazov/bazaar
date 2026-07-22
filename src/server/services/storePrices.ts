@@ -3,6 +3,7 @@ import { OperationRequestPrincipalType, type Prisma } from "@prisma/client";
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
 import { writeAuditLog } from "@/server/services/audit";
+import { invalidateBazaarCatalogCacheForStore } from "@/server/services/bazaarCatalog";
 import { toJson } from "@/server/services/json";
 import { assignProductToStore, productStoreAssignmentWhere } from "@/server/services/storeAccess";
 import { classifyDatabaseOperationFailure } from "@/server/services/databaseOperationFailure";
@@ -18,8 +19,8 @@ export const upsertStorePrice = async (input: {
   actorId: string;
   organizationId: string;
   requestId: string;
-}) =>
-  prisma.$transaction(async (tx) => {
+}) => {
+  const price = await prisma.$transaction(async (tx) => {
     const store = await tx.store.findUnique({ where: { id: input.storeId } });
     if (!store || store.organizationId !== input.organizationId) {
       throw new AppError("storeNotFound", "NOT_FOUND", 404);
@@ -91,6 +92,9 @@ export const upsertStorePrice = async (input: {
 
     return price;
   });
+  await invalidateBazaarCatalogCacheForStore(input.organizationId, input.storeId);
+  return price;
+};
 
 export const bulkUpdateStorePrices = async (input: {
   storeId: string;
@@ -258,5 +262,8 @@ export const bulkUpdateStorePrices = async (input: {
     },
     executeBulkUpdate,
   );
+  if (operation.response.updated > 0) {
+    await invalidateBazaarCatalogCacheForStore(input.organizationId, input.storeId);
+  }
   return operation.response;
 };
