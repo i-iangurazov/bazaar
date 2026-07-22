@@ -261,8 +261,8 @@ describeDb("Agent 2 P0 HTTP boundary reproductions", () => {
     expect(mockPrintLabels).not.toHaveBeenCalled();
   });
 
-  it("HARD-A2-010 lets an authenticated user in another organization consume an image ZIP token", async () => {
-    const { org, adminUser } = await seedBase({ plan: "BUSINESS" });
+  it("HARD-A2-010 binds image ZIP tokens to their creating user and organization", async () => {
+    const { org, adminUser, managerUser } = await seedBase({ plan: "BUSINESS" });
     const betaOrg = await prisma.organization.create({
       data: { name: "Artifact Beta Org", plan: "BUSINESS" },
     });
@@ -288,24 +288,63 @@ describeDb("Agent 2 P0 HTTP boundary reproductions", () => {
 
     const downloadToken = randomUUID();
     const alphaBytes = new TextEncoder().encode("alpha-private-zip-canary");
-    storeZip(downloadToken, alphaBytes.buffer, "alpha-private-images.zip");
+    storeZip(downloadToken, alphaBytes.buffer, "alpha-private-images.zip", {
+      userId: adminUser.id,
+      organizationId: org.id,
+    });
+
+    mockGetServerAuthToken.mockResolvedValue({
+      sub: managerUser.id,
+      organizationId: org.id,
+      role: managerUser.role,
+    });
+    const sameOrgResponse = await downloadImagesGet(
+      new Request(
+        `http://localhost/api/products/export-images/download?token=${encodeURIComponent(downloadToken)}`,
+      ),
+    );
+    expect(sameOrgResponse.status).toBe(404);
+    expect(imageExportStore.has(downloadToken)).toBe(true);
+
     mockGetServerAuthToken.mockResolvedValue({
       sub: betaUser.id,
       organizationId: betaOrg.id,
       role: betaUser.role,
     });
-
-    const response = await downloadImagesGet(
+    const crossOrgResponse = await downloadImagesGet(
       new Request(
         `http://localhost/api/products/export-images/download?token=${encodeURIComponent(downloadToken)}`,
       ),
     );
-    const downloaded = new Uint8Array(await response.arrayBuffer());
+    expect(crossOrgResponse.status).toBe(404);
+    expect(imageExportStore.has(downloadToken)).toBe(true);
 
-    expect(response.status).toBe(200);
-    expect(response.headers.get("content-type")).toBe("application/zip");
-    expect(response.headers.get("content-disposition")).toContain("alpha-private-images.zip");
+    const tamperedResponse = await downloadImagesGet(
+      new Request(
+        `http://localhost/api/products/export-images/download?token=${encodeURIComponent(randomUUID())}`,
+      ),
+    );
+    expect(tamperedResponse.status).toBe(404);
+    expect(imageExportStore.has(downloadToken)).toBe(true);
+
+    mockGetServerAuthToken.mockResolvedValue({
+      sub: adminUser.id,
+      organizationId: org.id,
+      role: adminUser.role,
+    });
+    const ownerResponse = await downloadImagesGet(
+      new Request(
+        `http://localhost/api/products/export-images/download?token=${encodeURIComponent(downloadToken)}`,
+      ),
+    );
+    const downloaded = new Uint8Array(await ownerResponse.arrayBuffer());
+
+    expect(ownerResponse.status).toBe(200);
+    expect(ownerResponse.headers.get("content-type")).toBe("application/zip");
+    expect(ownerResponse.headers.get("content-disposition")).toContain("alpha-private-images.zip");
     expect(downloaded).toEqual(alphaBytes);
-    expect(consumeZip(downloadToken)).toBeUndefined();
+    expect(
+      consumeZip(downloadToken, { userId: adminUser.id, organizationId: org.id }),
+    ).toBeUndefined();
   });
 });
