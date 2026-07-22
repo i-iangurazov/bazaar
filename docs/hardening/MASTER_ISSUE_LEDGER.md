@@ -2,23 +2,23 @@
 
 Baseline: `4d7c9b33218b584334ca62f7a816f8997f144a10`
 
-Phase: B1 — P0-A security/isolation Preview gate complete on approved commit `042ed6781f1ee483ee3f428f6fc8c8ecc0b3a15c`
+Phase: B2 — P0-B stock, orders, idempotency, and atomicity implementation from integration commit `f0bfa9e4629d696cfcfeb70a0726b2c08e5fd2d4`
 
-All 46 P0 hypotheses have runtime evidence and classifications. `HARD-A4-010` was resolved in B0. All 24 P0-A findings are `CLOSED` through five consolidated root-cause closures and independent Agent 4 verification against the protected Preview deployment. The remaining 21 P0 findings belong to P0-B/P0-C/P0-D and remain `OPEN`; no P1/P2 implementation was started. Preview verification added one P2 runtime finding, `HARD-B1-001`. [The Phase B1 summary](./PHASE_B1_SUMMARY.md) records the deployment and gate evidence.
+The original 46 B0 P0 hypotheses have runtime evidence and classifications. Phase B2 independently confirmed one additional P0, `HARD-A2-018`, bringing the current program total to 47. `HARD-A4-010` was resolved in B0, and all 24 P0-A findings are `CLOSED` through five consolidated root-cause closures and independent Agent 4 verification against the protected Preview deployment. The remaining 22 P0 findings belong to P0-B/P0-C/P0-D and remain `OPEN`; no P1/P2 implementation was started. Preview verification added one P2 runtime finding, `HARD-B1-001`. [The Phase B1 summary](./PHASE_B1_SUMMARY.md) records the deployment and gate evidence.
 
 ## Summary
 
 | Owner | P0 | P1 | P2 | P3 | Total |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Agent 1 — POS & Cash | 9 | 3 | 7 | 0 | 19 |
-| Agent 2 — Products & Inventory | 11 | 3 | 3 | 0 | 17 |
+| Agent 2 — Products & Inventory | 12 | 3 | 3 | 0 | 18 |
 | Agent 3 — Orders, APIs & Integrations | 15 | 7 | 5 | 0 | 27 |
 | Agent 4 — Platform QA & Release Gate | 11 | 4 | 5 | 0 | 20 |
-| **Total** | **46** | **17** | **20** | **0** | **83** |
+| **Total** | **47** | **17** | **20** | **0** | **84** |
 
 ## P0 — release and data-safety blockers
 
-Phase B0 classification total: **46 CONFIRMED, 0 DUPLICATE, 0 DOWNGRADED, 0 FALSE_POSITIVE, 0 BLOCKED_BY_ENVIRONMENT**. Current state: **25 CLOSED** (`HARD-A4-010` plus 24 P0-A) and **21 OPEN** (P0-B: 15, P0-C: 5, P0-D: 1). Runtime details are in the four `B0_AGENT_*_P0_VERIFICATION.md` reports.
+Phase B0 classification total: **46 CONFIRMED, 0 DUPLICATE, 0 DOWNGRADED, 0 FALSE_POSITIVE, 0 BLOCKED_BY_ENVIRONMENT**. Phase B2 added one independently reproduced P0. Current program state: **25 CLOSED** (`HARD-A4-010` plus 24 P0-A) and **22 OPEN** (P0-B: 16, P0-C: 5, P0-D: 1). Runtime details for the original set are in the four `B0_AGENT_*_P0_VERIFICATION.md` reports.
 
 ### Phase B1 P0-A closure
 
@@ -73,6 +73,7 @@ Each issue below retains its individual acceptance contract even where one root-
 | HARD-A2-009 | Agent 2 | Price-tag PDF and connector printing do not enforce assigned-store access. | [detail](./AGENT_2_INVENTORY_AUDIT.md#hard-a2-009) |
 | HARD-A2-010 | Agent 2 | Image-export download tokens are not bound to an authenticated owner. | [detail](./AGENT_2_INVENTORY_AUDIT.md#hard-a2-010) |
 | HARD-A2-017 | Agent 2 | Receiving drafts can leak across users sharing one browser profile. | [detail](./AGENT_2_INVENTORY_AUDIT.md#hard-a2-017) |
+| HARD-A2-018 | Agent 2 | Editing a receiving document leaves `ProductCost` on the superseded quantity/cost basis. | B2 DB reproduction: effective receiving `10 x 5 -> 7 x 6`, while `ProductCost` retained quantity/basis `10 x 5`; detailed implementation evidence pending. |
 | HARD-A3-001 | Agent 3 | Completing an API-created order deducts its stock a second time. | [detail](./AGENT_3_COMMERCE_AUDIT.md#hard-a3-001--api-order-stock-is-deducted-again-on-completion) |
 | HARD-A3-002 | Agent 3 | A revoked Bazaar API credential remains usable from cache. | [detail](./AGENT_3_COMMERCE_AUDIT.md#hard-a3-002--revoked-bazaar-api-credentials-remain-valid-from-cache) |
 | HARD-A3-003 | Agent 3 | API order retries are unsafe when `externalId` is omitted. | [detail](./AGENT_3_COMMERCE_AUDIT.md#hard-a3-003--api-order-retries-are-unsafe-when-externalid-is-omitted) |
@@ -119,6 +120,7 @@ Root-cause groups guide implementation batching; they do not remove distinct ver
 | RC-11 — product cache consistency | HARD-A3-010 | None; related A3-022 | Bazaar API, public catalogue/checkout | Agent 3; Agent 2 reviews mutations | query/cache configuration |
 | RC-12 — period money/business time | HARD-A4-007 | None; related A4-008 | dashboard, reports, period close/export | Agent 4 | report/export/time helpers |
 | RC-13 — destructive test identity | HARD-A4-010 | None | test and CI infrastructure | Agent 4; Agent 1 approved | test harness, CI workflow |
+| RC-14 — receiving effective cost basis | HARD-A2-018 | None | receiving edit/detail/print, product movement, valuation, reports | Agent 2; Agent 4 independently verifies | inventory service, ProductCost policy, audit history |
 
 ## P1 — major workflow blockers
 
