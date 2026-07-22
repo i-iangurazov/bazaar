@@ -5,29 +5,29 @@ Branch: `hardening/b0-agent-2-inventory`
 Prepared: 2026-07-22
 Scope: the eleven P0 hypotheses from `AGENT_2_INVENTORY_AUDIT.md`
 
-## Current state and safety gate
+## Runtime result and safety record
 
-Every item in this document is `BLOCKED_BY_ENVIRONMENT`. No DB-backed test, API mutation, browser mutation, SQL query, or external request described below has been executed in Phase B0. Static source evidence is a hypothesis only and is not sufficient to mark an item `CONFIRMED`.
+The hardening lead approved the database guard and isolated environment. Runtime verification used only database `bazaar_hardening_agent2_inventory`, all 87 committed migrations, and reserved Redis DB 12. Integrations were mocked; no provider, production, Preview, real account, or external network was contacted.
 
-Execution must not begin until the hardening lead confirms both the database guard and the exact isolated Agent 2 database identity are installed. The executor must then:
+Final guarded command:
 
-1. Record `DATABASE_URL` only as a redacted host/database fingerprint; never print credentials.
-2. Run the identity preflight below and attach its machine-readable result.
-3. Prove the database is dedicated to Agent 2 and is not production, Preview, the integration database, or another agent's database.
-4. Create fixtures with a unique `run_key`; clean up only rows bearing that key through fixture-owned IDs. Never truncate shared tables.
-5. Mock printer connector and image-source network calls. Do not call marketplace, email, printer, or arbitrary remote image services.
-6. Run destructive probes on fresh per-case fixtures so one result cannot contaminate another.
-7. Store API response JSON, sanitized SQL result JSON/CSV, Playwright traces, screenshots, HAR files, and console logs under `docs/hardening/evidence/agent-2/<issue-id>/<run-key>/`; `tmp/` may be used only as a working copy.
+```bash
+set -a; source .env.hardening; set +a; pnpm exec vitest run tests/integration/hardening-agent2-p0-reproductions.test.ts tests/integration/hardening-agent2-p0-http-reproductions.test.ts tests/unit/hardening-agent2-receiving-draft-reproduction.test.tsx --maxWorkers=1
+```
 
-Status vocabulary after the gate opens:
+Observed result: 3 test files passed, 11 tests passed, 0 failed. Focused ESLint and `pnpm typecheck` also passed. Static evidence was not used to assign the final classifications.
 
-| State | Meaning |
+Allowed classification taxonomy:
+
+| Classification | Meaning |
 |---|---|
-| `BLOCKED_BY_ENVIRONMENT` | Required isolated DB/guard identity has not been approved; current state for all items |
-| `READY_TO_RUN` | Guard passed and fixtures can be created, but runtime probe has not run |
-| `CONFIRMED` | The unsafe runtime outcome was reproduced and DB/API/browser evidence agrees |
-| `PARTIALLY_CONFIRMED` | At least one enumerated subcase reproduced and at least one did not; split the issue before implementation |
-| `REFUTED` | Every enumerated subcase produced the safe result and no prohibited state change occurred |
+| `CONFIRMED` | The unsafe runtime outcome was reproduced with durable or machine-readable evidence |
+| `DUPLICATE` | The runtime result is fully represented by a named primary issue/root-cause group |
+| `DOWNGRADED` | A defect reproduced but runtime impact does not meet P0 |
+| `FALSE_POSITIVE` | The proposed unsafe outcome did not reproduce and controls behaved correctly |
+| `BLOCKED_BY_ENVIRONMENT` | Required safe local evidence could not be executed |
+
+No issue was classified as a duplicate: shared root-cause groups identify implementation coordination, while each P0 has a distinct affected contract or business effect.
 
 ## Provisional root-cause groups
 
@@ -86,23 +86,29 @@ The test run must stop if the guard's expected database fingerprint and the firs
 
 ## Verification matrix
 
-| ID | Root group | Primary runtime proof | Current state |
+| ID | Root group | Primary runtime proof | Classification |
 |---|---|---|---|
-| `HARD-A2-001` | `RC-A1` | Restricted user reads or mutates Store B count/lot/snapshot data | `BLOCKED_BY_ENVIRONMENT` |
-| `HARD-A2-002` | `RC-A2` | Store-A Manager mutates Store-B-only product or price | `BLOCKED_BY_ENVIRONMENT` |
-| `HARD-A2-003` | `RC-A2` | Store-A-only user receives Store-B-only base price or average cost | `BLOCKED_BY_ENVIRONMENT` |
-| `HARD-A2-004` | `RC-D1` | Manager creates nested variant stock despite admin-only invariant | `BLOCKED_BY_ENVIRONMENT` |
-| `HARD-A2-005` | `RC-B1` | Same logical request changes product, stock, import, or price state twice | `BLOCKED_BY_ENVIRONMENT` |
-| `HARD-A2-006` | `RC-B1` | Retried scan increments the same count line twice | `BLOCKED_BY_ENVIRONMENT` |
-| `HARD-A2-007` | `RC-C1` | Later invalid chunk returns an error after first ten snapshots committed | `BLOCKED_BY_ENVIRONMENT` |
-| `HARD-A2-008` | `RC-A3` | Store-A removal deletes Store-B category preference/global category | `BLOCKED_BY_ENVIRONMENT` |
-| `HARD-A2-009` | `RC-A1` | Restricted user obtains PDF or reaches connector for Store B | `BLOCKED_BY_ENVIRONMENT` |
-| `HARD-A2-010` | `RC-E1` | Authenticated Beta user consumes Alpha user's ZIP token | `BLOCKED_BY_ENVIRONMENT` |
-| `HARD-A2-017` | `RC-F1` | User B sees User A's receiving draft in the same browser session | `BLOCKED_BY_ENVIRONMENT` |
+| `HARD-A2-001` | `RC-A1` | Store-A-only Manager read Store B data and applied Store B count | `CONFIRMED` |
+| `HARD-A2-002` | `RC-A2` | Store-A-only Manager changed Store-B-only product and price | `CONFIRMED` |
+| `HARD-A2-003` | `RC-A2` | Store-A-only Staff received Store-B-only base price and average cost | `CONFIRMED` |
+| `HARD-A2-004` | `RC-D1` | Manager created nested variant stock despite admin-only invariant | `CONFIRMED` |
+| `HARD-A2-005` | `RC-B1` | Replayed create and percentage-price requests produced second effects | `CONFIRMED` |
+| `HARD-A2-006` | `RC-B1` | Replayed scan incremented the same durable count line twice | `CONFIRMED` |
+| `HARD-A2-007` | `RC-C1` | Invalid second chunk errored after first ten snapshots committed | `CONFIRMED` |
+| `HARD-A2-008` | `RC-A3` | Store-A removal deleted Store-B preference and global category | `CONFIRMED` |
+| `HARD-A2-009` | `RC-A1` | Restricted Manager obtained PDF and reached mocked Store B connector | `CONFIRMED` |
+| `HARD-A2-010` | `RC-E1` | Authenticated Beta user consumed Alpha user's ZIP token | `CONFIRMED` |
+| `HARD-A2-017` | `RC-F1` | User B's rendered form hydrated User A's unowned session draft | `CONFIRMED` |
 
 ## HARD-A2-001 — stock count, lot and snapshot store authorization
 
-Runtime state: `BLOCKED_BY_ENVIRONMENT`
+Classification: `CONFIRMED`
+
+Primary/duplicates: primary `HARD-A2-001`; no duplicate. Root group `RC-A1` is shared with the separate HTTP-boundary issue `HARD-A2-009`.
+
+Focused evidence: `tests/integration/hardening-agent2-p0-reproductions.test.ts`, test `HARD-A2-001 exposes and mutates Store B count, lot, and snapshot data for a Store-A-only manager`.
+
+Observed result: the Manager's DB access rows contained Store A only. The authenticated caller nevertheless returned the Store B count, count line, expiry lot and snapshot product ID. The mutation changed the Store B line from counted quantity 7 to 8, changed the count from `IN_PROGRESS` to `APPLIED`, changed the Store B snapshot from 5 to 8, and persisted one `STOCK_COUNT` movement with `qtyDelta = 3`.
 
 Use separate fixtures for read, line mutation, apply and cancel probes. Exercise `manager_a`, `cashier_a`, and `viewer_a` wherever the declared role allows the procedure.
 
@@ -171,7 +177,13 @@ Decision rule: `CONFIRMED` if any restricted role receives Store B data or any b
 
 ## HARD-A2-002 — manager mutation scope for products and store prices
 
-Runtime state: `BLOCKED_BY_ENVIRONMENT`
+Classification: `CONFIRMED`
+
+Primary/duplicates: primary `HARD-A2-002`; no duplicate. Root group `RC-A2` is shared with the separate pricing-read disclosure `HARD-A2-003`.
+
+Focused evidence: `tests/integration/hardening-agent2-p0-reproductions.test.ts`, test `HARD-A2-002 lets a Store-A-only manager mutate a Store-B-only product and price`.
+
+Observed result: the Manager had only Store A access while Product B had only an active Store B assignment. `products.inlineUpdate` changed Product B's persisted name to `Unauthorized Store B rename`; `storePrices.upsert` then created a Store B price of 3210 with the restricted Manager as `updatedById`.
 
 Create one fresh Store-B-only product per destructive subcase. The manager must have exactly one active `UserStoreAccess` row for Store A.
 
@@ -228,7 +240,13 @@ Decision rule: `CONFIRMED` if any subcase succeeds or produces a prohibited row 
 
 ## HARD-A2-003 — restricted product pricing confidentiality
 
-Runtime state: `BLOCKED_BY_ENVIRONMENT`
+Classification: `CONFIRMED`
+
+Primary/duplicates: primary `HARD-A2-003`; no duplicate. It shares `RC-A2` with mutation-scope issue `HARD-A2-002`, but read confidentiality and write authorization require separate regression contracts.
+
+Focused evidence: `tests/integration/hardening-agent2-p0-reproductions.test.ts`, test `HARD-A2-003 returns Store-B-only prices and costs to a Store-A-only staff user`.
+
+Observed result: DB fixtures assigned Product B only to Store B with base price 9876 and average cost 5432. A Store-A-only Staff caller received both values from `products.pricing`; `products.storePricing` returned the same confidential values while returning `stores: []`. The probe is read-only, so no DB mutation was expected.
 
 Product B must be assigned only to Store B and have distinctive nonzero `basePriceKgs`, `ProductCost.avgCostKgs`, and Store B price values that do not occur in Store A.
 
@@ -265,7 +283,13 @@ Decision rule: `CONFIRMED` if any canary product, price or cost field is disclos
 
 ## HARD-A2-004 — manager nested initial stock bypass
 
-Runtime state: `BLOCKED_BY_ENVIRONMENT`
+Classification: `CONFIRMED`
+
+Primary/duplicates: primary `HARD-A2-004`; no duplicate; root group `RC-D1`.
+
+Focused evidence: `tests/integration/hardening-agent2-p0-reproductions.test.ts`, test `HARD-A2-004 lets a manager create admin-only stock through a nested variant`.
+
+Observed result: no marker product existed before the request. A Manager submitted top-level `initialOnHand: 0` and nested variant `initialOnHand: 10`; the API succeeded and persisted a variant snapshot with on-hand 10 plus one `ADJUSTMENT` movement of +10 attributed to the Manager.
 
 Use a Manager with Store A access and a valid base unit. Submit a normal product-create payload with top-level `initialOnHand` omitted or zero and this nested variant fragment:
 
