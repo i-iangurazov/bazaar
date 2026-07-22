@@ -5,7 +5,12 @@ import { prisma } from "@/server/db/prisma";
 import {
   canonicalizeOperationPayload,
   fingerprintOperationRequest,
+  OPERATION_FAILURE_SAFE_BEFORE_EFFECTS,
   OPERATION_RESPONSE_MAX_BYTES,
+  OPERATION_TRANSACTION_MAX_WAIT_MAX_MS,
+  OPERATION_TRANSACTION_MAX_WAIT_MIN_MS,
+  OPERATION_TRANSACTION_TIMEOUT_MAX_MS,
+  OPERATION_TRANSACTION_TIMEOUT_MIN_MS,
   runOperationRequest,
 } from "@/server/services/operationRequests";
 
@@ -19,6 +24,7 @@ const operationInput = (input: {
   key: string;
   value?: Record<string, unknown>;
   leaseDurationMs?: number;
+  transactionOptions?: { maxWait?: number; timeout?: number };
   principal?: {
     type: OperationRequestPrincipalType;
     id: string;
@@ -38,6 +44,7 @@ const operationInput = (input: {
   },
   allowedResponsePaths: ["id", "name"],
   leaseDurationMs: input.leaseDurationMs,
+  transactionOptions: input.transactionOptions,
 });
 
 describeDb("operation request lifecycle", () => {
@@ -57,6 +64,150 @@ describeDb("operation request lifecycle", () => {
     expect(fingerprintOperationRequest({ storeId: "store-b", payload: first })).not.toBe(
       firstFingerprint,
     );
+  });
+
+  it("preserves the default handler transaction behavior when options are omitted", async () => {
+    const { org, store } = await seedBase();
+    const result = await runOperationRequest(
+      operationInput({ organizationId: org.id, storeId: store.id, key: "op-default-tx-1" }),
+      async (tx) => {
+        const supplier = await tx.supplier.create({
+          data: { organizationId: org.id, name: "Default transaction supplier" },
+        });
+        return {
+          response: { id: supplier.id, name: supplier.name },
+          responseStatus: 201,
+        };
+      },
+    );
+
+    expect(result.replayed).toBe(false);
+    await expect(
+      prisma.operationRequest.findUniqueOrThrow({ where: { id: result.operationRequestId } }),
+    ).resolves.toMatchObject({ status: OperationRequestStatus.COMPLETED });
+  });
+
+  it("accepts bounded handler transaction options at their inclusive limits", async () => {
+    const { org, store } = await seedBase();
+    const lowerBound = await runOperationRequest(
+      operationInput({
+        organizationId: org.id,
+        storeId: store.id,
+        key: "op-bounded-tx-min-1",
+        transactionOptions: {
+          maxWait: OPERATION_TRANSACTION_MAX_WAIT_MIN_MS,
+          timeout: OPERATION_TRANSACTION_TIMEOUT_MIN_MS,
+        },
+      }),
+      async () => ({
+        response: { id: "bounded-min", name: "Bounded minimum" },
+        responseStatus: 200,
+      }),
+    );
+    const upperBound = await runOperationRequest(
+      operationInput({
+        organizationId: org.id,
+        storeId: store.id,
+        key: "op-bounded-tx-max-1",
+        transactionOptions: {
+          maxWait: OPERATION_TRANSACTION_MAX_WAIT_MAX_MS,
+          timeout: OPERATION_TRANSACTION_TIMEOUT_MAX_MS,
+        },
+      }),
+      async () => ({
+        response: { id: "bounded-max", name: "Bounded maximum" },
+        responseStatus: 200,
+      }),
+    );
+
+    expect(lowerBound.response.id).toBe("bounded-min");
+    expect(upperBound.response.id).toBe("bounded-max");
+  });
+
+  it("rejects non-integer and out-of-range handler transaction options before claiming", async () => {
+    const { org, store } = await seedBase();
+    const invalidOptions = [
+      { maxWait: OPERATION_TRANSACTION_MAX_WAIT_MIN_MS - 1 },
+      { maxWait: OPERATION_TRANSACTION_MAX_WAIT_MAX_MS + 1 },
+      { maxWait: 1_000.5 },
+      { timeout: OPERATION_TRANSACTION_TIMEOUT_MIN_MS - 1 },
+      { timeout: OPERATION_TRANSACTION_TIMEOUT_MAX_MS + 1 },
+      { timeout: 1_000.5 },
+    ];
+    let handlerCalls = 0;
+
+    for (const [index, transactionOptions] of invalidOptions.entries()) {
+      await expect(
+        runOperationRequest(
+          operationInput({
+            organizationId: org.id,
+            storeId: store.id,
+            key: `op-invalid-tx-${index}`,
+            transactionOptions,
+          }),
+          async () => {
+            handlerCalls += 1;
+            return {
+              response: { id: "invalid", name: "Invalid" },
+              responseStatus: 200,
+            };
+          },
+        ),
+      ).rejects.toThrow("invalidInput");
+    }
+
+    expect(handlerCalls).toBe(0);
+    await expect(
+      prisma.operationRequest.count({
+        where: { organizationId: org.id, idempotencyKey: { startsWith: "op-invalid-tx-" } },
+      }),
+    ).resolves.toBe(0);
+  });
+
+  it("rolls back domain writes and never marks COMPLETED when the handler transaction times out", async () => {
+    const { org, store } = await seedBase();
+    const input = {
+      ...operationInput({
+        organizationId: org.id,
+        storeId: store.id,
+        key: "op-timeout-rollback-1",
+        transactionOptions: { timeout: OPERATION_TRANSACTION_TIMEOUT_MIN_MS },
+      }),
+      classifyFailure: () => ({
+        classification: OPERATION_FAILURE_SAFE_BEFORE_EFFECTS as "SAFE_BEFORE_EFFECTS",
+        responseCode: "handlerTransactionTimedOut",
+        responseStatus: 500,
+      }),
+    };
+
+    await expect(
+      runOperationRequest(input, async (tx) => {
+        const supplier = await tx.supplier.create({
+          data: { organizationId: org.id, name: "Timed out transaction supplier" },
+        });
+        await new Promise((resolve) => setTimeout(resolve, 1_100));
+        return {
+          response: { id: supplier.id, name: supplier.name },
+          responseStatus: 201,
+        };
+      }),
+    ).rejects.toBeTruthy();
+
+    await expect(
+      prisma.supplier.count({
+        where: { organizationId: org.id, name: "Timed out transaction supplier" },
+      }),
+    ).resolves.toBe(0);
+    await expect(
+      prisma.operationRequest.findFirstOrThrow({
+        where: { organizationId: org.id, idempotencyKey: "op-timeout-rollback-1" },
+      }),
+    ).resolves.toMatchObject({
+      status: OperationRequestStatus.FAILED,
+      errorClassification: OPERATION_FAILURE_SAFE_BEFORE_EFFECTS,
+      responseCode: "handlerTransactionTimedOut",
+      completedAt: null,
+    });
   });
 
   it("commits one domain effect, replays its result, and rejects a changed payload", async () => {

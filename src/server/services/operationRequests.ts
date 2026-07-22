@@ -20,6 +20,10 @@ const DEFAULT_LEASE_DURATION_MS = 60_000;
 const MIN_LEASE_DURATION_MS = 1_000;
 const MAX_LEASE_DURATION_MS = 15 * 60 * 1000;
 const MAX_RETENTION_MS = 365 * 24 * 60 * 60 * 1000;
+export const OPERATION_TRANSACTION_MAX_WAIT_MIN_MS = 1_000;
+export const OPERATION_TRANSACTION_MAX_WAIT_MAX_MS = 30_000;
+export const OPERATION_TRANSACTION_TIMEOUT_MIN_MS = 1_000;
+export const OPERATION_TRANSACTION_TIMEOUT_MAX_MS = 120_000;
 export const OPERATION_FAILURE_SAFE_BEFORE_EFFECTS = "SAFE_BEFORE_EFFECTS";
 export const OPERATION_FAILURE_AMBIGUOUS = "AMBIGUOUS";
 
@@ -74,6 +78,10 @@ export type RunOperationRequestInput = {
   allowedResponsePaths: readonly string[];
   expiresAt?: Date;
   leaseDurationMs?: number;
+  transactionOptions?: {
+    maxWait?: number;
+    timeout?: number;
+  };
   classifyFailure?: (error: unknown) => OperationFailureDecision;
 };
 
@@ -97,6 +105,10 @@ type ValidatedOperationInput = {
   allowedResponsePaths: ReadonlySet<string>;
   expiresAt: Date;
   leaseDurationMs: number;
+  transactionOptions?: {
+    maxWait?: number;
+    timeout?: number;
+  };
   classifyFailure?: (error: unknown) => OperationFailureDecision;
 };
 
@@ -328,6 +340,32 @@ const validateOperationInput = (input: RunOperationRequestInput): ValidatedOpera
   if (!Number.isFinite(expiresAt.getTime()) || retentionMs <= 0 || retentionMs > MAX_RETENTION_MS) {
     throw new AppError("invalidInput", "BAD_REQUEST", 400);
   }
+  const transactionOptions = input.transactionOptions
+    ? {
+        ...(input.transactionOptions.maxWait === undefined
+          ? {}
+          : { maxWait: input.transactionOptions.maxWait }),
+        ...(input.transactionOptions.timeout === undefined
+          ? {}
+          : { timeout: input.transactionOptions.timeout }),
+      }
+    : undefined;
+  if (
+    transactionOptions?.maxWait !== undefined &&
+    (!Number.isInteger(transactionOptions.maxWait) ||
+      transactionOptions.maxWait < OPERATION_TRANSACTION_MAX_WAIT_MIN_MS ||
+      transactionOptions.maxWait > OPERATION_TRANSACTION_MAX_WAIT_MAX_MS)
+  ) {
+    throw new AppError("invalidInput", "BAD_REQUEST", 400);
+  }
+  if (
+    transactionOptions?.timeout !== undefined &&
+    (!Number.isInteger(transactionOptions.timeout) ||
+      transactionOptions.timeout < OPERATION_TRANSACTION_TIMEOUT_MIN_MS ||
+      transactionOptions.timeout > OPERATION_TRANSACTION_TIMEOUT_MAX_MS)
+  ) {
+    throw new AppError("invalidInput", "BAD_REQUEST", 400);
+  }
   return {
     organizationId,
     storeId,
@@ -339,6 +377,7 @@ const validateOperationInput = (input: RunOperationRequestInput): ValidatedOpera
     allowedResponsePaths: validateAllowedResponsePaths(input.allowedResponsePaths),
     expiresAt,
     leaseDurationMs,
+    transactionOptions,
     classifyFailure: input.classifyFailure,
   };
 };
@@ -617,7 +656,7 @@ export const runOperationRequest = async <TResponse extends Prisma.InputJsonObje
   if (claim.kind === "replay") return claim.result;
 
   try {
-    return await prisma.$transaction(async (tx) => {
+    const executeHandler = async (tx: Prisma.TransactionClient) => {
       const row = await lockOperationRequest(tx, claim.operationRequestId);
       if (!row) {
         throw new AppError("operationRequestUnavailable", "CONFLICT", 409);
@@ -663,7 +702,10 @@ export const runOperationRequest = async <TResponse extends Prisma.InputJsonObje
         resource,
         replayed: false,
       };
-    });
+    };
+    return request.transactionOptions
+      ? await prisma.$transaction(executeHandler, request.transactionOptions)
+      : await prisma.$transaction(executeHandler);
   } catch (error) {
     const failure = safeFailureDecision(error, request.classifyFailure);
     try {
