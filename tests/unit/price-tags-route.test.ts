@@ -13,7 +13,7 @@ const {
   mockUploadProductImageBuffer: vi.fn(),
   prisma: {
     organization: { findUnique: vi.fn() },
-    store: { findUnique: vi.fn() },
+    store: { findFirst: vi.fn(), findMany: vi.fn(), findUnique: vi.fn() },
     product: { findMany: vi.fn(), findUnique: vi.fn() },
     storePrice: { findMany: vi.fn() },
     storePrinterSettings: { upsert: vi.fn() },
@@ -49,7 +49,11 @@ import { POST as priceTagsPost } from "../../src/app/api/price-tags/pdf/route";
 describe("price tags pdf route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetServerAuthToken.mockResolvedValue({ organizationId: "org-1", sub: "user-1" });
+    mockGetServerAuthToken.mockResolvedValue({
+      organizationId: "org-1",
+      sub: "user-1",
+      role: "ADMIN",
+    });
     prisma.organization.findUnique.mockResolvedValue({
       id: "org-1",
       plan: "BUSINESS",
@@ -70,6 +74,8 @@ describe("price tags pdf route", () => {
         labelShowStoreName: false,
       },
     });
+    prisma.store.findFirst.mockResolvedValue({ id: "store-1" });
+    prisma.store.findMany.mockResolvedValue([{ id: "store-1" }]);
     prisma.product.findMany.mockResolvedValue([
       {
         id: "prod-1",
