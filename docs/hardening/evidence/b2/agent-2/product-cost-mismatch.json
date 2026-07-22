@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 1,
+  "issueId": "HARD-A2-018",
+  "artifactType": "product_cost_mismatch_report",
+  "sanitized": true,
+  "readOnly": true,
+  "recordedOn": "2026-07-22",
+  "command": {
+    "template": "node --import tsx scripts/product-cost-mismatch-report.ts --organization-id <organization-id> --limit 100 [--cursor <product-id>]",
+    "database": "isolated Agent 2 hardening database; identifier redacted",
+    "defaultLimit": 100,
+    "maximumLimit": 500,
+    "pagination": "ascending product ID cursor",
+    "exitSemantics": {
+      "0": "scan completed and every reported scope has status MATCH",
+      "2": "scan completed and at least one scope requires review; no repair is attempted",
+      "nonzeroOther": "argument, runtime, database, or migration failure"
+    }
+  },
+  "independentLiveGate": {
+    "observedExitCode": 2,
+    "productsScanned": 1,
+    "scopes": 1,
+    "statusCounts": {
+      "MATCH": 0,
+      "MISMATCH": 1,
+      "INVALID_AUTHORITATIVE_STREAM": 0,
+      "INDETERMINATE_UNVALUED_STREAM": 0
+    },
+    "writeCount": 0,
+    "repairAttempted": false,
+    "result": {
+      "status": "MISMATCH",
+      "organizationId": "<sanitized-org-id>",
+      "productId": "<sanitized-product-id>",
+      "variantId": null,
+      "affectedStoreIds": ["<sanitized-store-id>"],
+      "stockReceivingReferenceIds": ["<sanitized-receiving-id>"],
+      "supersededReceivingReferenceId": "<sanitized-receiving-id>",
+      "actual": {
+        "avgCostKgs": 5,
+        "costBasisQty": 10
+      },
+      "expected": {
+        "avgCostKgs": 6,
+        "costBasisQty": 7,
+        "totalValueKgs": 42
+      },
+      "valuedStream": {
+        "quantity": 7,
+        "totalValueKgs": 42
+      },
+      "valuedMovementCount": 2,
+      "unvaluedMovementCount": 0
+    }
+  },
+  "representativeResults": [
+    {
+      "source": "focused database regression",
+      "status": "MATCH",
+      "organizationId": "<sanitized-org-id>",
+      "productId": "<sanitized-clean-product-id>",
+      "variantId": null,
+      "affectedStoreIds": ["<sanitized-store-id>"],
+      "stockReceivingReferenceIds": ["<sanitized-clean-receiving-id>"],
+      "supersededReceivingReferenceId": null,
+      "actual": {
+        "avgCostKgs": 0,
+        "costBasisQty": 0
+      },
+      "expected": {
+        "avgCostKgs": 0,
+        "costBasisQty": 0,
+        "totalValueKgs": 0
+      },
+      "valuedStream": {
+        "quantity": 0,
+        "totalValueKgs": 0
+      },
+      "valuedMovementCount": 3,
+      "unvaluedMovementCount": 0
+    },
+    {
+      "source": "independent live detector gate",
+      "status": "MISMATCH",
+      "organizationId": "<sanitized-org-id>",
+      "productId": "<sanitized-mismatch-product-id>",
+      "variantId": null,
+      "affectedStoreIds": ["<sanitized-store-id>"],
+      "stockReceivingReferenceIds": ["<sanitized-receiving-id>"],
+      "supersededReceivingReferenceId": "<sanitized-receiving-id>",
+      "actual": {
+        "avgCostKgs": 5,
+        "costBasisQty": 10
+      },
+      "expected": {
+        "avgCostKgs": 6,
+        "costBasisQty": 7,
+        "totalValueKgs": 42
+      },
+      "valuedStream": {
+        "quantity": 7,
+        "totalValueKgs": 42
+      },
+      "valuedMovementCount": 2,
+      "unvaluedMovementCount": 0
+    },
+    {
+      "source": "focused database regression",
+      "status": "INDETERMINATE_UNVALUED_STREAM",
+      "organizationId": "<sanitized-org-id>",
+      "productId": "<sanitized-external-basis-product-id>",
+      "variantId": null,
+      "affectedStoreIds": ["<sanitized-store-id>"],
+      "stockReceivingReferenceIds": ["<sanitized-external-basis-receiving-id>"],
+      "supersededReceivingReferenceId": null,
+      "actual": {
+        "avgCostKgs": 6.49,
+        "costBasisQty": 8
+      },
+      "expected": null,
+      "valuedStream": {
+        "quantity": 7,
+        "totalValueKgs": 42
+      },
+      "valuedMovementCount": 1,
+      "unvaluedMovementCount": 0
+    }
+  ]
+}
