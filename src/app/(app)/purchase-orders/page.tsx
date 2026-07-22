@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
@@ -58,6 +58,7 @@ const PurchaseOrdersPage = () => {
   const [bulkCanceling, setBulkCanceling] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectingAllResults, setSelectingAllResults] = useState(false);
+  const bulkCancelAttemptRef = useRef<{ payload: string; idempotencyKey: string } | null>(null);
   const listQuery = trpc.purchaseOrders.list.useQuery(
     { page, pageSize },
     { keepPreviousData: true },
@@ -79,7 +80,7 @@ const PurchaseOrdersPage = () => {
       setCancelingId(null);
     },
   });
-  const bulkCancelMutation = trpc.purchaseOrders.cancel.useMutation();
+  const bulkCancelMutation = trpc.purchaseOrders.bulkCancel.useMutation();
 
   useSse({
     "purchaseOrder.updated": () => listQuery.refetch(),
@@ -150,19 +151,10 @@ const PurchaseOrdersPage = () => {
     if (!selectedList.length) {
       return;
     }
-    const [draftIds, submittedIds] = await Promise.all([
-      trpcUtils.purchaseOrders.listIds.fetch({ status: "DRAFT" }),
-      trpcUtils.purchaseOrders.listIds.fetch({ status: "SUBMITTED" }),
-    ]);
-    const cancelableIdSet = new Set([...draftIds, ...submittedIds]);
-    const cancelableSelectedIds = selectedList.filter((id) => cancelableIdSet.has(id));
-    if (!cancelableSelectedIds.length) {
-      toast({ variant: "error", description: t("bulkCancelUnavailable") });
-      return;
-    }
+    const purchaseOrderIds = [...selectedList].sort((left, right) => left.localeCompare(right));
     if (
       !(await confirm({
-        description: t("confirmBulkCancel", { count: cancelableSelectedIds.length }),
+        description: t("confirmBulkCancel", { count: purchaseOrderIds.length }),
         confirmVariant: "danger",
       }))
     ) {
@@ -170,16 +162,20 @@ const PurchaseOrdersPage = () => {
     }
     setBulkCanceling(true);
     try {
-      await Promise.all(
-        cancelableSelectedIds.map((purchaseOrderId) =>
-          bulkCancelMutation.mutateAsync({ purchaseOrderId }),
-        ),
-      );
+      const serializedPayload = JSON.stringify({ purchaseOrderIds });
+      const existingAttempt = bulkCancelAttemptRef.current;
+      const idempotencyKey =
+        existingAttempt?.payload === serializedPayload
+          ? existingAttempt.idempotencyKey
+          : crypto.randomUUID();
+      bulkCancelAttemptRef.current = { payload: serializedPayload, idempotencyKey };
+      const result = await bulkCancelMutation.mutateAsync({ purchaseOrderIds, idempotencyKey });
       await listQuery.refetch();
+      bulkCancelAttemptRef.current = null;
       setSelectedIds(new Set());
       toast({
         variant: "success",
-        description: t("bulkCancelSuccess", { count: cancelableSelectedIds.length }),
+        description: t("bulkCancelSuccess", { count: result.canceledCount }),
       });
     } catch (error) {
       toast({

@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
-import type { InventorySnapshot, Prisma } from "@prisma/client";
+import type { InventorySnapshot } from "@prisma/client";
 import {
   OperationRequestPrincipalType,
+  Prisma,
   PurchaseOrderStatus,
   Role,
   StockMovementType,
@@ -118,6 +119,21 @@ const adjustOnOrder = async (
       allowNegativeStock,
     },
   });
+};
+
+const lockPurchaseOrderIds = async (tx: Prisma.TransactionClient, purchaseOrderIds: string[]) => {
+  if (!purchaseOrderIds.length) {
+    throw new AppError("invalidInput", "BAD_REQUEST", 400);
+  }
+  await tx.$queryRaw(
+    Prisma.sql`
+      SELECT "id"
+      FROM "PurchaseOrder"
+      WHERE "id" IN (${Prisma.join(purchaseOrderIds)})
+      ORDER BY "id"
+      FOR UPDATE
+    `,
+  );
 };
 
 export type CreatePurchaseOrderInput = {
@@ -345,7 +361,7 @@ type PurchaseOrderCreateOperationResponse = Prisma.InputJsonObject & {
   };
 };
 
-const classifyPurchaseOrderCreateOperationFailure = (
+const classifyPurchaseOrderOperationFailure = (
   error: unknown,
 ): OperationFailureDecision => {
   if (error instanceof AppError) {
@@ -353,6 +369,17 @@ const classifyPurchaseOrderCreateOperationFailure = (
       classification: OPERATION_FAILURE_SAFE_BEFORE_EFFECTS,
       responseCode: error.message,
       responseStatus: error.status,
+    };
+  }
+  if (
+    error instanceof Prisma.PrismaClientKnownRequestError ||
+    error instanceof Prisma.PrismaClientValidationError ||
+    error instanceof Prisma.PrismaClientInitializationError
+  ) {
+    return {
+      classification: OPERATION_FAILURE_SAFE_BEFORE_EFFECTS,
+      responseCode: "operationRequestFailed",
+      responseStatus: 500,
     };
   }
   return {
@@ -397,7 +424,7 @@ export const createPurchaseOrderOperation = async (
         "purchaseOrder.storeId",
         "purchaseOrder.status",
       ],
-      classifyFailure: classifyPurchaseOrderCreateOperationFailure,
+      classifyFailure: classifyPurchaseOrderOperationFailure,
     },
     async (tx) => {
       const result = await createPurchaseOrderTx(tx, input);
@@ -566,6 +593,7 @@ export const submitPurchaseOrder = async (input: {
   let affectedStoreId = "";
 
   const result = await prisma.$transaction(async (tx) => {
+    await lockPurchaseOrderIds(tx, [input.purchaseOrderId]);
     const po = await tx.purchaseOrder.findUnique({
       where: { id: input.purchaseOrderId },
       include: { lines: { orderBy: [{ position: "asc" }, { id: "asc" }] }, store: true },
@@ -646,6 +674,7 @@ export const approvePurchaseOrder = async (input: {
   const logger = getLogger(input.requestId);
 
   const result = await prisma.$transaction(async (tx) => {
+    await lockPurchaseOrderIds(tx, [input.purchaseOrderId]);
     const po = await tx.purchaseOrder.findUnique({
       where: { id: input.purchaseOrderId },
     });
@@ -941,6 +970,7 @@ export const cancelPurchaseOrder = async (input: {
   let affectedStoreId = "";
 
   const result = await prisma.$transaction(async (tx) => {
+    await lockPurchaseOrderIds(tx, [input.purchaseOrderId]);
     const po = await tx.purchaseOrder.findUnique({
       where: { id: input.purchaseOrderId },
       include: { lines: { orderBy: [{ position: "asc" }, { id: "asc" }] }, store: true },
@@ -1007,6 +1037,197 @@ export const cancelPurchaseOrder = async (input: {
   logger.info({ poId: result.id }, "purchase order cancelled");
 
   return result;
+};
+
+const MAX_BULK_PURCHASE_ORDER_CANCEL = 5_000;
+
+const normalizeBulkPurchaseOrderIds = (purchaseOrderIds: string[]) => {
+  const normalized = purchaseOrderIds.map((id) => id.trim());
+  if (
+    !normalized.length ||
+    normalized.length > MAX_BULK_PURCHASE_ORDER_CANCEL ||
+    normalized.some((id) => !id) ||
+    new Set(normalized).size !== normalized.length
+  ) {
+    throw new AppError("invalidInput", "BAD_REQUEST", 400);
+  }
+  return normalized.sort((left, right) => left.localeCompare(right));
+};
+
+type BulkPurchaseOrderCancelResult = {
+  purchaseOrders: Array<{ id: string; status: PurchaseOrderStatus }>;
+  inventoryUpdates: Array<{ storeId: string; productId: string }>;
+};
+
+const bulkCancelPurchaseOrdersTx = async (
+  tx: Prisma.TransactionClient,
+  input: {
+    purchaseOrderIds: string[];
+    actorId: string;
+    organizationId: string;
+    requestId: string;
+  },
+): Promise<BulkPurchaseOrderCancelResult> => {
+  const actor = await tx.user.findFirst({
+    where: {
+      id: input.actorId,
+      organizationId: input.organizationId,
+      isActive: true,
+      role: { in: [Role.ADMIN, Role.MANAGER] },
+    },
+    select: {
+      id: true,
+      organizationId: true,
+      role: true,
+      isOrgOwner: true,
+    },
+  });
+  if (!actor || !actor.organizationId) {
+    throw new AppError("forbidden", "FORBIDDEN", 403);
+  }
+
+  await lockPurchaseOrderIds(tx, input.purchaseOrderIds);
+  const purchaseOrders = await tx.purchaseOrder.findMany({
+    where: {
+      id: { in: input.purchaseOrderIds },
+      organizationId: input.organizationId,
+    },
+    include: {
+      lines: { orderBy: [{ position: "asc" }, { id: "asc" }] },
+      store: true,
+    },
+    orderBy: { id: "asc" },
+  });
+  if (purchaseOrders.length !== input.purchaseOrderIds.length) {
+    throw new AppError("poNotFound", "NOT_FOUND", 404);
+  }
+
+  const storeIds = Array.from(new Set(purchaseOrders.map((po) => po.storeId))).sort((a, b) =>
+    a.localeCompare(b),
+  );
+  for (const storeId of storeIds) {
+    await assertUserCanAccessStore(
+      tx,
+      { ...actor, organizationId: actor.organizationId },
+      storeId,
+    );
+  }
+  for (const po of purchaseOrders) {
+    assertTransition(po.status, PurchaseOrderStatus.CANCELLED);
+  }
+
+  const inventoryUpdates = new Map<string, { storeId: string; productId: string }>();
+  const cancelled: Array<{ id: string; status: PurchaseOrderStatus }> = [];
+  for (const po of purchaseOrders) {
+    if (po.status === PurchaseOrderStatus.SUBMITTED) {
+      for (const line of po.lines) {
+        await adjustOnOrder(
+          tx,
+          po.storeId,
+          line.productId,
+          line.variantId,
+          -line.qtyOrdered,
+          po.store.allowNegativeStock,
+        );
+        inventoryUpdates.set(`${po.storeId}:${line.productId}`, {
+          storeId: po.storeId,
+          productId: line.productId,
+        });
+      }
+    }
+
+    const updated = await tx.purchaseOrder.update({
+      where: { id: po.id },
+      data: {
+        status: PurchaseOrderStatus.CANCELLED,
+        updatedById: input.actorId,
+      },
+    });
+    await writeAuditLog(tx, {
+      organizationId: input.organizationId,
+      actorId: input.actorId,
+      action: "PO_CANCEL",
+      entity: "PurchaseOrder",
+      entityId: po.id,
+      before: toJson({ status: po.status }),
+      after: toJson({ status: updated.status }),
+      requestId: input.requestId,
+    });
+    cancelled.push({ id: updated.id, status: updated.status });
+  }
+
+  return {
+    purchaseOrders: cancelled,
+    inventoryUpdates: Array.from(inventoryUpdates.values()).sort((left, right) =>
+      `${left.storeId}:${left.productId}`.localeCompare(`${right.storeId}:${right.productId}`),
+    ),
+  };
+};
+
+type BulkPurchaseOrderCancelOperationResponse = Prisma.InputJsonObject & {
+  canceledCount: number;
+};
+
+export const bulkCancelPurchaseOrders = async (input: {
+  purchaseOrderIds: string[];
+  idempotencyKey: string;
+  actorId: string;
+  organizationId: string;
+  requestId: string;
+}) => {
+  const purchaseOrderIds = normalizeBulkPurchaseOrderIds(input.purchaseOrderIds);
+  let createdResult: BulkPurchaseOrderCancelResult | null = null;
+  const operation = await runOperationRequest<BulkPurchaseOrderCancelOperationResponse>(
+    {
+      organizationId: input.organizationId,
+      scope: "purchaseOrders.bulkCancel.v1",
+      principal: {
+        type: OperationRequestPrincipalType.AUTHENTICATED_USER,
+        id: input.actorId,
+      },
+      idempotencyKey: input.idempotencyKey,
+      payload: {
+        version: "v1",
+        value: { purchaseOrderIds },
+      },
+      allowedResponsePaths: ["canceledCount"],
+      classifyFailure: classifyPurchaseOrderOperationFailure,
+    },
+    async (tx) => {
+      const result = await bulkCancelPurchaseOrdersTx(tx, {
+        ...input,
+        purchaseOrderIds,
+      });
+      createdResult = result;
+      return {
+        response: { canceledCount: result.purchaseOrders.length },
+        responseStatus: 200,
+        responseCode: "completed",
+      };
+    },
+  );
+
+  const executedResult = createdResult as BulkPurchaseOrderCancelResult | null;
+  if (executedResult) {
+    for (const purchaseOrder of executedResult.purchaseOrders) {
+      eventBus.publish({
+        type: "purchaseOrder.updated",
+        payload: { poId: purchaseOrder.id, status: purchaseOrder.status },
+      });
+    }
+    for (const update of executedResult.inventoryUpdates) {
+      eventBus.publish({
+        type: "inventory.updated",
+        payload: update,
+      });
+    }
+    getLogger(input.requestId).info(
+      { count: executedResult.purchaseOrders.length },
+      "purchase orders bulk cancelled",
+    );
+  }
+
+  return operation;
 };
 
 export const addPurchaseOrderLine = async (input: {

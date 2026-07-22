@@ -25,7 +25,7 @@ import {
 } from "@/server/services/bazaarApi";
 import { adjustStock } from "@/server/services/inventory";
 import {
-  cancelPurchaseOrder,
+  bulkCancelPurchaseOrders,
   createPurchaseOrder,
   createPurchaseOrderOperation,
 } from "@/server/services/purchaseOrders";
@@ -624,8 +624,8 @@ describeDb("B0 Agent 3 order P0 runtime verification", () => {
     expect(returnCount).toBe(0);
   });
 
-  it("reproduces HARD-A3-012: independent PO cancellation partially commits", async () => {
-    const { org, store, supplier, product, adminUser } = await seedBase();
+  it("regresses HARD-A3-012: bulk PO cancellation is atomic and replay-safe", async () => {
+    const { org, store, supplier, product, adminUser, managerUser } = await seedBase();
     const create = (requestId: string) =>
       createPurchaseOrder({
         organizationId: org.id,
@@ -643,40 +643,248 @@ describeDb("B0 Agent 3 order P0 runtime verification", () => {
       where: { id: second.id },
       data: { status: PurchaseOrderStatus.APPROVED, approvedAt: new Date() },
     });
+    sideEffects.publish.mockClear();
 
-    const settled = await Promise.allSettled([
-      cancelPurchaseOrder({
-        purchaseOrderId: first.id,
+    await prisma.userStoreAccess.deleteMany({
+      where: { organizationId: org.id, userId: managerUser.id, storeId: store.id },
+    });
+    await expect(
+      bulkCancelPurchaseOrders({
+        purchaseOrderIds: [first.id, second.id],
+        idempotencyKey: "b0-a3-012-revoked",
+        organizationId: org.id,
+        actorId: managerUser.id,
+        requestId: "b0-a3-012-revoked",
+      }),
+    ).rejects.toMatchObject({ message: "storeAccessDenied", status: 403 });
+    await expect(
+      bulkCancelPurchaseOrders({
+        purchaseOrderIds: [first.id, "missing-purchase-order"],
+        idempotencyKey: "b0-a3-012-missing",
         organizationId: org.id,
         actorId: adminUser.id,
-        requestId: "b0-a3-012-cancel-1",
+        requestId: "b0-a3-012-missing",
       }),
-      cancelPurchaseOrder({
-        purchaseOrderId: second.id,
-        organizationId: org.id,
-        actorId: adminUser.id,
-        requestId: "b0-a3-012-cancel-2",
-      }),
+    ).rejects.toMatchObject({ message: "poNotFound", status: 404 });
+
+    const batchInput = {
+      purchaseOrderIds: [second.id, first.id],
+      idempotencyKey: "b0-a3-012-bulk-cancel",
+      organizationId: org.id,
+      actorId: adminUser.id,
+    };
+    await expect(
+      bulkCancelPurchaseOrders({ ...batchInput, requestId: "b0-a3-012-invalid-state" }),
+    ).rejects.toMatchObject({ message: "invalidTransition", status: 409 });
+
+    const [afterFailureFirst, afterFailureSecond] = await Promise.all([
+      prisma.purchaseOrder.findUniqueOrThrow({ where: { id: first.id } }),
+      prisma.purchaseOrder.findUniqueOrThrow({ where: { id: second.id } }),
     ]);
+    const afterFailure = await snapshotFor(store.id, product.id);
+    await prisma.purchaseOrder.update({
+      where: { id: second.id },
+      data: { status: PurchaseOrderStatus.SUBMITTED, approvedAt: null },
+    });
+
+    const forcedSecondId = [first.id, second.id].sort((left, right) =>
+      left.localeCompare(right),
+    )[1]!;
+    if (!/^[A-Za-z0-9_-]+$/.test(forcedSecondId)) {
+      throw new Error("Unexpected purchase order ID format");
+    }
+    await prisma.$executeRawUnsafe(`
+      DROP TRIGGER IF EXISTS "hard_a3_012_fail_second_cancel_trigger" ON "PurchaseOrder"
+    `);
+    await prisma.$executeRawUnsafe(`
+      DROP FUNCTION IF EXISTS "hard_a3_012_fail_second_cancel"()
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE OR REPLACE FUNCTION "hard_a3_012_fail_second_cancel"()
+      RETURNS trigger AS $$
+      BEGIN
+        IF NEW."id" = '${forcedSecondId}' AND NEW."status" = 'CANCELLED' THEN
+          RAISE unique_violation USING MESSAGE = 'forced HARD-A3-012 second update failure';
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE TRIGGER "hard_a3_012_fail_second_cancel_trigger"
+      BEFORE UPDATE OF "status" ON "PurchaseOrder"
+      FOR EACH ROW
+      EXECUTE FUNCTION "hard_a3_012_fail_second_cancel"()
+    `);
+    try {
+      await expect(
+        bulkCancelPurchaseOrders({ ...batchInput, requestId: "b0-a3-012-forced-rollback" }),
+      ).rejects.toBeTruthy();
+    } finally {
+      await prisma.$executeRawUnsafe(`
+        DROP TRIGGER IF EXISTS "hard_a3_012_fail_second_cancel_trigger" ON "PurchaseOrder"
+      `);
+      await prisma.$executeRawUnsafe(`
+        DROP FUNCTION IF EXISTS "hard_a3_012_fail_second_cancel"()
+      `);
+    }
+    const [afterMutationFailureFirst, afterMutationFailureSecond] = await Promise.all([
+      prisma.purchaseOrder.findUniqueOrThrow({ where: { id: first.id } }),
+      prisma.purchaseOrder.findUniqueOrThrow({ where: { id: second.id } }),
+    ]);
+    const afterMutationFailure = await snapshotFor(store.id, product.id);
+    const afterMutationFailureAudits = await prisma.auditLog.count({
+      where: {
+        organizationId: org.id,
+        action: "PO_CANCEL",
+        entityId: { in: [first.id, second.id] },
+      },
+    });
+    const forcedFailureOperation = await prisma.operationRequest.findFirstOrThrow({
+      where: {
+        organizationId: org.id,
+        scope: "purchaseOrders.bulkCancel.v1",
+        principalKey: `user:${adminUser.id}`,
+        idempotencyKey: batchInput.idempotencyKey,
+      },
+    });
+    const forcedFailureEventCalls = sideEffects.publish.mock.calls.length;
+
+    expect(afterMutationFailureFirst.status).toBe(PurchaseOrderStatus.SUBMITTED);
+    expect(afterMutationFailureSecond.status).toBe(PurchaseOrderStatus.SUBMITTED);
+    expect(afterMutationFailure?.onOrder).toBe(10);
+    expect(afterMutationFailureAudits).toBe(0);
+    expect(forcedFailureOperation.status).toBe(OperationRequestStatus.FAILED);
+    expect(forcedFailureOperation.errorClassification).toBe("SAFE_BEFORE_EFFECTS");
+    expect(forcedFailureOperation.attemptCount).toBe(2);
+    expect(forcedFailureEventCalls).toBe(0);
+
+    const concurrent = await Promise.allSettled([
+      bulkCancelPurchaseOrders({ ...batchInput, requestId: "b0-a3-012-cancel-1" }),
+      bulkCancelPurchaseOrders({ ...batchInput, requestId: "b0-a3-012-cancel-2" }),
+    ]);
+    const replay = await bulkCancelPurchaseOrders({
+      ...batchInput,
+      purchaseOrderIds: [first.id, second.id],
+      requestId: "b0-a3-012-replay",
+    });
+    await expect(
+      bulkCancelPurchaseOrders({
+        ...batchInput,
+        purchaseOrderIds: [first.id],
+        requestId: "b0-a3-012-changed",
+      }),
+    ).rejects.toMatchObject({ message: "operationRequestPayloadMismatch", status: 409 });
 
     const [persistedFirst, persistedSecond] = await Promise.all([
       prisma.purchaseOrder.findUniqueOrThrow({ where: { id: first.id } }),
       prisma.purchaseOrder.findUniqueOrThrow({ where: { id: second.id } }),
     ]);
-    const after = await snapshotFor(store.id, product.id);
-
-    evidence("HARD-A3-012", {
-      results: settled.map((result) => result.status),
-      statusBefore: [PurchaseOrderStatus.SUBMITTED, PurchaseOrderStatus.APPROVED],
-      statusAfter: [persistedFirst.status, persistedSecond.status],
-      onOrderBefore: before?.onOrder,
-      onOrderAfter: after?.onOrder,
+    const afterSuccess = await snapshotFor(store.id, product.id);
+    const operation = await prisma.operationRequest.findFirstOrThrow({
+      where: {
+        organizationId: org.id,
+        scope: "purchaseOrders.bulkCancel.v1",
+        principalKey: `user:${adminUser.id}`,
+        idempotencyKey: batchInput.idempotencyKey,
+      },
+    });
+    const deniedOperation = await prisma.operationRequest.findFirstOrThrow({
+      where: {
+        organizationId: org.id,
+        scope: "purchaseOrders.bulkCancel.v1",
+        principalKey: `user:${managerUser.id}`,
+        idempotencyKey: "b0-a3-012-revoked",
+      },
+    });
+    const audits = await prisma.auditLog.count({
+      where: {
+        organizationId: org.id,
+        action: "PO_CANCEL",
+        entityId: { in: [first.id, second.id] },
+      },
     });
 
-    expect(settled.map((result) => result.status).sort()).toEqual(["fulfilled", "rejected"]);
+    evidence("HARD-A3-012", {
+      concurrentStatuses: concurrent.map((result) => result.status),
+      concurrentReplayFlags: concurrent.flatMap((result) =>
+        result.status === "fulfilled" ? [result.value.replayed] : [],
+      ),
+      concurrentFailureMessages: concurrent.flatMap((result) =>
+        result.status === "rejected" ? [String((result.reason as Error).message)] : [],
+      ),
+      explicitReplay: replay.replayed,
+      statusBefore: [PurchaseOrderStatus.SUBMITTED, PurchaseOrderStatus.APPROVED],
+      statusAfterFailedBatch: [afterFailureFirst.status, afterFailureSecond.status],
+      statusAfterForcedRollback: [
+        afterMutationFailureFirst.status,
+        afterMutationFailureSecond.status,
+      ],
+      statusAfter: [persistedFirst.status, persistedSecond.status],
+      onOrderBefore: before?.onOrder,
+      onOrderAfterFailedBatch: afterFailure?.onOrder,
+      onOrderAfterForcedRollback: afterMutationFailure?.onOrder,
+      onOrderAfterSuccess: afterSuccess?.onOrder,
+      forcedFailureStatus: forcedFailureOperation.status,
+      forcedFailureClassification: forcedFailureOperation.errorClassification,
+      forcedFailureAuditCount: afterMutationFailureAudits,
+      forcedFailureEventCalls,
+      operationStatus: operation.status,
+      operationAttempts: operation.attemptCount,
+      deniedOperationStatus: deniedOperation.status,
+      auditCount: audits,
+      purchaseOrderEventCalls: sideEffects.publish.mock.calls.filter(
+        ([event]) => event.type === "purchaseOrder.updated",
+      ).length,
+      inventoryEventCalls: sideEffects.publish.mock.calls.filter(
+        ([event]) => event.type === "inventory.updated",
+      ).length,
+    });
+
+    expect(afterFailureFirst.status).toBe(PurchaseOrderStatus.SUBMITTED);
+    expect(afterFailureSecond.status).toBe(PurchaseOrderStatus.APPROVED);
+    expect(afterFailure?.onOrder).toBe(10);
+    expect(afterMutationFailureFirst.status).toBe(PurchaseOrderStatus.SUBMITTED);
+    expect(afterMutationFailureSecond.status).toBe(PurchaseOrderStatus.SUBMITTED);
+    expect(afterMutationFailure?.onOrder).toBe(10);
+    expect(afterMutationFailureAudits).toBe(0);
+    expect(forcedFailureOperation.status).toBe(OperationRequestStatus.FAILED);
+    expect(forcedFailureOperation.errorClassification).toBe("SAFE_BEFORE_EFFECTS");
+    expect(forcedFailureOperation.attemptCount).toBe(2);
+    expect(forcedFailureEventCalls).toBe(0);
+    const concurrentSuccesses = concurrent.flatMap((result) =>
+      result.status === "fulfilled" ? [result.value] : [],
+    );
+    const concurrentFailures = concurrent.flatMap((result) =>
+      result.status === "rejected" ? [result.reason] : [],
+    );
+    expect(concurrentSuccesses.length).toBeGreaterThanOrEqual(1);
+    expect(concurrentSuccesses.every((result) => result.response.canceledCount === 2)).toBe(true);
+    expect(concurrentSuccesses.filter((result) => result.replayed)).toHaveLength(
+      concurrentSuccesses.length - 1,
+    );
+    expect(concurrentFailures.length).toBeLessThanOrEqual(1);
+    expect(
+      concurrentFailures.every(
+        (error) => error instanceof Error && error.message === "requestInProgress",
+      ),
+    ).toBe(true);
+    expect(replay.replayed).toBe(true);
+    expect(replay.response.canceledCount).toBe(2);
     expect(persistedFirst.status).toBe(PurchaseOrderStatus.CANCELLED);
-    expect(persistedSecond.status).toBe(PurchaseOrderStatus.APPROVED);
+    expect(persistedSecond.status).toBe(PurchaseOrderStatus.CANCELLED);
     expect(before?.onOrder).toBe(10);
-    expect(after?.onOrder).toBe(5);
+    expect(afterSuccess?.onOrder).toBe(0);
+    expect(operation.status).toBe(OperationRequestStatus.COMPLETED);
+    expect(operation.attemptCount).toBe(3);
+    expect(operation.resourceId).toBeNull();
+    expect(deniedOperation.status).toBe(OperationRequestStatus.FAILED);
+    expect(audits).toBe(2);
+    expect(
+      sideEffects.publish.mock.calls.filter(([event]) => event.type === "purchaseOrder.updated"),
+    ).toHaveLength(2);
+    expect(
+      sideEffects.publish.mock.calls.filter(([event]) => event.type === "inventory.updated"),
+    ).toHaveLength(1);
   });
 });
