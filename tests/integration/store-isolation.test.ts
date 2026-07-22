@@ -575,12 +575,12 @@ describeDb("store isolation", () => {
   });
 
   it("scopes dashboard stores and sales orders to assigned stores", async () => {
-    const { org, cashierUser, store } = await seedBase({ plan: "BUSINESS" });
+    const { org, managerUser, store } = await seedBase({ plan: "BUSINESS" });
     const storeB = await prisma.store.create({
       data: { organizationId: org.id, name: "Store B", code: "B" },
     });
     await prisma.userStoreAccess.createMany({
-      data: [{ organizationId: org.id, userId: cashierUser.id, storeId: store.id }],
+      data: [{ organizationId: org.id, userId: managerUser.id, storeId: store.id }],
       skipDuplicates: true,
     });
     const [storeAOrder, storeBOrder] = await Promise.all([
@@ -607,33 +607,33 @@ describeDb("store isolation", () => {
         },
       }),
     ]);
-    const cashierCaller = createTestCaller({
-      id: cashierUser.id,
-      email: cashierUser.email,
-      role: Role.CASHIER,
+    const managerCaller = createTestCaller({
+      id: managerUser.id,
+      email: managerUser.email,
+      role: Role.MANAGER,
       organizationId: org.id,
       isOrgOwner: false,
     });
 
-    const dashboard = await cashierCaller.dashboard.bootstrap({
+    const dashboard = await managerCaller.dashboard.bootstrap({
       includeRecentActivity: false,
       includeRecentMovements: false,
     });
-    const orders = await cashierCaller.salesOrders.list({ page: 1, pageSize: 25 });
+    const orders = await managerCaller.salesOrders.list({ page: 1, pageSize: 25 });
 
     expect(dashboard.stores.map((item) => item.id)).toEqual([store.id]);
     expect(dashboard.selectedStoreId).toBe(store.id);
     expect(orders.items.map((item) => item.id)).toContain(storeAOrder.id);
     expect(orders.items.map((item) => item.id)).not.toContain(storeBOrder.id);
     await expect(
-      cashierCaller.dashboard.summary({
+      managerCaller.dashboard.summary({
         storeId: storeB.id,
         includeRecentActivity: false,
         includeRecentMovements: false,
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(
-      cashierCaller.salesOrders.list({ storeId: storeB.id, page: 1, pageSize: 25 }),
+      managerCaller.salesOrders.list({ storeId: storeB.id, page: 1, pageSize: 25 }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
