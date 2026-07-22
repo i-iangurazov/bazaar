@@ -78,7 +78,10 @@ describeDb("inline edit mutations", () => {
         productId: otherProduct.id,
         patch: { basePriceKgs: 180 },
       }),
-    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    ).rejects.toMatchObject({ code: "FORBIDDEN", message: "productAccessDenied" });
+    await expect(
+      prisma.product.findUniqueOrThrow({ where: { id: otherProduct.id } }),
+    ).resolves.toMatchObject({ basePriceKgs: null });
   });
 
   it("updates inventory minStock and enforces RBAC and validation", async () => {
