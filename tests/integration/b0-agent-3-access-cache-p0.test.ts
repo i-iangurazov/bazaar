@@ -489,6 +489,112 @@ describeDb("B0 Agent 3 access and cache P0 runtime verification", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("verifies HARD-A3-008: Bakai overview is usable by managers without leaking other stores or organizations", async () => {
+    const { org, store, supplier, baseUnit, managerUser, staffUser } = await seedBase({
+      plan: "BUSINESS",
+    });
+    const { store: storeB } = await createSecondStoreProduct({
+      organizationId: org.id,
+      supplierId: supplier.id,
+      baseUnitId: baseUnit.id,
+      unitCode: baseUnit.code,
+    });
+    const managerCaller = createTestCaller(asCallerUser(managerUser));
+    const staffCaller = createTestCaller(asCallerUser(staffUser));
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await prisma.bakaiStoreIntegration.create({
+      data: {
+        orgId: org.id,
+        status: "READY",
+        connectionMode: "API",
+        apiTokenEncrypted: "encrypted-org-token",
+      },
+    });
+    await prisma.bakaiStoreStockMapping.createMany({
+      data: [
+        { orgId: org.id, storeId: store.id, columnKey: "stock_a" },
+        { orgId: org.id, storeId: storeB.id, columnKey: "stock_b" },
+      ],
+    });
+    await prisma.bakaiStoreBranchMapping.createMany({
+      data: [
+        { orgId: org.id, storeId: store.id, bakaiBranchId: "branch-a" },
+        { orgId: org.id, storeId: storeB.id, bakaiBranchId: "branch-b" },
+      ],
+    });
+
+    await expect(staffCaller.bakaiStore.overview()).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+    const positiveOverview = await managerCaller.bakaiStore.overview();
+    expect(positiveOverview).toMatchObject({
+      configured: true,
+      connectionMode: "API",
+      hasApiToken: true,
+      mappedColumns: ["stock_a"],
+    });
+
+    await prisma.bakaiStoreBranchMapping.delete({
+      where: { orgId_storeId: { orgId: org.id, storeId: store.id } },
+    });
+    const inaccessibleSameOrgOverview = await managerCaller.bakaiStore.overview();
+    expect(inaccessibleSameOrgOverview).toMatchObject({
+      configured: false,
+      hasApiToken: true,
+      mappedColumns: ["stock_a"],
+    });
+
+    await prisma.bakaiStoreIntegration.delete({ where: { orgId: org.id } });
+    const crossOrganization = await prisma.organization.create({
+      data: { name: "Bakai Overview Org B" },
+    });
+    const crossOrganizationStore = await prisma.store.create({
+      data: {
+        organizationId: crossOrganization.id,
+        name: "Bakai Overview Org B Store",
+        code: "BOB",
+      },
+    });
+    await prisma.bakaiStoreIntegration.create({
+      data: {
+        orgId: crossOrganization.id,
+        status: "READY",
+        connectionMode: "API",
+        apiTokenEncrypted: "encrypted-cross-org-token",
+      },
+    });
+    await prisma.bakaiStoreBranchMapping.create({
+      data: {
+        orgId: crossOrganization.id,
+        storeId: crossOrganizationStore.id,
+        bakaiBranchId: "cross-org-branch",
+      },
+    });
+
+    const crossOrganizationOverview = await managerCaller.bakaiStore.overview();
+
+    evidence("HARD-A3-008-bakai-overview-fixed", {
+      managerAccessibleStoreId: store.id,
+      inaccessibleSameOrgStoreId: storeB.id,
+      positiveConfigured: positiveOverview.configured,
+      positiveMappedColumns: positiveOverview.mappedColumns,
+      sameOrgOnlyConfigured: inaccessibleSameOrgOverview.configured,
+      sameOrgMappedColumns: inaccessibleSameOrgOverview.mappedColumns,
+      crossOrganizationId: crossOrganization.id,
+      crossOrganizationTokenVisible: crossOrganizationOverview.hasApiToken,
+      externalFetchCalls: fetchMock.mock.calls.length,
+    });
+
+    expect(crossOrganizationOverview).toMatchObject({
+      configured: false,
+      connectionMode: "TEMPLATE",
+      hasApiToken: false,
+      mappedColumns: ["stock_a"],
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("reproduces HARD-A3-010: warmed API product data ignores committed price and stock mutations", async () => {
     const { org, store, product, adminUser } = await seedBase({ plan: "BUSINESS" });
     await prisma.product.update({ where: { id: product.id }, data: { basePriceKgs: 100 } });

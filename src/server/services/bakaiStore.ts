@@ -2086,10 +2086,7 @@ export const getBakaiStoreOverview = async (
 ) => {
   const [integration, mappings, branchMappings] = await Promise.all([
     prisma.bakaiStoreIntegration.findUnique({
-      where: {
-        orgId: organizationId,
-        ...(accessibleStoreIds ? { storeId: { in: accessibleStoreIds } } : {}),
-      },
+      where: { orgId: organizationId },
       select: {
         status: true,
         connectionMode: true,
@@ -2104,7 +2101,10 @@ export const getBakaiStoreOverview = async (
       },
     }),
     prisma.bakaiStoreStockMapping.findMany({
-      where: { orgId: organizationId },
+      where: {
+        orgId: organizationId,
+        ...(accessibleStoreIds ? { storeId: { in: accessibleStoreIds } } : {}),
+      },
       select: { columnKey: true },
     }),
     prisma.bakaiStoreBranchMapping.findMany({
