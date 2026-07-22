@@ -55,7 +55,7 @@ jobs:
         env:
           POSTGRES_USER: inventory
           POSTGRES_PASSWORD: inventory
-          POSTGRES_DB: inventory
+          POSTGRES_DB: bazaar_hardening_ci
         ports:
           - 5432:5432
         options: >-
@@ -64,7 +64,11 @@ jobs:
           --health-timeout=5s
           --health-retries=5
     env:
-      DATABASE_URL: postgresql://inventory:inventory@localhost:5432/inventory?schema=public
+      DATABASE_URL: postgresql://inventory:inventory@localhost:5432/bazaar_hardening_ci?schema=public
+      DATABASE_TEST_URL: postgresql://inventory:inventory@localhost:5432/bazaar_hardening_ci?schema=public
+      RUN_DB_TESTS: "1"
+      ALLOW_TEST_DB_RESET: "1"
+      EXPECTED_TEST_DB_NAME: bazaar_hardening_ci
       NEXTAUTH_SECRET: ci-secret
       NEXTAUTH_URL: http://localhost:3000
     steps:

@@ -2,12 +2,10 @@ import { execSync } from "node:child_process";
 import { PrismaClient, Prisma } from "@prisma/client";
 
 import {
+  assertDatabaseTestExecutionPolicy,
   assertSafeTestDatabaseReset,
   resolveConfiguredTestDatabaseUrl,
 } from "./helpers/testDatabaseSafety";
-
-const shouldRunDbTests = () =>
-  process.env.SKIP_DB_TESTS !== "1" && process.env.RUN_DB_TESTS === "1";
 
 const ensureTestDatabase = async (databaseUrl: string, databaseName: string) => {
   const adminUrl = new URL(databaseUrl);
@@ -25,7 +23,7 @@ const ensureTestDatabase = async (databaseUrl: string, databaseName: string) => 
 };
 
 export default async function globalSetup() {
-  if (!shouldRunDbTests()) {
+  if (!assertDatabaseTestExecutionPolicy()) {
     return;
   }
   const databaseUrl = resolveConfiguredTestDatabaseUrl();

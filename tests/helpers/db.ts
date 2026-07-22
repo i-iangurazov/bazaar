@@ -3,10 +3,12 @@ import type { OrganizationPlan } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
 
-import { assertSafeTestDatabaseReset } from "./testDatabaseSafety";
+import {
+  assertSafeTestDatabaseReset,
+  isDatabaseTestExecutionEnabled,
+} from "./testDatabaseSafety";
 
-export const shouldRunDbTests =
-  process.env.SKIP_DB_TESTS !== "1" && process.env.RUN_DB_TESTS === "1";
+export const shouldRunDbTests = isDatabaseTestExecutionEnabled();
 
 export const resetDatabase = async () => {
   assertSafeTestDatabaseReset();
