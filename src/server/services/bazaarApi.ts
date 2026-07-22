@@ -31,7 +31,6 @@ import { sendOrderConfirmationEmail } from "@/server/services/orderEmails";
 
 const API_TOKEN_PREFIX = "bz_live_";
 const API_KEY_LAST_USED_UPDATE_INTERVAL_MS = 10 * 60 * 1000;
-const DEFAULT_API_AUTH_CACHE_TTL_SECONDS = 30 * 60;
 const DEFAULT_API_PRODUCTS_CACHE_TTL_SECONDS = 30 * 60;
 
 type CacheEntry<T> = {
@@ -71,9 +70,6 @@ const positiveIntFromEnv = (name: string, fallback: number) => {
   const value = raw ? Number(raw) : NaN;
   return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
 };
-
-const apiAuthCacheTtlSeconds = () =>
-  positiveIntFromEnv("BAZAAR_API_AUTH_CACHE_TTL_SECONDS", DEFAULT_API_AUTH_CACHE_TTL_SECONDS);
 
 const apiProductsCacheTtlSeconds = () =>
   positiveIntFromEnv("BAZAAR_API_PRODUCTS_CACHE_TTL_SECONDS", DEFAULT_API_PRODUCTS_CACHE_TTL_SECONDS);
@@ -187,6 +183,17 @@ const writeCache = async <T>(key: string, value: T, ttlSeconds: number): Promise
     await redis.set(key, JSON.stringify(entry), "EX", ttlSeconds);
   } catch {
     // Cache writes are best-effort; API correctness must not depend on Redis.
+  }
+};
+
+const deleteCache = async (key: string): Promise<void> => {
+  memoryCache.delete(key);
+  try {
+    const redis = getRedisPublisher();
+    if (!redis) return;
+    await redis.del(key);
+  } catch {
+    // Authentication always revalidates against the database, so stale cache cleanup is best-effort.
   }
 };
 
@@ -611,7 +618,7 @@ export const revokeBazaarApiKey = async (input: {
   apiKeyId: string;
 }) => {
   await ensureStoreAccess(input.organizationId, input.storeId);
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const existing = await tx.bazaarApiKey.findFirst({
       where: {
         id: input.apiKeyId,
@@ -644,8 +651,10 @@ export const revokeBazaarApiKey = async (input: {
       after: toJson(updated),
       requestId: input.requestId,
     });
-    return updated;
+    return { updated, tokenHash: existing.tokenHash };
   });
+  await deleteCache(`bazaar-api:auth:v1:${result.tokenHash}`);
+  return result.updated;
 };
 
 export const authenticateBazaarApiRequest = async (request: Request) => {
@@ -656,14 +665,6 @@ export const authenticateBazaarApiRequest = async (request: Request) => {
     throw new AppError("apiUnauthorized", "UNAUTHORIZED", 401);
   }
   const hashedToken = tokenHash(token);
-  const shouldUseAuthCache = request.method.toUpperCase() === "GET";
-  const authCacheKey = `bazaar-api:auth:v1:${hashedToken}`;
-  if (shouldUseAuthCache) {
-    const cached = await readCache<BazaarApiAuthContext>(authCacheKey);
-    if (cached) {
-      return cached;
-    }
-  }
 
   const apiKey = await prisma.bazaarApiKey.findUnique({
     where: { tokenHash: hashedToken },
@@ -701,16 +702,12 @@ export const authenticateBazaarApiRequest = async (request: Request) => {
       .catch(() => undefined);
   }
 
-  const authContext: BazaarApiAuthContext = {
+  return {
     apiKeyId: apiKey.id,
     organizationId: apiKey.organizationId,
     storeId: apiKey.storeId,
     store: apiKey.store,
-  };
-  if (shouldUseAuthCache) {
-    void writeCache(authCacheKey, authContext, apiAuthCacheTtlSeconds());
-  }
-  return authContext;
+  } satisfies BazaarApiAuthContext;
 };
 
 export const listBazaarApiProducts = async (input: {

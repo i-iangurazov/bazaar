@@ -1,6 +1,7 @@
 import type { Role } from "@prisma/client";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { GET as getBazaarApiProducts } from "@/app/api/bazaar/v1/products/route";
 import { prisma } from "@/server/db/prisma";
 import {
   authenticateBazaarApiRequest,
@@ -80,7 +81,7 @@ describeDb("B0 Agent 3 access and cache P0 runtime verification", () => {
     await resetDatabase();
   });
 
-  it("reproduces HARD-A3-002: a warmed revoked API key still authenticates", async () => {
+  it("verifies HARD-A3-002: a warmed API key is rejected immediately after revocation", async () => {
     const { org, store, adminUser } = await seedBase();
     const { apiKey, token } = await createBazaarApiKey({
       organizationId: org.id,
@@ -89,6 +90,23 @@ describeDb("B0 Agent 3 access and cache P0 runtime verification", () => {
       requestId: "b0-a3-002-key",
       name: "B0 revocation key",
     });
+    const { apiKey: unaffectedApiKey, token: unaffectedToken } = await createBazaarApiKey({
+      organizationId: org.id,
+      storeId: store.id,
+      actorId: adminUser.id,
+      requestId: "b1-a3-002-unaffected-key",
+      name: "B1 unaffected key",
+    });
+    const otherOrganization = await prisma.organization.create({
+      data: { name: "Other organization" },
+    });
+    const otherStore = await prisma.store.create({
+      data: {
+        organizationId: otherOrganization.id,
+        name: "Other organization store",
+        code: "OTHER",
+      },
+    });
     const request = () =>
       new Request("http://localhost/api/bazaar/v1/products", {
         method: "GET",
@@ -96,6 +114,18 @@ describeDb("B0 Agent 3 access and cache P0 runtime verification", () => {
       });
 
     const warmed = await authenticateBazaarApiRequest(request());
+    await expect(
+      revokeBazaarApiKey({
+        organizationId: otherOrganization.id,
+        storeId: otherStore.id,
+        actorId: adminUser.id,
+        requestId: "b1-a3-002-cross-org-tamper",
+        apiKeyId: apiKey.id,
+      }),
+    ).rejects.toMatchObject({ message: "apiKeyNotFound", status: 404 });
+    await expect(authenticateBazaarApiRequest(request())).resolves.toMatchObject({
+      apiKeyId: apiKey.id,
+    });
     await revokeBazaarApiKey({
       organizationId: org.id,
       storeId: store.id,
@@ -104,18 +134,32 @@ describeDb("B0 Agent 3 access and cache P0 runtime verification", () => {
       apiKeyId: apiKey.id,
     });
     const persisted = await prisma.bazaarApiKey.findUniqueOrThrow({ where: { id: apiKey.id } });
-    const afterRevoke = await authenticateBazaarApiRequest(request());
+    const directApiResponse = await getBazaarApiProducts(request());
+    const unaffectedContext = await authenticateBazaarApiRequest(
+      new Request("http://localhost/api/bazaar/v1/products", {
+        method: "GET",
+        headers: { authorization: `Bearer ${unaffectedToken}` },
+      }),
+    );
 
-    evidence("HARD-A3-002", {
+    evidence("HARD-A3-002-fixed", {
       apiKeyId: apiKey.id,
       warmedContextApiKeyId: warmed.apiKeyId,
       revokedAt: persisted.revokedAt?.toISOString(),
-      postRevokeContextApiKeyId: afterRevoke.apiKeyId,
-      cacheMode: process.env.REDIS_URL ? "memory-plus-agent3-redis" : "memory-only",
+      directApiStatusAfterRevoke: directApiResponse.status,
+      unaffectedApiKeyId: unaffectedContext.apiKeyId,
+      cacheMode: process.env.REDIS_URL ? "database-plus-agent3-redis-cleanup" : "database-only",
     });
 
     expect(persisted.revokedAt).toBeInstanceOf(Date);
-    expect(afterRevoke.apiKeyId).toBe(apiKey.id);
+    await expect(authenticateBazaarApiRequest(request())).rejects.toMatchObject({
+      message: "apiUnauthorized",
+      code: "UNAUTHORIZED",
+      status: 401,
+    });
+    expect(directApiResponse.status).toBe(401);
+    await expect(directApiResponse.json()).resolves.toEqual({ message: "apiUnauthorized" });
+    expect(unaffectedContext.apiKeyId).toBe(unaffectedApiKey.id);
   });
 
   it("reproduces HARD-A3-006: customer list/detail/upsert cross Store A and Store B", async () => {
