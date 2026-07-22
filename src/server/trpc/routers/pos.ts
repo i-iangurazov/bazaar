@@ -183,7 +183,7 @@ export const posRouter = router({
         }
       }),
 
-    create: managerProcedure
+    create: adminProcedure
       .input(
         z.object({
           storeId: z.string().min(1),
@@ -207,7 +207,7 @@ export const posRouter = router({
         }
       }),
 
-    update: managerProcedure
+    update: adminProcedure
       .input(
         z.object({
           registerId: z.string().min(1),
@@ -235,7 +235,7 @@ export const posRouter = router({
         }
       }),
 
-    delete: managerProcedure
+    delete: adminProcedure
       .input(z.object({ registerId: z.string().min(1) }))
       .mutation(async ({ ctx, input }) => {
         try {
@@ -286,6 +286,7 @@ export const posRouter = router({
             storeId: input?.storeId,
             page: input?.page ?? 1,
             pageSize: input?.pageSize ?? 20,
+            user: ctx.user,
           });
         } catch (error) {
           throw toTRPCError(error);
@@ -326,13 +327,14 @@ export const posRouter = router({
           return await getShiftXReport({
             organizationId: ctx.user.organizationId,
             shiftId: input.shiftId,
+            user: ctx.user,
           });
         } catch (error) {
           throw toTRPCError(error);
         }
       }),
 
-    close: cashierProcedure
+    close: managerProcedure
       .use(rateLimit({ windowMs: 10_000, max: 20, prefix: "pos-shifts-close" }))
       .input(
         z.object({
@@ -800,6 +802,7 @@ export const posRouter = router({
             lineId: input.lineId,
             codes: input.codes,
             actorId: ctx.user.id,
+            user: ctx.user,
             requestId: ctx.requestId,
           });
         } catch (error) {
@@ -903,6 +906,7 @@ export const posRouter = router({
             organizationId: ctx.user.organizationId,
             saleId: input.saleId,
             actorId: ctx.user.id,
+            user: ctx.user,
             requestId: ctx.requestId,
           });
         } catch (error) {
@@ -933,6 +937,7 @@ export const posRouter = router({
             originalSaleId: input?.originalSaleId,
             page: input?.page ?? 1,
             pageSize: input?.pageSize ?? 25,
+            user: ctx.user,
           });
         } catch (error) {
           throw toTRPCError(error);
@@ -946,6 +951,7 @@ export const posRouter = router({
           return await getSaleReturn({
             organizationId: ctx.user.organizationId,
             saleReturnId: input.saleReturnId,
+            user: ctx.user,
           });
         } catch (error) {
           throw toTRPCError(error);
@@ -1004,6 +1010,7 @@ export const posRouter = router({
             originalSaleId: input.originalSaleId,
             notes: input.notes,
             actorId: ctx.user.id,
+            user: ctx.user,
             requestId: ctx.requestId,
           });
         } catch (error) {
@@ -1027,6 +1034,7 @@ export const posRouter = router({
             customerOrderLineId: input.customerOrderLineId,
             qty: input.qty,
             actorId: ctx.user.id,
+            user: ctx.user,
             requestId: ctx.requestId,
           });
         } catch (error) {
@@ -1048,6 +1056,7 @@ export const posRouter = router({
             returnLineId: input.returnLineId,
             qty: input.qty,
             actorId: ctx.user.id,
+            user: ctx.user,
             requestId: ctx.requestId,
           });
         } catch (error) {
@@ -1063,6 +1072,7 @@ export const posRouter = router({
             organizationId: ctx.user.organizationId,
             returnLineId: input.returnLineId,
             actorId: ctx.user.id,
+            user: ctx.user,
             requestId: ctx.requestId,
           });
         } catch (error) {
@@ -1070,7 +1080,7 @@ export const posRouter = router({
         }
       }),
 
-    complete: cashierProcedure
+    complete: managerProcedure
       .use(rateLimit({ windowMs: 10_000, max: 20, prefix: "pos-returns-complete" }))
       .input(
         z.object({
@@ -1085,6 +1095,7 @@ export const posRouter = router({
             organizationId: ctx.user.organizationId,
             saleReturnId: input.saleReturnId,
             actorId: ctx.user.id,
+            user: ctx.user,
             requestId: ctx.requestId,
             idempotencyKey: input.idempotencyKey,
             payments: input.payments,
@@ -1117,6 +1128,7 @@ export const posRouter = router({
             search: input?.search,
             page: input?.page ?? 1,
             pageSize: input?.pageSize ?? 20,
+            user: ctx.user,
           });
         } catch (error) {
           throw toTRPCError(error);
@@ -1141,6 +1153,7 @@ export const posRouter = router({
             registerId: input.registerId,
             method: input.method ?? PosPaymentMethod.CASH,
             actorId: ctx.user.id,
+            user: ctx.user,
             requestId: ctx.requestId,
             idempotencyKey: input.idempotencyKey,
           });
@@ -1179,6 +1192,7 @@ export const posRouter = router({
           dateTo: input?.dateTo,
           page: input?.page ?? 1,
           pageSize: input?.pageSize ?? 25,
+          user: ctx.user,
         });
       } catch (error) {
         throw toTRPCError(error);
@@ -1206,6 +1220,7 @@ export const posRouter = router({
             amountKgs: input.amountKgs,
             reason: input.reason,
             actorId: ctx.user.id,
+            user: ctx.user,
             requestId: ctx.requestId,
             idempotencyKey: input.idempotencyKey,
           });
@@ -1235,6 +1250,7 @@ export const posRouter = router({
             status: input?.status,
             page: input?.page ?? 1,
             pageSize: input?.pageSize ?? 25,
+            user: ctx.user,
           });
         } catch (error) {
           throw toTRPCError(error);
@@ -1250,6 +1266,7 @@ export const posRouter = router({
             organizationId: ctx.user.organizationId,
             storeId: input.storeId,
             actorId: ctx.user.id,
+            user: ctx.user,
             requestId: ctx.requestId,
           });
         } catch (error) {
@@ -1266,6 +1283,7 @@ export const posRouter = router({
             organizationId: ctx.user.organizationId,
             receiptId: input.receiptId,
             actorId: ctx.user.id,
+            user: ctx.user,
             requestId: ctx.requestId,
           });
         } catch (error) {

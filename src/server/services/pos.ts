@@ -1481,11 +1481,16 @@ export const listRegisterShifts = async (input: {
   storeId?: string;
   page: number;
   pageSize: number;
+  user: StoreAccessUser;
 }) => {
+  const accessibleStoreIds = await resolveAccessibleStoreIds(prisma, input.user);
+  if (input.storeId && !accessibleStoreIds.includes(input.storeId)) {
+    throw new AppError("storeAccessDenied", "FORBIDDEN", 403);
+  }
   const where: Prisma.RegisterShiftWhereInput = {
     organizationId: input.organizationId,
     ...(input.registerId ? { registerId: input.registerId } : {}),
-    ...(input.storeId ? { storeId: input.storeId } : {}),
+    storeId: input.storeId ?? { in: accessibleStoreIds },
   };
 
   const [total, items] = await Promise.all([
@@ -1616,8 +1621,22 @@ export const listRegisterShifts = async (input: {
   };
 };
 
-export const getShiftXReport = async (input: { organizationId: string; shiftId: string }) => {
-  return prisma.$transaction(async (tx) => loadShiftReport(tx, input));
+export const getShiftXReport = async (input: {
+  organizationId: string;
+  shiftId: string;
+  user: StoreAccessUser;
+}) => {
+  return prisma.$transaction(async (tx) => {
+    const shift = await tx.registerShift.findFirst({
+      where: { id: input.shiftId, organizationId: input.organizationId },
+      select: { storeId: true },
+    });
+    if (!shift) {
+      throw new AppError("posShiftNotFound", "NOT_FOUND", 404);
+    }
+    await assertUserCanAccessStore(tx, input.user, shift.storeId);
+    return loadShiftReport(tx, input);
+  });
 };
 
 export const closeRegisterShift = async (input: {
@@ -2661,7 +2680,12 @@ export const listPosDebts = async (input: {
   search?: string;
   page: number;
   pageSize: number;
+  user: StoreAccessUser;
 }) => {
+  const accessibleStoreIds = await resolveAccessibleStoreIds(prisma, input.user);
+  if (input.storeId && !accessibleStoreIds.includes(input.storeId)) {
+    throw new AppError("storeAccessDenied", "FORBIDDEN", 403);
+  }
   const search = input.search?.trim().replace(/\s+/g, " ");
   const where: Prisma.CustomerOrderWhereInput = {
     organizationId: input.organizationId,
@@ -2669,7 +2693,7 @@ export const listPosDebts = async (input: {
     isDebt: true,
     debtSettledAt: null,
     status: CustomerOrderStatus.COMPLETED,
-    ...(input.storeId ? { storeId: input.storeId } : {}),
+    storeId: input.storeId ?? { in: accessibleStoreIds },
     ...(input.registerId ? { registerId: input.registerId } : {}),
     ...(search
       ? {
@@ -2749,8 +2773,22 @@ export const settlePosDebt = async (input: {
   actorId: string;
   requestId: string;
   idempotencyKey: string;
+  user: StoreAccessUser;
 }) => {
   const result = await prisma.$transaction(async (tx) => {
+    const target = await tx.customerOrder.findFirst({
+      where: {
+        id: input.saleId,
+        organizationId: input.organizationId,
+        isPosSale: true,
+      },
+      select: { storeId: true },
+    });
+    if (!target) {
+      throw new AppError("posSaleNotFound", "NOT_FOUND", 404);
+    }
+    await assertUserCanAccessStore(tx, input.user, target.storeId);
+
     const { result: settlement, replayed } = await withIdempotency(
       tx,
       {
@@ -3742,6 +3780,7 @@ export const upsertSaleLineMarkingCodes = async (input: {
   codes: string[];
   actorId: string;
   requestId: string;
+  user: StoreAccessUser;
 }) => {
   const normalizedCodes = normalizeMarkingCodes(input.codes);
   if (normalizedCodes.length > 200) {
@@ -3765,6 +3804,7 @@ export const upsertSaleLineMarkingCodes = async (input: {
     if (!sale) {
       throw new AppError("posSaleNotFound", "NOT_FOUND", 404);
     }
+    await assertUserCanAccessStore(tx, input.user, sale.storeId);
     if (sale.status !== CustomerOrderStatus.DRAFT) {
       throw new AppError("posSaleNotEditable", "CONFLICT", 409);
     }
@@ -3864,11 +3904,16 @@ export const listPosReceipts = async (input: {
   dateTo?: Date;
   page: number;
   pageSize: number;
+  user: StoreAccessUser;
 }) => {
+  const accessibleStoreIds = await resolveAccessibleStoreIds(prisma, input.user);
+  if (input.storeId && !accessibleStoreIds.includes(input.storeId)) {
+    throw new AppError("storeAccessDenied", "FORBIDDEN", 403);
+  }
   const where: Prisma.CustomerOrderWhereInput = {
     organizationId: input.organizationId,
     isPosSale: true,
-    ...(input.storeId ? { storeId: input.storeId } : {}),
+    storeId: input.storeId ?? { in: accessibleStoreIds },
     ...(input.shiftId ? { shiftId: input.shiftId } : {}),
     ...(input.registerId ? { registerId: input.registerId } : {}),
     ...(input.cashierId ? { createdById: input.cashierId } : {}),
@@ -4537,6 +4582,7 @@ export const createSaleReturnDraft = async (input: {
   notes?: string | null;
   actorId: string;
   requestId: string;
+  user: StoreAccessUser;
 }) => {
   return prisma.$transaction(async (tx) => {
     const shift = await tx.registerShift.findFirst({
@@ -4562,6 +4608,7 @@ export const createSaleReturnDraft = async (input: {
     if (!shift) {
       throw new AppError("posShiftNotOpen", "CONFLICT", 409);
     }
+    await assertUserCanAccessStore(tx, input.user, shift.storeId);
 
     const originalSale = await tx.customerOrder.findFirst({
       where: {
@@ -4686,6 +4733,7 @@ export const addSaleReturnLine = async (input: {
   qty: number;
   actorId: string;
   requestId: string;
+  user: StoreAccessUser;
 }) => {
   return prisma.$transaction(async (tx) => {
     const saleReturn = await tx.saleReturn.findFirst({
@@ -4694,11 +4742,13 @@ export const addSaleReturnLine = async (input: {
         id: true,
         status: true,
         originalSaleId: true,
+        storeId: true,
       },
     });
     if (!saleReturn) {
       throw new AppError("posReturnNotFound", "NOT_FOUND", 404);
     }
+    await assertUserCanAccessStore(tx, input.user, saleReturn.storeId);
     if (saleReturn.status !== PosReturnStatus.DRAFT) {
       throw new AppError("posReturnNotEditable", "CONFLICT", 409);
     }
@@ -4772,6 +4822,7 @@ export const updateSaleReturnLine = async (input: {
   qty: number;
   actorId: string;
   requestId: string;
+  user: StoreAccessUser;
 }) => {
   return prisma.$transaction(async (tx) => {
     const line = await tx.saleReturnLine.findUnique({
@@ -4786,6 +4837,7 @@ export const updateSaleReturnLine = async (input: {
     if (line.saleReturn.organizationId !== input.organizationId) {
       throw new AppError("salesOrderOrgMismatch", "FORBIDDEN", 403);
     }
+    await assertUserCanAccessStore(tx, input.user, line.saleReturn.storeId);
     if (line.saleReturn.status !== PosReturnStatus.DRAFT) {
       throw new AppError("posReturnNotEditable", "CONFLICT", 409);
     }
@@ -4834,6 +4886,7 @@ export const removeSaleReturnLine = async (input: {
   returnLineId: string;
   actorId: string;
   requestId: string;
+  user: StoreAccessUser;
 }) => {
   return prisma.$transaction(async (tx) => {
     const line = await tx.saleReturnLine.findUnique({
@@ -4848,6 +4901,7 @@ export const removeSaleReturnLine = async (input: {
     if (line.saleReturn.organizationId !== input.organizationId) {
       throw new AppError("salesOrderOrgMismatch", "FORBIDDEN", 403);
     }
+    await assertUserCanAccessStore(tx, input.user, line.saleReturn.storeId);
     if (line.saleReturn.status !== PosReturnStatus.DRAFT) {
       throw new AppError("posReturnNotEditable", "CONFLICT", 409);
     }
@@ -4877,9 +4931,12 @@ export const listSaleReturns = async (input: {
   originalSaleId?: string;
   page: number;
   pageSize: number;
+  user: StoreAccessUser;
 }) => {
+  const accessibleStoreIds = await resolveAccessibleStoreIds(prisma, input.user);
   const where: Prisma.SaleReturnWhereInput = {
     organizationId: input.organizationId,
+    storeId: { in: accessibleStoreIds },
     ...(input.shiftId ? { shiftId: input.shiftId } : {}),
     ...(input.registerId ? { registerId: input.registerId } : {}),
     ...(input.originalSaleId ? { originalSaleId: input.originalSaleId } : {}),
@@ -4928,7 +4985,11 @@ export const listSaleReturns = async (input: {
   };
 };
 
-export const getSaleReturn = async (input: { organizationId: string; saleReturnId: string }) => {
+export const getSaleReturn = async (input: {
+  organizationId: string;
+  saleReturnId: string;
+  user?: StoreAccessUser;
+}) => {
   const saleReturn = await prisma.saleReturn.findFirst({
     where: {
       id: input.saleReturnId,
@@ -4972,6 +5033,9 @@ export const getSaleReturn = async (input: { organizationId: string; saleReturnI
 
   if (!saleReturn) {
     return null;
+  }
+  if (input.user) {
+    await assertUserCanAccessStore(prisma, input.user, saleReturn.storeId);
   }
 
   return {
@@ -5400,10 +5464,20 @@ export const completeSaleReturn = async (input: {
   requestId: string;
   idempotencyKey: string;
   payments: Array<{ method: PosPaymentMethod; amountKgs: number; providerRef?: string | null }>;
+  user: StoreAccessUser;
 }) => {
   const normalizedPayments = normalizePayments(input.payments);
 
   const result = await prisma.$transaction(async (tx) => {
+    const target = await tx.saleReturn.findFirst({
+      where: { id: input.saleReturnId, organizationId: input.organizationId },
+      select: { storeId: true },
+    });
+    if (!target) {
+      throw new AppError("posReturnNotFound", "NOT_FOUND", 404);
+    }
+    await assertUserCanAccessStore(tx, input.user, target.storeId);
+
     const { result: completion } = await withIdempotency(
       tx,
       {
@@ -5661,6 +5735,7 @@ export const retryPosSaleKkm = async (input: {
   saleId: string;
   actorId: string;
   requestId: string;
+  user: StoreAccessUser;
 }) => {
   const sale = await prisma.customerOrder.findFirst({
     where: {
@@ -5695,6 +5770,7 @@ export const retryPosSaleKkm = async (input: {
   if (!sale) {
     throw new AppError("posSaleNotFound", "NOT_FOUND", 404);
   }
+  await assertUserCanAccessStore(prisma, input.user, sale.storeId);
 
   const compliance = await prisma.storeComplianceProfile.findUnique({
     where: { storeId: sale.storeId },
@@ -5861,8 +5937,18 @@ export const recordCashDrawerMovement = async (input: {
   actorId: string;
   requestId: string;
   idempotencyKey: string;
+  user: StoreAccessUser;
 }) => {
   return prisma.$transaction(async (tx) => {
+    const target = await tx.registerShift.findFirst({
+      where: { id: input.shiftId, organizationId: input.organizationId },
+      select: { storeId: true },
+    });
+    if (!target) {
+      throw new AppError("posShiftNotFound", "NOT_FOUND", 404);
+    }
+    await assertUserCanAccessStore(tx, input.user, target.storeId);
+
     const { result: movement } = await withIdempotency(
       tx,
       {

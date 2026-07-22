@@ -67,9 +67,16 @@ export const POST = async (request: Request) => {
   const tPos = createTranslator(messages, "pos");
 
   const token = await getServerAuthToken();
-  if (!token) {
+  if (!token?.sub || !token.organizationId || !token.role) {
     return new Response(tErrors("unauthorized"), { status: 401 });
   }
+  const user = {
+    id: token.sub,
+    organizationId: token.organizationId as string,
+    role: token.role as string,
+    isOrgOwner: Boolean(token.isOrgOwner),
+    isPlatformOwner: Boolean(token.isPlatformOwner),
+  };
 
   const body = await request.json().catch(() => null);
   const parsed = requestSchema.safeParse(body);
@@ -77,36 +84,12 @@ export const POST = async (request: Request) => {
     return new Response(tErrors("invalidInput"), { status: 400 });
   }
 
-  const sale = await prisma.customerOrder.findFirst({
-    where: {
-      id: parsed.data.saleId,
-      organizationId: token.organizationId as string,
-      isPosSale: true,
-    },
-    select: {
-      id: true,
-      storeId: true,
-    },
-  });
-
-  if (!sale) {
-    return new Response(tErrors("posSaleNotFound"), { status: 404 });
-  }
-
-  const settings = await prisma.storePrinterSettings.findUnique({
-    where: { storeId: sale.storeId },
-    select: { receiptPrintMode: true },
-  });
-  const mode = settings?.receiptPrintMode ?? PrinterPrintMode.PDF;
-  if (mode !== PrinterPrintMode.CONNECTOR) {
-    return new Response(tErrors("printerConnectorModeRequired"), { status: 409 });
-  }
-
   try {
     const variant = parsed.data.kind === "fiscal" ? "FISCAL" : "PRECHECK";
     const job = await buildReceiptPrintPayload({
       organizationId: token.organizationId as string,
-      saleId: sale.id,
+      saleId: parsed.data.saleId,
+      user,
       locale: toIntlLocale(locale),
       variant,
       paymentMethodLabels: {
@@ -116,6 +99,15 @@ export const POST = async (request: Request) => {
         OTHER: tPos("payments.other"),
       },
     });
+
+    const settings = await prisma.storePrinterSettings.findUnique({
+      where: { storeId: job.storeId },
+      select: { receiptPrintMode: true },
+    });
+    const mode = settings?.receiptPrintMode ?? PrinterPrintMode.PDF;
+    if (mode !== PrinterPrintMode.CONNECTOR) {
+      return new Response(tErrors("printerConnectorModeRequired"), { status: 409 });
+    }
 
     await printReceipt({
       organizationId: token.organizationId as string,

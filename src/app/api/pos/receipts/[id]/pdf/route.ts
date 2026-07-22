@@ -85,9 +85,16 @@ export const GET = async (request: Request, { params }: { params: { id: string }
   const tPos = createTranslator(messages, "pos");
 
   const token = await getServerAuthToken();
-  if (!token) {
+  if (!token?.sub || !token.organizationId || !token.role) {
     return new Response(tErrors("unauthorized"), { status: 401 });
   }
+  const user = {
+    id: token.sub,
+    organizationId: token.organizationId as string,
+    role: token.role as string,
+    isOrgOwner: Boolean(token.isOrgOwner),
+    isPlatformOwner: Boolean(token.isPlatformOwner),
+  };
 
   const variant = resolveVariant(request);
   if (!variant) {
@@ -99,6 +106,7 @@ export const GET = async (request: Request, { params }: { params: { id: string }
     const job = await buildReceiptPrintPayload({
       organizationId: token.organizationId as string,
       saleId: params.id,
+      user,
       locale: toIntlLocale(locale),
       variant,
       paymentMethodLabels: {
@@ -182,7 +190,7 @@ export const GET = async (request: Request, { params }: { params: { id: string }
     try {
       await writeAuditLog(prisma, {
         organizationId: token.organizationId as string,
-        actorId: token.sub ?? null,
+        actorId: user.id,
         action:
           receiptAction === "auto_print"
             ? "POS_RECEIPT_AUTO_PRINT"
