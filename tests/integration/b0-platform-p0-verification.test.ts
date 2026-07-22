@@ -246,7 +246,11 @@ describeDb("B0 Agent 4 P0 runtime verification", () => {
       expect(result.business.todaySalesKgs).toBe(0);
     } finally {
       vi.useRealTimers();
-      process.env.TZ = previousTimeZone;
+      if (previousTimeZone === undefined) {
+        delete process.env.TZ;
+      } else {
+        process.env.TZ = previousTimeZone;
+      }
     }
   });
 

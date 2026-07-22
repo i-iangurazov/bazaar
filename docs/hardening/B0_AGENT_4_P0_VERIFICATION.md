@@ -48,10 +48,14 @@ does not remove the verified shared-platform impact.
 Targeted verification command:
 
 ```bash
+set -a
+source .env.hardening
+set +a
 pnpm exec vitest run \
   tests/integration/b0-platform-p0-verification.test.ts \
   tests/integration/b0-platform-sse-p0-verification.test.ts \
   tests/unit/b0-platform-route-access-verification.test.ts \
+  tests/unit/test-database-safety.test.ts \
   --maxWorkers=1 --minWorkers=1
 ```
 
