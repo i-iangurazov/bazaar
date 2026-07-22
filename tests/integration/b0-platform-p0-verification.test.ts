@@ -336,7 +336,7 @@ describeDb("B0 Agent 4 P0 runtime verification", () => {
   });
 
   it("A4-009: tenant admins cannot list or mutate global/cross-org dead-letter jobs", async () => {
-    const { org, adminUser } = await seedBase({ plan: "BUSINESS" });
+    const { org, adminUser, staffUser } = await seedBase({ plan: "BUSINESS" });
     const tenantJob = await prisma.deadLetterJob.create({
       data: {
         organizationId: org.id,
@@ -375,7 +375,7 @@ describeDb("B0 Agent 4 P0 runtime verification", () => {
       },
     });
     const adminCaller = callerFor(adminUser);
-    const platformCaller = callerFor({ ...adminUser, isPlatformOwner: true });
+    const platformCaller = callerFor({ ...staffUser, isPlatformOwner: true });
     let providerCalls = 0;
     registerJobForTests("global-provider-job", async () => {
       providerCalls += 1;
@@ -403,7 +403,7 @@ describeDb("B0 Agent 4 P0 runtime verification", () => {
     await expect(adminCaller.adminJobs.retry({ jobId: otherJob.id })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
-    await expect(adminCaller.adminJobs.list({ scope: "GLOBAL" })).rejects.toMatchObject({
+    await expect(adminCaller.adminJobs.listGlobal()).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
     expect(providerCalls).toBe(0);
@@ -425,7 +425,8 @@ describeDb("B0 Agent 4 P0 runtime verification", () => {
       id: tenantJob.id,
       resolvedById: adminUser.id,
     });
-    const globalJobs = await platformCaller.adminJobs.list({ scope: "GLOBAL" });
+    const auditCountBeforeGlobalActions = await prisma.auditLog.count();
+    const globalJobs = await platformCaller.adminJobs.listGlobal();
     expect(globalJobs).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: globalJob.id }),
@@ -434,11 +435,18 @@ describeDb("B0 Agent 4 P0 runtime verification", () => {
     );
     expect(globalJobs.every((job) => !("payload" in job))).toBe(true);
     await expect(
-      platformCaller.adminJobs.retry({ jobId: globalJob.id, scope: "GLOBAL" }),
+      platformCaller.adminJobs.retryGlobal({ jobId: globalJob.id }),
     ).resolves.toMatchObject({ status: "resolved" });
     await expect(
-      platformCaller.adminJobs.resolve({ jobId: globalResolveJob.id, scope: "GLOBAL" }),
-    ).resolves.toMatchObject({ id: globalResolveJob.id, resolvedById: adminUser.id });
+      platformCaller.adminJobs.resolveGlobal({ jobId: globalResolveJob.id }),
+    ).resolves.toMatchObject({ id: globalResolveJob.id, resolvedById: staffUser.id });
     expect(providerCalls).toBe(1);
+    await expect(prisma.auditLog.count()).resolves.toBe(auditCountBeforeGlobalActions);
+    const tenantAuditJson = JSON.stringify(
+      await prisma.auditLog.findMany({ where: { organizationId: org.id } }),
+    );
+    expect(tenantAuditJson).not.toContain("provider-account-7");
+    expect(tenantAuditJson).not.toContain("provider-account-8");
+    expect(tenantAuditJson).not.toContain("Provider rejected global credential");
   });
 });

@@ -3,6 +3,47 @@ import { AppError } from "@/server/services/errors";
 import { writeAuditLog } from "@/server/services/audit";
 import { toJson } from "@/server/services/json";
 import { retryJob, type JobPayload } from "@/server/jobs";
+import { getLogger } from "@/server/logging";
+
+const writeDeadLetterActionAudit = async (input: {
+  client: Parameters<typeof writeAuditLog>[0];
+  organizationId: string;
+  jobOrganizationId?: string | null;
+  actorId: string;
+  action: "JOB_RETRY" | "JOB_RETRY_FAILED" | "JOB_RESOLVE";
+  job: { id: string; jobName: string; attempts: number };
+  updated: { attempts: number; resolvedAt: Date | null };
+  before: unknown;
+  after: unknown;
+  requestId: string;
+}) => {
+  if (input.jobOrganizationId === null) {
+    getLogger(input.requestId).info(
+      {
+        actorId: input.actorId,
+        action: input.action,
+        entity: "GlobalDeadLetterJob",
+        entityId: input.job.id,
+        jobName: input.job.jobName,
+        attemptsBefore: input.job.attempts,
+        attemptsAfter: input.updated.attempts,
+        resolved: Boolean(input.updated.resolvedAt),
+      },
+      "platform global dead-letter action",
+    );
+    return;
+  }
+  await writeAuditLog(input.client, {
+    organizationId: input.organizationId,
+    actorId: input.actorId,
+    action: input.action,
+    entity: "DeadLetterJob",
+    entityId: input.job.id,
+    before: toJson(input.before),
+    after: toJson(input.after),
+    requestId: input.requestId,
+  });
+};
 
 export const listDeadLetterJobs = async (input: { organizationId: string | null }) =>
   prisma.deadLetterJob.findMany({
@@ -56,14 +97,16 @@ export const retryDeadLetterJob = async (input: {
         },
       });
 
-      await writeAuditLog(tx, {
+      await writeDeadLetterActionAudit({
+        client: tx,
         organizationId: input.organizationId,
+        jobOrganizationId: input.jobOrganizationId,
         actorId: input.actorId,
         action: "JOB_RETRY",
-        entity: "DeadLetterJob",
-        entityId: job.id,
-        before: toJson(job),
-        after: toJson(updated),
+        job,
+        updated,
+        before: job,
+        after: updated,
         requestId: input.requestId,
       });
 
@@ -80,14 +123,16 @@ export const retryDeadLetterJob = async (input: {
       },
     });
 
-    await writeAuditLog(tx, {
+    await writeDeadLetterActionAudit({
+      client: tx,
       organizationId: input.organizationId,
+      jobOrganizationId: input.jobOrganizationId,
       actorId: input.actorId,
       action: "JOB_RETRY_FAILED",
-      entity: "DeadLetterJob",
-      entityId: job.id,
-      before: toJson(job),
-      after: toJson(updated),
+      job,
+      updated,
+      before: job,
+      after: updated,
       requestId: input.requestId,
     });
 
@@ -122,14 +167,16 @@ export const resolveDeadLetterJob = async (input: {
       },
     });
 
-    await writeAuditLog(tx, {
+    await writeDeadLetterActionAudit({
+      client: tx,
       organizationId: input.organizationId,
+      jobOrganizationId: input.jobOrganizationId,
       actorId: input.actorId,
       action: "JOB_RESOLVE",
-      entity: "DeadLetterJob",
-      entityId: job.id,
-      before: toJson(job),
-      after: toJson(updated),
+      job,
+      updated,
+      before: job,
+      after: updated,
       requestId: input.requestId,
     });
 
