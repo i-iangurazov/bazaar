@@ -154,15 +154,23 @@ const resolveUnitPrice = async (input: {
   variantId?: string | null;
 }) => {
   const { tx, organizationId, storeId, productId, variantId } = input;
-  const product = await tx.product.findUnique({
-    where: { id: productId },
-    select: { id: true, organizationId: true, isDeleted: true, basePriceKgs: true, isBundle: true },
+  const product = await tx.product.findFirst({
+    where: {
+      id: productId,
+      organizationId,
+      isDeleted: false,
+      storeProducts: {
+        some: {
+          organizationId,
+          storeId,
+          isActive: true,
+        },
+      },
+    },
+    select: { id: true, basePriceKgs: true, isBundle: true },
   });
-  if (!product || product.isDeleted) {
+  if (!product) {
     throw new AppError("productNotFound", "NOT_FOUND", 404);
-  }
-  if (product.organizationId !== organizationId) {
-    throw new AppError("productOrgMismatch", "FORBIDDEN", 403);
   }
 
   if (variantId) {

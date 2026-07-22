@@ -278,8 +278,8 @@ describeDb("B0 Agent 3 order P0 runtime verification", () => {
     expect(persistedCount).toBe(1);
   });
 
-  it("reproduces HARD-A3-009: sales mutations accept an unassigned store product", async () => {
-    const { org, store, supplier, baseUnit, adminUser } = await seedBase({
+  it("verifies HARD-A3-009: sales mutations reject inactive, unassigned, and cross-org products", async () => {
+    const { org, store, supplier, product, baseUnit, adminUser } = await seedBase({
       allowNegativeStock: true,
     });
     const otherStore = await prisma.store.create({
@@ -304,73 +304,98 @@ describeDb("B0 Agent 3 order P0 runtime verification", () => {
       },
     });
 
-    const initialLineDraft = await createCustomerOrderDraft({
-      organizationId: org.id,
-      storeId: store.id,
-      lines: [{ productId: unassignedProduct.id, qty: 1 }],
-      actorId: adminUser.id,
-      requestId: "b0-a3-009-initial-line",
+    const crossOrganization = await prisma.organization.create({ data: { name: "Sales Org B" } });
+    const crossOrganizationUnit = await prisma.unit.create({
+      data: {
+        organizationId: crossOrganization.id,
+        code: "each",
+        labelRu: "each",
+        labelKg: "each",
+      },
     });
+    const crossOrganizationProduct = await prisma.product.create({
+      data: {
+        organizationId: crossOrganization.id,
+        baseUnitId: crossOrganizationUnit.id,
+        unit: crossOrganizationUnit.code,
+        sku: "CROSS-ORG",
+        name: "Cross organization product",
+      },
+    });
+
+    await expect(
+      createCustomerOrderDraft({
+        organizationId: org.id,
+        storeId: store.id,
+        lines: [{ productId: unassignedProduct.id, qty: 1 }],
+        actorId: adminUser.id,
+        requestId: "b1-a3-009-initial-line",
+      }),
+    ).rejects.toMatchObject({ message: "productNotFound", status: 404 });
     const addLineDraft = await createCustomerOrderDraft({
       organizationId: org.id,
       storeId: store.id,
       actorId: adminUser.id,
-      requestId: "b0-a3-009-empty-draft",
+      requestId: "b1-a3-009-empty-draft",
     });
-    const addedLine = await addCustomerOrderLine({
-      organizationId: org.id,
-      customerOrderId: addLineDraft.id,
-      productId: unassignedProduct.id,
-      qty: 1,
-      actorId: adminUser.id,
-      requestId: "b0-a3-009-add-line",
-    });
-
-    await confirmCustomerOrder({
-      customerOrderId: initialLineDraft.id,
-      organizationId: org.id,
-      actorId: adminUser.id,
-      requestId: "b0-a3-009-confirm",
-    });
-    await markCustomerOrderReady({
-      customerOrderId: initialLineDraft.id,
-      organizationId: org.id,
-      actorId: adminUser.id,
-      requestId: "b0-a3-009-ready",
-    });
-    await completeCustomerOrder({
-      customerOrderId: initialLineDraft.id,
-      organizationId: org.id,
-      actorId: adminUser.id,
-      requestId: "b0-a3-009-complete",
-      idempotencyKey: "b0-a3-009-complete-key",
-    });
-
-    const snapshot = await snapshotFor(store.id, unassignedProduct.id);
-    const saleMovements = await prisma.stockMovement.findMany({
-      where: {
-        storeId: store.id,
+    await expect(
+      addCustomerOrderLine({
+        organizationId: org.id,
+        customerOrderId: addLineDraft.id,
         productId: unassignedProduct.id,
-        type: StockMovementType.SALE,
-        referenceId: initialLineDraft.id,
-      },
+        qty: 1,
+        actorId: adminUser.id,
+        requestId: "b1-a3-009-add-line",
+      }),
+    ).rejects.toMatchObject({ message: "productNotFound", status: 404 });
+    await expect(
+      addCustomerOrderLine({
+        organizationId: org.id,
+        customerOrderId: addLineDraft.id,
+        productId: crossOrganizationProduct.id,
+        qty: 1,
+        actorId: adminUser.id,
+        requestId: "b1-a3-009-cross-org-product",
+      }),
+    ).rejects.toMatchObject({ message: "productNotFound", status: 404 });
+
+    const positiveDraft = await createCustomerOrderDraft({
+      organizationId: org.id,
+      storeId: store.id,
+      lines: [{ productId: product.id, qty: 1 }],
+      actorId: adminUser.id,
+      requestId: "b1-a3-009-positive",
+    });
+    const persistedRejectedLines = await prisma.customerOrderLine.count({
+      where: { customerOrderId: addLineDraft.id },
+    });
+    const rejectedProductSnapshots = await prisma.inventorySnapshot.count({
+      where: { storeId: store.id, productId: unassignedProduct.id },
+    });
+    const rejectedProductMovements = await prisma.stockMovement.count({
+      where: { storeId: store.id, productId: unassignedProduct.id },
     });
 
-    evidence("HARD-A3-009", {
+    evidence("HARD-A3-009-fixed", {
       storeId: store.id,
       assignedStoreId: otherStore.id,
       productId: unassignedProduct.id,
-      initialLineDraftId: initialLineDraft.id,
       addLineDraftId: addLineDraft.id,
-      addedLineId: addedLine.id,
-      storeSnapshotOnHand: snapshot?.onHand,
-      saleMovementDeltas: saleMovements.map((movement) => movement.qtyDelta),
+      positiveDraftId: positiveDraft.id,
+      persistedRejectedLines,
+      rejectedProductSnapshots,
+      rejectedProductMovements,
     });
 
-    expect(initialLineDraft.id).toBeTruthy();
-    expect(addedLine.productId).toBe(unassignedProduct.id);
-    expect(snapshot?.onHand).toBe(-1);
-    expect(saleMovements.map((movement) => movement.qtyDelta)).toEqual([-1]);
+    expect(positiveDraft.id).toBeTruthy();
+    expect(persistedRejectedLines).toBe(0);
+    expect(rejectedProductSnapshots).toBe(0);
+    expect(rejectedProductMovements).toBe(0);
+    await expect(
+      prisma.customerOrder.count({
+        where: { organizationId: org.id, storeId: store.id },
+      }),
+    ).resolves.toBe(2);
   });
 
   it("provides HARD-A3-011 DB evidence: the return-page payload completes as an ordinary sale", async () => {
