@@ -2,7 +2,7 @@
 
 Baseline: `4d7c9b33218b584334ca62f7a816f8997f144a10`
 
-Status: Phase B0 infrastructure complete. Domain implementation locks remain inactive until the approved B0 commits are integrated and the first P0 batch is explicitly claimed.
+Status: Phase B1 P0-A active from integration commit `343079b4e6cd6140f84a8448610259b2d7573704`. The claims below are exclusive until Agent 4 review and selective integration complete.
 
 ## Rules
 
@@ -56,6 +56,9 @@ Add one row before starting a shared-file implementation batch.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | RELEASED | `B0-DB-SAFETY` / `HARD-A4-010` | Agent 4 | `f308b2b793c2b43d7e46814c3c2007a0927fede7` | `tests/global-setup.ts`, `tests/setup.ts`, `tests/helpers/db.ts`, `tests/helpers/testDatabaseSafety.ts`, `tests/unit/test-database-safety.test.ts`, `.env.example`, `.github/workflows/ci.yml` | 20 focused guard tests, isolated migration/reset proof, CI no-skip policy, full 884-test baseline | Agent 1 — APPROVED | `584c37d`, `d6079b7` |
 | RELEASED | `B0-PLATFORM-P0-EVIDENCE` / `HARD-A4-001..011` | Agent 4 | `f308b2b793c2b43d7e46814c3c2007a0927fede7` | `tests/integration/b0-platform-p0-verification.test.ts`, `tests/integration/b0-platform-sse-p0-verification.test.ts`, `tests/unit/b0-platform-route-access-verification.test.ts`, `docs/hardening/B0_AGENT_4_P0_VERIFICATION.md` | 31 focused evidence/guard tests, Agent 4 isolated DB/Redis, full baseline | Agent 1 — APPROVED after timezone-state and command corrections | `4f1ae32`, `aaad412` |
+| CLAIMED | `B1-A4-RBAC` / `HARD-A4-001/002/003/004/011` | Agent 4 | `343079b4e6cd6140f84a8448610259b2d7573704` | `src/lib/roleAccess.ts`, `middleware.ts`, dashboard/analytics/billing/exports/search routers, global-search service, export download service/route, focused tests | positive and denied role matrix, direct API/download, cross-org/store, no artifact exposure | Agent 1 or Agent 3 | pending |
+| CLAIMED | `B1-A4-STORE-EVENTS` / `HARD-A4-005/006` | Agent 4 | `343079b4e6cd6140f84a8448610259b2d7573704` | `src/server/services/storeAccess.ts`, `src/app/api/sse/route.ts`, period-close router/service boundary, focused tests | assigned/unassigned/cross-org SSE and period-close API/DB side-effect matrix | Agent 1 plus Agent 2 | pending |
+| CLAIMED | `B1-A4-JOB-CAPABILITY` / `HARD-A4-009` | Agent 4 | `343079b4e6cd6140f84a8448610259b2d7573704` | `src/server/trpc/routers/adminJobs.ts`, `src/server/services/deadLetterJobs.ts`, focused tests | tenant/global/cross-org list/get/retry/resolve with zero job/provider/audit side effects on denial | Agent 3 | pending |
 | Example only | `HARD-A4-001` | Agent 4 | baseline SHA | `src/lib/roleAccess.ts` | unit + two-role integration + browser denial | affected domain owners | pending |
 
 Allowed states: `PROPOSED`, `CLAIMED`, `IN_REVIEW`, `INTEGRATED`, `RELEASED`.
