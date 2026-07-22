@@ -1064,7 +1064,7 @@ describeDb("Agent 1 P0 runtime verification", () => {
     expect(activeRegisters.some((register) => register.id === runtime.register.id)).toBe(false);
   });
 
-  it("HARD-A1-008 bypasses the store negative-stock policy and persists permissive state", async () => {
+  it("HARD-A1-008 rejects insufficient stock without persisting checkout side effects", async () => {
     const { org, store, product, cashierUser } = await seedBase({
       plan: "BUSINESS",
       allowNegativeStock: false,
@@ -1083,36 +1083,52 @@ describeDb("Agent 1 P0 runtime verification", () => {
       where: { storeId: store.id, productId: product.id },
     });
 
-    await caller.pos.sales.complete({
-      saleId: sale.id,
-      idempotencyKey: "hard-a1-008-complete",
-      payments: [{ method: PosPaymentMethod.CASH, amountKgs: 200 }],
-    });
-    const [persistedStore, snapshot, completed, movement, payments] = await Promise.all([
-      prisma.store.findUniqueOrThrow({ where: { id: store.id } }),
-      prisma.inventorySnapshot.findUniqueOrThrow({
-        where: {
-          storeId_productId_variantKey: {
-            storeId: store.id,
-            productId: product.id,
-            variantKey: "BASE",
+    await expect(
+      caller.pos.sales.complete({
+        saleId: sale.id,
+        idempotencyKey: "hard-a1-008-complete",
+        payments: [{ method: PosPaymentMethod.CASH, amountKgs: 200 }],
+      }),
+    ).rejects.toMatchObject({ code: "CONFLICT", message: "insufficientStock" });
+    const [persistedStore, snapshot, persistedSale, movements, payments, completionAudits, keys] =
+      await Promise.all([
+        prisma.store.findUniqueOrThrow({ where: { id: store.id } }),
+        prisma.inventorySnapshot.findUnique({
+          where: {
+            storeId_productId_variantKey: {
+              storeId: store.id,
+              productId: product.id,
+              variantKey: "BASE",
+            },
           },
-        },
-      }),
-      prisma.customerOrder.findUniqueOrThrow({ where: { id: sale.id } }),
-      prisma.stockMovement.findFirstOrThrow({
-        where: { type: StockMovementType.SALE, referenceId: sale.id },
-      }),
-      prisma.salePayment.findMany({ where: { customerOrderId: sale.id } }),
-    ]);
+        }),
+        prisma.customerOrder.findUniqueOrThrow({ where: { id: sale.id } }),
+        prisma.stockMovement.findMany({
+          where: { type: StockMovementType.SALE, referenceId: sale.id },
+        }),
+        prisma.salePayment.findMany({ where: { customerOrderId: sale.id } }),
+        prisma.auditLog.count({
+          where: { action: "POS_SALE_COMPLETE", entity: "CustomerOrder", entityId: sale.id },
+        }),
+        prisma.idempotencyKey.count({
+          where: {
+            key: "hard-a1-008-complete",
+            route: "pos.sales.complete",
+            userId: cashierUser.id,
+          },
+        }),
+      ]);
 
     expect(snapshotsBefore).toBe(0);
     expect(persistedStore.allowNegativeStock).toBe(false);
-    expect(snapshot.onHand).toBe(-2);
-    expect(snapshot.allowNegativeStock).toBe(true);
-    expect(completed.status).toBe("COMPLETED");
-    expect(movement.qtyDelta).toBe(-2);
-    expect(payments).toHaveLength(1);
+    expect(snapshot).toBeNull();
+    expect(persistedSale.status).toBe("DRAFT");
+    expect(persistedSale.completedAt).toBeNull();
+    expect(persistedSale.completedEventId).toBeNull();
+    expect(movements).toHaveLength(0);
+    expect(payments).toHaveLength(0);
+    expect(completionAudits).toBe(0);
+    expect(keys).toBe(0);
   });
 
   it("HARD-A1-009 invokes the mocked fiscal provider twice for one concurrent retry", async () => {
