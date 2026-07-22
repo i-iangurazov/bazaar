@@ -1,10 +1,28 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   BazaarCatalogStatus,
   CustomerOrderSource,
   CustomerOrderStatus,
   Role,
 } from "@prisma/client";
+
+const sideEffects = vi.hoisted(() => ({
+  publish: vi.fn(),
+  sendOrderConfirmationEmail: vi.fn(async () => ({
+    status: "sent" as const,
+    recipientEmail: "catalog.integration@example.com",
+  })),
+}));
+
+vi.mock("@/server/events/eventBus", () => ({
+  eventBus: {
+    publish: sideEffects.publish,
+  },
+}));
+
+vi.mock("@/server/services/orderEmails", () => ({
+  sendOrderConfirmationEmail: sideEffects.sendOrderConfirmationEmail,
+}));
 
 import { prisma } from "@/server/db/prisma";
 import {
@@ -22,6 +40,8 @@ const describeDb = shouldRunDbTests ? describe : describe.skip;
 describeDb("bazaar catalog integration", () => {
   beforeEach(async () => {
     await resetDatabase();
+    sideEffects.publish.mockClear();
+    sideEffects.sendOrderConfirmationEmail.mockClear();
   });
 
   it("publishes store catalog and serves public payload by slug", async () => {
