@@ -15,7 +15,10 @@ import { getLogger } from "@/server/logging";
 import { toJson } from "@/server/services/json";
 import { classifyDatabaseOperationFailure } from "@/server/services/databaseOperationFailure";
 import { runOperationRequest } from "@/server/services/operationRequests";
-import { updateProductCost } from "@/server/services/productCost";
+import {
+  replaceProductCostContribution,
+  updateProductCost,
+} from "@/server/services/productCost";
 import { applyStockLotAdjustment } from "@/server/services/stockLots";
 import { resolveBaseQuantity } from "@/server/services/uom";
 import {
@@ -502,6 +505,13 @@ export const receiveStock = async (input: ReceiveStockInput): Promise<StockAdjus
           packId: input.packId,
           mode: "receiving",
         });
+        if (
+          input.unitCost !== null &&
+          input.unitCost !== undefined &&
+          (!Number.isFinite(input.unitCost) || input.unitCost < 0)
+        ) {
+          throw new AppError("unitCostInvalid", "BAD_REQUEST", 400);
+        }
 
         const before = await tx.inventorySnapshot.findUnique({
           where: {
@@ -519,6 +529,11 @@ export const receiveStock = async (input: ReceiveStockInput): Promise<StockAdjus
           variantId: input.variantId,
           qtyDelta: qtyReceived,
           type: StockMovementType.RECEIVE,
+          unitCostKgs: input.unitCost ?? undefined,
+          lineTotalKgs:
+            input.unitCost === null || input.unitCost === undefined
+              ? undefined
+              : qtyReceived * input.unitCost,
           note: input.note ?? undefined,
           actorId: input.actorId,
           organizationId: input.organizationId,
@@ -1874,7 +1889,9 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
           }
           const oldQuantity = beforeLine?.quantity ?? 0;
           const newQuantity = desiredLine?.quantity ?? 0;
-          const oldLineTotal = beforeLine?.lineTotalKgs ?? 0;
+          const oldLineTotal =
+            beforeLine?.lineTotalKgs ??
+            roundStockMoney(oldQuantity * (beforeLine?.unitCostKgs ?? 0));
           const newLineTotal = desiredLine?.lineTotalKgs ?? 0;
           const lineTotalDelta = roundStockMoney(newLineTotal - oldLineTotal);
           const unitCostKgs = desiredLine?.unitCostKgs ?? beforeLine?.unitCostKgs ?? null;
@@ -1898,15 +1915,15 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
                 organizationId: input.organizationId,
                 allowNegativeStock: true,
               });
-              if (desiredLine && qtyDelta > 0 && unitCostKgs !== null) {
-                await updateProductCost(tx, {
-                  organizationId: input.organizationId,
-                  productId: movementLine.productId,
-                  variantId: movementLine.variantId,
-                  qtyReceived: qtyDelta,
-                  unitCost: unitCostKgs,
-                });
-              }
+              await replaceProductCostContribution(tx, {
+                organizationId: input.organizationId,
+                productId: movementLine.productId,
+                variantId: movementLine.variantId,
+                previousQuantity: oldQuantity,
+                previousLineTotalKgs: oldLineTotal,
+                nextQuantity: newQuantity,
+                nextLineTotalKgs: newLineTotal,
+              });
               changedItems.set(`${sourceStoreId}:${key}`, {
                 storeId: sourceStoreId,
                 productId: movementLine.productId,

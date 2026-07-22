@@ -1,16 +1,17 @@
 import { randomUUID } from "node:crypto";
 import {
   OperationRequestPrincipalType,
+  Prisma,
   PurchaseOrderStatus,
   StockMovementType,
 } from "@prisma/client";
-import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
 import { writeAuditLog } from "@/server/services/audit";
 import { toJson } from "@/server/services/json";
 import { applyStockMovement } from "@/server/services/inventory";
+import { replaceProductCostContribution } from "@/server/services/productCost";
 import {
   importProductsTx,
   resolveImportRowsPhotoUrlsForOrganization,
@@ -385,6 +386,12 @@ export const rollbackImportBatch = async (input: {
 }) => {
   await assertFeatureEnabled({ organizationId: input.organizationId, feature: "imports" });
   return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`
+      SELECT "id"
+      FROM "ImportBatch"
+      WHERE "id" = ${input.batchId}
+      FOR UPDATE
+    `;
     const batch = await tx.importBatch.findUnique({
       where: { id: input.batchId },
       include: { entities: true },
@@ -428,13 +435,47 @@ export const rollbackImportBatch = async (input: {
             },
           });
 
+          const affectedCosts = new Map<
+            string,
+            { productId: string; variantId: string | null }
+          >();
+
           for (const movement of movements) {
+            const poLine = po.lines.find(
+              (line) =>
+                line.productId === movement.productId &&
+                (line.variantId ?? null) === (movement.variantId ?? null),
+            );
+            const unitCostKgs =
+              movement.unitCostKgs === null
+                ? poLine?.unitCost === null || poLine?.unitCost === undefined
+                  ? null
+                  : Number(poLine.unitCost)
+                : Number(movement.unitCostKgs);
+            if (unitCostKgs !== null && (!Number.isFinite(unitCostKgs) || unitCostKgs < 0)) {
+              throw new AppError("productCostContributionMismatch", "CONFLICT", 409);
+            }
+            const receivedLineTotalKgs =
+              movement.lineTotalKgs === null
+                ? unitCostKgs === null
+                  ? null
+                  : movement.qtyDelta * unitCostKgs
+                : Number(movement.lineTotalKgs);
+            if (
+              receivedLineTotalKgs !== null &&
+              (!Number.isFinite(receivedLineTotalKgs) || receivedLineTotalKgs < 0)
+            ) {
+              throw new AppError("productCostContributionMismatch", "CONFLICT", 409);
+            }
             const adjustment = await applyStockMovement(tx, {
               storeId: movement.storeId,
               productId: movement.productId,
               variantId: movement.variantId ?? undefined,
               qtyDelta: -movement.qtyDelta,
               type: StockMovementType.ADJUSTMENT,
+              unitCostKgs: unitCostKgs ?? undefined,
+              lineTotalKgs:
+                receivedLineTotalKgs === null ? undefined : -receivedLineTotalKgs,
               referenceType: "IMPORT_ROLLBACK",
               referenceId: po.id,
               note: "importRollback",
@@ -461,6 +502,50 @@ export const rollbackImportBatch = async (input: {
             }
 
             adjustments += 1;
+            if (unitCostKgs !== null && receivedLineTotalKgs !== null) {
+              affectedCosts.set(`${movement.productId}:${movement.variantId ?? "BASE"}`, {
+                productId: movement.productId,
+                variantId: movement.variantId ?? null,
+              });
+            }
+          }
+
+          for (const affectedCost of affectedCosts.values()) {
+            const affectedMovements = movements.filter(
+              (movement) =>
+                movement.productId === affectedCost.productId &&
+                (movement.variantId ?? null) === affectedCost.variantId,
+            );
+            const previousQuantity = affectedMovements.reduce(
+              (sum, movement) => sum + movement.qtyDelta,
+              0,
+            );
+            const previousLineTotalKgs = affectedMovements.reduce((sum, movement) => {
+              if (movement.lineTotalKgs !== null) {
+                return sum.plus(movement.lineTotalKgs);
+              }
+              const poLine = po.lines.find(
+                (line) =>
+                  line.productId === movement.productId &&
+                  (line.variantId ?? null) === (movement.variantId ?? null),
+              );
+              const movementUnitCost =
+                movement.unitCostKgs === null
+                  ? poLine?.unitCost
+                  : movement.unitCostKgs;
+              return movementUnitCost === null || movementUnitCost === undefined
+                ? new Prisma.Decimal(Number.NaN)
+                : sum.plus(movementUnitCost.mul(movement.qtyDelta));
+            }, new Prisma.Decimal(0));
+            await replaceProductCostContribution(tx, {
+              organizationId: input.organizationId,
+              productId: affectedCost.productId,
+              variantId: affectedCost.variantId,
+              previousQuantity,
+              previousLineTotalKgs,
+              nextQuantity: 0,
+              nextLineTotalKgs: 0,
+            });
           }
         }
 
