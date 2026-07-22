@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import {
   authenticateBazaarApiRequest,
-  createBazaarApiOrder,
+  createBazaarApiOrderOperation,
   listBazaarApiOrders,
 } from "@/server/services/bazaarApi";
 
@@ -48,6 +48,7 @@ const toStatus = (message: string) => {
   if (
     message === "invalidInput" ||
     message === "invalidExternalOrderId" ||
+    message === "idempotencyKeyRequired" ||
     message === "invalidQuantity" ||
     message === "salesOrderEmpty"
   ) {
@@ -60,7 +61,14 @@ const toStatus = (message: string) => {
   ) {
     return 404;
   }
-  if (message === "externalOrderIdConflict") {
+  if (
+    message === "externalOrderIdConflict" ||
+    message === "operationRequestIdentityMismatch" ||
+    message === "operationRequestPayloadMismatch" ||
+    message === "operationRequestUnavailable" ||
+    message === "operationRequestReconciliationRequired" ||
+    message === "requestInProgress"
+  ) {
     return 409;
   }
   return 500;
@@ -137,9 +145,18 @@ export const POST = async (request: Request) => {
 
   try {
     const auth = await authenticateBazaarApiRequest(request);
-    const order = await createBazaarApiOrder({
+    const suppliedIdempotencyKey = request.headers.get("idempotency-key")?.trim();
+    const idempotencyKey =
+      suppliedIdempotencyKey ||
+      (parsed.data.externalId ? `external:${parsed.data.externalId}` : null);
+    if (!idempotencyKey) {
+      return Response.json({ message: "idempotencyKeyRequired" }, { status: 400 });
+    }
+    const operation = await createBazaarApiOrderOperation({
       organizationId: auth.organizationId,
       storeId: auth.storeId,
+      apiKeyId: auth.apiKeyId,
+      idempotencyKey,
       externalId: parsed.data.externalId,
       customerName: parsed.data.customerName,
       customerEmail: parsed.data.customerEmail,
@@ -148,7 +165,13 @@ export const POST = async (request: Request) => {
       comment: parsed.data.comment,
       lines: parsed.data.lines,
     });
-    return Response.json({ order }, { status: 201 });
+    return Response.json(operation.response, {
+      status: operation.responseStatus,
+      headers: {
+        "idempotency-replayed": String(operation.replayed),
+        "operation-request-id": operation.operationRequestId,
+      },
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "genericMessage";
     return Response.json({ message }, { status: toStatus(message) });
