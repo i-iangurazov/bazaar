@@ -1,3 +1,5 @@
+import { assertExternalProviderCallAllowed } from "@/server/config/runtime";
+
 export const BAKAI_STORE_MAX_PRODUCTS_PER_REQUEST = 1000;
 export const BAKAI_STORE_REQUEST_TIMEOUT_MS = 90_000;
 export const BAKAI_STORE_DEFAULT_CITY_ID = "1";
@@ -81,6 +83,7 @@ export const getBakaiStoreCityId = () => resolveCityId();
 export const sendBakaiStoreProducts = async (
   input: BakaiStoreApiClientInput,
 ): Promise<BakaiStoreApiResponse> => {
+  assertExternalProviderCallAllowed("bakai-store");
   const fetchImpl = input.fetchImpl ?? fetch;
   let lastError: unknown = null;
 
@@ -126,6 +129,7 @@ export const probeBakaiStoreConnection = async (input: {
   signal?: AbortSignal;
   fetchImpl?: typeof fetch;
 }) => {
+  assertExternalProviderCallAllowed("bakai-store");
   const fetchImpl = input.fetchImpl ?? fetch;
   const response = await fetchImpl(resolveImportEndpoint(), {
     method: "OPTIONS",

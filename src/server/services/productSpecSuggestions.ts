@@ -3,6 +3,7 @@ import { extname, resolve, sep } from "node:path";
 
 import sharp from "sharp";
 
+import { assertExternalProviderCallAllowed } from "@/server/config/runtime";
 import { AppError } from "@/server/services/errors";
 import {
   downloadRemoteImage,
@@ -297,6 +298,7 @@ const callOpenAiResponses = async (input: {
     let response: Response;
     let responseBody: OpenAiResponseBody | null = null;
     try {
+      assertExternalProviderCallAllowed("openai");
       response = await fetch(OPENAI_RESPONSES_URL, {
         method: "POST",
         headers: {

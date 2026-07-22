@@ -8,6 +8,7 @@ import {
 } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
+import { assertExternalProviderCallAllowed } from "@/server/config/runtime";
 import { AppError } from "@/server/services/errors";
 import { writeAuditLog } from "@/server/services/audit";
 import { toJson } from "@/server/services/json";
@@ -754,6 +755,7 @@ const callCategoryArrangementAi = async (
       requestBody.reasoning = { effort: "minimal" };
     }
 
+    assertExternalProviderCallAllowed("openai");
     response = await fetch(CATEGORY_ARRANGEMENT_OPENAI_URL, {
       method: "POST",
       signal: controller.signal,

@@ -1,3 +1,5 @@
+import { assertExternalProviderCallAllowed } from "@/server/config/runtime";
+
 export const O_MARKET_DEFAULT_BASE_URL = "https://api-market.o.kg";
 export const O_MARKET_MAX_PRODUCTS_PER_REQUEST = 1000;
 export const O_MARKET_REQUEST_TIMEOUT_MS = 90_000;
@@ -119,6 +121,7 @@ const requestJson = async <TBody, TPayload = unknown>(input: {
   signal?: AbortSignal;
   fetchImpl?: typeof fetch;
 }): Promise<OMarketApiResponse<TBody | string | null>> => {
+  assertExternalProviderCallAllowed("o-market");
   const fetchImpl = input.fetchImpl ?? fetch;
   let lastError: unknown = null;
 

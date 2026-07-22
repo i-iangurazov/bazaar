@@ -1,5 +1,5 @@
 import { getLogger } from "@/server/logging";
-import { isProductionRuntime } from "@/server/config/runtime";
+import { assertExternalProviderCallAllowed, isProductionRuntime } from "@/server/config/runtime";
 import { defaultLocale, normalizeLocale, type Locale } from "@/lib/locales";
 
 export type EmailTag = {
@@ -124,6 +124,7 @@ export const assertEmailConfigured = () => {
 };
 
 const resendFetch = async <T>(path: string, init: RequestInit): Promise<T> => {
+  assertExternalProviderCallAllowed("resend");
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     throw new Error("emailProviderNotConfigured");
@@ -205,6 +206,7 @@ export const retrieveResendEmail = async (emailId: string) =>
   });
 
 const sendWithResend = async (payload: EmailPayload): Promise<EmailSendResult> => {
+  assertExternalProviderCallAllowed("resend");
   const from = payload.from ?? process.env.EMAIL_FROM;
   if (!process.env.RESEND_API_KEY || !from) {
     throw new Error("emailProviderNotConfigured");
@@ -253,6 +255,7 @@ const sendWithResendBatch = async (
   payloads: EmailPayload[],
   idempotencyKey?: string,
 ): Promise<EmailSendResult[]> => {
+  assertExternalProviderCallAllowed("resend");
   if (!payloads.length) {
     return [];
   }

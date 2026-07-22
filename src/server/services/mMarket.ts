@@ -10,6 +10,7 @@ import {
 } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
+import { assertExternalProviderCallAllowed } from "@/server/config/runtime";
 import { AppError } from "@/server/services/errors";
 import { getRedisPublisher } from "@/server/redis";
 import { registerJob, runJob, type JobPayload } from "@/server/jobs";
@@ -880,6 +881,7 @@ const loadRemoteSpecCatalog = async (input: {
   }
 
   const allowedByCategory = new Map<string, Set<string>>();
+  assertExternalProviderCallAllowed("m-market");
   for (const category of input.categories) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), MMARKET_SPEC_REQUEST_TIMEOUT_MS);
@@ -1572,6 +1574,7 @@ const sendMMarketPayload = async (input: {
   token: string;
   payload: MMarketPayload;
 }): Promise<RemoteApiResult> => {
+  assertExternalProviderCallAllowed("m-market");
   const endpoint = MMARKET_IMPORT_ENDPOINTS[input.environment];
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), MMARKET_REQUEST_TIMEOUT_MS);

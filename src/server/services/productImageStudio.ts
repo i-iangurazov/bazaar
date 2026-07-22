@@ -11,6 +11,7 @@ import {
 } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
+import { assertExternalProviderCallAllowed } from "@/server/config/runtime";
 import { registerJob, runJob, type JobPayload } from "@/server/jobs";
 import { writeAuditLog } from "@/server/services/audit";
 import { AppError } from "@/server/services/errors";
@@ -547,6 +548,7 @@ const callOpenAiImageEnhancement = async (input: {
     let responseBody: OpenAiImageResponseBody | null = null;
 
     try {
+      assertExternalProviderCallAllowed("openai");
       response = await fetch(OPENAI_RESPONSES_URL, {
         method: "POST",
         headers: {

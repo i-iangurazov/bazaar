@@ -11,7 +11,7 @@ const rawEnvSchema = z
     HARDENING_PREVIEW_GUARD: z.string().optional(),
     HARDENING_PREVIEW_EXPECTED_DATABASE_NAME: z.string().optional(),
     HARDENING_PREVIEW_EXPECTED_DATABASE_HOST: z.string().optional(),
-    HARDENING_EXTERNAL_PROVIDER_MODE: z.enum(["disabled", "mock"]).optional(),
+    HARDENING_EXTERNAL_PROVIDER_MODE: z.string().optional(),
     RUN_DB_TESTS: z.string().optional(),
     ALLOW_TEST_DB_RESET: z.string().optional(),
     REDIS_URL: z.string().optional(),
@@ -24,6 +24,13 @@ const rawEnvSchema = z
     RESEND_API_KEY: z.string().optional(),
     OPENAI_API_KEY: z.string().optional(),
     IMAGE_STORAGE_PROVIDER: z.string().optional(),
+    EXPORT_STORAGE_PROVIDER: z.string().optional(),
+    R2_ACCOUNT_ID: z.string().optional(),
+    R2_ACCESS_KEY_ID: z.string().optional(),
+    R2_SECRET_ACCESS_KEY: z.string().optional(),
+    R2_BUCKET_NAME: z.string().optional(),
+    R2_PUBLIC_BASE_URL: z.string().optional(),
+    R2_ENDPOINT: z.string().optional(),
     O_MARKET_MOCK_API: z.string().optional(),
     ALLOW_LOG_EMAIL_IN_PRODUCTION: z.string().optional(),
     SIGNUP_MODE: z.enum(["invite_only", "open"]).optional(),
@@ -78,7 +85,7 @@ export type RuntimeEnv = {
   hardeningPreviewGuard: boolean;
   hardeningPreviewExpectedDatabaseName: string;
   hardeningPreviewExpectedDatabaseHost: string;
-  hardeningExternalProviderMode: "disabled" | "mock" | "";
+  hardeningExternalProviderMode: string;
   runDbTests: boolean;
   allowTestDbReset: boolean;
   redisUrl: string;
@@ -91,6 +98,8 @@ export type RuntimeEnv = {
   resendApiKey: string;
   openAiApiKey: string;
   imageStorageProvider: string;
+  exportStorageProvider: string;
+  r2Configured: boolean;
   oMarketMockApi: boolean;
   allowLogEmailInProduction: boolean;
   signupMode: "invite_only" | "open";
@@ -116,7 +125,8 @@ const parseRuntimeEnv = (source: NodeJS.ProcessEnv): RuntimeEnv => {
       parsed.HARDENING_PREVIEW_EXPECTED_DATABASE_NAME?.trim() ?? "",
     hardeningPreviewExpectedDatabaseHost:
       parsed.HARDENING_PREVIEW_EXPECTED_DATABASE_HOST?.trim().toLowerCase() ?? "",
-    hardeningExternalProviderMode: parsed.HARDENING_EXTERNAL_PROVIDER_MODE ?? "",
+    hardeningExternalProviderMode:
+      parsed.HARDENING_EXTERNAL_PROVIDER_MODE?.trim().toLowerCase() ?? "",
     runDbTests: parseBool(parsed.RUN_DB_TESTS),
     allowTestDbReset: parseBool(parsed.ALLOW_TEST_DB_RESET),
     redisUrl: parsed.REDIS_URL?.trim() ?? "",
@@ -129,6 +139,15 @@ const parseRuntimeEnv = (source: NodeJS.ProcessEnv): RuntimeEnv => {
     resendApiKey: parsed.RESEND_API_KEY?.trim() ?? "",
     openAiApiKey: parsed.OPENAI_API_KEY?.trim() ?? "",
     imageStorageProvider: parsed.IMAGE_STORAGE_PROVIDER?.trim().toLowerCase() ?? "",
+    exportStorageProvider: parsed.EXPORT_STORAGE_PROVIDER?.trim().toLowerCase() ?? "",
+    r2Configured: Boolean(
+      parsed.R2_ACCOUNT_ID?.trim() ||
+      parsed.R2_ACCESS_KEY_ID?.trim() ||
+      parsed.R2_SECRET_ACCESS_KEY?.trim() ||
+      parsed.R2_BUCKET_NAME?.trim() ||
+      parsed.R2_PUBLIC_BASE_URL?.trim() ||
+      parsed.R2_ENDPOINT?.trim(),
+    ),
     oMarketMockApi: parseBool(parsed.O_MARKET_MOCK_API),
     allowLogEmailInProduction: parseBool(parsed.ALLOW_LOG_EMAIL_IN_PRODUCTION),
     signupMode: parsed.SIGNUP_MODE ?? "invite_only",
@@ -216,8 +235,21 @@ const assertHardeningPreviewEnv = (env: RuntimeEnv) => {
   if (env.imageStorageProvider && env.imageStorageProvider !== "local") {
     throw new Error("Hardening Preview storage must use the isolated local provider.");
   }
+  if (env.exportStorageProvider && env.exportStorageProvider !== "local") {
+    throw new Error("Hardening Preview exports must use the isolated local provider.");
+  }
+  if (env.r2Configured) {
+    throw new Error("R2 credentials and endpoints are forbidden in hardening Preview.");
+  }
   if (!env.oMarketMockApi) {
     throw new Error("O_MARKET_MOCK_API=1 is required in hardening Preview.");
+  }
+};
+
+export const assertExternalProviderCallAllowed = (provider: string) => {
+  const env = getRuntimeEnv();
+  if (env.hardeningPreviewGuard && env.hardeningExternalProviderMode === "disabled") {
+    throw new Error(`externalProviderDisabled:${provider}`);
   }
 };
 

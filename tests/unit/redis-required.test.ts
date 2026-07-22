@@ -29,6 +29,7 @@ describe("redis requirements", () => {
     vi.stubEnv("RESEND_API_KEY", "");
     vi.stubEnv("OPENAI_API_KEY", "");
     vi.stubEnv("IMAGE_STORAGE_PROVIDER", "local");
+    vi.stubEnv("EXPORT_STORAGE_PROVIDER", "local");
     vi.stubEnv("O_MARKET_MOCK_API", "1");
   };
 
@@ -189,6 +190,11 @@ describe("redis requirements", () => {
       "Destructive DB test flags must be disabled in hardening Preview runtime.",
     ],
     [
+      "RUN_DB_TESTS",
+      "1",
+      "Destructive DB test flags must be disabled in hardening Preview runtime.",
+    ],
+    [
       "HARDENING_EXTERNAL_PROVIDER_MODE",
       "mock",
       "HARDENING_EXTERNAL_PROVIDER_MODE must be disabled in hardening Preview.",
@@ -198,6 +204,27 @@ describe("redis requirements", () => {
       "forbidden-provider-secret",
       "External provider credentials are forbidden in hardening Preview.",
     ],
+    [
+      "OPENAI_API_KEY",
+      "forbidden-provider-secret",
+      "External provider credentials are forbidden in hardening Preview.",
+    ],
+    ["EMAIL_PROVIDER", "resend", "Hardening Preview email must use the local log provider."],
+    [
+      "IMAGE_STORAGE_PROVIDER",
+      "r2",
+      "Hardening Preview storage must use the isolated local provider.",
+    ],
+    [
+      "EXPORT_STORAGE_PROVIDER",
+      "r2",
+      "Hardening Preview exports must use the isolated local provider.",
+    ],
+    [
+      "R2_ACCOUNT_ID",
+      "forbidden-r2-account",
+      "R2 credentials and endpoints are forbidden in hardening Preview.",
+    ],
     ["O_MARKET_MOCK_API", "0", "O_MARKET_MOCK_API=1 is required in hardening Preview."],
   ])("rejects unsafe hardening Preview %s", async (name, value, message) => {
     stubHardeningPreviewEnv();
@@ -206,5 +233,29 @@ describe("redis requirements", () => {
     const { assertBuildEnvConfigured } = await import("@/server/config/runtime");
 
     expect(() => assertBuildEnvConfigured()).toThrow(message);
+  });
+
+  it("keeps the hardening guard a no-op when it is disabled", async () => {
+    stubPreviewBuildEnv("bazaar:ordinary:preview");
+    vi.stubEnv("HARDENING_PREVIEW_GUARD", "0");
+    vi.stubEnv("HARDENING_EXTERNAL_PROVIDER_MODE", "live");
+    vi.stubEnv("EXPORT_STORAGE_PROVIDER", "r2");
+    vi.stubEnv("R2_ACCOUNT_ID", "ordinary-preview-account");
+    vi.resetModules();
+    const { assertBuildEnvConfigured, assertExternalProviderCallAllowed } =
+      await import("@/server/config/runtime");
+
+    expect(() => assertBuildEnvConfigured()).not.toThrow();
+    expect(() => assertExternalProviderCallAllowed("test-provider")).not.toThrow();
+  });
+
+  it("blocks external provider calls before network execution in hardening Preview", async () => {
+    stubHardeningPreviewEnv();
+    vi.resetModules();
+    const { assertExternalProviderCallAllowed } = await import("@/server/config/runtime");
+
+    expect(() => assertExternalProviderCallAllowed("test-provider")).toThrow(
+      "externalProviderDisabled:test-provider",
+    );
   });
 });
