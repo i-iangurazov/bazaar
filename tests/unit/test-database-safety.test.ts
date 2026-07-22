@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  assertDatabaseTestExecutionPolicy,
   assertSafeTestDatabaseReset,
   HARDENING_TEST_DATABASE_ALLOWLIST,
 } from "../helpers/testDatabaseSafety";
@@ -11,6 +12,7 @@ const validEnvironment = (databaseName = "bazaar_hardening_agent4_platform") => 
   ALLOW_TEST_DB_RESET: "1",
   EXPECTED_TEST_DB_NAME: databaseName,
   DATABASE_URL: `postgresql://inventory:inventory@localhost:5432/${databaseName}?schema=public`,
+  DATABASE_TEST_URL: `postgresql://inventory:inventory@localhost:5432/${databaseName}?schema=public`,
 });
 
 describe("test database destructive-operation guard", () => {
@@ -57,6 +59,14 @@ describe("test database destructive-operation guard", () => {
     ).toThrow("EXPECTED_TEST_DB_NAME must be explicitly set");
   });
 
+  it("rejects a missing explicit test URL even when DATABASE_URL looks allowlisted", () => {
+    expect(() =>
+      assertSafeTestDatabaseReset({
+        env: { ...validEnvironment(), DATABASE_TEST_URL: "" },
+      }),
+    ).toThrow("DATABASE_TEST_URL must be explicitly set; DATABASE_URL fallback is forbidden");
+  });
+
   it("rejects a database outside the hardening allowlist", () => {
     expect(() =>
       assertSafeTestDatabaseReset({
@@ -70,7 +80,7 @@ describe("test database destructive-operation guard", () => {
       assertSafeTestDatabaseReset({
         env: {
           ...validEnvironment(),
-          DATABASE_URL:
+          DATABASE_TEST_URL:
             "postgresql://inventory:inventory@localhost:5432/bazaar_hardening_agent1_pos",
         },
       }),
@@ -90,7 +100,7 @@ describe("test database destructive-operation guard", () => {
       assertSafeTestDatabaseReset({
         env: {
           ...validEnvironment(),
-          DATABASE_URL:
+          DATABASE_TEST_URL:
             "postgresql://inventory:inventory@db.example.test:5432/bazaar_hardening_agent4_platform",
           HARDENING_TEST_DB_HOST_ALLOWLIST: "db.example.test",
           PRODUCTION_DATABASE_HOSTS: "db.example.test",
@@ -104,7 +114,7 @@ describe("test database destructive-operation guard", () => {
       assertSafeTestDatabaseReset({
         env: {
           ...validEnvironment(),
-          DATABASE_URL:
+          DATABASE_TEST_URL:
             "postgresql://inventory:inventory@db.example.test:5432/bazaar_hardening_agent4_platform",
         },
       }),
@@ -115,7 +125,7 @@ describe("test database destructive-operation guard", () => {
     const identity = assertSafeTestDatabaseReset({
       env: {
         ...validEnvironment(),
-        DATABASE_URL:
+        DATABASE_TEST_URL:
           "postgresql://inventory:inventory@db.example.test:5432/bazaar_hardening_agent4_platform",
         HARDENING_TEST_DB_HOST_ALLOWLIST: "db.example.test",
         PRODUCTION_DATABASE_HOSTS: "prod.example.test",
@@ -130,7 +140,7 @@ describe("test database destructive-operation guard", () => {
       assertSafeTestDatabaseReset({
         env: {
           ...validEnvironment(),
-          DATABASE_URL:
+          DATABASE_TEST_URL:
             "postgresql://private-user:private-password@localhost:5432/bazaar_hardening_agent1_pos",
         },
       }),
@@ -140,7 +150,7 @@ describe("test database destructive-operation guard", () => {
       assertSafeTestDatabaseReset({
         env: {
           ...validEnvironment(),
-          DATABASE_URL:
+          DATABASE_TEST_URL:
             "postgresql://private-user:private-password@localhost:5432/bazaar_hardening_agent1_pos",
         },
       });
@@ -148,5 +158,35 @@ describe("test database destructive-operation guard", () => {
       expect(String(error)).not.toContain("private-user");
       expect(String(error)).not.toContain("private-password");
     }
+  });
+
+  it("fails closed when GitHub Actions omits explicit DB execution", () => {
+    expect(() =>
+      assertDatabaseTestExecutionPolicy({
+        CI: "true",
+        GITHUB_ACTIONS: "true",
+      }),
+    ).toThrow("GitHub Actions must set RUN_DB_TESTS=1");
+  });
+
+  it("fails closed when GitHub Actions explicitly skips DB tests", () => {
+    expect(() =>
+      assertDatabaseTestExecutionPolicy({
+        CI: "true",
+        GITHUB_ACTIONS: "true",
+        RUN_DB_TESTS: "1",
+        SKIP_DB_TESTS: "1",
+      }),
+    ).toThrow("GitHub Actions cannot set SKIP_DB_TESTS=1");
+  });
+
+  it("enables DB tests for a fully explicit GitHub Actions environment", () => {
+    expect(
+      assertDatabaseTestExecutionPolicy({
+        CI: "true",
+        GITHUB_ACTIONS: "true",
+        RUN_DB_TESTS: "1",
+      }),
+    ).toBe(true);
   });
 });

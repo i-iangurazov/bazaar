@@ -3,11 +3,12 @@ const HARDENING_TEST_DATABASES = [
   "bazaar_hardening_agent2_inventory",
   "bazaar_hardening_agent3_commerce",
   "bazaar_hardening_agent4_platform",
+  "bazaar_hardening_ci",
 ] as const;
 
 const LOCAL_TEST_DATABASE_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 const SAFE_HARDENING_DATABASE_PATTERN =
-  /^bazaar_hardening_agent(?:1_pos|2_inventory|3_commerce|4_platform)$/;
+  /^bazaar_hardening_(?:agent(?:1_pos|2_inventory|3_commerce|4_platform)|ci)$/;
 
 export const HARDENING_TEST_DATABASE_ALLOWLIST = new Set<string>(HARDENING_TEST_DATABASES);
 
@@ -70,11 +71,29 @@ const productionHosts = (env: TestDatabaseEnvironment) => {
 };
 
 export const resolveConfiguredTestDatabaseUrl = (env: TestDatabaseEnvironment = process.env) => {
-  const databaseUrl = env.DATABASE_TEST_URL?.trim() || env.DATABASE_URL?.trim();
+  const databaseUrl = env.DATABASE_TEST_URL?.trim();
   if (!databaseUrl) {
-    throw safetyError("DATABASE_TEST_URL or DATABASE_URL must be explicitly set.");
+    throw safetyError("DATABASE_TEST_URL must be explicitly set; DATABASE_URL fallback is forbidden.");
   }
   return databaseUrl;
+};
+
+export const isDatabaseTestExecutionEnabled = (
+  env: TestDatabaseEnvironment = process.env,
+) => env.SKIP_DB_TESTS !== "1" && env.RUN_DB_TESTS === "1";
+
+export const assertDatabaseTestExecutionPolicy = (
+  env: TestDatabaseEnvironment = process.env,
+) => {
+  const isGitHubActions =
+    (env.CI === "true" || env.CI === "1") && env.GITHUB_ACTIONS === "true";
+  if (isGitHubActions && env.SKIP_DB_TESTS === "1") {
+    throw safetyError("GitHub Actions cannot set SKIP_DB_TESTS=1.");
+  }
+  if (isGitHubActions && env.RUN_DB_TESTS !== "1") {
+    throw safetyError("GitHub Actions must set RUN_DB_TESTS=1; DB suites cannot be skipped.");
+  }
+  return isDatabaseTestExecutionEnabled(env);
 };
 
 export const assertSafeTestDatabaseReset = (options?: {

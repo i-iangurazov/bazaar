@@ -1,13 +1,15 @@
 import { File } from "node:buffer";
 
-import { assertSafeTestDatabaseReset } from "./helpers/testDatabaseSafety";
+import {
+  assertDatabaseTestExecutionPolicy,
+  assertSafeTestDatabaseReset,
+} from "./helpers/testDatabaseSafety";
 
 if (typeof globalThis.File === "undefined") {
   globalThis.File = File as unknown as typeof globalThis.File;
 }
 
-const shouldRunDbTests =
-  process.env.SKIP_DB_TESTS !== "1" && process.env.RUN_DB_TESTS === "1";
+const shouldRunDbTests = assertDatabaseTestExecutionPolicy();
 
 if (process.env.DATABASE_TEST_URL) {
   process.env.DATABASE_URL = process.env.DATABASE_TEST_URL;

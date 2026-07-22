@@ -54,7 +54,7 @@ Add one row before starting a shared-file implementation batch.
 
 | State | Batch/issues | Owner | Start commit | Exact files | Required tests | Reviewers | Released commit |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| CLAIMED | `B0-DB-SAFETY` / `HARD-A4-010` | Agent 4 | `f308b2b793c2b43d7e46814c3c2007a0927fede7` | `tests/global-setup.ts`, `tests/setup.ts`, `tests/helpers/db.ts`, new guard/tests, `.env.example` | focused guard unit tests, isolated migration/reset proof, full baseline gate | Agent 1 | pending |
+| IN_REVIEW | `B0-DB-SAFETY` / `HARD-A4-010` | Agent 4 | `f308b2b793c2b43d7e46814c3c2007a0927fede7` | `tests/global-setup.ts`, `tests/setup.ts`, `tests/helpers/db.ts`, new guard/tests, `.env.example`, `.github/workflows/ci.yml` | focused guard unit tests, isolated migration/reset proof, CI no-skip policy, full baseline gate | Agent 1 | pending |
 | Example only | `HARD-A4-001` | Agent 4 | baseline SHA | `src/lib/roleAccess.ts` | unit + two-role integration + browser denial | affected domain owners | pending |
 
 Allowed states: `PROPOSED`, `CLAIMED`, `IN_REVIEW`, `INTEGRATED`, `RELEASED`.
