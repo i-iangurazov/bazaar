@@ -1,12 +1,12 @@
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
+import type { PrismaClient } from "@prisma/client";
 
 import {
   managerProcedure,
   rateLimit,
   router,
 } from "@/server/trpc/trpc";
-import { prisma } from "@/server/db/prisma";
 import {
   assertCommerceStoreAccess,
   resolveCommerceAccessibleStoreIds,
@@ -27,7 +27,7 @@ import {
 } from "@/server/services/purchaseOrders";
 
 type PurchaseOrderAccessContext = {
-  prisma: typeof prisma;
+  prisma: PrismaClient;
   user: StoreAccessUser;
 };
 
