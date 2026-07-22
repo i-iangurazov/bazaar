@@ -8,6 +8,12 @@ const rawEnvSchema = z
     npm_lifecycle_event: z.string().optional(),
     DATABASE_URL: z.string().optional(),
     ALLOW_LOCALHOST_DATABASE_IN_PRODUCTION: z.string().optional(),
+    HARDENING_PREVIEW_GUARD: z.string().optional(),
+    HARDENING_PREVIEW_EXPECTED_DATABASE_NAME: z.string().optional(),
+    HARDENING_PREVIEW_EXPECTED_DATABASE_HOST: z.string().optional(),
+    HARDENING_EXTERNAL_PROVIDER_MODE: z.enum(["disabled", "mock"]).optional(),
+    RUN_DB_TESTS: z.string().optional(),
+    ALLOW_TEST_DB_RESET: z.string().optional(),
     REDIS_URL: z.string().optional(),
     REDIS_KEY_PREFIX: z.string().optional(),
     NEXTAUTH_SECRET: z.string().optional(),
@@ -16,6 +22,9 @@ const rawEnvSchema = z
     EMAIL_PROVIDER: z.string().optional(),
     EMAIL_FROM: z.string().optional(),
     RESEND_API_KEY: z.string().optional(),
+    OPENAI_API_KEY: z.string().optional(),
+    IMAGE_STORAGE_PROVIDER: z.string().optional(),
+    O_MARKET_MOCK_API: z.string().optional(),
     ALLOW_LOG_EMAIL_IN_PRODUCTION: z.string().optional(),
     SIGNUP_MODE: z.enum(["invite_only", "open"]).optional(),
     SKIP_EMAIL_VERIFICATION: z.string().optional(),
@@ -31,7 +40,10 @@ const parseBool = (value?: string) => {
   return normalized === "1" || normalized === "true" || normalized === "yes";
 };
 
-const parseTrustedProxyHops = (value: string | undefined, nodeEnv: "development" | "test" | "production") => {
+const parseTrustedProxyHops = (
+  value: string | undefined,
+  nodeEnv: "development" | "test" | "production",
+) => {
   if (value === undefined || value === "") {
     return nodeEnv === "production" ? 1 : 0;
   }
@@ -63,6 +75,12 @@ export type RuntimeEnv = {
   isBuildPhase: boolean;
   databaseUrl: string;
   allowLocalhostDatabaseInProduction: boolean;
+  hardeningPreviewGuard: boolean;
+  hardeningPreviewExpectedDatabaseName: string;
+  hardeningPreviewExpectedDatabaseHost: string;
+  hardeningExternalProviderMode: "disabled" | "mock" | "";
+  runDbTests: boolean;
+  allowTestDbReset: boolean;
   redisUrl: string;
   redisKeyPrefix: string;
   nextAuthSecret: string;
@@ -71,6 +89,9 @@ export type RuntimeEnv = {
   emailProvider: string;
   emailFrom: string;
   resendApiKey: string;
+  openAiApiKey: string;
+  imageStorageProvider: string;
+  oMarketMockApi: boolean;
   allowLogEmailInProduction: boolean;
   signupMode: "invite_only" | "open";
   skipEmailVerification: boolean;
@@ -90,6 +111,14 @@ const parseRuntimeEnv = (source: NodeJS.ProcessEnv): RuntimeEnv => {
     isBuildPhase,
     databaseUrl: parsed.DATABASE_URL?.trim() ?? "",
     allowLocalhostDatabaseInProduction: parseBool(parsed.ALLOW_LOCALHOST_DATABASE_IN_PRODUCTION),
+    hardeningPreviewGuard: parseBool(parsed.HARDENING_PREVIEW_GUARD),
+    hardeningPreviewExpectedDatabaseName:
+      parsed.HARDENING_PREVIEW_EXPECTED_DATABASE_NAME?.trim() ?? "",
+    hardeningPreviewExpectedDatabaseHost:
+      parsed.HARDENING_PREVIEW_EXPECTED_DATABASE_HOST?.trim().toLowerCase() ?? "",
+    hardeningExternalProviderMode: parsed.HARDENING_EXTERNAL_PROVIDER_MODE ?? "",
+    runDbTests: parseBool(parsed.RUN_DB_TESTS),
+    allowTestDbReset: parseBool(parsed.ALLOW_TEST_DB_RESET),
     redisUrl: parsed.REDIS_URL?.trim() ?? "",
     redisKeyPrefix: normalizeRedisKeyPrefix(parsed.REDIS_KEY_PREFIX),
     nextAuthSecret: parsed.NEXTAUTH_SECRET?.trim() ?? "",
@@ -98,6 +127,9 @@ const parseRuntimeEnv = (source: NodeJS.ProcessEnv): RuntimeEnv => {
     emailProvider: normalizeEmailProvider(parsed.EMAIL_PROVIDER),
     emailFrom: parsed.EMAIL_FROM?.trim() ?? "",
     resendApiKey: parsed.RESEND_API_KEY?.trim() ?? "",
+    openAiApiKey: parsed.OPENAI_API_KEY?.trim() ?? "",
+    imageStorageProvider: parsed.IMAGE_STORAGE_PROVIDER?.trim().toLowerCase() ?? "",
+    oMarketMockApi: parseBool(parsed.O_MARKET_MOCK_API),
     allowLogEmailInProduction: parseBool(parsed.ALLOW_LOG_EMAIL_IN_PRODUCTION),
     signupMode: parsed.SIGNUP_MODE ?? "invite_only",
     skipEmailVerification: parseBool(parsed.SKIP_EMAIL_VERIFICATION),
@@ -141,6 +173,54 @@ const assertDatabaseUrlSafeForProduction = (
   }
 };
 
+const databaseNameFromUrl = (databaseUrl: string) => {
+  const pathname = new URL(databaseUrl).pathname.replace(/^\/+/, "");
+  return decodeURIComponent(pathname);
+};
+
+const assertHardeningPreviewEnv = (env: RuntimeEnv) => {
+  if (!env.hardeningPreviewGuard) {
+    return;
+  }
+  if (env.vercelEnv !== "preview") {
+    throw new Error("HARDENING_PREVIEW_GUARD requires VERCEL_ENV=preview.");
+  }
+  assertPresent(
+    env.hardeningPreviewExpectedDatabaseName,
+    "HARDENING_PREVIEW_EXPECTED_DATABASE_NAME is required.",
+  );
+  assertPresent(
+    env.hardeningPreviewExpectedDatabaseHost,
+    "HARDENING_PREVIEW_EXPECTED_DATABASE_HOST is required.",
+  );
+  const databaseUrl = new URL(env.databaseUrl);
+  const databaseName = databaseNameFromUrl(env.databaseUrl);
+  if (databaseName !== env.hardeningPreviewExpectedDatabaseName) {
+    throw new Error("DATABASE_URL does not match the approved hardening Preview database.");
+  }
+  if (databaseUrl.hostname.toLowerCase() !== env.hardeningPreviewExpectedDatabaseHost) {
+    throw new Error("DATABASE_URL host does not match the approved hardening Preview host.");
+  }
+  if (env.runDbTests || env.allowTestDbReset) {
+    throw new Error("Destructive DB test flags must be disabled in hardening Preview runtime.");
+  }
+  if (env.hardeningExternalProviderMode !== "disabled") {
+    throw new Error("HARDENING_EXTERNAL_PROVIDER_MODE must be disabled in hardening Preview.");
+  }
+  if (env.emailProvider !== "log" || !env.allowLogEmailInProduction) {
+    throw new Error("Hardening Preview email must use the local log provider.");
+  }
+  if (env.resendApiKey || env.openAiApiKey) {
+    throw new Error("External provider credentials are forbidden in hardening Preview.");
+  }
+  if (env.imageStorageProvider && env.imageStorageProvider !== "local") {
+    throw new Error("Hardening Preview storage must use the isolated local provider.");
+  }
+  if (!env.oMarketMockApi) {
+    throw new Error("O_MARKET_MOCK_API=1 is required in hardening Preview.");
+  }
+};
+
 const assertProductionEnv = (env: RuntimeEnv, target: "build" | "runtime") => {
   if (env.nodeEnv !== "production") {
     return;
@@ -157,18 +237,18 @@ const assertProductionEnv = (env: RuntimeEnv, target: "build" | "runtime") => {
   assertPresent(env.jobsSecret, "JOBS_SECRET is required in production.");
   assertPresent(env.redisUrl, "REDIS_URL is required in production.");
   if (env.vercelEnv === "preview") {
-    assertPresent(
-      env.redisKeyPrefix,
-      "REDIS_KEY_PREFIX is required for Vercel Preview isolation.",
-    );
+    assertPresent(env.redisKeyPrefix, "REDIS_KEY_PREFIX is required for Vercel Preview isolation.");
   }
+  assertHardeningPreviewEnv(env);
 
   if (env.emailProvider === "resend") {
     assertPresent(env.emailFrom, "EMAIL_FROM is required when EMAIL_PROVIDER=resend.");
     assertPresent(env.resendApiKey, "RESEND_API_KEY is required when EMAIL_PROVIDER=resend.");
   }
   if (env.emailProvider === "log" && !env.allowLogEmailInProduction) {
-    throw new Error("EMAIL_PROVIDER=log is not allowed in production without ALLOW_LOG_EMAIL_IN_PRODUCTION.");
+    throw new Error(
+      "EMAIL_PROVIDER=log is not allowed in production without ALLOW_LOG_EMAIL_IN_PRODUCTION.",
+    );
   }
 };
 

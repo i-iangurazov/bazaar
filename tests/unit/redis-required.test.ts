@@ -14,6 +14,24 @@ describe("redis requirements", () => {
     vi.stubEnv("ALLOW_LOG_EMAIL_IN_PRODUCTION", "true");
   };
 
+  const stubHardeningPreviewEnv = () => {
+    stubPreviewBuildEnv("bazaar:hardening:b2");
+    vi.stubEnv(
+      "DATABASE_URL",
+      "postgresql://preview:preview@preview-db.example.com:5432/bazaar_hardening_preview_b2?schema=public",
+    );
+    vi.stubEnv("HARDENING_PREVIEW_GUARD", "1");
+    vi.stubEnv("HARDENING_PREVIEW_EXPECTED_DATABASE_NAME", "bazaar_hardening_preview_b2");
+    vi.stubEnv("HARDENING_PREVIEW_EXPECTED_DATABASE_HOST", "preview-db.example.com");
+    vi.stubEnv("HARDENING_EXTERNAL_PROVIDER_MODE", "disabled");
+    vi.stubEnv("RUN_DB_TESTS", "0");
+    vi.stubEnv("ALLOW_TEST_DB_RESET", "0");
+    vi.stubEnv("RESEND_API_KEY", "");
+    vi.stubEnv("OPENAI_API_KEY", "");
+    vi.stubEnv("IMAGE_STORAGE_PROVIDER", "local");
+    vi.stubEnv("O_MARKET_MOCK_API", "1");
+  };
+
   afterEach(() => {
     vi.unstubAllEnvs();
   });
@@ -57,7 +75,9 @@ describe("redis requirements", () => {
     vi.resetModules();
     const { getRuntimeEnv } = await import("@/server/config/runtime");
 
-    expect(() => getRuntimeEnv()).toThrow("AUTH_TRUSTED_PROXY_HOPS must be a non-negative integer.");
+    expect(() => getRuntimeEnv()).toThrow(
+      "AUTH_TRUSTED_PROXY_HOPS must be a non-negative integer.",
+    );
   });
 
   it("allows localhost database in production only when explicitly enabled", async () => {
@@ -84,11 +104,8 @@ describe("redis requirements", () => {
     vi.stubEnv("REDIS_URL", "redis://redis.example.com:6379");
 
     vi.resetModules();
-    const {
-      getRedisPublisher,
-      redisConfigured,
-      shouldSkipRedisInitialization,
-    } = await import("@/server/redis");
+    const { getRedisPublisher, redisConfigured, shouldSkipRedisInitialization } =
+      await import("@/server/redis");
 
     expect(shouldSkipRedisInitialization()).toBe(true);
     expect(redisConfigured()).toBe(false);
@@ -118,9 +135,7 @@ describe("redis requirements", () => {
     const { getRedisKeyPrefix, withRedisKeyPrefix } = await import("@/server/redis");
 
     expect(getRedisKeyPrefix()).toBe("bazaar:hardening:b1:");
-    expect(withRedisKeyPrefix("inventory.events")).toBe(
-      "bazaar:hardening:b1:inventory.events",
-    );
+    expect(withRedisKeyPrefix("inventory.events")).toBe("bazaar:hardening:b1:inventory.events");
 
     vi.stubEnv("REDIS_KEY_PREFIX", "unsafe namespace");
     vi.resetModules();
@@ -144,5 +159,52 @@ describe("redis requirements", () => {
     const { assertBuildEnvConfigured } = await import("@/server/config/runtime");
 
     expect(assertBuildEnvConfigured().redisKeyPrefix).toBe("bazaar:hardening:b1:");
+  });
+
+  it("accepts only the exact isolated hardening Preview environment", async () => {
+    stubHardeningPreviewEnv();
+    vi.resetModules();
+    const { assertBuildEnvConfigured } = await import("@/server/config/runtime");
+
+    const env = assertBuildEnvConfigured();
+    expect(env.hardeningPreviewExpectedDatabaseName).toBe("bazaar_hardening_preview_b2");
+    expect(env.hardeningExternalProviderMode).toBe("disabled");
+  });
+
+  it.each([
+    ["VERCEL_ENV", "production", "HARDENING_PREVIEW_GUARD requires VERCEL_ENV=preview."],
+    [
+      "DATABASE_URL",
+      "postgresql://preview:preview@preview-db.example.com:5432/bazaar_production?schema=public",
+      "DATABASE_URL does not match the approved hardening Preview database.",
+    ],
+    [
+      "DATABASE_URL",
+      "postgresql://preview:preview@production-db.example.com:5432/bazaar_hardening_preview_b2?schema=public",
+      "DATABASE_URL host does not match the approved hardening Preview host.",
+    ],
+    [
+      "ALLOW_TEST_DB_RESET",
+      "1",
+      "Destructive DB test flags must be disabled in hardening Preview runtime.",
+    ],
+    [
+      "HARDENING_EXTERNAL_PROVIDER_MODE",
+      "mock",
+      "HARDENING_EXTERNAL_PROVIDER_MODE must be disabled in hardening Preview.",
+    ],
+    [
+      "RESEND_API_KEY",
+      "forbidden-provider-secret",
+      "External provider credentials are forbidden in hardening Preview.",
+    ],
+    ["O_MARKET_MOCK_API", "0", "O_MARKET_MOCK_API=1 is required in hardening Preview."],
+  ])("rejects unsafe hardening Preview %s", async (name, value, message) => {
+    stubHardeningPreviewEnv();
+    vi.stubEnv(name, value);
+    vi.resetModules();
+    const { assertBuildEnvConfigured } = await import("@/server/config/runtime");
+
+    expect(() => assertBuildEnvConfigured()).toThrow(message);
   });
 });
