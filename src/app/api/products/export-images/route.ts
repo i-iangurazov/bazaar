@@ -140,7 +140,10 @@ export const GET = async (request: Request) => {
         const date = new Date().toISOString().slice(0, 10);
         const filename = `images-${safeStoreName}-${date}.zip`;
 
-        storeZip(downloadToken, zipBuffer, filename);
+        storeZip(downloadToken, zipBuffer, filename, {
+          userId: user.id,
+          organizationId: user.organizationId,
+        });
 
         controller.enqueue(send({ type: "ready", token: downloadToken, filename }));
       } catch (err) {

@@ -12,7 +12,10 @@ export const GET = async (request: Request) => {
   const downloadToken = searchParams.get("token");
   if (!downloadToken) return new Response("Missing token", { status: 400 });
 
-  const zip = consumeZip(downloadToken);
+  const zip = consumeZip(downloadToken, {
+    userId: token.sub as string,
+    organizationId: token.organizationId as string,
+  });
   if (!zip) return new Response("Not found or expired", { status: 404 });
 
   return new Response(zip.data, {
