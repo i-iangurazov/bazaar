@@ -1,17 +1,28 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { prisma } = vi.hoisted(() => ({
+const { prisma, mockAssertUserCanAccessStore } = vi.hoisted(() => ({
   prisma: {
     customerOrder: {
       findFirst: vi.fn(),
     },
   },
+  mockAssertUserCanAccessStore: vi.fn(),
 }));
 
 vi.mock("@/server/db/prisma", () => ({ prisma }));
+vi.mock("@/server/services/storeAccess", () => ({
+  assertUserCanAccessStore: mockAssertUserCanAccessStore,
+}));
 
 import { AppError } from "@/server/services/errors";
 import { buildReceiptPrintPayload } from "@/server/services/receiptPrintPayload";
+
+const receiptUser = {
+  id: "user-1",
+  organizationId: "org-1",
+  role: "ADMIN",
+  isOrgOwner: true,
+};
 
 describe("receipt print payload", () => {
   beforeEach(() => {
@@ -62,6 +73,7 @@ describe("receipt print payload", () => {
     const payload = await buildReceiptPrintPayload({
       organizationId: "org-1",
       saleId: "sale-1",
+      user: receiptUser,
       locale: "ru-RU",
       variant: "PRECHECK",
       paymentMethodLabels: {
@@ -131,6 +143,7 @@ describe("receipt print payload", () => {
       buildReceiptPrintPayload({
         organizationId: "org-1",
         saleId: "sale-1",
+        user: receiptUser,
         locale: "ru-RU",
         variant: "FISCAL",
         paymentMethodLabels: {
@@ -178,6 +191,7 @@ describe("receipt print payload", () => {
     const payload = await buildReceiptPrintPayload({
       organizationId: "org-1",
       saleId: "sale-usd",
+      user: receiptUser,
       locale: "en-US",
       variant: "PRECHECK",
       paymentMethodLabels: {
@@ -243,6 +257,7 @@ describe("receipt print payload", () => {
     const payload = await buildReceiptPrintPayload({
       organizationId: "org-1",
       saleId: "sale-legacy",
+      user: receiptUser,
       locale: "en-US",
       variant: "PRECHECK",
       paymentMethodLabels: {

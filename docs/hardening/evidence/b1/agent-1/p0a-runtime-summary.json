@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "phase": "B1-P0-A",
+  "agent": "Agent 1 - POS and Cash Operations",
+  "branch": "hardening/b1-agent-1-pos",
+  "baseCommit": "343079b4e6cd6140f84a8448610259b2d7573704",
+  "database": {
+    "name": "bazaar_hardening_agent1_pos",
+    "environmentFile": ".env.hardening",
+    "migrationMode": "prisma migrate deploy",
+    "pendingMigrations": 0,
+    "dbPushUsed": false
+  },
+  "providers": {
+    "fiscalAdapter": "mocked",
+    "receiptConnector": "mocked"
+  },
+  "issues": [
+    {
+      "id": "HARD-A1-001",
+      "status": "IMPLEMENTED_AWAITING_AGENT_4_VERIFICATION",
+      "coverage": [
+        "assigned-store positive reads",
+        "same-organization inaccessible-store list and identifier denial",
+        "cross-organization identifier denial",
+        "unfiltered list scoping",
+        "receipt PDF and connector HTTP denial before artifact/audit/print effects"
+      ],
+      "coordinatedBoundary": "GET /api/sse is owned by Agent 4 and is not modified on this branch"
+    },
+    {
+      "id": "HARD-A1-002",
+      "status": "IMPLEMENTED_AWAITING_AGENT_4_VERIFICATION",
+      "coverage": [
+        "marking-code mutation",
+        "cash drawer mutation",
+        "return create/add/update/remove/complete",
+        "debt settlement",
+        "sale and fiscal-receipt KKM retries",
+        "same-organization denial",
+        "cross-organization identifier denial",
+        "assigned-store positive controls",
+        "no database, idempotency, inventory, refund, audit, print, or provider side effects"
+      ]
+    },
+    {
+      "id": "HARD-A1-003",
+      "status": "IMPLEMENTED_AWAITING_AGENT_4_VERIFICATION",
+      "policy": {
+        "registerCreateUpdateDelete": "ADMIN",
+        "shiftClose": "MANAGER_OR_ADMIN",
+        "returnComplete": "MANAGER_OR_ADMIN"
+      },
+      "coverage": [
+        "disallowed-role denial before writes",
+        "Admin register controls",
+        "Manager shift-close control",
+        "Manager return-completion control",
+        "cashier and staff no-side-effect assertions"
+      ]
+    }
+  ],
+  "verification": [
+    {
+      "command": "pnpm typecheck",
+      "result": "PASS"
+    },
+    {
+      "command": "pnpm exec vitest run tests/unit/receipt-print-payload.test.ts tests/unit/pos-receipt-pdf-route.test.ts --maxWorkers=1",
+      "result": "PASS",
+      "testFiles": 2,
+      "tests": 7
+    },
+    {
+      "command": "pnpm exec vitest run tests/integration/pos-p0-verification.test.ts tests/integration/pos-p0a-http-access.test.ts --maxWorkers=1",
+      "result": "PASS",
+      "testFiles": 2,
+      "tests": 11
+    },
+    {
+      "command": "pnpm exec vitest run tests/integration/pos.test.ts tests/integration/manager-permissions.test.ts --maxWorkers=1",
+      "result": "PASS",
+      "testFiles": 2,
+      "tests": 43,
+      "note": "The final combined verification confirmed all 38 POS tests and all five manager-permission tests."
+    },
+    {
+      "command": "pnpm exec vitest run tests/integration/pos-p0-verification.test.ts tests/integration/pos-p0a-http-access.test.ts tests/integration/pos.test.ts tests/integration/manager-permissions.test.ts tests/unit/receipt-print-payload.test.ts tests/unit/pos-receipt-pdf-route.test.ts --maxWorkers=1",
+      "result": "PASS",
+      "testFiles": 6,
+      "tests": 61
+    },
+    {
+      "command": "pnpm lint",
+      "result": "PASS"
+    },
+    {
+      "command": "pnpm i18n:check",
+      "result": "PASS"
+    },
+    {
+      "command": "git diff --check",
+      "result": "PASS"
+    }
+  ],
+  "browserQa": {
+    "status": "NOT_RUN_IN_AGENT_1_B1",
+    "reason": "This P0-A batch is server-boundary work; direct HTTP route execution is covered. Independent Preview/browser validation remains an Agent 4 release-gate requirement."
+  },
+  "migrations": [],
+  "sharedFilesModified": [],
+  "independentVerification": "PENDING_AGENT_4"
+}
