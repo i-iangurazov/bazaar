@@ -16,7 +16,7 @@ import {
   cancelCustomerOrder,
   completeCustomerOrder,
   confirmCustomerOrder,
-  createCustomerOrderDraft,
+  createCustomerOrderDraftOperation,
   getSalesOrderMetrics,
   getCustomerOrder,
   listCustomerOrders,
@@ -179,6 +179,7 @@ export const salesOrdersRouter = router({
     .input(
       z.object({
         storeId: z.string().min(1),
+        idempotencyKey: z.string().min(8),
         customerName: z.string().max(160).optional().nullable(),
         customerEmail: optionalEmailSchema,
         customerPhone: z.string().max(64).optional().nullable(),
@@ -198,9 +199,10 @@ export const salesOrdersRouter = router({
     .mutation(async ({ ctx, input }) => {
       try {
         await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
-        return await createCustomerOrderDraft({
+        const operation = await createCustomerOrderDraftOperation({
           organizationId: ctx.user.organizationId,
           storeId: input.storeId,
+          idempotencyKey: input.idempotencyKey,
           customerName: input.customerName,
           customerEmail: input.customerEmail,
           customerPhone: input.customerPhone,
@@ -210,6 +212,7 @@ export const salesOrdersRouter = router({
           actorId: ctx.user.id,
           requestId: ctx.requestId,
         });
+        return operation.response.order;
       } catch (error) {
         throw toTRPCError(error);
       }

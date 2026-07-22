@@ -102,7 +102,7 @@ describe("B0 Agent 3 return-mode runtime wiring", () => {
       })}`,
     );
 
-    expect(submittedPayload).toEqual({
+    expect(submittedPayload).toMatchObject({
       storeId: "store-a",
       customerName: null,
       customerEmail: null,
@@ -111,8 +111,33 @@ describe("B0 Agent 3 return-mode runtime wiring", () => {
       notes: null,
       lines: [],
     });
+    expect(submittedPayload.idempotencyKey).toEqual(expect.any(String));
     expect(submittedPayload).not.toHaveProperty("originalSaleId");
     expect(submittedPayload).not.toHaveProperty("customerOrderId");
     expect(submittedPayload).not.toHaveProperty("isReturn");
+  });
+
+  it("reuses the sales draft operation key while an identical create attempt is unresolved", async () => {
+    vi.stubGlobal("React", React);
+    const { default: NewSalesOrderPage } = await import("@/app/(app)/sales/orders/new/page");
+    render(<NewSalesOrderPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Store A")).toBeTruthy();
+    });
+    const createButton = screen.getByRole("button", { name: "create" });
+    fireEvent.click(createButton);
+    await waitFor(() => {
+      expect(runtime.createDraft).toHaveBeenCalledTimes(1);
+    });
+    fireEvent.click(createButton);
+    await waitFor(() => {
+      expect(runtime.createDraft).toHaveBeenCalledTimes(2);
+    });
+
+    const firstKey = runtime.createDraft.mock.calls[0]![0].idempotencyKey;
+    const retryKey = runtime.createDraft.mock.calls[1]![0].idempotencyKey;
+    expect(firstKey).toEqual(expect.any(String));
+    expect(retryKey).toBe(firstKey);
   });
 });

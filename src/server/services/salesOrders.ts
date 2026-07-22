@@ -4,6 +4,7 @@ import {
   CustomerOrderSource,
   CustomerOrderStatus,
   EmailAutomationTrigger,
+  OperationRequestPrincipalType,
   StockMovementType,
 } from "@prisma/client";
 
@@ -18,12 +19,19 @@ import { getLogger } from "@/server/logging";
 import { resolveCurrencySnapshot } from "@/lib/currencyDisplay";
 import { upsertCustomerFromOrderTx } from "@/server/services/customers";
 import { processEmailAutomationTrigger } from "@/server/services/emailMarketing";
+import { assertUserCanAccessStore } from "@/server/services/storeAccess";
 import {
   sendOrderConfirmationEmail,
   sendOrderCancellationEmail,
   sendOrderTrackingEmail,
   type OrderEmailSendResult,
 } from "@/server/services/orderEmails";
+import {
+  OPERATION_FAILURE_AMBIGUOUS,
+  OPERATION_FAILURE_SAFE_BEFORE_EFFECTS,
+  runOperationRequest,
+  type OperationFailureDecision,
+} from "@/server/services/operationRequests";
 
 const allowedTransitions: Record<CustomerOrderStatus, CustomerOrderStatus[]> = {
   DRAFT: [CustomerOrderStatus.CONFIRMED, CustomerOrderStatus.CANCELED],
@@ -584,7 +592,7 @@ export const getSalesOrderMetrics = async (input: {
   };
 };
 
-export const createCustomerOrderDraft = async (input: {
+export type CreateCustomerOrderDraftInput = {
   organizationId: string;
   storeId: string;
   customerName?: string | null;
@@ -599,102 +607,132 @@ export const createCustomerOrderDraft = async (input: {
   }>;
   actorId: string;
   requestId: string;
-}) => {
-  const result = await prisma.$transaction(async (tx) => {
-    const store = await tx.store.findUnique({ where: { id: input.storeId } });
-    if (!store) {
-      throw new AppError("storeNotFound", "NOT_FOUND", 404);
-    }
-    if (store.organizationId !== input.organizationId) {
-      throw new AppError("storeOrgMismatch", "FORBIDDEN", 403);
-    }
+};
 
-    const number = await nextSalesOrderNumber(tx, input.organizationId);
+const createCustomerOrderDraftTx = async (
+  tx: Prisma.TransactionClient,
+  input: CreateCustomerOrderDraftInput,
+) => {
+  const actor = await tx.user.findFirst({
+    where: {
+      id: input.actorId,
+      organizationId: input.organizationId,
+      isActive: true,
+    },
+    select: {
+      id: true,
+      organizationId: true,
+      role: true,
+      isOrgOwner: true,
+    },
+  });
+  if (!actor || !actor.organizationId) {
+    throw new AppError("storeAccessDenied", "FORBIDDEN", 403);
+  }
+  await assertUserCanAccessStore(
+    tx,
+    { ...actor, organizationId: actor.organizationId },
+    input.storeId,
+  );
 
-    let order = await tx.customerOrder.create({
-      data: {
-        organizationId: input.organizationId,
-        storeId: input.storeId,
-        number,
-        source: CustomerOrderSource.MANUAL,
-        customerName: input.customerName ?? null,
-        customerEmail: input.customerEmail ?? null,
-        customerPhone: input.customerPhone ?? null,
-        customerAddress: input.customerAddress ?? null,
-        notes: input.notes ?? null,
-        ...resolveCurrencySnapshot(store),
-        createdById: input.actorId,
-        updatedById: input.actorId,
-      },
-    });
+  const store = await tx.store.findUnique({ where: { id: input.storeId } });
+  if (!store) {
+    throw new AppError("storeNotFound", "NOT_FOUND", 404);
+  }
+  if (store.organizationId !== input.organizationId) {
+    throw new AppError("storeOrgMismatch", "FORBIDDEN", 403);
+  }
 
-    await upsertCustomerFromOrderTx(tx, {
+  const number = await nextSalesOrderNumber(tx, input.organizationId);
+
+  let order = await tx.customerOrder.create({
+    data: {
       organizationId: input.organizationId,
       storeId: input.storeId,
-      customerName: input.customerName,
-      customerEmail: input.customerEmail,
-      customerPhone: input.customerPhone,
-      customerAddress: input.customerAddress,
-    });
+      number,
+      source: CustomerOrderSource.MANUAL,
+      customerName: input.customerName ?? null,
+      customerEmail: input.customerEmail ?? null,
+      customerPhone: input.customerPhone ?? null,
+      customerAddress: input.customerAddress ?? null,
+      notes: input.notes ?? null,
+      ...resolveCurrencySnapshot(store),
+      createdById: input.actorId,
+      updatedById: input.actorId,
+    },
+  });
 
-    if (input.lines?.length) {
-      const existingKeys = new Set<string>();
+  await upsertCustomerFromOrderTx(tx, {
+    organizationId: input.organizationId,
+    storeId: input.storeId,
+    customerName: input.customerName,
+    customerEmail: input.customerEmail,
+    customerPhone: input.customerPhone,
+    customerAddress: input.customerAddress,
+  });
 
-      for (const lineInput of input.lines) {
-        const resolved = await resolveUnitPrice({
-          tx,
-          organizationId: input.organizationId,
-          storeId: input.storeId,
-          productId: lineInput.productId,
-          variantId: lineInput.variantId ?? null,
-        });
-        const unitCost = await resolveUnitCost({
-          tx,
-          organizationId: input.organizationId,
-          productId: lineInput.productId,
-          variantId: lineInput.variantId ?? null,
-          isBundle: resolved.isBundle,
-        });
+  if (input.lines?.length) {
+    const existingKeys = new Set<string>();
 
-        const dedupeKey = `${lineInput.productId}:${resolved.variantKey}`;
-        if (existingKeys.has(dedupeKey)) {
-          throw new AppError("duplicateLineItem", "CONFLICT", 409);
-        }
-        existingKeys.add(dedupeKey);
+    for (const lineInput of input.lines) {
+      const resolved = await resolveUnitPrice({
+        tx,
+        organizationId: input.organizationId,
+        storeId: input.storeId,
+        productId: lineInput.productId,
+        variantId: lineInput.variantId ?? null,
+      });
+      const unitCost = await resolveUnitCost({
+        tx,
+        organizationId: input.organizationId,
+        productId: lineInput.productId,
+        variantId: lineInput.variantId ?? null,
+        isBundle: resolved.isBundle,
+      });
 
-        const lineTotal = resolved.unitPrice * lineInput.qty;
-        const lineCostTotal = unitCost === null ? null : roundMoney(unitCost * lineInput.qty);
-        await tx.customerOrderLine.create({
-          data: {
-            customerOrderId: order.id,
-            productId: lineInput.productId,
-            variantId: lineInput.variantId ?? null,
-            variantKey: resolved.variantKey,
-            qty: lineInput.qty,
-            unitPriceKgs: resolved.unitPrice,
-            lineTotalKgs: lineTotal,
-            unitCostKgs: unitCost,
-            lineCostTotalKgs: lineCostTotal,
-          },
-        });
+      const dedupeKey = `${lineInput.productId}:${resolved.variantKey}`;
+      if (existingKeys.has(dedupeKey)) {
+        throw new AppError("duplicateLineItem", "CONFLICT", 409);
       }
+      existingKeys.add(dedupeKey);
 
-      order = await recomputeTotals(tx, order.id, input.actorId);
+      const lineTotal = resolved.unitPrice * lineInput.qty;
+      const lineCostTotal = unitCost === null ? null : roundMoney(unitCost * lineInput.qty);
+      await tx.customerOrderLine.create({
+        data: {
+          customerOrderId: order.id,
+          productId: lineInput.productId,
+          variantId: lineInput.variantId ?? null,
+          variantKey: resolved.variantKey,
+          qty: lineInput.qty,
+          unitPriceKgs: resolved.unitPrice,
+          lineTotalKgs: lineTotal,
+          unitCostKgs: unitCost,
+          lineCostTotalKgs: lineCostTotal,
+        },
+      });
     }
 
-    await writeAuditLog(tx, {
-      organizationId: input.organizationId,
-      actorId: input.actorId,
-      action: "SALES_ORDER_CREATE",
-      entity: "CustomerOrder",
-      entityId: order.id,
-      before: null,
-      after: toJson(order),
-      requestId: input.requestId,
-    });
+    order = await recomputeTotals(tx, order.id, input.actorId);
+  }
 
-    return serializeOrder(order);
+  await writeAuditLog(tx, {
+    organizationId: input.organizationId,
+    actorId: input.actorId,
+    action: "SALES_ORDER_CREATE",
+    entity: "CustomerOrder",
+    entityId: order.id,
+    before: null,
+    after: toJson(order),
+    requestId: input.requestId,
   });
+
+  return serializeOrder(order);
+};
+
+type CustomerOrderDraftResult = Awaited<ReturnType<typeof createCustomerOrderDraftTx>>;
+
+const dispatchCustomerOrderDraftCreated = (result: CustomerOrderDraftResult) => {
   eventBus.publish({
     type: "customerOrder.created",
     payload: {
@@ -703,7 +741,101 @@ export const createCustomerOrderDraft = async (input: {
       source: CustomerOrderSource.MANUAL,
     },
   });
+};
+
+export const createCustomerOrderDraft = async (input: CreateCustomerOrderDraftInput) => {
+  const result = await prisma.$transaction((tx) => createCustomerOrderDraftTx(tx, input));
+  dispatchCustomerOrderDraftCreated(result);
   return result;
+};
+
+type CustomerOrderDraftOperationResponse = Prisma.InputJsonObject & {
+  order: {
+    id: string;
+    number: string;
+    storeId: string;
+    status: CustomerOrderStatus;
+  };
+};
+
+const classifyCustomerOrderDraftOperationFailure = (
+  error: unknown,
+): OperationFailureDecision => {
+  if (error instanceof AppError) {
+    return {
+      classification: OPERATION_FAILURE_SAFE_BEFORE_EFFECTS,
+      responseCode: error.message,
+      responseStatus: error.status,
+    };
+  }
+  return {
+    classification: OPERATION_FAILURE_AMBIGUOUS,
+    responseCode: "operationRequestFailed",
+    responseStatus: 500,
+  };
+};
+
+export const createCustomerOrderDraftOperation = async (
+  input: CreateCustomerOrderDraftInput & { idempotencyKey: string },
+) => {
+  let createdResult: CustomerOrderDraftResult | null = null;
+  const operation = await runOperationRequest<CustomerOrderDraftOperationResponse>(
+    {
+      organizationId: input.organizationId,
+      storeId: input.storeId,
+      scope: "salesOrders.createDraft.v1",
+      principal: {
+        type: OperationRequestPrincipalType.AUTHENTICATED_USER,
+        id: input.actorId,
+      },
+      idempotencyKey: input.idempotencyKey,
+      payload: {
+        version: "v1",
+        value: {
+          customerName: input.customerName ?? null,
+          customerEmail: input.customerEmail ?? null,
+          customerPhone: input.customerPhone ?? null,
+          customerAddress: input.customerAddress ?? null,
+          notes: input.notes ?? null,
+          lines: (input.lines ?? []).map((line) => ({
+            productId: line.productId,
+            variantId: line.variantId ?? null,
+            qty: line.qty,
+          })),
+        },
+      },
+      allowedResponsePaths: [
+        "order",
+        "order.id",
+        "order.number",
+        "order.storeId",
+        "order.status",
+      ],
+      classifyFailure: classifyCustomerOrderDraftOperationFailure,
+    },
+    async (tx) => {
+      const result = await createCustomerOrderDraftTx(tx, input);
+      createdResult = result;
+      return {
+        response: {
+          order: {
+            id: result.id,
+            number: result.number,
+            storeId: result.storeId,
+            status: result.status,
+          },
+        },
+        responseStatus: 200,
+        responseCode: "created",
+        resource: { type: "CustomerOrder", id: result.id },
+      };
+    },
+  );
+
+  if (createdResult) {
+    dispatchCustomerOrderDraftCreated(createdResult);
+  }
+  return operation;
 };
 
 export const setCustomerOrderCustomer = async (input: {

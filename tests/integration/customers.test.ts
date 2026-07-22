@@ -1,12 +1,20 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CustomerSource,
   EmailCampaignRecipientStatus,
   EmailCampaignStatus,
   EmailSenderDomainStatus,
   EmailSenderIdentityStatus,
-  Role,
+  type Role,
 } from "@prisma/client";
+
+const orderEmailSideEffects = vi.hoisted(() => ({
+  sendOrderConfirmationEmail: vi.fn(async () => ({ status: "sent" as const })),
+  sendOrderCancellationEmail: vi.fn(async () => ({ status: "sent" as const })),
+  sendOrderTrackingEmail: vi.fn(async () => ({ status: "sent" as const })),
+}));
+
+vi.mock("@/server/services/orderEmails", () => orderEmailSideEffects);
 
 import { prisma } from "@/server/db/prisma";
 import { runJob } from "@/server/jobs";
@@ -54,6 +62,9 @@ const asCallerUser = (user: {
 describeDb("customer database", () => {
   beforeEach(async () => {
     await resetDatabase();
+    orderEmailSideEffects.sendOrderConfirmationEmail.mockClear();
+    orderEmailSideEffects.sendOrderCancellationEmail.mockClear();
+    orderEmailSideEffects.sendOrderTrackingEmail.mockClear();
   });
 
   it("enforces role and store scope for customer CRUD", async () => {
@@ -206,6 +217,7 @@ describeDb("customer database", () => {
     const caller = createTestCaller(asCallerUser(adminUser));
 
     await caller.salesOrders.createDraft({
+      idempotencyKey: "customers-order-email",
       storeId: store.id,
       customerName: "Email Customer",
       customerEmail: "Customer@Example.COM",
@@ -213,18 +225,21 @@ describeDb("customer database", () => {
       customerAddress: "Bishkek, Chui 1",
     });
     await caller.salesOrders.createDraft({
+      idempotencyKey: "customers-order-phone",
       storeId: store.id,
       customerName: "Phone Customer",
       customerEmail: null,
       customerPhone: "+996 555 123 123",
     });
     await caller.salesOrders.createDraft({
+      idempotencyKey: "customers-order-other-store",
       storeId: otherStore.id,
       customerName: "Other Store Same Email",
       customerEmail: "customer@example.com",
       customerPhone: null,
     });
     await caller.salesOrders.createDraft({
+      idempotencyKey: "customers-order-no-contact",
       storeId: store.id,
       customerName: "No Contact",
       customerEmail: null,

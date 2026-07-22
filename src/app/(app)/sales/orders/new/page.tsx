@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 
@@ -71,6 +71,7 @@ const NewSalesOrderPage = () => {
   const [showLineSearchResults, setShowLineSearchResults] = useState(false);
   const [pendingQty, setPendingQty] = useState("1");
   const [draftLines, setDraftLines] = useState<DraftLine[]>([]);
+  const createAttemptRef = useRef<{ payload: string; idempotencyKey: string } | null>(null);
 
   useEffect(() => {
     if (!storeId && storesQuery.data?.[0]) {
@@ -86,6 +87,7 @@ const NewSalesOrderPage = () => {
 
   const createMutation = trpc.salesOrders.createDraft.useMutation({
     onSuccess: (order) => {
+      createAttemptRef.current = null;
       toast({ variant: "success", description: t("createSuccess") });
       router.push(`/sales/orders/${order.id}`);
     },
@@ -218,7 +220,7 @@ const NewSalesOrderPage = () => {
       return;
     }
 
-    await createMutation.mutateAsync({
+    const payload = {
       storeId,
       customerName: customerName.trim() || null,
       customerEmail: customerEmail.trim() || null,
@@ -230,7 +232,16 @@ const NewSalesOrderPage = () => {
         variantId: null,
         qty: Math.trunc(line.qty),
       })),
-    });
+    };
+    const serializedPayload = JSON.stringify(payload);
+    const existingAttempt = createAttemptRef.current;
+    const idempotencyKey =
+      existingAttempt?.payload === serializedPayload
+        ? existingAttempt.idempotencyKey
+        : crypto.randomUUID();
+    createAttemptRef.current = { payload: serializedPayload, idempotencyKey };
+
+    await createMutation.mutateAsync({ ...payload, idempotencyKey });
   };
 
   const orderTotalKgs = useMemo(

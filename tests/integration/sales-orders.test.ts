@@ -35,6 +35,7 @@ describeDb("sales orders", () => {
     });
 
     const order = await caller.salesOrders.createDraft({
+      idempotencyKey: "sales-create-initial-lines",
       storeId: store.id,
       customerName: null,
       customerPhone: null,
@@ -67,6 +68,7 @@ describeDb("sales orders", () => {
     });
 
     const order = await caller.salesOrders.createDraft({
+      idempotencyKey: "sales-create-manual-email",
       storeId: store.id,
       customerName: "Client Email",
       customerEmail: "Client.Email@Example.COM",
@@ -128,6 +130,7 @@ describeDb("sales orders", () => {
     });
 
     const order = await caller.salesOrders.createDraft({
+      idempotencyKey: "sales-create-confirm-automation",
       storeId: store.id,
       customerName: "Confirm Client",
       customerEmail: "confirm@example.com",
@@ -167,6 +170,7 @@ describeDb("sales orders", () => {
     });
 
     const order = await caller.salesOrders.createDraft({
+      idempotencyKey: "sales-create-tracking",
       storeId: store.id,
       customerName: "Tracking Client",
       customerEmail: "tracking@example.com",
@@ -229,6 +233,7 @@ describeDb("sales orders", () => {
     expect(sentLogs).toHaveLength(1);
 
     const missingTrackingOrder = await caller.salesOrders.createDraft({
+      idempotencyKey: "sales-create-missing-tracking",
       storeId: store.id,
       customerName: "Missing Tracking Client",
       customerEmail: "missing-tracking@example.com",
@@ -255,6 +260,7 @@ describeDb("sales orders", () => {
     });
 
     const order = await caller.salesOrders.createDraft({
+      idempotencyKey: "sales-create-cancel",
       storeId: store.id,
       customerName: "Cancel Client",
       customerEmail: "cancel@example.com",
@@ -281,6 +287,7 @@ describeDb("sales orders", () => {
     });
 
     const noEmailOrder = await caller.salesOrders.createDraft({
+      idempotencyKey: "sales-create-cancel-no-email",
       storeId: store.id,
       customerName: "No Email Client",
       customerEmail: null,
@@ -317,6 +324,7 @@ describeDb("sales orders", () => {
     });
 
     const order = await caller.salesOrders.createDraft({
+      idempotencyKey: "sales-create-follow-up",
       storeId: store.id,
       customerName: "Follow Up Client",
       customerEmail: "followup@example.com",
@@ -377,7 +385,10 @@ describeDb("sales orders", () => {
       isOrgOwner: true,
     });
 
-    const order = await caller.salesOrders.createDraft({ storeId: store.id });
+    const order = await caller.salesOrders.createDraft({
+      idempotencyKey: "sales-create-add-line",
+      storeId: store.id,
+    });
     const line = await caller.salesOrders.addLine({
       customerOrderId: order.id,
       productId: product.id,
@@ -411,6 +422,7 @@ describeDb("sales orders", () => {
     });
 
     const order = await caller.salesOrders.createDraft({
+      idempotencyKey: "sales-create-client-a",
       storeId: store.id,
       customerName: "Client A",
     });
@@ -474,6 +486,7 @@ describeDb("sales orders", () => {
     });
 
     const order = await caller.salesOrders.createDraft({
+      idempotencyKey: "sales-create-client-b",
       storeId: store.id,
       customerName: "Client B",
     });
@@ -533,7 +546,10 @@ describeDb("sales orders", () => {
       isOrgOwner: true,
     });
 
-    const order = await adminCaller.salesOrders.createDraft({ storeId: store.id });
+    const order = await adminCaller.salesOrders.createDraft({
+      idempotencyKey: "sales-create-store-access",
+      storeId: store.id,
+    });
     await adminCaller.salesOrders.addLine({
       customerOrderId: order.id,
       productId: product.id,
@@ -650,7 +666,10 @@ describeDb("sales orders", () => {
       isOrgOwner: true,
     });
 
-    const order = await caller.salesOrders.createDraft({ storeId: store.id });
+    const order = await caller.salesOrders.createDraft({
+      idempotencyKey: "sales-create-bundle-cost",
+      storeId: store.id,
+    });
     const line = await caller.salesOrders.addLine({
       customerOrderId: order.id,
       productId: bundle.id,
@@ -761,7 +780,10 @@ describeDb("sales orders", () => {
       isOrgOwner: true,
     });
 
-    const order = await caller.salesOrders.createDraft({ storeId: store.id });
+    const order = await caller.salesOrders.createDraft({
+      idempotencyKey: "sales-create-metrics",
+      storeId: store.id,
+    });
     await caller.salesOrders.addLine({ customerOrderId: order.id, productId: product.id, qty: 2 });
     await caller.salesOrders.addLine({ customerOrderId: order.id, productId: bundle.id, qty: 1 });
     await caller.salesOrders.confirm({ customerOrderId: order.id });
