@@ -226,7 +226,7 @@ describeDb("B0 Agent 3 order P0 runtime verification", () => {
     expect(snapshot?.onOrder).toBe(10);
   });
 
-  it("reproduces HARD-A3-005: EXT-1 collides with EXT-10 substring identity", async () => {
+  it("regresses HARD-A3-005: EXT-1 remains distinct from EXT-10", async () => {
     const { org, store, product, adminUser } = await seedBase({ allowNegativeStock: true });
     await prisma.product.update({ where: { id: product.id }, data: { basePriceKgs: 50 } });
     await seedStock({
@@ -272,10 +272,10 @@ describeDb("B0 Agent 3 order P0 runtime verification", () => {
       persistedCount,
     });
 
-    expect(shorter.id).toBe(longer.id);
-    expect(lookedUp.id).toBe(longer.id);
-    expect(listed.data.map((order) => order.id)).toEqual([longer.id]);
-    expect(persistedCount).toBe(1);
+    expect(shorter.id).not.toBe(longer.id);
+    expect(lookedUp.id).toBe(shorter.id);
+    expect(listed.data.map((order) => order.id)).toEqual([shorter.id]);
+    expect(persistedCount).toBe(2);
   });
 
   it("verifies HARD-A3-009: sales mutations reject inactive, unassigned, and cross-org products", async () => {

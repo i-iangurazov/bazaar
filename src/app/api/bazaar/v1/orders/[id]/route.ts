@@ -16,11 +16,14 @@ const toStatus = (message: string) => {
   if (message === "apiUnauthorized") {
     return 401;
   }
-  if (message === "invalidInput") {
+  if (message === "invalidInput" || message === "invalidExternalOrderId") {
     return 400;
   }
   if (message === "orderNotFound") {
     return 404;
+  }
+  if (message === "externalOrderIdConflict") {
+    return 409;
   }
   return 500;
 };

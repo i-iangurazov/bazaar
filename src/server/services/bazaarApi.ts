@@ -20,6 +20,11 @@ import { getLogger } from "@/server/logging";
 import { getRedisPublisher } from "@/server/redis";
 import { writeAuditLog } from "@/server/services/audit";
 import {
+  formatBazaarExternalOrderIdNote,
+  normalizeBazaarExternalOrderId,
+  parseLegacyBazaarExternalIdNotes,
+} from "@/server/services/bazaarExternalIdentity";
+import {
   normalizeCustomerEmail,
   normalizeCustomerPhone,
   upsertCustomerFromOrderTx,
@@ -51,10 +56,13 @@ const normalizeOptionalText = (value?: string | null) => {
   const normalized = value?.trim();
   return normalized ? normalized : null;
 };
-const normalizeExternalId = (value?: string | null) => normalizeOptionalText(value)?.replace(/\s+/g, " ") ?? null;
 const customerEmailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const variantKeyFrom = (variantId?: string | null) => variantId ?? "BASE";
-const bazaarApiExternalIdNote = (externalId: string) => `Bazaar API externalId: ${externalId}`;
+// Staged compatibility defaults on until the clean backfill and Preview gate approve removal.
+const shouldWriteLegacyBazaarApiExternalIdMarker = () => {
+  const configured = process.env.BAZAAR_API_WRITE_LEGACY_EXTERNAL_ID_MARKER?.trim().toLowerCase();
+  return configured !== "0" && configured !== "false";
+};
 const bazaarApiStockImpactingStatuses = new Set<CustomerOrderStatus>([
   CustomerOrderStatus.CONFIRMED,
   CustomerOrderStatus.READY,
@@ -133,15 +141,81 @@ const normalizeBazaarApiOrderStatusFilter = (status?: string | null) => {
   throw new AppError("invalidInput", "BAD_REQUEST", 400);
 };
 
-const extractBazaarApiExternalId = (notes?: string | null) => {
-  if (!notes) {
-    return null;
+const resolveBazaarApiExternalId = (order: {
+  externalOrderId: string | null;
+  notes: string | null;
+}) => {
+  if (order.externalOrderId !== null) {
+    return order.externalOrderId;
   }
-  const line = notes
-    .split(/\r?\n/)
-    .map((entry) => entry.trim())
-    .find((entry) => entry.startsWith(`${bazaarApiExternalIdNote("")}`));
-  return normalizeExternalId(line?.slice(bazaarApiExternalIdNote("").length) ?? null);
+  const legacyIdentity = parseLegacyBazaarExternalIdNotes(order.notes);
+  return legacyIdentity.kind === "value" ? legacyIdentity.value : null;
+};
+
+const strictLegacyMarkerWhere = (externalOrderId: string): Prisma.CustomerOrderWhereInput => {
+  const marker = formatBazaarExternalOrderIdNote(externalOrderId);
+  return {
+    OR: [
+      { notes: { equals: marker } },
+      { notes: { startsWith: `${marker}\n` } },
+      { notes: { startsWith: `${marker}\r` } },
+      { notes: { endsWith: `\n${marker}` } },
+      { notes: { endsWith: `\r${marker}` } },
+      { notes: { contains: `\n${marker}\n` } },
+      { notes: { contains: `\n${marker}\r` } },
+      { notes: { contains: `\r${marker}\n` } },
+      { notes: { contains: `\r${marker}\r` } },
+    ],
+  };
+};
+
+type BazaarApiOrderIdentityClient = Pick<Prisma.TransactionClient, "customerOrder">;
+
+const findBazaarApiOrderIdByExternalIdentity = async (
+  client: BazaarApiOrderIdentityClient,
+  input: {
+    organizationId: string;
+    storeId: string;
+    externalOrderId: string;
+  },
+) => {
+  const scope = {
+    organizationId: input.organizationId,
+    storeId: input.storeId,
+    source: CustomerOrderSource.API,
+  } as const;
+  const exactMatches = await client.customerOrder.findMany({
+    where: { ...scope, externalOrderId: input.externalOrderId },
+    select: { id: true },
+    orderBy: { id: "asc" },
+    take: 2,
+  });
+  if (exactMatches.length > 1) {
+    throw new AppError("externalOrderIdConflict", "CONFLICT", 409);
+  }
+  if (exactMatches[0]) {
+    return exactMatches[0].id;
+  }
+
+  const legacyCandidates = await client.customerOrder.findMany({
+    where: {
+      ...scope,
+      externalOrderId: null,
+      ...strictLegacyMarkerWhere(input.externalOrderId),
+    },
+    select: { id: true, notes: true },
+    orderBy: { id: "asc" },
+    take: 2,
+  });
+  if (legacyCandidates.length > 1) {
+    throw new AppError("externalOrderIdConflict", "CONFLICT", 409);
+  }
+  const legacyCandidate = legacyCandidates[0];
+  if (!legacyCandidate) return null;
+  const parsed = parseLegacyBazaarExternalIdNotes(legacyCandidate.notes);
+  return parsed.kind === "value" && parsed.value === input.externalOrderId
+    ? legacyCandidate.id
+    : null;
 };
 
 const readCache = async <T>(key: string): Promise<T | null> => {
@@ -312,6 +386,7 @@ const bazaarApiOrderSelect = {
   currencyCode: true,
   currencyRateKgsPerUnit: true,
   notes: true,
+  externalOrderId: true,
   confirmedAt: true,
   readyAt: true,
   completedAt: true,
@@ -419,7 +494,7 @@ const serializeBazaarApiOrder = (order: BazaarApiOrderRecord) => {
   return {
     id: order.id,
     orderNumber: order.number,
-    externalOrderId: extractBazaarApiExternalId(order.notes),
+    externalOrderId: resolveBazaarApiExternalId(order),
     ...status,
     createdAt: order.createdAt.toISOString(),
     updatedAt: order.updatedAt.toISOString(),
@@ -480,7 +555,7 @@ const serializeBazaarApiOrderSummary = (order: BazaarApiOrderRecord) => {
   return {
     id: order.id,
     orderNumber: order.number,
-    externalOrderId: extractBazaarApiExternalId(order.notes),
+    externalOrderId: resolveBazaarApiExternalId(order),
     ...mapBazaarApiOrderStatus(order.status),
     createdAt: order.createdAt.toISOString(),
     updatedAt: order.updatedAt.toISOString(),
@@ -963,20 +1038,39 @@ export const getBazaarApiOrder = async (input: {
     throw new AppError("invalidInput", "BAD_REQUEST", 400);
   }
 
-  const externalId = normalizeExternalId(identifier);
-  const order = await prisma.customerOrder.findFirst({
+  const directOrder = await prisma.customerOrder.findFirst({
     where: {
       organizationId: input.organizationId,
       storeId: input.storeId,
       source: CustomerOrderSource.API,
-      OR: [
-        { id: identifier },
-        { number: identifier },
-        ...(externalId ? [{ notes: { contains: bazaarApiExternalIdNote(externalId) } }] : []),
-      ],
+      OR: [{ id: identifier }, { number: identifier }],
     },
     select: bazaarApiOrderSelect,
   });
+  if (directOrder) {
+    return serializeBazaarApiOrder(directOrder);
+  }
+
+  const externalOrderId = normalizeBazaarExternalOrderId(identifier);
+  if (!externalOrderId) {
+    throw new AppError("orderNotFound", "NOT_FOUND", 404);
+  }
+  const externalOrderMatchId = await findBazaarApiOrderIdByExternalIdentity(prisma, {
+    organizationId: input.organizationId,
+    storeId: input.storeId,
+    externalOrderId,
+  });
+  const order = externalOrderMatchId
+    ? await prisma.customerOrder.findFirst({
+        where: {
+          id: externalOrderMatchId,
+          organizationId: input.organizationId,
+          storeId: input.storeId,
+          source: CustomerOrderSource.API,
+        },
+        select: bazaarApiOrderSelect,
+      })
+    : null;
   if (!order) {
     throw new AppError("orderNotFound", "NOT_FOUND", 404);
   }
@@ -1000,7 +1094,7 @@ export const listBazaarApiOrders = async (input: {
   const limit = Math.min(100, Math.max(1, Math.trunc(input.limit ?? 50)));
   const status = normalizeBazaarApiOrderStatusFilter(input.status);
   const orderNumber = normalizeOptionalText(input.orderNumber);
-  const externalOrderId = normalizeExternalId(input.externalOrderId);
+  const externalOrderId = normalizeBazaarExternalOrderId(input.externalOrderId);
   const cursor = normalizeOptionalText(input.cursor);
 
   if (input.dateFrom && input.dateTo && input.dateFrom > input.dateTo) {
@@ -1011,13 +1105,24 @@ export const listBazaarApiOrders = async (input: {
     return { data: [], pagination: { nextCursor: null } };
   }
 
+  const externalOrderMatchId = externalOrderId
+    ? await findBazaarApiOrderIdByExternalIdentity(prisma, {
+        organizationId: input.organizationId,
+        storeId: input.storeId,
+        externalOrderId,
+      })
+    : null;
+  if (externalOrderId && !externalOrderMatchId) {
+    return { data: [], pagination: { nextCursor: null } };
+  }
+
   const where: Prisma.CustomerOrderWhereInput = {
     organizationId: input.organizationId,
     storeId: input.storeId,
     source: CustomerOrderSource.API,
     ...(status ? { status } : {}),
     ...(orderNumber ? { number: orderNumber } : {}),
-    ...(externalOrderId ? { notes: { contains: bazaarApiExternalIdNote(externalOrderId) } } : {}),
+    ...(externalOrderMatchId ? { id: externalOrderMatchId } : {}),
     ...(input.dateFrom || input.dateTo
       ? {
           createdAt: {
@@ -1196,8 +1301,11 @@ export const createBazaarApiOrder = async (input: {
   externalId?: string | null;
   lines: Array<{ productId: string; variantId?: string | null; qty: number }>;
 }) => {
-  const externalId = normalizeExternalId(input.externalId);
-  const externalIdNote = externalId ? bazaarApiExternalIdNote(externalId) : null;
+  const externalId = normalizeBazaarExternalOrderId(input.externalId);
+  const externalIdNote =
+    externalId && shouldWriteLegacyBazaarApiExternalIdMarker()
+      ? formatBazaarExternalOrderIdNote(externalId)
+      : null;
   const normalizedLines = Array.from(
     input.lines.reduce((map, line) => {
       const productId = line.productId.trim();
@@ -1236,33 +1344,40 @@ export const createBazaarApiOrder = async (input: {
       throw new AppError("storeNotFound", "NOT_FOUND", 404);
     }
 
-    if (externalIdNote) {
+    if (externalId) {
       const lockKey = `bazaar-api-order:${input.organizationId}:${input.storeId}:${externalId}`;
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
-      const existingOrder = await tx.customerOrder.findFirst({
-        where: {
-          organizationId: input.organizationId,
-          storeId: input.storeId,
-          source: CustomerOrderSource.API,
-          notes: { contains: externalIdNote },
-        },
-        select: {
-          id: true,
-          number: true,
-          storeId: true,
-          status: true,
-          totalKgs: true,
-          lines: {
-            select: {
-              productId: true,
-              variantId: true,
-              qty: true,
-              unitCostKgs: true,
-              lineTotalKgs: true,
-            },
-          },
-        },
+      const existingOrderId = await findBazaarApiOrderIdByExternalIdentity(tx, {
+        organizationId: input.organizationId,
+        storeId: input.storeId,
+        externalOrderId: externalId,
       });
+      const existingOrder = existingOrderId
+        ? await tx.customerOrder.findFirst({
+            where: {
+              id: existingOrderId,
+              organizationId: input.organizationId,
+              storeId: input.storeId,
+              source: CustomerOrderSource.API,
+            },
+            select: {
+              id: true,
+              number: true,
+              storeId: true,
+              status: true,
+              totalKgs: true,
+              lines: {
+                select: {
+                  productId: true,
+                  variantId: true,
+                  qty: true,
+                  unitCostKgs: true,
+                  lineTotalKgs: true,
+                },
+              },
+            },
+          })
+        : null;
       if (existingOrder) {
         if (bazaarApiStockImpactingStatuses.has(existingOrder.status)) {
           await applyBazaarApiOrderStockDeduction(tx, {
@@ -1379,6 +1494,7 @@ export const createBazaarApiOrder = async (input: {
         customerPhone: normalizeOptionalText(input.customerPhone),
         customerAddress: normalizeOptionalText(input.customerAddress),
         notes: notes || null,
+        externalOrderId: externalId,
         subtotalKgs: subtotal,
         totalKgs: subtotal,
         ...resolveCurrencySnapshot(store),
