@@ -1,22 +1,116 @@
 {
   "phase": "B1",
-  "target": "local production bundle with Preview-isolated services",
-  "database": "bazaar_hardening_b1_preview",
-  "generatedAt": "2026-07-22T02:48:49.738Z",
+  "baseUrl": "https://bazaar-hardening-b1.vercel.app",
+  "database": "bazaar_hardening_preview_b1",
+  "generatedAt": "2026-07-22T04:51:42.111Z",
   "status": "PASS",
   "checks": [
-    { "name": "health", "status": "PASS", "httpStatus": 200 },
-    { "name": "api-key-required", "status": "PASS", "httpStatus": 401 },
-    { "name": "api-key-product-store-isolation", "status": "PASS", "httpStatus": 200, "visibleProductCount": 1 },
-    { "name": "api-key-order-store-isolation", "status": "PASS", "httpStatus": 200, "visibleOrderCount": 1 },
-    { "name": "api-key-store-id-tampering", "status": "PASS", "httpStatus": 200, "visibleOrderCount": 0 },
-    { "name": "foreign-resource-indistinguishable", "status": "PASS", "sameOrgStatus": 404, "crossOrgStatus": 404, "absentStatus": 404, "responseCode": "NOT_FOUND" },
-    { "name": "rejected-api-mutation-has-no-side-effects", "status": "PASS", "httpStatus": 404, "before": { "orders": 3, "movements": 0 }, "after": { "orders": 3, "movements": 0 } },
-    { "name": "revoked-api-key-immediate", "status": "PASS", "httpStatus": 401 },
-    { "name": "restored-api-key-positive", "status": "PASS", "httpStatus": 200 },
-    { "name": "second-organization-positive-and-isolated", "status": "PASS", "httpStatus": 200, "visibleProductCount": 1 },
-    { "name": "ssrf-live-deny-suite", "status": "PASS", "cases": 13 },
-    { "name": "no-sensitive-values-in-http-bodies", "status": "PASS", "responseBodiesChecked": 25 }
+    {
+      "name": "health",
+      "status": "PASS",
+      "httpStatus": 200
+    },
+    {
+      "name": "api-key-required",
+      "status": "PASS",
+      "httpStatus": 401
+    },
+    {
+      "name": "api-key-product-store-isolation",
+      "status": "PASS",
+      "httpStatus": 200,
+      "visibleProductCount": 1
+    },
+    {
+      "name": "api-key-order-store-isolation",
+      "status": "PASS",
+      "httpStatus": 200,
+      "visibleOrderCount": 1
+    },
+    {
+      "name": "api-key-store-id-tampering",
+      "status": "PASS",
+      "httpStatus": 200,
+      "visibleOrderCount": 0
+    },
+    {
+      "name": "foreign-resource-indistinguishable",
+      "status": "PASS",
+      "sameOrgStatus": 404,
+      "crossOrgStatus": 404,
+      "absentStatus": 404,
+      "responseCode": "NOT_FOUND"
+    },
+    {
+      "name": "rejected-api-mutation-has-no-side-effects",
+      "status": "PASS",
+      "httpStatus": 404,
+      "before": {
+        "orders": 3,
+        "movements": 0
+      },
+      "after": {
+        "orders": 3,
+        "movements": 0
+      }
+    },
+    {
+      "name": "revoked-api-key-immediate",
+      "status": "PASS",
+      "httpStatus": 401
+    },
+    {
+      "name": "restored-api-key-positive",
+      "status": "PASS",
+      "httpStatus": 200
+    },
+    {
+      "name": "second-organization-positive-and-isolated",
+      "status": "PASS",
+      "httpStatus": 200,
+      "visibleProductCount": 1
+    },
+    {
+      "name": "ssrf-live-deny-suite",
+      "status": "PASS",
+      "cases": 13,
+      "statuses": [
+        404,
+        404,
+        404,
+        404,
+        404,
+        404,
+        404,
+        404,
+        404,
+        404,
+        404,
+        404,
+        404
+      ]
+    },
+    {
+      "name": "ssrf-redirect-to-private-denied",
+      "status": "PASS",
+      "httpStatus": 502,
+      "genericError": "imageReadFailed"
+    },
+    {
+      "name": "ssrf-public-image-positive",
+      "status": "PASS",
+      "httpStatus": 200,
+      "contentType": "image/webp",
+      "responseBytes": 2264
+    },
+    {
+      "name": "no-sensitive-values-in-http-bodies",
+      "status": "PASS",
+      "responseBodiesChecked": 26
+    }
   ],
-  "totals": { "passed": 12, "failed": 0 }
+  "totals": {
+    "passed": 14,
+    "failed": 0
+  }
 }

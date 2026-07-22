@@ -2,9 +2,9 @@
 
 Baseline: `4d7c9b33218b584334ca62f7a816f8997f144a10`
 
-Phase: B1 — P0-A security/isolation implementation locally complete; Preview gate awaiting explicit deployment authorization
+Phase: B1 — P0-A security/isolation Preview gate complete on approved commit `042ed6781f1ee483ee3f428f6fc8c8ecc0b3a15c`
 
-All 46 P0 hypotheses have runtime evidence and classifications. `HARD-A4-010` was resolved in B0. All 24 P0-A findings are now `CLOSED` locally through five consolidated root-cause closures and independent Agent 4 verification. The remaining 21 P0 findings belong to P0-B/P0-C/P0-D and remain `OPEN`; no P1/P2 implementation was started. [The Phase B1 summary](./PHASE_B1_SUMMARY.md) records commits, evidence, gates, and the outstanding Preview authorization.
+All 46 P0 hypotheses have runtime evidence and classifications. `HARD-A4-010` was resolved in B0. All 24 P0-A findings are `CLOSED` through five consolidated root-cause closures and independent Agent 4 verification against the protected Preview deployment. The remaining 21 P0 findings belong to P0-B/P0-C/P0-D and remain `OPEN`; no P1/P2 implementation was started. Preview verification added one P2 runtime finding, `HARD-B1-001`. [The Phase B1 summary](./PHASE_B1_SUMMARY.md) records the deployment and gate evidence.
 
 ## Summary
 
@@ -13,8 +13,8 @@ All 46 P0 hypotheses have runtime evidence and classifications. `HARD-A4-010` wa
 | Agent 1 — POS & Cash | 9 | 3 | 7 | 0 | 19 |
 | Agent 2 — Products & Inventory | 11 | 3 | 3 | 0 | 17 |
 | Agent 3 — Orders, APIs & Integrations | 15 | 7 | 5 | 0 | 27 |
-| Agent 4 — Platform QA & Release Gate | 11 | 4 | 4 | 0 | 19 |
-| **Total** | **46** | **17** | **19** | **0** | **82** |
+| Agent 4 — Platform QA & Release Gate | 11 | 4 | 5 | 0 | 20 |
+| **Total** | **46** | **17** | **20** | **0** | **83** |
 
 ## P0 — release and data-safety blockers
 
@@ -165,11 +165,12 @@ Root-cause groups guide implementation batching; they do not remove distinct ver
 | HARD-A4-015 | Agent 4 | Platform routes omit explicit API-error and retry states. | [detail](./AGENT_4_PLATFORM_QA_AUDIT.md#hard-a4-015) |
 | HARD-A4-016 | Agent 4 | Reports and period-close history load unbounded data. | [detail](./AGENT_4_PLATFORM_QA_AUDIT.md#hard-a4-016) |
 | HARD-A4-017 | Agent 4 | Large route bundles and globally loaded font families threaten performance budgets. | [detail](./AGENT_4_PLATFORM_QA_AUDIT.md#hard-a4-017) |
+| HARD-B1-001 | Agent 4 | `/api/sse` connections reach Vercel's 300-second execution limit and are recorded as runtime timeouts. | [Preview evidence](./PHASE_B1_SUMMARY.md#new-non-p0-observation) |
 
 ## Release posture
 
 - No P0/P1 is unowned; implementation ownership follows the agent column and the shared-file lock document.
-- `HARD-A4-010` is verified resolved in B0 and all 24 P0-A findings are locally closed in B1. The remaining 21 P0s stay open for B/C/D; no P1/P2 work has begun.
+- `HARD-A4-010` is verified resolved in B0 and all 24 P0-A findings are closed in B1. The remaining 21 P0s stay open for B/C/D; no P1/P2 implementation has begun.
 - DB-backed execution is ready on four positively identified databases with explicit reset guards; agents must continue using only their assigned database/Redis/storage identities.
-- Local browser/API/DB security evidence is `PASS`; the external Preview deployment and remote smoke remain `BLOCKED_PENDING_USER_AUTHORIZATION`. Theme and performance are outside the P0-A authorization surface and were not expanded into P1/P2 work.
+- Protected Preview deployment `dpl_B4cmRL7MxKwSXyr54JK12mfRH14n` is `READY`; remote browser/API/DB, SSRF, API-key, RBAC, and secret-leak checks are `PASS`. The non-security SSE timeout observation is tracked as P2 `HARD-B1-001` and was not fixed in B1.
 - External marketplace and email APIs must be mocked in automated tests.

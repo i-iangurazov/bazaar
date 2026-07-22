@@ -1,7 +1,7 @@
 {
   "phase": "B1",
-  "baseUrl": "http://localhost:3105",
-  "generatedAt": "2026-07-22T03:17:39.424Z",
+  "baseUrl": "https://bazaar-hardening-b1.vercel.app",
+  "generatedAt": "2026-07-22T04:58:25.853Z",
   "status": "PASS",
   "roles": [
     "ADMIN",
@@ -23,6 +23,8 @@
       "viewport": "1440x1000",
       "status": "PASS",
       "leakedSensitiveValue": false,
+      "expectedTheme": "light",
+      "actualTheme": "light",
       "problems": [],
       "screenshot": "admin-dashboard-desktop.png"
     },
@@ -34,6 +36,8 @@
       "viewport": "1440x1000",
       "status": "PASS",
       "leakedSensitiveValue": false,
+      "expectedTheme": "light",
+      "actualTheme": "light",
       "problems": [],
       "screenshot": null
     },
@@ -45,6 +49,8 @@
       "viewport": "1440x1000",
       "status": "PASS",
       "leakedSensitiveValue": false,
+      "expectedTheme": "dark",
+      "actualTheme": "dark",
       "problems": [],
       "screenshot": "manager-dashboard-desktop.png"
     },
@@ -56,6 +62,8 @@
       "viewport": "1440x1000",
       "status": "PASS",
       "leakedSensitiveValue": false,
+      "expectedTheme": "dark",
+      "actualTheme": "dark",
       "problems": [],
       "screenshot": null
     },
@@ -67,6 +75,8 @@
       "viewport": "1440x1000",
       "status": "PASS",
       "leakedSensitiveValue": false,
+      "expectedTheme": "dark",
+      "actualTheme": "dark",
       "problems": [],
       "screenshot": null
     },
@@ -78,6 +88,8 @@
       "viewport": "1440x1000",
       "status": "PASS",
       "leakedSensitiveValue": false,
+      "expectedTheme": "dark",
+      "actualTheme": "dark",
       "problems": [],
       "screenshot": null
     },
@@ -89,6 +101,8 @@
       "viewport": "390x844",
       "status": "PASS",
       "leakedSensitiveValue": false,
+      "expectedTheme": "dark",
+      "actualTheme": "dark",
       "problems": [],
       "screenshot": "cashier-pos-mobile.png"
     },
@@ -100,6 +114,8 @@
       "viewport": "390x844",
       "status": "PASS",
       "leakedSensitiveValue": false,
+      "expectedTheme": "dark",
+      "actualTheme": "dark",
       "problems": [],
       "screenshot": null
     },
@@ -111,6 +127,8 @@
       "viewport": "390x844",
       "status": "PASS",
       "leakedSensitiveValue": false,
+      "expectedTheme": "dark",
+      "actualTheme": "dark",
       "problems": [],
       "screenshot": null
     },
@@ -122,6 +140,8 @@
       "viewport": "414x896",
       "status": "PASS",
       "leakedSensitiveValue": false,
+      "expectedTheme": "light",
+      "actualTheme": "light",
       "problems": [],
       "screenshot": null
     },
@@ -133,6 +153,8 @@
       "viewport": "414x896",
       "status": "PASS",
       "leakedSensitiveValue": false,
+      "expectedTheme": "light",
+      "actualTheme": "light",
       "problems": [],
       "screenshot": "limited-products-denied-mobile.png"
     },
@@ -144,6 +166,8 @@
       "viewport": "414x896",
       "status": "PASS",
       "leakedSensitiveValue": false,
+      "expectedTheme": "light",
+      "actualTheme": "light",
       "problems": [],
       "screenshot": null
     }

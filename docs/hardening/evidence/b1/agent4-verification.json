@@ -1,9 +1,10 @@
 {
   "phase": "B1",
   "scope": "P0-A security and organization/store isolation",
-  "implementationHead": "fa0c48604d85067291f00bf0567b867c4597f585",
-  "generatedAt": "2026-07-22T03:25:00.000Z",
-  "status": "LOCAL_PASS_PREVIEW_PENDING_AUTHORIZATION",
+  "implementationHead": "042ed6781f1ee483ee3f428f6fc8c8ecc0b3a15c",
+  "deployedCommit": "042ed6781f1ee483ee3f428f6fc8c8ecc0b3a15c",
+  "generatedAt": "2026-07-22T05:12:50.000Z",
+  "status": "PREVIEW_SECURITY_PASS_WITH_KNOWN_P2",
   "issueTotals": {
     "approved": 24,
     "rejected": 0,
@@ -45,8 +46,8 @@
     },
     "apiDatabaseSecuritySmoke": {
       "status": "PASS",
-      "checks": 12,
-      "database": "bazaar_hardening_b1_preview",
+      "checks": 14,
+      "database": "bazaar_hardening_preview_b1",
       "evidence": "api-security-smoke.json"
     },
     "browserSecuritySmoke": {
@@ -77,9 +78,40 @@
       "build": "PASS",
       "gitDiffCheck": "PASS"
     },
+    "secretLeakReview": {
+      "status": "PASS",
+      "httpBodiesChecked": 26,
+      "runtimeLogRecordsChecked": 500,
+      "exactSecretMatches": 0,
+      "credentialPatternMatches": 0,
+      "browserNetworkLeaks": 0
+    },
+    "runtimeObservation": {
+      "id": "HARD-B1-001",
+      "severity": "P2",
+      "status": "OPEN",
+      "route": "/api/sse",
+      "vercelTimeoutRecords": 30,
+      "timeoutSeconds": 300,
+      "securityImpactObserved": false
+    },
     "preview": {
-      "status": "BLOCKED_PENDING_USER_AUTHORIZATION",
-      "reason": "External deployment of private source and deployment-specific secrets requires explicit approval"
+      "status": "READY",
+      "target": "preview",
+      "deploymentId": "dpl_B4cmRL7MxKwSXyr54JK12mfRH14n",
+      "url": "https://bazaar-hardening-b1.vercel.app",
+      "projectId": "prj_M1de7oGW6aL0xRTTYlHjz3ATxXbi",
+      "protected": true,
+      "migrationStatus": "87/87_APPLIED_NONE_PENDING",
+      "redisPrefix": "bazaar:hardening:b1:preview:042ed678:"
+    },
+    "cleanup": {
+      "automationBypassRevoked": true,
+      "qaUsersDeactivated": 5,
+      "apiKeysRevoked": 2,
+      "providerTokensCleared": 2,
+      "localSecretArtifactsRemoved": true,
+      "previewDatabaseRetainedForPhaseB2": true
     }
   }
 }

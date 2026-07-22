@@ -2,7 +2,7 @@
 
 Baseline: `4d7c9b33218b584334ca62f7a816f8997f144a10`
 
-Status: Phase B1 P0-A locally integrated from `343079b4e6cd6140f84a8448610259b2d7573704`. All B1 claims below are released after selective integration and cross-review; the external Preview gate awaits explicit deployment authorization.
+Status: Phase B1 P0-A integrated from `343079b4e6cd6140f84a8448610259b2d7573704` and verified on protected Preview deployment `dpl_B4cmRL7MxKwSXyr54JK12mfRH14n` at exact commit `042ed6781f1ee483ee3f428f6fc8c8ecc0b3a15c`. All B1 claims below are released after selective integration and cross-review.
 
 ## Rules
 

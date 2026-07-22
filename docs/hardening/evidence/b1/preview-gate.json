@@ -1,0 +1,60 @@
+{
+  "phase": "B1",
+  "status": "PASS_WITH_KNOWN_NON_P0_FINDING",
+  "deployment": {
+    "id": "dpl_B4cmRL7MxKwSXyr54JK12mfRH14n",
+    "url": "https://bazaar-hardening-b1.vercel.app",
+    "generatedUrl": "https://bazaar-3ki9wg2u6-ilyas0707s-projects.vercel.app",
+    "projectId": "prj_M1de7oGW6aL0xRTTYlHjz3ATxXbi",
+    "environment": "preview",
+    "state": "READY",
+    "commitSha": "042ed6781f1ee483ee3f428f6fc8c8ecc0b3a15c",
+    "protected": true
+  },
+  "infrastructure": {
+    "database": "bazaar_hardening_preview_b1",
+    "databaseData": "synthetic_only",
+    "migrations": "87/87_APPLIED_NONE_PENDING",
+    "dbPushUsed": false,
+    "redisIsolation": "bazaar:hardening:b1:preview:042ed678:",
+    "storage": "local_ephemeral_b1_namespace",
+    "externalProviders": "disabled_or_mock"
+  },
+  "checks": {
+    "typecheck": "PASS",
+    "lint": "PASS",
+    "i18n": "PASS",
+    "tests": "PASS_946_OF_946",
+    "build": "PASS",
+    "gitDiffCheck": "PASS",
+    "apiDatabaseSecurity": "PASS_14_OF_14",
+    "browserRbac": "PASS_12_OF_12",
+    "ssrf": "PASS_13_DENIED_REDIRECT_DENIED_PUBLIC_IMAGE_ALLOWED",
+    "apiKeyIsolation": "PASS",
+    "secretLeakReview": "PASS"
+  },
+  "runtimeLogs": {
+    "recordsReviewed": 500,
+    "exactSecretMatches": 0,
+    "credentialPatternMatches": 0,
+    "sseTimeoutRecords": 30,
+    "finding": "HARD-B1-001"
+  },
+  "cleanup": {
+    "automationBypassRevoked": true,
+    "revokedBypassReturnsSsoRedirect": true,
+    "qaUsersDeactivated": 5,
+    "apiKeysRevoked": 2,
+    "providerTokensCleared": 2,
+    "localSecretArtifactsRemoved": true,
+    "databaseRetainedForPhaseB2": true
+  },
+  "remainingP0": {
+    "total": 21,
+    "P0_B": 15,
+    "P0_C": 5,
+    "P0_D": 1
+  },
+  "mainCommit": "4d7c9b33218b584334ca62f7a816f8997f144a10",
+  "phaseB2Started": false
+}

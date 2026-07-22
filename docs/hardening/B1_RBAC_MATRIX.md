@@ -2,6 +2,8 @@
 
 Baseline: `343079b4e6cd6140f84a8448610259b2d7573704`
 
+Preview verified commit: `042ed6781f1ee483ee3f428f6fc8c8ecc0b3a15c`
+
 Scope: the 24 confirmed P0-A findings only. `ALLOW` means both the route/procedure and the underlying resource scope permit the operation. `DENY` means the server rejects the direct request even when the UI is bypassed. A resource outside the authenticated organization or effective store set is always denied regardless of role.
 
 | Capability | Admin | Manager | Cashier | Limited / Staff | Additional scope invariant |
@@ -38,5 +40,4 @@ Scope: the 24 confirmed P0-A findings only. `ALLOW` means both the route/procedu
 
 ## Browser route evidence
 
-The saved browser matrix covers Admin, Manager, Cashier and Staff at desktop `1440x1000` and mobile `390x844` / `414x896`. It validates positive routes and direct URL denial redirects with no captured console, runtime or HTTP 5xx errors. Evidence: [`evidence/b1/browser-security-smoke/summary.json`](./evidence/b1/browser-security-smoke/summary.json).
-
+The saved remote browser matrix covers Admin, Manager, Cashier and Staff at desktop `1440x1000` and mobile `390x844` / `414x896`, in light and dark themes. It validates positive routes and direct URL denial redirects with no captured browser-console or HTTP 5xx failures and no sensitive value in page/network responses. Vercel later recorded finite-runtime timeouts for the long-lived `/api/sse` connections; that separate non-security observation is tracked as P2 `HARD-B1-001`. Evidence: [`evidence/b1/browser-security-smoke/summary.json`](./evidence/b1/browser-security-smoke/summary.json).
