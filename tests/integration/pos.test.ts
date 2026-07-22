@@ -241,11 +241,23 @@ describeDb("pos", () => {
   });
 
   it("holds and resumes draft receipts and blocks shift close while held", async () => {
-    const { org, store, product, cashierUser, managerUser } = await seedBase({ plan: "BUSINESS" });
+    const { org, store, product, cashierUser, managerUser, adminUser } = await seedBase({
+      plan: "BUSINESS",
+    });
 
     await prisma.product.update({
       where: { id: product.id },
       data: { basePriceKgs: 125 },
+    });
+    await adjustStock({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 2,
+      reason: "seed held receipt completion",
+      idempotencyKey: "pos-held-stock-seed-1",
+      requestId: "pos-held-stock-seed-1",
     });
 
     const register = await prisma.posRegister.create({
@@ -419,6 +431,16 @@ describeDb("pos", () => {
     await prisma.product.update({
       where: { id: product.id },
       data: { basePriceKgs: 150 },
+    });
+    await adjustStock({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 1,
+      reason: "seed shared-register resumed sale",
+      idempotencyKey: "pos-shared-register-stock-seed-1",
+      requestId: "pos-shared-register-stock-seed-1",
     });
     const register = await prisma.posRegister.create({
       data: {
@@ -1563,7 +1585,7 @@ describeDb("pos", () => {
   });
 
   it("keeps draft totals in sync when multiple products are added concurrently", async () => {
-    const { org, store, supplier, product, cashierUser, baseUnit } = await seedBase({
+    const { org, store, supplier, product, cashierUser, adminUser, baseUnit } = await seedBase({
       plan: "BUSINESS",
     });
 
@@ -1602,6 +1624,18 @@ describeDb("pos", () => {
         isActive: true,
       })),
     });
+    for (const [index, productId] of [product.id, secondProduct.id, thirdProduct.id].entries()) {
+      await adjustStock({
+        organizationId: org.id,
+        actorId: adminUser.id,
+        storeId: store.id,
+        productId,
+        qtyDelta: 10,
+        reason: "seed concurrent POS line totals",
+        idempotencyKey: `pos-concurrent-line-stock-seed-${index + 1}`,
+        requestId: `pos-concurrent-line-stock-seed-${index + 1}`,
+      });
+    }
 
     const register = await prisma.posRegister.create({
       data: {
@@ -1662,11 +1696,21 @@ describeDb("pos", () => {
   });
 
   it("completes a zero-total POS sale without requiring a payment row", async () => {
-    const { org, store, product, cashierUser } = await seedBase({ plan: "BUSINESS" });
+    const { org, store, product, cashierUser, adminUser } = await seedBase({ plan: "BUSINESS" });
 
     await prisma.product.update({
       where: { id: product.id },
       data: { basePriceKgs: null },
+    });
+    await adjustStock({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 1,
+      reason: "seed zero-total POS sale",
+      idempotencyKey: "pos-zero-total-stock-seed-1",
+      requestId: "pos-zero-total-stock-seed-1",
     });
 
     const register = await prisma.posRegister.create({
@@ -1748,6 +1792,16 @@ describeDb("pos", () => {
       reason: "seed-repeated-pos-sales",
       idempotencyKey: "pos-seed-repeated-sales-1",
       requestId: "pos-seed-repeated-sales-1",
+    });
+    await adjustStock({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      storeId: store.id,
+      productId: zeroPriceProduct.id,
+      qtyDelta: 1,
+      reason: "seed repeated zero-price POS sale",
+      idempotencyKey: "pos-seed-repeated-zero-price-sale-1",
+      requestId: "pos-seed-repeated-zero-price-sale-1",
     });
 
     const register = await prisma.posRegister.create({
