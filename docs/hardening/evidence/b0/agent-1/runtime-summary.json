@@ -1,0 +1,80 @@
+{
+  "program": "Bazaar B0 hardening",
+  "owner": "Agent 1 - POS & Cash Operations",
+  "executedAt": "2026-07-22",
+  "environment": {
+    "database": "bazaar_hardening_agent1_pos",
+    "redisDatabase": 11,
+    "migrationCount": 87,
+    "pendingMigrations": 0,
+    "externalKkmCalls": 0
+  },
+  "command": "set -a; source .env.hardening; set +a; pnpm exec vitest run tests/integration/pos-p0-verification.test.ts",
+  "result": {
+    "testFilesPassed": 1,
+    "testFilesFailed": 0,
+    "testsPassed": 9,
+    "testsFailed": 0,
+    "durationSeconds": 5.12,
+    "testDurationSeconds": 3.38
+  },
+  "classificationCounts": {
+    "CONFIRMED": 9,
+    "DUPLICATE": 0,
+    "DOWNGRADED": 0,
+    "FALSE_POSITIVE": 0,
+    "BLOCKED_BY_ENVIRONMENT": 0
+  },
+  "issues": [
+    {
+      "id": "HARD-A1-001",
+      "verdict": "CONFIRMED",
+      "evidence": "A Store-A1-only Manager retrieved Store A2 shifts, X-report, return, debt, POS receipt, and fiscal receipt records; database row counts were unchanged by reads."
+    },
+    {
+      "id": "HARD-A1-002",
+      "verdict": "CONFIRMED",
+      "evidence": "A Store-A1-only Cashier persisted Store A2 marking, cash movement, return draft, and debt settlement/payment records."
+    },
+    {
+      "id": "HARD-A1-003",
+      "verdict": "CONFIRMED",
+      "evidence": "A Manager created a register, a Cashier closed a shift, and a Staff user completed a return; actor IDs and terminal states persisted."
+    },
+    {
+      "id": "HARD-A1-004",
+      "verdict": "CONFIRMED",
+      "evidence": "A second Cashier completed another Cashier's active and held drafts without resume; createdById, updatedById, and payment attribution changed to the second Cashier."
+    },
+    {
+      "id": "HARD-A1-005",
+      "verdict": "CONFIRMED",
+      "evidence": "Two stale quantity-5 returns completed against one quantity-5 sale; returned quantity and stock delta were 10, refund was KGS 1000, and on-hand rose from 5 to 15."
+    },
+    {
+      "id": "HARD-A1-006",
+      "verdict": "CONFIRMED",
+      "evidence": "A shift closed while an active unheld draft remained; later completion returned posShiftClosed and created no payment."
+    },
+    {
+      "id": "HARD-A1-007",
+      "verdict": "CONFIRMED",
+      "evidence": "A register with an open shift and active draft was deactivated; the open records remained while POS entry and active-register selectors omitted the register."
+    },
+    {
+      "id": "HARD-A1-008",
+      "verdict": "CONFIRMED",
+      "evidence": "A store configured with allowNegativeStock=false completed a quantity-2 sale from no snapshot and persisted onHand=-2 with snapshot allowNegativeStock=true."
+    },
+    {
+      "id": "HARD-A1-009",
+      "verdict": "CONFIRMED",
+      "evidence": "Gated concurrent manual and worker retries invoked the deterministic mock adapter twice for one receipt; attemptCount reached 3 after the initial failed attempt."
+    }
+  ],
+  "remaining": [
+    "Browser validation at required roles, viewports, and themes",
+    "Agent 4 independent verification",
+    "Remediation and regression verification"
+  ]
+}

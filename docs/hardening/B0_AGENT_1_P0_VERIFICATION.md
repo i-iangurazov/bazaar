@@ -1,22 +1,23 @@
-# B0 Agent 1 P0 verification plan — POS & Cash Operations
+# B0 Agent 1 P0 verification results — POS & Cash Operations
 
 ## Status and evidence rule
 
-This document converts the nine Agent 1 P0 findings into executable database, API, and browser verification work. It does not confirm any defect from source inspection alone.
+This document records executable database/API verification for the nine Agent 1 P0 findings and retains the remaining browser work needed before remediation can be called done. No verdict below relies on source inspection alone.
 
 - Baseline: accepted `hardening/integration` at `f308b2b793c2b43d7e46814c3c2007a0927fede7`
 - Branch: `hardening/b0-agent-1-pos`
 - Domain owner: Agent 1 — POS & Cash Operations
-- Runtime state for every issue: `BLOCKED_BY_ENVIRONMENT`
-- DB-backed tests executed in B0 so far: none
-- Authenticated API/browser verification executed in B0 so far: none
+- Runtime verdict for every issue: `CONFIRMED`
+- DB-backed tests executed in B0: 9 passed, 0 failed
+- Authenticated API verification executed in B0: direct tRPC callers for Admin, Manager, Staff, and Cashier roles
+- Browser verification executed in B0: none; this remains required before issue remediation is complete
 - External fiscal provider calls: prohibited; KKM verification must use a deterministic mock adapter
 
-`SOURCE_SUPPORTED` below means only that static code supports a root-cause hypothesis. An issue may become `CONFIRMED` only after the required isolated API/DB evidence reproduces the behavior. Browser evidence is additionally required for the user-visible workflow. A non-reproduction must retain its raw requests, responses, and state snapshots and be reviewed before an issue is closed or reclassified.
+The focused suite at `tests/integration/pos-p0-verification.test.ts` reproduced every finding through real tRPC/service calls and persisted before/after assertions. Browser evidence is additionally required for the user-visible workflow. A non-reproduction must retain its raw requests, responses, and state snapshots and be reviewed before an issue is closed or reclassified.
 
-## Environment hold point
+## Environment release and execution boundary
 
-Do not run any fixture setup, Prisma integration suite, direct database query, or reset/cleanup command until the coordinator confirms both the database-identity guard and Agent 1's unique database/environment.
+The coordinator released the hold point with the database-identity guard at commits `26b261f` and `815e80a`. The focused suite ran only through the required guarded command, against PostgreSQL database `bazaar_hardening_agent1_pos`, with Redis logical database 11 and external KKM/provider calls mocked.
 
 Before the first DB-backed command, record the guard output and these read-only identity results in `docs/hardening/evidence/b0/agent-1/environment/`:
 
@@ -73,21 +74,39 @@ For each issue, retain sanitized artifacts under `docs/hardening/evidence/b0/age
 - `db-before.json` and `db-after.json` — results of the listed read queries;
 - `browser.json` — browser, role, viewport, theme, console/network result, and assertion summary;
 - screenshots or traces where the issue is user-visible;
-- `verdict.md` — `CONFIRMED`, `NOT_REPRODUCED`, or `BLOCKED`, reviewer, and evidence links.
+- `verdict.md` — `CONFIRMED`, `DUPLICATE`, `DOWNGRADED`, `FALSE_POSITIVE`, or `BLOCKED_BY_ENVIRONMENT`, reviewer, and evidence links.
 
 ## P0 execution matrix
 
-| Issue | Provisional group | Source state | Runtime state | Required decisive evidence |
+| Issue | Provisional group | Static support | Runtime verdict | Decisive evidence obtained |
 | --- | --- | --- | --- | --- |
-| HARD-A1-001 | `A1-RC-AUTHZ-STORE` | SOURCE_SUPPORTED | BLOCKED_BY_ENVIRONMENT | Inaccessible-store read/receipt/SSE response containing a Store A2 record, correlated to DB fixture |
-| HARD-A1-002 | `A1-RC-AUTHZ-STORE` | SOURCE_SUPPORTED | BLOCKED_BY_ENVIRONMENT | Inaccessible-store mutation succeeds and changes money, stock, fiscal, debt, return, cash, or marking state |
-| HARD-A1-003 | `A1-RC-AUTHZ-ROLE` | SOURCE_SUPPORTED | BLOCKED_BY_ENVIRONMENT | Disallowed role completes register administration, shift close, or refund completion and DB state changes |
-| HARD-A1-004 | `A1-RC-LIFECYCLE` | SOURCE_SUPPORTED | BLOCKED_BY_ENVIRONMENT | Cashier B mutates/completes Cashier A's active/held draft without explicit resume and attribution changes |
-| HARD-A1-005 | `A1-RC-STOCK-TXN` | SOURCE_SUPPORTED | BLOCKED_BY_ENVIRONMENT | Two eligible return drafts complete beyond sold quantity, with excess refund/stock restoration |
-| HARD-A1-006 | `A1-RC-LIFECYCLE` | SOURCE_SUPPORTED | BLOCKED_BY_ENVIRONMENT | Shift closes while an active unheld draft remains, leaving the cart orphaned/uncompletable |
-| HARD-A1-007 | `A1-RC-LIFECYCLE` | SOURCE_SUPPORTED | BLOCKED_BY_ENVIRONMENT | Live register deactivation succeeds and removes an unresolved shift/draft/debt recovery path |
-| HARD-A1-008 | `A1-RC-STOCK-TXN` | SOURCE_SUPPORTED | BLOCKED_BY_ENVIRONMENT | A store with negative stock disabled completes/edits a sale below zero and records permissive stock state |
-| HARD-A1-009 | `A1-RC-EXTERNAL-CLAIM` | SOURCE_SUPPORTED | BLOCKED_BY_ENVIRONMENT | Concurrent manual/worker retries invoke the mocked fiscal provider more than once for one receipt |
+| HARD-A1-001 | `A1-RC-AUTHZ-STORE` | Yes | CONFIRMED | A Store-A1-only Manager read Store A2 shift, X-report, return, debt, POS receipt, and fiscal receipt records |
+| HARD-A1-002 | `A1-RC-AUTHZ-STORE` | Yes | CONFIRMED | A Store-A1-only Cashier wrote Store A2 marking, cash, return, and debt-settlement state |
+| HARD-A1-003 | `A1-RC-AUTHZ-ROLE` | Yes | CONFIRMED | Manager register creation, Cashier shift close, and Staff return completion all persisted |
+| HARD-A1-004 | `A1-RC-LIFECYCLE` | Yes | CONFIRMED | Cashier B completed Cashier A's active and held drafts and replaced mutable attribution |
+| HARD-A1-005 | `A1-RC-STOCK-TXN` | Yes | CONFIRMED | Two stale full-quantity returns both completed, returning/refunding twice and over-restoring stock |
+| HARD-A1-006 | `A1-RC-LIFECYCLE` | Yes | CONFIRMED | Shift close succeeded with an active draft; later checkout failed with `posShiftClosed` |
+| HARD-A1-007 | `A1-RC-LIFECYCLE` | Yes | CONFIRMED | An active register with an open shift/draft was deactivated and disappeared from POS entry/selectors |
+| HARD-A1-008 | `A1-RC-STOCK-TXN` | Yes | CONFIRMED | Restricted store completed below zero and persisted a permissive negative snapshot |
+| HARD-A1-009 | `A1-RC-EXTERNAL-CLAIM` | Yes | CONFIRMED | Concurrent manual/worker retries called the mocked adapter twice for one receipt |
+
+## Executed runtime evidence
+
+Command:
+
+```bash
+set -a; source .env.hardening; set +a; pnpm exec vitest run tests/integration/pos-p0-verification.test.ts
+```
+
+Result: 1 file passed; 9 tests passed; 0 failed; 87 migrations present with none pending. The initial sandboxed attempt could not reach localhost and collected no tests; the same guarded command was then authorized for the local isolated services. The final successful run took 5.12 seconds, including 3.38 seconds of test execution.
+
+Evidence:
+
+- Executable reproductions and before/after assertions: `tests/integration/pos-p0-verification.test.ts`
+- Machine-readable run record: `docs/hardening/evidence/b0/agent-1/runtime-summary.json`
+- KKM boundary: hoisted deterministic adapter mock; initial failure plus gated concurrent manual/worker success; zero live provider calls
+- Isolation boundary: guarded reset of only `bazaar_hardening_agent1_pos`; Redis DB 11 reserved for this agent
+- Classification count: 9 `CONFIRMED`; 0 `DUPLICATE`; 0 `DOWNGRADED`; 0 `FALSE_POSITIVE`; 0 `BLOCKED_BY_ENVIRONMENT`
 
 ### Static source anchors (provisional only)
 
@@ -107,7 +126,7 @@ For each issue, retain sanitized artifacts under `docs/hardening/evidence/b0/age
 
 - Provisional root-cause group: `A1-RC-AUTHZ-STORE`
 - Static evidence: POS shift list/X-report, return list/get, debt list, receipt list, and fiscal receipt list pass organization plus caller-controlled identifiers without the actor; receipt PDF/connector and SSE enforce organization but not assigned stores.
-- Runtime state: `BLOCKED_BY_ENVIRONMENT`
+- Verdict: `CONFIRMED`
 
 ### API execution
 
@@ -157,7 +176,7 @@ At 390x844 and 1440 in light and dark themes, sign in as the limited actor and o
 
 - Provisional root-cause group: `A1-RC-AUTHZ-STORE`
 - Static evidence: marking, return, debt, cash, and KKM mutation contracts omit actor store access in their service boundary.
-- Runtime state: `BLOCKED_BY_ENVIRONMENT`
+- Verdict: `CONFIRMED`
 
 ### API execution
 
@@ -206,7 +225,7 @@ Use an authenticated Playwright context for the Store A1-only actor. Verify inac
 
 - Provisional root-cause group: `A1-RC-AUTHZ-ROLE`
 - Static evidence: documented policy assigns register management to Admin and shift close/refund confirmation to Manager/Admin, while register CRUD uses `managerProcedure` and shift close/return completion use `cashierProcedure`.
-- Runtime state: `BLOCKED_BY_ENVIRONMENT`
+- Verdict: `CONFIRMED`
 
 ### API execution
 
@@ -247,7 +266,7 @@ For each role at 390x844 and 1440, record direct-route behavior, action visibili
 
 - Provisional root-cause group: `A1-RC-LIFECYCLE`
 - Static evidence: the shared draft lock checks organization/store/status but not creator ownership or held state; completion attributes the sale to the completing actor; explicit resume is a separate transfer operation.
-- Runtime state: `BLOCKED_BY_ENVIRONMENT`
+- Verdict: `CONFIRMED`
 
 ### API execution
 
@@ -291,7 +310,7 @@ Use two simultaneous browser contexts at 390x844 and 1440. Keep Cashier A's cart
 
 - Provisional root-cause group: `A1-RC-STOCK-TXN`
 - Static evidence: return-line availability is checked during draft editing; completion locks the return itself but does not revalidate/serialize cumulative completed quantity against the original order line.
-- Runtime state: `BLOCKED_BY_ENVIRONMENT`
+- Verdict: `CONFIRMED`
 
 ### API execution
 
@@ -345,7 +364,7 @@ Use two Manager/Admin contexts to open the same original receipt and prepare ind
 
 - Provisional root-cause group: `A1-RC-LIFECYCLE`
 - Static evidence: shift close checks held drafts but omits active `DRAFT` rows where `isHeld=false`; later draft creation can cancel stale drafts on a closed shift.
-- Runtime state: `BLOCKED_BY_ENVIRONMENT`
+- Verdict: `CONFIRMED`
 
 ### API execution
 
@@ -383,7 +402,7 @@ Use two contexts: Cashier A keeps `/pos/sell` open with an unsaved active cart; 
 
 - Provisional root-cause group: `A1-RC-LIFECYCLE`
 - Static evidence: register update accepts `isActive=false` without operational dependency checks, while shared selection rejects inactive registers and debt selection uses active registers.
-- Runtime state: `BLOCKED_BY_ENVIRONMENT`
+- Verdict: `CONFIRMED`
 
 ### API execution
 
@@ -421,7 +440,7 @@ Use an Admin register-management context and a Cashier operational context simul
 
 - Provisional root-cause group: `A1-RC-STOCK-TXN`
 - Static evidence: POS sale completion and completed-sale editing pass `allowNegativeStock: true`; the existing integration test codifies negative POS stock even when the store setting is false.
-- Runtime state: `BLOCKED_BY_ENVIRONMENT`
+- Verdict: `CONFIRMED`
 - Policy prerequisite: the current repository documentation treats `Store.allowNegativeStock=false` as an effective restriction. If product ownership declares an intentional POS exception, record that decision and update the contract before changing code or severity.
 
 ### API execution
@@ -465,7 +484,7 @@ Under the documented restrictive policy, `CONFIRMED` requires sale completion/ed
 
 - Provisional root-cause group: `A1-RC-EXTERNAL-CLAIM`
 - Static evidence: sale retry, receipt retry, and the background retry job each read failed state and can call the adapter without a shared compare-and-set claim around the external effect.
-- Runtime state: `BLOCKED_BY_ENVIRONMENT`
+- Verdict: `CONFIRMED`
 
 ### API/job execution
 
@@ -502,15 +521,14 @@ Open `/pos/history` and `/pos/kkm` in separate Manager browser contexts while th
 
 `CONFIRMED` requires the mock adapter to record more than one fiscalization invocation for the same logical receipt/provider idempotency key, even if the final DB row appears correct. No live KKM/provider call is permitted.
 
-## Execution order after environment approval
+## Remaining browser execution order
 
-1. Record and review the Agent 1 database/environment identity; create only uniquely prefixed fixtures.
-2. Run HARD-A1-001 and HARD-A1-002 first because store-boundary failures affect the safety of every later browser/API fixture.
-3. Run HARD-A1-003 before relying on role-specific browser fixtures.
-4. Run lifecycle issues HARD-A1-004, HARD-A1-006, and HARD-A1-007 with independent fixtures.
-5. Run transactional/concurrency issues HARD-A1-005 and HARD-A1-008 with deterministic barriers and before/after snapshots.
-6. Run HARD-A1-009 last with the mock KKM adapter and job runner; never enable a live provider.
-7. For each reproduced P0, notify the coordinator immediately with the sanitized decisive artifact. Do not implement until the root cause is runtime-confirmed and any shared-file claim is assigned.
+1. Run HARD-A1-001 and HARD-A1-002 first because store-boundary failures affect the safety of every later browser fixture.
+2. Run HARD-A1-003 before relying on role-specific browser fixtures.
+3. Run lifecycle issues HARD-A1-004, HARD-A1-006, and HARD-A1-007 with independent fixtures.
+4. Run transactional/concurrency issues HARD-A1-005 and HARD-A1-008 with deterministic fixtures.
+5. Run HARD-A1-009 last with the mock KKM adapter and job runner; never enable a live provider.
+6. Attach sanitized browser traces/contact-sheet references, then obtain Agent 4 independent review before remediation is marked done.
 
 ## Exit criteria for B0 verification
 
@@ -525,4 +543,4 @@ For each issue, B0 verification is complete only when:
 - the verdict is independently reviewed by Agent 4;
 - the ledger remains `OPEN` unless the evidence and reviewer explicitly support a state change.
 
-Until the environment hold point is released, all nine issues remain `OPEN / BLOCKED_BY_ENVIRONMENT` and none is `CONFIRMED` by this document.
+All nine findings are `CONFIRMED` by isolated API/database evidence. They remain open defects: no fixes were made, browser coverage is still pending, and Agent 4 independent verification is still required.
