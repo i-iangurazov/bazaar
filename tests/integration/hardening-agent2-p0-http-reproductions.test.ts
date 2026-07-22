@@ -294,6 +294,30 @@ describeDb("Agent 2 P0 HTTP boundary reproductions", () => {
     });
 
     mockGetServerAuthToken.mockResolvedValue({
+      sub: adminUser.id,
+      role: adminUser.role,
+    });
+    const missingOrganizationResponse = await downloadImagesGet(
+      new Request(
+        `http://localhost/api/products/export-images/download?token=${encodeURIComponent(downloadToken)}`,
+      ),
+    );
+    expect(missingOrganizationResponse.status).toBe(401);
+    expect(imageExportStore.has(downloadToken)).toBe(true);
+
+    mockGetServerAuthToken.mockResolvedValue({
+      organizationId: org.id,
+      role: adminUser.role,
+    });
+    const missingSubjectResponse = await downloadImagesGet(
+      new Request(
+        `http://localhost/api/products/export-images/download?token=${encodeURIComponent(downloadToken)}`,
+      ),
+    );
+    expect(missingSubjectResponse.status).toBe(401);
+    expect(imageExportStore.has(downloadToken)).toBe(true);
+
+    mockGetServerAuthToken.mockResolvedValue({
       sub: managerUser.id,
       organizationId: org.id,
       role: managerUser.role,
