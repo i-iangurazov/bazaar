@@ -141,7 +141,7 @@ describeDb("store isolation", () => {
     expect(storeBSearch.map((item) => item.id)).toContain(product.id);
   });
 
-  it("keeps store-pricing management assigned-scoped while pricing lookup is catalog-wide", async () => {
+  it("requires store assignment before exposing store pricing overrides", async () => {
     const { org, adminUser, store, baseUnit } = await seedBase({ plan: "BUSINESS" });
     const caller = createTestCaller({
       id: adminUser.id,
@@ -180,7 +180,32 @@ describeDb("store isolation", () => {
     const pricing = await caller.products.storePricing({ productId: product.id });
 
     expect(pricing.stores.map((item) => item.storeId)).toEqual([store.id]);
-    const storeBPricing = await caller.products.pricing({ productId: product.id, storeId: storeB.id });
+    await expect(
+      caller.products.pricing({ productId: product.id, storeId: storeB.id }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND", message: "productNotFound" });
+    expect(
+      await prisma.storeProduct.count({
+        where: { storeId: storeB.id, productId: product.id, isActive: true },
+      }),
+    ).toBe(0);
+    await expect(
+      prisma.storePrice.findUniqueOrThrow({
+        where: {
+          organizationId_storeId_productId_variantKey: {
+            organizationId: org.id,
+            storeId: storeB.id,
+            productId: product.id,
+            variantKey: "BASE",
+          },
+        },
+      }),
+    ).resolves.toMatchObject({ priceKgs: new Prisma.Decimal(250) });
+
+    await caller.products.assignToStore({ storeId: storeB.id, productIds: [product.id] });
+    const storeBPricing = await caller.products.pricing({
+      productId: product.id,
+      storeId: storeB.id,
+    });
     expect(storeBPricing).toMatchObject({
       basePriceKgs: 100,
       effectivePriceKgs: 250,
