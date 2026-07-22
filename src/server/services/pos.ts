@@ -5605,6 +5605,28 @@ export const completeSaleReturn = async (input: {
           throw new AppError("posPaymentTotalMismatch", "BAD_REQUEST", 400);
         }
 
+        const sourceLineIds = Array.from(
+          new Set(saleReturn.lines.map((line) => line.customerOrderLineId)),
+        ).sort();
+        await tx.$queryRaw(
+          Prisma.sql`
+            SELECT id
+            FROM "CustomerOrderLine"
+            WHERE id IN (${Prisma.join(sourceLineIds)})
+            ORDER BY id
+            FOR UPDATE
+          `,
+        );
+        for (const line of saleReturn.lines) {
+          const sourceLine = await assertReturnLineAvailable(tx, {
+            customerOrderLineId: line.customerOrderLineId,
+            requestedQty: line.qty,
+          });
+          if (sourceLine.customerOrderId !== saleReturn.originalSaleId) {
+            throw new AppError("posReturnSourceMismatch", "CONFLICT", 409);
+          }
+        }
+
         let manualRefundRequestId: string | null = null;
         if (refundHasQrLike || originalHasQrLike) {
           const request = await tx.refundRequest.upsert({
