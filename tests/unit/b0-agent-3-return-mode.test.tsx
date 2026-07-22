@@ -5,7 +5,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const runtime = vi.hoisted(() => ({
-  createDraft: vi.fn(async () => ({ id: "runtime-order-id" })),
+  createDraft: vi.fn(async (_input: Record<string, unknown>) => ({ id: "runtime-order-id" })),
   pricing: vi.fn(async () => ({ effectivePriceKgs: 100 })),
   push: vi.fn(),
   toast: vi.fn(),
@@ -90,7 +90,7 @@ describe("B0 Agent 3 return-mode runtime wiring", () => {
       expect(runtime.createDraft).toHaveBeenCalledTimes(1);
     });
 
-    const submittedPayload = runtime.createDraft.mock.calls[0]?.[0] as Record<string, unknown>;
+    const submittedPayload = runtime.createDraft.mock.calls[0]![0];
     console.info(
       `[B0-EVIDENCE] HARD-A3-011-ui ${JSON.stringify({
         displayedTitle: "newReturn",

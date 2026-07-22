@@ -9,11 +9,12 @@ describe("B0 Agent 3 public image proxy P0 runtime verification", () => {
 
   it("reproduces HARD-A3-026 without network access: a managed-looking loopback path is fetched", async () => {
     const attackerControlledUrl = "http://127.0.0.1/uploads/imported-products/internal-probe";
-    const fetchMock = vi.fn(async () =>
-      new Response("internal-secret", {
-        status: 200,
-        headers: { "content-type": "text/plain" },
-      }),
+    const fetchMock = vi.fn(
+      async (_input: Parameters<typeof fetch>[0], _init?: Parameters<typeof fetch>[1]) =>
+        new Response("internal-secret", {
+          status: 200,
+          headers: { "content-type": "text/plain" },
+        }),
     );
     vi.stubGlobal("fetch", fetchMock);
 
