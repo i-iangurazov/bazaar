@@ -77,6 +77,8 @@ node --import tsx scripts/product-cost-mismatch-report.ts --organization-id <tes
 
 The CLI is read-only, scans at most 500 products per page, returns `nextCursor`, includes affected store and receiving-document identifiers, and exits with status 2 when a row needs review. A live bounded scan of the legacy PO fixture returned one `INDETERMINATE_UNVALUED_STREAM` row and no writes.
 
+Sanitized machine-readable detector evidence, including the independent exit-2 mismatch gate and representative `MATCH`, `MISMATCH`, and `INDETERMINATE_UNVALUED_STREAM` results, is stored at [`evidence/b2/agent-2/product-cost-mismatch.json`](./evidence/b2/agent-2/product-cost-mismatch.json).
+
 ## Covered regression matrix
 
 - retry of the same edit key;
