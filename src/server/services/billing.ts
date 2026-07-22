@@ -118,6 +118,21 @@ export const getBillingSummary = async (input: { organizationId: string }) => {
   };
 };
 
+export const getBillingFeatureSummary = async (input: { organizationId: string }) => {
+  const org = await prisma.organization.findUnique({
+    where: { id: input.organizationId },
+    select: { plan: true },
+  });
+  if (!org) {
+    return null;
+  }
+  return {
+    plan: org.plan,
+    features: getPlanFeatures(org.plan),
+    featureFlags: getPlanFeatureMap(org.plan),
+  };
+};
+
 export const requestPlanUpgrade = async (input: {
   organizationId: string;
   requestedById: string;

@@ -2,14 +2,22 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { OrganizationPlan } from "@prisma/client";
 
-import { adminProcedure, publicProcedure, router } from "@/server/trpc/trpc";
-import { getBillingSummary, requestPlanUpgrade } from "@/server/services/billing";
+import { adminProcedure, protectedProcedure, publicProcedure, router } from "@/server/trpc/trpc";
+import {
+  getBillingFeatureSummary,
+  getBillingSummary,
+  requestPlanUpgrade,
+} from "@/server/services/billing";
 import { writeAuditLog } from "@/server/services/audit";
 import { toJson } from "@/server/services/json";
 
 export const billingRouter = router({
   get: adminProcedure.query(async ({ ctx }) => {
     return getBillingSummary({ organizationId: ctx.user.organizationId });
+  }),
+
+  features: protectedProcedure.query(async ({ ctx }) => {
+    return getBillingFeatureSummary({ organizationId: ctx.user.organizationId });
   }),
 
   requestUpgrade: publicProcedure

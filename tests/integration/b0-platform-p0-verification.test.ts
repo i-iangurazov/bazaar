@@ -2,7 +2,7 @@ import { ExportType, Prisma } from "@prisma/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { prisma } from "@/server/db/prisma";
-import { runJob } from "@/server/jobs";
+import { registerJobForTests, runJob } from "@/server/jobs";
 import { resolveExportJobDownload } from "@/server/services/exports";
 import { createTestCaller } from "../helpers/context";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
@@ -15,6 +15,7 @@ const callerFor = (user: {
   role: "ADMIN" | "MANAGER" | "STAFF" | "CASHIER";
   organizationId: string | null;
   isOrgOwner?: boolean;
+  isPlatformOwner?: boolean;
 }) => {
   if (!user.organizationId) {
     throw new Error("seeded user is missing organizationId");
@@ -25,6 +26,7 @@ const callerFor = (user: {
     role: user.role,
     organizationId: user.organizationId,
     isOrgOwner: user.isOrgOwner,
+    isPlatformOwner: user.isPlatformOwner,
   });
 };
 
@@ -91,6 +93,15 @@ describeDb("B0 Agent 4 P0 runtime verification", () => {
     await expect(callerFor(cashierUser).billing.get()).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
+    await expect(callerFor(cashierUser).billing.features()).resolves.toMatchObject({
+      plan: "BUSINESS",
+      features: expect.any(Array),
+      featureFlags: expect.any(Object),
+    });
+    const limitedSummary = await callerFor(cashierUser).billing.features();
+    expect(limitedSummary).not.toHaveProperty("upgradeRequests");
+    expect(JSON.stringify(limitedSummary)).not.toContain("Private commercial context");
+    expect(JSON.stringify(limitedSummary)).not.toContain("Private platform review note");
   });
 
   it("A4-003: export metadata and download require report permission", async () => {
@@ -195,8 +206,26 @@ describeDb("B0 Agent 4 P0 runtime verification", () => {
       periodStart,
       periodEnd,
     });
+    const unassignedClose = await prisma.periodClose.create({
+      data: {
+        organizationId: org.id,
+        storeId: unassignedStore.id,
+        periodStart,
+        periodEnd,
+        closedById: managerUser.id,
+      },
+    });
 
     expect(result.storeId).toBe(store.id);
+    await expect(caller.periodClose.list({ storeId: store.id })).resolves.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: result.id, storeId: store.id })]),
+    );
+    await expect(caller.periodClose.list()).resolves.not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: unassignedClose.id })]),
+    );
+    await expect(caller.periodClose.list({ storeId: unassignedStore.id })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
     await expect(
       caller.periodClose.close({
         storeId: unassignedStore.id,
@@ -215,7 +244,13 @@ describeDb("B0 Agent 4 P0 runtime verification", () => {
       prisma.periodClose.count({
         where: { storeId: { in: [unassignedStore.id, otherStore.id] } },
       }),
-    ).resolves.toBe(0);
+    ).resolves.toBe(1);
+    await expect(
+      prisma.periodClose.findMany({
+        where: { storeId: { in: [unassignedStore.id, otherStore.id] } },
+        select: { id: true },
+      }),
+    ).resolves.toEqual([{ id: unassignedClose.id }]);
   });
 
   it("A4-007: period-close KGS totals contain quantities instead of movement money", async () => {
@@ -320,6 +355,15 @@ describeDb("B0 Agent 4 P0 runtime verification", () => {
         lastError: "Provider rejected global credential",
       },
     });
+    const globalResolveJob = await prisma.deadLetterJob.create({
+      data: {
+        organizationId: null,
+        jobName: "global-resolve-job",
+        payload: { secretReference: "provider-account-8" },
+        attempts: 1,
+        lastError: "Global operation needs review",
+      },
+    });
     const otherOrg = await prisma.organization.create({ data: { name: "Other Job Org" } });
     const otherJob = await prisma.deadLetterJob.create({
       data: {
@@ -331,6 +375,12 @@ describeDb("B0 Agent 4 P0 runtime verification", () => {
       },
     });
     const adminCaller = callerFor(adminUser);
+    const platformCaller = callerFor({ ...adminUser, isPlatformOwner: true });
+    let providerCalls = 0;
+    registerJobForTests("global-provider-job", async () => {
+      providerCalls += 1;
+      return { job: "global-provider-job", status: "ok" };
+    });
 
     const listed = await adminCaller.adminJobs.list();
     expect(listed).toEqual(expect.arrayContaining([expect.objectContaining({ id: tenantJob.id })]));
@@ -344,9 +394,24 @@ describeDb("B0 Agent 4 P0 runtime verification", () => {
     await expect(adminCaller.adminJobs.resolve({ jobId: globalJob.id })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
+    await expect(adminCaller.adminJobs.retry({ jobId: globalJob.id })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
     await expect(adminCaller.adminJobs.resolve({ jobId: otherJob.id })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
+    await expect(adminCaller.adminJobs.retry({ jobId: otherJob.id })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+    await expect(adminCaller.adminJobs.list({ scope: "GLOBAL" })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    expect(providerCalls).toBe(0);
+    await expect(
+      prisma.auditLog.count({
+        where: { action: { in: ["JOB_RETRY", "JOB_RETRY_FAILED", "JOB_RESOLVE"] } },
+      }),
+    ).resolves.toBe(0);
     await expect(
       prisma.deadLetterJob.findMany({ where: { id: { in: [globalJob.id, otherJob.id] } } }),
     ).resolves.toEqual(
@@ -355,5 +420,25 @@ describeDb("B0 Agent 4 P0 runtime verification", () => {
         expect.objectContaining({ id: otherJob.id, resolvedAt: null, resolvedById: null }),
       ]),
     );
+
+    await expect(adminCaller.adminJobs.resolve({ jobId: tenantJob.id })).resolves.toMatchObject({
+      id: tenantJob.id,
+      resolvedById: adminUser.id,
+    });
+    const globalJobs = await platformCaller.adminJobs.list({ scope: "GLOBAL" });
+    expect(globalJobs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: globalJob.id }),
+        expect.objectContaining({ id: globalResolveJob.id }),
+      ]),
+    );
+    expect(globalJobs.every((job) => !("payload" in job))).toBe(true);
+    await expect(
+      platformCaller.adminJobs.retry({ jobId: globalJob.id, scope: "GLOBAL" }),
+    ).resolves.toMatchObject({ status: "resolved" });
+    await expect(
+      platformCaller.adminJobs.resolve({ jobId: globalResolveJob.id, scope: "GLOBAL" }),
+    ).resolves.toMatchObject({ id: globalResolveJob.id, resolvedById: adminUser.id });
+    expect(providerCalls).toBe(1);
   });
 });
