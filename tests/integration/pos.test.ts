@@ -3874,6 +3874,10 @@ describeDb("pos", () => {
   });
 
   it("emits machine-readable B2 POS stock and payment compatibility evidence", async () => {
+    const expectedTestDatabase = process.env.EXPECTED_TEST_DB_NAME;
+    if (!expectedTestDatabase) {
+      throw new Error("EXPECTED_TEST_DB_NAME is required for B2 POS compatibility evidence");
+    }
     const { org, store, product, cashierUser, managerUser, adminUser } = await seedBase({
       plan: "BUSINESS",
       allowNegativeStock: false,
@@ -4099,7 +4103,7 @@ describeDb("pos", () => {
 
     const evidence = {
       schemaVersion: 1,
-      database: process.env.EXPECTED_TEST_DB_NAME,
+      database: expectedTestDatabase,
       issueIds: ["HARD-A1-005", "HARD-A1-008"],
       stock: {
         initial: initialStock,
@@ -4147,7 +4151,7 @@ describeDb("pos", () => {
     };
 
     expect(evidence).toMatchObject({
-      database: "bazaar_hardening_agent1_pos",
+      database: expectedTestDatabase,
       stock: {
         initial: 30,
         afterCompletedOnce: 28,
