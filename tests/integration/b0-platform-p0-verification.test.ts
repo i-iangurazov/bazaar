@@ -34,24 +34,35 @@ describeDb("B0 Agent 4 P0 runtime verification", () => {
     await resetDatabase();
   });
 
-  it("A4-001: lower-privilege callers can invoke dashboard and analytics procedures", async () => {
-    const { store, staffUser, cashierUser } = await seedBase({ plan: "BUSINESS" });
+  it("A4-001: dashboard and analytics enforce the server-side report role", async () => {
+    const { store, managerUser, staffUser, cashierUser } = await seedBase({ plan: "BUSINESS" });
+    const managerCaller = callerFor(managerUser);
     const staffCaller = callerFor(staffUser);
     const cashierCaller = callerFor(cashierUser);
 
     await expect(
-      cashierCaller.dashboard.summary({
+      managerCaller.dashboard.summary({
         storeId: store.id,
         includeRecentActivity: false,
         includeRecentMovements: false,
       }),
     ).resolves.toMatchObject({ business: expect.any(Object) });
     await expect(
-      staffCaller.analytics.salesTrend({ rangeDays: 30, granularity: "day" }),
+      managerCaller.analytics.salesTrend({ rangeDays: 30, granularity: "day" }),
     ).resolves.toMatchObject({ series: expect.any(Array) });
+    await expect(
+      cashierCaller.dashboard.summary({
+        storeId: store.id,
+        includeRecentActivity: false,
+        includeRecentMovements: false,
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(
+      staffCaller.analytics.salesTrend({ rangeDays: 30, granularity: "day" }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
-  it("A4-002: cashier billing response contains upgrade messages and review notes", async () => {
+  it("A4-002: only an admin can read billing and private upgrade notes", async () => {
     const { org, adminUser, cashierUser } = await seedBase({ plan: "BUSINESS" });
     await prisma.planUpgradeRequest.create({
       data: {
@@ -67,7 +78,7 @@ describeDb("B0 Agent 4 P0 runtime verification", () => {
       },
     });
 
-    const result = await callerFor(cashierUser).billing.get();
+    const result = await callerFor(adminUser).billing.get();
 
     expect(result?.upgradeRequests).toEqual(
       expect.arrayContaining([
@@ -77,10 +88,15 @@ describeDb("B0 Agent 4 P0 runtime verification", () => {
         }),
       ]),
     );
+    await expect(callerFor(cashierUser).billing.get()).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
   });
 
-  it("A4-003: cashier can list and read export job metadata", async () => {
-    const { org, store, adminUser, cashierUser } = await seedBase({ plan: "BUSINESS" });
+  it("A4-003: export metadata and download require report permission", async () => {
+    const { org, store, adminUser, managerUser, cashierUser } = await seedBase({
+      plan: "BUSINESS",
+    });
     const exportJob = await callerFor(adminUser).exports.create({
       storeId: store.id,
       type: ExportType.RECEIPTS_REGISTRY,
@@ -89,12 +105,13 @@ describeDb("B0 Agent 4 P0 runtime verification", () => {
       periodEnd: new Date("2026-07-21T23:59:59.999Z"),
     });
     await runJob("export-job", { jobId: exportJob.id });
+    const managerCaller = callerFor(managerUser);
     const cashierCaller = callerFor(cashierUser);
 
-    await expect(cashierCaller.exports.list()).resolves.toEqual(
+    await expect(managerCaller.exports.list()).resolves.toEqual(
       expect.arrayContaining([expect.objectContaining({ id: exportJob.id })]),
     );
-    await expect(cashierCaller.exports.get({ jobId: exportJob.id })).resolves.toMatchObject({
+    await expect(managerCaller.exports.get({ jobId: exportJob.id })).resolves.toMatchObject({
       id: exportJob.id,
       status: "DONE",
       downloadAvailable: true,
@@ -103,9 +120,9 @@ describeDb("B0 Agent 4 P0 runtime verification", () => {
       organizationId: org.id,
       jobId: exportJob.id,
       user: {
-        id: cashierUser.id,
+        id: managerUser.id,
         organizationId: org.id,
-        role: cashierUser.role,
+        role: managerUser.role,
         isOrgOwner: false,
         isPlatformOwner: false,
       },
@@ -117,18 +134,36 @@ describeDb("B0 Agent 4 P0 runtime verification", () => {
     const exportedReceipts = Buffer.concat(chunks).toString("utf8");
     expect(download.fileName).toMatch(/^receipts-registry-.*\.csv$/);
     expect(exportedReceipts).toContain("Номер чека");
+    await expect(cashierCaller.exports.list()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(cashierCaller.exports.get({ jobId: exportJob.id })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    await expect(
+      resolveExportJobDownload({
+        organizationId: org.id,
+        jobId: exportJob.id,
+        user: {
+          id: cashierUser.id,
+          organizationId: org.id,
+          role: cashierUser.role,
+          isOrgOwner: false,
+          isPlatformOwner: false,
+        },
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
-  it("A4-004: global search returns a store result to a cashier without store-list permission", async () => {
-    const { store, cashierUser } = await seedBase({ plan: "BUSINESS" });
+  it("A4-004: global search filters result types by server-side permission", async () => {
+    const { store, managerUser, cashierUser } = await seedBase({ plan: "BUSINESS" });
     await prisma.store.update({
       where: { id: store.id },
       data: { code: "SECRET-STORE-77", name: "Restricted Store Metadata" },
     });
 
-    const result = await callerFor(cashierUser).search.global({ q: "SECRET-STORE-77" });
+    const managerResult = await callerFor(managerUser).search.global({ q: "SECRET-STORE-77" });
+    const cashierResult = await callerFor(cashierUser).search.global({ q: "SECRET-STORE-77" });
 
-    expect(result.results).toEqual(
+    expect(managerResult.results).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: store.id,
@@ -137,10 +172,13 @@ describeDb("B0 Agent 4 P0 runtime verification", () => {
         }),
       ]),
     );
+    expect(cashierResult.results).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: store.id, type: "store" })]),
+    );
   });
 
-  it("A4-006: manager can close an unassigned store in the same organization", async () => {
-    const { org, managerUser } = await seedBase({ plan: "BUSINESS" });
+  it("A4-006: period close rejects same-org unassigned and cross-org stores without writes", async () => {
+    const { org, store, managerUser } = await seedBase({ plan: "BUSINESS" });
     const unassignedStore = await prisma.store.create({
       data: {
         organizationId: org.id,
@@ -151,25 +189,33 @@ describeDb("B0 Agent 4 P0 runtime verification", () => {
     const periodStart = new Date("2026-06-01T00:00:00.000Z");
     const periodEnd = new Date("2026-06-30T23:59:59.999Z");
 
-    const result = await callerFor(managerUser).periodClose.close({
-      storeId: unassignedStore.id,
+    const caller = callerFor(managerUser);
+    const result = await caller.periodClose.close({
+      storeId: store.id,
       periodStart,
       periodEnd,
     });
 
-    expect(result.storeId).toBe(unassignedStore.id);
+    expect(result.storeId).toBe(store.id);
     await expect(
-      prisma.periodClose.findUnique({
-        where: {
-          organizationId_storeId_periodStart_periodEnd: {
-            organizationId: org.id,
-            storeId: unassignedStore.id,
-            periodStart,
-            periodEnd,
-          },
-        },
+      caller.periodClose.close({
+        storeId: unassignedStore.id,
+        periodStart,
+        periodEnd,
       }),
-    ).resolves.toMatchObject({ closedById: managerUser.id });
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    const otherOrg = await prisma.organization.create({ data: { name: "Other Org" } });
+    const otherStore = await prisma.store.create({
+      data: { organizationId: otherOrg.id, name: "Other Store", code: "OTHER" },
+    });
+    await expect(
+      caller.periodClose.close({ storeId: otherStore.id, periodStart, periodEnd }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(
+      prisma.periodClose.count({
+        where: { storeId: { in: [unassignedStore.id, otherStore.id] } },
+      }),
+    ).resolves.toBe(0);
   });
 
   it("A4-007: period-close KGS totals contain quantities instead of movement money", async () => {
@@ -254,8 +300,17 @@ describeDb("B0 Agent 4 P0 runtime verification", () => {
     }
   });
 
-  it("A4-009: organization admin can see and resolve a global dead-letter job", async () => {
-    const { adminUser } = await seedBase({ plan: "BUSINESS" });
+  it("A4-009: tenant admins cannot list or mutate global/cross-org dead-letter jobs", async () => {
+    const { org, adminUser } = await seedBase({ plan: "BUSINESS" });
+    const tenantJob = await prisma.deadLetterJob.create({
+      data: {
+        organizationId: org.id,
+        jobName: "tenant-job",
+        payload: { safeReference: "tenant-7" },
+        attempts: 1,
+        lastError: "Tenant failure",
+      },
+    });
     const globalJob = await prisma.deadLetterJob.create({
       data: {
         organizationId: null,
@@ -265,14 +320,40 @@ describeDb("B0 Agent 4 P0 runtime verification", () => {
         lastError: "Provider rejected global credential",
       },
     });
+    const otherOrg = await prisma.organization.create({ data: { name: "Other Job Org" } });
+    const otherJob = await prisma.deadLetterJob.create({
+      data: {
+        organizationId: otherOrg.id,
+        jobName: "other-job",
+        payload: { secretReference: "other-provider" },
+        attempts: 2,
+        lastError: "Other failure",
+      },
+    });
     const adminCaller = callerFor(adminUser);
 
-    await expect(adminCaller.adminJobs.list()).resolves.toEqual(
-      expect.arrayContaining([expect.objectContaining({ id: globalJob.id })]),
+    const listed = await adminCaller.adminJobs.list();
+    expect(listed).toEqual(expect.arrayContaining([expect.objectContaining({ id: tenantJob.id })]));
+    expect(listed[0]).not.toHaveProperty("payload");
+    expect(listed).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: globalJob.id }),
+        expect.objectContaining({ id: otherJob.id }),
+      ]),
     );
-    await expect(adminCaller.adminJobs.resolve({ jobId: globalJob.id })).resolves.toMatchObject({
-      id: globalJob.id,
-      resolvedById: adminUser.id,
+    await expect(adminCaller.adminJobs.resolve({ jobId: globalJob.id })).rejects.toMatchObject({
+      code: "NOT_FOUND",
     });
+    await expect(adminCaller.adminJobs.resolve({ jobId: otherJob.id })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+    await expect(
+      prisma.deadLetterJob.findMany({ where: { id: { in: [globalJob.id, otherJob.id] } } }),
+    ).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: globalJob.id, resolvedAt: null, resolvedById: null }),
+        expect.objectContaining({ id: otherJob.id, resolvedAt: null, resolvedById: null }),
+      ]),
+    );
   });
 });
