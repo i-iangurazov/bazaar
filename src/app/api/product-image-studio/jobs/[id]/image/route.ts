@@ -1,6 +1,7 @@
 import { getServerAuthToken } from "@/server/auth/token";
 import { prisma } from "@/server/db/prisma";
 import { isManagedProductImageUrl } from "@/server/services/productImageStorage";
+import { assertCommercePermission } from "@/server/services/commerceAccess";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -53,6 +54,20 @@ export const GET = async (request: Request, { params }: RouteParams) => {
   const token = await getServerAuthToken();
   if (!token?.organizationId) {
     return new Response(null, { status: 401 });
+  }
+  try {
+    assertCommercePermission(
+      {
+        id: String(token.sub ?? ""),
+        organizationId: String(token.organizationId),
+        role: String(token.role ?? ""),
+        isOrgOwner: Boolean(token.isOrgOwner),
+        isPlatformOwner: Boolean(token.isPlatformOwner),
+      },
+      "manageIntegrations",
+    );
+  } catch {
+    return new Response(null, { status: 403 });
   }
 
   const requestUrl = new URL(request.url);

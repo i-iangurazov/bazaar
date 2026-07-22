@@ -2080,10 +2080,16 @@ export const renderBakaiStoreWorkbookFromTemplate = async (input: {
   }
 };
 
-export const getBakaiStoreOverview = async (organizationId: string) => {
+export const getBakaiStoreOverview = async (
+  organizationId: string,
+  accessibleStoreIds?: string[] | null,
+) => {
   const [integration, mappings, branchMappings] = await Promise.all([
     prisma.bakaiStoreIntegration.findUnique({
-      where: { orgId: organizationId },
+      where: {
+        orgId: organizationId,
+        ...(accessibleStoreIds ? { storeId: { in: accessibleStoreIds } } : {}),
+      },
       select: {
         status: true,
         connectionMode: true,
@@ -2102,7 +2108,11 @@ export const getBakaiStoreOverview = async (organizationId: string) => {
       select: { columnKey: true },
     }),
     prisma.bakaiStoreBranchMapping.findMany({
-      where: { orgId: organizationId, bakaiBranchId: { not: "" } },
+      where: {
+        orgId: organizationId,
+        ...(accessibleStoreIds ? { storeId: { in: accessibleStoreIds } } : {}),
+        bakaiBranchId: { not: "" },
+      },
       select: { storeId: true },
     }),
   ]);
@@ -2147,7 +2157,10 @@ export const getBakaiStoreOverview = async (organizationId: string) => {
   };
 };
 
-export const getBakaiStoreSettings = async (organizationId: string) => {
+export const getBakaiStoreSettings = async (
+  organizationId: string,
+  accessibleStoreIds?: string[] | null,
+) => {
   const [integration, stores, mappings, branchMappings] = await Promise.all([
     prisma.bakaiStoreIntegration.findUnique({
       where: { orgId: organizationId },
@@ -2169,16 +2182,25 @@ export const getBakaiStoreSettings = async (organizationId: string) => {
       },
     }),
     prisma.store.findMany({
-      where: { organizationId },
+      where: {
+        organizationId,
+        ...(accessibleStoreIds ? { id: { in: accessibleStoreIds } } : {}),
+      },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
     prisma.bakaiStoreStockMapping.findMany({
-      where: { orgId: organizationId },
+      where: {
+        orgId: organizationId,
+        ...(accessibleStoreIds ? { storeId: { in: accessibleStoreIds } } : {}),
+      },
       select: { columnKey: true, storeId: true },
     }),
     prisma.bakaiStoreBranchMapping.findMany({
-      where: { orgId: organizationId },
+      where: {
+        orgId: organizationId,
+        ...(accessibleStoreIds ? { storeId: { in: accessibleStoreIds } } : {}),
+      },
       select: { storeId: true, bakaiBranchId: true },
     }),
   ]);
@@ -3123,10 +3145,17 @@ export const runBakaiStorePreflight = async (organizationId: string, storeId?: s
   return plan.preflight;
 };
 
-export const listBakaiStoreJobs = async (organizationId: string, limit = 50) => {
+export const listBakaiStoreJobs = async (
+  organizationId: string,
+  limit = 50,
+  accessibleStoreIds?: string[] | null,
+) => {
   const take = Math.max(1, Math.min(200, Math.trunc(limit)));
   return prisma.bakaiStoreExportJob.findMany({
-    where: { orgId: organizationId },
+    where: {
+      orgId: organizationId,
+      ...(accessibleStoreIds ? { storeId: { in: accessibleStoreIds } } : {}),
+    },
     orderBy: { createdAt: "desc" },
     take,
     include: {
@@ -3142,11 +3171,16 @@ export const listBakaiStoreJobs = async (organizationId: string, limit = 50) => 
 
 export const listBakaiStoreExportJobs = listBakaiStoreJobs;
 
-export const getBakaiStoreJob = async (organizationId: string, jobId: string) => {
+export const getBakaiStoreJob = async (
+  organizationId: string,
+  jobId: string,
+  accessibleStoreIds?: string[] | null,
+) => {
   return prisma.bakaiStoreExportJob.findFirst({
     where: {
       id: jobId,
       orgId: organizationId,
+      ...(accessibleStoreIds ? { storeId: { in: accessibleStoreIds } } : {}),
     },
     include: {
       requestedBy: {

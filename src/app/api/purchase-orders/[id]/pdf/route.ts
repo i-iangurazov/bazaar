@@ -11,6 +11,10 @@ import { getPurchaseOrderStatusLabel, type Translator } from "@/lib/i18n/status"
 import { normalizeLocale, toIntlLocale, defaultLocale } from "@/lib/locales";
 import { getMessageFromFallback } from "@/lib/i18nFallback";
 import { currencySourceWithFallback, formatStoreMoney } from "@/lib/currencyDisplay";
+import {
+  assertCommercePermission,
+  assertCommerceStoreAccess,
+} from "@/server/services/commerceAccess";
 
 export const runtime = "nodejs";
 
@@ -131,6 +135,18 @@ export const GET = async (_request: Request, { params }: { params: { id: string 
   if (!token) {
     return new Response(tErrors("unauthorized"), { status: 401 });
   }
+  const accessUser = {
+    id: String(token.sub ?? ""),
+    organizationId: String(token.organizationId ?? ""),
+    role: String(token.role ?? ""),
+    isOrgOwner: Boolean(token.isOrgOwner),
+    isPlatformOwner: Boolean(token.isPlatformOwner),
+  };
+  try {
+    assertCommercePermission(accessUser, "viewPurchaseOrders");
+  } catch {
+    return new Response(tErrors("forbidden"), { status: 403 });
+  }
   const intlLocale = toIntlLocale(locale);
 
   const po = await prisma.purchaseOrder.findFirst({
@@ -144,6 +160,11 @@ export const GET = async (_request: Request, { params }: { params: { id: string 
 
   if (!po) {
     return new Response(tErrors("poNotFound"), { status: 404 });
+  }
+  try {
+    await assertCommerceStoreAccess(prisma, accessUser, po.storeId);
+  } catch {
+    return new Response(tErrors("forbidden"), { status: 403 });
   }
   const poCurrencySource = currencySourceWithFallback(po, po.store);
 

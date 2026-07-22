@@ -6,6 +6,7 @@ import { Readable } from "node:stream";
 import { prisma } from "@/server/db/prisma";
 import { getServerAuthToken } from "@/server/auth/token";
 import { saveBakaiStoreTemplateWorkbook } from "@/server/services/bakaiStore";
+import { assertCommercePermission } from "@/server/services/commerceAccess";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,6 +44,20 @@ export const GET = async () => {
   const token = await getServerAuthToken();
   if (!token?.organizationId) {
     return new Response(null, { status: 401 });
+  }
+  try {
+    assertCommercePermission(
+      {
+        id: String(token.sub ?? ""),
+        organizationId: String(token.organizationId),
+        role: String(token.role ?? ""),
+        isOrgOwner: Boolean(token.isOrgOwner),
+        isPlatformOwner: Boolean(token.isPlatformOwner),
+      },
+      "manageIntegrations",
+    );
+  } catch {
+    return new Response(null, { status: 403 });
   }
 
   const integration = await prisma.bakaiStoreIntegration.findUnique({

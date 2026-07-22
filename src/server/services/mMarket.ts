@@ -1601,7 +1601,10 @@ const sendMMarketPayload = async (input: {
   }
 };
 
-export const getMMarketOverview = async (organizationId: string) => {
+export const getMMarketOverview = async (
+  organizationId: string,
+  accessibleStoreIds?: string[] | null,
+) => {
   const [integration, stores, mappings] = await Promise.all([
     prisma.mMarketIntegration.findUnique({
       where: { orgId: organizationId },
@@ -1615,10 +1618,16 @@ export const getMMarketOverview = async (organizationId: string) => {
         lastErrorSummary: true,
       },
     }),
-    prisma.store.count({ where: { organizationId } }),
+    prisma.store.count({
+      where: {
+        organizationId,
+        ...(accessibleStoreIds ? { id: { in: accessibleStoreIds } } : {}),
+      },
+    }),
     prisma.mMarketBranchMapping.count({
       where: {
         orgId: organizationId,
+        ...(accessibleStoreIds ? { storeId: { in: accessibleStoreIds } } : {}),
         mmarketBranchId: { not: "" },
       },
     }),
@@ -1637,7 +1646,10 @@ export const getMMarketOverview = async (organizationId: string) => {
   };
 };
 
-export const getMMarketSettings = async (organizationId: string) => {
+export const getMMarketSettings = async (
+  organizationId: string,
+  accessibleStoreIds?: string[] | null,
+) => {
   const [integration, stores, mappings, cooldownSeconds] = await Promise.all([
     prisma.mMarketIntegration.findUnique({
       where: { orgId: organizationId },
@@ -1653,12 +1665,18 @@ export const getMMarketSettings = async (organizationId: string) => {
       },
     }),
     prisma.store.findMany({
-      where: { organizationId },
+      where: {
+        organizationId,
+        ...(accessibleStoreIds ? { id: { in: accessibleStoreIds } } : {}),
+      },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
     prisma.mMarketBranchMapping.findMany({
-      where: { orgId: organizationId },
+      where: {
+        orgId: organizationId,
+        ...(accessibleStoreIds ? { storeId: { in: accessibleStoreIds } } : {}),
+      },
       select: { storeId: true, mmarketBranchId: true },
     }),
     getCooldownSeconds(organizationId),
@@ -2975,20 +2993,32 @@ export const bulkAutofillMMarketSpecs = async (input: {
   };
 };
 
-export const listMMarketExportJobs = async (organizationId: string, limit = 50) => {
+export const listMMarketExportJobs = async (
+  organizationId: string,
+  limit = 50,
+  accessibleStoreIds?: string[] | null,
+) => {
   const take = Math.max(1, Math.min(200, Math.trunc(limit)));
   return prisma.mMarketExportJob.findMany({
-    where: { orgId: organizationId },
+    where: {
+      orgId: organizationId,
+      ...(accessibleStoreIds ? { storeId: { in: accessibleStoreIds } } : {}),
+    },
     orderBy: { createdAt: "desc" },
     take,
   });
 };
 
-export const getMMarketExportJob = async (organizationId: string, jobId: string) => {
+export const getMMarketExportJob = async (
+  organizationId: string,
+  jobId: string,
+  accessibleStoreIds?: string[] | null,
+) => {
   return prisma.mMarketExportJob.findFirst({
     where: {
       id: jobId,
       orgId: organizationId,
+      ...(accessibleStoreIds ? { storeId: { in: accessibleStoreIds } } : {}),
     },
   });
 };

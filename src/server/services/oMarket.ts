@@ -1088,7 +1088,10 @@ export const runOMarketPreflight = async (
   return plan.preflight;
 };
 
-export const getOMarketOverview = async (organizationId: string) => {
+export const getOMarketOverview = async (
+  organizationId: string,
+  accessibleStoreIds?: string[] | null,
+) => {
   const [integration, mappingCount] = await Promise.all([
     prisma.oMarketIntegration.findUnique({
       where: { orgId: organizationId },
@@ -1104,7 +1107,11 @@ export const getOMarketOverview = async (organizationId: string) => {
       },
     }),
     prisma.oMarketStoreMapping.count({
-      where: { orgId: organizationId, oMarketLocationId: { not: "" } },
+      where: {
+        orgId: organizationId,
+        ...(accessibleStoreIds ? { storeId: { in: accessibleStoreIds } } : {}),
+        oMarketLocationId: { not: "" },
+      },
     }),
   ]);
   const status = resolveOverviewStatus(
@@ -1130,7 +1137,10 @@ export const getOMarketOverview = async (organizationId: string) => {
   };
 };
 
-export const getOMarketSettings = async (organizationId: string) => {
+export const getOMarketSettings = async (
+  organizationId: string,
+  accessibleStoreIds?: string[] | null,
+) => {
   const [integration, stores, storeMappings, categoryMappings, categories] = await Promise.all([
     prisma.oMarketIntegration.findUnique({
       where: { orgId: organizationId },
@@ -1147,12 +1157,18 @@ export const getOMarketSettings = async (organizationId: string) => {
       },
     }),
     prisma.store.findMany({
-      where: { organizationId },
+      where: {
+        organizationId,
+        ...(accessibleStoreIds ? { id: { in: accessibleStoreIds } } : {}),
+      },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
     prisma.oMarketStoreMapping.findMany({
-      where: { orgId: organizationId },
+      where: {
+        orgId: organizationId,
+        ...(accessibleStoreIds ? { storeId: { in: accessibleStoreIds } } : {}),
+      },
       select: { storeId: true, oMarketLocationId: true },
     }),
     prisma.oMarketCategoryMapping.findMany({
@@ -1169,6 +1185,13 @@ export const getOMarketSettings = async (organizationId: string) => {
       where: {
         organizationId,
         isDeleted: false,
+        ...(accessibleStoreIds
+          ? {
+              storeProducts: {
+                some: { storeId: { in: accessibleStoreIds }, isActive: true },
+              },
+            }
+          : {}),
         category: { not: null },
       },
       distinct: ["category"],
@@ -1722,10 +1745,17 @@ export const testOMarketConnection = async (input: {
   }
 };
 
-export const listOMarketJobs = async (organizationId: string, limit = 50) => {
+export const listOMarketJobs = async (
+  organizationId: string,
+  limit = 50,
+  accessibleStoreIds?: string[] | null,
+) => {
   const take = Math.max(1, Math.min(200, Math.trunc(limit)));
   return prisma.oMarketExportJob.findMany({
-    where: { orgId: organizationId },
+    where: {
+      orgId: organizationId,
+      ...(accessibleStoreIds ? { storeId: { in: accessibleStoreIds } } : {}),
+    },
     orderBy: { createdAt: "desc" },
     take,
     include: {
@@ -1734,9 +1764,17 @@ export const listOMarketJobs = async (organizationId: string, limit = 50) => {
   });
 };
 
-export const getOMarketJob = async (organizationId: string, jobId: string) => {
+export const getOMarketJob = async (
+  organizationId: string,
+  jobId: string,
+  accessibleStoreIds?: string[] | null,
+) => {
   return prisma.oMarketExportJob.findFirst({
-    where: { id: jobId, orgId: organizationId },
+    where: {
+      id: jobId,
+      orgId: organizationId,
+      ...(accessibleStoreIds ? { storeId: { in: accessibleStoreIds } } : {}),
+    },
     include: {
       requestedBy: { select: { id: true, name: true } },
     },

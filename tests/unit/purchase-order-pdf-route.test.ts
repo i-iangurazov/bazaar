@@ -9,6 +9,12 @@ const { formatStoreMoneyMock, mockGetServerAuthToken, prisma } = vi.hoisted(() =
     purchaseOrder: {
       findFirst: vi.fn(),
     },
+    store: {
+      findFirst: vi.fn(),
+    },
+    userStoreAccess: {
+      findFirst: vi.fn(),
+    },
   },
 }));
 
@@ -34,9 +40,17 @@ import { GET as purchaseOrderPdfGet } from "../../src/app/api/purchase-orders/[i
 describe("purchase order pdf route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetServerAuthToken.mockResolvedValue({ organizationId: "org-1" });
+    mockGetServerAuthToken.mockResolvedValue({
+      sub: "admin-1",
+      organizationId: "org-1",
+      role: "ADMIN",
+      isOrgOwner: true,
+    });
+    prisma.store.findFirst.mockResolvedValue({ id: "store-1" });
+    prisma.userStoreAccess.findFirst.mockResolvedValue(null);
     prisma.purchaseOrder.findFirst.mockResolvedValue({
       id: "po-1",
+      storeId: "store-1",
       currencyCode: "USD",
       currencyRateKgsPerUnit: "89.5",
       status: "DRAFT",
@@ -93,5 +107,46 @@ describe("purchase order pdf route", () => {
         return source.currencyCode === "USD" && source.currencyRateKgsPerUnit === "89.5";
       }),
     ).toBe(true);
+  });
+
+  it("rejects route-forbidden roles before reading the purchase order", async () => {
+    mockGetServerAuthToken.mockResolvedValue({
+      sub: "staff-1",
+      organizationId: "org-1",
+      role: "STAFF",
+    });
+
+    const response = await purchaseOrderPdfGet(new Request("http://localhost"), {
+      params: { id: "po-1" },
+    });
+
+    expect(response.status).toBe(403);
+    expect(prisma.purchaseOrder.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("rejects a same-organization purchase order outside the manager's stores", async () => {
+    mockGetServerAuthToken.mockResolvedValue({
+      sub: "manager-1",
+      organizationId: "org-1",
+      role: "MANAGER",
+    });
+    prisma.userStoreAccess.findFirst.mockResolvedValue(null);
+
+    const response = await purchaseOrderPdfGet(new Request("http://localhost"), {
+      params: { id: "po-1" },
+    });
+
+    expect(response.status).toBe(403);
+    expect(formatStoreMoneyMock).not.toHaveBeenCalled();
+  });
+
+  it("returns not found for a cross-organization ID", async () => {
+    prisma.purchaseOrder.findFirst.mockResolvedValue(null);
+
+    const response = await purchaseOrderPdfGet(new Request("http://localhost"), {
+      params: { id: "cross-org-po" },
+    });
+
+    expect(response.status).toBe(404);
   });
 });
