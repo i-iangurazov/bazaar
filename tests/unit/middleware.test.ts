@@ -9,7 +9,7 @@ vi.mock("next-auth/jwt", () => ({
   getToken: (...args: unknown[]) => mockGetToken(...args),
 }));
 
-import { isProtectedPath, middleware, protectedPrefixes } from "../../middleware";
+import { isProtectedPath, middleware, protectedPrefixes } from "../../src/middleware";
 
 const requestFor = (path: string) => new NextRequest(`https://bazaar.test${path}`);
 

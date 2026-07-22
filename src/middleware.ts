@@ -6,8 +6,8 @@ import {
   getLocaleFromAcceptLanguage,
   normalizeLocale,
   type Locale,
-} from "./src/lib/locales";
-import { canAccessAppRoute, getRoleHomePath } from "./src/lib/roleAccess";
+} from "./lib/locales";
+import { canAccessAppRoute, getRoleHomePath } from "./lib/roleAccess";
 
 const localeCookieOptions = {
   path: "/",
