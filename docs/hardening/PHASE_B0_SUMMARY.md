@@ -1,7 +1,9 @@
 # Bazaar hardening Phase B0 summary
 
-Date: 2026-07-22  
-Accepted integration baseline: `f308b2b793c2b43d7e46814c3c2007a0927fede7`  
+Date: 2026-07-22
+
+Accepted integration baseline: `f308b2b793c2b43d7e46814c3c2007a0927fede7`
+
 Scope: isolated test infrastructure, baseline stabilization, and independent runtime classification of the 46 Phase A P0 findings. No domain application fix was authorized or started.
 
 ## Isolated environment inventory
@@ -64,7 +66,7 @@ Every classification below is supported by a runtime API, DB, HTTP/SSE, rendered
 | HARD-A1-002 | CONFIRMED | RC-01 | Limited actor persisted cash/return/debt state in another store | OPEN |
 | HARD-A1-003 | CONFIRMED | RC-02 | Disallowed register, close, and refund operations persisted by role | OPEN |
 | HARD-A1-004 | CONFIRMED | RC-08 | A second cashier completed another cashier's active and held drafts | OPEN |
-| HARD-A1-005 | CONFIRMED | RC-07 | Concurrent returns refunded and restored the same quantity twice | OPEN |
+| HARD-A1-005 | CONFIRMED | RC-07 | Two sequentially completed stale return drafts refunded and restored the same quantity twice | OPEN |
 | HARD-A1-006 | CONFIRMED | RC-08 | Shift closed with an active draft, leaving checkout blocked | OPEN |
 | HARD-A1-007 | CONFIRMED | RC-08 | Active register with open operational state was deactivated | OPEN |
 | HARD-A1-008 | CONFIRMED | RC-07 | Restricted sale paths persisted prohibited negative stock | OPEN |
@@ -104,7 +106,7 @@ Every classification below is supported by a runtime API, DB, HTTP/SSE, rendered
 | HARD-A4-007 | CONFIRMED | RC-12 | KGS total fields persisted quantities `2` and `5` instead of money | OPEN |
 | HARD-A4-008 | CONFIRMED | RC-12 | 01:30 Bishkek sale was omitted under UTC server bounds | OPEN |
 | HARD-A4-009 | CONFIRMED | RC-03 | Tenant Admin read and resolved a global null-org dead letter | OPEN |
-| HARD-A4-010 | CONFIRMED | RC-13 | Unsafe inferred shared reset reproduced; explicit guard now enforced | B0_RESOLVED |
+| HARD-A4-010 | CONFIRMED | RC-13 | Prior inferred shared-reset path was established from the harness; the new guard's 20-case failure/success matrix is enforced | B0_RESOLVED |
 | HARD-A4-011 | CONFIRMED | RC-02 | Cashier route guard allowed two forbidden settings routes | OPEN |
 
 Totals: **46 CONFIRMED, 0 DUPLICATE, 0 DOWNGRADED, 0 FALSE_POSITIVE, 0 BLOCKED_BY_ENVIRONMENT**. `HARD-A4-010` is the sole P0 corrected during B0 because it is the approved infrastructure blocker; the other 45 remain open.
