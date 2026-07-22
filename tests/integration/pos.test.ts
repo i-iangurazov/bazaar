@@ -3872,4 +3872,350 @@ describeDb("pos", () => {
     });
     expect(snapshot?.onHand).toBe(10);
   });
+
+  it("emits machine-readable B2 POS stock and payment compatibility evidence", async () => {
+    const { org, store, product, cashierUser, managerUser, adminUser } = await seedBase({
+      plan: "BUSINESS",
+      allowNegativeStock: false,
+    });
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { basePriceKgs: 100 },
+    });
+    await adjustStock({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 30,
+      reason: "B2 POS compatibility fixture",
+      idempotencyKey: "b2-pos-compat-stock",
+      requestId: "b2-pos-compat-stock",
+    });
+
+    const register = await prisma.posRegister.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "B2 compatibility register",
+        code: "B2-COMPAT",
+      },
+    });
+    const cashierCaller = createTestCaller({
+      id: cashierUser.id,
+      email: cashierUser.email,
+      role: cashierUser.role,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+    const managerCaller = createTestCaller({
+      id: managerUser.id,
+      email: managerUser.email,
+      role: managerUser.role,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+    const shift = await cashierCaller.pos.shifts.open({
+      registerId: register.id,
+      openingCashKgs: 0,
+      idempotencyKey: "b2-pos-compat-shift",
+    });
+
+    const stockOnHand = async () => {
+      const snapshot = await prisma.inventorySnapshot.findUniqueOrThrow({
+        where: {
+          storeId_productId_variantKey: {
+            storeId: store.id,
+            productId: product.id,
+            variantKey: "BASE",
+          },
+        },
+      });
+      return snapshot.onHand;
+    };
+    const saleStats = async (saleId: string) => {
+      const [sale, movements, payments] = await Promise.all([
+        prisma.customerOrder.findUniqueOrThrow({ where: { id: saleId } }),
+        prisma.stockMovement.findMany({
+          where: { referenceType: "CustomerOrder", referenceId: saleId, type: "SALE" },
+        }),
+        prisma.salePayment.findMany({
+          where: { customerOrderId: saleId, isRefund: false },
+          orderBy: { createdAt: "asc" },
+        }),
+      ]);
+      return {
+        status: sale.status,
+        movementCount: movements.length,
+        movementQty: movements.reduce((sum, movement) => sum + movement.qtyDelta, 0),
+        paymentCount: payments.length,
+        paymentTotalKgs: payments.reduce(
+          (sum, payment) => sum + Number(payment.amountKgs),
+          0,
+        ),
+        paymentMethods: payments.map((payment) => payment.method).sort(),
+      };
+    };
+
+    const initialStock = await stockOnHand();
+
+    const completedOnceSale = await cashierCaller.pos.sales.createDraft({
+      registerId: register.id,
+    });
+    await cashierCaller.pos.sales.addLine({
+      saleId: completedOnceSale.id,
+      productId: product.id,
+      qty: 2,
+    });
+    const completedOnceResults = [
+      await cashierCaller.pos.sales.complete({
+        saleId: completedOnceSale.id,
+        idempotencyKey: "b2-pos-complete-once",
+        payments: [{ method: "CASH", amountKgs: 200 }],
+      }),
+      await cashierCaller.pos.sales.complete({
+        saleId: completedOnceSale.id,
+        idempotencyKey: "b2-pos-complete-once",
+        payments: [{ method: "CASH", amountKgs: 200 }],
+      }),
+    ];
+    const completedOnceStats = await saleStats(completedOnceSale.id);
+    const afterCompletedOnce = await stockOnHand();
+
+    const duplicateSale = await cashierCaller.pos.sales.createDraft({ registerId: register.id });
+    await cashierCaller.pos.sales.addLine({
+      saleId: duplicateSale.id,
+      productId: product.id,
+      qty: 3,
+    });
+    const duplicateResults = await Promise.all([
+      cashierCaller.pos.sales.complete({
+        saleId: duplicateSale.id,
+        idempotencyKey: "b2-pos-duplicate-a",
+        payments: [{ method: "CARD", amountKgs: 300 }],
+      }),
+      cashierCaller.pos.sales.complete({
+        saleId: duplicateSale.id,
+        idempotencyKey: "b2-pos-duplicate-b",
+        payments: [{ method: "CARD", amountKgs: 300 }],
+      }),
+    ]);
+    const duplicateStats = await saleStats(duplicateSale.id);
+    const afterDuplicate = await stockOnHand();
+
+    const heldSale = await cashierCaller.pos.sales.createDraft({ registerId: register.id });
+    await cashierCaller.pos.sales.addLine({
+      saleId: heldSale.id,
+      productId: product.id,
+      qty: 4,
+    });
+    await cashierCaller.pos.sales.holdDraft({ saleId: heldSale.id });
+    const [heldBeforeResume, heldMovementCount, heldPaymentCount, stockWhileHeld] = await Promise.all([
+      prisma.customerOrder.findUniqueOrThrow({ where: { id: heldSale.id } }),
+      prisma.stockMovement.count({ where: { referenceId: heldSale.id, type: "SALE" } }),
+      prisma.salePayment.count({ where: { customerOrderId: heldSale.id } }),
+      stockOnHand(),
+    ]);
+    await cashierCaller.pos.sales.resumeHeldDraft({
+      saleId: heldSale.id,
+      registerId: register.id,
+    });
+    await cashierCaller.pos.sales.complete({
+      saleId: heldSale.id,
+      idempotencyKey: "b2-pos-resumed-complete",
+      payments: [{ method: "TRANSFER", amountKgs: 400 }],
+    });
+    const resumedStats = await saleStats(heldSale.id);
+    const afterResumedComplete = await stockOnHand();
+
+    const canceledSale = await cashierCaller.pos.sales.createDraft({ registerId: register.id });
+    await cashierCaller.pos.sales.addLine({
+      saleId: canceledSale.id,
+      productId: product.id,
+      qty: 5,
+    });
+    const stockBeforeCancel = await stockOnHand();
+    await cashierCaller.pos.sales.cancelDraft({ saleId: canceledSale.id });
+    const canceledStats = await saleStats(canceledSale.id);
+    const stockAfterCancel = await stockOnHand();
+
+    const splitSale = await cashierCaller.pos.sales.createDraft({ registerId: register.id });
+    const splitLine = await cashierCaller.pos.sales.addLine({
+      saleId: splitSale.id,
+      productId: product.id,
+      qty: 2,
+    });
+    await cashierCaller.pos.sales.complete({
+      saleId: splitSale.id,
+      idempotencyKey: "b2-pos-split-complete",
+      payments: [
+        { method: "CASH", amountKgs: 80 },
+        { method: "TRANSFER", amountKgs: 120 },
+      ],
+    });
+    const splitStats = await saleStats(splitSale.id);
+    const afterSplitComplete = await stockOnHand();
+
+    const returnDraft = await cashierCaller.pos.returns.createDraft({
+      shiftId: shift.id,
+      originalSaleId: splitSale.id,
+    });
+    await cashierCaller.pos.returns.addLine({
+      saleReturnId: returnDraft.id,
+      customerOrderLineId: splitLine.id,
+      qty: 1,
+    });
+    const returnResults = [
+      await managerCaller.pos.returns.complete({
+        saleReturnId: returnDraft.id,
+        idempotencyKey: "b2-pos-split-return",
+        payments: [
+          { method: "CASH", amountKgs: 40 },
+          { method: "TRANSFER", amountKgs: 60 },
+        ],
+      }),
+      await managerCaller.pos.returns.complete({
+        saleReturnId: returnDraft.id,
+        idempotencyKey: "b2-pos-split-return",
+        payments: [
+          { method: "CASH", amountKgs: 40 },
+          { method: "TRANSFER", amountKgs: 60 },
+        ],
+      }),
+    ];
+    const [persistedReturn, returnMovements, refundPayments, finalStock, activeDraft] =
+      await Promise.all([
+        prisma.saleReturn.findUniqueOrThrow({ where: { id: returnDraft.id } }),
+        prisma.stockMovement.findMany({
+          where: { referenceType: "SaleReturn", referenceId: returnDraft.id, type: "RETURN" },
+        }),
+        prisma.salePayment.findMany({
+          where: { saleReturnId: returnDraft.id, isRefund: true },
+          orderBy: { createdAt: "asc" },
+        }),
+        stockOnHand(),
+        cashierCaller.pos.sales.activeDraft({ registerId: register.id }),
+      ]);
+
+    const evidence = {
+      schemaVersion: 1,
+      database: process.env.EXPECTED_TEST_DB_NAME,
+      issueIds: ["HARD-A1-005", "HARD-A1-008"],
+      stock: {
+        initial: initialStock,
+        afterCompletedOnce,
+        afterDuplicate,
+        whileHeld: stockWhileHeld,
+        afterResumedComplete,
+        beforeCancel: stockBeforeCancel,
+        afterCancel: stockAfterCancel,
+        afterSplitComplete,
+        final: finalStock,
+      },
+      flows: {
+        completedOnce: {
+          ...completedOnceStats,
+          responseIds: new Set(completedOnceResults.map((result) => result.id)).size,
+        },
+        duplicateSubmit: {
+          ...duplicateStats,
+          responseIds: new Set(duplicateResults.map((result) => result.id)).size,
+        },
+        heldBeforeResume: {
+          status: heldBeforeResume.status,
+          isHeld: heldBeforeResume.isHeld,
+          movementCount: heldMovementCount,
+          paymentCount: heldPaymentCount,
+        },
+        resumedComplete: resumedStats,
+        canceledDraft: canceledStats,
+        splitPayment: splitStats,
+        splitReturn: {
+          status: persistedReturn.status,
+          responseIds: new Set(returnResults.map((result) => result.id)).size,
+          movementCount: returnMovements.length,
+          movementQty: returnMovements.reduce((sum, movement) => sum + movement.qtyDelta, 0),
+          refundCount: refundPayments.length,
+          refundTotalKgs: refundPayments.reduce(
+            (sum, payment) => sum + Number(payment.amountKgs),
+            0,
+          ),
+          refundMethods: refundPayments.map((payment) => payment.method).sort(),
+        },
+      },
+      activeDraftAfterSuite: activeDraft,
+    };
+
+    expect(evidence).toMatchObject({
+      database: "bazaar_hardening_agent1_pos",
+      stock: {
+        initial: 30,
+        afterCompletedOnce: 28,
+        afterDuplicate: 25,
+        whileHeld: 25,
+        afterResumedComplete: 21,
+        beforeCancel: 21,
+        afterCancel: 21,
+        afterSplitComplete: 19,
+        final: 20,
+      },
+      flows: {
+        completedOnce: {
+          status: "COMPLETED",
+          movementCount: 1,
+          movementQty: -2,
+          paymentCount: 1,
+          paymentTotalKgs: 200,
+          responseIds: 1,
+        },
+        duplicateSubmit: {
+          status: "COMPLETED",
+          movementCount: 1,
+          movementQty: -3,
+          paymentCount: 1,
+          paymentTotalKgs: 300,
+          responseIds: 1,
+        },
+        heldBeforeResume: {
+          status: "DRAFT",
+          isHeld: true,
+          movementCount: 0,
+          paymentCount: 0,
+        },
+        resumedComplete: {
+          status: "COMPLETED",
+          movementCount: 1,
+          movementQty: -4,
+          paymentCount: 1,
+          paymentTotalKgs: 400,
+        },
+        canceledDraft: {
+          status: "CANCELED",
+          movementCount: 0,
+          movementQty: 0,
+          paymentCount: 0,
+          paymentTotalKgs: 0,
+        },
+        splitPayment: {
+          status: "COMPLETED",
+          movementCount: 1,
+          movementQty: -2,
+          paymentCount: 2,
+          paymentTotalKgs: 200,
+          paymentMethods: ["CASH", "TRANSFER"],
+        },
+        splitReturn: {
+          status: "COMPLETED",
+          responseIds: 1,
+          movementCount: 1,
+          movementQty: 1,
+          refundCount: 2,
+          refundTotalKgs: 100,
+          refundMethods: ["CASH", "TRANSFER"],
+        },
+      },
+      activeDraftAfterSuite: null,
+    });
+    console.info(`[B2-POS-EVIDENCE] ${JSON.stringify(evidence)}`);
+  });
 });
