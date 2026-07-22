@@ -95,7 +95,9 @@ describeDb("email marketing product search", () => {
         unit: baseUnit.code,
         sku: "RECENT-NEW",
         name: "Recently Added Camera",
-        createdAt: new Date("2026-03-01T00:00:00.000Z"),
+        // Keep the ordering fixture newer than records created by seedBase/createMany
+        // regardless of the calendar date on which the suite is executed.
+        createdAt: new Date(Date.now() + 60_000),
         storeProducts: {
           create: {
             organizationId: org.id,
