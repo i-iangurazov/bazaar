@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { isCompleteInternationalPhone } from "@/lib/phoneCountries";
-import { createCatalogCheckoutOrder } from "@/server/services/bazaarCatalog";
+import { createCatalogCheckoutOrderOperation } from "@/server/services/bazaarCatalog";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,34 +32,52 @@ export const POST = async (request: Request, context: { params: { slug: string }
   }
 
   try {
-    const order = await createCatalogCheckoutOrder({
+    const idempotencyKey = request.headers.get("idempotency-key")?.trim();
+    if (!idempotencyKey) {
+      return Response.json({ message: "idempotencyKeyRequired" }, { status: 400 });
+    }
+    const operation = await createCatalogCheckoutOrderOperation({
       slug: context.params.slug,
+      idempotencyKey,
       customerName: parsed.data.customerName,
       customerEmail: parsed.data.customerEmail,
       customerPhone: parsed.data.customerPhone,
       comment: parsed.data.comment ?? null,
       lines: parsed.data.lines,
     });
-    return Response.json(
-      {
-        order: {
-          id: order.id,
-          number: order.number,
-        },
+    return Response.json(operation.response, {
+      status: operation.responseStatus,
+      headers: {
+        "idempotency-replayed": String(operation.replayed),
+        "operation-request-id": operation.operationRequestId,
       },
-      { status: 200 },
-    );
+    });
   } catch (error) {
     const message = toMessage(error);
     if (
       message === "invalidInput" ||
+      message === "idempotencyKeyRequired" ||
       message === "invalidQuantity" ||
       message === "salesOrderEmpty"
     ) {
       return Response.json({ message }, { status: 400 });
     }
-    if (message === "catalogNotFound" || message === "productNotFound" || message === "variantNotFound") {
+    if (
+      message === "catalogNotFound" ||
+      message === "productNotFound" ||
+      message === "variantNotFound"
+    ) {
       return Response.json({ message }, { status: 404 });
+    }
+    if (
+      message === "catalogScopeChanged" ||
+      message === "operationRequestIdentityMismatch" ||
+      message === "operationRequestPayloadMismatch" ||
+      message === "operationRequestUnavailable" ||
+      message === "operationRequestReconciliationRequired" ||
+      message === "requestInProgress"
+    ) {
+      return Response.json({ message }, { status: 409 });
     }
     return Response.json({ message: "genericMessage" }, { status: 500 });
   }

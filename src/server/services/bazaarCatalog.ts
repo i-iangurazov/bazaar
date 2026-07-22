@@ -6,6 +6,7 @@ import {
   BazaarCatalogStatus,
   CustomerOrderSource,
   CustomerOrderStatus,
+  OperationRequestPrincipalType,
 } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
@@ -14,6 +15,12 @@ import { AppError } from "@/server/services/errors";
 import { writeAuditLog } from "@/server/services/audit";
 import { upsertCustomerFromOrderTx } from "@/server/services/customers";
 import { toJson } from "@/server/services/json";
+import {
+  OPERATION_FAILURE_AMBIGUOUS,
+  OPERATION_FAILURE_SAFE_BEFORE_EFFECTS,
+  runOperationRequest,
+  type OperationFailureDecision,
+} from "@/server/services/operationRequests";
 import { sendOrderConfirmationEmail } from "@/server/services/orderEmails";
 import { getRedisPublisher } from "@/server/redis";
 import { eventBus } from "@/server/events/eventBus";
@@ -900,14 +907,26 @@ export const getPublicBazaarCatalog = async (
   return payload;
 };
 
-export const createCatalogCheckoutOrder = async (input: {
+export type CreateCatalogCheckoutOrderInput = {
   slug: string;
   customerName: string;
   customerEmail: string;
   customerPhone: string;
   comment?: string | null;
   lines: Array<{ productId: string; variantId?: string | null; qty: number }>;
-}) => {
+};
+
+export type TrustedCatalogCheckoutScope = {
+  catalogId: string;
+  organizationId: string;
+  storeId: string;
+};
+
+const createCatalogCheckoutOrderTx = async (
+  tx: Prisma.TransactionClient,
+  input: CreateCatalogCheckoutOrderInput,
+  expectedScope?: TrustedCatalogCheckoutScope,
+) => {
   const slug = input.slug.trim().toLowerCase();
   if (!slug) {
     throw new AppError("invalidInput", "BAD_REQUEST", 400);
@@ -949,184 +968,195 @@ export const createCatalogCheckoutOrder = async (input: {
     throw new AppError("invalidInput", "BAD_REQUEST", 400);
   }
 
-  const result = await prisma.$transaction(async (tx) => {
-    const catalog = await tx.bazaarCatalog.findUnique({
-      where: { slug },
-      select: {
-        organizationId: true,
-        storeId: true,
-        status: true,
-        store: {
-          select: {
-            currencyCode: true,
-            currencyRateKgsPerUnit: true,
-          },
+  const catalog = await tx.bazaarCatalog.findUnique({
+    where: { slug },
+    select: {
+      id: true,
+      organizationId: true,
+      storeId: true,
+      status: true,
+      store: {
+        select: {
+          currencyCode: true,
+          currencyRateKgsPerUnit: true,
         },
       },
-    });
-    if (!catalog || catalog.status !== BazaarCatalogStatus.PUBLISHED) {
-      throw new AppError("catalogNotFound", "NOT_FOUND", 404);
-    }
+    },
+  });
+  if (!catalog || catalog.status !== BazaarCatalogStatus.PUBLISHED) {
+    throw new AppError("catalogNotFound", "NOT_FOUND", 404);
+  }
+  if (
+    expectedScope &&
+    (catalog.id !== expectedScope.catalogId ||
+      catalog.organizationId !== expectedScope.organizationId ||
+      catalog.storeId !== expectedScope.storeId)
+  ) {
+    throw new AppError("catalogScopeChanged", "CONFLICT", 409);
+  }
 
-    const productIds = Array.from(new Set(normalizedLines.map((line) => line.productId)));
-    const variantIds = Array.from(
-      new Set(
-        normalizedLines
-          .map((line) => line.variantId)
-          .filter((variantId): variantId is string => Boolean(variantId)),
-      ),
-    );
+  const productIds = Array.from(new Set(normalizedLines.map((line) => line.productId)));
+  const variantIds = Array.from(
+    new Set(
+      normalizedLines
+        .map((line) => line.variantId)
+        .filter((variantId): variantId is string => Boolean(variantId)),
+    ),
+  );
 
-    const [products, variants, storePrices, productCosts] = await Promise.all([
-      tx.product.findMany({
-        where: {
-          organizationId: catalog.organizationId,
-          isDeleted: false,
-          id: { in: productIds },
-          hiddenInBazaarCatalogs: {
-            none: { storeId: catalog.storeId },
-          },
-          storeProducts: { some: { storeId: catalog.storeId, isActive: true } },
-        },
-        select: {
-          id: true,
-          basePriceKgs: true,
-        },
-      }),
-      variantIds.length
-        ? tx.productVariant.findMany({
-            where: {
-              id: { in: variantIds },
-              isActive: true,
-            },
-            select: {
-              id: true,
-              productId: true,
-            },
-          })
-        : Promise.resolve([]),
-      tx.storePrice.findMany({
-        where: {
-          organizationId: catalog.organizationId,
-          storeId: catalog.storeId,
-          productId: { in: productIds },
-        },
-        select: {
-          productId: true,
-          variantId: true,
-          variantKey: true,
-          priceKgs: true,
-        },
-      }),
-      tx.productCost.findMany({
-        where: {
-          organizationId: catalog.organizationId,
-          productId: { in: productIds },
-        },
-        select: {
-          productId: true,
-          variantId: true,
-          variantKey: true,
-          avgCostKgs: true,
-        },
-      }),
-    ]);
-
-    const productsById = new Map(products.map((product) => [product.id, product]));
-    if (productsById.size !== productIds.length) {
-      throw new AppError("productNotFound", "NOT_FOUND", 404);
-    }
-
-    const variantsById = new Map(variants.map((variant) => [variant.id, variant]));
-    const storePriceByProductVariantKey = new Map(
-      storePrices.map((storePrice) => [
-        `${storePrice.productId}:${storePrice.variantKey}`,
-        Number(storePrice.priceKgs),
-      ]),
-    );
-    const productCostByProductVariantKey = new Map(
-      productCosts.map((productCost) => [
-        `${productCost.productId}:${productCost.variantKey}`,
-        Number(productCost.avgCostKgs),
-      ]),
-    );
-
-    const lines = normalizedLines.map((line) => {
-      const product = productsById.get(line.productId);
-      if (!product) {
-        throw new AppError("productNotFound", "NOT_FOUND", 404);
-      }
-      if (line.variantId) {
-        const variant = variantsById.get(line.variantId);
-        if (!variant || variant.productId !== line.productId) {
-          throw new AppError("variantNotFound", "NOT_FOUND", 404);
-        }
-      }
-
-      const basePrice = toMoney(product.basePriceKgs);
-      const unitPrice =
-        storePriceByProductVariantKey.get(`${line.productId}:${line.variantKey}`) ??
-        storePriceByProductVariantKey.get(`${line.productId}:BASE`) ??
-        basePrice;
-      const lineTotal = roundMoney(unitPrice * line.qty);
-      const unitCost =
-        productCostByProductVariantKey.get(`${line.productId}:${line.variantKey}`) ??
-        (line.variantKey !== "BASE"
-          ? (productCostByProductVariantKey.get(`${line.productId}:BASE`) ?? null)
-          : null);
-      const lineCostTotal = unitCost === null ? null : roundMoney(unitCost * line.qty);
-      return {
-        productId: line.productId,
-        qty: line.qty,
-        variantId: line.variantId,
-        variantKey: line.variantKey,
-        unitPriceKgs: roundMoney(unitPrice),
-        lineTotalKgs: lineTotal,
-        unitCostKgs: unitCost,
-        lineCostTotalKgs: lineCostTotal,
-      };
-    });
-
-    const subtotal = roundMoney(lines.reduce((sum, line) => sum + line.lineTotalKgs, 0));
-    const number = await nextSalesOrderNumber(tx, catalog.organizationId);
-    const order = await tx.customerOrder.create({
-      data: {
+  const [products, variants, storePrices, productCosts] = await Promise.all([
+    tx.product.findMany({
+      where: {
         organizationId: catalog.organizationId,
-        storeId: catalog.storeId,
-        number,
-        status: CustomerOrderStatus.CONFIRMED,
-        source: CustomerOrderSource.CATALOG,
-        confirmedAt: new Date(),
-        customerName,
-        customerEmail,
-        customerPhone,
-        notes: normalizeOptionalText(input.comment),
-        subtotalKgs: subtotal,
-        totalKgs: subtotal,
-        ...resolveCurrencySnapshot(catalog.store),
-        lines: {
-          create: lines,
+        isDeleted: false,
+        id: { in: productIds },
+        hiddenInBazaarCatalogs: {
+          none: { storeId: catalog.storeId },
         },
+        storeProducts: { some: { storeId: catalog.storeId, isActive: true } },
       },
       select: {
         id: true,
-        number: true,
-        organizationId: true,
-        storeId: true,
+        basePriceKgs: true,
       },
-    });
+    }),
+    variantIds.length
+      ? tx.productVariant.findMany({
+          where: {
+            id: { in: variantIds },
+            isActive: true,
+          },
+          select: {
+            id: true,
+            productId: true,
+          },
+        })
+      : Promise.resolve([]),
+    tx.storePrice.findMany({
+      where: {
+        organizationId: catalog.organizationId,
+        storeId: catalog.storeId,
+        productId: { in: productIds },
+      },
+      select: {
+        productId: true,
+        variantId: true,
+        variantKey: true,
+        priceKgs: true,
+      },
+    }),
+    tx.productCost.findMany({
+      where: {
+        organizationId: catalog.organizationId,
+        productId: { in: productIds },
+      },
+      select: {
+        productId: true,
+        variantId: true,
+        variantKey: true,
+        avgCostKgs: true,
+      },
+    }),
+  ]);
 
-    await upsertCustomerFromOrderTx(tx, {
+  const productsById = new Map(products.map((product) => [product.id, product]));
+  if (productsById.size !== productIds.length) {
+    throw new AppError("productNotFound", "NOT_FOUND", 404);
+  }
+
+  const variantsById = new Map(variants.map((variant) => [variant.id, variant]));
+  const storePriceByProductVariantKey = new Map(
+    storePrices.map((storePrice) => [
+      `${storePrice.productId}:${storePrice.variantKey}`,
+      Number(storePrice.priceKgs),
+    ]),
+  );
+  const productCostByProductVariantKey = new Map(
+    productCosts.map((productCost) => [
+      `${productCost.productId}:${productCost.variantKey}`,
+      Number(productCost.avgCostKgs),
+    ]),
+  );
+
+  const lines = normalizedLines.map((line) => {
+    const product = productsById.get(line.productId);
+    if (!product) {
+      throw new AppError("productNotFound", "NOT_FOUND", 404);
+    }
+    if (line.variantId) {
+      const variant = variantsById.get(line.variantId);
+      if (!variant || variant.productId !== line.productId) {
+        throw new AppError("variantNotFound", "NOT_FOUND", 404);
+      }
+    }
+
+    const basePrice = toMoney(product.basePriceKgs);
+    const unitPrice =
+      storePriceByProductVariantKey.get(`${line.productId}:${line.variantKey}`) ??
+      storePriceByProductVariantKey.get(`${line.productId}:BASE`) ??
+      basePrice;
+    const lineTotal = roundMoney(unitPrice * line.qty);
+    const unitCost =
+      productCostByProductVariantKey.get(`${line.productId}:${line.variantKey}`) ??
+      (line.variantKey !== "BASE"
+        ? (productCostByProductVariantKey.get(`${line.productId}:BASE`) ?? null)
+        : null);
+    const lineCostTotal = unitCost === null ? null : roundMoney(unitCost * line.qty);
+    return {
+      productId: line.productId,
+      qty: line.qty,
+      variantId: line.variantId,
+      variantKey: line.variantKey,
+      unitPriceKgs: roundMoney(unitPrice),
+      lineTotalKgs: lineTotal,
+      unitCostKgs: unitCost,
+      lineCostTotalKgs: lineCostTotal,
+    };
+  });
+
+  const subtotal = roundMoney(lines.reduce((sum, line) => sum + line.lineTotalKgs, 0));
+  const number = await nextSalesOrderNumber(tx, catalog.organizationId);
+  const order = await tx.customerOrder.create({
+    data: {
       organizationId: catalog.organizationId,
       storeId: catalog.storeId,
+      number,
+      status: CustomerOrderStatus.CONFIRMED,
+      source: CustomerOrderSource.CATALOG,
+      confirmedAt: new Date(),
       customerName,
       customerEmail,
       customerPhone,
-    });
-
-    return order;
+      notes: normalizeOptionalText(input.comment),
+      subtotalKgs: subtotal,
+      totalKgs: subtotal,
+      ...resolveCurrencySnapshot(catalog.store),
+      lines: {
+        create: lines,
+      },
+    },
+    select: {
+      id: true,
+      number: true,
+      organizationId: true,
+      storeId: true,
+    },
   });
 
+  await upsertCustomerFromOrderTx(tx, {
+    organizationId: catalog.organizationId,
+    storeId: catalog.storeId,
+    customerName,
+    customerEmail,
+    customerPhone,
+  });
+
+  return order;
+};
+
+type CatalogCheckoutOrderResult = Awaited<ReturnType<typeof createCatalogCheckoutOrderTx>>;
+
+const dispatchCatalogCheckoutOrderCreated = (result: CatalogCheckoutOrderResult) => {
   eventBus.publish({
     type: "customerOrder.created",
     payload: {
@@ -1145,10 +1175,125 @@ export const createCatalogCheckoutOrder = async (input: {
       "catalogue order confirmation email send failed",
     );
   });
+};
 
-  return {
-    id: result.id,
-    number: result.number,
-    storeId: result.storeId,
+const toCatalogCheckoutOrderResponse = (result: CatalogCheckoutOrderResult) => ({
+  id: result.id,
+  number: result.number,
+  storeId: result.storeId,
+});
+
+export const createCatalogCheckoutOrder = async (input: CreateCatalogCheckoutOrderInput) => {
+  const result = await prisma.$transaction((tx) => createCatalogCheckoutOrderTx(tx, input));
+  dispatchCatalogCheckoutOrderCreated(result);
+  return toCatalogCheckoutOrderResponse(result);
+};
+
+type CatalogCheckoutOperationResponse = Prisma.InputJsonObject & {
+  order: {
+    id: string;
+    number: string;
   };
+};
+
+const classifyCatalogCheckoutOperationFailure = (error: unknown): OperationFailureDecision => {
+  if (error instanceof AppError) {
+    return {
+      classification: OPERATION_FAILURE_SAFE_BEFORE_EFFECTS,
+      responseCode: error.message,
+      responseStatus: error.status,
+    };
+  }
+  return {
+    classification: OPERATION_FAILURE_AMBIGUOUS,
+    responseCode: "operationRequestFailed",
+    responseStatus: 500,
+  };
+};
+
+export const createCatalogCheckoutOrderOperationForTrustedScope = async (
+  input: CreateCatalogCheckoutOrderInput & { idempotencyKey: string },
+  trustedCatalog: TrustedCatalogCheckoutScope,
+) => {
+  const slug = input.slug.trim().toLowerCase();
+  if (!slug) {
+    throw new AppError("invalidInput", "BAD_REQUEST", 400);
+  }
+
+  let createdResult: CatalogCheckoutOrderResult | null = null;
+  const operation = await runOperationRequest<CatalogCheckoutOperationResponse>(
+    {
+      organizationId: trustedCatalog.organizationId,
+      storeId: trustedCatalog.storeId,
+      scope: "catalog.checkout.create.v1",
+      principal: {
+        type: OperationRequestPrincipalType.ANONYMOUS_CATALOG,
+        id: trustedCatalog.catalogId,
+      },
+      idempotencyKey: input.idempotencyKey,
+      payload: {
+        version: "v1",
+        value: {
+          slug,
+          customerName: input.customerName,
+          customerEmail: input.customerEmail,
+          customerPhone: input.customerPhone,
+          comment: input.comment ?? null,
+          lines: input.lines.map((line) => ({
+            productId: line.productId,
+            variantId: line.variantId ?? null,
+            qty: line.qty,
+          })),
+        },
+      },
+      allowedResponsePaths: ["order", "order.id", "order.number"],
+      classifyFailure: classifyCatalogCheckoutOperationFailure,
+    },
+    async (tx) => {
+      const result = await createCatalogCheckoutOrderTx(tx, input, {
+        catalogId: trustedCatalog.catalogId,
+        organizationId: trustedCatalog.organizationId,
+        storeId: trustedCatalog.storeId,
+      });
+      createdResult = result;
+      return {
+        response: {
+          order: {
+            id: result.id,
+            number: result.number,
+          },
+        },
+        responseStatus: 200,
+        responseCode: "created",
+        resource: { type: "CustomerOrder", id: result.id },
+      };
+    },
+  );
+
+  if (createdResult) {
+    dispatchCatalogCheckoutOrderCreated(createdResult);
+  }
+  return operation;
+};
+
+export const createCatalogCheckoutOrderOperation = async (
+  input: CreateCatalogCheckoutOrderInput & { idempotencyKey: string },
+) => {
+  const slug = input.slug.trim().toLowerCase();
+  if (!slug) {
+    throw new AppError("invalidInput", "BAD_REQUEST", 400);
+  }
+  const trustedCatalog = await prisma.bazaarCatalog.findUnique({
+    where: { slug },
+    select: { id: true, organizationId: true, storeId: true },
+  });
+  if (!trustedCatalog) {
+    throw new AppError("catalogNotFound", "NOT_FOUND", 404);
+  }
+
+  return createCatalogCheckoutOrderOperationForTrustedScope(input, {
+    catalogId: trustedCatalog.id,
+    organizationId: trustedCatalog.organizationId,
+    storeId: trustedCatalog.storeId,
+  });
 };

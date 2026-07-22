@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
@@ -230,6 +230,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
   const [orderNumber, setOrderNumber] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const checkoutAttemptRef = useRef<{ payload: string; idempotencyKey: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -483,24 +484,33 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
     setSubmitting(true);
     setSubmitError(null);
     try {
+      const checkoutPayload = {
+        customerName: checkoutName.trim(),
+        customerEmail: checkoutEmail.trim(),
+        customerPhone: checkoutPhone.trim(),
+        comment: checkoutComment.trim() || null,
+        lines: cartItems.map((item) => ({
+          productId: item.product.id,
+          variantId: item.variant?.id ?? null,
+          qty: item.qty,
+        })),
+      };
+      const serializedPayload = JSON.stringify(checkoutPayload);
+      const existingAttempt = checkoutAttemptRef.current;
+      const idempotencyKey =
+        existingAttempt?.payload === serializedPayload
+          ? existingAttempt.idempotencyKey
+          : crypto.randomUUID();
+      checkoutAttemptRef.current = { payload: serializedPayload, idempotencyKey };
       const response = await fetch(
         `/api/public/catalog/${encodeURIComponent(catalog.slug)}/checkout`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            "Idempotency-Key": idempotencyKey,
           },
-          body: JSON.stringify({
-            customerName: checkoutName.trim(),
-            customerEmail: checkoutEmail.trim(),
-            customerPhone: checkoutPhone.trim(),
-            comment: checkoutComment.trim() || null,
-            lines: cartItems.map((item) => ({
-              productId: item.product.id,
-              variantId: item.variant?.id ?? null,
-              qty: item.qty,
-            })),
-          }),
+          body: serializedPayload,
         },
       );
       const body = (await response.json().catch(() => ({}))) as CheckoutResponse;
@@ -517,6 +527,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
       setCheckoutEmail("");
       setCheckoutPhone("");
       setCheckoutComment("");
+      checkoutAttemptRef.current = null;
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : tErrors("genericMessage"));
     } finally {
