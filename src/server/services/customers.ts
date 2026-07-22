@@ -267,6 +267,7 @@ const loadCustomerLookup = async (
   client: CustomerClient,
   input: {
     organizationId: string;
+    storeId: string;
     rows: Array<{ name?: string | null; email?: string | null; phone?: string | null }>;
   },
 ): Promise<CustomerLookup> => {
@@ -292,6 +293,7 @@ const loadCustomerLookup = async (
   const customers = await client.customer.findMany({
     where: {
       organizationId: input.organizationId,
+      storeId: input.storeId,
       deletedAt: null,
       OR: [
         ...(emails.length ? [{ email: { not: null } }] : []),
@@ -311,6 +313,7 @@ const findMatchingCustomer = async (
   client: CustomerClient,
   input: {
     organizationId: string;
+    storeId: string;
     email?: string | null;
     phone?: string | null;
   },
@@ -319,6 +322,7 @@ const findMatchingCustomer = async (
     const byEmail = await client.customer.findFirst({
       where: {
         organizationId: input.organizationId,
+        storeId: input.storeId,
         email: { equals: input.email, mode: "insensitive" },
         deletedAt: null,
       },
@@ -333,6 +337,7 @@ const findMatchingCustomer = async (
     const phoneCandidates = await client.customer.findMany({
       where: {
         organizationId: input.organizationId,
+        storeId: input.storeId,
         phone: { not: null },
         deletedAt: null,
       },
@@ -455,6 +460,7 @@ export const listCustomers = async (input: {
   const source = input.source && input.source !== "ALL" ? input.source : null;
   const where = buildCustomerListWhere({
     organizationId: input.user.organizationId,
+    storeId,
     search,
     source,
   });
@@ -472,14 +478,16 @@ export const listCustomers = async (input: {
   return { items, total, page, pageSize, accessibleStoreIds };
 };
 
-// Customer records are shared across an organization after store access has been verified. Keep
-// list and export filtering here so the downloaded file always matches the UI.
+// Customer records are store-scoped. Keep list and export filtering here so the downloaded file
+// always matches the UI without exposing another assigned or unassigned store.
 const buildCustomerListWhere = (input: {
   organizationId: string;
+  storeId: string;
   search?: string | null;
   source?: CustomerSource | null;
 }): Prisma.CustomerWhereInput => ({
   organizationId: input.organizationId,
+  storeId: input.storeId,
   deletedAt: null,
   ...(input.source ? { source: input.source } : {}),
   ...(input.search
@@ -517,6 +525,7 @@ export const listCustomersForExport = async (input: {
   return prisma.customer.findMany({
     where: buildCustomerListWhere({
       organizationId: input.user.organizationId,
+      storeId,
       search,
       source,
     }),
@@ -545,10 +554,7 @@ export const getCustomerDetail = async (input: { user: StoreAccessUser; customer
   if (!customer) {
     throw new AppError("customerNotFound", "NOT_FOUND", 404);
   }
-  const accessibleStoreIds = await resolveAccessibleStoreIds(prisma, input.user);
-  if (!accessibleStoreIds.length) {
-    throw new AppError("storeAccessDenied", "FORBIDDEN", 403);
-  }
+  await assertUserCanAccessStore(prisma, input.user, customer.storeId);
 
   const customerMatches: Prisma.CustomerOrderWhereInput[] = [
     ...(customer.email ? [{ customerEmail: customer.email }] : []),
@@ -561,6 +567,7 @@ export const getCustomerDetail = async (input: { user: StoreAccessUser; customer
   const recentOrders = await prisma.customerOrder.findMany({
     where: {
       organizationId: input.user.organizationId,
+      storeId: customer.storeId,
       isPosSale: true,
       status: CustomerOrderStatus.COMPLETED,
       OR: customerMatches,
@@ -667,6 +674,7 @@ export const updateCustomer = async (input: {
 
   const duplicate = await findMatchingCustomer(prisma, {
     organizationId: input.user.organizationId,
+    storeId: existing.storeId,
     email: normalized.email,
     phone: normalized.phone,
   });
@@ -747,6 +755,7 @@ export const previewCustomerImport = async (input: {
   });
   const lookup = await loadCustomerLookup(prisma, {
     organizationId: input.user.organizationId,
+    storeId: input.storeId,
     rows: validatedRows.filter((row) => row.errors.length === 0),
   });
 
@@ -892,6 +901,7 @@ export const runCustomerImport = async (input: {
 
   const lookup = await loadCustomerLookup(prisma, {
     organizationId: input.user.organizationId,
+    storeId: input.storeId,
     rows: importableRows,
   });
   const rows: CustomerImportRowResult[] = [];
@@ -904,6 +914,7 @@ export const runCustomerImport = async (input: {
     const chunk = preview.rows.slice(start, start + CUSTOMER_IMPORT_CHUNK_SIZE);
     const refreshedLookup = await loadCustomerLookup(prisma, {
       organizationId: input.user.organizationId,
+      storeId: input.storeId,
       rows: chunk.filter((row) => row.errors.length === 0),
     });
     refreshedLookup.customers.forEach((customer) => addCustomerToLookup(lookup, customer));
@@ -1109,6 +1120,7 @@ export const upsertCustomerFromOrderTx = async (
 
   const existing = await findMatchingCustomer(tx, {
     organizationId: input.organizationId,
+    storeId: input.storeId,
     email,
     phone,
   });

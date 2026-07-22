@@ -1,5 +1,5 @@
 import type { Role } from "@prisma/client";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { GET as getBazaarApiProducts } from "@/app/api/bazaar/v1/products/route";
 import { prisma } from "@/server/db/prisma";
@@ -79,6 +79,10 @@ const createSecondStoreProduct = async (input: {
 describeDb("B0 Agent 3 access and cache P0 runtime verification", () => {
   beforeEach(async () => {
     await resetDatabase();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("verifies HARD-A3-002: a warmed API key is rejected immediately after revocation", async () => {
@@ -162,7 +166,7 @@ describeDb("B0 Agent 3 access and cache P0 runtime verification", () => {
     expect(unaffectedContext.apiKeyId).toBe(unaffectedApiKey.id);
   });
 
-  it("reproduces HARD-A3-006: customer list/detail/upsert cross Store A and Store B", async () => {
+  it("verifies HARD-A3-006: customer list, detail, order history, and order upsert stay store-scoped", async () => {
     const { org, store, managerUser } = await seedBase({ plan: "BUSINESS" });
     const storeB = await prisma.store.create({
       data: { organizationId: org.id, name: "Store B", code: "STB" },
@@ -176,6 +180,26 @@ describeDb("B0 Agent 3 access and cache P0 runtime verification", () => {
         address: "Store B address",
       },
     });
+    const storeACustomer = await prisma.customer.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Store A Customer",
+        email: "store-a@example.com",
+      },
+    });
+    const crossOrganization = await prisma.organization.create({ data: { name: "Customer Org B" } });
+    const crossOrganizationStore = await prisma.store.create({
+      data: { organizationId: crossOrganization.id, name: "Org B Store", code: "ORGB" },
+    });
+    const crossOrganizationCustomer = await prisma.customer.create({
+      data: {
+        organizationId: crossOrganization.id,
+        storeId: crossOrganizationStore.id,
+        name: "Cross organization customer",
+        email: "cross-org@example.com",
+      },
+    });
     const caller = createTestCaller(asCallerUser(managerUser));
 
     const storeAList = await caller.customers.list({
@@ -184,7 +208,16 @@ describeDb("B0 Agent 3 access and cache P0 runtime verification", () => {
       page: 1,
       pageSize: 25,
     });
-    const detail = await caller.customers.detail({ customerId: storeBCustomer.id });
+    await expect(caller.customers.detail({ customerId: storeBCustomer.id })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    await expect(
+      caller.customers.detail({ customerId: crossOrganizationCustomer.id }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(
+      caller.customers.list({ storeId: storeB.id, page: 1, pageSize: 25 }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    const positiveDetail = await caller.customers.detail({ customerId: storeACustomer.id });
     const draft = await createCustomerOrderDraft({
       organizationId: org.id,
       storeId: store.id,
@@ -198,26 +231,32 @@ describeDb("B0 Agent 3 access and cache P0 runtime verification", () => {
       orderBy: { createdAt: "asc" },
     });
 
-    evidence("HARD-A3-006", {
+    evidence("HARD-A3-006-fixed", {
       requestedStoreId: store.id,
-      leakedListStoreIds: storeAList.items.map((customer) => customer.storeId),
-      detailCustomerStoreId: detail.customer.storeId,
+      listedStoreIds: storeAList.items.map((customer) => customer.storeId),
+      positiveDetailStoreId: positiveDetail.customer.storeId,
       orderStoreId: draft.storeId,
       persistedCustomerStoreIds: customersAfter.map((customer) => customer.storeId),
       persistedOrderCounts: customersAfter.map((customer) => customer.orderCount),
     });
 
-    expect(storeAList.items.map((customer) => customer.id)).toContain(storeBCustomer.id);
-    expect(detail.customer.id).toBe(storeBCustomer.id);
-    expect(customersAfter).toHaveLength(1);
-    expect(customersAfter[0]).toMatchObject({
+    expect(storeAList.items).toHaveLength(0);
+    expect(positiveDetail.customer.id).toBe(storeACustomer.id);
+    expect(customersAfter).toHaveLength(2);
+    expect(customersAfter).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ storeId: store.id, orderCount: 1 }),
+        expect.objectContaining({ id: storeBCustomer.id, storeId: storeB.id, orderCount: 0 }),
+      ]),
+    );
+    expect(customersAfter.find((customer) => customer.id === storeBCustomer.id)).toMatchObject({
       id: storeBCustomer.id,
       storeId: storeB.id,
-      orderCount: 1,
+      orderCount: 0,
     });
   });
 
-  it("reproduces HARD-A3-007: route-forbidden roles read POs/suppliers and a Store A manager cancels Store B", async () => {
+  it("verifies HARD-A3-007: PO and supplier procedures enforce role, store, organization, and ID boundaries", async () => {
     const { org, store, supplier, product, baseUnit, adminUser, managerUser, staffUser, cashierUser } =
       await seedBase({ plan: "BUSINESS" });
     const { store: storeB } = await createSecondStoreProduct({
@@ -243,6 +282,26 @@ describeDb("B0 Agent 3 access and cache P0 runtime verification", () => {
       requestId: "b0-a3-007-po",
       submit: true,
     });
+    const accessiblePo = await createPurchaseOrder({
+      organizationId: org.id,
+      storeId: store.id,
+      supplierId: supplier.id,
+      lines: [{ productId: product.id, qtyOrdered: 2 }],
+      actorId: adminUser.id,
+      requestId: "b1-a3-007-accessible-po",
+      submit: true,
+    });
+    const crossOrganization = await prisma.organization.create({ data: { name: "PO Org B" } });
+    const crossOrganizationStore = await prisma.store.create({
+      data: { organizationId: crossOrganization.id, name: "PO Org B Store", code: "POB" },
+    });
+    const crossOrganizationPo = await prisma.purchaseOrder.create({
+      data: {
+        organizationId: crossOrganization.id,
+        storeId: crossOrganizationStore.id,
+        status: "DRAFT",
+      },
+    });
     const before = await prisma.inventorySnapshot.findUniqueOrThrow({
       where: {
         storeId_productId_variantKey: {
@@ -256,12 +315,27 @@ describeDb("B0 Agent 3 access and cache P0 runtime verification", () => {
     const staffCaller = createTestCaller(asCallerUser(staffUser));
     const cashierCaller = createTestCaller(asCallerUser(cashierUser));
     const managerCaller = createTestCaller(asCallerUser(managerUser));
-    const [staffList, staffDetail, cashierSuppliers] = await Promise.all([
+    await expect(
       staffCaller.purchaseOrders.list({ page: 1, pageSize: 25 }),
-      staffCaller.purchaseOrders.getById({ id: po.id }),
-      cashierCaller.suppliers.list(),
-    ]);
-    await managerCaller.purchaseOrders.cancel({ purchaseOrderId: po.id });
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(staffCaller.purchaseOrders.getById({ id: po.id })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    await expect(cashierCaller.suppliers.list()).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+    const managerList = await managerCaller.purchaseOrders.list({ page: 1, pageSize: 25 });
+    await expect(managerCaller.purchaseOrders.getById({ id: po.id })).resolves.toBeNull();
+    await expect(
+      managerCaller.purchaseOrders.getById({ id: crossOrganizationPo.id }),
+    ).resolves.toBeNull();
+    await expect(
+      managerCaller.purchaseOrders.cancel({ purchaseOrderId: po.id }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(
+      managerCaller.purchaseOrders.cancel({ purchaseOrderId: crossOrganizationPo.id }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    const managerSuppliers = await managerCaller.suppliers.list();
+    await managerCaller.purchaseOrders.cancel({ purchaseOrderId: accessiblePo.id });
 
     const persisted = await prisma.purchaseOrder.findUniqueOrThrow({ where: { id: po.id } });
     const after = await prisma.inventorySnapshot.findUniqueOrThrow({
@@ -274,29 +348,40 @@ describeDb("B0 Agent 3 access and cache P0 runtime verification", () => {
       },
     });
 
-    evidence("HARD-A3-007", {
+    const accessiblePersisted = await prisma.purchaseOrder.findUniqueOrThrow({
+      where: { id: accessiblePo.id },
+    });
+    const deniedCancelAudits = await prisma.auditLog.count({
+      where: { entity: "PurchaseOrder", entityId: po.id, action: "PO_CANCEL" },
+    });
+
+    evidence("HARD-A3-007-fixed", {
       managerAccessibleStoreId: store.id,
       targetStoreId: storeB.id,
-      staffListOrderIds: staffList.items.map((order) => order.id),
-      staffDetailOrderId: staffDetail?.id,
-      cashierSupplierIds: cashierSuppliers.map((row) => row.id),
+      managerListOrderIds: managerList.items.map((order) => order.id),
+      managerSupplierIds: managerSuppliers.map((row) => row.id),
       targetStatusAfterManagerCancel: persisted.status,
+      accessibleStatusAfterManagerCancel: accessiblePersisted.status,
       targetOnOrderBefore: before.onOrder,
       targetOnOrderAfter: after.onOrder,
+      deniedCancelAudits,
     });
 
-    expect(staffList.items.map((order) => order.id)).toContain(po.id);
-    expect(staffDetail?.id).toBe(po.id);
-    expect(cashierSuppliers.map((row) => row.id)).toContain(supplier.id);
-    expect(persisted.status).toBe("CANCELLED");
+    expect(managerList.items.map((order) => order.id)).toContain(accessiblePo.id);
+    expect(managerList.items.map((order) => order.id)).not.toContain(po.id);
+    expect(managerSuppliers.map((row) => row.id)).toContain(supplier.id);
+    expect(persisted.status).toBe("SUBMITTED");
+    expect(accessiblePersisted.status).toBe("CANCELLED");
     expect(before.onOrder).toBe(5);
-    expect(after.onOrder).toBe(0);
+    expect(after.onOrder).toBe(5);
+    expect(deniedCancelAudits).toBe(0);
   });
 
-  it("reproduces HARD-A3-008: limited roles read integrations and a Store A manager mutates Store B selection", async () => {
-    const { org, store, supplier, baseUnit, managerUser, staffUser, cashierUser } = await seedBase({
-      plan: "BUSINESS",
-    });
+  it("verifies HARD-A3-008: integration roles and store-scoped reads/writes are enforced before side effects", async () => {
+    const { org, store, supplier, product, baseUnit, managerUser, staffUser, cashierUser } =
+      await seedBase({
+        plan: "BUSINESS",
+      });
     const { store: storeB, product: productB } = await createSecondStoreProduct({
       organizationId: org.id,
       supplierId: supplier.id,
@@ -306,27 +391,55 @@ describeDb("B0 Agent 3 access and cache P0 runtime verification", () => {
     const staffCaller = createTestCaller(asCallerUser(staffUser));
     const cashierCaller = createTestCaller(asCallerUser(cashierUser));
     const managerCaller = createTestCaller(asCallerUser(managerUser));
+    const fetchMock = vi.fn(async () => {
+      throw new Error("provider access is forbidden in access-boundary tests");
+    });
+    vi.stubGlobal("fetch", fetchMock);
 
-    const successfulReads: string[] = [];
-    await staffCaller.bazaarCatalog.listStores();
-    successfulReads.push("staff:bazaarCatalog.listStores");
-    await staffCaller.bazaarCatalog.getSettings({ storeId: store.id });
-    successfulReads.push("staff:bazaarCatalog.getSettings");
-    await staffCaller.mMarket.overview();
-    successfulReads.push("staff:mMarket.overview");
-    await staffCaller.bakaiStore.overview();
-    successfulReads.push("staff:bakaiStore.overview");
-    await cashierCaller.oMarket.overview();
-    successfulReads.push("cashier:oMarket.overview");
-    await cashierCaller.productImageStudio.overview();
-    successfulReads.push("cashier:productImageStudio.overview");
+    const deniedReads = [
+      () => staffCaller.bazaarCatalog.listStores(),
+      () => staffCaller.bazaarCatalog.getSettings({ storeId: store.id }),
+      () => staffCaller.mMarket.overview(),
+      () => staffCaller.bakaiStore.overview(),
+      () => cashierCaller.oMarket.overview(),
+      () => cashierCaller.productImageStudio.overview(),
+    ];
+    for (const deniedRead of deniedReads) {
+      await expect(deniedRead()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    }
+
+    await expect(
+      managerCaller.mMarket.updateProducts({
+        storeId: storeB.id,
+        productIds: [productB.id],
+        included: true,
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+    const crossOrganization = await prisma.organization.create({ data: { name: "Integration Org B" } });
+    const crossOrganizationStore = await prisma.store.create({
+      data: { organizationId: crossOrganization.id, name: "Integration Org B Store", code: "IOB" },
+    });
+    await expect(
+      managerCaller.mMarket.updateProducts({
+        storeId: crossOrganizationStore.id,
+        productIds: [product.id],
+        included: true,
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
 
     const selectionResult = await managerCaller.mMarket.updateProducts({
-      storeId: storeB.id,
-      productIds: [productB.id],
+      storeId: store.id,
+      productIds: [product.id],
       included: true,
     });
-    const persistedSelection = await prisma.mMarketIncludedProduct.findUnique({
+    const [catalogStores, mMarketSettings, bakaiSettings, oMarketSettings] = await Promise.all([
+      managerCaller.bazaarCatalog.listStores(),
+      managerCaller.mMarket.settings(),
+      managerCaller.bakaiStore.settings(),
+      managerCaller.oMarket.settings(),
+    ]);
+    const persistedDeniedSelection = await prisma.mMarketIncludedProduct.findUnique({
       where: {
         orgId_storeId_productId: {
           orgId: org.id,
@@ -335,19 +448,45 @@ describeDb("B0 Agent 3 access and cache P0 runtime verification", () => {
         },
       },
     });
+    const persistedAllowedSelection = await prisma.mMarketIncludedProduct.findUnique({
+      where: {
+        orgId_storeId_productId: {
+          orgId: org.id,
+          storeId: store.id,
+          productId: product.id,
+        },
+      },
+    });
+    const integrationJobCount =
+      (await prisma.mMarketExportJob.count()) +
+      (await prisma.bakaiStoreExportJob.count()) +
+      (await prisma.oMarketExportJob.count()) +
+      (await prisma.productImageStudioJob.count());
 
-    evidence("HARD-A3-008", {
-      successfulReads,
+    evidence("HARD-A3-008-fixed", {
+      deniedReadCount: deniedReads.length,
       managerAccessibleStoreId: store.id,
       targetStoreId: storeB.id,
       selectionResult,
-      persistedSelectionId: persistedSelection?.id,
-      externalFetchCalls: 0,
+      catalogStoreIds: catalogStores.map((entry) => entry.storeId),
+      mMarketStoreIds: mMarketSettings.stores.map((entry) => entry.storeId),
+      bakaiStoreIds: bakaiSettings.stores.map((entry) => entry.storeId),
+      oMarketStoreIds: oMarketSettings.stores.map((entry) => entry.storeId),
+      persistedDeniedSelectionId: persistedDeniedSelection?.id,
+      persistedAllowedSelectionId: persistedAllowedSelection?.id,
+      integrationJobCount,
+      externalFetchCalls: fetchMock.mock.calls.length,
     });
 
-    expect(successfulReads).toHaveLength(6);
+    expect(catalogStores.map((entry) => entry.storeId)).toEqual([store.id]);
+    expect(mMarketSettings.stores.map((entry) => entry.storeId)).toEqual([store.id]);
+    expect(bakaiSettings.stores.map((entry) => entry.storeId)).toEqual([store.id]);
+    expect(oMarketSettings.stores.map((entry) => entry.storeId)).toEqual([store.id]);
     expect(selectionResult).toEqual({ updatedCount: 1 });
-    expect(persistedSelection).not.toBeNull();
+    expect(persistedDeniedSelection).toBeNull();
+    expect(persistedAllowedSelection).not.toBeNull();
+    expect(integrationJobCount).toBe(0);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("reproduces HARD-A3-010: warmed API product data ignores committed price and stock mutations", async () => {

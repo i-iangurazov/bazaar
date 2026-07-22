@@ -13,10 +13,10 @@ import {
   saveGeneratedImageToProduct,
 } from "@/server/services/productImageStudio";
 import { toTRPCError } from "@/server/trpc/errors";
-import { managerProcedure, protectedProcedure, rateLimit, router } from "@/server/trpc/trpc";
+import { managerProcedure, rateLimit, router } from "@/server/trpc/trpc";
 
 export const productImageStudioRouter = router({
-  overview: protectedProcedure.query(async ({ ctx }) => {
+  overview: managerProcedure.query(async ({ ctx }) => {
     try {
       return await getProductImageStudioOverview(ctx.user.organizationId);
     } catch (error) {
@@ -24,7 +24,7 @@ export const productImageStudioRouter = router({
     }
   }),
 
-  jobs: protectedProcedure
+  jobs: managerProcedure
     .input(
       z
         .object({
@@ -40,7 +40,7 @@ export const productImageStudioRouter = router({
       }
     }),
 
-  job: protectedProcedure
+  job: managerProcedure
     .input(
       z.object({
         jobId: z.string().min(1),

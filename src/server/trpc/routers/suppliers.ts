@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { managerProcedure, protectedProcedure, router } from "@/server/trpc/trpc";
+import { managerProcedure, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
 import {
   bulkDeleteSuppliers,
@@ -10,7 +10,7 @@ import {
 } from "@/server/services/suppliers";
 
 export const suppliersRouter = router({
-  list: protectedProcedure.query(async ({ ctx }) => {
+  list: managerProcedure.query(async ({ ctx }) => {
     return ctx.prisma.supplier.findMany({
       where: { organizationId: ctx.user.organizationId },
       orderBy: { name: "asc" },

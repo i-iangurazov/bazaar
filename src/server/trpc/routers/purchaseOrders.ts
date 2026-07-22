@@ -3,10 +3,16 @@ import { z } from "zod";
 
 import {
   managerProcedure,
-  protectedProcedure,
   rateLimit,
   router,
 } from "@/server/trpc/trpc";
+import { prisma } from "@/server/db/prisma";
+import {
+  assertCommerceStoreAccess,
+  resolveCommerceAccessibleStoreIds,
+} from "@/server/services/commerceAccess";
+import { AppError } from "@/server/services/errors";
+import type { StoreAccessUser } from "@/server/services/storeAccess";
 import { toTRPCError } from "@/server/trpc/errors";
 import {
   addPurchaseOrderLine,
@@ -20,8 +26,44 @@ import {
   updatePurchaseOrderLine,
 } from "@/server/services/purchaseOrders";
 
+type PurchaseOrderAccessContext = {
+  prisma: typeof prisma;
+  user: StoreAccessUser;
+};
+
+const assertPurchaseOrderAccess = async (
+  ctx: PurchaseOrderAccessContext,
+  purchaseOrderId: string,
+) => {
+  const purchaseOrder = await ctx.prisma.purchaseOrder.findFirst({
+    where: { id: purchaseOrderId, organizationId: ctx.user.organizationId },
+    select: { storeId: true },
+  });
+  if (!purchaseOrder) {
+    throw new AppError("poNotFound", "NOT_FOUND", 404);
+  }
+  await assertCommerceStoreAccess(ctx.prisma, ctx.user, purchaseOrder.storeId);
+};
+
+const assertPurchaseOrderLineAccess = async (
+  ctx: PurchaseOrderAccessContext,
+  lineId: string,
+) => {
+  const line = await ctx.prisma.purchaseOrderLine.findFirst({
+    where: {
+      id: lineId,
+      purchaseOrder: { organizationId: ctx.user.organizationId },
+    },
+    select: { purchaseOrder: { select: { storeId: true } } },
+  });
+  if (!line) {
+    throw new AppError("poLineNotFound", "NOT_FOUND", 404);
+  }
+  await assertCommerceStoreAccess(ctx.prisma, ctx.user, line.purchaseOrder.storeId);
+};
+
 export const purchaseOrdersRouter = router({
-  list: protectedProcedure
+  list: managerProcedure
     .input(
       z
         .object({
@@ -36,8 +78,10 @@ export const purchaseOrdersRouter = router({
     .query(async ({ ctx, input }) => {
       const page = input?.page ?? 1;
       const pageSize = input?.pageSize ?? 25;
+      const accessibleStoreIds = await resolveCommerceAccessibleStoreIds(ctx.prisma, ctx.user);
       const where = {
         organizationId: ctx.user.organizationId,
+        ...(accessibleStoreIds ? { storeId: { in: accessibleStoreIds } } : {}),
         ...(input?.status ? { status: input.status } : {}),
       };
 
@@ -92,7 +136,7 @@ export const purchaseOrdersRouter = router({
       };
     }),
 
-  listIds: protectedProcedure
+  listIds: managerProcedure
     .input(
       z
         .object({
@@ -103,8 +147,10 @@ export const purchaseOrdersRouter = router({
         .optional(),
     )
     .query(async ({ ctx, input }) => {
+      const accessibleStoreIds = await resolveCommerceAccessibleStoreIds(ctx.prisma, ctx.user);
       const where = {
         organizationId: ctx.user.organizationId,
+        ...(accessibleStoreIds ? { storeId: { in: accessibleStoreIds } } : {}),
         ...(input?.status ? { status: input.status } : {}),
       };
       const rows = await ctx.prisma.purchaseOrder.findMany({
@@ -115,9 +161,14 @@ export const purchaseOrdersRouter = router({
       return rows.map((row) => row.id);
     }),
 
-  getById: protectedProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
+  getById: managerProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
+    const accessibleStoreIds = await resolveCommerceAccessibleStoreIds(ctx.prisma, ctx.user);
     const po = await ctx.prisma.purchaseOrder.findFirst({
-      where: { id: input.id, organizationId: ctx.user.organizationId },
+      where: {
+        id: input.id,
+        organizationId: ctx.user.organizationId,
+        ...(accessibleStoreIds ? { storeId: { in: accessibleStoreIds } } : {}),
+      },
       include: {
         supplier: true,
         store: true,
@@ -163,6 +214,7 @@ export const purchaseOrdersRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertCommerceStoreAccess(ctx.prisma, ctx.user, input.storeId);
         const po = await createPurchaseOrder({
           organizationId: ctx.user.organizationId,
           storeId: input.storeId,
@@ -198,6 +250,7 @@ export const purchaseOrdersRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertCommerceStoreAccess(ctx.prisma, ctx.user, input.storeId);
         return await createDraftsFromReorder({
           organizationId: ctx.user.organizationId,
           storeId: input.storeId,
@@ -215,6 +268,7 @@ export const purchaseOrdersRouter = router({
     .input(z.object({ purchaseOrderId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertPurchaseOrderAccess(ctx, input.purchaseOrderId);
         return await submitPurchaseOrder({
           purchaseOrderId: input.purchaseOrderId,
           actorId: ctx.user.id,
@@ -230,6 +284,7 @@ export const purchaseOrdersRouter = router({
     .input(z.object({ purchaseOrderId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertPurchaseOrderAccess(ctx, input.purchaseOrderId);
         return await approvePurchaseOrder({
           purchaseOrderId: input.purchaseOrderId,
           actorId: ctx.user.id,
@@ -262,6 +317,7 @@ export const purchaseOrdersRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertPurchaseOrderAccess(ctx, input.purchaseOrderId);
         return await receivePurchaseOrder({
           purchaseOrderId: input.purchaseOrderId,
           actorId: ctx.user.id,
@@ -280,6 +336,7 @@ export const purchaseOrdersRouter = router({
     .input(z.object({ purchaseOrderId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertPurchaseOrderAccess(ctx, input.purchaseOrderId);
         return await cancelPurchaseOrder({
           purchaseOrderId: input.purchaseOrderId,
           actorId: ctx.user.id,
@@ -305,6 +362,7 @@ export const purchaseOrdersRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertPurchaseOrderAccess(ctx, input.purchaseOrderId);
         return await addPurchaseOrderLine({
           purchaseOrderId: input.purchaseOrderId,
           productId: input.productId,
@@ -334,6 +392,7 @@ export const purchaseOrdersRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertPurchaseOrderLineAccess(ctx, input.lineId);
         return await updatePurchaseOrderLine({
           lineId: input.lineId,
           qtyOrdered: input.qtyOrdered,
@@ -353,6 +412,7 @@ export const purchaseOrdersRouter = router({
     .input(z.object({ lineId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertPurchaseOrderLineAccess(ctx, input.lineId);
         return await removePurchaseOrderLine({
           lineId: input.lineId,
           actorId: ctx.user.id,

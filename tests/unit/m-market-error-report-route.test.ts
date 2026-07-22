@@ -32,8 +32,28 @@ describe("m-market error report route", () => {
     expect(response.status).toBe(401);
   });
 
+  it("rejects route-forbidden roles before reading an export artifact", async () => {
+    mockGetServerAuthToken.mockResolvedValue({
+      sub: "staff-1",
+      organizationId: "org-1",
+      role: "STAFF",
+    });
+
+    const response = await mMarketErrorReportGet(new Request("http://localhost"), {
+      params: { id: "job-1" },
+    });
+
+    expect(response.status).toBe(403);
+    expect(prisma.mMarketExportJob.findFirst).not.toHaveBeenCalled();
+  });
+
   it("merges legacy payload stats and remote response into the downloaded report", async () => {
-    mockGetServerAuthToken.mockResolvedValue({ organizationId: "org-1" });
+    mockGetServerAuthToken.mockResolvedValue({
+      sub: "admin-1",
+      organizationId: "org-1",
+      role: "ADMIN",
+      isOrgOwner: true,
+    });
     prisma.mMarketExportJob.findFirst.mockResolvedValue({
       id: "job-1",
       environment: "PROD",
@@ -110,7 +130,12 @@ describe("m-market error report route", () => {
   });
 
   it("keeps richer debug fields that are already stored in the error report", async () => {
-    mockGetServerAuthToken.mockResolvedValue({ organizationId: "org-1" });
+    mockGetServerAuthToken.mockResolvedValue({
+      sub: "admin-1",
+      organizationId: "org-1",
+      role: "ADMIN",
+      isOrgOwner: true,
+    });
     prisma.mMarketExportJob.findFirst.mockResolvedValue({
       id: "job-2",
       environment: "DEV",
@@ -196,7 +221,12 @@ describe("m-market error report route", () => {
   });
 
   it("returns remoteResponse as null when MMarket did not reply", async () => {
-    mockGetServerAuthToken.mockResolvedValue({ organizationId: "org-1" });
+    mockGetServerAuthToken.mockResolvedValue({
+      sub: "admin-1",
+      organizationId: "org-1",
+      role: "ADMIN",
+      isOrgOwner: true,
+    });
     prisma.mMarketExportJob.findFirst.mockResolvedValue({
       id: "job-3",
       environment: "DEV",

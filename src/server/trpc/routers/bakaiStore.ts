@@ -20,22 +20,30 @@ import {
   updateBakaiStoreProductSelection,
 } from "@/server/services/bakaiStore";
 import { toTRPCError } from "@/server/trpc/errors";
-import { managerProcedure, protectedProcedure, rateLimit, router } from "@/server/trpc/trpc";
+import { managerProcedure, rateLimit, router } from "@/server/trpc/trpc";
 import { locales } from "@/lib/locales";
 import { startProductDescriptionGenerationJob } from "@/server/services/productDescriptionGenerationJobs";
+import {
+  assertCommerceStoreAccess,
+  assertCommerceStoreIdsAccess,
+  resolveCommerceAccessibleStoreIds,
+  resolveCommerceStoreScope,
+} from "@/server/services/commerceAccess";
 
 export const bakaiStoreRouter = router({
-  overview: protectedProcedure.query(async ({ ctx }) => {
+  overview: managerProcedure.query(async ({ ctx }) => {
     try {
-      return await getBakaiStoreOverview(ctx.user.organizationId);
+      const accessibleStoreIds = await resolveCommerceAccessibleStoreIds(ctx.prisma, ctx.user);
+      return await getBakaiStoreOverview(ctx.user.organizationId, accessibleStoreIds);
     } catch (error) {
       throw toTRPCError(error);
     }
   }),
 
-  settings: protectedProcedure.query(async ({ ctx }) => {
+  settings: managerProcedure.query(async ({ ctx }) => {
     try {
-      return await getBakaiStoreSettings(ctx.user.organizationId);
+      const accessibleStoreIds = await resolveCommerceAccessibleStoreIds(ctx.prisma, ctx.user);
+      return await getBakaiStoreSettings(ctx.user.organizationId, accessibleStoreIds);
     } catch (error) {
       throw toTRPCError(error);
     }
@@ -101,6 +109,11 @@ export const bakaiStoreRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertCommerceStoreIdsAccess(
+          ctx.prisma,
+          ctx.user,
+          input.mappings.map((mapping) => mapping.storeId),
+        );
         return await updateBakaiStoreMappings({
           organizationId: ctx.user.organizationId,
           actorId: ctx.user.id,
@@ -126,6 +139,11 @@ export const bakaiStoreRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertCommerceStoreIdsAccess(
+          ctx.prisma,
+          ctx.user,
+          input.mappings.map((mapping) => mapping.storeId),
+        );
         return await updateBakaiStoreBranchMappings({
           organizationId: ctx.user.organizationId,
           actorId: ctx.user.id,
@@ -137,7 +155,7 @@ export const bakaiStoreRouter = router({
       }
     }),
 
-  products: protectedProcedure
+  products: managerProcedure
     .input(
       z
         .object({
@@ -151,9 +169,10 @@ export const bakaiStoreRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
+        const storeId = await resolveCommerceStoreScope(ctx.prisma, ctx.user, input?.storeId);
         return await listBakaiStoreProducts({
           organizationId: ctx.user.organizationId,
-          storeId: input?.storeId,
+          storeId,
           search: input?.search,
           selection: input?.selection,
           page: input?.page,
@@ -164,7 +183,7 @@ export const bakaiStoreRouter = router({
       }
     }),
 
-  listIds: protectedProcedure
+  listIds: managerProcedure
     .input(
       z
         .object({
@@ -176,9 +195,10 @@ export const bakaiStoreRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
+        const storeId = await resolveCommerceStoreScope(ctx.prisma, ctx.user, input?.storeId);
         return await listBakaiStoreProductIds({
           organizationId: ctx.user.organizationId,
-          storeId: input?.storeId,
+          storeId,
           search: input?.search,
           selection: input?.selection,
         });
@@ -198,6 +218,7 @@ export const bakaiStoreRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertCommerceStoreAccess(ctx.prisma, ctx.user, input.storeId);
         return await updateBakaiStoreProductSelection({
           organizationId: ctx.user.organizationId,
           storeId: input.storeId,
@@ -223,6 +244,7 @@ export const bakaiStoreRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertCommerceStoreAccess(ctx.prisma, ctx.user, input.storeId);
         return await startProductDescriptionGenerationJob({
           organizationId: ctx.user.organizationId,
           storeId: input.storeId,
@@ -239,21 +261,23 @@ export const bakaiStoreRouter = router({
       }
     }),
 
-  preflight: protectedProcedure
+  preflight: managerProcedure
     .input(z.object({ storeId: z.string().min(1).optional() }).optional())
     .query(async ({ ctx, input }) => {
       try {
-        return await runBakaiStorePreflight(ctx.user.organizationId, input?.storeId);
+        const storeId = await resolveCommerceStoreScope(ctx.prisma, ctx.user, input?.storeId);
+        return await runBakaiStorePreflight(ctx.user.organizationId, storeId);
       } catch (error) {
         throw toTRPCError(error);
       }
     }),
 
-  apiPreflight: protectedProcedure
+  apiPreflight: managerProcedure
     .input(z.object({ storeId: z.string().min(1).optional() }).optional())
     .query(async ({ ctx, input }) => {
       try {
-        return await runBakaiStoreApiPreflight(ctx.user.organizationId, input?.storeId);
+        const storeId = await resolveCommerceStoreScope(ctx.prisma, ctx.user, input?.storeId);
+        return await runBakaiStoreApiPreflight(ctx.user.organizationId, storeId);
       } catch (error) {
         throw toTRPCError(error);
       }
@@ -264,6 +288,7 @@ export const bakaiStoreRouter = router({
     .input(z.object({ storeId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertCommerceStoreAccess(ctx.prisma, ctx.user, input.storeId);
         return await requestBakaiStoreExport({
           organizationId: ctx.user.organizationId,
           storeId: input.storeId,
@@ -280,6 +305,7 @@ export const bakaiStoreRouter = router({
     .input(z.object({ storeId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertCommerceStoreAccess(ctx.prisma, ctx.user, input.storeId);
         return await requestBakaiStoreExport({
           organizationId: ctx.user.organizationId,
           storeId: input.storeId,
@@ -297,6 +323,7 @@ export const bakaiStoreRouter = router({
     .input(z.object({ storeId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertCommerceStoreAccess(ctx.prisma, ctx.user, input.storeId);
         return await requestBakaiStoreApiSync({
           organizationId: ctx.user.organizationId,
           storeId: input.storeId,
@@ -313,6 +340,7 @@ export const bakaiStoreRouter = router({
     .input(z.object({ storeId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertCommerceStoreAccess(ctx.prisma, ctx.user, input.storeId);
         return await requestBakaiStoreApiSync({
           organizationId: ctx.user.organizationId,
           storeId: input.storeId,
@@ -325,7 +353,7 @@ export const bakaiStoreRouter = router({
       }
     }),
 
-  jobs: protectedProcedure
+  jobs: managerProcedure
     .input(
       z
         .object({
@@ -335,13 +363,18 @@ export const bakaiStoreRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
-        return await listBakaiStoreJobs(ctx.user.organizationId, input?.limit ?? 50);
+        const accessibleStoreIds = await resolveCommerceAccessibleStoreIds(ctx.prisma, ctx.user);
+        return await listBakaiStoreJobs(
+          ctx.user.organizationId,
+          input?.limit ?? 50,
+          accessibleStoreIds,
+        );
       } catch (error) {
         throw toTRPCError(error);
       }
     }),
 
-  getJob: protectedProcedure
+  getJob: managerProcedure
     .input(
       z.object({
         jobId: z.string().min(1),
@@ -349,7 +382,12 @@ export const bakaiStoreRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
-        return await getBakaiStoreJob(ctx.user.organizationId, input.jobId);
+        const accessibleStoreIds = await resolveCommerceAccessibleStoreIds(ctx.prisma, ctx.user);
+        return await getBakaiStoreJob(
+          ctx.user.organizationId,
+          input.jobId,
+          accessibleStoreIds,
+        );
       } catch (error) {
         throw toTRPCError(error);
       }

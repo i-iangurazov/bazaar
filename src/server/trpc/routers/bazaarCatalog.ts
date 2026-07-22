@@ -5,7 +5,7 @@ import {
 } from "@prisma/client";
 import { z } from "zod";
 
-import { managerProcedure, protectedProcedure, router } from "@/server/trpc/trpc";
+import { managerProcedure, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
 import { assertUserCanAccessStore, listAccessibleStores } from "@/server/services/storeAccess";
 import {
@@ -22,7 +22,7 @@ import {
 } from "@/server/services/bazaarCatalog";
 
 export const bazaarCatalogRouter = router({
-  listStores: protectedProcedure.query(async ({ ctx }) => {
+  listStores: managerProcedure.query(async ({ ctx }) => {
     try {
       const stores = await listAccessibleStores(ctx.prisma, ctx.user);
       return await listBazaarCatalogStores(
@@ -34,7 +34,7 @@ export const bazaarCatalogRouter = router({
     }
   }),
 
-  getSettings: protectedProcedure
+  getSettings: managerProcedure
     .input(
       z.object({
         storeId: z.string().min(1),
@@ -52,7 +52,7 @@ export const bazaarCatalogRouter = router({
       }
     }),
 
-  products: protectedProcedure
+  products: managerProcedure
     .input(
       z.object({
         storeId: z.string().min(1),

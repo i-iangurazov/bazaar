@@ -22,21 +22,29 @@ import {
   validateMMarketLocally,
 } from "@/server/services/mMarket";
 import { toTRPCError } from "@/server/trpc/errors";
-import { managerProcedure, protectedProcedure, rateLimit, router } from "@/server/trpc/trpc";
+import { managerProcedure, rateLimit, router } from "@/server/trpc/trpc";
 import { startProductDescriptionGenerationJob } from "@/server/services/productDescriptionGenerationJobs";
+import {
+  assertCommerceStoreAccess,
+  assertCommerceStoreIdsAccess,
+  resolveCommerceAccessibleStoreIds,
+  resolveCommerceStoreScope,
+} from "@/server/services/commerceAccess";
 
 export const mMarketRouter = router({
-  overview: protectedProcedure.query(async ({ ctx }) => {
+  overview: managerProcedure.query(async ({ ctx }) => {
     try {
-      return await getMMarketOverview(ctx.user.organizationId);
+      const accessibleStoreIds = await resolveCommerceAccessibleStoreIds(ctx.prisma, ctx.user);
+      return await getMMarketOverview(ctx.user.organizationId, accessibleStoreIds);
     } catch (error) {
       throw toTRPCError(error);
     }
   }),
 
-  settings: protectedProcedure.query(async ({ ctx }) => {
+  settings: managerProcedure.query(async ({ ctx }) => {
     try {
-      return await getMMarketSettings(ctx.user.organizationId);
+      const accessibleStoreIds = await resolveCommerceAccessibleStoreIds(ctx.prisma, ctx.user);
+      return await getMMarketSettings(ctx.user.organizationId, accessibleStoreIds);
     } catch (error) {
       throw toTRPCError(error);
     }
@@ -98,6 +106,11 @@ export const mMarketRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertCommerceStoreIdsAccess(
+          ctx.prisma,
+          ctx.user,
+          input.mappings.map((mapping) => mapping.storeId),
+        );
         return await updateMMarketBranchMappings({
           organizationId: ctx.user.organizationId,
           actorId: ctx.user.id,
@@ -109,7 +122,7 @@ export const mMarketRouter = router({
       }
     }),
 
-  products: protectedProcedure
+  products: managerProcedure
     .input(
       z
         .object({
@@ -123,9 +136,10 @@ export const mMarketRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
+        const storeId = await resolveCommerceStoreScope(ctx.prisma, ctx.user, input?.storeId);
         return await listMMarketProducts({
           organizationId: ctx.user.organizationId,
-          storeId: input?.storeId,
+          storeId,
           search: input?.search,
           selection: input?.selection,
           page: input?.page,
@@ -136,7 +150,7 @@ export const mMarketRouter = router({
       }
     }),
 
-  listIds: protectedProcedure
+  listIds: managerProcedure
     .input(
       z
         .object({
@@ -148,9 +162,10 @@ export const mMarketRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
+        const storeId = await resolveCommerceStoreScope(ctx.prisma, ctx.user, input?.storeId);
         return await listMMarketProductIds({
           organizationId: ctx.user.organizationId,
-          storeId: input?.storeId,
+          storeId,
           search: input?.search,
           selection: input?.selection,
         });
@@ -170,6 +185,7 @@ export const mMarketRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertCommerceStoreAccess(ctx.prisma, ctx.user, input.storeId);
         return await updateMMarketProductSelection({
           organizationId: ctx.user.organizationId,
           storeId: input.storeId,
@@ -183,11 +199,12 @@ export const mMarketRouter = router({
       }
     }),
 
-  preflight: protectedProcedure
+  preflight: managerProcedure
     .input(z.object({ storeId: z.string().min(1).optional() }).optional())
     .query(async ({ ctx, input }) => {
       try {
-        return await runMMarketPreflight(ctx.user.organizationId, input?.storeId);
+        const storeId = await resolveCommerceStoreScope(ctx.prisma, ctx.user, input?.storeId);
+        return await runMMarketPreflight(ctx.user.organizationId, storeId);
       } catch (error) {
         throw toTRPCError(error);
       }
@@ -204,6 +221,7 @@ export const mMarketRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertCommerceStoreAccess(ctx.prisma, ctx.user, input.storeId);
         return await bulkGenerateMMarketShortDescriptions({
           organizationId: ctx.user.organizationId,
           storeId: input.storeId,
@@ -230,6 +248,7 @@ export const mMarketRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertCommerceStoreAccess(ctx.prisma, ctx.user, input.storeId);
         return await startProductDescriptionGenerationJob({
           organizationId: ctx.user.organizationId,
           storeId: input.storeId,
@@ -256,6 +275,7 @@ export const mMarketRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertCommerceStoreAccess(ctx.prisma, ctx.user, input.storeId);
         return await bulkAutofillMMarketSpecs({
           organizationId: ctx.user.organizationId,
           storeId: input.storeId,
@@ -274,6 +294,7 @@ export const mMarketRouter = router({
     .input(z.object({ storeId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertCommerceStoreAccess(ctx.prisma, ctx.user, input.storeId);
         return await bulkCreateMMarketBaseTemplates({
           organizationId: ctx.user.organizationId,
           storeId: input.storeId,
@@ -291,6 +312,7 @@ export const mMarketRouter = router({
     .input(z.object({ storeId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertCommerceStoreAccess(ctx.prisma, ctx.user, input.storeId);
         return await assignDefaultCategoryToMMarketProducts({
           organizationId: ctx.user.organizationId,
           storeId: input.storeId,
@@ -308,6 +330,7 @@ export const mMarketRouter = router({
     .input(z.object({ storeId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertCommerceStoreAccess(ctx.prisma, ctx.user, input.storeId);
         return await requestMMarketExport({
           organizationId: ctx.user.organizationId,
           storeId: input.storeId,
@@ -324,6 +347,7 @@ export const mMarketRouter = router({
     .input(z.object({ storeId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertCommerceStoreAccess(ctx.prisma, ctx.user, input.storeId);
         return await requestMMarketExport({
           organizationId: ctx.user.organizationId,
           storeId: input.storeId,
@@ -336,7 +360,7 @@ export const mMarketRouter = router({
       }
     }),
 
-  jobs: protectedProcedure
+  jobs: managerProcedure
     .input(
       z
         .object({
@@ -346,13 +370,18 @@ export const mMarketRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
-        return await listMMarketExportJobs(ctx.user.organizationId, input?.limit ?? 50);
+        const accessibleStoreIds = await resolveCommerceAccessibleStoreIds(ctx.prisma, ctx.user);
+        return await listMMarketExportJobs(
+          ctx.user.organizationId,
+          input?.limit ?? 50,
+          accessibleStoreIds,
+        );
       } catch (error) {
         throw toTRPCError(error);
       }
     }),
 
-  getJob: protectedProcedure
+  getJob: managerProcedure
     .input(
       z.object({
         jobId: z.string().min(1),
@@ -360,7 +389,12 @@ export const mMarketRouter = router({
     )
     .query(async ({ ctx, input }) => {
       try {
-        return await getMMarketExportJob(ctx.user.organizationId, input.jobId);
+        const accessibleStoreIds = await resolveCommerceAccessibleStoreIds(ctx.prisma, ctx.user);
+        return await getMMarketExportJob(
+          ctx.user.organizationId,
+          input.jobId,
+          accessibleStoreIds,
+        );
       } catch (error) {
         throw toTRPCError(error);
       }

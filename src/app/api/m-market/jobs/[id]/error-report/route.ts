@@ -2,6 +2,10 @@ import type { MMarketEnvironment } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
 import { getServerAuthToken } from "@/server/auth/token";
+import {
+  assertCommercePermission,
+  resolveCommerceAccessibleStoreIds,
+} from "@/server/services/commerceAccess";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,14 +36,30 @@ export const GET = async (_request: Request, { params }: RouteParams) => {
   if (!token?.organizationId) {
     return new Response(null, { status: 401 });
   }
+  const accessUser = {
+    id: String(token.sub ?? ""),
+    organizationId: String(token.organizationId),
+    role: String(token.role ?? ""),
+    isOrgOwner: Boolean(token.isOrgOwner),
+    isPlatformOwner: Boolean(token.isPlatformOwner),
+  };
+  let accessibleStoreIds: string[] | null;
+  try {
+    assertCommercePermission(accessUser, "manageIntegrations");
+    accessibleStoreIds = await resolveCommerceAccessibleStoreIds(prisma, accessUser);
+  } catch {
+    return new Response(null, { status: 403 });
+  }
 
   const job = await prisma.mMarketExportJob.findFirst({
     where: {
       id: params.id,
       orgId: token.organizationId as string,
+      ...(accessibleStoreIds ? { storeId: { in: accessibleStoreIds } } : {}),
     },
     select: {
       id: true,
+      storeId: true,
       environment: true,
       requestIdempotencyKey: true,
       errorReportJson: true,
