@@ -8,6 +8,7 @@ import { printLabels } from "@/server/printing/adapter";
 import { getServerAuthToken } from "@/server/auth/token";
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
+import { assertUserCanAccessStore, type StoreAccessUser } from "@/server/services/storeAccess";
 import { defaultLocale, normalizeLocale, toIntlLocale } from "@/lib/locales";
 import { getMessageFromFallback } from "@/lib/i18nFallback";
 import { PRICE_TAG_TEMPLATES } from "@/lib/priceTags";
@@ -85,6 +86,24 @@ export const POST = async (request: Request) => {
   if (!parsed.success) {
     return new Response(tErrors("invalidInput"), { status: 400 });
   }
+  if (!token.sub || !token.organizationId || !token.role) {
+    return new Response(tErrors("unauthorized"), { status: 401 });
+  }
+  const user: StoreAccessUser = {
+    id: token.sub,
+    organizationId: token.organizationId as string,
+    role: token.role as string,
+    isOrgOwner: token.isOrgOwner as boolean | null,
+    isPlatformOwner: token.isPlatformOwner as boolean | null,
+  };
+  try {
+    await assertUserCanAccessStore(prisma, user, parsed.data.storeId);
+  } catch (error) {
+    if (error instanceof AppError) {
+      return new Response(tErrors(error.message), { status: error.status });
+    }
+    return new Response(tErrors("unexpectedError"), { status: 500 });
+  }
 
   const store = await prisma.store.findFirst({
     where: {
@@ -99,6 +118,19 @@ export const POST = async (request: Request) => {
 
   if (!store) {
     return new Response(tErrors("storeNotFound"), { status: 404 });
+  }
+  const productIds = Array.from(new Set(parsed.data.items.map((item) => item.productId)));
+  const assignedProductCount = await prisma.storeProduct.count({
+    where: {
+      organizationId: user.organizationId,
+      storeId: store.id,
+      productId: { in: productIds },
+      isActive: true,
+      product: { isDeleted: false },
+    },
+  });
+  if (assignedProductCount !== productIds.length) {
+    return new Response(tErrors("productAccessDenied"), { status: 403 });
   }
 
   const settings = await prisma.storePrinterSettings.findUnique({

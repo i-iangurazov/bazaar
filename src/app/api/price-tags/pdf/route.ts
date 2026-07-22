@@ -13,6 +13,11 @@ import { selectPrimaryBarcodeValue } from "@/server/services/barcodes";
 import { AppError } from "@/server/services/errors";
 import { assertFeatureEnabled } from "@/server/services/planLimits";
 import {
+  assertUserCanAccessStore,
+  resolveAccessibleStoreIds,
+  type StoreAccessUser,
+} from "@/server/services/storeAccess";
+import {
   PRICE_TAG_ROLL_DEFAULTS,
   PRICE_TAG_ROLL_LIMITS,
   PRICE_TAG_TEMPLATES,
@@ -178,6 +183,30 @@ export const POST = async (request: Request) => {
   const template = parsed.data.template;
   const parsedItems = parsed.data.items as PriceTagItem[];
   const storeId = typeof parsed.data.storeId === "string" ? parsed.data.storeId : null;
+  if (!token.sub || !token.organizationId || !token.role) {
+    return new Response(tErrors("unauthorized"), { status: 401 });
+  }
+  const user: StoreAccessUser = {
+    id: token.sub,
+    organizationId: token.organizationId as string,
+    role: token.role as string,
+    isOrgOwner: token.isOrgOwner as boolean | null,
+    isPlatformOwner: token.isPlatformOwner as boolean | null,
+  };
+  let accessibleStoreIds: string[];
+  try {
+    if (storeId) {
+      await assertUserCanAccessStore(prisma, user, storeId);
+      accessibleStoreIds = [storeId];
+    } else {
+      accessibleStoreIds = await resolveAccessibleStoreIds(prisma, user);
+    }
+  } catch (error) {
+    if (error instanceof AppError) {
+      return new Response(tErrors(error.message), { status: error.status });
+    }
+    return new Response(tErrors("genericMessage"), { status: 500 });
+  }
   const allowWithoutBarcode = parsed.data.allowWithoutBarcode === true;
   const rollCalibration = {
     gapMm: parsed.data.rollCalibration?.gapMm ?? PRICE_TAG_ROLL_DEFAULTS.gapMm,
@@ -244,9 +273,18 @@ export const POST = async (request: Request) => {
       id: { in: productIds },
       organizationId: token.organizationId as string,
       isDeleted: false,
+      storeProducts: {
+        some: {
+          storeId: { in: accessibleStoreIds },
+          isActive: true,
+        },
+      },
     },
     include: { barcodes: { select: { value: true } } },
   });
+  if (products.length !== productIds.length) {
+    return new Response(tErrors("productAccessDenied"), { status: 403 });
+  }
 
   const productMap = new Map(products.map((product) => [product.id, product]));
   const hasStoreSpecificPrices =

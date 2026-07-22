@@ -1,9 +1,10 @@
-import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { protectedProcedure, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
+import { AppError } from "@/server/services/errors";
 import { assertFeatureEnabled } from "@/server/services/planLimits";
+import { assertUserCanAccessStore } from "@/server/services/storeAccess";
 
 const stockLotsProcedure = protectedProcedure.use(async ({ ctx, next }) => {
   try {
@@ -24,13 +25,23 @@ export const stockLotsRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const store = await ctx.prisma.store.findUnique({ where: { id: input.storeId } });
-      if (!store || store.organizationId !== ctx.user.organizationId) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "storeAccessDenied" });
+      try {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+      } catch (error) {
+        throw toTRPCError(error);
       }
-      const product = await ctx.prisma.product.findUnique({ where: { id: input.productId } });
-      if (!product || product.organizationId !== ctx.user.organizationId) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "productAccessDenied" });
+      const assignment = await ctx.prisma.storeProduct.findFirst({
+        where: {
+          organizationId: ctx.user.organizationId,
+          storeId: input.storeId,
+          productId: input.productId,
+          isActive: true,
+          product: { isDeleted: false },
+        },
+        select: { id: true },
+      });
+      if (!assignment) {
+        throw toTRPCError(new AppError("productAccessDenied", "FORBIDDEN", 403));
       }
 
       return ctx.prisma.stockLot.findMany({
@@ -46,9 +57,14 @@ export const stockLotsRouter = router({
   expiringSoon: stockLotsProcedure
     .input(z.object({ storeId: z.string(), days: z.number().int().min(1).max(365) }))
     .query(async ({ ctx, input }) => {
+      try {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+      } catch (error) {
+        throw toTRPCError(error);
+      }
       const store = await ctx.prisma.store.findUnique({ where: { id: input.storeId } });
-      if (!store || store.organizationId !== ctx.user.organizationId) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "storeAccessDenied" });
+      if (!store) {
+        return [];
       }
       if (!store.trackExpiryLots) {
         return [];
