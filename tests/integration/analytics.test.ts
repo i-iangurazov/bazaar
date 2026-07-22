@@ -71,10 +71,11 @@ describeDb("analytics", () => {
     expect(Array.isArray(orgSales.series)).toBe(true);
   });
 
-  it("scopes org-wide charts for staff to assigned stores", async () => {
-    const { store, staffUser } = await seedBase({ plan: "BUSINESS" });
+  it("denies staff analytics and scopes manager charts to assigned stores", async () => {
+    const { store, managerUser, staffUser } = await seedBase({ plan: "BUSINESS" });
     await prisma.userStoreAccess.createMany({
       data: [
+        { organizationId: managerUser.organizationId!, userId: managerUser.id, storeId: store.id },
         { organizationId: staffUser.organizationId!, userId: staffUser.id, storeId: store.id },
       ],
       skipDuplicates: true,
@@ -85,14 +86,34 @@ describeDb("analytics", () => {
       role: staffUser.role,
       organizationId: staffUser.organizationId!,
     });
+    const managerCaller = createTestCaller({
+      id: managerUser.id,
+      email: managerUser.email,
+      role: managerUser.role,
+      organizationId: managerUser.organizationId!,
+    });
 
-    const scopedSales = await staffCaller.analytics.salesTrend({
+    await expect(
+      staffCaller.analytics.salesTrend({
+        rangeDays: 30,
+        granularity: "day",
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(
+      staffCaller.analytics.salesTrend({
+        storeId: store.id,
+        rangeDays: 30,
+        granularity: "day",
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+    const scopedSales = await managerCaller.analytics.salesTrend({
       rangeDays: 30,
       granularity: "day",
     });
     expect(Array.isArray(scopedSales.series)).toBe(true);
 
-    const storeSales = await staffCaller.analytics.salesTrend({
+    const storeSales = await managerCaller.analytics.salesTrend({
       storeId: store.id,
       rangeDays: 30,
       granularity: "day",
