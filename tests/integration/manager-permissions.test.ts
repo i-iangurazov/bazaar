@@ -13,7 +13,7 @@ describeDb("manager operational permissions", () => {
   });
 
   it("allows managers to manage product support data", async () => {
-    const { org, managerUser } = await seedBase();
+    const { org, store, managerUser } = await seedBase();
     const caller = createTestCaller({
       id: managerUser.id,
       email: managerUser.email,
@@ -55,7 +55,22 @@ describeDb("manager operational permissions", () => {
     expect(template.map((row) => row.attributeKey)).toEqual(["size", "color"]);
 
     await caller.categoryTemplates.remove({ category: "Shoes" });
-    await caller.productCategories.remove({ name: "Shoes" });
+    await caller.productCategories.remove({ name: "Shoes", storeId: store.id });
+    await expect(
+      prisma.storeCategoryPreference.findUniqueOrThrow({
+        where: {
+          storeId_normalizedName: {
+            storeId: store.id,
+            normalizedName: "shoes",
+          },
+        },
+      }),
+    ).resolves.toMatchObject({ isArchived: true, isVisibleInForms: false });
+    await expect(
+      prisma.productCategory.findUnique({
+        where: { organizationId_name: { organizationId: org.id, name: "Shoes" } },
+      }),
+    ).resolves.toMatchObject({ id: category.id });
     await caller.units.remove({ unitId: unit.id });
   });
 
