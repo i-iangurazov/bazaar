@@ -78,10 +78,10 @@ export const closePeriod = async (input: ClosePeriodInput) => {
 
       const movementValueKgs = (movement: (typeof movements)[number]) => {
         if (movement.lineTotalKgs !== null) {
-          return movement.lineTotalKgs.abs();
+          return movement.lineTotalKgs;
         }
         if (movement.unitCostKgs !== null) {
-          return movement.unitCostKgs.mul(Math.abs(movement.qtyDelta));
+          return movement.unitCostKgs.mul(movement.qtyDelta);
         }
         return new Prisma.Decimal(0);
       };
