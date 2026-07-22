@@ -279,8 +279,8 @@ describeDb("manager operational permissions", () => {
     expect(transferSnapshot?.onHand).toBe(3);
   });
 
-  it("allows managers to manage registers safely only in accessible stores", async () => {
-    const { org, store, managerUser } = await seedBase({ plan: "BUSINESS" });
+  it("requires administrators to manage registers", async () => {
+    const { org, store, managerUser, adminUser } = await seedBase({ plan: "BUSINESS" });
     await prisma.userStoreAccess.createMany({
       data: [{ organizationId: org.id, userId: managerUser.id, storeId: store.id }],
       skipDuplicates: true,
@@ -293,50 +293,64 @@ describeDb("manager operational permissions", () => {
         allowNegativeStock: false,
       },
     });
-    const caller = createTestCaller({
+    const managerCaller = createTestCaller({
       id: managerUser.id,
       email: managerUser.email,
       role: managerUser.role,
       organizationId: org.id,
     });
+    const adminCaller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+      isOrgOwner: true,
+    });
 
-    const register = await caller.pos.registers.create({
+    await expect(
+      managerCaller.pos.registers.create({
+        storeId: store.id,
+        name: "Manager register",
+        code: "manager",
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN", message: "forbidden" });
+
+    const register = await adminCaller.pos.registers.create({
       storeId: store.id,
       name: "Front",
       code: "front",
     });
     expect(register.code).toBe("FRONT");
 
-    const updated = await caller.pos.registers.update({
+    const updated = await adminCaller.pos.registers.update({
       registerId: register.id,
       name: "Front Desk",
     });
     expect(updated.name).toBe("Front Desk");
 
-    await caller.pos.registers.update({
+    await adminCaller.pos.registers.update({
       registerId: register.id,
       isActive: false,
     });
-    const activeRegisters = await caller.pos.registers.list();
+    const activeRegisters = await adminCaller.pos.registers.list();
     expect(activeRegisters.map((item) => item.id)).not.toContain(register.id);
 
-    const inactiveRegisters = await caller.pos.registers.list({ status: "inactive" });
+    const inactiveRegisters = await adminCaller.pos.registers.list({ status: "inactive" });
     expect(inactiveRegisters.map((item) => item.id)).toContain(register.id);
 
-    const allRegisters = await caller.pos.registers.list({ status: "all" });
+    const allRegisters = await adminCaller.pos.registers.list({ status: "all" });
     expect(allRegisters.map((item) => item.id)).toContain(register.id);
 
-    const tempRegister = await caller.pos.registers.create({
+    const tempRegister = await adminCaller.pos.registers.create({
       storeId: store.id,
       name: "Temporary",
       code: "temp",
     });
-    await expect(caller.pos.registers.delete({ registerId: tempRegister.id })).resolves.toMatchObject({
-      deleted: true,
-      id: tempRegister.id,
-    });
+    await expect(
+      adminCaller.pos.registers.delete({ registerId: tempRegister.id }),
+    ).resolves.toMatchObject({ deleted: true, id: tempRegister.id });
 
-    const historyRegister = await caller.pos.registers.create({
+    const historyRegister = await adminCaller.pos.registers.create({
       storeId: store.id,
       name: "History",
       code: "hist",
@@ -346,21 +360,20 @@ describeDb("manager operational permissions", () => {
         organizationId: org.id,
         storeId: store.id,
         registerId: historyRegister.id,
-        openedById: managerUser.id,
+        openedById: adminUser.id,
         openingCashKgs: 0,
       },
     });
-    await expect(caller.pos.registers.delete({ registerId: historyRegister.id })).rejects.toMatchObject({
-      code: "CONFLICT",
-      message: "posRegisterDeleteBlockedByHistory",
-    });
+    await expect(
+      adminCaller.pos.registers.delete({ registerId: historyRegister.id }),
+    ).rejects.toMatchObject({ code: "CONFLICT", message: "posRegisterDeleteBlockedByHistory" });
 
     await expect(
-      caller.pos.registers.create({
+      managerCaller.pos.registers.create({
         storeId: otherStore.id,
         name: "Back",
         code: "back",
       }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    ).rejects.toMatchObject({ code: "FORBIDDEN", message: "forbidden" });
   });
 });

@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockGetServerAuthToken, prisma } = vi.hoisted(() => ({
+const { mockGetServerAuthToken, mockAssertUserCanAccessStore, prisma } = vi.hoisted(() => ({
   mockGetServerAuthToken: vi.fn(),
+  mockAssertUserCanAccessStore: vi.fn(),
   prisma: {
     customerOrder: {
       findFirst: vi.fn(),
@@ -16,6 +17,9 @@ vi.mock("@/server/auth/token", () => ({
   getServerAuthToken: () => mockGetServerAuthToken(),
 }));
 vi.mock("@/server/db/prisma", () => ({ prisma }));
+vi.mock("@/server/services/storeAccess", () => ({
+  assertUserCanAccessStore: mockAssertUserCanAccessStore,
+}));
 vi.mock("next/headers", () => ({
   cookies: () => ({
     get: () => ({ value: "ru" }),
@@ -101,7 +105,12 @@ const saleFixture = {
 describe("pos receipt pdf route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetServerAuthToken.mockResolvedValue({ organizationId: "org-1" });
+    mockGetServerAuthToken.mockResolvedValue({
+      sub: "user-1",
+      organizationId: "org-1",
+      role: "ADMIN",
+      isOrgOwner: true,
+    });
     prisma.customerOrder.findFirst.mockResolvedValue(saleFixture);
     prisma.storePrinterSettings.findUnique.mockResolvedValue(null);
   });
