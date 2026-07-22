@@ -3,7 +3,12 @@ import type Redis from "ioredis";
 
 import { isProductionRuntime } from "@/server/config/runtime";
 import { getLogger } from "@/server/logging";
-import { getRedisPublisher, getRedisSubscriber, redisConfigured } from "@/server/redis";
+import {
+  getRedisPublisher,
+  getRedisSubscriber,
+  redisConfigured,
+  withRedisKeyPrefix,
+} from "@/server/redis";
 import {
   eventsPublishedTotal,
   eventsPublishFailuresTotal,
@@ -85,7 +90,8 @@ type EventEnvelope = {
   event: EventPayload;
 };
 
-const CHANNEL = "inventory.events";
+// Redis keyPrefix does not apply to Pub/Sub channel arguments, so channel isolation is explicit.
+const CHANNEL = withRedisKeyPrefix("inventory.events");
 
 const toLogError = (error: unknown) => {
   if (error instanceof Error) {

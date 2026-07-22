@@ -1,6 +1,6 @@
 import Redis from "ioredis";
 
-import { isBuildPhase, isProductionRuntime } from "@/server/config/runtime";
+import { getRuntimeEnv, isBuildPhase, isProductionRuntime } from "@/server/config/runtime";
 import { getLogger } from "@/server/logging";
 
 type RedisState = {
@@ -49,6 +49,10 @@ const getRedisUrl = () => {
   return url;
 };
 
+export const getRedisKeyPrefix = () => getRuntimeEnv().redisKeyPrefix;
+
+export const withRedisKeyPrefix = (value: string) => `${getRedisKeyPrefix()}${value}`;
+
 export const shouldSkipRedisInitialization = () => isBuildPhase();
 
 export const assertRedisConfigured = () => {
@@ -72,6 +76,7 @@ const createClient = (role: "publisher" | "subscriber") => {
 
   try {
     const client = new Redis(url, {
+      keyPrefix: getRedisKeyPrefix() || undefined,
       // Subscriber is connected explicitly before SUBSCRIBE to avoid INFO checks in subscriber mode.
       lazyConnect: role === "subscriber",
       maxRetriesPerRequest: role === "subscriber" ? null : 2,
