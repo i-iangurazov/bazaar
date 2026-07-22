@@ -27,7 +27,7 @@ const toStatus = (message: string) => {
 
 const errorBody = (message: string) => {
   if (message === "orderNotFound") {
-    return { error: "ORDER_NOT_FOUND" };
+    return { error: "NOT_FOUND" };
   }
   return { message };
 };
