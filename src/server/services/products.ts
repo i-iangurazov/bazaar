@@ -2052,7 +2052,7 @@ export const createProduct = async (input: CreateProductInput) => {
     if (!product) {
       throw new AppError("productNotFound", "NOT_FOUND", 404);
     }
-    return product;
+    return { product, replayed: operation.replayed };
   };
 
   const recordFirstProductCreated = async (productIdForEvent: string) => {
@@ -2072,15 +2072,19 @@ export const createProduct = async (input: CreateProductInput) => {
   };
 
   if (!shouldGenerateSku) {
-    const product = await runCreateTransaction();
-    void recordFirstProductCreated(product.id);
+    const { product, replayed } = await runCreateTransaction();
+    if (!replayed) {
+      await recordFirstProductCreated(product.id);
+    }
     return product;
   }
 
   for (let attempt = 0; attempt < GENERATED_SKU_MAX_RETRIES; attempt += 1) {
     try {
-      const product = await runCreateTransaction();
-      void recordFirstProductCreated(product.id);
+      const { product, replayed } = await runCreateTransaction();
+      if (!replayed) {
+        await recordFirstProductCreated(product.id);
+      }
       return product;
     } catch (error) {
       if (

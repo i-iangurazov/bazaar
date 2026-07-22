@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { OperationRequestStatus, StockMovementType } from "@prisma/client";
+import { OperationRequestStatus, Prisma, StockMovementType } from "@prisma/client";
 import type { Role } from "@prisma/client";
 import { beforeEach, describe, expect, it } from "vitest";
 
@@ -9,6 +9,30 @@ import { createTestCaller } from "../helpers/context";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
+
+const forcedStockMovementFailure = {
+  enabled: false,
+  note: "",
+  matchingCreates: 0,
+};
+
+prisma.$use(async (params, next) => {
+  if (
+    forcedStockMovementFailure.enabled &&
+    params.model === "StockMovement" &&
+    params.action === "create" &&
+    params.args?.data?.note === forcedStockMovementFailure.note
+  ) {
+    forcedStockMovementFailure.matchingCreates += 1;
+    if (forcedStockMovementFailure.matchingCreates === 2) {
+      throw new Prisma.PrismaClientKnownRequestError("synthetic second movement failure", {
+        code: "P2004",
+        clientVersion: Prisma.prismaVersion.client,
+      });
+    }
+  }
+  return next(params);
+});
 
 const callerFor = (user: {
   id: string;
@@ -88,6 +112,9 @@ const seedTwoStoreScope = async () => {
 
 describeDb("Agent 2 P0 runtime reproductions", () => {
   beforeEach(async () => {
+    forcedStockMovementFailure.enabled = false;
+    forcedStockMovementFailure.note = "";
+    forcedStockMovementFailure.matchingCreates = 0;
     await resetDatabase();
   });
 
@@ -461,8 +488,10 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
       initialOnHand: 3,
     };
 
-    const firstCreate = await caller.products.create(createInput);
-    const secondCreate = await caller.products.create(createInput);
+    const [firstCreate, secondCreate] = await Promise.all([
+      caller.products.create(createInput),
+      caller.products.create(createInput),
+    ]);
     const createdRows = await prisma.product.findMany({
       where: { organizationId: org.id, name: marker },
     });
@@ -473,6 +502,11 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
     expect(firstCreate.id).toBe(secondCreate.id);
     expect(createdRows).toHaveLength(1);
     expect(createdMovements.map((movement) => movement.qtyDelta)).toEqual([3]);
+    expect(
+      await prisma.productEvent.count({
+        where: { organizationId: org.id, type: "first_product_created" },
+      }),
+    ).toBe(1);
     await expect(
       caller.products.create({ ...createInput, name: `${marker} changed` }),
     ).rejects.toMatchObject({
@@ -593,8 +627,10 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
         },
       ],
     };
-    const firstImport = await caller.products.importCsv(importInput);
-    const secondImport = await caller.products.importCsv(importInput);
+    const [firstImport, secondImport] = await Promise.all([
+      caller.products.importCsv(importInput),
+      caller.products.importCsv(importInput),
+    ]);
     await expect(
       caller.products.importCsv({
         ...importInput,
@@ -632,6 +668,11 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
     expect(snapshot.onHand).toBe(4);
     expect(movements.map((movement) => movement.qtyDelta)).toEqual([4]);
     expect(batchCount).toBe(1);
+    expect(
+      await prisma.productEvent.count({
+        where: { organizationId: org.id, type: "first_import_completed" },
+      }),
+    ).toBe(1);
     const operationRequests = await prisma.operationRequest.findMany({
       where: {
         organizationId: org.id,
@@ -804,6 +845,103 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
       response: first,
     });
     expect(validOperation?.response).not.toHaveProperty("changedItems");
+  });
+
+  it("HARD-A2-007 rolls back line one when line two fails inside the transaction", async () => {
+    const { org, store, baseUnit, product, adminUser } = await seedBase({ plan: "BUSINESS" });
+    const caller = callerFor(adminUser);
+    const secondProduct = await prisma.product.create({
+      data: {
+        organizationId: org.id,
+        sku: `ATOMIC-MID-${randomUUID().slice(0, 8)}`,
+        name: "Atomic mid-transaction product",
+        unit: baseUnit.code,
+        baseUnitId: baseUnit.id,
+        storeProducts: {
+          create: {
+            organizationId: org.id,
+            storeId: store.id,
+            isActive: true,
+            assignedById: adminUser.id,
+          },
+        },
+      },
+    });
+    const snapshots = await Promise.all([
+      prisma.inventorySnapshot.create({
+        data: { storeId: store.id, productId: product.id, variantKey: "BASE", onHand: 4 },
+      }),
+      prisma.inventorySnapshot.create({
+        data: { storeId: store.id, productId: secondProduct.id, variantKey: "BASE", onHand: 9 },
+      }),
+    ]);
+    const snapshotIds = snapshots.map((snapshot) => snapshot.id);
+    const reason = `atomicity-mid-transaction-${randomUUID()}`;
+    const idempotencyKey = `a2-007-mid-transaction-${randomUUID()}`;
+    const [snapshotsBefore, movementCountBefore, auditCountBefore] = await Promise.all([
+      prisma.inventorySnapshot.findMany({
+        where: { id: { in: snapshotIds } },
+        orderBy: { id: "asc" },
+        select: { id: true, onHand: true, updatedAt: true },
+      }),
+      prisma.stockMovement.count({ where: { storeId: store.id } }),
+      prisma.auditLog.count({
+        where: { organizationId: org.id, action: "INVENTORY_BULK_SET_ON_HAND" },
+      }),
+    ]);
+
+    forcedStockMovementFailure.enabled = true;
+    forcedStockMovementFailure.note = reason;
+    try {
+      await expect(
+        caller.inventory.bulkSetOnHand({
+          storeId: store.id,
+          snapshotIds,
+          targetOnHand: 77,
+          reason,
+          idempotencyKey,
+        }),
+      ).rejects.toThrow("genericMessage");
+    } finally {
+      forcedStockMovementFailure.enabled = false;
+    }
+
+    const [snapshotsAfter, movementCountAfter, scopedMovements, auditCountAfter, operation] =
+      await Promise.all([
+        prisma.inventorySnapshot.findMany({
+          where: { id: { in: snapshotIds } },
+          orderBy: { id: "asc" },
+          select: { id: true, onHand: true, updatedAt: true },
+        }),
+        prisma.stockMovement.count({ where: { storeId: store.id } }),
+        prisma.stockMovement.count({ where: { storeId: store.id, note: reason } }),
+        prisma.auditLog.count({
+          where: { organizationId: org.id, action: "INVENTORY_BULK_SET_ON_HAND" },
+        }),
+        prisma.operationRequest.findUniqueOrThrow({
+          where: {
+            organizationId_scope_principalKey_idempotencyKey: {
+              organizationId: org.id,
+              scope: "inventory.bulkSetOnHand",
+              principalKey: `user:${adminUser.id}`,
+              idempotencyKey,
+            },
+          },
+        }),
+      ]);
+
+    expect(forcedStockMovementFailure.matchingCreates).toBe(2);
+    expect(snapshotsAfter).toEqual(snapshotsBefore);
+    expect(movementCountAfter).toBe(movementCountBefore);
+    expect(scopedMovements).toBe(0);
+    expect(auditCountAfter).toBe(auditCountBefore);
+    expect(operation).toMatchObject({
+      status: OperationRequestStatus.FAILED,
+      storeId: store.id,
+      errorClassification: "SAFE_BEFORE_EFFECTS",
+      responseCode: "inventoryBulkSetOnHandFailed",
+      attemptCount: 1,
+    });
   });
 
   it("HARD-A2-007 binds a bulk operation key to one organization and store", async () => {

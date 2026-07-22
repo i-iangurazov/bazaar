@@ -272,12 +272,14 @@ export const runProductImport = async (input: RunProductImportInput) => {
     summary: operation.response.summary,
   };
 
-  await recordFirstEvent({
-    organizationId: input.organizationId,
-    actorId: input.actorId,
-    type: "first_import_completed",
-    metadata: { batchId: result.batch.id },
-  });
+  if (!operation.replayed) {
+    await recordFirstEvent({
+      organizationId: input.organizationId,
+      actorId: input.actorId,
+      type: "first_import_completed",
+      metadata: { batchId: result.batch.id },
+    });
+  }
 
   return result;
 };
