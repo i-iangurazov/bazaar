@@ -274,15 +274,25 @@ describeDb("B0 Agent 4 P0 runtime verification", () => {
       idempotencyKey: "hard-a4-007-stock",
       requestId: "hard-a4-007-stock",
     });
-    await prisma.stockMovement.create({
-      data: {
-        storeId: store.id,
-        productId: product.id,
-        type: "RECEIVE",
-        qtyDelta: 5,
-        unitCostKgs: new Prisma.Decimal("200.01"),
-        lineTotalKgs: null,
-      },
+    await prisma.stockMovement.createMany({
+      data: [
+        {
+          storeId: store.id,
+          productId: product.id,
+          type: "RECEIVE",
+          qtyDelta: 10,
+          unitCostKgs: new Prisma.Decimal(5),
+          lineTotalKgs: new Prisma.Decimal(50),
+        },
+        {
+          storeId: store.id,
+          productId: product.id,
+          type: "RECEIVE",
+          qtyDelta: -3,
+          unitCostKgs: new Prisma.Decimal(6),
+          lineTotalKgs: new Prisma.Decimal(-8),
+        },
+      ],
     });
     const register = await prisma.posRegister.create({
       data: {
@@ -315,7 +325,7 @@ describeDb("B0 Agent 4 P0 runtime verification", () => {
 
     expect(result.totals).toMatchObject({
       salesTotalKgs: 500,
-      purchasesTotalKgs: 1000.05,
+      purchasesTotalKgs: 42,
     });
   });
 
