@@ -68,7 +68,81 @@ describeDb("Agent 2 B2 receiving cost verification", () => {
     };
 
     await caller.inventory.editProductMovementDocument(firstEdit);
+    const readSimplePostEditState = async () => {
+      const [cost, snapshot, movements, auditCount, costRowCount] = await Promise.all([
+        prisma.productCost.findUniqueOrThrow({ where: costKey(org.id, product.id) }),
+        prisma.inventorySnapshot.findUniqueOrThrow({
+          where: {
+            storeId_productId_variantKey: {
+              storeId: store.id,
+              productId: product.id,
+              variantKey: "BASE",
+            },
+          },
+        }),
+        prisma.stockMovement.findMany({
+          where: {
+            productId: product.id,
+            referenceType: "STOCK_RECEIVING",
+            referenceId: receiving.receivingId,
+          },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        }),
+        prisma.auditLog.count({
+          where: {
+            organizationId: org.id,
+            action: "INVENTORY_DOCUMENT_EDIT",
+            entityId: `STOCK_RECEIVING:${receiving.receivingId}`,
+          },
+        }),
+        prisma.productCost.count({
+          where: { organizationId: org.id, productId: product.id, variantKey: "BASE" },
+        }),
+      ]);
+      const movementRows = movements.map((movement) => ({
+        type: movement.type,
+        qtyDelta: movement.qtyDelta,
+        lineTotalKgs: Number(movement.lineTotalKgs),
+      }));
+      return {
+        cost: { avgCostKgs: Number(cost.avgCostKgs), costBasisQty: cost.costBasisQty },
+        onHand: snapshot.onHand,
+        movementRows,
+        effective: {
+          quantity: movementRows.reduce((sum, movement) => sum + movement.qtyDelta, 0),
+          totalValueKgs: movementRows.reduce(
+            (sum, movement) => sum + movement.lineTotalKgs,
+            0,
+          ),
+        },
+        counts: { movements: movements.length, audits: auditCount, productCosts: costRowCount },
+      };
+    };
+    const afterFirstEdit = await readSimplePostEditState();
     await caller.inventory.editProductMovementDocument(firstEdit);
+    const afterRetry = await readSimplePostEditState();
+    const postEditEvidence = {
+      ...afterRetry,
+      retryCounts: [afterFirstEdit.counts, afterRetry.counts],
+    };
+    console.info(`[B2-EVIDENCE] HARD-A2-018-simple-post-edit ${JSON.stringify(postEditEvidence)}`);
+
+    expect(afterRetry).toEqual(afterFirstEdit);
+    expect(postEditEvidence).toEqual({
+      cost: { avgCostKgs: 6, costBasisQty: 7 },
+      onHand: 7,
+      movementRows: [
+        { type: StockMovementType.RECEIVE, qtyDelta: 10, lineTotalKgs: 50 },
+        { type: StockMovementType.RECEIVE, qtyDelta: -3, lineTotalKgs: -8 },
+      ],
+      effective: { quantity: 7, totalValueKgs: 42 },
+      counts: { movements: 2, audits: 1, productCosts: 1 },
+      retryCounts: [
+        { movements: 2, audits: 1, productCosts: 1 },
+        { movements: 2, audits: 1, productCosts: 1 },
+      ],
+    });
+
     await caller.inventory.editProductMovementDocument({
       documentKey,
       reason: "remove the effective edited line",
