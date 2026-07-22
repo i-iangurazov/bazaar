@@ -583,7 +583,7 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
     expect(idempotencyRows[0]?.key).toMatch(/:0$/);
   });
 
-  it("HARD-A2-008 removes Store B preferences and the global category from a Store-A manager command", async () => {
+  it("HARD-A2-008 archives only the selected store preference", async () => {
     const { org, store, storeB, managerUser } = await seedTwoStoreScope();
     const marker = `Unused ${randomUUID()}`;
     const normalized = marker.toLocaleLowerCase();
@@ -605,11 +605,103 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
     await callerFor(managerUser).productCategories.remove({ name: marker, storeId: store.id });
 
     expect(before).toBe(2);
+    await expect(
+      prisma.storeCategoryPreference.findUniqueOrThrow({
+        where: { storeId_normalizedName: { storeId: store.id, normalizedName: normalized } },
+      }),
+    ).resolves.toMatchObject({ isArchived: true, isVisibleInForms: false });
+    await expect(
+      prisma.storeCategoryPreference.findUniqueOrThrow({
+        where: { storeId_normalizedName: { storeId: storeB.id, normalizedName: normalized } },
+      }),
+    ).resolves.toMatchObject({ isArchived: false, isVisibleInForms: true });
+    await expect(prisma.productCategory.findUnique({ where: { id: category.id } })).resolves.toMatchObject({
+      id: category.id,
+    });
+    expect(
+      await prisma.auditLog.count({
+        where: {
+          organizationId: org.id,
+          actorId: managerUser.id,
+          action: "STORE_CATEGORY_PREFERENCE_UPDATE",
+        },
+      }),
+    ).toBe(1);
+  });
+
+  it("HARD-A2-008 rejects organization-wide and inaccessible-store deletion without side effects", async () => {
+    const { org, storeB, managerUser } = await seedTwoStoreScope();
+    const marker = `Protected ${randomUUID()}`;
+    const normalized = marker.toLocaleLowerCase();
+    const category = await prisma.productCategory.create({
+      data: { organizationId: org.id, name: marker },
+    });
+    const preference = await prisma.storeCategoryPreference.create({
+      data: {
+        organizationId: org.id,
+        storeId: storeB.id,
+        name: marker,
+        normalizedName: normalized,
+      },
+    });
+    const betaOrg = await prisma.organization.create({ data: { name: "Category Beta" } });
+    const betaStore = await prisma.store.create({
+      data: {
+        organizationId: betaOrg.id,
+        name: "Category Beta Store",
+        code: `CAT-B-${randomUUID().slice(0, 8)}`,
+      },
+    });
+    const caller = callerFor(managerUser);
+
+    await expect(caller.productCategories.remove({ name: marker })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: "categoryGlobalRemoveForbidden",
+    });
+    await expect(
+      caller.productCategories.remove({ name: marker, storeId: storeB.id }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN", message: "storeAccessDenied" });
+    await expect(
+      caller.productCategories.remove({ name: marker, storeId: betaStore.id }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN", message: "storeAccessDenied" });
+
+    await expect(prisma.productCategory.findUnique({ where: { id: category.id } })).resolves.toMatchObject({
+      id: category.id,
+    });
+    await expect(
+      prisma.storeCategoryPreference.findUnique({ where: { id: preference.id } }),
+    ).resolves.toMatchObject({ isArchived: false, isVisibleInForms: true });
+    expect(
+      await prisma.auditLog.count({
+        where: { organizationId: org.id, actorId: managerUser.id },
+      }),
+    ).toBe(0);
+  });
+
+  it("HARD-A2-008 preserves explicit organization-wide deletion for admins", async () => {
+    const { org, store, adminUser } = await seedBase({ plan: "BUSINESS" });
+    const marker = `Global ${randomUUID()}`;
+    const normalized = marker.toLocaleLowerCase();
+    const category = await prisma.productCategory.create({
+      data: { organizationId: org.id, name: marker },
+    });
+    await prisma.storeCategoryPreference.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: marker,
+        normalizedName: normalized,
+      },
+    });
+
+    await expect(callerFor(adminUser).productCategories.remove({ name: marker })).resolves.toMatchObject({
+      id: category.id,
+    });
+    expect(await prisma.productCategory.findUnique({ where: { id: category.id } })).toBeNull();
     expect(
       await prisma.storeCategoryPreference.count({
         where: { organizationId: org.id, normalizedName: normalized },
       }),
     ).toBe(0);
-    expect(await prisma.productCategory.findUnique({ where: { id: category.id } })).toBeNull();
   });
 });
