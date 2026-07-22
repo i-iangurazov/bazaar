@@ -1251,19 +1251,34 @@ export const completeCustomerOrder = async (input: {
           throw new AppError("salesOrderEmpty", "BAD_REQUEST", 400);
         }
 
-        for (const line of order.lines) {
-          await applyStockMovement(tx, {
-            storeId: order.storeId,
-            productId: line.productId,
-            variantId: line.variantId,
-            qtyDelta: -line.qty,
-            type: StockMovementType.SALE,
-            referenceType: "CustomerOrder",
-            referenceId: order.id,
-            note: order.number,
-            actorId: input.actorId,
-            organizationId: input.organizationId,
-          });
+        const apiStockAlreadyApplied =
+          order.source === CustomerOrderSource.API
+            ? await tx.stockMovement.findFirst({
+                where: {
+                  referenceType: "CustomerOrder",
+                  referenceId: order.id,
+                  type: StockMovementType.SALE,
+                  qtyDelta: { lt: 0 },
+                },
+                select: { id: true },
+              })
+            : null;
+
+        if (!apiStockAlreadyApplied) {
+          for (const line of order.lines) {
+            await applyStockMovement(tx, {
+              storeId: order.storeId,
+              productId: line.productId,
+              variantId: line.variantId,
+              qtyDelta: -line.qty,
+              type: StockMovementType.SALE,
+              referenceType: "CustomerOrder",
+              referenceId: order.id,
+              note: order.number,
+              actorId: input.actorId,
+              organizationId: input.organizationId,
+            });
+          }
         }
 
         const updated = await tx.customerOrder.update({

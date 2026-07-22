@@ -68,7 +68,7 @@ describeDb("B0 Agent 3 order P0 runtime verification", () => {
     await resetDatabase();
   });
 
-  it("reproduces HARD-A3-001: completing an API order deducts stock twice", async () => {
+  it("verifies HARD-A3-001: completing an API order preserves its single stock effect", async () => {
     const { org, store, product, adminUser } = await seedBase({ allowNegativeStock: true });
     await prisma.product.update({ where: { id: product.id }, data: { basePriceKgs: 100 } });
     await seedStock({
@@ -125,8 +125,8 @@ describeDb("B0 Agent 3 order P0 runtime verification", () => {
 
     expect(before?.onHand).toBe(10);
     expect(afterCreate?.onHand).toBe(9);
-    expect(afterComplete?.onHand).toBe(8);
-    expect(saleMovements.map((movement) => movement.qtyDelta)).toEqual([-1, -1]);
+    expect(afterComplete?.onHand).toBe(9);
+    expect(saleMovements.map((movement) => movement.qtyDelta)).toEqual([-1]);
   });
 
   it("reproduces HARD-A3-003: missing API operation identity duplicates orders and stock effects", async () => {
