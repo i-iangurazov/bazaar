@@ -651,6 +651,7 @@ describe("redis event bus recovery", () => {
       redisConfigured: () => true,
       getRedisPublisher: () => publisher,
       getRedisSubscriber: () => subscriber,
+      withRedisKeyPrefix: (value: string) => `hardening:b1:${value}`,
     }));
     vi.doMock("@/server/config/runtime", () => ({
       isProductionRuntime: () => false,
@@ -706,7 +707,12 @@ describe("redis event bus recovery", () => {
 
     expect(localListener).toHaveBeenCalledTimes(3);
     expect(subscriber.subscribe).toHaveBeenCalled();
+    expect(subscriber.subscribe).toHaveBeenCalledWith("hardening:b1:inventory.events");
     expect(publisher.publish).toHaveBeenCalledTimes(2);
+    expect(publisher.publish).toHaveBeenLastCalledWith(
+      "hardening:b1:inventory.events",
+      expect.any(String),
+    );
     expect(logger.info).toHaveBeenCalledWith("redis event bus recovered");
     unsubscribe();
   });

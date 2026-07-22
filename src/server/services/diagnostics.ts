@@ -11,7 +11,7 @@ import { requestExport } from "@/server/services/exports";
 import { runJob, registerJob } from "@/server/jobs";
 import { getBillingSummary } from "@/server/services/billing";
 import { assertFeatureEnabled } from "@/server/services/planLimits";
-import { getRedisPublisher, redisConfigured } from "@/server/redis";
+import { getRedisPublisher, redisConfigured, withRedisKeyPrefix } from "@/server/redis";
 import { buildPriceTagsPdf } from "@/server/services/priceTagsPdf";
 import { isProductionRuntime } from "@/server/config/runtime";
 import { toJson } from "@/server/services/json";
@@ -142,7 +142,7 @@ const runRedisCheck = async (
     return { status: "warning", code: "redisPingFailed", details: { connected: true, pingOk: false, pubSubOk: false } };
   }
 
-  const channel = `diagnostics:${organizationId}:${randomUUID()}`;
+  const channel = withRedisKeyPrefix(`diagnostics:${organizationId}:${randomUUID()}`);
   const token = randomUUID();
   let pubSubOk = false;
   let timer: ReturnType<typeof setTimeout> | null = null;

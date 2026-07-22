@@ -41,6 +41,7 @@ const main = async () => {
   const authSecret = env.nextAuthSecret;
   const jobsSecret = env.jobsSecret;
   const redisUrl = env.redisUrl;
+  const redisKeyPrefix = env.redisKeyPrefix;
   const emailProvider = env.emailProvider;
   const emailFrom = env.emailFrom;
   const resendApiKey = env.resendApiKey;
@@ -56,6 +57,9 @@ const main = async () => {
 
   if (nodeEnv === "production") {
     ensure(Boolean(redisUrl), "REDIS_URL is set for production");
+    if (env.vercelEnv === "preview") {
+      ensure(Boolean(redisKeyPrefix), "REDIS_KEY_PREFIX is set for Preview isolation");
+    }
     ensure(emailProvider !== "log" || allowLogEmailInProduction, "EMAIL_PROVIDER is configured for production");
     if (emailProvider === "resend") {
       ensure(Boolean(emailFrom), "EMAIL_FROM is set for resend");

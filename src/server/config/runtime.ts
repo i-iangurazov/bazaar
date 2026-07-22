@@ -3,11 +3,13 @@ import { z } from "zod";
 const rawEnvSchema = z
   .object({
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+    VERCEL_ENV: z.enum(["development", "preview", "production"]).optional(),
     NEXT_PHASE: z.string().optional(),
     npm_lifecycle_event: z.string().optional(),
     DATABASE_URL: z.string().optional(),
     ALLOW_LOCALHOST_DATABASE_IN_PRODUCTION: z.string().optional(),
     REDIS_URL: z.string().optional(),
+    REDIS_KEY_PREFIX: z.string().optional(),
     NEXTAUTH_SECRET: z.string().optional(),
     NEXTAUTH_URL: z.string().optional(),
     JOBS_SECRET: z.string().optional(),
@@ -42,12 +44,27 @@ const parseTrustedProxyHops = (value: string | undefined, nodeEnv: "development"
 
 const normalizeEmailProvider = (value?: string) => (value ?? "").trim().toLowerCase();
 
+const normalizeRedisKeyPrefix = (value?: string) => {
+  const configured = (value ?? "").trim();
+  if (!configured) {
+    return "";
+  }
+  if (!/^[A-Za-z0-9:_-]{1,64}$/.test(configured)) {
+    throw new Error(
+      "REDIS_KEY_PREFIX must contain only letters, numbers, colon, underscore, or hyphen (max 64 characters).",
+    );
+  }
+  return configured.endsWith(":") ? configured : `${configured}:`;
+};
+
 export type RuntimeEnv = {
   nodeEnv: "development" | "test" | "production";
+  vercelEnv: "development" | "preview" | "production" | "";
   isBuildPhase: boolean;
   databaseUrl: string;
   allowLocalhostDatabaseInProduction: boolean;
   redisUrl: string;
+  redisKeyPrefix: string;
   nextAuthSecret: string;
   nextAuthUrl: string;
   jobsSecret: string;
@@ -69,10 +86,12 @@ const parseRuntimeEnv = (source: NodeJS.ProcessEnv): RuntimeEnv => {
     parsed.NEXT_PHASE === "phase-production-build" || parsed.npm_lifecycle_event === "build";
   return {
     nodeEnv,
+    vercelEnv: parsed.VERCEL_ENV ?? "",
     isBuildPhase,
     databaseUrl: parsed.DATABASE_URL?.trim() ?? "",
     allowLocalhostDatabaseInProduction: parseBool(parsed.ALLOW_LOCALHOST_DATABASE_IN_PRODUCTION),
     redisUrl: parsed.REDIS_URL?.trim() ?? "",
+    redisKeyPrefix: normalizeRedisKeyPrefix(parsed.REDIS_KEY_PREFIX),
     nextAuthSecret: parsed.NEXTAUTH_SECRET?.trim() ?? "",
     nextAuthUrl: parsed.NEXTAUTH_URL?.trim() ?? "",
     jobsSecret: parsed.JOBS_SECRET?.trim() ?? "",
@@ -137,6 +156,12 @@ const assertProductionEnv = (env: RuntimeEnv, target: "build" | "runtime") => {
   assertValidUrl(env.nextAuthUrl, "NEXTAUTH_URL");
   assertPresent(env.jobsSecret, "JOBS_SECRET is required in production.");
   assertPresent(env.redisUrl, "REDIS_URL is required in production.");
+  if (env.vercelEnv === "preview") {
+    assertPresent(
+      env.redisKeyPrefix,
+      "REDIS_KEY_PREFIX is required for Vercel Preview isolation.",
+    );
+  }
 
   if (env.emailProvider === "resend") {
     assertPresent(env.emailFrom, "EMAIL_FROM is required when EMAIL_PROVIDER=resend.");
