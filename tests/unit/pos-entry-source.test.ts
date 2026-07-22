@@ -148,9 +148,17 @@ describe("pos entry navigation", () => {
       pageSource.indexOf("const clearCartRuntimeSyncState"),
       pageSource.indexOf("const createDraftMutation"),
     );
-    const completeBlock = pageSource.slice(
-      pageSource.indexOf("const completeMutation"),
-      pageSource.indexOf("const sale = saleQuery.data"),
+    const completionCleanupBlock = pageSource.slice(
+      pageSource.indexOf("const handleConfirmedCompletion"),
+      pageSource.indexOf("const reconcileCompletionFailure"),
+    );
+    const completionReconciliationBlock = pageSource.slice(
+      pageSource.indexOf("const reconcileCompletionFailure"),
+      pageSource.indexOf("const handleComplete"),
+    );
+    const handleCompleteBlock = pageSource.slice(
+      pageSource.indexOf("const handleComplete"),
+      pageSource.indexOf("const handleHoldReceipt"),
     );
     const cancelBlock = pageSource.slice(
       pageSource.indexOf("const cancelDraftMutation"),
@@ -174,8 +182,17 @@ describe("pos entry navigation", () => {
     expect(cleanupBlock).toContain("completeSubmitInFlightRef.current = false;");
     expect(cleanupBlock).toContain("optimisticLineServerIdsRef.current = {};");
     expect(cleanupBlock).toContain("removedOptimisticLineIdsRef.current.clear();");
-    expect(completeBlock).toContain("clearCartRuntimeSyncState();");
-    expect(completeBlock).toContain("void Promise.all([");
+    expect(completionCleanupBlock).toContain("clearCartRuntimeSyncState();");
+    expect(completionCleanupBlock).toContain("void Promise.all([");
+    expect(handleCompleteBlock).toContain("if (sellInDebt) {");
+    expect(handleCompleteBlock).toContain("payments: paymentPayload.payments");
+    expect(
+      handleCompleteBlock.match(/await handleConfirmedCompletion\(result\);/g),
+    ).toHaveLength(2);
+    expect(completionReconciliationBlock).toContain(
+      "if (reconciledSale.status === CustomerOrderStatus.COMPLETED)",
+    );
+    expect(completionReconciliationBlock).toContain("await handleConfirmedCompletion({");
     expect(cancelBlock).toContain("clearCartRuntimeSyncState();");
     expect(cancelBlock).toContain("void Promise.all([");
     expect(handleAddLineBlock).toContain(
