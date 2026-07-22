@@ -60,6 +60,18 @@ enum CustomerOrderSource {
   API
 }
 
+enum OperationRequestStatus {
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum OperationRequestPrincipalType {
+  AUTHENTICATED_USER
+  API_KEY
+  ANONYMOUS_CATALOG
+}
+
 enum CustomerSource {
   MANUAL
   IMPORT
@@ -458,6 +470,7 @@ model Organization {
   productPacks                ProductPack[]
   purchaseOrders              PurchaseOrder[]
   customerOrders              CustomerOrder[]
+  operationRequests           OperationRequest[]
   customers                   Customer[]
   customerOrderEmailLogs      CustomerOrderEmailLog[]
   emailCampaigns              EmailCampaign[]
@@ -672,6 +685,7 @@ model Store {
   forecastSnapshots           ForecastSnapshot[]
   purchaseOrders              PurchaseOrder[]
   customerOrders              CustomerOrder[]
+  operationRequests           OperationRequest[]
   customerOrderEmailLogs      CustomerOrderEmailLog[]
   customers                   Customer[]
   emailCampaigns              EmailCampaign[]
@@ -1712,6 +1726,7 @@ model CustomerOrder {
   number                  String
   status                  CustomerOrderStatus @default(DRAFT)
   source                  CustomerOrderSource @default(MANUAL)
+  externalOrderId         String?             @db.VarChar(160)
   isPosSale               Boolean             @default(false)
   customerName            String?
   customerEmail           String?
@@ -1769,6 +1784,7 @@ model CustomerOrder {
   @@unique([organizationId, number])
   @@index([storeId, status, createdAt])
   @@index([organizationId, status, createdAt])
+  @@index([organizationId, storeId, source, externalOrderId], map: "CustomerOrder_external_identity_idx")
   @@index([organizationId, createdAt])
   @@index([organizationId, isPosSale, createdAt])
   @@index([organizationId, isPosSale, isHeld, status, createdAt])
@@ -2500,6 +2516,45 @@ model IdempotencyKey {
 
   @@unique([key, route, userId])
   @@index([createdAt])
+}
+
+model OperationRequest {
+  id                  String                        @id @default(cuid())
+  organizationId      String
+  storeId             String?
+  scope               String                        @db.VarChar(120)
+  principalType       OperationRequestPrincipalType
+  principalKey        String                        @db.VarChar(220)
+  idempotencyKey      String                        @db.VarChar(256)
+  requestFingerprint  String                        @db.Char(64)
+  status              OperationRequestStatus        @default(PROCESSING)
+  responseStatus      Int?
+  responseCode        String?                       @db.VarChar(120)
+  response            Json?
+  responseBytes       Int?
+  resourceType        String?                       @db.VarChar(80)
+  resourceId          String?                       @db.VarChar(191)
+  errorClassification String?                       @db.VarChar(120)
+  attemptCount        Int                           @default(1)
+  processingStartedAt DateTime                      @default(now())
+  leaseToken          String?                       @db.VarChar(64)
+  leaseExpiresAt      DateTime?
+  lastAttemptAt       DateTime                      @default(now())
+  completedAt         DateTime?
+  failedAt            DateTime?
+  expiresAt           DateTime?
+  createdAt           DateTime                      @default(now())
+  updatedAt           DateTime                      @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  store        Store?       @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, scope, principalKey, idempotencyKey], map: "OperationRequest_scope_principal_key_uq")
+  @@index([organizationId, status, createdAt], map: "OperationRequest_org_status_created_idx")
+  @@index([storeId, status, createdAt], map: "OperationRequest_store_status_created_idx")
+  @@index([expiresAt], map: "OperationRequest_expires_idx")
+  @@index([leaseExpiresAt], map: "OperationRequest_lease_expires_idx")
+  @@index([resourceType, resourceId], map: "OperationRequest_resource_idx")
 }
 
 model StockCount {
