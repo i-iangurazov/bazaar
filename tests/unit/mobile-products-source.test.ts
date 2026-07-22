@@ -19,7 +19,21 @@ describe("mobile products source", () => {
     expect(source).toContain('variant={readiness === "missingImage" ? "primary" : "secondary"}');
     expect(source).toContain('variant={readiness === "outOfStock" ? "primary" : "secondary"}');
     expect(source).toContain("enableBarcode ? (");
-    expect(source).toContain("mobileSheet");
+  });
+
+  it("keeps product duplication wired to a mobile-sheet dialog", async () => {
+    const [pageSource, dialogSource] = await Promise.all([
+      readSource("src/app/(app)/products/page.tsx"),
+      readSource("src/components/products/product-duplicate-dialog.tsx"),
+    ]);
+
+    expect(pageSource).toContain(
+      'import { ProductDuplicateDialog } from "@/components/products/product-duplicate-dialog";',
+    );
+    expect(pageSource).toContain("<ProductDuplicateDialog");
+    expect(pageSource).toContain("open={Boolean(duplicateTarget)}");
+    expect(dialogSource).toContain("<Modal");
+    expect(dialogSource).toContain("mobileSheet");
   });
 
   it("keeps mobile product form sectioned with an in-flow mobile save action", async () => {
