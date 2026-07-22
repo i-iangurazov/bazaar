@@ -2,6 +2,11 @@ import { getServerAuthToken } from "@/server/auth/token";
 import { prisma } from "@/server/db/prisma";
 import { eventBus } from "@/server/events/eventBus";
 import {
+  resolveAccessibleStoreIds,
+  type StoreAccessUser,
+  userHasAllStoreAccess,
+} from "@/server/services/storeAccess";
+import {
   decrementGauge,
   httpRequestDurationMs,
   incrementCounter,
@@ -14,16 +19,16 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const storeOrgCache = new Map<string, { organizationId: string; expiresAt: number }>();
-const poOrgCache = new Map<string, { organizationId: string; expiresAt: number }>();
+type StoreScope = { organizationId: string; storeId: string };
+type CachedStoreScope = StoreScope & { expiresAt: number };
+
+const storeScopeCache = new Map<string, CachedStoreScope>();
+const poScopeCache = new Map<string, CachedStoreScope>();
 const CACHE_TTL_MS = 60_000;
 
 const now = () => Date.now();
 
-const getCachedOrganization = (
-  cache: Map<string, { organizationId: string; expiresAt: number }>,
-  key: string,
-) => {
+const getCachedScope = (cache: Map<string, CachedStoreScope>, key: string) => {
   const hit = cache.get(key);
   if (!hit) {
     return null;
@@ -32,53 +37,60 @@ const getCachedOrganization = (
     cache.delete(key);
     return null;
   }
-  return hit.organizationId;
+  return { organizationId: hit.organizationId, storeId: hit.storeId };
 };
 
-const setCachedOrganization = (
-  cache: Map<string, { organizationId: string; expiresAt: number }>,
-  key: string,
-  organizationId: string,
-) => {
-  cache.set(key, { organizationId, expiresAt: now() + CACHE_TTL_MS });
+const setCachedScope = (cache: Map<string, CachedStoreScope>, key: string, scope: StoreScope) => {
+  cache.set(key, { ...scope, expiresAt: now() + CACHE_TTL_MS });
 };
 
-const resolveStoreOrganizationId = async (storeId: string) => {
-  const cached = getCachedOrganization(storeOrgCache, storeId);
+const resolveStoreScope = async (storeId: string) => {
+  const cached = getCachedScope(storeScopeCache, storeId);
   if (cached) {
     return cached;
   }
   const store = await prisma.store.findUnique({
     where: { id: storeId },
-    select: { organizationId: true },
+    select: { id: true, organizationId: true },
   });
   if (!store) {
     return null;
   }
-  setCachedOrganization(storeOrgCache, storeId, store.organizationId);
-  return store.organizationId;
+  const scope = { organizationId: store.organizationId, storeId: store.id };
+  setCachedScope(storeScopeCache, storeId, scope);
+  return scope;
 };
 
-const resolvePoOrganizationId = async (poId: string) => {
-  const cached = getCachedOrganization(poOrgCache, poId);
+const resolvePoScope = async (poId: string) => {
+  const cached = getCachedScope(poScopeCache, poId);
   if (cached) {
     return cached;
   }
   const po = await prisma.purchaseOrder.findUnique({
     where: { id: poId },
-    select: { organizationId: true },
+    select: { organizationId: true, storeId: true },
   });
   if (!po) {
     return null;
   }
-  setCachedOrganization(poOrgCache, poId, po.organizationId);
-  return po.organizationId;
+  const scope = { organizationId: po.organizationId, storeId: po.storeId };
+  setCachedScope(poScopeCache, poId, scope);
+  return scope;
 };
 
-const canReceiveEvent = async (
-  organizationId: string,
-  event: { type: string; payload: unknown },
-) => {
+type EventAccess = {
+  organizationId: string;
+  allowedStoreIds: Set<string> | null;
+};
+
+const canReceiveStoreScope = (access: EventAccess, scope: StoreScope | null) =>
+  Boolean(
+    scope &&
+    scope.organizationId === access.organizationId &&
+    (!access.allowedStoreIds || access.allowedStoreIds.has(scope.storeId)),
+  );
+
+const canReceiveEvent = async (access: EventAccess, event: { type: string; payload: unknown }) => {
   if (
     event.type === "inventory.updated" ||
     event.type === "lowStock.triggered" ||
@@ -93,8 +105,7 @@ const canReceiveEvent = async (
     if (!payload.storeId) {
       return false;
     }
-    const eventOrgId = await resolveStoreOrganizationId(payload.storeId);
-    return eventOrgId === organizationId;
+    return canReceiveStoreScope(access, await resolveStoreScope(payload.storeId));
   }
 
   if (event.type === "purchaseOrder.updated") {
@@ -102,8 +113,7 @@ const canReceiveEvent = async (
     if (!payload.poId) {
       return false;
     }
-    const eventOrgId = await resolvePoOrganizationId(payload.poId);
-    return eventOrgId === organizationId;
+    return canReceiveStoreScope(access, await resolvePoScope(payload.poId));
   }
 
   return false;
@@ -121,6 +131,24 @@ export const GET = async (request: Request) => {
     return new Response("unauthorized", { status: 401 });
   }
 
+  const userId = String(token.sub ?? (token as { id?: string }).id ?? "");
+  if (!userId) {
+    return new Response("unauthorized", { status: 401 });
+  }
+  const accessUser: StoreAccessUser = {
+    id: userId,
+    organizationId: String(token.organizationId),
+    role: String(token.role ?? "STAFF"),
+    isOrgOwner: Boolean((token as { isOrgOwner?: boolean | null }).isOrgOwner),
+    isPlatformOwner: Boolean((token as { isPlatformOwner?: boolean | null }).isPlatformOwner),
+  };
+  const access: EventAccess = {
+    organizationId: accessUser.organizationId,
+    allowedStoreIds: userHasAllStoreAccess(accessUser)
+      ? null
+      : new Set(await resolveAccessibleStoreIds(prisma, accessUser)),
+  };
+
   incrementCounter(httpRequestsTotal, { path: "/api/sse" });
 
   const encoder = new TextEncoder();
@@ -130,7 +158,7 @@ export const GET = async (request: Request) => {
       let closed = false;
       incrementGauge(sseConnectionsActive);
       const send = async (event: { type: string; payload: unknown }) => {
-        const allowed = await canReceiveEvent(token.organizationId as string, event);
+        const allowed = await canReceiveEvent(access, event);
         if (!allowed || closed) {
           return;
         }

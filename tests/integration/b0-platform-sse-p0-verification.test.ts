@@ -15,14 +15,14 @@ import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
 
-describeDb("B0 Agent 4 SSE P0 runtime verification", () => {
+describeDb("B1 Agent 4 SSE store-isolation contract", () => {
   beforeEach(async () => {
     mockGetServerAuthToken.mockReset();
     await resetDatabase();
   });
 
-  it("A4-005: assigned-store cashier receives an event from an unassigned same-org store", async () => {
-    const { org, cashierUser } = await seedBase({ plan: "BUSINESS" });
+  it("A4-005: assigned-store cashier receives only events from an allowed store", async () => {
+    const { org, store, cashierUser } = await seedBase({ plan: "BUSINESS" });
     const unassignedStore = await prisma.store.create({
       data: {
         organizationId: org.id,
@@ -57,6 +57,19 @@ describeDb("B0 Agent 4 SSE P0 runtime verification", () => {
           productId: "cross-store-product",
         },
       });
+      const otherOrg = await prisma.organization.create({ data: { name: "SSE Other Org" } });
+      const otherStore = await prisma.store.create({
+        data: { organizationId: otherOrg.id, name: "Other Realtime Store", code: "SSE-OTHER" },
+      });
+      eventBus.publish({
+        type: "inventory.updated",
+        payload: { storeId: otherStore.id, productId: "cross-org-product" },
+      });
+      await new Promise<void>((resolve) => setTimeout(resolve, 25));
+      eventBus.publish({
+        type: "inventory.updated",
+        payload: { storeId: store.id, productId: "allowed-product" },
+      });
 
       const firstChunk = await reader.read();
       const secondChunk = await reader.read();
@@ -69,7 +82,9 @@ describeDb("B0 Agent 4 SSE P0 runtime verification", () => {
 
       expect(response.status).toBe(200);
       expect(evidence).toContain("event: inventory.updated");
-      expect(evidence).toContain(`\"storeId\":\"${unassignedStore.id}\"`);
+      expect(evidence).toContain(`\"storeId\":\"${store.id}\"`);
+      expect(evidence).not.toContain(unassignedStore.id);
+      expect(evidence).not.toContain(otherStore.id);
     } finally {
       abortController.abort();
     }

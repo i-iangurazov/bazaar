@@ -14,9 +14,16 @@ type ClosePeriodInput = {
   requestId: string;
 };
 
-export const listPeriodCloses = async (organizationId: string, storeId?: string) => {
+export const listPeriodCloses = async (
+  organizationId: string,
+  storeId?: string,
+  storeIds?: string[],
+) => {
   return prisma.periodClose.findMany({
-    where: { organizationId, ...(storeId ? { storeId } : {}) },
+    where: {
+      organizationId,
+      ...(storeId ? { storeId } : storeIds ? { storeId: { in: storeIds } } : {}),
+    },
     orderBy: { closedAt: "desc" },
   });
 };
