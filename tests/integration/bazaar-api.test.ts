@@ -460,10 +460,13 @@ describeDb("bazaar api integration", () => {
     });
   });
 
-  it("rejects invalid keys and hides orders from other organizations", async () => {
+  it("rejects invalid keys and normalizes absent, cross-store, and cross-org order responses", async () => {
     const { org, store, product, adminUser } = await seedBase();
+    const sameOrgOtherStore = await prisma.store.create({
+      data: { organizationId: org.id, name: "Same Org Other Store", code: "SAME-OTH" },
+    });
     const otherOrg = await prisma.organization.create({ data: { name: "Other Org" } });
-    const otherStore = await prisma.store.create({
+    const otherOrgStore = await prisma.store.create({
       data: { organizationId: otherOrg.id, name: "Other Store", code: "OTH" },
     });
     const otherAdmin = await prisma.user.create({
@@ -477,9 +480,23 @@ describeDb("bazaar api integration", () => {
         emailVerifiedAt: new Date(),
       },
     });
-    const { token: otherToken } = await createBazaarApiKey({
+    const { token: primaryToken } = await createBazaarApiKey({
+      organizationId: org.id,
+      storeId: store.id,
+      actorId: adminUser.id,
+      requestId: "bazaar-api-primary-key",
+      name: "primary-reader",
+    });
+    const { token: sameOrgOtherStoreToken } = await createBazaarApiKey({
+      organizationId: org.id,
+      storeId: sameOrgOtherStore.id,
+      actorId: adminUser.id,
+      requestId: "bazaar-api-same-org-other-store-key",
+      name: "same-org-other-store-reader",
+    });
+    const { token: otherOrgToken } = await createBazaarApiKey({
       organizationId: otherOrg.id,
-      storeId: otherStore.id,
+      storeId: otherOrgStore.id,
       actorId: otherAdmin.id,
       requestId: "bazaar-api-other-org-key",
       name: "other-org-reader",
@@ -500,15 +517,42 @@ describeDb("bazaar api integration", () => {
     await expect(invalidResponse.json()).resolves.toEqual({ message: "apiUnauthorized" });
     expect(invalidResponse.status).toBe(401);
 
-    const otherOrgResponse = await getBazaarApiOrderGet(
+    const positiveResponse = await getBazaarApiOrderGet(
       new Request(`http://localhost/api/bazaar/v1/orders/${order.id}`, {
         method: "GET",
-        headers: { authorization: `Bearer ${otherToken}` },
+        headers: { authorization: `Bearer ${primaryToken}` },
       }),
       { params: { id: order.id } },
     );
-    await expect(otherOrgResponse.json()).resolves.toEqual({ error: "ORDER_NOT_FOUND" });
-    expect(otherOrgResponse.status).toBe(404);
+    expect(positiveResponse.status).toBe(200);
+    await expect(positiveResponse.json()).resolves.toMatchObject({ order: { id: order.id } });
+
+    const inaccessibleRequests = [
+      { identifier: "missing-order-id", token: primaryToken },
+      { identifier: order.id, token: sameOrgOtherStoreToken },
+      { identifier: order.id, token: otherOrgToken },
+    ];
+    const inaccessibleResponses = await Promise.all(
+      inaccessibleRequests.map(({ identifier, token }) =>
+        getBazaarApiOrderGet(
+          new Request(`http://localhost/api/bazaar/v1/orders/${identifier}`, {
+            method: "GET",
+            headers: { authorization: `Bearer ${token}` },
+          }),
+          { params: { id: identifier } },
+        ),
+      ),
+    );
+    const inaccessibleBodies = await Promise.all(
+      inaccessibleResponses.map((response) => response.json()),
+    );
+
+    expect(inaccessibleResponses.map((response) => response.status)).toEqual([404, 404, 404]);
+    expect(inaccessibleBodies).toEqual([
+      { error: "NOT_FOUND" },
+      { error: "NOT_FOUND" },
+      { error: "NOT_FOUND" },
+    ]);
   });
 
   it("applies stock movements for API orders and restores stock once on cancellation", async () => {
