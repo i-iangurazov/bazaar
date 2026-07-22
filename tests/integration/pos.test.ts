@@ -2026,8 +2026,8 @@ describeDb("pos", () => {
     });
   });
 
-  it("allows POS sale completion to drive stock negative", async () => {
-    const { org, store, product, cashierUser } = await seedBase({ plan: "BUSINESS" });
+  it("rejects restricted negative stock atomically and retries after replenishment", async () => {
+    const { org, store, product, cashierUser, adminUser } = await seedBase({ plan: "BUSINESS" });
 
     await prisma.product.update({
       where: { id: product.id },
@@ -2060,34 +2060,244 @@ describeDb("pos", () => {
     const sale = await caller.pos.sales.createDraft({ registerId: register.id });
     await caller.pos.sales.addLine({ saleId: sale.id, productId: product.id, qty: 2 });
 
+    await expect(
+      caller.pos.sales.complete({
+        saleId: sale.id,
+        idempotencyKey: "pos-sale-complete-negative-stock-1",
+        payments: [{ method: "CASH", amountKgs: 200 }],
+      }),
+    ).rejects.toMatchObject({ code: "CONFLICT", message: "insufficientStock" });
+
+    const [rejectedSale, rejectedSnapshot, rejectedMovements, rejectedPayments] = await Promise.all([
+      prisma.customerOrder.findUniqueOrThrow({ where: { id: sale.id } }),
+      prisma.inventorySnapshot.findUnique({
+        where: {
+          storeId_productId_variantKey: {
+            storeId: store.id,
+            productId: product.id,
+            variantKey: "BASE",
+          },
+        },
+      }),
+      prisma.stockMovement.findMany({
+        where: { type: StockMovementType.SALE, referenceId: sale.id },
+      }),
+      prisma.salePayment.findMany({ where: { customerOrderId: sale.id } }),
+    ]);
+    expect(rejectedSale.status).toBe("DRAFT");
+    expect(rejectedSnapshot).toBeNull();
+    expect(rejectedMovements).toHaveLength(0);
+    expect(rejectedPayments).toHaveLength(0);
+
+    await adjustStock({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 2,
+      reason: "replenish restricted POS retry",
+      idempotencyKey: "pos-negative-stock-replenish-1",
+      requestId: "pos-negative-stock-replenish-1",
+    });
     await caller.pos.sales.complete({
       saleId: sale.id,
       idempotencyKey: "pos-sale-complete-negative-stock-1",
       payments: [{ method: "CASH", amountKgs: 200 }],
     });
 
-    const snapshot = await prisma.inventorySnapshot.findUnique({
-      where: {
-        storeId_productId_variantKey: {
-          storeId: store.id,
-          productId: product.id,
-          variantKey: "BASE",
+    const [completedSale, snapshot, movements, payments] = await Promise.all([
+      prisma.customerOrder.findUniqueOrThrow({ where: { id: sale.id } }),
+      prisma.inventorySnapshot.findUniqueOrThrow({
+        where: {
+          storeId_productId_variantKey: {
+            storeId: store.id,
+            productId: product.id,
+            variantKey: "BASE",
+          },
         },
-      },
-    });
-    const movement = await prisma.stockMovement.findFirst({
-      where: {
-        storeId: store.id,
-        productId: product.id,
-        type: StockMovementType.SALE,
-        referenceId: sale.id,
-      },
-    });
+      }),
+      prisma.stockMovement.findMany({
+        where: { type: StockMovementType.SALE, referenceId: sale.id },
+      }),
+      prisma.salePayment.findMany({ where: { customerOrderId: sale.id } }),
+    ]);
 
     expect(store.allowNegativeStock).toBe(false);
-    expect(snapshot?.onHand).toBe(-2);
-    expect(snapshot?.allowNegativeStock).toBe(true);
-    expect(movement?.qtyDelta).toBe(-2);
+    expect(completedSale.status).toBe("COMPLETED");
+    expect(snapshot.onHand).toBe(0);
+    expect(snapshot.allowNegativeStock).toBe(false);
+    expect(movements).toHaveLength(1);
+    expect(movements[0]?.qtyDelta).toBe(-2);
+    expect(payments).toHaveLength(1);
+  });
+
+  it("allows POS sale completion to drive stock negative when the store permits it", async () => {
+    const { org, store, product, cashierUser } = await seedBase({
+      plan: "BUSINESS",
+      allowNegativeStock: true,
+    });
+    await prisma.product.update({ where: { id: product.id }, data: { basePriceKgs: 100 } });
+    const register = await prisma.posRegister.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Front Desk",
+        code: "FRONT",
+      },
+    });
+    const caller = createTestCaller({
+      id: cashierUser.id,
+      email: cashierUser.email,
+      role: cashierUser.role,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+    await caller.pos.shifts.open({
+      registerId: register.id,
+      openingCashKgs: 0,
+      idempotencyKey: "pos-open-permitted-negative-stock-1",
+    });
+    const sale = await caller.pos.sales.createDraft({ registerId: register.id });
+    await caller.pos.sales.addLine({ saleId: sale.id, productId: product.id, qty: 2 });
+
+    await caller.pos.sales.complete({
+      saleId: sale.id,
+      idempotencyKey: "pos-sale-complete-permitted-negative-stock-1",
+      payments: [{ method: PosPaymentMethod.CASH, amountKgs: 200 }],
+    });
+
+    const [completedSale, snapshot, movement, payments] = await Promise.all([
+      prisma.customerOrder.findUniqueOrThrow({ where: { id: sale.id } }),
+      prisma.inventorySnapshot.findUniqueOrThrow({
+        where: {
+          storeId_productId_variantKey: {
+            storeId: store.id,
+            productId: product.id,
+            variantKey: "BASE",
+          },
+        },
+      }),
+      prisma.stockMovement.findFirstOrThrow({
+        where: { type: StockMovementType.SALE, referenceId: sale.id },
+      }),
+      prisma.salePayment.findMany({ where: { customerOrderId: sale.id } }),
+    ]);
+
+    expect(store.allowNegativeStock).toBe(true);
+    expect(completedSale.status).toBe("COMPLETED");
+    expect(snapshot.onHand).toBe(-2);
+    expect(snapshot.allowNegativeStock).toBe(true);
+    expect(movement.qtyDelta).toBe(-2);
+    expect(payments).toHaveLength(1);
+  });
+
+  it("rejects a completed-sale quantity increase when restricted stock is exhausted", async () => {
+    const { org, store, product, cashierUser, adminUser } = await seedBase({
+      plan: "BUSINESS",
+      allowNegativeStock: false,
+    });
+    await prisma.product.update({ where: { id: product.id }, data: { basePriceKgs: 100 } });
+    await adjustStock({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 1,
+      reason: "seed completed-sale stock policy",
+      idempotencyKey: "pos-edit-stock-policy-seed-1",
+      requestId: "pos-edit-stock-policy-seed-1",
+    });
+    const register = await prisma.posRegister.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Front Desk",
+        code: "FRONT",
+      },
+    });
+    const caller = createTestCaller({
+      id: cashierUser.id,
+      email: cashierUser.email,
+      role: cashierUser.role,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+    await caller.pos.shifts.open({
+      registerId: register.id,
+      openingCashKgs: 0,
+      idempotencyKey: "pos-edit-stock-policy-open-1",
+    });
+    const sale = await caller.pos.sales.createDraft({ registerId: register.id });
+    const line = await caller.pos.sales.addLine({
+      saleId: sale.id,
+      productId: product.id,
+      qty: 1,
+    });
+    await caller.pos.sales.complete({
+      saleId: sale.id,
+      idempotencyKey: "pos-edit-stock-policy-complete-1",
+      payments: [{ method: PosPaymentMethod.CASH, amountKgs: 100 }],
+    });
+
+    await expect(
+      caller.pos.sales.editCompleted({
+        saleId: sale.id,
+        lines: [
+          {
+            lineId: line.id,
+            productId: product.id,
+            qty: 2,
+            unitPriceKgs: 100,
+          },
+        ],
+        reason: "policy regression control",
+        idempotencyKey: "pos-edit-stock-policy-increase-1",
+      }),
+    ).rejects.toMatchObject({ code: "CONFLICT", message: "insufficientStock" });
+
+    const [persistedSale, snapshot, saleMovements, payments, editAudits, editKeys] =
+      await Promise.all([
+        prisma.customerOrder.findUniqueOrThrow({
+          where: { id: sale.id },
+          include: { lines: true },
+        }),
+        prisma.inventorySnapshot.findUniqueOrThrow({
+          where: {
+            storeId_productId_variantKey: {
+              storeId: store.id,
+              productId: product.id,
+              variantKey: "BASE",
+            },
+          },
+        }),
+        prisma.stockMovement.findMany({
+          where: { type: StockMovementType.SALE, referenceId: sale.id },
+        }),
+        prisma.salePayment.findMany({ where: { customerOrderId: sale.id } }),
+        prisma.auditLog.count({
+          where: { action: "POS_SALE_EDIT", entity: "CustomerOrder", entityId: sale.id },
+        }),
+        prisma.idempotencyKey.count({
+          where: {
+            key: "pos-edit-stock-policy-increase-1",
+            route: "pos.sales.editCompleted",
+            userId: cashierUser.id,
+          },
+        }),
+      ]);
+
+    expect(persistedSale.status).toBe("COMPLETED");
+    expect(persistedSale.lines).toHaveLength(1);
+    expect(persistedSale.lines[0]?.qty).toBe(1);
+    expect(Number(persistedSale.totalKgs)).toBe(100);
+    expect(snapshot.onHand).toBe(0);
+    expect(snapshot.allowNegativeStock).toBe(false);
+    expect(saleMovements).toHaveLength(1);
+    expect(saleMovements[0]?.qtyDelta).toBe(-1);
+    expect(payments).toHaveLength(1);
+    expect(Number(payments[0]?.amountKgs)).toBe(100);
+    expect(editAudits).toBe(0);
+    expect(editKeys).toBe(0);
   });
 
   it("tracks discounted debt sales and settles debt into the active shift", async () => {

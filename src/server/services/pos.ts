@@ -4313,7 +4313,6 @@ export const completePosSale = async (input: {
               note: sale.number,
               actorId: input.actorId,
               organizationId: input.organizationId,
-              allowNegativeStock: true,
             });
           }
 
