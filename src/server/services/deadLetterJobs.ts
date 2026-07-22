@@ -6,11 +6,19 @@ import { retryJob, type JobPayload } from "@/server/jobs";
 
 export const listDeadLetterJobs = async (input: { organizationId: string }) =>
   prisma.deadLetterJob.findMany({
-    where: {
-      OR: [{ organizationId: input.organizationId }, { organizationId: null }],
-    },
+    where: { organizationId: input.organizationId },
     orderBy: { lastErrorAt: "desc" },
-    include: {
+    select: {
+      id: true,
+      organizationId: true,
+      jobName: true,
+      attempts: true,
+      lastError: true,
+      lastErrorAt: true,
+      resolvedAt: true,
+      resolvedById: true,
+      createdAt: true,
+      updatedAt: true,
       resolvedBy: { select: { id: true, name: true, email: true } },
     },
   });
@@ -22,12 +30,11 @@ export const retryDeadLetterJob = async (input: {
   requestId: string;
 }) =>
   prisma.$transaction(async (tx) => {
-    const job = await tx.deadLetterJob.findUnique({ where: { id: input.jobId } });
+    const job = await tx.deadLetterJob.findFirst({
+      where: { id: input.jobId, organizationId: input.organizationId },
+    });
     if (!job) {
       throw new AppError("jobNotFound", "NOT_FOUND", 404);
-    }
-    if (job.organizationId && job.organizationId !== input.organizationId) {
-      throw new AppError("forbidden", "FORBIDDEN", 403);
     }
     if (job.resolvedAt) {
       throw new AppError("jobAlreadyResolved", "CONFLICT", 409);
@@ -90,12 +97,11 @@ export const resolveDeadLetterJob = async (input: {
   requestId: string;
 }) =>
   prisma.$transaction(async (tx) => {
-    const job = await tx.deadLetterJob.findUnique({ where: { id: input.jobId } });
+    const job = await tx.deadLetterJob.findFirst({
+      where: { id: input.jobId, organizationId: input.organizationId },
+    });
     if (!job) {
       throw new AppError("jobNotFound", "NOT_FOUND", 404);
-    }
-    if (job.organizationId && job.organizationId !== input.organizationId) {
-      throw new AppError("forbidden", "FORBIDDEN", 403);
     }
     if (job.resolvedAt) {
       return job;
