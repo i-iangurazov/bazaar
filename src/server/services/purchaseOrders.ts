@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type { InventorySnapshot, Prisma } from "@prisma/client";
-import { PurchaseOrderStatus, StockMovementType } from "@prisma/client";
+import {
+  OperationRequestPrincipalType,
+  PurchaseOrderStatus,
+  Role,
+  StockMovementType,
+} from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
@@ -15,6 +20,13 @@ import { applyStockLotAdjustment } from "@/server/services/stockLots";
 import { resolveBaseQuantity } from "@/server/services/uom";
 import { recordFirstEvent } from "@/server/services/productEvents";
 import { resolveCurrencySnapshot } from "@/lib/currencyDisplay";
+import { assertUserCanAccessStore } from "@/server/services/storeAccess";
+import {
+  OPERATION_FAILURE_AMBIGUOUS,
+  OPERATION_FAILURE_SAFE_BEFORE_EFFECTS,
+  runOperationRequest,
+  type OperationFailureDecision,
+} from "@/server/services/operationRequests";
 
 const allowedTransitions: Record<PurchaseOrderStatus, PurchaseOrderStatus[]> = {
   DRAFT: [PurchaseOrderStatus.SUBMITTED, PurchaseOrderStatus.CANCELLED],
@@ -139,14 +151,35 @@ export type CreateDraftsFromReorderInput = {
   }[];
 };
 
-export const createPurchaseOrder = async (input: CreatePurchaseOrderInput) => {
-  const logger = getLogger(input.requestId);
-  let affectedProductIds: string[] = [];
-  let affectedStoreId = input.storeId;
-
+const createPurchaseOrderTx = async (
+  tx: Prisma.TransactionClient,
+  input: CreatePurchaseOrderInput,
+) => {
   assertUniqueLines(input.lines);
 
-  const result = await prisma.$transaction(async (tx) => {
+    const actor = await tx.user.findFirst({
+      where: {
+        id: input.actorId,
+        organizationId: input.organizationId,
+        isActive: true,
+        role: { in: [Role.ADMIN, Role.MANAGER] },
+      },
+      select: {
+        id: true,
+        organizationId: true,
+        role: true,
+        isOrgOwner: true,
+      },
+    });
+    if (!actor || !actor.organizationId) {
+      throw new AppError("forbidden", "FORBIDDEN", 403);
+    }
+    await assertUserCanAccessStore(
+      tx,
+      { ...actor, organizationId: actor.organizationId },
+      input.storeId,
+    );
+
     const store = await tx.store.findUnique({ where: { id: input.storeId } });
     if (!store) {
       throw new AppError("storeNotFound", "NOT_FOUND", 404);
@@ -252,9 +285,6 @@ export const createPurchaseOrder = async (input: CreatePurchaseOrderInput) => {
       }
     }
 
-    affectedProductIds = po.lines.map((line) => line.productId);
-    affectedStoreId = po.storeId;
-
     await writeAuditLog(tx, {
       organizationId: input.organizationId,
       actorId: input.actorId,
@@ -267,7 +297,15 @@ export const createPurchaseOrder = async (input: CreatePurchaseOrderInput) => {
     });
 
     return po;
-  });
+};
+
+type PurchaseOrderCreateResult = Awaited<ReturnType<typeof createPurchaseOrderTx>>;
+
+const dispatchPurchaseOrderCreated = async (
+  input: CreatePurchaseOrderInput,
+  result: PurchaseOrderCreateResult,
+) => {
+  const logger = getLogger(input.requestId);
 
   await recordFirstEvent({
     organizationId: input.organizationId,
@@ -282,17 +320,107 @@ export const createPurchaseOrder = async (input: CreatePurchaseOrderInput) => {
   });
 
   if (input.submit) {
-    for (const productId of affectedProductIds) {
+    for (const productId of new Set(result.lines.map((line) => line.productId))) {
       eventBus.publish({
         type: "inventory.updated",
-        payload: { storeId: affectedStoreId, productId },
+        payload: { storeId: result.storeId, productId },
       });
     }
   }
 
   logger.info({ poId: result.id, status: result.status }, "purchase order created");
+};
 
+export const createPurchaseOrder = async (input: CreatePurchaseOrderInput) => {
+  const result = await prisma.$transaction((tx) => createPurchaseOrderTx(tx, input));
+  await dispatchPurchaseOrderCreated(input, result);
   return result;
+};
+
+type PurchaseOrderCreateOperationResponse = Prisma.InputJsonObject & {
+  purchaseOrder: {
+    id: string;
+    storeId: string;
+    status: PurchaseOrderStatus;
+  };
+};
+
+const classifyPurchaseOrderCreateOperationFailure = (
+  error: unknown,
+): OperationFailureDecision => {
+  if (error instanceof AppError) {
+    return {
+      classification: OPERATION_FAILURE_SAFE_BEFORE_EFFECTS,
+      responseCode: error.message,
+      responseStatus: error.status,
+    };
+  }
+  return {
+    classification: OPERATION_FAILURE_AMBIGUOUS,
+    responseCode: "operationRequestFailed",
+    responseStatus: 500,
+  };
+};
+
+export const createPurchaseOrderOperation = async (
+  input: CreatePurchaseOrderInput & { idempotencyKey: string },
+) => {
+  let createdResult: PurchaseOrderCreateResult | null = null;
+  const operation = await runOperationRequest<PurchaseOrderCreateOperationResponse>(
+    {
+      organizationId: input.organizationId,
+      storeId: input.storeId,
+      scope: "purchaseOrders.create.v1",
+      principal: {
+        type: OperationRequestPrincipalType.AUTHENTICATED_USER,
+        id: input.actorId,
+      },
+      idempotencyKey: input.idempotencyKey,
+      payload: {
+        version: "v1",
+        value: {
+          supplierId: input.supplierId ?? null,
+          submit: input.submit ?? false,
+          lines: input.lines.map((line) => ({
+            productId: line.productId,
+            variantId: line.variantId ?? null,
+            qtyOrdered: line.qtyOrdered,
+            unitCost: line.unitCost ?? null,
+            unitId: line.unitId ?? null,
+            packId: line.packId ?? null,
+          })),
+        },
+      },
+      allowedResponsePaths: [
+        "purchaseOrder",
+        "purchaseOrder.id",
+        "purchaseOrder.storeId",
+        "purchaseOrder.status",
+      ],
+      classifyFailure: classifyPurchaseOrderCreateOperationFailure,
+    },
+    async (tx) => {
+      const result = await createPurchaseOrderTx(tx, input);
+      createdResult = result;
+      return {
+        response: {
+          purchaseOrder: {
+            id: result.id,
+            storeId: result.storeId,
+            status: result.status,
+          },
+        },
+        responseStatus: 200,
+        responseCode: "created",
+        resource: { type: "PurchaseOrder", id: result.id },
+      };
+    },
+  );
+
+  if (createdResult) {
+    await dispatchPurchaseOrderCreated(input, createdResult);
+  }
+  return operation;
 };
 
 export const createDraftsFromReorder = async (input: CreateDraftsFromReorderInput) => {

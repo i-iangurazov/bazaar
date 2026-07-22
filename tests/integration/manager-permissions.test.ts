@@ -257,6 +257,7 @@ describeDb("manager operational permissions", () => {
     ).resolves.toMatchObject({ status: StockCountStatus.APPLIED });
 
     const purchaseOrder = await caller.purchaseOrders.create({
+      idempotencyKey: "manager-purchase-order-create",
       storeId: store.id,
       supplierId: supplier.id,
       lines: [{ productId: product.id, qtyOrdered: 2, unitCost: 100 }],

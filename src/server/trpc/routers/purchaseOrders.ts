@@ -18,7 +18,7 @@ import {
   addPurchaseOrderLine,
   approvePurchaseOrder,
   cancelPurchaseOrder,
-  createPurchaseOrder,
+  createPurchaseOrderOperation,
   createDraftsFromReorder,
   receivePurchaseOrder,
   removePurchaseOrderLine,
@@ -196,6 +196,7 @@ export const purchaseOrdersRouter = router({
     .input(
       z.object({
         storeId: z.string(),
+        idempotencyKey: z.string().min(8),
         supplierId: z.string().optional().nullable(),
         lines: z
           .array(
@@ -215,16 +216,17 @@ export const purchaseOrdersRouter = router({
     .mutation(async ({ ctx, input }) => {
       try {
         await assertCommerceStoreAccess(ctx.prisma, ctx.user, input.storeId);
-        const po = await createPurchaseOrder({
+        const operation = await createPurchaseOrderOperation({
           organizationId: ctx.user.organizationId,
           storeId: input.storeId,
+          idempotencyKey: input.idempotencyKey,
           supplierId: input.supplierId ?? undefined,
           lines: input.lines,
           actorId: ctx.user.id,
           requestId: ctx.requestId,
           submit: input.submit,
         });
-        return { id: po.id, status: po.status };
+        return operation.response.purchaseOrder;
       } catch (error) {
         throw toTRPCError(error);
       }
