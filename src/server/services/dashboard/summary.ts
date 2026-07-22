@@ -13,7 +13,7 @@ import { TRPCError } from "@trpc/server";
 import { logProfileSection } from "@/server/profiling/perf";
 import { enrichRecentActivity } from "@/server/services/activity";
 import { buildReorderSuggestion } from "@/server/services/reorderSuggestions";
-import { defaultTimeZone } from "@/lib/timezone";
+import { defaultTimeZone, resolveBusinessDayBounds } from "@/lib/timezone";
 import {
   canAccessStore,
   listAccessibleStores,
@@ -383,14 +383,7 @@ export const getDashboardSummary = async ({
       scope: "dashboard.summary",
     });
   }
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const tomorrowStart = new Date(todayStart);
-  tomorrowStart.setDate(todayStart.getDate() + 1);
-  const yesterdayStart = new Date(todayStart);
-  yesterdayStart.setDate(todayStart.getDate() - 1);
-  const sevenDaysStart = new Date(todayStart);
-  sevenDaysStart.setDate(todayStart.getDate() - 6);
+  const { todayStart, tomorrowStart, yesterdayStart, sevenDaysStart } = resolveBusinessDayBounds();
 
   const lowStockCandidatesStartedAt = Date.now();
   const lowStockCandidates = await prisma.$queryRaw<
