@@ -107,7 +107,7 @@ describeDb("customer database", () => {
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
-  it("imports customers with organization-wide dedupe and shared visibility", async () => {
+  it("imports customers with store-scoped dedupe and isolated visibility", async () => {
     const { org, store, adminUser } = await seedBase({ plan: "BUSINESS" });
     const otherStore = await prisma.store.create({
       data: {
@@ -160,8 +160,8 @@ describeDb("customer database", () => {
 
     expect(result.summary).toMatchObject({
       rows: 6,
-      created: 2,
-      updated: 2,
+      created: 3,
+      updated: 1,
       skipped: 2,
       errors: 2,
     });
@@ -178,15 +178,23 @@ describeDb("customer database", () => {
       "bad@example.com",
       "existing@example.com",
       "new@example.com",
+      "other@example.com",
     ]);
     expect(storeCustomers.find((customer) => customer.email === "existing@example.com")?.phone).toBe(
       "+996700000001",
     );
     expect(otherStoreCustomers).toHaveLength(1);
-    expect(otherStoreCustomers[0]?.email).toBe("other@example.com");
+    expect(otherStoreCustomers[0]).toMatchObject({
+      email: "other@example.com",
+      name: "Other Store Existing",
+    });
+    expect(storeCustomers.find((customer) => customer.email === "other@example.com")).toMatchObject({
+      storeId: store.id,
+      name: "Other Store Copy",
+    });
   });
 
-  it("auto-creates customers from manual and bazaar API orders", async () => {
+  it("auto-creates store-local customers from manual and bazaar API orders", async () => {
     const { org, store, product, adminUser } = await seedBase();
     const otherStore = await prisma.store.create({
       data: {
@@ -252,7 +260,16 @@ describeDb("customer database", () => {
       "Osh, Lenin 2",
     );
     expect(storeCustomers.every((customer) => customer.source === CustomerSource.ORDER)).toBe(true);
-    expect(otherStoreCustomers).toHaveLength(0);
+    expect(otherStoreCustomers).toHaveLength(1);
+    expect(otherStoreCustomers[0]).toMatchObject({
+      storeId: otherStore.id,
+      email: "customer@example.com",
+      name: "Other Store Same Email",
+      source: CustomerSource.ORDER,
+    });
+    expect(otherStoreCustomers[0]?.id).not.toBe(
+      storeCustomers.find((customer) => customer.email === "customer@example.com")?.id,
+    );
   });
 
   it("uses a verified custom sender as the only primary sender instead of the Bazaar fallback", async () => {
