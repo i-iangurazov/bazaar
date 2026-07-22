@@ -42,6 +42,7 @@ import { setDefaultMinStock, setMinStock } from "@/server/services/reorderPolici
 import {
   assertUserCanAccessStore,
   productStoreAssignmentWhere,
+  resolveAccessibleStoreIds,
 } from "@/server/services/storeAccess";
 import { WRITE_OFF_REASONS } from "@/lib/inventory/writeOff";
 
@@ -737,9 +738,11 @@ export const inventoryRouter = router({
       if (!snapshotIds.length) {
         return [];
       }
+      const accessibleStoreIds = await resolveAccessibleStoreIds(ctx.prisma, ctx.user);
       const rows = await ctx.prisma.inventorySnapshot.findMany({
         where: {
           id: { in: snapshotIds },
+          storeId: { in: accessibleStoreIds },
           store: { organizationId: ctx.user.organizationId },
           product: { isDeleted: false },
         },

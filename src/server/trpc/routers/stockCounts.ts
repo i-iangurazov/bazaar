@@ -1,9 +1,9 @@
-import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { managerProcedure, protectedProcedure, rateLimit, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
 import { assertFeatureEnabled } from "@/server/services/planLimits";
+import { assertUserCanAccessStore } from "@/server/services/storeAccess";
 import {
   addOrUpdateLineByScan,
   applyStockCount,
@@ -40,9 +40,10 @@ export const stockCountsRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const store = await ctx.prisma.store.findUnique({ where: { id: input.storeId } });
-      if (!store || store.organizationId !== ctx.user.organizationId) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "storeAccessDenied" });
+      try {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+      } catch (error) {
+        throw toTRPCError(error);
       }
 
       return ctx.prisma.stockCount.findMany({
@@ -78,6 +79,11 @@ export const stockCountsRouter = router({
       if (!count) {
         return null;
       }
+      try {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, count.storeId);
+      } catch (error) {
+        throw toTRPCError(error);
+      }
 
       const totalLines = count.lines.length;
       const varianceLines = count.lines.filter((line) => line.deltaQty !== 0);
@@ -99,6 +105,7 @@ export const stockCountsRouter = router({
     .input(z.object({ storeId: z.string(), notes: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
         return await createStockCount({
           storeId: input.storeId,
           notes: input.notes,
@@ -125,6 +132,7 @@ export const stockCountsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
         return await addOrUpdateLineByScan({
           stockCountId: input.stockCountId,
           storeId: input.storeId,
@@ -145,6 +153,13 @@ export const stockCountsRouter = router({
     .input(z.object({ lineId: z.string(), countedQty: z.number().int().min(0) }))
     .mutation(async ({ ctx, input }) => {
       try {
+        const line = await ctx.prisma.stockCountLine.findFirst({
+          where: { id: input.lineId, stockCount: { organizationId: ctx.user.organizationId } },
+          select: { storeId: true },
+        });
+        if (line) {
+          await assertUserCanAccessStore(ctx.prisma, ctx.user, line.storeId);
+        }
         return await setLineCountedQty({
           lineId: input.lineId,
           countedQty: input.countedQty,
@@ -161,6 +176,13 @@ export const stockCountsRouter = router({
     .input(z.object({ lineId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       try {
+        const line = await ctx.prisma.stockCountLine.findFirst({
+          where: { id: input.lineId, stockCount: { organizationId: ctx.user.organizationId } },
+          select: { storeId: true },
+        });
+        if (line) {
+          await assertUserCanAccessStore(ctx.prisma, ctx.user, line.storeId);
+        }
         return await removeLine({
           lineId: input.lineId,
           actorId: ctx.user.id,
@@ -176,6 +198,13 @@ export const stockCountsRouter = router({
     .input(z.object({ stockCountId: z.string(), idempotencyKey: z.string().min(8) }))
     .mutation(async ({ ctx, input }) => {
       try {
+        const count = await ctx.prisma.stockCount.findFirst({
+          where: { id: input.stockCountId, organizationId: ctx.user.organizationId },
+          select: { storeId: true },
+        });
+        if (count) {
+          await assertUserCanAccessStore(ctx.prisma, ctx.user, count.storeId);
+        }
         return await applyStockCount({
           stockCountId: input.stockCountId,
           actorId: ctx.user.id,
@@ -192,6 +221,13 @@ export const stockCountsRouter = router({
     .input(z.object({ stockCountId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       try {
+        const count = await ctx.prisma.stockCount.findFirst({
+          where: { id: input.stockCountId, organizationId: ctx.user.organizationId },
+          select: { storeId: true },
+        });
+        if (count) {
+          await assertUserCanAccessStore(ctx.prisma, ctx.user, count.storeId);
+        }
         return await cancelStockCount({
           stockCountId: input.stockCountId,
           actorId: ctx.user.id,

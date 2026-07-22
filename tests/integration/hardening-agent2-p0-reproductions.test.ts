@@ -91,7 +91,7 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
     await resetDatabase();
   });
 
-  it("HARD-A2-001 exposes and mutates Store B count, lot, and snapshot data for a Store-A-only manager", async () => {
+  it("HARD-A2-001 rejects Store B count, lot, and snapshot access without side effects", async () => {
     const { org, storeB, productB, managerUser, snapshotB } = await seedTwoStoreScope();
     const countB = await prisma.stockCount.create({
       data: {
@@ -125,25 +125,35 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
     });
     const caller = callerFor(managerUser);
 
-    const [listed, detail, lots, expiring, productIds] = await Promise.all([
-      caller.stockCounts.list({ storeId: storeB.id }),
-      caller.stockCounts.get({ stockCountId: countB.id }),
-      caller.stockLots.byProduct({ storeId: storeB.id, productId: productB.id }),
-      caller.stockLots.expiringSoon({ storeId: storeB.id, days: 30 }),
-      caller.inventory.productIdsBySnapshotIds({ snapshotIds: [snapshotB.id] }),
-    ]);
-
-    expect(listed.map((row) => row.id)).toContain(countB.id);
-    expect(detail?.lines.map((row) => row.id)).toContain(lineB.id);
-    expect(lots.map((row) => row.id)).toContain(lotB.id);
-    expect(expiring.map((row) => row.id)).toContain(lotB.id);
-    expect(productIds).toEqual([productB.id]);
-
-    await caller.stockCounts.setLineCountedQty({ lineId: lineB.id, countedQty: 8 });
-    await caller.stockCounts.applyCount({
-      stockCountId: countB.id,
-      idempotencyKey: `a2-001-${randomUUID()}`,
+    await expect(caller.stockCounts.list({ storeId: storeB.id })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: "storeAccessDenied",
     });
+    await expect(caller.stockCounts.get({ stockCountId: countB.id })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: "storeAccessDenied",
+    });
+    await expect(
+      caller.stockLots.byProduct({ storeId: storeB.id, productId: productB.id }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN", message: "storeAccessDenied" });
+    await expect(caller.stockLots.expiringSoon({ storeId: storeB.id, days: 30 })).rejects.toMatchObject(
+      { code: "FORBIDDEN", message: "storeAccessDenied" },
+    );
+    await expect(
+      caller.inventory.productIdsBySnapshotIds({ snapshotIds: [snapshotB.id] }),
+    ).resolves.toEqual([]);
+    await expect(
+      caller.stockCounts.setLineCountedQty({ lineId: lineB.id, countedQty: 8 }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN", message: "storeAccessDenied" });
+    await expect(
+      caller.stockCounts.removeLine({ lineId: lineB.id }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN", message: "storeAccessDenied" });
+    await expect(
+      caller.stockCounts.applyCount({
+        stockCountId: countB.id,
+        idempotencyKey: `a2-001-${randomUUID()}`,
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN", message: "storeAccessDenied" });
 
     const [afterLine, afterCount, afterSnapshot, movements] = await Promise.all([
       prisma.stockCountLine.findUniqueOrThrow({ where: { id: lineB.id } }),
@@ -153,11 +163,63 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
         where: { referenceType: "STOCK_COUNT", referenceId: countB.id },
       }),
     ]);
-    expect(afterLine.countedQty).toBe(8);
-    expect(afterCount.status).toBe("APPLIED");
-    expect(afterSnapshot.onHand).toBe(8);
-    expect(movements).toHaveLength(1);
-    expect(movements[0]?.qtyDelta).toBe(3);
+    expect(afterLine.countedQty).toBe(7);
+    expect(afterCount.status).toBe("IN_PROGRESS");
+    expect(afterSnapshot.onHand).toBe(5);
+    expect(movements).toHaveLength(0);
+    expect(await prisma.stockLot.findUnique({ where: { id: lotB.id } })).not.toBeNull();
+  });
+
+  it("HARD-A2-001 preserves count and lot access in an assigned store and hides cross-org IDs", async () => {
+    const { org, store, product, managerUser } = await seedBase({ plan: "BUSINESS" });
+    await prisma.store.update({ where: { id: store.id }, data: { trackExpiryLots: true } });
+    const snapshot = await prisma.inventorySnapshot.create({
+      data: { storeId: store.id, productId: product.id, variantKey: "BASE", onHand: 4 },
+    });
+    const lot = await prisma.stockLot.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        productId: product.id,
+        variantKey: "BASE",
+        expiryDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        onHandQty: 4,
+      },
+    });
+    const caller = callerFor(managerUser);
+    const count = await caller.stockCounts.create({ storeId: store.id, notes: "allowed" });
+    const line = await caller.stockCounts.addOrUpdateLineByScan({
+      stockCountId: count.id,
+      storeId: store.id,
+      barcodeOrQuery: product.sku,
+      mode: "set",
+      countedQty: 4,
+    });
+
+    await expect(caller.stockCounts.list({ storeId: store.id })).resolves.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: count.id })]),
+    );
+    await expect(caller.stockCounts.get({ stockCountId: count.id })).resolves.toMatchObject({
+      id: count.id,
+    });
+    await expect(
+      caller.stockLots.byProduct({ storeId: store.id, productId: product.id }),
+    ).resolves.toEqual(expect.arrayContaining([expect.objectContaining({ id: lot.id })]));
+    await expect(
+      caller.inventory.productIdsBySnapshotIds({ snapshotIds: [snapshot.id] }),
+    ).resolves.toEqual([product.id]);
+    await expect(
+      caller.stockCounts.setLineCountedQty({ lineId: line.id, countedQty: 5 }),
+    ).resolves.toMatchObject({ countedQty: 5 });
+
+    const betaOrg = await prisma.organization.create({ data: { name: "Count Beta" } });
+    const betaStore = await prisma.store.create({
+      data: { organizationId: betaOrg.id, name: "Beta Store", code: "COUNT-BETA" },
+    });
+    const betaCount = await prisma.stockCount.create({
+      data: { organizationId: betaOrg.id, storeId: betaStore.id, code: "SC-BETA" },
+    });
+    await expect(caller.stockCounts.get({ stockCountId: betaCount.id })).resolves.toBeNull();
   });
 
   it("HARD-A2-002 lets a Store-A-only manager mutate a Store-B-only product and price", async () => {
