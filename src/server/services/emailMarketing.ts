@@ -14,8 +14,9 @@ import {
   EmailAutomationStatus,
   EmailAutomationTrigger,
   EmailDeliveryErrorCategory,
+  Prisma,
 } from "@prisma/client";
-import type { CustomerOrderStatus, CustomerSource, Prisma } from "@prisma/client";
+import type { CustomerOrderStatus, CustomerSource } from "@prisma/client";
 
 import { formatKgsMoney } from "@/lib/currencyDisplay";
 import { prisma } from "@/server/db/prisma";
@@ -892,6 +893,8 @@ export const unsubscribeCustomerFromEmailMarketing = async (input: {
     where: { id: input.customerId },
     select: {
       id: true,
+      organizationId: true,
+      storeId: true,
       email: true,
       emailMarketingUnsubscribedAt: true,
     },
@@ -899,14 +902,54 @@ export const unsubscribeCustomerFromEmailMarketing = async (input: {
   if (!customer || normalizeRecipientEmail(customer.email) !== email) {
     throw new AppError("customerNotFound", "NOT_FOUND", 404);
   }
-  if (customer.emailMarketingUnsubscribedAt) {
-    return { status: "already_unsubscribed" as const, email };
-  }
-  await prisma.customer.update({
-    where: { id: customer.id },
-    data: { emailMarketingUnsubscribedAt: new Date() },
+  const unsubscribedAt = new Date();
+  const status = await prisma.$transaction(async (tx) => {
+    const matching = await tx.$queryRaw<
+      Array<{ id: string; email: string | null; emailMarketingUnsubscribedAt: Date | null }>
+    >(Prisma.sql`
+      SELECT "id", "email", "emailMarketingUnsubscribedAt"
+      FROM "Customer"
+      WHERE "organizationId" = ${customer.organizationId}
+        AND "storeId" = ${customer.storeId}
+        AND lower(btrim("email")) = ${email}
+      FOR UPDATE
+    `);
+    await tx.customer.updateMany({
+      where: { id: { in: matching.map((duplicate) => duplicate.id) } },
+      data: { emailMarketingUnsubscribedAt: unsubscribedAt },
+    });
+    await tx.emailMarketingSuppression.upsert({
+      where: {
+        organizationId_storeId_email: {
+          organizationId: customer.organizationId,
+          storeId: customer.storeId,
+          email,
+        },
+      },
+      create: {
+        organizationId: customer.organizationId,
+        storeId: customer.storeId,
+        email,
+        provider: "bazaar",
+        source: "UNSUBSCRIBED",
+        reason: "customerUnsubscribeLink",
+        active: true,
+        suppressedAt: unsubscribedAt,
+      },
+      update: {
+        provider: "bazaar",
+        source: "UNSUBSCRIBED",
+        reason: "customerUnsubscribeLink",
+        active: true,
+        suppressedAt: unsubscribedAt,
+        clearedAt: null,
+      },
+    });
+    return matching.every((duplicate) => duplicate.emailMarketingUnsubscribedAt)
+      ? "already_unsubscribed" as const
+      : "unsubscribed" as const;
   });
-  return { status: "unsubscribed" as const, email };
+  return { status, email };
 };
 
 const getStoreBrand = async (input: { organizationId: string; storeId: string }) => {
@@ -1148,7 +1191,10 @@ const buildAudienceWhere = (
   return base;
 };
 
-const summarizeAudience = (customers: RecipientRow[]) => {
+const summarizeAudience = (
+  customers: RecipientRow[],
+  suppressedEmails: ReadonlySet<string> = new Set(),
+) => {
   const seenEmails = new Set<string>();
   const recipients: RecipientRow[] = [];
   const summary: AudienceSummary = {
@@ -1165,7 +1211,7 @@ const summarizeAudience = (customers: RecipientRow[]) => {
       summary.excludedNoEmail += 1;
       continue;
     }
-    if (customer.emailMarketingUnsubscribedAt) {
+    if (customer.emailMarketingUnsubscribedAt || suppressedEmails.has(email)) {
       summary.excludedUnsubscribed += 1;
       continue;
     }
@@ -1191,22 +1237,35 @@ const resolveCampaignRecipients = async (input: {
     input.campaign.storeId,
     input.campaign.audience,
   );
-  const customers = await prisma.customer.findMany({
-    where,
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      phone: true,
-      source: true,
-      createdAt: true,
-      orderCount: true,
-      emailMarketingUnsubscribedAt: true,
-    },
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    take: maxCampaignRecipients,
-  });
-  return summarizeAudience(customers);
+  const [customers, suppressions] = await Promise.all([
+    prisma.customer.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        source: true,
+        createdAt: true,
+        orderCount: true,
+        emailMarketingUnsubscribedAt: true,
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: maxCampaignRecipients,
+    }),
+    prisma.emailMarketingSuppression.findMany({
+      where: {
+        organizationId: input.user.organizationId,
+        storeId: input.campaign.storeId,
+        active: true,
+      },
+      select: { email: true },
+    }),
+  ]);
+  return summarizeAudience(
+    customers,
+    new Set(suppressions.map((suppression) => normalizeRecipientEmail(suppression.email))),
+  );
 };
 
 export const getEmailMarketingAudiencePreview = async (input: {
@@ -4283,7 +4342,7 @@ export const listEmailCampaigns = async (input: {
   limit?: number;
 }) => {
   await assertUserCanAccessStore(prisma, input.user, input.storeId);
-  return prisma.emailCampaign.findMany({
+  const campaigns = await prisma.emailCampaign.findMany({
     where: {
       organizationId: input.user.organizationId,
       storeId: input.storeId,
@@ -4292,10 +4351,74 @@ export const listEmailCampaigns = async (input: {
     include: {
       createdBy: { select: { name: true, email: true } },
       senderIdentity: { select: { id: true, displayName: true, fromEmail: true, status: true } },
+      _count: {
+        select: {
+          recipients: {
+            where: {
+              status: EmailCampaignRecipientStatus.FAILED,
+              normalizedErrorCategory: {
+                in: [
+                  EmailDeliveryErrorCategory.PROVIDER_TIMEOUT,
+                  EmailDeliveryErrorCategory.RATE_LIMIT,
+                  EmailDeliveryErrorCategory.PROVIDER_TEMPORARY,
+                  EmailDeliveryErrorCategory.RECIPIENT_TEMPORARY,
+                ],
+              },
+              OR: [
+                { providerOperationKey: null },
+                { providerOperationStartedAt: { gt: new Date(Date.now() - 23 * 60 * 60 * 1_000) } },
+              ],
+            },
+          },
+        },
+      },
     },
     orderBy: { createdAt: "desc" },
     take: Math.min(50, Math.max(1, input.limit ?? 20)),
   });
+  return campaigns.map(({ _count, ...campaign }) => ({
+    ...campaign,
+    retryableFailedCount: _count.recipients,
+  }));
+};
+
+export const exportEmailCampaignFailedRecipients = async (input: {
+  user: StoreAccessUser;
+  campaignId: string;
+}) => {
+  const campaign = await findAccessibleEmailCampaign(input);
+  const recipients = await prisma.emailCampaignRecipient.findMany({
+    where: {
+      campaignId: campaign.id,
+      status: {
+        in: [
+          EmailCampaignRecipientStatus.BOUNCED,
+          EmailCampaignRecipientStatus.DROPPED,
+          EmailCampaignRecipientStatus.SUPPRESSED,
+          EmailCampaignRecipientStatus.COMPLAINED,
+          EmailCampaignRecipientStatus.FAILED,
+        ],
+      },
+    },
+    select: {
+      email: true,
+      status: true,
+      normalizedErrorCategory: true,
+      providerStatus: true,
+      providerReason: true,
+      attemptCount: true,
+      failedAt: true,
+      customer: { select: { name: true } },
+    },
+    orderBy: [{ status: "asc" }, { email: "asc" }],
+    take: 10_000,
+  });
+  return {
+    campaignId: campaign.id,
+    exportedAt: new Date(),
+    truncated: recipients.length === 10_000,
+    recipients,
+  };
 };
 
 export const duplicateEmailCampaign = async (input: {
@@ -4424,8 +4547,14 @@ export const getEmailCampaignDetail = async (input: {
   user: StoreAccessUser;
   campaignId: string;
   recipientStatus?: EmailCampaignRecipientStatus | null;
-  recipientLimit?: number | null;
+  recipientPage?: number | null;
+  recipientPageSize?: number | null;
 }) => {
+  const recipientPage = Math.max(1, Math.trunc(input.recipientPage ?? 1));
+  const recipientPageSize = Math.min(
+    200,
+    Math.max(1, Math.trunc(input.recipientPageSize ?? 100)),
+  );
   const campaign = await prisma.emailCampaign.findFirst({
     where: {
       id: input.campaignId,
@@ -4476,7 +4605,8 @@ export const getEmailCampaignDetail = async (input: {
           customer: { select: { id: true, name: true } },
         },
         orderBy: [{ status: "asc" }, { createdAt: "asc" }],
-        take: Math.min(500, Math.max(1, Math.trunc(input.recipientLimit ?? 200))),
+        skip: (recipientPage - 1) * recipientPageSize,
+        take: recipientPageSize,
       },
     },
   });
@@ -4484,6 +4614,12 @@ export const getEmailCampaignDetail = async (input: {
     throw new AppError("emailCampaignNotFound", "NOT_FOUND", 404);
   }
   await assertUserCanAccessStore(prisma, input.user, campaign.storeId);
+  const recipientTotal = await prisma.emailCampaignRecipient.count({
+    where: {
+      campaignId: campaign.id,
+      ...(input.recipientStatus ? { status: input.recipientStatus } : {}),
+    },
+  });
   const campaignInput = campaignRecordToInput(campaign);
   const productsById = await loadEmailMarketingProductsByIds({
     organizationId: campaign.organizationId,
@@ -4498,7 +4634,16 @@ export const getEmailCampaignDetail = async (input: {
     recipient: { name: "клиент" },
     baseUrl: getPublicAppBaseUrl(),
   });
-  return { campaign, rendered };
+  return {
+    campaign,
+    rendered,
+    recipientPage: {
+      page: recipientPage,
+      pageSize: recipientPageSize,
+      total: recipientTotal,
+      pageCount: Math.max(1, Math.ceil(recipientTotal / recipientPageSize)),
+    },
+  };
 };
 
 const defaultAutomationBlocks = (

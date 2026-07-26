@@ -4,6 +4,7 @@ import {
   canRetryEmailProviderOperation,
   canonicalEmailEventTypeForProviderLookup,
   isEmailProviderOperationExpired,
+  isEmailReconciliationExhausted,
 } from "@/server/services/emailCampaignDeliveryState";
 
 describe("email campaign durable provider operations", () => {
@@ -44,6 +45,27 @@ describe("email campaign durable provider operations", () => {
       canRetryEmailProviderOperation({
         providerOperationKey: null,
         providerOperationStartedAt: null,
+        now,
+      }),
+    ).toBe(true);
+  });
+
+  it("terminates repeated unknown, transient, or deferred reconciliation", () => {
+    const now = new Date("2026-07-27T12:00:00.000Z");
+    for (const failureKind of ["unknown", "transient", "deferred"] as const) {
+      expect(
+        isEmailReconciliationExhausted({
+          nextAttempt: 8,
+          lifecycleStartedAt: new Date("2026-07-27T11:00:00.000Z"),
+          now,
+        }),
+        failureKind,
+      ).toBe(true);
+    }
+    expect(
+      isEmailReconciliationExhausted({
+        nextAttempt: 1,
+        lifecycleStartedAt: new Date("2026-07-20T12:00:00.000Z"),
         now,
       }),
     ).toBe(true);

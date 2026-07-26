@@ -82,6 +82,8 @@ SET "status" = (
       THEN 'COMPLAINED'
     WHEN lower(COALESCE("providerStatus", '')) IN ('suppressed', 'email.suppressed')
       THEN 'SUPPRESSED'
+    WHEN lower(COALESCE("providerStatus", '')) IN ('dropped', 'email.dropped')
+      THEN 'DROPPED'
     WHEN "bouncedAt" IS NOT NULL OR lower(COALESCE("providerStatus", '')) IN ('bounced', 'email.bounced')
       THEN 'BOUNCED'
     WHEN "deliveredAt" IS NOT NULL OR lower(COALESCE("providerStatus", '')) IN ('delivered', 'opened', 'clicked', 'email.delivered', 'email.opened', 'email.clicked')
@@ -89,7 +91,10 @@ SET "status" = (
     WHEN lower(COALESCE("providerStatus", '')) IN ('delivery_delayed', 'deferred', 'email.delivery_delayed', 'email.deferred')
       THEN 'DEFERRED'
     WHEN "status"::text = 'PENDING' THEN 'QUEUED'
-    WHEN "status"::text = 'SKIPPED' AND lower(COALESCE("errorMessage", '')) LIKE '%unsubscrib%'
+    WHEN "status"::text = 'SKIPPED' AND (
+      lower(COALESCE("errorMessage", '')) LIKE '%unsubscrib%' OR
+      lower(COALESCE("errorMessage", '')) LIKE '%suppress%'
+    )
       THEN 'SUPPRESSED'
     WHEN "status"::text IN ('FAILED', 'SKIPPED') OR lower(COALESCE("providerStatus", '')) IN ('failed', 'email.failed')
       THEN 'FAILED'
@@ -130,6 +135,28 @@ SET
 ALTER TABLE "EmailCampaignRecipient"
   ALTER COLUMN "sendOperationKey" SET NOT NULL,
   ALTER COLUMN "status" SET DEFAULT 'QUEUED';
+
+-- A campaign/store tenant mismatch cannot be repaired safely because both the
+-- audience and sender domain are store-scoped. Fail before suppression backfill.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM "EmailCampaign" campaign
+    JOIN "Store" store ON store."id" = campaign."storeId"
+    WHERE campaign."organizationId" <> store."organizationId"
+  ) THEN
+    RAISE EXCEPTION 'email marketing migration blocked: EmailCampaign organization/store tenant mismatch';
+  END IF;
+END $$;
+
+-- Campaign ownership is authoritative. Repair legacy denormalized organization IDs
+-- before enforcing scoped webhook/event behavior.
+UPDATE "EmailCampaignRecipient" recipient
+SET "organizationId" = campaign."organizationId"
+FROM "EmailCampaign" campaign
+WHERE recipient."campaignId" = campaign."id"
+  AND recipient."organizationId" <> campaign."organizationId";
 
 -- A provider message must identify exactly one recipient. Preserve the oldest
 -- mapping and turn any pre-existing duplicate mapping into an explicit failure.
@@ -240,6 +267,59 @@ ALTER TABLE "EmailMarketingSuppression"
     FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
   ADD CONSTRAINT "EmailMarketingSuppression_storeId_fkey"
     FOREIGN KEY ("storeId") REFERENCES "Store"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+ALTER TABLE "EmailMarketingSuppression"
+  ADD CONSTRAINT "EmailMarketingSuppression_normalized_email"
+  CHECK ("email" = lower(btrim("email")));
+
+-- Seed future-campaign suppression from terminal legacy provider outcomes. Campaign
+-- organization/store are authoritative and email keys are normalized/deduplicated.
+INSERT INTO "EmailMarketingSuppression" (
+  "id",
+  "organizationId",
+  "storeId",
+  "email",
+  "provider",
+  "source",
+  "reason",
+  "originProviderEventId",
+  "active",
+  "suppressedAt",
+  "createdAt",
+  "updatedAt"
+)
+SELECT DISTINCT ON (campaign."organizationId", campaign."storeId", lower(btrim(recipient."email")))
+  'legacy_' || md5(campaign."organizationId" || ':' || campaign."storeId" || ':' || lower(btrim(recipient."email"))),
+  campaign."organizationId",
+  campaign."storeId",
+  lower(btrim(recipient."email")),
+  recipient."provider",
+  CASE
+    WHEN recipient."status"::text = 'COMPLAINED' THEN 'COMPLAINED'
+    WHEN recipient."status"::text = 'SUPPRESSED' THEN 'SUPPRESSED'
+    ELSE 'BOUNCED'
+  END,
+  COALESCE(recipient."providerReason", recipient."errorMessage", recipient."providerStatus"),
+  recipient."lastProviderEventId",
+  true,
+  COALESCE(recipient."complainedAt", recipient."bouncedAt", recipient."terminalAt", recipient."updatedAt"),
+  CURRENT_TIMESTAMP,
+  CURRENT_TIMESTAMP
+FROM "EmailCampaignRecipient" recipient
+JOIN "EmailCampaign" campaign ON campaign."id" = recipient."campaignId"
+WHERE recipient."status"::text IN ('COMPLAINED', 'BOUNCED', 'SUPPRESSED')
+  AND btrim(recipient."email") <> ''
+ORDER BY
+  campaign."organizationId",
+  campaign."storeId",
+  lower(btrim(recipient."email")),
+  CASE recipient."status"::text
+    WHEN 'COMPLAINED' THEN 1
+    WHEN 'SUPPRESSED' THEN 2
+    ELSE 3
+  END,
+  recipient."updatedAt" DESC
+ON CONFLICT ("organizationId", "storeId", "email") DO NOTHING;
 
 -- Campaign counters are an exclusive partition of recipient rows. Keep sentCount as
 -- the backwards-compatible cumulative accepted counter.

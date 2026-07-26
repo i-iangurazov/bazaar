@@ -21,7 +21,7 @@ const secureCompare = (actual: string, expected: string) => {
   return actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer);
 };
 
-const verifyResendSignature = (input: {
+export const verifyResendSignature = (input: {
   payload: string;
   headers: Headers;
   secret: string;

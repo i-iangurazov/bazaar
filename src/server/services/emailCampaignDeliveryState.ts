@@ -207,6 +207,34 @@ export const processEmailProviderRecipientEvent = async (input: {
       where: { id: locked[0]!.id },
       include: { campaign: { select: { id: true, organizationId: true, storeId: true } } },
     });
+    if (recipient.organizationId !== recipient.campaign.organizationId) {
+      await tx.emailCampaignRecipientEvent.createMany({
+        data: [{
+          organizationId: recipient.campaign.organizationId,
+          campaignId: recipient.campaignId,
+          recipientId: recipient.id,
+          provider,
+          eventIdentity,
+          providerEventId: input.providerEventId ?? null,
+          providerMessageId: input.providerMessageId,
+          eventType: input.eventType.slice(0, 100),
+          eventAt: input.eventAt,
+          statusBefore: recipient.status,
+          statusAfter: recipient.status,
+          applied: false,
+          ignoredReason: "recipient_organization_mismatch",
+          providerReason: boundedText(input.providerReason, 1_000),
+          payloadJson: sanitizedProviderPayload(input.payload) ?? Prisma.JsonNull,
+        }],
+        skipDuplicates: true,
+      });
+      return {
+        processed: false as const,
+        reason: "recipient_organization_mismatch" as const,
+        campaignId: recipient.campaignId,
+        recipientId: recipient.id,
+      };
+    }
     const campaignTag = providerTag(input.payload, "campaign_id");
     const storeTag = providerTag(input.payload, "store_id");
     if (
@@ -229,7 +257,7 @@ export const processEmailProviderRecipientEvent = async (input: {
     const inserted = await tx.emailCampaignRecipientEvent.createMany({
       data: [
         {
-          organizationId: recipient.organizationId,
+          organizationId: recipient.campaign.organizationId,
           campaignId: recipient.campaignId,
           recipientId: recipient.id,
           provider,
@@ -298,13 +326,13 @@ export const processEmailProviderRecipientEvent = async (input: {
         await tx.emailMarketingSuppression.upsert({
           where: {
             organizationId_storeId_email: {
-              organizationId: recipient.organizationId,
+              organizationId: recipient.campaign.organizationId,
               storeId: recipient.campaign.storeId,
               email: recipient.email.trim().toLowerCase(),
             },
           },
           create: {
-            organizationId: recipient.organizationId,
+            organizationId: recipient.campaign.organizationId,
             storeId: recipient.campaign.storeId,
             email: recipient.email.trim().toLowerCase(),
             provider,
@@ -381,6 +409,20 @@ const reconciliationRetryAt = (attempt: number, minimumDelayMs = 0) => {
   return new Date(Date.now() + Math.max(minimumDelayMs, delayMinutes * 60 * 1_000));
 };
 
+export const EMAIL_RECONCILIATION_MAX_ATTEMPTS = 8;
+export const EMAIL_RECONCILIATION_MAX_AGE_MS = 72 * 60 * 60 * 1_000;
+
+export const isEmailReconciliationExhausted = (input: {
+  nextAttempt: number;
+  lifecycleStartedAt: Date;
+  now: Date;
+  maxAttempts?: number;
+  maxAgeMs?: number;
+}) =>
+  input.nextAttempt >= (input.maxAttempts ?? EMAIL_RECONCILIATION_MAX_ATTEMPTS) ||
+  input.lifecycleStartedAt.getTime() <=
+    input.now.getTime() - (input.maxAgeMs ?? EMAIL_RECONCILIATION_MAX_AGE_MS);
+
 const wait = (milliseconds: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
 
@@ -416,11 +458,45 @@ export const reconcileEmailCampaignRecipients = async (input?: {
   let requeued = 0;
   let failed = 0;
   let deferred = 0;
+  let exhausted = 0;
   const campaignIds = new Set<string>();
   let lastProviderLookupStartedAt = 0;
 
   for (const recipient of recipients) {
     campaignIds.add(recipient.campaignId);
+    const nextReconcileAttempt = recipient.reconcileAttemptCount + 1;
+    const reconciliationExhausted = isEmailReconciliationExhausted({
+      nextAttempt: nextReconcileAttempt,
+      lifecycleStartedAt:
+        recipient.acceptedAt ??
+        recipient.providerOperationStartedAt ??
+        recipient.createdAt,
+      now,
+    });
+    const failExhaustedReconciliation = async (reason: string) => {
+      if (!recipient.providerMessageId) return;
+      await processEmailProviderRecipientEvent({
+        provider: recipient.provider,
+        providerMessageId: recipient.providerMessageId,
+        providerEventId: reconciliationEventId(
+          recipient.providerMessageId,
+          `exhausted:${reason}`,
+        ),
+        eventType: "email.failed",
+        eventAt: now,
+        providerReason: `reconciliationExhausted:${reason}`,
+      });
+      await prisma.emailCampaignRecipient.update({
+        where: { id: recipient.id },
+        data: {
+          reconcileAt: now,
+          reconcileAttemptCount: nextReconcileAttempt,
+          retryAt: null,
+        },
+      });
+      exhausted += 1;
+      failed += 1;
+    };
     if (recipient.status === EmailCampaignRecipientStatus.SENDING && !recipient.providerMessageId) {
       if (recipient.sendLeaseExpiresAt && recipient.sendLeaseExpiresAt > now) {
         continue;
@@ -489,6 +565,10 @@ export const reconcileEmailCampaignRecipients = async (input?: {
       const lastEvent = providerEmail.last_event?.trim().toLowerCase() ?? "";
       const lookupStatus = lifecycleStatusForProviderLookup(lastEvent);
       if (!lookupStatus) {
+        if (reconciliationExhausted) {
+          await failExhaustedReconciliation(`unknownProviderEvent:${lastEvent || "missing"}`);
+          continue;
+        }
         await prisma.emailCampaignRecipient.update({
           where: { id: recipient.id },
           data: {
@@ -502,6 +582,10 @@ export const reconcileEmailCampaignRecipients = async (input?: {
         deferred += 1;
         continue;
       }
+      if (lookupStatus === "DEFERRED" && reconciliationExhausted) {
+        await failExhaustedReconciliation("providerRemainedDeferred");
+        continue;
+      }
       const result = await processEmailProviderRecipientEvent({
         provider: "resend",
         providerMessageId: recipient.providerMessageId,
@@ -512,7 +596,20 @@ export const reconcileEmailCampaignRecipients = async (input?: {
         eventAt: now,
         providerReason: `reconciledFromProvider:${lastEvent}`,
       });
-      if (result.processed) reconciled += 1;
+      if (result.processed) {
+        reconciled += 1;
+        if (lookupStatus === "DEFERRED") {
+          await prisma.emailCampaignRecipient.updateMany({
+            where: { id: recipient.id, status: EmailCampaignRecipientStatus.DEFERRED },
+            data: {
+              reconcileAt: now,
+              reconcileAttemptCount: nextReconcileAttempt,
+              retryAt: reconciliationRetryAt(nextReconcileAttempt),
+            },
+          });
+          deferred += 1;
+        }
+      }
     } catch (error) {
       const providerError = error instanceof EmailProviderError ? error : null;
       const retryable =
@@ -521,6 +618,14 @@ export const reconcileEmailCampaignRecipients = async (input?: {
         providerError.status === 429 ||
         providerError.status >= 500;
       if (retryable) {
+        if (reconciliationExhausted) {
+          await failExhaustedReconciliation(
+            providerError?.status === 429
+              ? "providerRateLimitRepeated"
+              : "providerLookupTransientRepeated",
+          );
+          continue;
+        }
         await prisma.emailCampaignRecipient.update({
           where: { id: recipient.id },
           data: {
@@ -568,6 +673,7 @@ export const reconcileEmailCampaignRecipients = async (input?: {
     requeued,
     failed,
     deferred,
+    exhausted,
     campaigns: Array.from(campaignIds),
   };
 };

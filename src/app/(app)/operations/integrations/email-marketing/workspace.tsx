@@ -29,6 +29,7 @@ import {
   EmailAutomationStatus,
   EmailAutomationTrigger,
   EmailCampaignFontFamily,
+  EmailCampaignRecipientStatus,
   EmailCampaignStatus,
   EmailCampaignTemplate,
   EmailCampaignType,
@@ -137,8 +138,19 @@ type CampaignDashboardItem = {
   senderIdentity?: { displayName: string; fromEmail: string } | null;
   recipientCount: number;
   sentCount: number;
+  queuedCount: number;
+  sendingCount: number;
+  acceptedCount: number;
+  deferredCount: number;
   deliveredCount: number;
+  bouncedCount: number;
+  droppedCount: number;
+  suppressedCount: number;
+  complainedCount: number;
   failedCount: number;
+  cancelledCount: number;
+  unresolvedCount: number;
+  retryableFailedCount: number;
   updatedAt: Date | string | number;
   createdAt: Date | string | number;
 };
@@ -538,18 +550,62 @@ const parseBlocks = (value: unknown, fallbackBody?: string | null): CampaignBloc
 
 const campaignStatusLabel = (status: EmailCampaignStatus) => {
   if (status === EmailCampaignStatus.DRAFT) return "Черновик";
+  if (status === EmailCampaignStatus.QUEUED) return "В очереди";
   if (status === EmailCampaignStatus.SENDING) return "Отправляется";
-  if (status === EmailCampaignStatus.SENT) return "Передана провайдеру";
-  if (status === EmailCampaignStatus.PARTIAL) return "Частично";
+  if (status === EmailCampaignStatus.AWAITING_EVENTS) return "Ожидает статусы";
+  if (status === EmailCampaignStatus.COMPLETED) return "Завершена";
+  if (status === EmailCampaignStatus.COMPLETED_WITH_ERRORS) return "Завершена с ошибками";
+  if (status === EmailCampaignStatus.CANCELLED) return "Отменена";
+  if (status === EmailCampaignStatus.SENT) return "Передана провайдеру (legacy)";
+  if (status === EmailCampaignStatus.PARTIAL) return "Частично (legacy)";
   return "Ошибка";
 };
 
 const campaignStatusVariant = (status: EmailCampaignStatus) => {
-  if (status === EmailCampaignStatus.SENT) return "success" as const;
-  if (status === EmailCampaignStatus.SENDING) return "warning" as const;
+  if (
+    status === EmailCampaignStatus.COMPLETED ||
+    status === EmailCampaignStatus.SENT
+  ) return "success" as const;
+  if (
+    status === EmailCampaignStatus.QUEUED ||
+    status === EmailCampaignStatus.SENDING ||
+    status === EmailCampaignStatus.AWAITING_EVENTS
+  ) return "warning" as const;
   if (status === EmailCampaignStatus.FAILED) return "danger" as const;
   return "muted" as const;
 };
+
+const recipientLifecycleStatuses = [
+  EmailCampaignRecipientStatus.QUEUED,
+  EmailCampaignRecipientStatus.SENDING,
+  EmailCampaignRecipientStatus.ACCEPTED,
+  EmailCampaignRecipientStatus.DEFERRED,
+  EmailCampaignRecipientStatus.DELIVERED,
+  EmailCampaignRecipientStatus.BOUNCED,
+  EmailCampaignRecipientStatus.DROPPED,
+  EmailCampaignRecipientStatus.SUPPRESSED,
+  EmailCampaignRecipientStatus.COMPLAINED,
+  EmailCampaignRecipientStatus.FAILED,
+  EmailCampaignRecipientStatus.CANCELLED,
+] as const;
+
+const recipientStatusLabel = (status: EmailCampaignRecipientStatus) =>
+  ({
+    QUEUED: "В очереди",
+    SENDING: "Отправляется",
+    ACCEPTED: "Принято провайдером",
+    DEFERRED: "Отложено",
+    DELIVERED: "Доставлено",
+    BOUNCED: "Возврат",
+    DROPPED: "Отклонено",
+    SUPPRESSED: "Подавлено",
+    COMPLAINED: "Жалоба",
+    FAILED: "Сбой",
+    CANCELLED: "Отменено",
+    PENDING: "Ожидает (legacy)",
+    SENT: "Отправлено (legacy)",
+    SKIPPED: "Пропущено (legacy)",
+  })[status];
 
 const senderStatusLabel = (status?: string | null) => {
   if (status === "VERIFIED") return "Подтвержден";
@@ -765,6 +821,11 @@ export const EmailMarketingWorkspace = () => {
   const [builderMode, setBuilderMode] = useState<BuilderMode>("campaign");
   const [builderOpen, setBuilderOpen] = useState(false);
   const [campaignId, setCampaignId] = useState<string | null>(null);
+  const [campaignDetailId, setCampaignDetailId] = useState<string | null>(null);
+  const [recipientStatusFilter, setRecipientStatusFilter] = useState<
+    "ALL" | EmailCampaignRecipientStatus
+  >("ALL");
+  const [recipientDetailPage, setRecipientDetailPage] = useState(1);
   const [automationId, setAutomationId] = useState<string | null>(null);
   const [campaignName, setCampaignName] = useState("");
   const [subject, setSubject] = useState("");
@@ -828,14 +889,34 @@ export const EmailMarketingWorkspace = () => {
     { enabled: Boolean(storeId) },
   );
   const hasSendingCampaigns = useMemo(
-    () => (historyQuery.data ?? []).some((campaign) => campaign.status === EmailCampaignStatus.SENDING),
+    () =>
+      (historyQuery.data ?? []).some(
+        (campaign) =>
+          campaign.status === EmailCampaignStatus.QUEUED ||
+          campaign.status === EmailCampaignStatus.SENDING,
+      ),
     [historyQuery.data],
   );
   const sendingCampaignId = useMemo(
-    () => (historyQuery.data ?? []).find((campaign) => campaign.status === EmailCampaignStatus.SENDING)?.id ?? null,
+    () =>
+      (historyQuery.data ?? []).find(
+        (campaign) =>
+          campaign.status === EmailCampaignStatus.QUEUED ||
+          campaign.status === EmailCampaignStatus.SENDING,
+      )?.id ?? null,
     [historyQuery.data],
   );
   const { refetch: refetchCampaignHistory } = historyQuery;
+  const campaignDetailQuery = trpc.emailMarketing.detail.useQuery(
+    {
+      campaignId: campaignDetailId ?? "",
+      recipientStatus:
+        recipientStatusFilter === "ALL" ? null : recipientStatusFilter,
+      recipientPage: recipientDetailPage,
+      recipientPageSize: 100,
+    },
+    { enabled: Boolean(campaignDetailId) },
+  );
   const sendersQuery = trpc.emailMarketing.senders.useQuery(
     { storeId },
     { enabled: Boolean(storeId) },
@@ -1141,6 +1222,71 @@ export const EmailMarketingWorkspace = () => {
             ? `Отправлено еще: ${result.sent}. Осталось в очереди: ${result.pending}.`
             : `Отправка обработана. Отправлено: ${result.sent}, ошибок: ${result.failed}.`,
       });
+    },
+    onError: (error) => toast({ variant: "error", description: translateError(tErrors, error) }),
+  });
+  const reconcileCampaignMutation = trpc.emailMarketing.reconcileCampaign.useMutation({
+    onSuccess: async (result) => {
+      await Promise.all([
+        utils.emailMarketing.history.invalidate(),
+        utils.emailMarketing.detail.invalidate(),
+      ]);
+      toast({
+        variant: result.failed > 0 ? "info" : "success",
+        description: `Сверка завершена: проверено ${result.inspected}, обновлено ${result.reconciled}, отложено ${result.deferred}.`,
+      });
+    },
+    onError: (error) => toast({ variant: "error", description: translateError(tErrors, error) }),
+  });
+  const retryTransientMutation = trpc.emailMarketing.retryTransientFailures.useMutation({
+    onSuccess: async (result) => {
+      await Promise.all([
+        utils.emailMarketing.history.invalidate(),
+        utils.emailMarketing.detail.invalidate(),
+      ]);
+      toast({
+        variant: result.refused > 0 ? "info" : "success",
+        description: `Повторно поставлено в очередь: ${result.retried}. Отказано вне окна идемпотентности: ${result.refused}.`,
+      });
+    },
+    onError: (error) => toast({ variant: "error", description: translateError(tErrors, error) }),
+  });
+  const cancelQueuedMutation = trpc.emailMarketing.cancelQueuedRecipients.useMutation({
+    onSuccess: async (result) => {
+      await Promise.all([
+        utils.emailMarketing.history.invalidate(),
+        utils.emailMarketing.detail.invalidate(),
+      ]);
+      toast({ variant: "success", description: `Отменено получателей в очереди: ${result.cancelled}.` });
+    },
+    onError: (error) => toast({ variant: "error", description: translateError(tErrors, error) }),
+  });
+  const exportFailedMutation = trpc.emailMarketing.exportFailedRecipients.useMutation({
+    onSuccess: (result) => {
+      const escapeCsv = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+      const rows = [
+        ["email", "name", "status", "category", "providerStatus", "providerReason", "attempts", "failedAt"],
+        ...result.recipients.map((recipient) => [
+          recipient.email,
+          recipient.customer.name,
+          recipient.status,
+          recipient.normalizedErrorCategory,
+          recipient.providerStatus,
+          recipient.providerReason,
+          recipient.attemptCount,
+          recipient.failedAt ? new Date(recipient.failedAt).toISOString() : "",
+        ]),
+      ];
+      const blob = new Blob(
+        [`\uFEFF${rows.map((row) => row.map(escapeCsv).join(",")).join("\n")}`],
+        { type: "text/csv;charset=utf-8" },
+      );
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `email-campaign-${result.campaignId}-failed.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
     },
     onError: (error) => toast({ variant: "error", description: translateError(tErrors, error) }),
   });
@@ -2080,7 +2226,31 @@ export const EmailMarketingWorkspace = () => {
               onArchive={(campaignId) => archiveMutation.mutate({ campaignId })}
               onDelete={(campaignId) => deleteDraftMutation.mutate({ campaignId })}
               onResume={(campaignId) => resumeCampaignMutation.mutate({ campaignId })}
+              onDetails={(campaignId) => {
+                setRecipientStatusFilter("ALL");
+                setRecipientDetailPage(1);
+                setCampaignDetailId(campaignId);
+              }}
+              onReconcile={(campaignId) =>
+                reconcileCampaignMutation.mutate({ campaignId, limit: 250 })
+              }
+              onRetryTransient={(campaignId) =>
+                retryTransientMutation.mutate({ campaignId })
+              }
+              onCancelQueued={(campaignId) =>
+                cancelQueuedMutation.mutate({ campaignId })
+              }
+              onExportFailed={(campaignId) =>
+                exportFailedMutation.mutate({ campaignId })
+              }
               resumingCampaignId={resumeCampaignMutation.variables?.campaignId ?? null}
+              actionCampaignId={
+                reconcileCampaignMutation.variables?.campaignId ??
+                retryTransientMutation.variables?.campaignId ??
+                cancelQueuedMutation.variables?.campaignId ??
+                exportFailedMutation.variables?.campaignId ??
+                null
+              }
             />
           </TabsPanel>
         ) : null}
@@ -2142,6 +2312,142 @@ export const EmailMarketingWorkspace = () => {
           </TabsPanel>
         ) : null}
       </Tabs>
+
+      <Modal
+        open={Boolean(campaignDetailId)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCampaignDetailId(null);
+            setRecipientDetailPage(1);
+            setRecipientStatusFilter("ALL");
+          }
+        }}
+        title="Статусы получателей"
+        className="max-w-6xl"
+      >
+        <div className="space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <Field
+              label="Фильтр статуса"
+              hint="Каждый получатель находится ровно в одном статусе."
+            >
+              <Select
+                value={recipientStatusFilter}
+                onValueChange={(value) =>
+                  {
+                    setRecipientStatusFilter(value as "ALL" | EmailCampaignRecipientStatus);
+                    setRecipientDetailPage(1);
+                  }
+                }
+              >
+                <SelectTrigger className="w-full sm:w-64">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">Все статусы</SelectItem>
+                  {recipientLifecycleStatuses.map((status) => (
+                    <SelectItem key={status} value={status}>
+                      {recipientStatusLabel(status)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            {campaignDetailId ? (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => exportFailedMutation.mutate({ campaignId: campaignDetailId })}
+                disabled={exportFailedMutation.isLoading}
+              >
+                Экспорт ошибок
+              </Button>
+            ) : null}
+          </div>
+          {campaignDetailQuery.isLoading ? (
+            <div className="flex min-h-40 items-center justify-center"><Spinner /></div>
+          ) : (
+            <div className="max-h-[60vh] overflow-auto rounded-lg border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Получатель</TableHead>
+                    <TableHead>Статус</TableHead>
+                    <TableHead>Причина</TableHead>
+                    <TableHead>Попытки</TableHead>
+                    <TableHead>Последнее событие</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(campaignDetailQuery.data?.campaign.recipients ?? []).map((recipient) => (
+                    <TableRow key={recipient.id}>
+                      <TableCell>
+                        <p className="font-medium">{recipient.customer.name}</p>
+                        <p className="text-xs text-muted-foreground">{recipient.email}</p>
+                      </TableCell>
+                      <TableCell>{recipientStatusLabel(recipient.status)}</TableCell>
+                      <TableCell className="max-w-md">
+                        <p className="break-words text-sm">{recipient.providerReason ?? recipient.errorMessage ?? "—"}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {recipient.normalizedErrorCategory}
+                          {recipient.providerStatus ? ` · ${recipient.providerStatus}` : ""}
+                        </p>
+                      </TableCell>
+                      <TableCell>{recipient.attemptCount}</TableCell>
+                      <TableCell>
+                        {recipient.lastProviderEventAt
+                          ? formatDateTime(recipient.lastProviderEventAt, locale)
+                          : "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {!campaignDetailQuery.data?.campaign.recipients.length ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                        Получателей с этим статусом нет.
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+          <div className="flex flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+            <span>
+              Показано {(campaignDetailQuery.data?.campaign.recipients ?? []).length} из {campaignDetailQuery.data?.recipientPage.total ?? 0}.
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={recipientDetailPage <= 1}
+                onClick={() => setRecipientDetailPage((page) => Math.max(1, page - 1))}
+              >
+                Назад
+              </Button>
+              <span>
+                {campaignDetailQuery.data?.recipientPage.page ?? recipientDetailPage} / {campaignDetailQuery.data?.recipientPage.pageCount ?? 1}
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={
+                  recipientDetailPage >=
+                  (campaignDetailQuery.data?.recipientPage.pageCount ?? 1)
+                }
+                onClick={() => setRecipientDetailPage((page) => page + 1)}
+              >
+                Далее
+              </Button>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Ответ провайдера отображается без секретов и с ограниченной длиной.
+          </p>
+        </div>
+      </Modal>
 
 	      <LogoFileInput
 	        inputRef={logoInputRef}
@@ -2992,7 +3298,13 @@ const CampaignsDashboard = ({
   onArchive,
   onDelete,
   onResume,
+  onDetails,
+  onReconcile,
+  onRetryTransient,
+  onCancelQueued,
+  onExportFailed,
   resumingCampaignId,
+  actionCampaignId,
 }: {
   campaigns: CampaignDashboardItem[];
   loading: boolean;
@@ -3004,7 +3316,13 @@ const CampaignsDashboard = ({
   onArchive: (campaignId: string) => void;
   onDelete: (campaignId: string) => void;
   onResume: (campaignId: string) => void;
+  onDetails: (campaignId: string) => void;
+  onReconcile: (campaignId: string) => void;
+  onRetryTransient: (campaignId: string) => void;
+  onCancelQueued: (campaignId: string) => void;
+  onExportFailed: (campaignId: string) => void;
   resumingCampaignId?: string | null;
+  actionCampaignId?: string | null;
 }) => (
   <Card className="bazaar-admin-surface">
     <CardHeader className="bazaar-admin-section-header flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -3037,15 +3355,25 @@ const CampaignsDashboard = ({
                 </div>
                 <Badge variant={campaignStatusVariant(campaign.status)}>{campaignStatusLabel(campaign.status)}</Badge>
               </div>
-              <div className="mt-4 grid gap-2 text-sm sm:grid-cols-4">
+              <div className="mt-4 grid gap-2 text-sm sm:grid-cols-3 xl:grid-cols-5">
                 <Metric label="Аудитория" value={campaign.recipientCount} />
-                <Metric label="Принято провайдером" value={campaign.sentCount} />
+                <Metric label="В очереди" value={campaign.queuedCount} />
+                <Metric label="Отправляется" value={campaign.sendingCount} />
+                <Metric label="Принято (текущий статус)" value={campaign.acceptedCount} />
+                <Metric label="Отложено" value={campaign.deferredCount} />
                 <Metric label="Доставлено" value={campaign.deliveredCount} />
-                <Metric label="Ошибки" value={campaign.failedCount} />
+                <Metric label="Возвраты" value={campaign.bouncedCount} />
+                <Metric label="Отклонено" value={campaign.droppedCount} />
+                <Metric label="Подавлено" value={campaign.suppressedCount} />
+                <Metric label="Жалобы" value={campaign.complainedCount} />
+                <Metric label="Сбой" value={campaign.failedCount} />
+                <Metric label="Не разрешено" value={campaign.unresolvedCount} />
               </div>
-              {campaign.status === EmailCampaignStatus.SENDING ? (
+              {campaign.status !== EmailCampaignStatus.DRAFT ? (
                 <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                  Обработано {campaign.sentCount + campaign.failedCount} из {campaign.recipientCount}. Отправка продолжается автоматически.
+                  Доставлено: {campaign.deliveredCount} / {campaign.recipientCount} ({campaign.recipientCount > 0 ? Math.round((campaign.deliveredCount / campaign.recipientCount) * 100) : 0}%).
+                  {" "}Ожидает сверки: {campaign.unresolvedCount}.
+                  {" "}Постоянные ошибки: {campaign.bouncedCount + campaign.droppedCount + campaign.suppressedCount + campaign.complainedCount + campaign.failedCount}.
                 </p>
               ) : null}
               <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -3054,7 +3382,8 @@ const CampaignsDashboard = ({
                   <p>{formatDateTime(campaign.updatedAt ?? campaign.createdAt, locale)}</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {campaign.status === EmailCampaignStatus.SENDING ? (
+                  {campaign.status === EmailCampaignStatus.QUEUED ||
+                  campaign.status === EmailCampaignStatus.SENDING ? (
                     <Button
                       type="button"
                       size="sm"
@@ -3066,15 +3395,25 @@ const CampaignsDashboard = ({
                       {resumingCampaignId === campaign.id ? "Отправляем..." : "Продолжить"}
                     </Button>
                   ) : null}
+                  {campaign.status !== EmailCampaignStatus.DRAFT ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => onDetails(campaign.id)}
+                    >
+                      Подробнее
+                    </Button>
+                  ) : null}
                   <Button
                     type="button"
                     size="sm"
                     variant="secondary"
                     onClick={() => onEdit(campaign)}
-                    disabled={!builderAvailable || campaign.status === EmailCampaignStatus.SENDING}
+                    disabled={!builderAvailable || campaign.status !== EmailCampaignStatus.DRAFT}
                     title={
-                      campaign.status === EmailCampaignStatus.SENDING
-                        ? "Кампания отправляется"
+                      campaign.status !== EmailCampaignStatus.DRAFT
+                        ? "Отправленную кампанию нельзя редактировать; создайте копию"
                         : !builderAvailable
                           ? builderUnavailableMessage
                           : undefined
@@ -3084,12 +3423,33 @@ const CampaignsDashboard = ({
                     Редактировать
                   </Button>
                   <ActionMenu>
+                    {campaign.unresolvedCount > 0 ? (
+                      <ActionMenuItem onSelect={() => onReconcile(campaign.id)}>
+                        Сверить статусы
+                      </ActionMenuItem>
+                    ) : null}
+                    {campaign.retryableFailedCount > 0 ? (
+                      <ActionMenuItem onSelect={() => onRetryTransient(campaign.id)}>
+                        Повторить временные сбои ({campaign.retryableFailedCount})
+                      </ActionMenuItem>
+                    ) : null}
+                    {campaign.queuedCount > 0 ? (
+                      <ActionMenuItem onSelect={() => onCancelQueued(campaign.id)}>
+                        Отменить очередь ({campaign.queuedCount})
+                      </ActionMenuItem>
+                    ) : null}
+                    {campaign.bouncedCount + campaign.droppedCount + campaign.suppressedCount + campaign.complainedCount + campaign.failedCount > 0 ? (
+                      <ActionMenuItem onSelect={() => onExportFailed(campaign.id)}>
+                        Экспорт ошибок
+                      </ActionMenuItem>
+                    ) : null}
                     <ActionMenuItem onSelect={() => onDuplicate(campaign.id)}>Дублировать</ActionMenuItem>
                     <ActionMenuItem onSelect={() => onArchive(campaign.id)}>Архивировать</ActionMenuItem>
                     {campaign.status === EmailCampaignStatus.DRAFT ? (
                       <ActionMenuItem onSelect={() => onDelete(campaign.id)} className="text-danger">Удалить</ActionMenuItem>
                     ) : null}
                   </ActionMenu>
+                  {actionCampaignId === campaign.id ? <Spinner className="h-4 w-4" /> : null}
                 </div>
               </div>
             </div>
@@ -3180,6 +3540,21 @@ const SendersPanel = ({
   data?: {
     defaultSender: { fromEmail: string; status: string; demoOnly: boolean } | null;
     primarySenderId?: string | null;
+    senderHealth: {
+      activeFromEmail: string;
+      customDomainRequired: boolean;
+      customDomainVerified: boolean;
+      fallbackPermitted: boolean;
+      dkim: { visible: boolean; verified: boolean };
+      spfOrMailFrom: { visible: boolean; verified: boolean };
+      dmarc: { visible: boolean; verified: boolean };
+      activeSuppressions: number;
+      acceptedTotal: number;
+      bounceCount: number;
+      complaintCount: number;
+      bounceRate: number;
+      complaintRate: number;
+    };
     domains: Array<{ id: string; domain: string; status: string; recordsJson: unknown; lastCheckedAt: Date | null; errorMessage: string | null }>;
     senders: Array<{ id: string; displayName: string; fromEmail: string; replyToEmail: string | null; status: string; domainId: string | null }>;
   };
@@ -3208,6 +3583,30 @@ const SendersPanel = ({
       </CardContent>
     </Card>
     <div className="space-y-4">
+      {data?.senderHealth ? (
+        <Card className="bazaar-admin-surface">
+          <CardHeader className="bazaar-admin-section-header"><CardTitle>Здоровье отправителя</CardTitle></CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+              <Metric label="Активный From" value={data.senderHealth.customDomainVerified ? 1 : 0} />
+              <Metric label="Подавлений" value={data.senderHealth.activeSuppressions} />
+              <Metric label="Принято провайдером" value={data.senderHealth.acceptedTotal} />
+            </div>
+            <p className="break-all text-xs text-muted-foreground">
+              Фактически используется: {data.senderHealth.activeFromEmail}. {data.senderHealth.fallbackPermitted ? "Fallback Bazaar разрешен: подтвержденного custom-домена нет." : "Fallback Bazaar заблокирован: используется подтвержденный custom-домен."}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant={data.senderHealth.customDomainVerified ? "success" : data.senderHealth.customDomainRequired ? "danger" : "muted"}>Домен {data.senderHealth.customDomainVerified ? "подтвержден" : "не подтвержден"}</Badge>
+              <Badge variant={data.senderHealth.dkim.verified ? "success" : "warning"}>DKIM {data.senderHealth.dkim.verified ? "OK" : data.senderHealth.dkim.visible ? "ожидает" : "нет данных"}</Badge>
+              <Badge variant={data.senderHealth.spfOrMailFrom.verified ? "success" : "warning"}>SPF / MAIL FROM {data.senderHealth.spfOrMailFrom.verified ? "OK" : data.senderHealth.spfOrMailFrom.visible ? "ожидает" : "нет данных"}</Badge>
+              <Badge variant={data.senderHealth.dmarc.visible ? "success" : "warning"}>DMARC {data.senderHealth.dmarc.visible ? "виден" : "нет данных"}</Badge>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Bounce rate: {(data.senderHealth.bounceRate * 100).toFixed(2)}% ({data.senderHealth.bounceCount}). Complaint rate: {(data.senderHealth.complaintRate * 100).toFixed(2)}% ({data.senderHealth.complaintCount}).
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
       <Card className="bazaar-admin-surface">
         <CardHeader className="bazaar-admin-section-header"><CardTitle>Отправители</CardTitle></CardHeader>
         <CardContent className="space-y-3">

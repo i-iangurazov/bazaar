@@ -20,6 +20,7 @@ import {
   createEmailSenderIdentity,
   deleteEmailCampaignDraft,
   duplicateEmailCampaign,
+  exportEmailCampaignFailedRecipients,
   listEmailMarketingCustomers,
   listEmailMarketingLogoGallery,
   listEmailCampaigns,
@@ -559,6 +560,19 @@ export const emailMarketingRouter = router({
       }
     }),
 
+  exportFailedRecipients: managerProcedure
+    .input(z.object({ campaignId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await exportEmailCampaignFailedRecipients({
+          user: ctx.user,
+          campaignId: input.campaignId,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
   duplicateCampaign: managerProcedure
     .input(z.object({ campaignId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
@@ -623,7 +637,8 @@ export const emailMarketingRouter = router({
       z.object({
         campaignId: z.string().min(1),
         recipientStatus: z.nativeEnum(EmailCampaignRecipientStatus).optional().nullable(),
-        recipientLimit: z.number().int().min(1).max(500).optional(),
+        recipientPage: z.number().int().min(1).optional(),
+        recipientPageSize: z.number().int().min(1).max(200).optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
@@ -632,7 +647,8 @@ export const emailMarketingRouter = router({
           user: ctx.user,
           campaignId: input.campaignId,
           recipientStatus: input.recipientStatus,
-          recipientLimit: input.recipientLimit,
+          recipientPage: input.recipientPage,
+          recipientPageSize: input.recipientPageSize,
         });
       } catch (error) {
         throw toTRPCError(error);

@@ -343,6 +343,7 @@ export const classifyLegacyEmailCampaignRecipient = (
   const providerStatus = normalizedProviderEventType(recipient.providerStatus ?? "");
   if (recipient.complainedAt || providerStatus === "complained") return "COMPLAINED";
   if (providerStatus === "suppressed") return "SUPPRESSED";
+  if (providerStatus === "dropped") return "DROPPED";
   if (recipient.bouncedAt || providerStatus === "bounced") return "BOUNCED";
   if (
     recipient.deliveredAt ||
