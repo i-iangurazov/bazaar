@@ -1,22 +1,48 @@
 -- Durable, explainable Email Marketing recipient lifecycle.
 -- Legacy enum values remain available so this migration is additive and rollback-safe.
 
-ALTER TYPE "EmailCampaignStatus" ADD VALUE IF NOT EXISTS 'QUEUED';
-ALTER TYPE "EmailCampaignStatus" ADD VALUE IF NOT EXISTS 'AWAITING_EVENTS';
-ALTER TYPE "EmailCampaignStatus" ADD VALUE IF NOT EXISTS 'COMPLETED';
-ALTER TYPE "EmailCampaignStatus" ADD VALUE IF NOT EXISTS 'COMPLETED_WITH_ERRORS';
-ALTER TYPE "EmailCampaignStatus" ADD VALUE IF NOT EXISTS 'CANCELLED';
+BEGIN;
 
-ALTER TYPE "EmailCampaignRecipientStatus" ADD VALUE IF NOT EXISTS 'QUEUED';
-ALTER TYPE "EmailCampaignRecipientStatus" ADD VALUE IF NOT EXISTS 'SENDING';
-ALTER TYPE "EmailCampaignRecipientStatus" ADD VALUE IF NOT EXISTS 'ACCEPTED';
-ALTER TYPE "EmailCampaignRecipientStatus" ADD VALUE IF NOT EXISTS 'DEFERRED';
-ALTER TYPE "EmailCampaignRecipientStatus" ADD VALUE IF NOT EXISTS 'DELIVERED';
-ALTER TYPE "EmailCampaignRecipientStatus" ADD VALUE IF NOT EXISTS 'BOUNCED';
-ALTER TYPE "EmailCampaignRecipientStatus" ADD VALUE IF NOT EXISTS 'DROPPED';
-ALTER TYPE "EmailCampaignRecipientStatus" ADD VALUE IF NOT EXISTS 'SUPPRESSED';
-ALTER TYPE "EmailCampaignRecipientStatus" ADD VALUE IF NOT EXISTS 'COMPLAINED';
-ALTER TYPE "EmailCampaignRecipientStatus" ADD VALUE IF NOT EXISTS 'CANCELLED';
+-- A campaign/store tenant mismatch cannot be repaired safely because both the
+-- audience and sender domain are store-scoped. Fail before mutating the schema.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM "EmailCampaign" campaign
+    JOIN "Store" store ON store."id" = campaign."storeId"
+    WHERE campaign."organizationId" <> store."organizationId"
+  ) THEN
+    RAISE EXCEPTION 'email marketing migration blocked: EmailCampaign organization/store tenant mismatch';
+  END IF;
+END $$;
+
+-- PostgreSQL cannot use ALTER TYPE ... ADD VALUE inside Prisma's migration
+-- transaction. Rebuild both enums atomically while retaining every legacy value.
+ALTER TYPE "EmailCampaignStatus" RENAME TO "EmailCampaignStatus_legacy";
+CREATE TYPE "EmailCampaignStatus" AS ENUM (
+  'DRAFT', 'QUEUED', 'SENDING', 'AWAITING_EVENTS', 'COMPLETED',
+  'COMPLETED_WITH_ERRORS', 'CANCELLED', 'SENT', 'FAILED', 'PARTIAL'
+);
+ALTER TABLE "EmailCampaign" ALTER COLUMN "status" DROP DEFAULT;
+ALTER TABLE "EmailCampaign"
+  ALTER COLUMN "status" TYPE "EmailCampaignStatus"
+  USING ("status"::text::"EmailCampaignStatus");
+ALTER TABLE "EmailCampaign" ALTER COLUMN "status" SET DEFAULT 'DRAFT';
+DROP TYPE "EmailCampaignStatus_legacy";
+
+ALTER TYPE "EmailCampaignRecipientStatus" RENAME TO "EmailCampaignRecipientStatus_legacy";
+CREATE TYPE "EmailCampaignRecipientStatus" AS ENUM (
+  'QUEUED', 'SENDING', 'ACCEPTED', 'DEFERRED', 'DELIVERED', 'BOUNCED',
+  'DROPPED', 'SUPPRESSED', 'COMPLAINED', 'CANCELLED',
+  'PENDING', 'SENT', 'FAILED', 'SKIPPED'
+);
+ALTER TABLE "EmailCampaignRecipient" ALTER COLUMN "status" DROP DEFAULT;
+ALTER TABLE "EmailCampaignRecipient"
+  ALTER COLUMN "status" TYPE "EmailCampaignRecipientStatus"
+  USING ("status"::text::"EmailCampaignRecipientStatus");
+ALTER TABLE "EmailCampaignRecipient" ALTER COLUMN "status" SET DEFAULT 'PENDING';
+DROP TYPE "EmailCampaignRecipientStatus_legacy";
 
 CREATE TYPE "EmailDeliveryErrorCategory" AS ENUM (
   'NONE',
@@ -135,20 +161,6 @@ SET
 ALTER TABLE "EmailCampaignRecipient"
   ALTER COLUMN "sendOperationKey" SET NOT NULL,
   ALTER COLUMN "status" SET DEFAULT 'QUEUED';
-
--- A campaign/store tenant mismatch cannot be repaired safely because both the
--- audience and sender domain are store-scoped. Fail before suppression backfill.
-DO $$
-BEGIN
-  IF EXISTS (
-    SELECT 1
-    FROM "EmailCampaign" campaign
-    JOIN "Store" store ON store."id" = campaign."storeId"
-    WHERE campaign."organizationId" <> store."organizationId"
-  ) THEN
-    RAISE EXCEPTION 'email marketing migration blocked: EmailCampaign organization/store tenant mismatch';
-  END IF;
-END $$;
 
 -- Campaign ownership is authoritative. Repair legacy denormalized organization IDs
 -- before enforcing scoped webhook/event behavior.
@@ -382,3 +394,5 @@ ALTER TABLE "EmailCampaign"
       "deliveredCount" + "bouncedCount" + "droppedCount" + "suppressedCount" +
       "complainedCount" + "failedCount" + "cancelledCount"
   );
+
+COMMIT;

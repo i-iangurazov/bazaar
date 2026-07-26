@@ -404,6 +404,18 @@ export const canRetryEmailProviderOperation = (input: {
       now: input.now,
     }));
 
+export const buildEmailCampaignProviderOperationKey = (
+  sendOperationKeys: readonly string[],
+) =>
+  `email-campaign-${createHash("sha256")
+    .update([...sendOperationKeys].sort().join("\u0000"))
+    .digest("hex")}`;
+
+export const shouldContinueEmailCampaignDeliveryRun = (input: {
+  queued: number;
+  progressed: number;
+}) => input.queued > 0 && input.progressed > 0;
+
 const reconciliationRetryAt = (attempt: number, minimumDelayMs = 0) => {
   const delayMinutes = Math.min(6 * 60, 5 * 2 ** Math.max(0, attempt - 1));
   return new Date(Date.now() + Math.max(minimumDelayMs, delayMinutes * 60 * 1_000));

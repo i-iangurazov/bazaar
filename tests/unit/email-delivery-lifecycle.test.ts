@@ -141,6 +141,7 @@ describe("email delivery lifecycle", () => {
       { status: "FAILED", httpStatus: 429, expected: true },
       { status: "FAILED", httpStatus: 503, expected: true },
       { status: "FAILED", reason: "provider timeout", expected: true },
+      { status: "FAILED", reason: "fetch failed: socket closed", expected: true },
       { status: "DEFERRED", reason: "mailbox temporarily unavailable", expected: true },
       { status: "BOUNCED", reason: "unknown user", expected: false },
       { status: "SUPPRESSED", reason: "suppression list", expected: false },

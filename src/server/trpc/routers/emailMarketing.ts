@@ -202,7 +202,7 @@ const campaignInputSchema = z.object({
   blocks: z.array(blockSchema).max(30).optional().nullable(),
 });
 
-const EMAIL_CAMPAIGN_SEND_MAX_BATCHES_PER_ACTION = 50;
+const EMAIL_CAMPAIGN_SEND_MAX_BATCHES_PER_ACTION = 10;
 
 const kickEmailCampaignDelivery = async (input: {
   user: Parameters<typeof continueEmailCampaignDelivery>[0]["user"];

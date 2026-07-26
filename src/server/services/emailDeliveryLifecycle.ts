@@ -297,6 +297,9 @@ export const normalizeEmailDeliveryError = (input: {
   ) {
     return "PROVIDER_TEMPORARY";
   }
+  if (containsAny(reason, ["fetch failed", "network", "socket", "econnreset", "econnrefused"])) {
+    return "PROVIDER_TEMPORARY";
+  }
   if (input.status === "DEFERRED") return "RECIPIENT_TEMPORARY";
   if (containsAny(reason, ["domain", "dkim", "spf", "api key", "configuration"])) {
     return "CONFIGURATION";
@@ -358,7 +361,7 @@ export const classifyLegacyEmailCampaignRecipient = (
   }
   if (recipient.status === "PENDING") return "QUEUED";
   if (recipient.status === "SKIPPED") {
-    return containsAny(recipient.errorMessage?.toLowerCase() ?? "", ["unsubscribe", "suppressed"])
+    return containsAny(recipient.errorMessage?.toLowerCase() ?? "", ["unsubscrib", "suppress"])
       ? "SUPPRESSED"
       : "FAILED";
   }

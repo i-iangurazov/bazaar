@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildEmailCampaignProviderOperationKey,
   canRetryEmailProviderOperation,
   canonicalEmailEventTypeForProviderLookup,
   isEmailProviderOperationExpired,
   isEmailReconciliationExhausted,
+  shouldContinueEmailCampaignDeliveryRun,
 } from "@/server/services/emailCampaignDeliveryState";
 
 describe("email campaign durable provider operations", () => {
@@ -69,5 +71,19 @@ describe("email campaign durable provider operations", () => {
         now,
       }),
     ).toBe(true);
+  });
+
+  it("keeps provider idempotency stable and stops a no-progress batch loop", () => {
+    expect(buildEmailCampaignProviderOperationKey(["recipient-b", "recipient-a"]))
+      .toBe(buildEmailCampaignProviderOperationKey(["recipient-a", "recipient-b"]));
+    expect(
+      shouldContinueEmailCampaignDeliveryRun({ queued: 50, progressed: 0 }),
+    ).toBe(false);
+    expect(
+      shouldContinueEmailCampaignDeliveryRun({ queued: 50, progressed: 10 }),
+    ).toBe(true);
+    expect(
+      shouldContinueEmailCampaignDeliveryRun({ queued: 0, progressed: 10 }),
+    ).toBe(false);
   });
 });

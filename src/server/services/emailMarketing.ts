@@ -1,4 +1,4 @@
-import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 
 import {
   BazaarCatalogFontFamily,
@@ -37,10 +37,12 @@ import { AppError } from "@/server/services/errors";
 import { toJson } from "@/server/services/json";
 import { writeAuditLog } from "@/server/services/audit";
 import {
+  buildEmailCampaignProviderOperationKey,
   canRetryEmailProviderOperation,
   processEmailProviderRecipientEvent,
   reconcileEmailCampaignRecipients,
   recomputeEmailCampaignDeliverySummary,
+  shouldContinueEmailCampaignDeliveryRun,
 } from "@/server/services/emailCampaignDeliveryState";
 import {
   isRetryableEmailDeliveryFailure,
@@ -3405,6 +3407,7 @@ type DeliverEmailCampaignResult = {
   failed: number;
   skipped: number;
   pending: number;
+  queued: number;
   recipientCount: number;
 };
 
@@ -3672,6 +3675,7 @@ export const deliverEmailCampaign = async (input: {
       failed: 0,
       skipped: 0,
       pending: 0,
+      queued: 0,
       recipientCount: 0,
     };
   }
@@ -3684,6 +3688,7 @@ export const deliverEmailCampaign = async (input: {
       failed: 0,
       skipped: 0,
       pending: summary.pending,
+      queued: summary.counts.QUEUED,
       recipientCount: summary.campaign.recipientCount,
     };
   }
@@ -3739,19 +3744,15 @@ export const deliverEmailCampaign = async (input: {
       failed: 0,
       skipped: 0,
       pending: summary.pending,
+      queued: summary.counts.QUEUED,
       recipientCount: summary.campaign.recipientCount,
     };
   }
   const providerOperationKey =
     retryOperationKey ??
-    `email-campaign-${createHash("sha256")
-      .update(
-        deliveryRecipients
-          .map((recipient) => recipient.sendOperationKey)
-          .sort()
-          .join("\u0000"),
-      )
-      .digest("hex")}`;
+    buildEmailCampaignProviderOperationKey(
+      deliveryRecipients.map((recipient) => recipient.sendOperationKey),
+    );
   await prisma.emailCampaignRecipient.updateMany({
     where: { campaignId: campaign.id, sendLeaseToken },
     data: {
@@ -3777,6 +3778,7 @@ export const deliverEmailCampaign = async (input: {
       failed: summary.failed,
       skipped: 0,
       pending: summary.pending,
+      queued: summary.counts.QUEUED,
       recipientCount: campaign.recipientCount,
     };
   }
@@ -3807,6 +3809,7 @@ export const deliverEmailCampaign = async (input: {
       failed: senderResult.summary.failed,
       skipped: 0,
       pending: senderResult.summary.pending,
+      queued: senderResult.summary.counts.QUEUED,
       recipientCount: campaign.recipientCount,
     };
   }
@@ -3835,6 +3838,7 @@ export const deliverEmailCampaign = async (input: {
       failed: productsResult.summary.failed,
       skipped: 0,
       pending: productsResult.summary.pending,
+      queued: productsResult.summary.counts.QUEUED,
       recipientCount: campaign.recipientCount,
     };
   }
@@ -3853,6 +3857,7 @@ export const deliverEmailCampaign = async (input: {
       failed: summary.failed,
       skipped: 0,
       pending: summary.pending,
+      queued: summary.counts.QUEUED,
       recipientCount: campaign.recipientCount,
     };
   }
@@ -4096,6 +4101,7 @@ export const deliverEmailCampaign = async (input: {
     failed,
     skipped,
     pending: summary.pending,
+    queued: summary.counts.QUEUED,
     recipientCount: summary.campaign.recipientCount,
   };
 };
@@ -4129,7 +4135,13 @@ export const deliverPendingEmailCampaigns = async (input?: {
   });
 
   for (const next of campaigns) {
+    let lastBatchStartedAt = 0;
     while (remainingBatches > 0) {
+      const delayMs = Math.max(0, 550 - (Date.now() - lastBatchStartedAt));
+      if (delayMs > 0) {
+        await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+      }
+      lastBatchStartedAt = Date.now();
       const result = await deliverEmailCampaign({
         organizationId: next.organizationId,
         campaignId: next.id,
@@ -4138,7 +4150,12 @@ export const deliverPendingEmailCampaigns = async (input?: {
       results.push(result);
       pendingByCampaign.set(result.campaignId, result.pending);
       remainingBatches -= 1;
-      if (result.pending <= 0) {
+      if (
+        !shouldContinueEmailCampaignDeliveryRun({
+          queued: result.queued,
+          progressed: result.sent + result.failed + result.skipped,
+        })
+      ) {
         break;
       }
     }
