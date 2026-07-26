@@ -35,8 +35,8 @@ export type CatalogDiscountDialogLabels = {
   affectedVariants: string;
   productsWithoutPrice: string;
   samplePrices: string;
-  basePrice: string;
-  effectivePrice: string;
+  currentPrice: string;
+  nextPrice: string;
   preview: string;
   previewAgain: string;
   apply: string;
@@ -316,8 +316,8 @@ export const CatalogDiscountDialog = ({
                   <thead>
                     <tr>
                       <th>{labels.selectedProducts}</th>
-                      <th>{labels.basePrice}</th>
-                      <th>{labels.effectivePrice}</th>
+                      <th>{labels.currentPrice}</th>
+                      <th>{labels.nextPrice}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -328,10 +328,10 @@ export const CatalogDiscountDialog = ({
                           {sample.variantName ? ` — ${sample.variantName}` : ""}
                         </td>
                         <td>
-                          {sample.basePrice} {sample.currency}
+                          {sample.currentPrice} {sample.currency}
                         </td>
                         <td>
-                          {sample.effectivePrice} {sample.currency}
+                          {sample.nextPrice} {sample.currency}
                         </td>
                       </tr>
                     ))}

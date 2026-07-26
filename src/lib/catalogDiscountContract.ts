@@ -94,7 +94,8 @@ export const catalogDiscountPreviewSampleSchema = z.object({
   variantName: z.string().nullable(),
   currency: z.string().length(3),
   basePrice: z.string(),
-  effectivePrice: z.string(),
+  currentPrice: z.string(),
+  nextPrice: z.string(),
 });
 
 export const catalogDiscountPreviewSchema = z.object({
