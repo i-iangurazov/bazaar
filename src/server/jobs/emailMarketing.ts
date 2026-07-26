@@ -1,7 +1,11 @@
 import type { JobPayload, JobResult } from "@/server/jobs";
-import { deliverPendingEmailCampaigns } from "@/server/services/emailMarketing";
+import {
+  deliverPendingEmailCampaigns,
+} from "@/server/services/emailMarketing";
+import { reconcileEmailCampaignRecipients } from "@/server/services/emailCampaignDeliveryState";
 
 export const EMAIL_CAMPAIGN_SEND_JOB_NAME = "email-campaign-send";
+export const EMAIL_CAMPAIGN_RECONCILE_JOB_NAME = "email-campaign-reconcile";
 
 export const runEmailCampaignSendJob = async (payload?: JobPayload): Promise<JobResult> => {
   const organizationId =
@@ -36,5 +40,26 @@ export const runEmailCampaignSendJob = async (payload?: JobPayload): Promise<Job
       maxBatches,
       ...result,
     },
+  };
+};
+
+export const runEmailCampaignReconcileJob = async (
+  payload?: JobPayload,
+): Promise<JobResult> => {
+  const record = payload && typeof payload === "object"
+    ? (payload as Record<string, unknown>)
+    : {};
+  const organizationId = String(record.organizationId ?? "").trim() || null;
+  const campaignId = String(record.campaignId ?? "").trim() || null;
+  const limit = Number(record.limit);
+  const result = await reconcileEmailCampaignRecipients({
+    organizationId,
+    campaignId,
+    limit: Number.isFinite(limit) ? limit : null,
+  });
+  return {
+    job: EMAIL_CAMPAIGN_RECONCILE_JOB_NAME,
+    status: "ok",
+    details: { organizationId, campaignId, ...result },
   };
 };

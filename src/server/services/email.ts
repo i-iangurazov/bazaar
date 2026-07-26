@@ -41,6 +41,15 @@ export type ResendDomainResponse = {
   created_at?: string;
 };
 
+export type ResendSentEmailResponse = {
+  id: string;
+  from?: string;
+  to?: string[];
+  subject?: string;
+  created_at?: string;
+  last_event?: string;
+};
+
 type EmailLocale = Locale;
 
 export class EmailProviderError extends Error {
@@ -48,12 +57,14 @@ export class EmailProviderError extends Error {
   public readonly status: number;
   public readonly responseText: string;
   public readonly providerMessage: string | null;
+  public readonly retryAfterMs: number | null;
 
   constructor(input: {
     provider: "resend";
     status: number;
     responseText: string;
     providerMessage?: string | null;
+    retryAfterMs?: number | null;
   }) {
     super(input.providerMessage ?? `emailProviderError:${input.status}`);
     this.name = "EmailProviderError";
@@ -61,6 +72,7 @@ export class EmailProviderError extends Error {
     this.status = input.status;
     this.responseText = input.responseText;
     this.providerMessage = input.providerMessage ?? null;
+    this.retryAfterMs = input.retryAfterMs ?? null;
   }
 }
 
@@ -150,6 +162,14 @@ const resendFetch = async <T>(path: string, init: RequestInit): Promise<T> => {
       status: response.status,
       responseText: text,
       providerMessage,
+      retryAfterMs: (() => {
+        const value = response.headers.get("retry-after");
+        if (!value) return null;
+        const seconds = Number.parseInt(value, 10);
+        if (Number.isFinite(seconds)) return Math.max(0, seconds * 1_000);
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? null : Math.max(0, date.getTime() - Date.now());
+      })(),
     });
   }
   return body as T;
@@ -176,6 +196,11 @@ export const verifyResendDomain = async (domainId: string) =>
 
 export const listResendDomains = async () =>
   resendFetch<{ data?: ResendDomainResponse[] } | ResendDomainResponse[]>("/domains", {
+    method: "GET",
+  });
+
+export const retrieveResendEmail = async (emailId: string) =>
+  resendFetch<ResendSentEmailResponse>(`/emails/${encodeURIComponent(emailId)}`, {
     method: "GET",
   });
 
@@ -235,11 +260,11 @@ const sendWithResendBatch = async (
   if (!apiKey) {
     throw new Error("emailProviderNotConfigured");
   }
-  const response = await fetch("https://api.resend.com/emails/batch", {
+  const body = await resendFetch<{
+    data?: Array<{ id?: string }>;
+  }>("/emails/batch", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
       ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
     },
     body: JSON.stringify(
@@ -261,18 +286,10 @@ const sendWithResendBatch = async (
     ),
   });
 
-  if (response.ok) {
-    const body = (await response.json().catch(() => ({}))) as {
-      data?: Array<{ id?: string }>;
-    };
-    return payloads.map((_payload, index) => ({
-      provider: "resend" as const,
-      id: body.data?.[index]?.id ?? null,
-    }));
-  }
-
-  const body = await response.text();
-  throw new Error(`emailProviderError:${response.status}:${body}`);
+  return payloads.map((_payload, index) => ({
+    provider: "resend" as const,
+    id: body.data?.[index]?.id ?? null,
+  }));
 };
 
 const sendEmail = async (payload: EmailPayload): Promise<EmailSendResult> => {

@@ -350,7 +350,13 @@ enum ProductImageStudioOutputFormat {
 
 enum EmailCampaignStatus {
   DRAFT
+  QUEUED
   SENDING
+  AWAITING_EVENTS
+  COMPLETED
+  COMPLETED_WITH_ERRORS
+  CANCELLED
+  // Legacy values retained so the additive migration can deterministically backfill rows.
   SENT
   FAILED
   PARTIAL
@@ -385,10 +391,37 @@ enum EmailCampaignFontFamily {
 }
 
 enum EmailCampaignRecipientStatus {
+  QUEUED
+  SENDING
+  ACCEPTED
+  DEFERRED
+  DELIVERED
+  BOUNCED
+  DROPPED
+  SUPPRESSED
+  COMPLAINED
+  CANCELLED
+  // Legacy values retained so the additive migration can deterministically backfill rows.
   PENDING
   SENT
   FAILED
   SKIPPED
+}
+
+enum EmailDeliveryErrorCategory {
+  NONE
+  PROVIDER_TIMEOUT
+  RATE_LIMIT
+  PROVIDER_TEMPORARY
+  RECIPIENT_TEMPORARY
+  HARD_BOUNCE
+  INVALID_ADDRESS
+  SUPPRESSED
+  UNSUBSCRIBED
+  COMPLAINT
+  PROVIDER_PERMANENT
+  CONFIGURATION
+  UNKNOWN
 }
 
 enum EmailSenderDomainStatus {
@@ -462,6 +495,8 @@ model Organization {
   customerOrderEmailLogs      CustomerOrderEmailLog[]
   emailCampaigns              EmailCampaign[]
   emailCampaignRecipients     EmailCampaignRecipient[]
+  emailCampaignRecipientEvents EmailCampaignRecipientEvent[]
+  emailMarketingSuppressions  EmailMarketingSuppression[]
   emailMarketingLogos         EmailMarketingLogo[]
   emailSenderDomains          EmailSenderDomain[]
   emailSenderIdentities       EmailSenderIdentity[]
@@ -675,6 +710,7 @@ model Store {
   customerOrderEmailLogs      CustomerOrderEmailLog[]
   customers                   Customer[]
   emailCampaigns              EmailCampaign[]
+  emailMarketingSuppressions  EmailMarketingSuppression[]
   emailMarketingLogo          EmailMarketingLogo?
   emailSenderDomains          EmailSenderDomain[]
   emailSenderIdentities       EmailSenderIdentity[]
@@ -1851,8 +1887,18 @@ model EmailCampaign {
   logoImageId            String?
   recipientCount         Int                     @default(0)
   sentCount              Int                     @default(0)
+  queuedCount            Int                     @default(0)
+  sendingCount           Int                     @default(0)
+  acceptedCount          Int                     @default(0)
+  deferredCount          Int                     @default(0)
   deliveredCount         Int                     @default(0)
+  bouncedCount           Int                     @default(0)
+  droppedCount           Int                     @default(0)
+  suppressedCount        Int                     @default(0)
+  complainedCount        Int                     @default(0)
   failedCount            Int                     @default(0)
+  cancelledCount         Int                     @default(0)
+  unresolvedCount        Int                     @default(0)
   sentAt                 DateTime?
   archivedAt             DateTime?
   errorMessage           String?                 @db.Text
@@ -1867,6 +1913,7 @@ model EmailCampaign {
   duplicates     EmailCampaign[]          @relation("emailCampaignDuplicates")
   logoImage      BazaarCatalogImage?      @relation("emailCampaignLogoImage", fields: [logoImageId], references: [id])
   recipients     EmailCampaignRecipient[]
+  recipientEvents EmailCampaignRecipientEvent[]
 
   @@index([organizationId, storeId, createdAt])
   @@index([storeId, status, createdAt])
@@ -1903,14 +1950,29 @@ model EmailCampaignRecipient {
   campaignId          String
   customerId          String
   email               String
-  status              EmailCampaignRecipientStatus @default(PENDING)
+  status              EmailCampaignRecipientStatus @default(QUEUED)
+  provider            String                       @default("resend")
   providerMessageId   String?
   providerStatus      String?
+  providerReason      String?                      @db.Text
+  normalizedErrorCategory EmailDeliveryErrorCategory @default(NONE)
   errorMessage        String?                      @db.Text
+  attemptCount        Int                          @default(0)
+  acceptedAt          DateTime?
   sentAt              DateTime?
   deliveredAt         DateTime?
   bouncedAt           DateTime?
   complainedAt        DateTime?
+  failedAt            DateTime?
+  retryAt             DateTime?
+  terminalAt          DateTime?
+  sendOperationKey    String
+  providerOperationKey String?
+  providerOperationStartedAt DateTime?
+  sendLeaseToken      String?
+  sendLeaseExpiresAt  DateTime?
+  reconcileAttemptCount Int                        @default(0)
+  reconcileAt         DateTime?
   lastProviderEvent   String?
   lastProviderEventId String?
   lastProviderEventAt DateTime?
@@ -1920,14 +1982,72 @@ model EmailCampaignRecipient {
   organization Organization  @relation(fields: [organizationId], references: [id])
   campaign     EmailCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   customer     Customer      @relation(fields: [customerId], references: [id])
+  events       EmailCampaignRecipientEvent[]
 
   @@unique([campaignId, customerId])
   @@index([organizationId, campaignId])
   @@index([customerId])
   @@index([email])
-  @@index([providerMessageId])
+  @@unique([provider, providerMessageId])
+  @@unique([sendOperationKey])
+  @@index([campaignId, status, retryAt])
+  @@index([campaignId, providerOperationKey])
+  @@index([status, sendLeaseExpiresAt])
   @@index([campaignId, deliveredAt])
   @@index([lastProviderEventId])
+}
+
+model EmailCampaignRecipientEvent {
+  id                String                       @id @default(cuid())
+  organizationId    String
+  campaignId        String
+  recipientId       String
+  provider          String
+  eventIdentity     String
+  providerEventId   String?
+  providerMessageId String
+  eventType         String
+  eventAt           DateTime
+  receivedAt        DateTime                     @default(now())
+  statusBefore      EmailCampaignRecipientStatus
+  statusAfter       EmailCampaignRecipientStatus
+  applied           Boolean                      @default(false)
+  ignoredReason     String?
+  providerReason    String?                      @db.Text
+  payloadJson       Json?
+  createdAt         DateTime                     @default(now())
+
+  organization Organization           @relation(fields: [organizationId], references: [id])
+  campaign     EmailCampaign           @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  recipient    EmailCampaignRecipient  @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, eventIdentity])
+  @@index([organizationId, campaignId, eventAt])
+  @@index([provider, providerMessageId, eventAt])
+  @@index([recipientId, eventAt])
+}
+
+model EmailMarketingSuppression {
+  id                    String    @id @default(cuid())
+  organizationId        String
+  storeId               String
+  email                 String
+  provider              String
+  source                String
+  reason                String?   @db.Text
+  originProviderEventId String?
+  active                Boolean   @default(true)
+  suppressedAt          DateTime  @default(now())
+  clearedAt             DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  store        Store        @relation(fields: [storeId], references: [id])
+
+  @@unique([organizationId, storeId, email])
+  @@index([organizationId, email, active])
+  @@index([storeId, active, suppressedAt])
 }
 
 model EmailSenderDomain {

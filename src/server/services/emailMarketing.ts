@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 
 import {
   BazaarCatalogFontFamily,
@@ -13,6 +13,7 @@ import {
   EmailAutomationDeliveryStatus,
   EmailAutomationStatus,
   EmailAutomationTrigger,
+  EmailDeliveryErrorCategory,
 } from "@prisma/client";
 import type { CustomerOrderStatus, CustomerSource, Prisma } from "@prisma/client";
 
@@ -34,6 +35,16 @@ import {
 import { AppError } from "@/server/services/errors";
 import { toJson } from "@/server/services/json";
 import { writeAuditLog } from "@/server/services/audit";
+import {
+  canRetryEmailProviderOperation,
+  processEmailProviderRecipientEvent,
+  reconcileEmailCampaignRecipients,
+  recomputeEmailCampaignDeliverySummary,
+} from "@/server/services/emailCampaignDeliveryState";
+import {
+  isRetryableEmailDeliveryFailure,
+  normalizeEmailDeliveryError,
+} from "@/server/services/emailDeliveryLifecycle";
 import {
   assertUserCanAccessStore,
   listAccessibleStores,
@@ -1293,7 +1304,7 @@ export const listEmailSenderSetup = async (input: {
   storeId: string;
 }) => {
   await assertUserCanAccessStore(prisma, input.user, input.storeId);
-  const [domains, senders] = await Promise.all([
+  const [domains, senders, activeSuppressions, deliveryStatusCounts] = await Promise.all([
     prisma.emailSenderDomain.findMany({
       where: {
         organizationId: input.user.organizationId,
@@ -1310,16 +1321,83 @@ export const listEmailSenderSetup = async (input: {
       include: { domain: true },
       orderBy: [{ status: "asc" }, { createdAt: "desc" }],
     }),
+    prisma.emailMarketingSuppression.count({
+      where: {
+        organizationId: input.user.organizationId,
+        storeId: input.storeId,
+        active: true,
+      },
+    }),
+    prisma.emailCampaignRecipient.groupBy({
+      by: ["status"],
+      where: {
+        organizationId: input.user.organizationId,
+        campaign: { storeId: input.storeId },
+        acceptedAt: { not: null },
+      },
+      _count: { _all: true },
+    }),
   ]);
   const config = getMarketingEmailConfiguration();
   const primaryCustomSender = selectPrimaryVerifiedSender(senders);
   const visibleSenders = primaryCustomSender
     ? senders.filter((sender) => sender.id === primaryCustomSender.id)
     : senders;
+  const primaryDomain = primaryCustomSender?.domain ?? null;
+  const dnsRecords = Array.isArray(primaryDomain?.recordsJson)
+    ? primaryDomain.recordsJson.flatMap((record) =>
+        Boolean(record) && typeof record === "object" && !Array.isArray(record)
+          ? [record as Prisma.JsonObject]
+          : [],
+      )
+    : [];
+  const recordStatus = (record: Prisma.JsonObject) =>
+    String(record.status ?? "").trim().toLowerCase();
+  const recordText = (record: Prisma.JsonObject) =>
+    [record.record, record.name, record.type, record.value]
+      .map((value) => String(value ?? "").toLowerCase())
+      .join(" ");
+  const healthFor = (matcher: (text: string) => boolean) => {
+    const matches = dnsRecords.filter((record) => matcher(recordText(record)));
+    return {
+      visible: matches.length > 0,
+      verified:
+        matches.length > 0 &&
+        matches.every((record) => ["verified", "valid"].includes(recordStatus(record))),
+    };
+  };
+  const deliveryCounts = new Map(
+    deliveryStatusCounts.map((row) => [row.status, row._count._all]),
+  );
+  const acceptedTotal = deliveryStatusCounts.reduce(
+    (total, row) => total + row._count._all,
+    0,
+  );
+  const bounceCount = deliveryCounts.get(EmailCampaignRecipientStatus.BOUNCED) ?? 0;
+  const complaintCount = deliveryCounts.get(EmailCampaignRecipientStatus.COMPLAINED) ?? 0;
   return {
     domains,
     senders: visibleSenders,
     primarySenderId: primaryCustomSender?.id ?? null,
+    senderHealth: {
+      activeFromEmail: primaryCustomSender?.fromEmail ?? MARKETING_EMAIL_FROM,
+      customDomainRequired: Boolean(primaryCustomSender),
+      customDomainVerified:
+        primaryDomain?.status === EmailSenderDomainStatus.VERIFIED &&
+        primaryCustomSender?.status === EmailSenderIdentityStatus.VERIFIED,
+      fallbackPermitted: !primaryCustomSender,
+      dkim: healthFor((text) => text.includes("dkim") || text.includes("domainkey")),
+      spfOrMailFrom: healthFor(
+        (text) => text.includes("spf") || text.includes("send") || text.includes("mail"),
+      ),
+      dmarc: healthFor((text) => text.includes("_dmarc") || text.includes("dmarc")),
+      activeSuppressions,
+      acceptedTotal,
+      bounceCount,
+      complaintCount,
+      bounceRate: acceptedTotal > 0 ? bounceCount / acceptedTotal : 0,
+      complaintRate: acceptedTotal > 0 ? complaintCount / acceptedTotal : 0,
+    },
     defaultSender: primaryCustomSender
       ? null
       : {
@@ -2951,7 +3029,9 @@ export const saveEmailCampaignDraft = async (input: {
     fontFamily: campaignInput.fontFamily,
     bannerImageUrl: campaignInput.bannerImageUrl,
     logoImageId: logo.logoImageId,
-    recipientCount: audience.summary.validRecipients,
+    // Draft audience is only a preview. Durable recipient rows (and recipientCount)
+    // are created atomically when the campaign is queued.
+    recipientCount: 0,
   };
   const created = campaignInput.id
     ? await prisma.emailCampaign.update({
@@ -3014,16 +3094,30 @@ export const sendEmailCampaignToAudience = async (input: {
     throw new AppError("emailCampaignAudienceEmpty", "BAD_REQUEST", 400);
   }
 
+  const campaignId = randomUUID();
+  const recipientRecords = recipients.map((customer) => {
+    const id = randomUUID();
+    return {
+      id,
+      organizationId: input.user.organizationId,
+      customerId: customer.id,
+      email: normalizeRecipientEmail(customer.email),
+      status: EmailCampaignRecipientStatus.QUEUED,
+      sendOperationKey: `email-campaign:${campaignId}:recipient:${id}`,
+    };
+  });
+
   const campaign = await prisma.$transaction(async (tx) => {
     const created = await tx.emailCampaign.create({
       data: {
+        id: campaignId,
         organizationId: input.user.organizationId,
         storeId: campaignInput.storeId,
         createdById: input.actorId,
-        status: EmailCampaignStatus.SENDING,
+        status: EmailCampaignStatus.QUEUED,
         contentVersion: emailContentVersion,
         campaignType: campaignInput.campaignType,
-        senderIdentityId: campaignInput.senderIdentityId,
+        senderIdentityId: sender.id,
         template: campaignInput.template,
         templateKey: campaignInput.templateKey,
         name: campaignInput.name,
@@ -3046,12 +3140,10 @@ export const sendEmailCampaignToAudience = async (input: {
         fontFamily: campaignInput.fontFamily,
         logoImageId: logo.logoImageId,
         recipientCount: recipients.length,
+        queuedCount: recipients.length,
+        unresolvedCount: recipients.length,
         recipients: {
-          create: recipients.map((customer) => ({
-            organizationId: input.user.organizationId,
-            customerId: customer.id,
-            email: normalizeRecipientEmail(customer.email),
-          })),
+          create: recipientRecords,
         },
       },
       include: {
@@ -3161,6 +3253,19 @@ export const sendSavedEmailCampaignToAudience = async (input: {
     throw new AppError("emailCampaignAudienceEmpty", "BAD_REQUEST", 400);
   }
 
+  const recipientRecords = recipients.map((customer) => {
+    const id = randomUUID();
+    return {
+      id,
+      organizationId: input.user.organizationId,
+      campaignId: existing.id,
+      customerId: customer.id,
+      email: normalizeRecipientEmail(customer.email),
+      status: EmailCampaignRecipientStatus.QUEUED,
+      sendOperationKey: `email-campaign:${existing.id}:recipient:${id}`,
+    };
+  });
+
   const queued = await prisma.$transaction(async (tx) => {
     const locked = await tx.emailCampaign.updateMany({
       where: {
@@ -3171,8 +3276,22 @@ export const sendSavedEmailCampaignToAudience = async (input: {
         archivedAt: null,
       },
       data: {
-        status: EmailCampaignStatus.SENDING,
+        status: EmailCampaignStatus.QUEUED,
+        senderIdentityId: sender.id,
         recipientCount: recipients.length,
+        queuedCount: recipients.length,
+        sendingCount: 0,
+        acceptedCount: 0,
+        deferredCount: 0,
+        deliveredCount: 0,
+        bouncedCount: 0,
+        droppedCount: 0,
+        suppressedCount: 0,
+        complainedCount: 0,
+        failedCount: 0,
+        cancelledCount: 0,
+        unresolvedCount: recipients.length,
+        sentCount: 0,
         audienceSummaryJson: summary as unknown as Prisma.InputJsonValue,
         errorMessage: null,
       },
@@ -3182,12 +3301,7 @@ export const sendSavedEmailCampaignToAudience = async (input: {
     }
     await tx.emailCampaignRecipient.deleteMany({ where: { campaignId: existing.id } });
     await tx.emailCampaignRecipient.createMany({
-      data: recipients.map((customer) => ({
-        organizationId: input.user.organizationId,
-        campaignId: existing.id,
-        customerId: customer.id,
-        email: normalizeRecipientEmail(customer.email),
-      })),
+      data: recipientRecords,
     });
     await writeAuditLog(tx, {
       organizationId: input.user.organizationId,
@@ -3254,66 +3368,29 @@ const normalizeDeliveryBatchCount = (value?: number | null) => {
 const updateEmailCampaignDeliverySummary = async (input: {
   campaignId: string;
   errorMessage?: string | null;
-}) => {
-  const statusCounts = await prisma.emailCampaignRecipient.groupBy({
-    by: ["status"],
-    where: { campaignId: input.campaignId },
-    _count: { _all: true },
-  });
-  const countByStatus = new Map(statusCounts.map((row) => [row.status, row._count._all]));
-  const totalFailed = countByStatus.get(EmailCampaignRecipientStatus.FAILED) ?? 0;
-  const totalSkipped = countByStatus.get(EmailCampaignRecipientStatus.SKIPPED) ?? 0;
-  const totalPending = countByStatus.get(EmailCampaignRecipientStatus.PENDING) ?? 0;
-  const totalSent = await prisma.emailCampaignRecipient.count({
-    where: { campaignId: input.campaignId, sentAt: { not: null } },
-  });
-  const totalDelivered = await prisma.emailCampaignRecipient.count({
-    where: { campaignId: input.campaignId, deliveredAt: { not: null } },
-  });
-  const failedOrSkipped = totalFailed + totalSkipped;
-  const finalStatus =
-    totalPending > 0
-      ? EmailCampaignStatus.SENDING
-      : failedOrSkipped === 0
-        ? EmailCampaignStatus.SENT
-        : totalSent > 0
-          ? EmailCampaignStatus.PARTIAL
-          : EmailCampaignStatus.FAILED;
-
-  const updated = await prisma.emailCampaign.update({
-    where: { id: input.campaignId },
-    data: {
-      status: finalStatus,
-      sentCount: totalSent,
-      deliveredCount: totalDelivered,
-      failedCount: failedOrSkipped,
-      sentAt: totalPending === 0 && totalSent > 0 ? new Date() : undefined,
-      errorMessage:
-        finalStatus === EmailCampaignStatus.SENT || finalStatus === EmailCampaignStatus.SENDING
-          ? null
-          : (input.errorMessage ?? "emailCampaignPartialOrFullFailure"),
-    },
-  });
-
-  return {
-    campaign: updated,
-    sent: totalSent,
-    failed: totalFailed,
-    skipped: totalSkipped,
-    pending: totalPending,
-    failedOrSkipped,
-  };
-};
+}) => recomputeEmailCampaignDeliverySummary(input.campaignId, input.errorMessage);
 
 const failPendingEmailCampaignRecipients = async (input: {
   campaignId: string;
   errorMessage: string;
 }) => {
   await prisma.emailCampaignRecipient.updateMany({
-    where: { campaignId: input.campaignId, status: EmailCampaignRecipientStatus.PENDING },
+    where: {
+      campaignId: input.campaignId,
+      status: {
+        in: [EmailCampaignRecipientStatus.QUEUED, EmailCampaignRecipientStatus.SENDING],
+      },
+    },
     data: {
       status: EmailCampaignRecipientStatus.FAILED,
+      normalizedErrorCategory: EmailDeliveryErrorCategory.CONFIGURATION,
+      providerReason: input.errorMessage,
       errorMessage: input.errorMessage,
+      failedAt: new Date(),
+      terminalAt: new Date(),
+      retryAt: null,
+      sendLeaseToken: null,
+      sendLeaseExpiresAt: null,
     },
   });
   return updateEmailCampaignDeliverySummary({
@@ -3348,17 +3425,20 @@ const parseProviderEventDate = (value?: string | null) => {
   return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
 };
 
-const normalizeProviderStatus = (eventType: string) => eventType.replace(/^email\./, "");
-
 const providerFailureMessage = (event: ResendEmailWebhookPayload) => {
   const bounce = event.data?.bounce;
   const parts = [
-    event.type ?? "email.delivery_failed",
     bounce?.type ?? null,
     bounce?.subType ?? null,
     bounce?.message ?? null,
   ].filter((part): part is string => Boolean(part));
-  return parts.join(": ");
+  if (parts.length) return parts.join(": ");
+  return event.type === "email.bounced" ||
+    event.type === "email.failed" ||
+    event.type === "email.suppressed" ||
+    event.type === "email.complained"
+    ? event.type
+    : "";
 };
 
 export const handleResendEmailWebhook = async (input: {
@@ -3375,71 +3455,32 @@ export const handleResendEmailWebhook = async (input: {
     return { processed: false, reason: "missing_email_id" };
   }
 
-  const recipient = await prisma.emailCampaignRecipient.findFirst({
-    where: { providerMessageId },
-    select: { id: true, campaignId: true, status: true },
-  });
-  if (!recipient) {
-    return { processed: false, reason: "recipient_not_found" };
-  }
-
   const eventAt = parseProviderEventDate(input.event.created_at ?? input.event.data?.created_at);
-  const providerStatus = normalizeProviderStatus(eventType);
-  const baseData: Prisma.EmailCampaignRecipientUpdateInput = {
-    providerStatus,
-    lastProviderEvent: eventType,
-    lastProviderEventId: input.webhookEventId ?? undefined,
-    lastProviderEventAt: eventAt,
-  };
-
-  if (eventType === "email.delivered") {
-    await prisma.emailCampaignRecipient.update({
-      where: { id: recipient.id },
-      data: {
-        ...baseData,
-        deliveredAt: eventAt,
-        ...(recipient.status === EmailCampaignRecipientStatus.FAILED
-          ? {}
-          : { status: EmailCampaignRecipientStatus.SENT }),
-      },
-    });
-  } else if (eventType === "email.bounced" || eventType === "email.failed" || eventType === "email.suppressed") {
-    await prisma.emailCampaignRecipient.update({
-      where: { id: recipient.id },
-      data: {
-        ...baseData,
-        status: EmailCampaignRecipientStatus.FAILED,
-        bouncedAt: eventAt,
-        errorMessage: providerFailureMessage(input.event),
-      },
-    });
-  } else if (eventType === "email.complained") {
-    await prisma.emailCampaignRecipient.update({
-      where: { id: recipient.id },
-      data: {
-        ...baseData,
-        status: EmailCampaignRecipientStatus.FAILED,
-        complainedAt: eventAt,
-        errorMessage: providerFailureMessage(input.event),
-      },
-    });
-  } else {
-    await prisma.emailCampaignRecipient.update({
-      where: { id: recipient.id },
-      data: baseData,
-    });
-  }
-
-  const summary = await updateEmailCampaignDeliverySummary({ campaignId: recipient.campaignId });
-  return {
-    processed: true,
-    campaignId: recipient.campaignId,
-    recipientId: recipient.id,
+  const result = await processEmailProviderRecipientEvent({
+    provider: "resend",
+    providerMessageId,
+    providerEventId: input.webhookEventId,
     eventType,
-    accepted: summary.sent,
-    delivered: summary.campaign.deliveredCount,
-    failed: summary.failedOrSkipped,
-    pending: summary.pending,
+    eventAt,
+    providerReason: providerFailureMessage(input.event) || null,
+    payload: input.event,
+  });
+  if (!result.processed || !("counts" in result) || !result.counts) return result;
+  const counts = result.counts;
+  return {
+    ...result,
+    eventType,
+    accepted:
+      counts.ACCEPTED +
+      counts.DEFERRED +
+      counts.DELIVERED +
+      counts.BOUNCED +
+      counts.DROPPED +
+      counts.SUPPRESSED +
+      counts.COMPLAINED,
+    delivered: counts.DELIVERED,
+    failed: counts.permanentFailures,
+    pending: counts.unresolved,
   };
 };
 
@@ -3506,6 +3547,14 @@ export const deliverEmailCampaign = async (input: {
   maxRecipients?: number | null;
 }): Promise<DeliverEmailCampaignResult> => {
   const batchSize = normalizeDeliveryBatchSize(input.maxRecipients);
+  await prisma.emailCampaign.updateMany({
+    where: {
+      id: input.campaignId,
+      organizationId: input.organizationId,
+      status: EmailCampaignStatus.QUEUED,
+    },
+    data: { status: EmailCampaignStatus.SENDING },
+  });
   const campaign = await prisma.emailCampaign.findFirst({
     where: {
       id: input.campaignId,
@@ -3535,7 +3584,10 @@ export const deliverEmailCampaign = async (input: {
       },
       logoImage: { select: { url: true } },
       recipients: {
-        where: { status: EmailCampaignRecipientStatus.PENDING },
+        where: {
+          status: EmailCampaignRecipientStatus.QUEUED,
+          OR: [{ retryAt: null }, { retryAt: { lte: new Date() } }],
+        },
         include: {
           customer: {
             select: {
@@ -3549,7 +3601,7 @@ export const deliverEmailCampaign = async (input: {
           },
         },
         orderBy: { createdAt: "asc" },
-        take: batchSize,
+        take: EMAIL_CAMPAIGN_DELIVERY_BATCH_SIZE,
       },
     },
   });
@@ -3576,6 +3628,79 @@ export const deliverEmailCampaign = async (input: {
       recipientCount: summary.campaign.recipientCount,
     };
   }
+
+  const retryOperationKey = campaign.recipients.find(
+    (recipient) => recipient.providerOperationKey,
+  )?.providerOperationKey;
+  const candidates = retryOperationKey
+    ? campaign.recipients.filter(
+        (recipient) => recipient.providerOperationKey === retryOperationKey,
+      )
+    : campaign.recipients
+        .filter((recipient) => !recipient.providerOperationKey)
+        .slice(0, batchSize);
+  const sendLeaseToken = randomUUID();
+  const sendLeaseExpiresAt = new Date(Date.now() + 10 * 60 * 1_000);
+  const candidateIds = candidates.map((recipient) => recipient.id);
+  await prisma.emailCampaignRecipient.updateMany({
+    where: {
+      id: { in: candidateIds },
+      status: EmailCampaignRecipientStatus.QUEUED,
+      OR: [{ retryAt: null }, { retryAt: { lte: new Date() } }],
+    },
+    data: {
+      status: EmailCampaignRecipientStatus.SENDING,
+      sendLeaseToken,
+      sendLeaseExpiresAt,
+      retryAt: null,
+      attemptCount: { increment: 1 },
+    },
+  });
+  const deliveryRecipients = await prisma.emailCampaignRecipient.findMany({
+    where: { campaignId: campaign.id, sendLeaseToken },
+    include: {
+      customer: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          storeId: true,
+          deletedAt: true,
+          emailMarketingUnsubscribedAt: true,
+        },
+      },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+  if (!deliveryRecipients.length) {
+    const summary = await updateEmailCampaignDeliverySummary({ campaignId: campaign.id });
+    return {
+      campaignId: campaign.id,
+      sent: 0,
+      failed: 0,
+      skipped: 0,
+      pending: summary.pending,
+      recipientCount: summary.campaign.recipientCount,
+    };
+  }
+  const providerOperationKey =
+    retryOperationKey ??
+    `email-campaign-${createHash("sha256")
+      .update(
+        deliveryRecipients
+          .map((recipient) => recipient.sendOperationKey)
+          .sort()
+          .join("\u0000"),
+      )
+      .digest("hex")}`;
+  await prisma.emailCampaignRecipient.updateMany({
+    where: { campaignId: campaign.id, sendLeaseToken },
+    data: {
+      providerOperationKey,
+      ...(retryOperationKey ? {} : { providerOperationStartedAt: new Date() }),
+    },
+  });
+  await updateEmailCampaignDeliverySummary({ campaignId: campaign.id });
 
   let baseUrl: string;
   try {
@@ -3678,6 +3803,7 @@ export const deliverEmailCampaign = async (input: {
   let skipped = 0;
   let batch: Array<{
     recipientId: string;
+    attemptCount: number;
     payload: {
       to: string;
       subject: string;
@@ -3699,57 +3825,161 @@ export const deliverEmailCampaign = async (input: {
       const results = await sendEmailBatch(
         currentBatch.map((item) => item.payload),
         {
-          idempotencyKey: `campaign-${campaign.id}-${currentBatch[0]?.recipientId}`,
+          idempotencyKey: providerOperationKey,
         },
       );
-      await Promise.all(
-        currentBatch.map((item, index) =>
-          prisma.emailCampaignRecipient.update({
+      const acceptedAt = new Date();
+      await prisma.$transaction(async (tx) => {
+        for (const [index, item] of currentBatch.entries()) {
+          const result = results[index];
+          if (!result?.id) {
+            await tx.emailCampaignRecipient.update({
+              where: { id: item.recipientId },
+              data: {
+                status: EmailCampaignRecipientStatus.FAILED,
+                provider: result?.provider ?? "resend",
+                providerStatus: "accepted_without_message_id",
+                providerReason: "providerAcceptedWithoutMessageId",
+                normalizedErrorCategory: EmailDeliveryErrorCategory.UNKNOWN,
+                errorMessage: "providerAcceptedWithoutMessageId",
+                failedAt: acceptedAt,
+                terminalAt: acceptedAt,
+                retryAt: null,
+                sendLeaseToken: null,
+                sendLeaseExpiresAt: null,
+              },
+            });
+            failed += 1;
+            continue;
+          }
+          await tx.emailCampaignRecipient.update({
             where: { id: item.recipientId },
             data: {
-              status: EmailCampaignRecipientStatus.SENT,
-              providerMessageId: results[index]?.id ?? null,
-              sentAt: new Date(),
+              status: EmailCampaignRecipientStatus.ACCEPTED,
+              provider: result.provider,
+              providerMessageId: result.id,
+              providerStatus: "accepted",
+              providerReason: null,
+              normalizedErrorCategory: EmailDeliveryErrorCategory.NONE,
+              errorMessage: null,
+              acceptedAt,
+              sentAt: acceptedAt,
+              retryAt: null,
+              sendLeaseToken: null,
+              sendLeaseExpiresAt: null,
             },
-          }),
-        ),
-      );
-      sent += currentBatch.length;
+          });
+          sent += 1;
+        }
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : "emailSendFailed";
-      await Promise.all(
-        currentBatch.map((item) =>
-          prisma.emailCampaignRecipient.update({
+      const providerStatus = error instanceof EmailProviderError ? error.status : null;
+      const category = normalizeEmailDeliveryError({
+        status: "FAILED",
+        providerHttpStatus: providerStatus,
+        reason: message,
+      });
+      const canRetry = isRetryableEmailDeliveryFailure({
+        status: "FAILED",
+        category,
+      });
+      const failedAt = new Date();
+      await prisma.$transaction(async (tx) => {
+        for (const item of currentBatch) {
+          const retryable = canRetry && item.attemptCount < 5;
+          const exponentialDelayMs = Math.min(
+            60 * 60 * 1_000,
+            60 * 1_000 * 2 ** Math.max(0, item.attemptCount - 1),
+          );
+          const retryAt = retryable
+            ? new Date(
+                Date.now() +
+                  Math.max(
+                    exponentialDelayMs,
+                    error instanceof EmailProviderError ? (error.retryAfterMs ?? 0) : 0,
+                  ),
+              )
+            : null;
+          await tx.emailCampaignRecipient.update({
             where: { id: item.recipientId },
             data: {
-              status: EmailCampaignRecipientStatus.FAILED,
-              errorMessage: message,
+              status: retryable
+                ? EmailCampaignRecipientStatus.QUEUED
+                : EmailCampaignRecipientStatus.FAILED,
+              providerReason: message.slice(0, 1_000),
+              normalizedErrorCategory: category as EmailDeliveryErrorCategory,
+              errorMessage: retryable ? null : message.slice(0, 1_000),
+              retryAt,
+              failedAt: retryable ? null : failedAt,
+              terminalAt: retryable ? null : failedAt,
+              sendLeaseToken: null,
+              sendLeaseExpiresAt: null,
             },
-          }),
-        ),
-      );
-      failed += currentBatch.length;
+          });
+          if (!retryable) failed += 1;
+        }
+      });
     }
   };
 
-  for (const recipient of campaign.recipients) {
+  const activeSuppressions = await prisma.emailMarketingSuppression.findMany({
+    where: {
+      organizationId: campaign.organizationId,
+      storeId: campaign.storeId,
+      active: true,
+      email: {
+        in: deliveryRecipients.map((recipient) =>
+          normalizeRecipientEmail(recipient.email),
+        ),
+      },
+    },
+    select: { email: true },
+  });
+  const suppressedEmails = new Set(activeSuppressions.map((entry) => entry.email));
+
+  for (const recipient of deliveryRecipients) {
     const recipientEmail = normalizeRecipientEmail(recipient.email);
     const customerEmail = normalizeRecipientEmail(recipient.customer.email);
+    const isSuppressed =
+      Boolean(recipient.customer.emailMarketingUnsubscribedAt) ||
+      suppressedEmails.has(recipientEmail);
     if (
       !emailPattern.test(recipientEmail) ||
       recipient.customer.storeId !== campaign.storeId ||
       recipient.customer.deletedAt ||
-      recipient.customer.emailMarketingUnsubscribedAt ||
+      isSuppressed ||
       customerEmail !== recipientEmail
     ) {
       skipped += 1;
+      const failedAt = new Date();
       await prisma.emailCampaignRecipient.update({
         where: { id: recipient.id },
         data: {
-          status: EmailCampaignRecipientStatus.SKIPPED,
+          status: isSuppressed
+            ? EmailCampaignRecipientStatus.SUPPRESSED
+            : EmailCampaignRecipientStatus.FAILED,
+          providerStatus: isSuppressed ? "suppressed" : "recipient_unavailable",
+          providerReason: recipient.customer.emailMarketingUnsubscribedAt
+            ? "emailCampaignRecipientUnsubscribed"
+            : isSuppressed
+              ? "emailCampaignRecipientProviderSuppressed"
+              : "emailCampaignRecipientUnavailable",
+          normalizedErrorCategory: recipient.customer.emailMarketingUnsubscribedAt
+            ? EmailDeliveryErrorCategory.UNSUBSCRIBED
+            : isSuppressed
+              ? EmailDeliveryErrorCategory.SUPPRESSED
+              : EmailDeliveryErrorCategory.INVALID_ADDRESS,
           errorMessage: recipient.customer.emailMarketingUnsubscribedAt
             ? "emailCampaignRecipientUnsubscribed"
-            : "emailCampaignRecipientUnavailable",
+            : isSuppressed
+              ? "emailCampaignRecipientProviderSuppressed"
+              : "emailCampaignRecipientUnavailable",
+          failedAt,
+          terminalAt: failedAt,
+          retryAt: null,
+          sendLeaseToken: null,
+          sendLeaseExpiresAt: null,
         },
       });
       continue;
@@ -3772,6 +4002,7 @@ export const deliverEmailCampaign = async (input: {
 
     batch.push({
       recipientId: recipient.id,
+      attemptCount: recipient.attemptCount,
       payload: {
         to: recipient.email,
         subject: campaign.subject,
@@ -3829,7 +4060,7 @@ export const deliverPendingEmailCampaigns = async (input?: {
   const organizationId = input?.organizationId?.trim() || null;
   const campaigns = await prisma.emailCampaign.findMany({
     where: {
-      status: EmailCampaignStatus.SENDING,
+      status: { in: [EmailCampaignStatus.QUEUED, EmailCampaignStatus.SENDING] },
       ...(organizationId ? { organizationId } : {}),
       ...(campaignId ? { id: campaignId } : {}),
     },
@@ -3883,7 +4114,10 @@ export const continueEmailCampaignDelivery = async (input: {
     throw new AppError("emailCampaignNotFound", "NOT_FOUND", 404);
   }
   await assertUserCanAccessStore(prisma, input.user, campaign.storeId);
-  if (campaign.status !== EmailCampaignStatus.SENDING) {
+  if (
+    campaign.status !== EmailCampaignStatus.QUEUED &&
+    campaign.status !== EmailCampaignStatus.SENDING
+  ) {
     throw new AppError("emailCampaignNotSending", "CONFLICT", 409);
   }
   return deliverPendingEmailCampaigns({
@@ -3892,6 +4126,155 @@ export const continueEmailCampaignDelivery = async (input: {
     maxCampaigns: 1,
     maxBatches: input.maxBatches,
   });
+};
+
+const findAccessibleEmailCampaign = async (input: {
+  user: StoreAccessUser;
+  campaignId: string;
+}) => {
+  const campaign = await prisma.emailCampaign.findFirst({
+    where: {
+      id: input.campaignId,
+      organizationId: input.user.organizationId,
+      archivedAt: null,
+    },
+    select: { id: true, storeId: true, status: true },
+  });
+  if (!campaign) throw new AppError("emailCampaignNotFound", "NOT_FOUND", 404);
+  await assertUserCanAccessStore(prisma, input.user, campaign.storeId);
+  return campaign;
+};
+
+export const reconcileEmailCampaignDelivery = async (input: {
+  user: StoreAccessUser;
+  campaignId: string;
+  limit?: number | null;
+}) => {
+  const campaign = await findAccessibleEmailCampaign(input);
+  return reconcileEmailCampaignRecipients({
+    organizationId: input.user.organizationId,
+    campaignId: campaign.id,
+    limit: input.limit,
+  });
+};
+
+export const retryEmailCampaignTransientFailures = async (input: {
+  user: StoreAccessUser;
+  actorId: string;
+  requestId: string;
+  campaignId: string;
+}) => {
+  const campaign = await findAccessibleEmailCampaign(input);
+  const retryNow = new Date();
+  const transientRecipients = await prisma.emailCampaignRecipient.findMany({
+    where: {
+      campaignId: campaign.id,
+      status: EmailCampaignRecipientStatus.FAILED,
+      normalizedErrorCategory: {
+        in: [
+          EmailDeliveryErrorCategory.PROVIDER_TIMEOUT,
+          EmailDeliveryErrorCategory.RATE_LIMIT,
+          EmailDeliveryErrorCategory.PROVIDER_TEMPORARY,
+          EmailDeliveryErrorCategory.RECIPIENT_TEMPORARY,
+        ],
+      },
+    },
+    select: {
+      id: true,
+      providerOperationKey: true,
+      providerOperationStartedAt: true,
+    },
+  });
+  const refused = transientRecipients.filter(
+    (recipient) =>
+      !canRetryEmailProviderOperation({
+        providerOperationKey: recipient.providerOperationKey,
+        providerOperationStartedAt: recipient.providerOperationStartedAt,
+        now: retryNow,
+      }),
+  );
+  const refusedIds = new Set(refused.map((recipient) => recipient.id));
+  const eligibleIds = transientRecipients
+    .filter((recipient) => !refusedIds.has(recipient.id))
+    .map((recipient) => recipient.id);
+  const result = await prisma.emailCampaignRecipient.updateMany({
+    where: {
+      id: { in: eligibleIds },
+      status: EmailCampaignRecipientStatus.FAILED,
+    },
+    data: {
+      status: EmailCampaignRecipientStatus.QUEUED,
+      failedAt: null,
+      terminalAt: null,
+      errorMessage: null,
+      retryAt: new Date(),
+      sendLeaseToken: null,
+      sendLeaseExpiresAt: null,
+    },
+  });
+  const summary = await updateEmailCampaignDeliverySummary({ campaignId: campaign.id });
+  await writeAuditLog(prisma, {
+    organizationId: input.user.organizationId,
+    actorId: input.actorId,
+    action: "EMAIL_CAMPAIGN_RETRY_TRANSIENT",
+    entity: "EmailCampaign",
+    entityId: campaign.id,
+    before: toJson({ status: campaign.status }),
+    after: toJson({
+      retried: result.count,
+      refused: refused.length,
+      refusedReason: refused.length ? "providerIdempotencyWindowExpired" : null,
+      status: summary.campaign.status,
+    }),
+    requestId: input.requestId,
+  });
+  return {
+    eligible: eligibleIds.length,
+    retried: result.count,
+    refused: refused.length,
+    refusedReasons: refused.length
+      ? [{ reason: "providerIdempotencyWindowExpired", count: refused.length }]
+      : [],
+    campaign: summary.campaign,
+    counts: summary.counts,
+  };
+};
+
+export const cancelEmailCampaignQueuedRecipients = async (input: {
+  user: StoreAccessUser;
+  actorId: string;
+  requestId: string;
+  campaignId: string;
+}) => {
+  const campaign = await findAccessibleEmailCampaign(input);
+  const cancelledAt = new Date();
+  const result = await prisma.emailCampaignRecipient.updateMany({
+    where: {
+      campaignId: campaign.id,
+      status: EmailCampaignRecipientStatus.QUEUED,
+    },
+    data: {
+      status: EmailCampaignRecipientStatus.CANCELLED,
+      providerReason: "cancelledByUserBeforeSubmission",
+      normalizedErrorCategory: EmailDeliveryErrorCategory.NONE,
+      retryAt: null,
+      terminalAt: cancelledAt,
+      sendLeaseToken: null,
+      sendLeaseExpiresAt: null,
+    },
+  });
+  const summary = await updateEmailCampaignDeliverySummary({ campaignId: campaign.id });
+  await writeAuditLog(prisma, {
+    organizationId: input.user.organizationId,
+    actorId: input.actorId,
+    action: "EMAIL_CAMPAIGN_CANCEL_QUEUED",
+    entity: "EmailCampaign",
+    entityId: campaign.id,
+    before: toJson({ status: campaign.status }),
+    after: toJson({ cancelled: result.count, status: summary.campaign.status }),
+    requestId: input.requestId,
+  });
+  return { cancelled: result.count, campaign: summary.campaign, counts: summary.counts };
 };
 
 export const listEmailCampaigns = async (input: {
@@ -3968,7 +4351,8 @@ export const duplicateEmailCampaign = async (input: {
       fontFamily: campaign.fontFamily,
       bannerImageUrl: campaign.bannerImageUrl,
       logoImageId: campaign.logoImageId,
-      recipientCount: campaign.recipientCount,
+      // A duplicated draft carries audience criteria, not sent-recipient rows.
+      recipientCount: 0,
     },
   });
   await writeAuditLog(prisma, {
@@ -4039,6 +4423,8 @@ export const deleteEmailCampaignDraft = async (input: {
 export const getEmailCampaignDetail = async (input: {
   user: StoreAccessUser;
   campaignId: string;
+  recipientStatus?: EmailCampaignRecipientStatus | null;
+  recipientLimit?: number | null;
 }) => {
   const campaign = await prisma.emailCampaign.findFirst({
     where: {
@@ -4070,16 +4456,27 @@ export const getEmailCampaignDetail = async (input: {
       createdBy: { select: { name: true, email: true } },
       senderIdentity: { select: { id: true, displayName: true, fromEmail: true, status: true } },
       recipients: {
+        where: input.recipientStatus ? { status: input.recipientStatus } : undefined,
         select: {
           id: true,
           email: true,
           status: true,
           errorMessage: true,
+          providerStatus: true,
+          providerReason: true,
+          normalizedErrorCategory: true,
+          attemptCount: true,
+          acceptedAt: true,
           sentAt: true,
+          deliveredAt: true,
+          failedAt: true,
+          retryAt: true,
+          terminalAt: true,
+          lastProviderEventAt: true,
           customer: { select: { id: true, name: true } },
         },
         orderBy: [{ status: "asc" }, { createdAt: "asc" }],
-        take: 200,
+        take: Math.min(500, Math.max(1, Math.trunc(input.recipientLimit ?? 200))),
       },
     },
   });

@@ -21,7 +21,9 @@ import {
   redisOperationsTotal,
 } from "@/server/metrics/metrics";
 import {
+  EMAIL_CAMPAIGN_RECONCILE_JOB_NAME,
   EMAIL_CAMPAIGN_SEND_JOB_NAME,
+  runEmailCampaignReconcileJob,
   runEmailCampaignSendJob,
 } from "@/server/jobs/emailMarketing";
 import {
@@ -202,6 +204,11 @@ const jobs: Record<string, JobDefinition> = {
     handler: runEmailCampaignSendJob,
     maxAttempts: 3,
     baseDelayMs: 1000,
+  },
+  [EMAIL_CAMPAIGN_RECONCILE_JOB_NAME]: {
+    handler: runEmailCampaignReconcileJob,
+    maxAttempts: 3,
+    baseDelayMs: 5_000,
   },
   [CUSTOMER_ORDER_FOLLOW_UP_JOB_NAME]: {
     handler: runCustomerOrderFollowUpJob,

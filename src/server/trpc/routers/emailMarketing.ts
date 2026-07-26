@@ -2,6 +2,7 @@ import {
   CustomerSource,
   EmailAutomationStatus,
   EmailCampaignFontFamily,
+  EmailCampaignRecipientStatus,
   EmailCampaignTemplate,
   EmailCampaignType,
 } from "@prisma/client";
@@ -14,6 +15,7 @@ import {
   archiveEmailCampaign,
   archiveEmailSenderIdentity,
   checkEmailSenderDomain,
+  cancelEmailCampaignQueuedRecipients,
   continueEmailCampaignDelivery,
   createEmailSenderIdentity,
   deleteEmailCampaignDraft,
@@ -24,6 +26,8 @@ import {
   listEmailAutomations,
   listEmailSenderSetup,
   previewEmailCampaign,
+  reconcileEmailCampaignDelivery,
+  retryEmailCampaignTransientFailures,
   saveEmailCampaignDraft,
   searchEmailMarketingProducts,
   sendEmailCampaignToAudience,
@@ -503,6 +507,58 @@ export const emailMarketingRouter = router({
       }
     }),
 
+  reconcileCampaign: managerProcedure
+    .use(rateLimit({ windowMs: 60_000, max: 10, prefix: "email-marketing-reconcile" }))
+    .input(
+      z.object({
+        campaignId: z.string().min(1),
+        limit: z.number().int().min(1).max(250).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await reconcileEmailCampaignDelivery({
+          user: ctx.user,
+          campaignId: input.campaignId,
+          limit: input.limit,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  retryTransientFailures: managerProcedure
+    .use(rateLimit({ windowMs: 60_000, max: 10, prefix: "email-marketing-retry" }))
+    .input(z.object({ campaignId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await retryEmailCampaignTransientFailures({
+          user: ctx.user,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+          campaignId: input.campaignId,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  cancelQueuedRecipients: managerProcedure
+    .use(rateLimit({ windowMs: 60_000, max: 10, prefix: "email-marketing-cancel" }))
+    .input(z.object({ campaignId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await cancelEmailCampaignQueuedRecipients({
+          user: ctx.user,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+          campaignId: input.campaignId,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
   duplicateCampaign: managerProcedure
     .input(z.object({ campaignId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
@@ -563,12 +619,20 @@ export const emailMarketingRouter = router({
     }),
 
   detail: managerProcedure
-    .input(z.object({ campaignId: z.string().min(1) }))
+    .input(
+      z.object({
+        campaignId: z.string().min(1),
+        recipientStatus: z.nativeEnum(EmailCampaignRecipientStatus).optional().nullable(),
+        recipientLimit: z.number().int().min(1).max(500).optional(),
+      }),
+    )
     .query(async ({ ctx, input }) => {
       try {
         return await getEmailCampaignDetail({
           user: ctx.user,
           campaignId: input.campaignId,
+          recipientStatus: input.recipientStatus,
+          recipientLimit: input.recipientLimit,
         });
       } catch (error) {
         throw toTRPCError(error);
