@@ -127,6 +127,19 @@ curl -X GET "https://bazaar.kg/api/bazaar/v1/products?page=1&pageSize=50" \
       "updatedAt": "2026-06-04T10:00:00.000Z",
       "price": 900,
       "priceKgs": 900,
+      "pricing": {
+        "currency": "KGS",
+        "basePrice": 1000,
+        "effectivePrice": 900,
+        "compareAtPrice": 1000,
+        "hasDiscount": true,
+        "discount": {
+          "type": "PERCENTAGE",
+          "value": 10,
+          "startsAt": null,
+          "endsAt": null
+        }
+      },
       "stockQty": 7,
       "pcs": 7,
       "stockByVariant": [
@@ -166,6 +179,14 @@ curl -X GET "https://bazaar.kg/api/bazaar/v1/products?page=1&pageSize=50" \
           "updatedAt": "2026-06-04T10:00:00.000Z",
           "price": 1200,
           "priceKgs": 1200,
+          "pricing": {
+            "currency": "KGS",
+            "basePrice": 1200,
+            "effectivePrice": 1200,
+            "compareAtPrice": null,
+            "hasDiscount": false,
+            "discount": null
+          },
           "stockQty": 3,
           "pcs": 3
         }
@@ -183,6 +204,9 @@ curl -X GET "https://bazaar.kg/api/bazaar/v1/products?page=1&pageSize=50" \
 | `sku` | Артикул товара |
 | `price` | Цена в валюте магазина |
 | `priceKgs` | Цена в KGS |
+| `pricing.effectivePrice` | Текущая серверная цена продажи в валюте магазина |
+| `pricing.compareAtPrice` | Исходная цена для зачёркнутого отображения; `null` без активной скидки |
+| `pricing.discount` | Тип, процент и расписание скидки; рассчитывается отдельно для каждого варианта |
 | `currencyCode` | Валюта магазина |
 | `stockQty` | Остаток базового товара |
 | `pcs` | Совместимый alias для `stockQty` |

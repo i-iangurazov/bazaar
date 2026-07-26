@@ -3,8 +3,8 @@ import {
   CustomerOrderSource,
   CustomerOrderStatus,
   CustomerSource,
+  Prisma,
   StockMovementType,
-  type Prisma,
 } from "@prisma/client";
 
 import {
@@ -28,6 +28,8 @@ import { AppError } from "@/server/services/errors";
 import { applyStockMovement } from "@/server/services/inventory";
 import { toJson } from "@/server/services/json";
 import { sendOrderConfirmationEmail } from "@/server/services/orderEmails";
+import { getEffectiveProductPrice } from "@/server/services/effectiveProductPrice";
+import type { BazaarCatalogPricingJson } from "@/server/services/bazaarCatalogPricingMapper";
 
 const API_TOKEN_PREFIX = "bz_live_";
 const API_KEY_LAST_USED_UPDATE_INTERVAL_MS = 10 * 60 * 1000;
@@ -61,6 +63,73 @@ const bazaarApiStockImpactingStatuses = new Set<CustomerOrderStatus>([
   CustomerOrderStatus.READY,
   CustomerOrderStatus.COMPLETED,
 ]);
+
+type BazaarApiStorePriceRow = {
+  productId: string;
+  variantId: string | null;
+  variantKey: string;
+  priceKgs: Prisma.Decimal;
+  discountType: "PERCENTAGE" | null;
+  discountPercentage: Prisma.Decimal | null;
+  discountStartsAt: Date | null;
+  discountEndsAt: Date | null;
+};
+
+const discountFromStorePrice = (row?: BazaarApiStorePriceRow | null) =>
+  row?.discountType === "PERCENTAGE" && row.discountPercentage
+    ? {
+        type: "PERCENTAGE" as const,
+        percentage: row.discountPercentage,
+        startsAt: row.discountStartsAt,
+        endsAt: row.discountEndsAt,
+      }
+    : null;
+
+const resolveBazaarApiCatalogPrice = (input: {
+  row?: BazaarApiStorePriceRow | null;
+  fallbackBasePriceKgs: Prisma.Decimal | number;
+  now: Date;
+  organizationId: string;
+  storeId: string;
+  productId: string;
+  variantId: string | null;
+  currencyCode: SupportedCurrencyCode;
+  currencyRateKgsPerUnit: number;
+}) => {
+  const basePriceKgs = input.row?.priceKgs ?? input.fallbackBasePriceKgs;
+  const effective = getEffectiveProductPrice({
+    basePrice: basePriceKgs,
+    discount: discountFromStorePrice(input.row),
+    now: input.now,
+    currency: "KGS",
+  });
+  const convert = (value: Prisma.Decimal) =>
+    roundMoney(
+      convertFromKgs(value.toNumber(), input.currencyRateKgsPerUnit, input.currencyCode),
+    );
+  const percentage = effective.discountPercentage;
+  const pricing: BazaarCatalogPricingJson = {
+    currency: input.currencyCode,
+    basePrice: convert(effective.basePrice),
+    effectivePrice: convert(effective.effectivePrice),
+    compareAtPrice: effective.compareAtPrice ? convert(effective.compareAtPrice) : null,
+    hasDiscount: effective.hasActiveDiscount,
+    discount:
+      percentage && input.row?.discountType === "PERCENTAGE"
+        ? {
+            type: "PERCENTAGE",
+            value: percentage.toNumber(),
+            startsAt: input.row.discountStartsAt?.toISOString() ?? null,
+            endsAt: input.row.discountEndsAt?.toISOString() ?? null,
+          }
+        : null,
+  };
+  return {
+    basePriceKgs: effective.basePrice,
+    effectivePriceKgs: effective.effectivePrice,
+    pricing,
+  };
+};
 
 const tokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
 const createRawToken = () => `${API_TOKEN_PREFIX}${randomBytes(32).toString("base64url")}`;
@@ -190,6 +259,45 @@ const writeCache = async <T>(key: string, value: T, ttlSeconds: number): Promise
   }
 };
 
+const bazaarApiProductsCacheIndexKey = (organizationId: string, storeId: string) =>
+  `bazaar-api:products:index:${organizationId}:${storeId}`;
+
+const registerBazaarApiProductsCacheKey = async (
+  organizationId: string,
+  storeId: string,
+  key: string,
+) => {
+  try {
+    const redis = getRedisPublisher();
+    if (!redis) return;
+    const indexKey = bazaarApiProductsCacheIndexKey(organizationId, storeId);
+    await redis.sadd(indexKey, key);
+    await redis.expire(indexKey, apiProductsCacheTtlSeconds() + 60);
+  } catch {
+    // Cache indexes are best-effort.
+  }
+};
+
+export const invalidateBazaarApiProductsCacheForStore = async (
+  organizationId: string,
+  storeId: string,
+) => {
+  const prefix = `bazaar-api:products:v1:${organizationId}:${storeId}:`;
+  for (const key of memoryCache.keys()) {
+    if (key.startsWith(prefix)) memoryCache.delete(key);
+  }
+  try {
+    const redis = getRedisPublisher();
+    if (!redis) return;
+    const indexKey = bazaarApiProductsCacheIndexKey(organizationId, storeId);
+    const keys = await redis.smembers(indexKey);
+    if (keys.length) await redis.del(...keys);
+    await redis.del(indexKey);
+  } catch {
+    // Cache invalidation remains best-effort; catalog reads are still source-of-truth backed.
+  }
+};
+
 const nextSalesOrderNumber = async (tx: Prisma.TransactionClient, organizationId: string) => {
   const counter = await tx.organizationCounter.upsert({
     where: { organizationId },
@@ -243,6 +351,7 @@ type BazaarApiProductsResult = {
     updatedAt: string;
     price: number;
     priceKgs: number;
+    pricing: BazaarCatalogPricingJson;
     stockQty: number;
     pcs: number;
     stockByVariant: Array<{ variantKey: string; stockQty: number; pcs: number }>;
@@ -264,6 +373,7 @@ type BazaarApiProductsResult = {
       updatedAt: string;
       price: number;
       priceKgs: number;
+      pricing: BazaarCatalogPricingJson;
       stockQty: number;
       pcs: number;
     }>;
@@ -723,7 +833,7 @@ export const listBazaarApiProducts = async (input: {
   const page = Math.max(1, Math.trunc(input.page ?? 1));
   const pageSize = Math.min(100, Math.max(1, Math.trunc(input.pageSize ?? 50)));
   const search = normalizeOptionalText(input.search);
-  const productsCacheKey = `bazaar-api:products:v1:${cacheDigest({
+  const productsCacheKey = `bazaar-api:products:v1:${input.organizationId}:${input.storeId}:${cacheDigest({
     organizationId: input.organizationId,
     storeId: input.storeId,
     search,
@@ -846,7 +956,16 @@ export const listBazaarApiProducts = async (input: {
             storeId: input.storeId,
             productId: { in: productIds },
           },
-          select: { productId: true, variantId: true, variantKey: true, priceKgs: true },
+          select: {
+            productId: true,
+            variantId: true,
+            variantKey: true,
+            priceKgs: true,
+            discountType: true,
+            discountPercentage: true,
+            discountStartsAt: true,
+            discountEndsAt: true,
+          },
         })
       : Promise.resolve([]),
     productIds.length
@@ -858,7 +977,7 @@ export const listBazaarApiProducts = async (input: {
   ]);
 
   const priceByProductVariant = new Map(
-    storePrices.map((price) => [`${price.productId}:${price.variantKey}`, Number(price.priceKgs)]),
+    storePrices.map((price) => [`${price.productId}:${price.variantKey}`, price]),
   );
   const stockByProductVariant = new Map<string, number>();
   for (const snapshot of snapshots) {
@@ -866,6 +985,7 @@ export const listBazaarApiProducts = async (input: {
     stockByProductVariant.set(key, (stockByProductVariant.get(key) ?? 0) + snapshot.onHand);
   }
 
+  const pricingNow = new Date();
   const result: BazaarApiProductsResult = {
     store: { id: store.id, name: store.name },
     currencyCode,
@@ -874,8 +994,18 @@ export const listBazaarApiProducts = async (input: {
     pageSize,
     total,
     items: products.map((product) => {
-      const basePriceKgs =
-        priceByProductVariant.get(`${product.id}:BASE`) ?? toMoney(product.basePriceKgs);
+      const baseRow = priceByProductVariant.get(`${product.id}:BASE`);
+      const basePrice = resolveBazaarApiCatalogPrice({
+        row: baseRow,
+        fallbackBasePriceKgs: product.basePriceKgs ?? 0,
+        now: pricingNow,
+        organizationId: input.organizationId,
+        storeId: input.storeId,
+        productId: product.id,
+        variantId: null,
+        currencyCode,
+        currencyRateKgsPerUnit,
+      });
       const baseStockQty = stockByProductVariant.get(`${product.id}:BASE`) ?? 0;
       return {
         id: product.id,
@@ -892,8 +1022,9 @@ export const listBazaarApiProducts = async (input: {
         packs: product.packs,
         createdAt: product.createdAt.toISOString(),
         updatedAt: product.updatedAt.toISOString(),
-        price: roundMoney(convertFromKgs(basePriceKgs, currencyRateKgsPerUnit, currencyCode)),
-        priceKgs: roundMoney(basePriceKgs),
+        price: basePrice.pricing.effectivePrice,
+        priceKgs: basePrice.effectivePriceKgs.toNumber(),
+        pricing: basePrice.pricing,
         stockQty: baseStockQty,
         pcs: baseStockQty,
         stockByVariant: Array.from(stockByProductVariant.entries())
@@ -930,8 +1061,18 @@ export const listBazaarApiProducts = async (input: {
         ),
         variants: product.variants.map((variant) => {
           const variantKey = variantKeyFrom(variant.id);
-          const variantPriceKgs =
-            priceByProductVariant.get(`${product.id}:${variantKey}`) ?? basePriceKgs;
+          const variantRow = priceByProductVariant.get(`${product.id}:${variantKey}`) ?? baseRow;
+          const variantPrice = resolveBazaarApiCatalogPrice({
+            row: variantRow,
+            fallbackBasePriceKgs: product.basePriceKgs ?? 0,
+            now: pricingNow,
+            organizationId: input.organizationId,
+            storeId: input.storeId,
+            productId: product.id,
+            variantId: variant.id,
+            currencyCode,
+            currencyRateKgsPerUnit,
+          });
           const variantStockQty = stockByProductVariant.get(`${product.id}:${variantKey}`) ?? 0;
           return {
             id: variant.id,
@@ -941,10 +1082,9 @@ export const listBazaarApiProducts = async (input: {
             attributeValues: variant.attributeValues,
             createdAt: variant.createdAt.toISOString(),
             updatedAt: variant.updatedAt.toISOString(),
-            price: roundMoney(
-              convertFromKgs(variantPriceKgs, currencyRateKgsPerUnit, currencyCode),
-            ),
-            priceKgs: roundMoney(variantPriceKgs),
+            price: variantPrice.pricing.effectivePrice,
+            priceKgs: variantPrice.effectivePriceKgs.toNumber(),
+            pricing: variantPrice.pricing,
             stockQty: variantStockQty,
             pcs: variantStockQty,
           };
@@ -952,7 +1092,21 @@ export const listBazaarApiProducts = async (input: {
       };
     }),
   };
-  await writeCache(productsCacheKey, result, apiProductsCacheTtlSeconds());
+  const nextPricingBoundary = storePrices
+    .flatMap((price) => [price.discountStartsAt, price.discountEndsAt])
+    .filter((value): value is Date => Boolean(value && value.getTime() > pricingNow.getTime()))
+    .sort((left, right) => left.getTime() - right.getTime())[0];
+  const cacheTtlSeconds = nextPricingBoundary
+    ? Math.max(
+        1,
+        Math.min(
+          apiProductsCacheTtlSeconds(),
+          Math.ceil((nextPricingBoundary.getTime() - pricingNow.getTime()) / 1_000),
+        ),
+      )
+    : apiProductsCacheTtlSeconds();
+  await writeCache(productsCacheKey, result, cacheTtlSeconds);
+  await registerBazaarApiProductsCacheKey(input.organizationId, input.storeId, productsCacheKey);
   return result;
 };
 
@@ -1307,7 +1461,16 @@ export const createBazaarApiOrder = async (input: {
           storeId: input.storeId,
           productId: { in: productIds },
         },
-        select: { productId: true, variantKey: true, priceKgs: true },
+        select: {
+          productId: true,
+          variantId: true,
+          variantKey: true,
+          priceKgs: true,
+          discountType: true,
+          discountPercentage: true,
+          discountStartsAt: true,
+          discountEndsAt: true,
+        },
       }),
       tx.productCost.findMany({
         where: { organizationId: input.organizationId, productId: { in: productIds } },
@@ -1322,15 +1485,13 @@ export const createBazaarApiOrder = async (input: {
 
     const variantsById = new Map(variants.map((variant) => [variant.id, variant]));
     const priceByProductVariant = new Map(
-      storePrices.map((price) => [
-        `${price.productId}:${price.variantKey}`,
-        Number(price.priceKgs),
-      ]),
+      storePrices.map((price) => [`${price.productId}:${price.variantKey}`, price]),
     );
     const costByProductVariant = new Map(
       productCosts.map((cost) => [`${cost.productId}:${cost.variantKey}`, Number(cost.avgCostKgs)]),
     );
 
+    const pricedAt = new Date();
     const lines = normalizedLines.map((line) => {
       const product = productsById.get(line.productId);
       if (!product) {
@@ -1342,11 +1503,21 @@ export const createBazaarApiOrder = async (input: {
           throw new AppError("variantNotFound", "NOT_FOUND", 404);
         }
       }
-      const basePrice = toMoney(product.basePriceKgs);
-      const unitPrice =
+      const productFallbackPrice = product.basePriceKgs ?? new Prisma.Decimal(0);
+      const priceRow =
         priceByProductVariant.get(`${line.productId}:${line.variantKey}`) ??
-        priceByProductVariant.get(`${line.productId}:BASE`) ??
-        basePrice;
+        priceByProductVariant.get(`${line.productId}:BASE`);
+      const effective = getEffectiveProductPrice({
+        basePrice: priceRow?.priceKgs ?? productFallbackPrice,
+        discount: discountFromStorePrice(priceRow),
+        now: pricedAt,
+        currency: "KGS",
+      });
+      const basePrice = effective.basePrice.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+      const unitPrice = effective.effectivePrice;
+      const discountAmount = effective.hasActiveDiscount
+        ? basePrice.minus(unitPrice).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)
+        : null;
       const unitCost =
         costByProductVariant.get(`${line.productId}:${line.variantKey}`) ??
         (line.variantKey !== "BASE"
@@ -1357,14 +1528,22 @@ export const createBazaarApiOrder = async (input: {
         variantId: line.variantId,
         variantKey: line.variantKey,
         qty: line.qty,
-        unitPriceKgs: roundMoney(unitPrice),
-        lineTotalKgs: roundMoney(unitPrice * line.qty),
+        baseUnitPriceKgs: basePrice,
+        appliedDiscountType: effective.hasActiveDiscount ? "PERCENTAGE" as const : null,
+        appliedDiscountPercentage: effective.hasActiveDiscount
+          ? effective.discountPercentage
+          : null,
+        appliedDiscountAmountKgs: discountAmount,
+        unitPriceKgs: unitPrice,
+        lineTotalKgs: unitPrice.mul(line.qty).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP),
         unitCostKgs: unitCost,
         lineCostTotalKgs: unitCost === null ? null : roundMoney(unitCost * line.qty),
       };
     });
 
-    const subtotal = roundMoney(lines.reduce((sum, line) => sum + line.lineTotalKgs, 0));
+    const subtotal = lines
+      .reduce((sum, line) => sum.plus(line.lineTotalKgs), new Prisma.Decimal(0))
+      .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
     const number = await nextSalesOrderNumber(tx, input.organizationId);
     const notes = [normalizeOptionalText(input.comment), externalIdNote]
       .filter(Boolean)
@@ -1428,7 +1607,7 @@ export const createBazaarApiOrder = async (input: {
         source: CustomerOrderSource.API,
       },
     });
-    void sendOrderConfirmationEmail({
+    const confirmation = sendOrderConfirmationEmail({
       organizationId: input.organizationId,
       customerOrderId: result.order.id,
       throwOnMissingEmail: false,
@@ -1438,6 +1617,8 @@ export const createBazaarApiOrder = async (input: {
         "API order confirmation email send failed",
       );
     });
+    if (process.env.NODE_ENV === "test") await confirmation;
+    else void confirmation;
   }
 
   return {

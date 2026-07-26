@@ -1225,7 +1225,51 @@ const PosSellPage = () => {
     }
   }, []);
 
-  const completeMutation = trpc.pos.sales.complete.useMutation();
+  const resetCompletedSaleUi = (result: {
+    id: string;
+    number: string;
+    kkmStatus: "NOT_SENT" | "SENT" | "FAILED";
+  }) => {
+    clearActiveDraftCache();
+    setLastCompletedSale(result);
+    setAutoReceiptStatus("idle");
+    setSaleId(null);
+    setPayments([createDefaultPosPaymentDraft()]);
+    setDiscountDraft("");
+    setDiscountEditorOpen(false);
+    setSellInDebt(false);
+    setDebtFullName("");
+    setSelectedCustomer(null);
+    setCustomerSelectorOpen(false);
+    setCustomerSearch("");
+    setCustomerCreateOpen(false);
+    setNewCustomerEmail("");
+    setNewCustomerAddress("");
+    setCustomerEditOpen(false);
+    setMobileCheckoutOpen(true);
+    setMobileScreen("sale");
+    setMobileSaleTab("payment");
+    setMobileActiveLineId(null);
+    setMobilePendingProductId(null);
+    setMobilePendingLineInputMode("qty");
+    setMobileComment("");
+    mobileCommentHydratedSaleIdRef.current = null;
+    setOptimisticSaleLines(null);
+    setLineInputDrafts({});
+    paymentAutoFillRef.current = { saleId: null, totalKgs: null };
+  };
+
+  const completeMutation = trpc.pos.sales.complete.useMutation({
+    onSuccess: (result) => {
+      resetCompletedSaleUi(result);
+      clearCartRuntimeSyncState();
+      void Promise.all([
+        shiftQuery.refetch(),
+        activeDraftQuery.refetch(),
+        trpcUtils.pos.sales.list.invalidate(),
+      ]).catch(() => undefined);
+    },
+  });
 
   const sale = saleQuery.data;
   const activeDraft = activeDraftQuery.data;
@@ -2599,34 +2643,8 @@ const PosSellPage = () => {
     number: string;
     kkmStatus: "NOT_SENT" | "SENT" | "FAILED";
   }) => {
-    clearActiveDraftCache();
-    setLastCompletedSale(result);
-    setAutoReceiptStatus("idle");
-    setSaleId(null);
-    setPayments([createDefaultPosPaymentDraft()]);
-    setDiscountDraft("");
-    setDiscountEditorOpen(false);
-    setSellInDebt(false);
-    setDebtFullName("");
-    setSelectedCustomer(null);
-    setCustomerSelectorOpen(false);
-    setCustomerSearch("");
-    setCustomerCreateOpen(false);
-    setNewCustomerEmail("");
-    setNewCustomerAddress("");
-    setCustomerEditOpen(false);
-    setMobileCheckoutOpen(true);
-    setMobileScreen("sale");
-    setMobileSaleTab("payment");
-    setMobileActiveLineId(null);
-    setMobilePendingProductId(null);
-    setMobilePendingLineInputMode("qty");
-    setMobileComment("");
-    mobileCommentHydratedSaleIdRef.current = null;
-    setOptimisticSaleLines(null);
+    resetCompletedSaleUi(result);
     clearCartRuntimeSyncState();
-    setLineInputDrafts({});
-    paymentAutoFillRef.current = { saleId: null, totalKgs: null };
     void Promise.all([
       shiftQuery.refetch(),
       activeDraftQuery.refetch(),
@@ -2749,7 +2767,7 @@ const PosSellPage = () => {
           toast({ variant: "error", description: t("sell.debtNameRequired") });
           return;
         }
-        const result = await completeMutation.mutateAsync({
+        await completeMutation.mutateAsync({
           saleId: targetSaleId,
           idempotencyKey: completionAttempt.idempotencyKey,
           debtCustomerName: normalizedDebtName,
@@ -2759,7 +2777,6 @@ const PosSellPage = () => {
             visibleCartTotalKgs: currentCartTotalKgs,
           },
         });
-        await handleConfirmedCompletion(result);
         return;
       }
 
@@ -2800,7 +2817,7 @@ const PosSellPage = () => {
         return;
       }
 
-      const result = await completeMutation.mutateAsync({
+      await completeMutation.mutateAsync({
         saleId: targetSaleId,
         idempotencyKey: completionAttempt.idempotencyKey,
         debtCustomerName: null,
@@ -2810,7 +2827,6 @@ const PosSellPage = () => {
           visibleCartTotalKgs: currentCartTotalKgs,
         },
       });
-      await handleConfirmedCompletion(result);
     } catch (error) {
       if (isPhoneScreen === true) {
         const completedOnServer = await reconcileCompletionFailure(targetSaleId);

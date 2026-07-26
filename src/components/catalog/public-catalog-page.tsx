@@ -53,12 +53,18 @@ type CatalogPayload = {
     name: string;
     category: string | null;
     priceKgs: number;
+    compareAtPriceKgs: number | null;
+    hasDiscount: boolean;
+    discountPercentage: number | null;
     imageUrl: string | null;
     isBundle: boolean;
     variants: Array<{
       id: string;
       name: string;
       priceKgs: number;
+      compareAtPriceKgs: number | null;
+      hasDiscount: boolean;
+      discountPercentage: number | null;
       imageUrl: string | null;
     }>;
   }>;
@@ -539,6 +545,8 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
     const qty = cart[lineKey] ?? 0;
     const qtyInput = qtyInputs[lineKey] ?? (qty > 0 ? String(qty) : "");
     const displayPrice = selectedVariant?.priceKgs ?? product.priceKgs;
+    const compareAtPrice = selectedVariant?.compareAtPriceKgs ?? product.compareAtPriceKgs;
+    const discountPercentage = selectedVariant?.discountPercentage ?? product.discountPercentage;
     const canAdjustQty = product.variants.length === 0 || Boolean(selectedVariant);
     const displayImageUrl = selectedVariant?.imageUrl ?? product.imageUrl;
     const optimizedImageSources = displayImageUrl
@@ -575,9 +583,21 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
           </div>
           <div className="space-y-1">
             <p className="line-clamp-2 text-sm font-semibold text-foreground">{product.name}</p>
-            <p className="text-sm text-muted-foreground">
-              {formatCatalogCurrency(displayPrice, locale, catalogCurrencyCode)}
-            </p>
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="font-semibold text-foreground">
+                {formatCatalogCurrency(displayPrice, locale, catalogCurrencyCode)}
+              </span>
+              {compareAtPrice !== null ? (
+                <span className="text-muted-foreground line-through">
+                  {formatCatalogCurrency(compareAtPrice, locale, catalogCurrencyCode)}
+                </span>
+              ) : null}
+              {discountPercentage !== null && compareAtPrice !== null ? (
+                <span className="rounded-md bg-primary/10 px-1.5 py-0.5 text-xs font-semibold text-primary">
+                  −{discountPercentage}%
+                </span>
+              ) : null}
+            </div>
           </div>
           {product.variants.length ? (
             <div className="space-y-2">

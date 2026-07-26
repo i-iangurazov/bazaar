@@ -21,6 +21,7 @@ import {
   ProductDescriptionGenerationProgress,
 } from "@/components/product-description-generation-progress";
 import { ProductDuplicateDialog } from "@/components/products/product-duplicate-dialog";
+import { CatalogDiscountDialog } from "@/components/products/catalog-discount-dialog";
 import { SavedTableViews } from "@/components/saved-table-views";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -338,6 +339,7 @@ const ProductsPage = () => {
   );
   const [bulkCategoryValue, setBulkCategoryValue] = useState("");
   const [bulkStorePriceOpen, setBulkStorePriceOpen] = useState(false);
+  const [catalogDiscountMode, setCatalogDiscountMode] = useState<"APPLY" | "REMOVE" | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<DownloadFormat>("csv");
@@ -865,6 +867,9 @@ const ProductsPage = () => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
   });
+  const previewCatalogDiscountMutation = trpc.storePrices.previewDiscount.useMutation();
+  const applyCatalogDiscountMutation = trpc.storePrices.applyDiscount.useMutation();
+  const removeCatalogDiscountMutation = trpc.storePrices.removeDiscount.useMutation();
 
   const createCategoryMutation = trpc.productCategories.create.useMutation({
     onSuccess: async () => {
@@ -1436,6 +1441,13 @@ const ProductsPage = () => {
   });
 
   const selectedList = useMemo(() => Array.from(selectedIds), [selectedIds]);
+  const catalogDiscountVariantsQuery = trpc.storePrices.discountVariants.useQuery(
+    { storeId, productIds: selectedList },
+    {
+      enabled: Boolean(catalogDiscountMode && storeId && selectedList.length),
+      keepPreviousData: true,
+    },
+  );
   const allSelected =
     Boolean(products.length) && products.every((product) => selectedIds.has(product.id));
   const allResultsSelected = productsTotal > 0 && selectedIds.size === productsTotal;
@@ -3698,16 +3710,39 @@ const ProductsPage = () => {
                     </Button>
                   ) : null}
                   {canManagePrices ? (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      className="w-full sm:w-auto"
-                      onClick={() => setBulkStorePriceOpen(true)}
-                    >
-                      <PriceIcon className="h-4 w-4" aria-hidden />
-                      {t("bulkSetStorePrice")}
-                    </Button>
+                    <>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        className="w-full sm:w-auto"
+                        onClick={() => setBulkStorePriceOpen(true)}
+                      >
+                        <PriceIcon className="h-4 w-4" aria-hidden />
+                        {t("bulkSetStorePrice")}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        className="w-full sm:w-auto"
+                        disabled={!storeId}
+                        onClick={() => setCatalogDiscountMode("APPLY")}
+                      >
+                        <PriceIcon className="h-4 w-4" aria-hidden />
+                        {t("applyCatalogDiscount")}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        className="w-full sm:w-auto"
+                        disabled={!storeId}
+                        onClick={() => setCatalogDiscountMode("REMOVE")}
+                      >
+                        {t("removeCatalogDiscount")}
+                      </Button>
+                    </>
                   ) : null}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -5249,6 +5284,7 @@ const ProductsPage = () => {
 
       <Modal
         open={bulkStorePriceOpen}
+        mobileSheet
         onOpenChange={(open) => {
           if (!open) {
             setBulkStorePriceOpen(false);
@@ -5720,6 +5756,56 @@ const ProductsPage = () => {
           </Form>
         </Modal>
       ) : null}
+      <CatalogDiscountDialog
+        open={catalogDiscountMode !== null}
+        mode={catalogDiscountMode ?? "APPLY"}
+        productIds={selectedList}
+        stores={stores.map((store) => ({ id: store.id, name: store.name }))}
+        variants={catalogDiscountVariantsQuery.data ?? []}
+        initialStoreId={storeId || undefined}
+        labels={{
+          applyTitle: t("catalogDiscountApplyTitle"),
+          removeTitle: t("catalogDiscountRemoveTitle"),
+          subtitle: t("catalogDiscountSubtitle"),
+          store: tCommon("store"),
+          percentage: t("catalogDiscountPercentage"),
+          startsAt: t("catalogDiscountStartsAt"),
+          endsAt: t("catalogDiscountEndsAt"),
+          variants: t("catalogDiscountVariants"),
+          allVariants: t("catalogDiscountAllVariants"),
+          selectedVariants: t("catalogDiscountSelectedVariants"),
+          selectedProducts: t("catalogDiscountSelectedProducts"),
+          affectedProducts: t("catalogDiscountAffectedProducts"),
+          affectedVariants: t("catalogDiscountAffectedVariants"),
+          productsWithoutPrice: t("catalogDiscountProductsWithoutPrice"),
+          samplePrices: t("catalogDiscountSamplePrices"),
+          currentPrice: t("catalogDiscountCurrentPrice"),
+          nextPrice: t("catalogDiscountNextPrice"),
+          preview: t("catalogDiscountPreview"),
+          previewAgain: t("catalogDiscountPreviewAgain"),
+          apply: t("applyCatalogDiscount"),
+          remove: t("removeCatalogDiscount"),
+          cancel: tCommon("cancel"),
+          loading: tCommon("loading"),
+          previewRequired: t("catalogDiscountPreviewRequired"),
+        }}
+        adapter={{
+          preview: (input) => previewCatalogDiscountMutation.mutateAsync(input),
+          apply: (input) => applyCatalogDiscountMutation.mutateAsync(input),
+          remove: (input) => removeCatalogDiscountMutation.mutateAsync(input),
+        }}
+        onOpenChange={(open) => {
+          if (!open) setCatalogDiscountMode(null);
+        }}
+        onCompleted={(result) => {
+          void productsBootstrapQuery.refetch();
+          setSelectedIds(new Set());
+          toast({
+            variant: "success",
+            description: t("catalogDiscountSuccess", { count: result.affectedPriceRowCount }),
+          });
+        }}
+      />
       <ProductDuplicateDialog
         open={Boolean(duplicateTarget)}
         onOpenChange={(open) => {

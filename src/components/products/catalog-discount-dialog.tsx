@@ -73,7 +73,8 @@ export const CatalogDiscountDialog = ({
   onOpenChange,
   onCompleted,
 }: CatalogDiscountDialogProps) => {
-  const [storeId, setStoreId] = useState(initialStoreId ?? stores[0]?.id ?? "");
+  const defaultStoreId = initialStoreId ?? stores[0]?.id ?? "";
+  const [storeId, setStoreId] = useState(defaultStoreId);
   const [percentage, setPercentage] = useState("20");
   const [startsAt, setStartsAt] = useState("");
   const [endsAt, setEndsAt] = useState("");
@@ -92,7 +93,7 @@ export const CatalogDiscountDialog = ({
 
   useEffect(() => {
     if (!open) return;
-    setStoreId(initialStoreId ?? stores[0]?.id ?? "");
+    setStoreId(defaultStoreId);
     setPercentage("20");
     setStartsAt("");
     setEndsAt("");
@@ -101,7 +102,7 @@ export const CatalogDiscountDialog = ({
     setPreview(null);
     setError(null);
     idempotencyKeyRef.current = null;
-  }, [initialStoreId, open, stores]);
+  }, [defaultStoreId, open]);
 
   const invalidatePreview = () => {
     setPreview(null);

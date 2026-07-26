@@ -39,6 +39,7 @@ import {
   serializeProductPreview,
   serializeProductPricing,
 } from "@/server/services/products/serializers";
+import { getEffectiveProductPrice } from "@/server/services/effectiveProductPrice";
 
 type PrismaDbClient = PrismaClient | Prisma.TransactionClient;
 
@@ -1064,9 +1065,20 @@ export const listProducts = async ({
               select: {
                 productId: true,
                 priceKgs: true,
+                discountType: true,
+                discountPercentage: true,
+                discountStartsAt: true,
+                discountEndsAt: true,
               },
             })
-          : Promise.resolve([] as Array<{ productId: string; priceKgs: Prisma.Decimal }>),
+          : Promise.resolve([] as Array<{
+              productId: string;
+              priceKgs: Prisma.Decimal;
+              discountType: "PERCENTAGE" | null;
+              discountPercentage: Prisma.Decimal | null;
+              discountStartsAt: Date | null;
+              discountEndsAt: Date | null;
+            }>),
       ])
     : [[], [], [], []];
   if (logger) {
@@ -1093,7 +1105,23 @@ export const listProducts = async ({
   );
   const storeNameById = new Map(storeNames.map((store) => [store.id, store.name]));
   const storePriceByProductId = new Map(
-    storePrices.map((storePrice) => [storePrice.productId, Number(storePrice.priceKgs)]),
+    storePrices.map((storePrice) => {
+      const pricing = getEffectiveProductPrice({
+        basePrice: storePrice.priceKgs,
+        discount:
+          storePrice.discountType === "PERCENTAGE" && storePrice.discountPercentage
+            ? {
+                type: "PERCENTAGE",
+                percentage: storePrice.discountPercentage,
+                startsAt: storePrice.discountStartsAt,
+                endsAt: storePrice.discountEndsAt,
+              }
+            : null,
+        now: new Date(),
+        currency: "KGS",
+      });
+      return [storePrice.productId, pricing.effectivePrice.toNumber()] as const;
+    }),
   );
 
   const items = products.map((product) =>

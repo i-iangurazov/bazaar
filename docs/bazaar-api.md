@@ -38,6 +38,13 @@ Responses include safe integration fields such as:
 - variants with `createdAt`/`updatedAt` timestamps and variant attribute values
 - store-scoped stock and variant stock; `pcs` is a compatibility alias for `stockQty` on the product, each variant, and each `stockByVariant` row
 - `currencyCode` and currency rate metadata
+- backward-compatible `price`/`priceKgs` current sellable price fields
+- additive `pricing` on products and variants with `basePrice`, `effectivePrice`,
+  `compareAtPrice`, `hasDiscount`, and percentage schedule metadata
+
+External storefronts should charge `pricing.effectivePrice`, show
+`pricing.compareAtPrice` as the crossed-out original when non-null, and use
+`pricing.discount` for sale badges. Variant pricing is resolved independently.
 
 Private cost/accounting fields are not exposed.
 
@@ -56,6 +63,9 @@ Orders are created for the token store only.
 
 - Product lines must reference products active in the same store.
 - Orders store currency snapshots from the store.
+- The server resolves any active store/variant discount at order creation and snapshots the
+  base unit price, applied percentage/amount, and final unit price on each order line. Clients
+  cannot submit a discounted unit price, and later discount changes never rewrite old orders.
 - Customer name/email/phone from the order upserts the customer database for that same store.
 - If both email and phone are missing, no customer row is created.
 - Existing API order creation still returns `{ order: { id, number, status, totalKgs } }`.

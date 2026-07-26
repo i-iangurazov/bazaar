@@ -26,6 +26,7 @@ import {
   type SupportedCurrencyCode,
 } from "@/lib/currency";
 import { resolveCurrencySnapshot } from "@/lib/currencyDisplay";
+import { getEffectiveProductPrice } from "@/server/services/effectiveProductPrice";
 
 const DEFAULT_ACCENT_COLOR = "#2a6be4";
 const DEFAULT_FONT_FAMILY = BazaarCatalogFontFamily.NotoSans;
@@ -120,31 +121,43 @@ const generateUniqueSlug = async (tx: Prisma.TransactionClient) => {
 const cacheKeyBySlug = (slug: string) => `bazaar-catalog:public:v3:${slug}`;
 
 const cacheGet = async <T>(key: string): Promise<T | null> => {
-  const redis = getRedisPublisher();
-  if (!redis) {
+  try {
+    const redis = getRedisPublisher();
+    if (!redis) {
+      return null;
+    }
+    const raw = await redis.get(key);
+    if (!raw) {
+      return null;
+    }
+    return JSON.parse(raw) as T;
+  } catch {
     return null;
   }
-  const raw = await redis.get(key);
-  if (!raw) {
-    return null;
-  }
-  return JSON.parse(raw) as T;
 };
 
-const cacheSet = async (key: string, value: unknown) => {
-  const redis = getRedisPublisher();
-  if (!redis) {
-    return;
+const cacheSet = async (key: string, value: unknown, ttlSeconds = PUBLIC_CACHE_TTL_SECONDS) => {
+  try {
+    const redis = getRedisPublisher();
+    if (!redis) {
+      return;
+    }
+    await redis.set(key, JSON.stringify(value), "EX", ttlSeconds);
+  } catch {
+    // Public catalog correctness does not depend on Redis availability.
   }
-  await redis.set(key, JSON.stringify(value), "EX", PUBLIC_CACHE_TTL_SECONDS);
 };
 
 const cacheDel = async (key: string) => {
-  const redis = getRedisPublisher();
-  if (!redis) {
-    return;
+  try {
+    const redis = getRedisPublisher();
+    if (!redis) {
+      return;
+    }
+    await redis.del(key);
+  } catch {
+    // Cache invalidation is best-effort when Redis is unavailable.
   }
-  await redis.del(key);
 };
 
 const toMoney = (value: Prisma.Decimal | number | null | undefined) =>
@@ -709,12 +722,18 @@ type PublicCatalogPayload = {
     name: string;
     category: string | null;
     priceKgs: number;
+    compareAtPriceKgs: number | null;
+    hasDiscount: boolean;
+    discountPercentage: number | null;
     imageUrl: string | null;
     isBundle: boolean;
     variants: Array<{
       id: string;
       name: string;
       priceKgs: number;
+      compareAtPriceKgs: number | null;
+      hasDiscount: boolean;
+      discountPercentage: number | null;
       imageUrl: string | null;
     }>;
   }>;
@@ -817,22 +836,16 @@ export const getPublicBazaarCatalog = async (
           variantId: true,
           variantKey: true,
           priceKgs: true,
+          discountType: true,
+          discountPercentage: true,
+          discountStartsAt: true,
+          discountEndsAt: true,
         },
       })
     : [];
 
-  const basePriceByProductId = new Map<string, number>();
-  const priceByProductVariantKey = new Map<string, number>();
-  for (const storePrice of storePrices) {
-    const variantKey = storePrice.variantKey || "BASE";
-    priceByProductVariantKey.set(
-      `${storePrice.productId}:${variantKey}`,
-      Number(storePrice.priceKgs),
-    );
-    if (variantKey === "BASE") {
-      basePriceByProductId.set(storePrice.productId, Number(storePrice.priceKgs));
-    }
-  }
+  const basePriceByProductId = new Map(storePrices.filter((price) => price.variantKey === "BASE").map((price) => [price.productId, price]));
+  const priceByProductVariantKey = new Map(storePrices.map((price) => [`${price.productId}:${price.variantKey || "BASE"}`, price]));
 
   const currencyCode = normalizeCurrencyCode(catalog.store.currencyCode);
   const currencyRateKgsPerUnit = normalizeCurrencyRateKgsPerUnit(
@@ -841,6 +854,7 @@ export const getPublicBazaarCatalog = async (
   );
 
   const categoryMap = new Map<string, { key: string; name: string | null; count: number }>();
+  const pricingNow = new Date();
   const payloadProducts = products.map((product) => {
     const categoryName = product.category?.trim() || null;
     const categoryKey = categoryName ? categoryName.toLowerCase() : "__uncategorized";
@@ -855,16 +869,47 @@ export const getPublicBazaarCatalog = async (
       });
     }
 
-    const basePrice = toMoney(product.basePriceKgs);
-    const effectivePrice = basePriceByProductId.get(product.id) ?? basePrice;
+    const baseRow = basePriceByProductId.get(product.id);
+    const basePricing = getEffectiveProductPrice({
+      basePrice: baseRow?.priceKgs ?? product.basePriceKgs ?? 0,
+      discount:
+        baseRow?.discountType === "PERCENTAGE" && baseRow.discountPercentage
+          ? {
+              type: "PERCENTAGE",
+              percentage: baseRow.discountPercentage,
+              startsAt: baseRow.discountStartsAt,
+              endsAt: baseRow.discountEndsAt,
+            }
+          : null,
+      now: pricingNow,
+      currency: "KGS",
+    });
     const imageUrl = resolveProductListImageUrl(product);
     const variants = product.variants.map((variant) => {
-      const variantPrice =
-        priceByProductVariantKey.get(`${product.id}:${variant.id}`) ?? effectivePrice;
+      const variantRow = priceByProductVariantKey.get(`${product.id}:${variant.id}`) ?? baseRow;
+      const variantPricing = getEffectiveProductPrice({
+        basePrice: variantRow?.priceKgs ?? product.basePriceKgs ?? 0,
+        discount:
+          variantRow?.discountType === "PERCENTAGE" && variantRow.discountPercentage
+            ? {
+                type: "PERCENTAGE",
+                percentage: variantRow.discountPercentage,
+                startsAt: variantRow.discountStartsAt,
+                endsAt: variantRow.discountEndsAt,
+              }
+            : null,
+        now: pricingNow,
+        currency: "KGS",
+      });
       return {
         id: variant.id,
         name: normalizeOptionalText(variant.name) ?? variant.id.slice(0, 8),
-        priceKgs: roundCatalogPrice(variantPrice, currencyCode, currencyRateKgsPerUnit),
+        priceKgs: roundCatalogPrice(variantPricing.effectivePrice.toNumber(), currencyCode, currencyRateKgsPerUnit),
+        compareAtPriceKgs: variantPricing.compareAtPrice
+          ? roundCatalogPrice(variantPricing.compareAtPrice.toNumber(), currencyCode, currencyRateKgsPerUnit)
+          : null,
+        hasDiscount: variantPricing.hasActiveDiscount,
+        discountPercentage: variantPricing.discountPercentage?.toNumber() ?? null,
         imageUrl: sanitizeImageUrl(variant.image?.url),
       };
     });
@@ -873,7 +918,12 @@ export const getPublicBazaarCatalog = async (
       id: product.id,
       name: product.name,
       category: categoryName,
-      priceKgs: roundCatalogPrice(effectivePrice, currencyCode, currencyRateKgsPerUnit),
+      priceKgs: roundCatalogPrice(basePricing.effectivePrice.toNumber(), currencyCode, currencyRateKgsPerUnit),
+      compareAtPriceKgs: basePricing.compareAtPrice
+        ? roundCatalogPrice(basePricing.compareAtPrice.toNumber(), currencyCode, currencyRateKgsPerUnit)
+        : null,
+      hasDiscount: basePricing.hasActiveDiscount,
+      discountPercentage: basePricing.discountPercentage?.toNumber() ?? null,
       imageUrl,
       isBundle: product.isBundle,
       variants,
@@ -896,7 +946,20 @@ export const getPublicBazaarCatalog = async (
     products: payloadProducts,
   };
 
-  await cacheSet(cacheKey, payload);
+  const nextPricingBoundary = storePrices
+    .flatMap((price) => [price.discountStartsAt, price.discountEndsAt])
+    .filter((value): value is Date => Boolean(value && value.getTime() > pricingNow.getTime()))
+    .sort((left, right) => left.getTime() - right.getTime())[0];
+  const cacheTtlSeconds = nextPricingBoundary
+    ? Math.max(
+        1,
+        Math.min(
+          PUBLIC_CACHE_TTL_SECONDS,
+          Math.ceil((nextPricingBoundary.getTime() - pricingNow.getTime()) / 1_000),
+        ),
+      )
+    : PUBLIC_CACHE_TTL_SECONDS;
+  await cacheSet(cacheKey, payload, cacheTtlSeconds);
   return payload;
 };
 
@@ -1016,6 +1079,10 @@ export const createCatalogCheckoutOrder = async (input: {
           variantId: true,
           variantKey: true,
           priceKgs: true,
+          discountType: true,
+          discountPercentage: true,
+          discountStartsAt: true,
+          discountEndsAt: true,
         },
       }),
       tx.productCost.findMany({
@@ -1041,7 +1108,7 @@ export const createCatalogCheckoutOrder = async (input: {
     const storePriceByProductVariantKey = new Map(
       storePrices.map((storePrice) => [
         `${storePrice.productId}:${storePrice.variantKey}`,
-        Number(storePrice.priceKgs),
+        storePrice,
       ]),
     );
     const productCostByProductVariantKey = new Map(
@@ -1051,6 +1118,7 @@ export const createCatalogCheckoutOrder = async (input: {
       ]),
     );
 
+    const pricedAt = new Date();
     const lines = normalizedLines.map((line) => {
       const product = productsById.get(line.productId);
       if (!product) {
@@ -1063,12 +1131,26 @@ export const createCatalogCheckoutOrder = async (input: {
         }
       }
 
-      const basePrice = toMoney(product.basePriceKgs);
-      const unitPrice =
+      const storePrice =
         storePriceByProductVariantKey.get(`${line.productId}:${line.variantKey}`) ??
-        storePriceByProductVariantKey.get(`${line.productId}:BASE`) ??
-        basePrice;
-      const lineTotal = roundMoney(unitPrice * line.qty);
+        storePriceByProductVariantKey.get(`${line.productId}:BASE`);
+      const effective = getEffectiveProductPrice({
+        basePrice: storePrice?.priceKgs ?? product.basePriceKgs ?? 0,
+        discount:
+          storePrice?.discountType === "PERCENTAGE" && storePrice.discountPercentage
+            ? {
+                type: "PERCENTAGE",
+                percentage: storePrice.discountPercentage,
+                startsAt: storePrice.discountStartsAt,
+                endsAt: storePrice.discountEndsAt,
+              }
+            : null,
+        now: pricedAt,
+        currency: "KGS",
+      });
+      const basePrice = effective.basePrice.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+      const unitPrice = effective.effectivePrice;
+      const lineTotal = unitPrice.mul(line.qty).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
       const unitCost =
         productCostByProductVariantKey.get(`${line.productId}:${line.variantKey}`) ??
         (line.variantKey !== "BASE"
@@ -1080,14 +1162,24 @@ export const createCatalogCheckoutOrder = async (input: {
         qty: line.qty,
         variantId: line.variantId,
         variantKey: line.variantKey,
-        unitPriceKgs: roundMoney(unitPrice),
+        baseUnitPriceKgs: basePrice,
+        appliedDiscountType: effective.hasActiveDiscount ? "PERCENTAGE" as const : null,
+        appliedDiscountPercentage: effective.hasActiveDiscount
+          ? effective.discountPercentage
+          : null,
+        appliedDiscountAmountKgs: effective.hasActiveDiscount
+          ? basePrice.minus(unitPrice).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)
+          : null,
+        unitPriceKgs: unitPrice,
         lineTotalKgs: lineTotal,
         unitCostKgs: unitCost,
         lineCostTotalKgs: lineCostTotal,
       };
     });
 
-    const subtotal = roundMoney(lines.reduce((sum, line) => sum + line.lineTotalKgs, 0));
+    const subtotal = lines
+      .reduce((sum, line) => sum.plus(line.lineTotalKgs), new Prisma.Decimal(0))
+      .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
     const number = await nextSalesOrderNumber(tx, catalog.organizationId);
     const order = await tx.customerOrder.create({
       data: {
@@ -1135,7 +1227,7 @@ export const createCatalogCheckoutOrder = async (input: {
       source: CustomerOrderSource.CATALOG,
     },
   });
-  void sendOrderConfirmationEmail({
+  const confirmation = sendOrderConfirmationEmail({
     organizationId: result.organizationId,
     customerOrderId: result.id,
     throwOnMissingEmail: false,
@@ -1145,6 +1237,8 @@ export const createCatalogCheckoutOrder = async (input: {
       "catalogue order confirmation email send failed",
     );
   });
+  if (process.env.NODE_ENV === "test") await confirmation;
+  else void confirmation;
 
   return {
     id: result.id,
