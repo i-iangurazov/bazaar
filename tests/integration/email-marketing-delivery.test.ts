@@ -4,6 +4,8 @@ import {
   CustomerSource,
   EmailCampaignRecipientStatus,
   EmailCampaignStatus,
+  EmailSenderDomainStatus,
+  EmailSenderIdentityStatus,
   type Role,
 } from "@prisma/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -11,6 +13,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "@/server/db/prisma";
 import {
   processEmailProviderRecipientEvent,
+  reconcileEmailCampaignRecipients,
   recomputeEmailCampaignDeliverySummary,
 } from "@/server/services/emailCampaignDeliveryState";
 import {
@@ -481,6 +484,180 @@ describeDb("email marketing durable delivery", () => {
       fetchMock.mockRestore();
       delete process.env.EMAIL_PROVIDER;
       delete process.env.RESEND_API_KEY;
+    }
+  });
+
+  it("reconciles a missing delivered webhook from the provider lookup", async () => {
+    const { org, store } = await seedBase({ plan: "BUSINESS" });
+    const customer = await prisma.customer.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Reconciled recipient",
+        email: "reconciled@example.com",
+      },
+    });
+    const campaign = await prisma.emailCampaign.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        status: EmailCampaignStatus.AWAITING_EVENTS,
+        name: "Reconciliation",
+        subject: "Reconciliation",
+        body: "Reconciliation",
+        recipientCount: 1,
+        acceptedCount: 1,
+        unresolvedCount: 1,
+      },
+    });
+    const recipient = await prisma.emailCampaignRecipient.create({
+      data: {
+        organizationId: org.id,
+        campaignId: campaign.id,
+        customerId: customer.id,
+        email: "reconciled@example.com",
+        status: EmailCampaignRecipientStatus.ACCEPTED,
+        provider: "resend",
+        providerMessageId: "resend_missing_webhook",
+        sendOperationKey: `reconcile:${randomUUID()}`,
+        acceptedAt: new Date("2026-07-27T08:00:00.000Z"),
+      },
+    });
+    const previousApiKey = process.env.RESEND_API_KEY;
+    process.env.RESEND_API_KEY = "re_test_key";
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ id: "resend_missing_webhook", last_event: "delivered" }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+    try {
+      await expect(
+        reconcileEmailCampaignRecipients({
+          organizationId: org.id,
+          campaignId: campaign.id,
+          stuckBefore: new Date("2026-07-28T00:00:00.000Z"),
+        }),
+      ).resolves.toMatchObject({ inspected: 1, reconciled: 1 });
+      await expect(
+        prisma.emailCampaignRecipient.findUniqueOrThrow({ where: { id: recipient.id } }),
+      ).resolves.toMatchObject({
+        status: EmailCampaignRecipientStatus.DELIVERED,
+        providerStatus: "delivered",
+      });
+      await expect(
+        prisma.emailCampaign.findUniqueOrThrow({ where: { id: campaign.id } }),
+      ).resolves.toMatchObject({
+        recipientCount: 1,
+        deliveredCount: 1,
+        unresolvedCount: 0,
+        status: EmailCampaignStatus.COMPLETED,
+      });
+      expect(await prisma.emailCampaignRecipientEvent.count({ where: { recipientId: recipient.id } }))
+        .toBe(1);
+    } finally {
+      fetchMock.mockRestore();
+      if (previousApiKey === undefined) delete process.env.RESEND_API_KEY;
+      else process.env.RESEND_API_KEY = previousApiKey;
+    }
+  });
+
+  it("submits through the verified custom sender instead of Bazaar fallback", async () => {
+    const { org, store } = await seedBase({ plan: "BUSINESS" });
+    const domain = await prisma.emailSenderDomain.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        domain: "mail.example.com",
+        status: EmailSenderDomainStatus.VERIFIED,
+        resendStatus: "verified",
+        verifiedAt: new Date(),
+      },
+    });
+    const sender = await prisma.emailSenderIdentity.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        domainId: domain.id,
+        displayName: "Example Store",
+        fromEmail: "offers@mail.example.com",
+        status: EmailSenderIdentityStatus.VERIFIED,
+      },
+    });
+    const customer = await prisma.customer.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Sender test",
+        email: "sender-test@example.com",
+      },
+    });
+    const campaign = await prisma.emailCampaign.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        senderIdentityId: sender.id,
+        status: EmailCampaignStatus.QUEUED,
+        name: "Verified sender",
+        subject: "Verified sender",
+        body: "Verified sender body",
+        recipientCount: 1,
+        queuedCount: 1,
+        unresolvedCount: 1,
+      },
+    });
+    await prisma.emailCampaignRecipient.create({
+      data: {
+        organizationId: org.id,
+        campaignId: campaign.id,
+        customerId: customer.id,
+        email: "sender-test@example.com",
+        status: EmailCampaignRecipientStatus.QUEUED,
+        sendOperationKey: `verified-sender:${randomUUID()}`,
+      },
+    });
+    const previous = {
+      provider: process.env.EMAIL_PROVIDER,
+      apiKey: process.env.RESEND_API_KEY,
+      nextAuthUrl: process.env.NEXTAUTH_URL,
+      nextAuthSecret: process.env.NEXTAUTH_SECRET,
+    };
+    process.env.EMAIL_PROVIDER = "resend";
+    process.env.RESEND_API_KEY = "re_test_key";
+    process.env.NEXTAUTH_URL = "https://app.bazaar.test";
+    process.env.NEXTAUTH_SECRET = "email-delivery-test-secret";
+    let submittedFrom = "";
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementationOnce(async (_url, init) => {
+      const payload = JSON.parse(String(init?.body)) as Array<{ from?: string }>;
+      submittedFrom = payload[0]?.from ?? "";
+      return new Response(JSON.stringify({ data: [{ id: "resend_custom_sender" }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    try {
+      await deliverPendingEmailCampaigns({
+        organizationId: org.id,
+        campaignId: campaign.id,
+        maxBatches: 1,
+      });
+      expect(submittedFrom).toBe("Example Store <offers@mail.example.com>");
+      await expect(
+        prisma.emailCampaignRecipient.findFirstOrThrow({ where: { campaignId: campaign.id } }),
+      ).resolves.toMatchObject({
+        status: EmailCampaignRecipientStatus.ACCEPTED,
+        providerMessageId: "resend_custom_sender",
+      });
+    } finally {
+      fetchMock.mockRestore();
+      if (previous.provider === undefined) delete process.env.EMAIL_PROVIDER;
+      else process.env.EMAIL_PROVIDER = previous.provider;
+      if (previous.apiKey === undefined) delete process.env.RESEND_API_KEY;
+      else process.env.RESEND_API_KEY = previous.apiKey;
+      if (previous.nextAuthUrl === undefined) delete process.env.NEXTAUTH_URL;
+      else process.env.NEXTAUTH_URL = previous.nextAuthUrl;
+      if (previous.nextAuthSecret === undefined) delete process.env.NEXTAUTH_SECRET;
+      else process.env.NEXTAUTH_SECRET = previous.nextAuthSecret;
     }
   });
 });
