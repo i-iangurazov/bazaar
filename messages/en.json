@@ -4901,6 +4901,7 @@
     "cannotDemoteSelf": "Cannot demote self",
     "cannotDeactivateSelf": "Cannot deactivate self",
     "requestInProgress": "Request already in progress. Please wait a moment.",
+    "idempotencyKeyPayloadMismatch": "This request key was already used with different discount details. Refresh and try again.",
     "storeAccessDenied": "Store access denied",
     "posRegisterDeleteBlockedByHistory": "This register has sales/history and cannot be deleted. You can deactivate it instead.",
     "posRegisterStoreChangeBlockedByHistory": "This register already has sales or shift history, so its store cannot be changed.",

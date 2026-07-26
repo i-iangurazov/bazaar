@@ -1,4 +1,5 @@
 import {
+  CatalogDiscountType,
   Prisma,
   CustomerOrderEmailType,
   CustomerOrderSource,
@@ -18,6 +19,7 @@ import { getLogger } from "@/server/logging";
 import { resolveCurrencySnapshot } from "@/lib/currencyDisplay";
 import { upsertCustomerFromOrderTx } from "@/server/services/customers";
 import { processEmailAutomationTrigger } from "@/server/services/emailMarketing";
+import { getEffectiveProductPrice } from "@/server/services/effectiveProductPrice";
 import {
   sendOrderConfirmationEmail,
   sendOrderCancellationEmail,
@@ -185,15 +187,49 @@ const resolveUnitPrice = async (input: {
         variantKey,
       },
     },
-    select: { priceKgs: true },
+    select: {
+      priceKgs: true,
+      discountType: true,
+      discountPercentage: true,
+      discountStartsAt: true,
+      discountEndsAt: true,
+    },
   });
 
-  const basePrice = product.basePriceKgs ? Number(product.basePriceKgs) : 0;
-  const unitPrice = override ? Number(override.priceKgs) : basePrice;
+  const effective = getEffectiveProductPrice({
+    basePrice: override?.priceKgs ?? product.basePriceKgs ?? 0,
+    discount:
+      override?.discountType === CatalogDiscountType.PERCENTAGE &&
+      override.discountPercentage
+        ? {
+            type: "PERCENTAGE",
+            percentage: override.discountPercentage,
+            startsAt: override.discountStartsAt,
+            endsAt: override.discountEndsAt,
+          }
+        : null,
+    now: new Date(),
+    currency: "KGS",
+  });
+  const baseUnitPriceKgs = effective.basePrice.toDecimalPlaces(
+    2,
+    Prisma.Decimal.ROUND_HALF_UP,
+  );
+  const unitPriceKgs = effective.effectivePrice;
 
   return {
     variantKey,
-    unitPrice: Number.isFinite(unitPrice) ? unitPrice : 0,
+    baseUnitPriceKgs,
+    appliedDiscountType: effective.hasActiveDiscount
+      ? CatalogDiscountType.PERCENTAGE
+      : null,
+    appliedDiscountPercentage: effective.hasActiveDiscount
+      ? effective.discountPercentage
+      : null,
+    appliedDiscountAmountKgs: effective.hasActiveDiscount
+      ? baseUnitPriceKgs.minus(unitPriceKgs).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)
+      : null,
+    unitPrice: unitPriceKgs.toNumber(),
     isBundle: product.isBundle,
   };
 };
@@ -663,6 +699,10 @@ export const createCustomerOrderDraft = async (input: {
             variantId: lineInput.variantId ?? null,
             variantKey: resolved.variantKey,
             qty: lineInput.qty,
+            baseUnitPriceKgs: resolved.baseUnitPriceKgs,
+            appliedDiscountType: resolved.appliedDiscountType,
+            appliedDiscountPercentage: resolved.appliedDiscountPercentage,
+            appliedDiscountAmountKgs: resolved.appliedDiscountAmountKgs,
             unitPriceKgs: resolved.unitPrice,
             lineTotalKgs: lineTotal,
             unitCostKgs: unitCost,
@@ -867,13 +907,14 @@ export const addCustomerOrderLine = async (input: {
 
     assertEditable(order.status);
 
-    const { variantKey, unitPrice, isBundle } = await resolveUnitPrice({
+    const resolved = await resolveUnitPrice({
       tx,
       organizationId: input.organizationId,
       storeId: order.storeId,
       productId: input.productId,
       variantId: input.variantId,
     });
+    const { variantKey, unitPrice, isBundle } = resolved;
     const unitCost = await resolveUnitCost({
       tx,
       organizationId: input.organizationId,
@@ -904,6 +945,10 @@ export const addCustomerOrderLine = async (input: {
         variantId: input.variantId ?? null,
         variantKey,
         qty: input.qty,
+        baseUnitPriceKgs: resolved.baseUnitPriceKgs,
+        appliedDiscountType: resolved.appliedDiscountType,
+        appliedDiscountPercentage: resolved.appliedDiscountPercentage,
+        appliedDiscountAmountKgs: resolved.appliedDiscountAmountKgs,
         unitPriceKgs: unitPrice,
         lineTotalKgs: lineTotal,
         unitCostKgs: unitCost,

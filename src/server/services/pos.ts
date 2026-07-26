@@ -1,4 +1,5 @@
 import {
+  CatalogDiscountType,
   CashDrawerMovementType,
   CustomerOrderStatus,
   KkmMode,
@@ -36,6 +37,7 @@ import { withIdempotency } from "@/server/services/idempotency";
 import { toJson } from "@/server/services/json";
 import { sanitizeListImageUrl } from "@/server/services/products/serializers";
 import { upsertCustomerFromOrderTx } from "@/server/services/customers";
+import { getEffectiveProductPrice } from "@/server/services/effectiveProductPrice";
 import {
   calculateCashDiscrepancyKgs,
   calculateExpectedCashKgs,
@@ -433,15 +435,49 @@ const resolveUnitPrice = async (input: {
         variantKey,
       },
     },
-    select: { priceKgs: true },
+    select: {
+      priceKgs: true,
+      discountType: true,
+      discountPercentage: true,
+      discountStartsAt: true,
+      discountEndsAt: true,
+    },
   });
 
-  const basePrice = product.basePriceKgs ? Number(product.basePriceKgs) : 0;
-  const unitPrice = override ? Number(override.priceKgs) : basePrice;
+  const effective = getEffectiveProductPrice({
+    basePrice: override?.priceKgs ?? product.basePriceKgs ?? 0,
+    discount:
+      override?.discountType === CatalogDiscountType.PERCENTAGE &&
+      override.discountPercentage
+        ? {
+            type: "PERCENTAGE",
+            percentage: override.discountPercentage,
+            startsAt: override.discountStartsAt,
+            endsAt: override.discountEndsAt,
+          }
+        : null,
+    now: new Date(),
+    currency: "KGS",
+  });
+  const baseUnitPriceKgs = effective.basePrice.toDecimalPlaces(
+    2,
+    Prisma.Decimal.ROUND_HALF_UP,
+  );
+  const unitPriceKgs = effective.effectivePrice;
 
   return {
     variantKey,
-    unitPrice: Number.isFinite(unitPrice) ? unitPrice : 0,
+    baseUnitPriceKgs,
+    appliedDiscountType: effective.hasActiveDiscount
+      ? CatalogDiscountType.PERCENTAGE
+      : null,
+    appliedDiscountPercentage: effective.hasActiveDiscount
+      ? effective.discountPercentage
+      : null,
+    appliedDiscountAmountKgs: effective.hasActiveDiscount
+      ? baseUnitPriceKgs.minus(unitPriceKgs).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)
+      : null,
+    unitPrice: unitPriceKgs.toNumber(),
     isBundle: product.isBundle,
   };
 };
@@ -1966,6 +2002,10 @@ export const createPosSaleDraft = async (input: {
               variantId: lineInput.variantId ?? null,
               variantKey: resolved.variantKey,
               qty: lineInput.qty,
+              baseUnitPriceKgs: resolved.baseUnitPriceKgs,
+              appliedDiscountType: resolved.appliedDiscountType,
+              appliedDiscountPercentage: resolved.appliedDiscountPercentage,
+              appliedDiscountAmountKgs: resolved.appliedDiscountAmountKgs,
               unitPriceKgs: resolved.unitPrice,
               lineTotalKgs: roundMoney(resolved.unitPrice * lineInput.qty),
               unitCostKgs: unitCost,
@@ -3288,6 +3328,10 @@ export const editCompletedPosSale = async (input: {
             variantId: line.variantId,
             variantKey: line.variantKey,
             qty: line.qty,
+            baseUnitPriceKgs: line.unitPriceKgs,
+            appliedDiscountType: null,
+            appliedDiscountPercentage: null,
+            appliedDiscountAmountKgs: null,
             unitPriceKgs: line.unitPriceKgs,
             lineTotalKgs: line.lineTotalKgs,
             unitCostKgs: line.unitCostKgs,
@@ -3528,6 +3572,10 @@ export const addPosSaleLine = async (input: {
         variantId: input.variantId ?? null,
         variantKey: resolved.variantKey,
         qty: input.qty,
+        baseUnitPriceKgs: resolved.baseUnitPriceKgs,
+        appliedDiscountType: resolved.appliedDiscountType,
+        appliedDiscountPercentage: resolved.appliedDiscountPercentage,
+        appliedDiscountAmountKgs: resolved.appliedDiscountAmountKgs,
         unitPriceKgs: resolved.unitPrice,
         lineTotalKgs: roundMoney(resolved.unitPrice * input.qty),
         unitCostKgs: unitCost,
@@ -3603,6 +3651,14 @@ export const updatePosSaleLine = async (input: {
       where: { id: line.id },
       data: {
         qty: nextQty,
+        ...(input.unitPriceKgs !== undefined
+          ? {
+              baseUnitPriceKgs: nextUnitPriceKgs,
+              appliedDiscountType: null,
+              appliedDiscountPercentage: null,
+              appliedDiscountAmountKgs: null,
+            }
+          : {}),
         unitPriceKgs: nextUnitPriceKgs,
         lineTotalKgs: roundMoney(nextUnitPriceKgs * nextQty),
         lineCostTotalKgs:

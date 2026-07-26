@@ -7,6 +7,10 @@ import {
   applyCatalogDiscount,
   removeCatalogDiscount,
 } from "@/server/services/catalogDiscounts";
+import {
+  addCustomerOrderLine,
+  createCustomerOrderDraft,
+} from "@/server/services/salesOrders";
 
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 
@@ -106,6 +110,14 @@ describeDb("store/variant catalog discounts", () => {
         discount,
       }),
     ).resolves.toMatchObject({ replayed: true, affectedPriceRowCount: 2 });
+    await expect(
+      applyCatalogDiscount({
+        user: caller(adminUser),
+        actorId: adminUser.id,
+        requestId: "catalog-discount-reused-key-with-different-payload",
+        discount: { ...discount, percentage: 25 },
+      }),
+    ).rejects.toMatchObject({ message: "idempotencyKeyPayloadMismatch" });
 
     const prices = await prisma.storePrice.findMany({
       where: { productId: product.id },
@@ -180,6 +192,46 @@ describeDb("store/variant catalog discounts", () => {
       lineTotalKgs: new Prisma.Decimal(2_400),
     });
 
+    const manualOrder = await createCustomerOrderDraft({
+      organizationId: org.id,
+      storeId: store.id,
+      actorId: adminUser.id,
+      requestId: "discount-manual-order",
+      lines: [{ productId: product.id, variantId: variant.id, qty: 1 }],
+    });
+    const manualOrderLine = await prisma.customerOrderLine.findFirstOrThrow({
+      where: { customerOrderId: manualOrder.id },
+    });
+    expect(manualOrderLine).toMatchObject({
+      baseUnitPriceKgs: new Prisma.Decimal(1_500),
+      unitPriceKgs: new Prisma.Decimal(1_200),
+      appliedDiscountType: "PERCENTAGE",
+      appliedDiscountPercentage: new Prisma.Decimal(20),
+      appliedDiscountAmountKgs: new Prisma.Decimal(300),
+    });
+    const emptyManualOrder = await createCustomerOrderDraft({
+      organizationId: org.id,
+      storeId: store.id,
+      actorId: adminUser.id,
+      requestId: "discount-empty-manual-order",
+    });
+    const addedManualLine = await addCustomerOrderLine({
+      organizationId: org.id,
+      customerOrderId: emptyManualOrder.id,
+      productId: product.id,
+      variantId: variant.id,
+      qty: 1,
+      actorId: adminUser.id,
+      requestId: "discount-manual-order-add-line",
+    });
+    expect(addedManualLine).toMatchObject({
+      baseUnitPriceKgs: new Prisma.Decimal(1_500),
+      unitPriceKgs: 1_200,
+      appliedDiscountType: "PERCENTAGE",
+      appliedDiscountPercentage: new Prisma.Decimal(20),
+      appliedDiscountAmountKgs: new Prisma.Decimal(300),
+    });
+
     await removeCatalogDiscount({
       user: caller(adminUser),
       actorId: adminUser.id,
@@ -199,6 +251,13 @@ describeDb("store/variant catalog discounts", () => {
     ).resolves.toBe(0);
     await expect(
       prisma.customerOrderLine.findUniqueOrThrow({ where: { id: orderLine.id } }),
+    ).resolves.toMatchObject({
+      baseUnitPriceKgs: new Prisma.Decimal(1_500),
+      unitPriceKgs: new Prisma.Decimal(1_200),
+      appliedDiscountPercentage: new Prisma.Decimal(20),
+    });
+    await expect(
+      prisma.customerOrderLine.findUniqueOrThrow({ where: { id: manualOrderLine.id } }),
     ).resolves.toMatchObject({
       baseUnitPriceKgs: new Prisma.Decimal(1_500),
       unitPriceKgs: new Prisma.Decimal(1_200),

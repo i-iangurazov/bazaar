@@ -17,9 +17,9 @@ const scope = {
 } as const;
 
 describe("Bazaar API additive pricing contract", () => {
-  it("preserves the legacy field while exposing an active sale", () => {
+  it("preserves the legacy current-sellable-price field while exposing an active sale", () => {
     const result = withBazaarCatalogPricing({
-      item: { id: "product-a", price: 1000, priceKgs: 1000 },
+      item: { id: "product-a", price: 800, priceKgs: 800 },
       priceScope: {
         ...scope,
         discount: { type: "PERCENTAGE", percentage: "20" },
@@ -27,7 +27,7 @@ describe("Bazaar API additive pricing contract", () => {
       now,
     });
 
-    expect(result.price).toBe(1000);
+    expect(result.price).toBe(800);
     expect(result.pricing).toEqual({
       currency: "KGS",
       basePrice: 1000,

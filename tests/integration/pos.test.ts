@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { CashDrawerMovementType, PosPaymentMethod, StockMovementType } from "@prisma/client";
+import { CashDrawerMovementType, PosPaymentMethod, Prisma, StockMovementType } from "@prisma/client";
 
 import { buildPosPaymentSubmitPayload } from "@/lib/posSaleMath";
 import { prisma } from "@/server/db/prisma";
@@ -2378,6 +2378,14 @@ describeDb("pos", () => {
       unitPriceKgs: 125,
       lineTotalKgs: 250,
     });
+    await expect(
+      prisma.customerOrderLine.findUniqueOrThrow({ where: { id: line.id } }),
+    ).resolves.toMatchObject({
+      baseUnitPriceKgs: new Prisma.Decimal(125),
+      appliedDiscountType: null,
+      appliedDiscountPercentage: null,
+      appliedDiscountAmountKgs: null,
+    });
     expect(fetched?.subtotalKgs).toBe(250);
     expect(fetched?.totalKgs).toBe(250);
 
@@ -2386,6 +2394,59 @@ describeDb("pos", () => {
       select: { basePriceKgs: true },
     });
     expect(Number(productAfterEdit?.basePriceKgs)).toBe(100);
+  });
+
+  it("uses the active StorePrice discount and snapshots it on a POS line", async () => {
+    const { org, store, product, cashierUser } = await seedBase({ plan: "BUSINESS" });
+    await prisma.product.update({ where: { id: product.id }, data: { basePriceKgs: 1_000 } });
+    await prisma.storePrice.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        productId: product.id,
+        variantKey: "BASE",
+        priceKgs: 1_000,
+        discountType: "PERCENTAGE",
+        discountPercentage: 20,
+      },
+    });
+    const register = await prisma.posRegister.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Discount Register",
+        code: "DISCOUNT",
+      },
+    });
+    const caller = createTestCaller({
+      id: cashierUser.id,
+      email: cashierUser.email,
+      role: cashierUser.role,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+    await caller.pos.shifts.open({
+      registerId: register.id,
+      openingCashKgs: 0,
+      idempotencyKey: "pos-open-discount-snapshot-1",
+    });
+    const sale = await caller.pos.sales.createDraft({ registerId: register.id });
+    const line = await caller.pos.sales.addLine({
+      saleId: sale.id,
+      productId: product.id,
+      qty: 2,
+    });
+    const persisted = await prisma.customerOrderLine.findUniqueOrThrow({
+      where: { id: line.id },
+    });
+    expect(persisted).toMatchObject({
+      baseUnitPriceKgs: new Prisma.Decimal(1_000),
+      unitPriceKgs: new Prisma.Decimal(800),
+      appliedDiscountType: "PERCENTAGE",
+      appliedDiscountPercentage: new Prisma.Decimal(20),
+      appliedDiscountAmountKgs: new Prisma.Decimal(200),
+      lineTotalKgs: new Prisma.Decimal(1_600),
+    });
   });
 
   it("requires marking codes when store marking mode is REQUIRED_ON_SALE", async () => {

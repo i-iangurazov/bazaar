@@ -51,8 +51,9 @@ export const mapBazaarCatalogPricing = (
 };
 
 /**
- * Adds pricing without deriving or rewriting the legacy `price` field. The caller must pass the
- * existing response item as-is, making any legacy semantic change an explicit versioned decision.
+ * Adds pricing without deriving or rewriting the legacy `price` field. Bazaar's documented legacy
+ * semantics are the current sellable price, so callers pass `pricing.effectivePrice` there while
+ * older clients continue to receive the same scalar field and newer clients get the full breakdown.
  */
 export const withBazaarCatalogPricing = <TItem extends { price: number }>(input: {
   item: TItem;

@@ -7,16 +7,18 @@ export type IdempotencyContext = {
   key: string;
   route: string;
   userId: string;
+  request?: Prisma.InputJsonValue;
 };
 
-const hashResponse = (response: Prisma.InputJsonValue) =>
-  createHash("sha256").update(JSON.stringify(response ?? null)).digest("hex");
+const hashJson = (value: Prisma.InputJsonValue) =>
+  createHash("sha256").update(JSON.stringify(value ?? null)).digest("hex");
 
 export const withIdempotency = async <T>(
   tx: Prisma.TransactionClient,
   context: IdempotencyContext,
   handler: () => Promise<T>,
 ): Promise<{ result: T; replayed: boolean }> => {
+  const requestHash = context.request === undefined ? null : hashJson(context.request);
   const existing = await tx.idempotencyKey.findUnique({
     where: {
       key_route_userId: {
@@ -26,6 +28,10 @@ export const withIdempotency = async <T>(
       },
     },
   });
+
+  if (existing && requestHash && existing.responseHash !== requestHash) {
+    throw new AppError("idempotencyKeyPayloadMismatch", "CONFLICT", 409);
+  }
 
   if (existing?.response) {
     return { result: existing.response as T, replayed: true };
@@ -61,6 +67,9 @@ export const withIdempotency = async <T>(
         },
       },
     });
+    if (retry && requestHash && retry.responseHash !== requestHash) {
+      throw new AppError("idempotencyKeyPayloadMismatch", "CONFLICT", 409);
+    }
     if (retry?.response) {
       return { result: retry.response as T, replayed: true };
     }
@@ -80,7 +89,7 @@ export const withIdempotency = async <T>(
     },
     data: {
       response,
-      responseHash: hashResponse(response),
+      responseHash: requestHash ?? hashJson(response),
     },
   });
 

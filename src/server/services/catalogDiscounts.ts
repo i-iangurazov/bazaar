@@ -161,6 +161,23 @@ const mutateCatalogDiscount = async (input: {
           key: input.discount.idempotencyKey,
           route: `catalogDiscounts.${input.action.toLowerCase()}`,
           userId: input.actorId,
+          request: toJson({
+            action: input.action,
+            organizationId: input.user.organizationId,
+            storeId: input.discount.storeId,
+            productIds,
+            variantPolicy: input.discount.variantPolicy,
+            variantIds,
+            ...(input.action === "APPLY"
+              ? {
+                  percentage: (input.discount as ApplyCatalogDiscountInput).percentage,
+                  startsAt:
+                    (input.discount as ApplyCatalogDiscountInput).startsAt?.toISOString() ?? null,
+                  endsAt:
+                    (input.discount as ApplyCatalogDiscountInput).endsAt?.toISOString() ?? null,
+                }
+              : {}),
+          }),
         },
         async () => {
           const scope = await loadDiscountScope(tx, {
