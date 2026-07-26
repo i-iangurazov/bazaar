@@ -217,13 +217,18 @@ const extractBazaarApiExternalId = (notes?: string | null) => {
   return normalizeExternalId(line?.slice(bazaarApiExternalIdNote("").length) ?? null);
 };
 
-const readCache = async <T>(key: string): Promise<T | null> => {
-  const memoryEntry = memoryCache.get(key) as CacheEntry<T> | undefined;
-  if (memoryEntry) {
-    if (memoryEntry.expiresAt > Date.now()) {
-      return memoryEntry.value;
+const readCache = async <T>(
+  key: string,
+  options?: { useMemory?: boolean },
+): Promise<T | null> => {
+  if (options?.useMemory !== false) {
+    const memoryEntry = memoryCache.get(key) as CacheEntry<T> | undefined;
+    if (memoryEntry) {
+      if (memoryEntry.expiresAt > Date.now()) {
+        return memoryEntry.value;
+      }
+      memoryCache.delete(key);
     }
-    memoryCache.delete(key);
   }
 
   try {
@@ -236,19 +241,28 @@ const readCache = async <T>(key: string): Promise<T | null> => {
       void redis.del(key).catch(() => undefined);
       return null;
     }
-    memoryCache.set(key, entry as CacheEntry<unknown>);
+    if (options?.useMemory !== false) {
+      memoryCache.set(key, entry as CacheEntry<unknown>);
+    }
     return entry.value;
   } catch {
     return null;
   }
 };
 
-const writeCache = async <T>(key: string, value: T, ttlSeconds: number): Promise<void> => {
+const writeCache = async <T>(
+  key: string,
+  value: T,
+  ttlSeconds: number,
+  options?: { useMemory?: boolean },
+): Promise<void> => {
   const entry: CacheEntry<T> = {
     expiresAt: Date.now() + ttlSeconds * 1000,
     value,
   };
-  memoryCache.set(key, entry as CacheEntry<unknown>);
+  if (options?.useMemory !== false) {
+    memoryCache.set(key, entry as CacheEntry<unknown>);
+  }
 
   try {
     const redis = getRedisPublisher();
@@ -840,7 +854,12 @@ export const listBazaarApiProducts = async (input: {
     page,
     pageSize,
   })}`;
-  const cached = await readCache<BazaarApiProductsResult>(productsCacheKey);
+  // Product pricing is invalidated from a different serverless function than the
+  // public GET route. Process-local cache entries cannot be purged across instances,
+  // so Redis is the only shared cache for this mutable catalog response.
+  const cached = await readCache<BazaarApiProductsResult>(productsCacheKey, {
+    useMemory: false,
+  });
   if (cached) {
     return cached;
   }
@@ -1105,7 +1124,7 @@ export const listBazaarApiProducts = async (input: {
         ),
       )
     : apiProductsCacheTtlSeconds();
-  await writeCache(productsCacheKey, result, cacheTtlSeconds);
+  await writeCache(productsCacheKey, result, cacheTtlSeconds, { useMemory: false });
   await registerBazaarApiProductsCacheKey(input.organizationId, input.storeId, productsCacheKey);
   return result;
 };

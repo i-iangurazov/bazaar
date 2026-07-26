@@ -204,6 +204,21 @@ describeDb("store/variant catalog discounts", () => {
       unitPriceKgs: new Prisma.Decimal(1_200),
       appliedDiscountPercentage: new Prisma.Decimal(20),
     });
+    const restoredCatalog = await listBazaarApiProducts({
+      organizationId: org.id,
+      storeId: store.id,
+      page: 1,
+      pageSize: 10,
+    });
+    expect(restoredCatalog.items.find((candidate) => candidate.id === product.id)).toMatchObject({
+      price: 1_000,
+      pricing: {
+        basePrice: 1_000,
+        effectivePrice: 1_000,
+        compareAtPrice: null,
+        hasDiscount: false,
+      },
+    });
   }, 20_000);
 
   it("honors selected variants and inactive schedules without leaking across stores", async () => {
