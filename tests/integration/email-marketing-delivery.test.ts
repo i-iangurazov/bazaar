@@ -221,6 +221,90 @@ describeDb("email marketing durable delivery", () => {
       });
   });
 
+  it("serializes concurrent recipient events before persisting campaign counters", async () => {
+    const { org, store } = await seedBase({ plan: "BUSINESS" });
+    const campaign = await prisma.emailCampaign.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        status: EmailCampaignStatus.AWAITING_EVENTS,
+        name: "Concurrent webhooks",
+        subject: "Concurrent webhooks",
+        body: "Concurrent webhooks",
+        recipientCount: 2,
+        acceptedCount: 2,
+        unresolvedCount: 2,
+      },
+    });
+    const customers = await Promise.all(
+      ["first", "second"].map((name) =>
+        prisma.customer.create({
+          data: {
+            organizationId: org.id,
+            storeId: store.id,
+            name,
+            email: `${name}@example.com`,
+          },
+        }),
+      ),
+    );
+    await prisma.emailCampaignRecipient.createMany({
+      data: customers.map((customer, index) => ({
+        organizationId: org.id,
+        campaignId: campaign.id,
+        customerId: customer.id,
+        email: customer.email!,
+        status: EmailCampaignRecipientStatus.ACCEPTED,
+        provider: "resend",
+        providerMessageId: `concurrent_message_${index}`,
+        sendOperationKey: `concurrent:${index}:${randomUUID()}`,
+        acceptedAt: new Date("2026-07-27T10:00:00.000Z"),
+      })),
+    });
+
+    await Promise.all([
+      processEmailProviderRecipientEvent({
+        provider: "resend",
+        providerMessageId: "concurrent_message_0",
+        providerEventId: "concurrent_delivered",
+        eventType: "email.delivered",
+        eventAt: new Date("2026-07-27T10:01:00.000Z"),
+        payload: { data: { tags: { campaign_id: campaign.id, store_id: store.id } } },
+      }),
+      processEmailProviderRecipientEvent({
+        provider: "resend",
+        providerMessageId: "concurrent_message_1",
+        providerEventId: "concurrent_bounced",
+        eventType: "email.bounced",
+        eventAt: new Date("2026-07-27T10:01:00.000Z"),
+        providerReason: "mailbox unavailable",
+        payload: { data: { tags: { campaign_id: campaign.id, store_id: store.id } } },
+      }),
+    ]);
+
+    const persisted = await prisma.emailCampaign.findUniqueOrThrow({
+      where: { id: campaign.id },
+    });
+    const recipientCounts = await prisma.emailCampaignRecipient.groupBy({
+      by: ["status"],
+      where: { campaignId: campaign.id },
+      _count: { _all: true },
+    });
+    expect(recipientCounts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ status: EmailCampaignRecipientStatus.DELIVERED, _count: { _all: 1 } }),
+        expect.objectContaining({ status: EmailCampaignRecipientStatus.BOUNCED, _count: { _all: 1 } }),
+      ]),
+    );
+    expect(persisted).toMatchObject({
+      recipientCount: 2,
+      deliveredCount: 1,
+      bouncedCount: 1,
+      unresolvedCount: 0,
+      status: EmailCampaignStatus.COMPLETED_WITH_ERRORS,
+    });
+  });
+
   it("accounts exactly for the 3960-recipient incident-safe equivalent", async () => {
     const { org, store } = await seedBase({ plan: "BUSINESS" });
     const campaign = await prisma.emailCampaign.create({

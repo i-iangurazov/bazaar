@@ -49,6 +49,15 @@ export const recomputeEmailCampaignDeliverySummaryTx = async (
   campaignId: string,
   errorMessage?: string | null,
 ) => {
+  // Serialize counter recomputation per campaign before reading recipients. If two
+  // webhook/reconciliation transactions counted first, the later campaign update
+  // could persist a snapshot that did not include the other committed transition.
+  await tx.$queryRaw`
+    SELECT "id"
+    FROM "EmailCampaign"
+    WHERE "id" = ${campaignId}
+    FOR UPDATE
+  `;
   const grouped = await tx.emailCampaignRecipient.groupBy({
     by: ["status"],
     where: { campaignId },
@@ -192,10 +201,30 @@ export const processEmailProviderRecipientEvent = async (input: {
   });
 
   return prisma.$transaction(async (tx) => {
+    const candidate = await tx.emailCampaignRecipient.findFirst({
+      where: {
+        provider,
+        providerMessageId: input.providerMessageId,
+      },
+      select: { id: true, campaignId: true },
+    });
+    if (!candidate) {
+      return { processed: false as const, reason: "recipient_not_found" as const };
+    }
+    // Campaign first, recipient second is the canonical lock order. This prevents
+    // different-recipient webhooks from holding recipient/FK locks while each waits
+    // to serialize the same campaign summary.
+    await tx.$queryRaw`
+      SELECT "id"
+      FROM "EmailCampaign"
+      WHERE "id" = ${candidate.campaignId}
+      FOR UPDATE
+    `;
     const locked = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
       SELECT "id"
       FROM "EmailCampaignRecipient"
-      WHERE "provider" = ${provider}
+      WHERE "id" = ${candidate.id}
+        AND "provider" = ${provider}
         AND "providerMessageId" = ${input.providerMessageId}
       FOR UPDATE
     `);
