@@ -6,6 +6,7 @@ import {
   deleteCustomer,
   getCustomerDetail,
   listCustomers,
+  listCustomersForExport,
   previewCustomerImport,
   runCustomerImport,
   updateCustomer,
@@ -36,17 +37,20 @@ const importRowSchema = z.object({
   rowNumber: z.number().int().min(1).optional(),
 });
 
+const customerFiltersSchema = z.object({
+  storeId: z.string().min(1).optional().nullable(),
+  search: z.string().max(200).optional().nullable(),
+  source: z
+    .union([z.nativeEnum(CustomerSource), z.literal("ALL")])
+    .optional()
+    .nullable(),
+});
+
 export const customersRouter = router({
   list: managerProcedure
     .input(
-      z
-        .object({
-          storeId: z.string().min(1).optional().nullable(),
-          search: z.string().max(200).optional().nullable(),
-          source: z
-            .union([z.nativeEnum(CustomerSource), z.literal("ALL")])
-            .optional()
-            .nullable(),
+      customerFiltersSchema
+        .extend({
           page: z.number().int().min(1).optional(),
           pageSize: z.number().int().min(1).max(100).optional(),
         })
@@ -66,6 +70,19 @@ export const customersRouter = router({
         throw toTRPCError(error);
       }
     }),
+
+  exportRows: managerProcedure.input(customerFiltersSchema).query(async ({ ctx, input }) => {
+    try {
+      return await listCustomersForExport({
+        user: ctx.user,
+        storeId: input.storeId,
+        search: input.search,
+        source: input.source,
+      });
+    } catch (error) {
+      throw toTRPCError(error);
+    }
+  }),
 
   detail: managerProcedure
     .input(z.object({ customerId: z.string().min(1) }))

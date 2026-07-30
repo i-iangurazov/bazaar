@@ -453,21 +453,11 @@ export const listCustomers = async (input: {
   const pageSize = Math.min(100, Math.max(1, Math.trunc(input.pageSize ?? 25)));
   const search = normalizeOptionalText(input.search);
   const source = input.source && input.source !== "ALL" ? input.source : null;
-  const where: Prisma.CustomerWhereInput = {
+  const where = buildCustomerListWhere({
     organizationId: input.user.organizationId,
-    deletedAt: null,
-    ...(source ? { source } : {}),
-    ...(search
-      ? {
-          OR: [
-            { name: { contains: search, mode: "insensitive" } },
-            { email: { contains: search, mode: "insensitive" } },
-            { phone: { contains: search, mode: "insensitive" } },
-            { address: { contains: search, mode: "insensitive" } },
-          ],
-        }
-      : {}),
-  };
+    search,
+    source,
+  });
 
   const [total, items] = await Promise.all([
     prisma.customer.count({ where }),
@@ -480,6 +470,68 @@ export const listCustomers = async (input: {
   ]);
 
   return { items, total, page, pageSize, accessibleStoreIds };
+};
+
+// Customer records are shared across an organization after store access has been verified. Keep
+// list and export filtering here so the downloaded file always matches the UI.
+const buildCustomerListWhere = (input: {
+  organizationId: string;
+  search?: string | null;
+  source?: CustomerSource | null;
+}): Prisma.CustomerWhereInput => ({
+  organizationId: input.organizationId,
+  deletedAt: null,
+  ...(input.source ? { source: input.source } : {}),
+  ...(input.search
+    ? {
+        OR: [
+          { name: { contains: input.search, mode: "insensitive" } },
+          { email: { contains: input.search, mode: "insensitive" } },
+          { phone: { contains: input.search, mode: "insensitive" } },
+          { address: { contains: input.search, mode: "insensitive" } },
+        ],
+      }
+    : {}),
+});
+
+export const listCustomersForExport = async (input: {
+  user: StoreAccessUser;
+  storeId?: string | null;
+  search?: string | null;
+  source?: CustomerSource | "ALL" | null;
+}) => {
+  const accessibleStoreIds = await resolveAccessibleStoreIds(prisma, input.user);
+  if (!accessibleStoreIds.length) {
+    return [];
+  }
+
+  const storeId = input.storeId?.trim() || accessibleStoreIds[0] || null;
+  if (!storeId) {
+    throw new AppError("storeRequired", "BAD_REQUEST", 400);
+  }
+  await assertUserCanAccessStore(prisma, input.user, storeId);
+
+  const search = normalizeOptionalText(input.search);
+  const source = input.source && input.source !== "ALL" ? input.source : null;
+
+  return prisma.customer.findMany({
+    where: buildCustomerListWhere({
+      organizationId: input.user.organizationId,
+      search,
+      source,
+    }),
+    select: {
+      name: true,
+      email: true,
+      phone: true,
+      address: true,
+      source: true,
+      createdAt: true,
+      lastOrderAt: true,
+      orderCount: true,
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+  });
 };
 
 export const getCustomerDetail = async (input: { user: StoreAccessUser; customerId: string }) => {

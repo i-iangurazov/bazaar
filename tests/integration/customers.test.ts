@@ -99,12 +99,33 @@ describeDb("customer database", () => {
       address: "A address",
     });
 
+    const exported = await managerCaller.customers.exportRows({
+      storeId: store.id,
+      search: "Store A",
+      source: CustomerSource.MANUAL,
+    });
+    expect(exported).toEqual([
+      expect.objectContaining({
+        name: "Store A Customer",
+        email: "mixedcase@example.com",
+        address: "A address",
+      }),
+    ]);
+    expect(exported[0]).not.toHaveProperty("id");
+    expect(exported[0]).not.toHaveProperty("metadata");
+
     await expect(
       managerCaller.customers.list({ storeId: otherStore.id, page: 1, pageSize: 25 }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(
+      managerCaller.customers.exportRows({ storeId: otherStore.id }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(
       cashierCaller.customers.list({ storeId: store.id, page: 1, pageSize: 25 }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(cashierCaller.customers.exportRows({ storeId: store.id })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
   });
 
   it("imports customers with organization-wide dedupe and shared visibility", async () => {

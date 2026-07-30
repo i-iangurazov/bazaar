@@ -7,8 +7,10 @@ import { useSearchParams } from "next/navigation";
 
 import { PageHeader } from "@/components/page-header";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
+import { DownloadIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Modal, ModalFooter } from "@/components/ui/modal";
@@ -19,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Spinner } from "@/components/ui/spinner";
 import {
   Table,
   TableBody,
@@ -30,10 +33,17 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
+import {
+  buildCustomerExportTable,
+  CUSTOMER_EXPORT_COLUMN_KEYS,
+  type CustomerExportColumnKey,
+} from "@/lib/customerExport";
 import { formatStoreMoney } from "@/lib/currencyDisplay";
+import type { DownloadFormat } from "@/lib/fileExport";
 import { formatDateTime } from "@/lib/i18nFormat";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
+import { cn } from "@/lib/utils";
 
 type CustomerFormState = {
   id?: string;
@@ -72,6 +82,11 @@ const CustomerDatabasePage = () => {
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState<CustomerFormState>(emptyForm);
   const [detailCustomerId, setDetailCustomerId] = useState<string | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportFormat, setExportFormat] = useState<DownloadFormat>("xlsx");
+  const [selectedExportColumns, setSelectedExportColumns] = useState<CustomerExportColumnKey[]>([
+    ...CUSTOMER_EXPORT_COLUMN_KEYS,
+  ]);
 
   const storesQuery = trpc.stores.list.useQuery();
   const stores = useMemo(() => storesQuery.data ?? [], [storesQuery.data]);
@@ -98,6 +113,14 @@ const CustomerDatabasePage = () => {
       pageSize,
     },
     { enabled: Boolean(storeId) },
+  );
+  const exportQuery = trpc.customers.exportRows.useQuery(
+    {
+      storeId: storeId || undefined,
+      search: search || undefined,
+      source,
+    },
+    { enabled: false },
   );
   const customerDetailQuery = trpc.customers.detail.useQuery(
     { customerId: detailCustomerId ?? "" },
@@ -141,6 +164,18 @@ const CustomerDatabasePage = () => {
   const selectedStore = stores.find((store) => store.id === storeId);
   const customers = customersQuery.data?.items ?? [];
   const customerDetail = customerDetailQuery.data ?? null;
+  const exportColumns = useMemo(
+    () =>
+      CUSTOMER_EXPORT_COLUMN_KEYS.map((key) => ({
+        key,
+        label: t(`columns.${key}`),
+      })),
+    [t],
+  );
+  const selectedExportColumnSet = useMemo(
+    () => new Set(selectedExportColumns),
+    [selectedExportColumns],
+  );
   const formErrors = useMemo(() => {
     const errors: string[] = [];
     if (!form.name.trim()) {
@@ -193,6 +228,61 @@ const CustomerDatabasePage = () => {
 
   const renderSource = (value: CustomerSource) => t(`sources.${value.toLowerCase()}`);
 
+  const toggleExportColumn = (column: CustomerExportColumnKey) => {
+    setSelectedExportColumns((current) =>
+      current.includes(column)
+        ? current.filter((key) => key !== column)
+        : CUSTOMER_EXPORT_COLUMN_KEYS.filter((key) => key === column || current.includes(key)),
+    );
+  };
+
+  const handleExport = async () => {
+    if (!selectedExportColumns.length) {
+      return;
+    }
+
+    const { data, error } = await exportQuery.refetch();
+    if (error) {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+      return;
+    }
+    if (!data?.length) {
+      toast({ variant: "error", description: t("export.empty") });
+      return;
+    }
+
+    const labels = Object.fromEntries(
+      exportColumns.map((column) => [column.key, column.label]),
+    ) as Record<CustomerExportColumnKey, string>;
+    const table = buildCustomerExportTable({
+      customers: data,
+      selectedColumns: selectedExportColumns,
+      labels,
+      formatDate: (value) => formatDateTime(value, locale),
+      formatSource: (value) => renderSource(value as CustomerSource),
+    });
+    const storeSlug = (selectedStore?.code || selectedStore?.name || "customers")
+      .trim()
+      .replace(/[^a-zA-Z0-9_-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .toLowerCase();
+    const exportDate = new Date().toISOString().slice(0, 10);
+
+    try {
+      const { downloadTableFile } = await import("@/lib/fileExport");
+      downloadTableFile({
+        format: exportFormat,
+        fileNameBase: `customers-${storeSlug || "export"}-${exportDate}`,
+        ...table,
+      });
+    } catch {
+      toast({ variant: "error", description: t("export.failed") });
+      return;
+    }
+    setExportOpen(false);
+    toast({ variant: "success", description: t("messages.exported", { count: data.length }) });
+  };
+
   const viewCustomerSales = (customer: (typeof customers)[number]) => {
     setDetailCustomerId(customer.id);
   };
@@ -213,7 +303,16 @@ const CustomerDatabasePage = () => {
         title={t("title")}
         subtitle={t("subtitle")}
         action={
-          <div className="hidden md:block">
+          <div className="hidden gap-2 md:flex">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setExportOpen(true)}
+              disabled={!storeId || customersQuery.isLoading || !customersQuery.data?.total}
+            >
+              <DownloadIcon className="h-4 w-4" aria-hidden />
+              {t("actions.export")}
+            </Button>
             <Button type="button" onClick={openAdd} disabled={!storeId}>
               {t("actions.add")}
             </Button>
@@ -343,9 +442,21 @@ const CustomerDatabasePage = () => {
             ))}
           </div>
         </div>
-        <Button type="button" className="min-h-12 w-full" onClick={openAdd} disabled={!storeId}>
-          {t("actions.add")}
-        </Button>
+        <div className="grid grid-cols-2 gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-12 w-full"
+            onClick={() => setExportOpen(true)}
+            disabled={!storeId || customersQuery.isLoading || !customersQuery.data?.total}
+          >
+            <DownloadIcon className="h-4 w-4" aria-hidden />
+            {t("actions.export")}
+          </Button>
+          <Button type="button" className="min-h-12 w-full" onClick={openAdd} disabled={!storeId}>
+            {t("actions.add")}
+          </Button>
+        </div>
       </section>
 
       {!storesQuery.isLoading && !stores.length ? (
@@ -520,6 +631,146 @@ const CustomerDatabasePage = () => {
           </Card>
         )}
       />
+
+      <Modal
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        title={t("export.title")}
+        subtitle={t("export.subtitle")}
+        className="max-w-2xl"
+        mobileSheet
+      >
+        <div className="space-y-6">
+          <section className="space-y-3">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">{t("export.formatTitle")}</h3>
+              <p className="mt-1 text-xs text-muted-foreground">{t("export.formatHint")}</p>
+            </div>
+            <div
+              className="grid gap-3 sm:grid-cols-2"
+              role="radiogroup"
+              aria-label={t("export.formatTitle")}
+            >
+              {(["csv", "xlsx"] as const).map((format) => {
+                const selected = exportFormat === format;
+                return (
+                  <button
+                    key={format}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    className={cn(
+                      "button-focus-ring rounded-xl border p-4 text-left transition",
+                      selected
+                        ? "border-primary bg-primary/10 ring-1 ring-primary/20"
+                        : "border-border bg-card hover:border-primary/45 hover:bg-muted/40",
+                    )}
+                    onClick={() => setExportFormat(format)}
+                  >
+                    <span className="flex items-center justify-between gap-3">
+                      <span className="font-semibold text-foreground">
+                        {t(`export.formats.${format}.title`)}
+                      </span>
+                      <span
+                        className={cn(
+                          "flex h-5 w-5 items-center justify-center rounded-full border",
+                          selected ? "border-primary bg-primary" : "border-input bg-background",
+                        )}
+                        aria-hidden
+                      >
+                        {selected ? (
+                          <span className="h-2 w-2 rounded-full bg-primary-foreground" />
+                        ) : null}
+                      </span>
+                    </span>
+                    <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                      {t(`export.formats.${format}.description`)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">
+                  {t("export.columnsTitle")}
+                </h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {t("export.selectionSummary", {
+                    selected: selectedExportColumns.length,
+                    total: customersQuery.data?.total ?? 0,
+                  })}
+                </p>
+              </div>
+              <div className="flex gap-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedExportColumns([...CUSTOMER_EXPORT_COLUMN_KEYS])}
+                >
+                  {t("export.selectAll")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedExportColumns([])}
+                >
+                  {t("export.clear")}
+                </Button>
+              </div>
+            </div>
+            <div className="grid gap-2 rounded-xl border border-border bg-muted/20 p-3 sm:grid-cols-2">
+              {exportColumns.map((column) => {
+                const checked = selectedExportColumnSet.has(column.key);
+                return (
+                  <label
+                    key={column.key}
+                    className={cn(
+                      "flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 text-sm transition",
+                      checked
+                        ? "border-primary/45 bg-card text-foreground shadow-sm"
+                        : "border-border bg-card/60 text-muted-foreground hover:bg-card",
+                    )}
+                  >
+                    <Checkbox
+                      checked={checked}
+                      onCheckedChange={() => toggleExportColumn(column.key)}
+                      aria-label={column.label}
+                    />
+                    <span className="font-medium">{column.label}</span>
+                  </label>
+                );
+              })}
+            </div>
+            {!selectedExportColumns.length ? (
+              <p className="text-sm font-medium text-danger">{t("export.columnsRequired")}</p>
+            ) : null}
+          </section>
+
+          <ModalFooter>
+            <Button type="button" variant="secondary" onClick={() => setExportOpen(false)}>
+              {tCommon("cancel")}
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void handleExport()}
+              disabled={exportQuery.isFetching || !selectedExportColumns.length}
+            >
+              {exportQuery.isFetching ? (
+                <Spinner className="h-4 w-4 text-primary-foreground" />
+              ) : (
+                <DownloadIcon className="h-4 w-4" aria-hidden />
+              )}
+              {exportQuery.isFetching ? t("export.preparing") : t("export.download")}
+            </Button>
+          </ModalFooter>
+        </div>
+      </Modal>
 
       <Modal
         open={Boolean(detailCustomerId)}

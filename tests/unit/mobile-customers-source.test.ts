@@ -45,6 +45,20 @@ describe("mobile customers source", () => {
     expect(pageSource).toContain("await invalidateCustomers();");
   });
 
+  it("provides filtered CSV and Excel exports with selectable columns", async () => {
+    const pageSource = await readSource("src/app/(app)/customers/page.tsx");
+    const routerSource = await readSource("src/server/trpc/routers/customers.ts");
+    const serviceSource = await readSource("src/server/services/customers.ts");
+
+    expect(pageSource).toContain("trpc.customers.exportRows.useQuery");
+    expect(pageSource).toContain("CUSTOMER_EXPORT_COLUMN_KEYS");
+    expect(pageSource).toContain("downloadTableFile");
+    expect(pageSource).toContain('(["csv", "xlsx"] as const)');
+    expect(routerSource).toContain("exportRows: managerProcedure");
+    expect(serviceSource).toContain("export const listCustomersForExport");
+    expect(serviceSource).toContain("buildCustomerListWhere");
+  });
+
   it("keeps the POS mobile customer selector on a bottom sheet backed by customer search", async () => {
     const posSource = await readSource("src/app/(app)/pos/sell/page.tsx");
 

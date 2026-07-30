@@ -1084,10 +1084,36 @@
     "deleteConfirm": "Delete {name} from this store customer database?",
     "actions": {
       "add": "Add Customer",
+      "export": "Export",
       "create": "Create customer",
       "save": "Save changes",
       "call": "Call",
       "viewSales": "Sales"
+    },
+    "export": {
+      "title": "Export customers",
+      "subtitle": "The file will include every customer matching the current filters.",
+      "formatTitle": "File format",
+      "formatHint": "Choose the format that best fits your next step.",
+      "formats": {
+        "csv": {
+          "title": "CSV (.csv)",
+          "description": "A universal UTF-8 file for importing into other systems."
+        },
+        "xlsx": {
+          "title": "Excel (.xlsx)",
+          "description": "A ready-to-use spreadsheet for Microsoft Excel and Google Sheets."
+        }
+      },
+      "columnsTitle": "Columns to export",
+      "selectionSummary": "Columns selected: {selected} · Customers: {total}",
+      "selectAll": "Select all",
+      "clear": "Clear",
+      "columnsRequired": "Select at least one column.",
+      "empty": "There are no customers to export with the current filters.",
+      "failed": "The file could not be prepared. Please try again.",
+      "preparing": "Preparing…",
+      "download": "Export"
     },
     "columns": {
       "name": "Name",
@@ -1141,7 +1167,8 @@
     "messages": {
       "created": "Customer created.",
       "updated": "Customer updated.",
-      "deleted": "Customer removed."
+      "deleted": "Customer removed.",
+      "exported": "File ready. Exported {count} customers."
     }
   },
   "bazaarApiSettings": {
