@@ -263,6 +263,7 @@ export const uploadOMarketImageFile = async (input: {
   signal?: AbortSignal;
   fetchImpl?: typeof fetch;
 }) => {
+  assertExternalProviderCallAllowed("o-market");
   const fetchImpl = input.fetchImpl ?? fetch;
   const form = new FormData();
   form.append("file", input.file, input.fileName ?? "image");

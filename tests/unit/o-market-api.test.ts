@@ -1,5 +1,5 @@
 import { Prisma, OMarketJobType } from "@prisma/client";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   createOrUpdateOMarketProducts,
@@ -14,6 +14,11 @@ import {
 } from "@/server/services/oMarket";
 
 describe("o-market api helpers", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
   it("constructs create/update requests with the documented X-Access-Token header", async () => {
     const fetchImpl = vi.fn(async () =>
       new Response(JSON.stringify({ result: { task_id: 42 }, status: "success" }), {
@@ -211,5 +216,44 @@ describe("o-market api helpers", () => {
     expect(chunks).toHaveLength(2);
     expect(chunks[0]).toHaveLength(1000);
     expect(chunks[1]).toEqual([1001]);
+  });
+
+  it("blocks file upload before network execution in hardening Preview", async () => {
+    vi.stubEnv("HARDENING_PREVIEW_GUARD", "1");
+    vi.stubEnv("HARDENING_EXTERNAL_PROVIDER_MODE", "disabled");
+    vi.resetModules();
+    const { uploadOMarketImageFile } = await import("@/server/services/oMarketApiClient");
+    const fetchImpl = vi.fn() as unknown as typeof fetch;
+
+    await expect(
+      uploadOMarketImageFile({
+        token: "test-token",
+        file: new Blob(["image"], { type: "image/png" }),
+        fetchImpl,
+      }),
+    ).rejects.toThrow("externalProviderDisabled:o-market");
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("keeps file upload available when the hardening guard is disabled", async () => {
+    vi.stubEnv("HARDENING_PREVIEW_GUARD", "0");
+    vi.stubEnv("HARDENING_EXTERNAL_PROVIDER_MODE", "live");
+    vi.resetModules();
+    const { uploadOMarketImageFile } = await import("@/server/services/oMarketApiClient");
+    const fetchImpl = vi.fn(async () =>
+      new Response(JSON.stringify({ result: { url: "https://cdn.example.com/image.png" } }), {
+        status: 201,
+        headers: { "Content-Type": "application/json" },
+      }),
+    ) as unknown as typeof fetch;
+
+    const response = await uploadOMarketImageFile({
+      token: "test-token",
+      file: new Blob(["image"], { type: "image/png" }),
+      fetchImpl,
+    });
+
+    expect(response).toMatchObject({ status: 201, ok: true });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 });
