@@ -156,6 +156,23 @@ const lockPurchaseOrderForLineId = async (
   return purchaseOrderId;
 };
 
+const lockPurchaseOrderForOrganization = async (
+  tx: Prisma.TransactionClient,
+  purchaseOrderId: string,
+  organizationId: string,
+) => {
+  const rows = await tx.$queryRaw<Array<{ id: string }>>`
+    SELECT "id"
+    FROM "PurchaseOrder"
+    WHERE "id" = ${purchaseOrderId}
+      AND "organizationId" = ${organizationId}
+    FOR UPDATE
+  `;
+  if (!rows[0]) {
+    throw new AppError("poNotFound", "NOT_FOUND", 404);
+  }
+};
+
 export type CreatePurchaseOrderInput = {
   organizationId: string;
   storeId: string;
@@ -1248,7 +1265,11 @@ export const addPurchaseOrderLine = async (input: {
   const logger = getLogger(input.requestId);
 
   const result = await prisma.$transaction(async (tx) => {
-    await lockPurchaseOrderIds(tx, [input.purchaseOrderId]);
+    await lockPurchaseOrderForOrganization(
+      tx,
+      input.purchaseOrderId,
+      input.organizationId,
+    );
     const po = await tx.purchaseOrder.findUnique({
       where: { id: input.purchaseOrderId },
     });

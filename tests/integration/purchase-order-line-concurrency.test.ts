@@ -1,5 +1,11 @@
 import { PurchaseOrderStatus } from "@prisma/client";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const sideEffects = vi.hoisted(() => ({ publish: vi.fn() }));
+
+vi.mock("@/server/events/eventBus", () => ({
+  eventBus: { publish: sideEffects.publish },
+}));
 
 import { prisma } from "@/server/db/prisma";
 import {
@@ -130,6 +136,56 @@ const onOrderFor = async (storeId: string, productId: string) =>
 describeDb("HARD-A3-030 purchase-order line/status serialization", () => {
   beforeEach(async () => {
     await resetDatabase();
+    sideEffects.publish.mockClear();
+  });
+
+  it("hides foreign-organization parents and lines without audits or events", async () => {
+    const fixture = await seedPurchaseOrder();
+    const foreignOrganization = await prisma.organization.create({
+      data: { name: "Foreign PO Organization", plan: "BUSINESS" },
+    });
+    sideEffects.publish.mockClear();
+    const before = await prisma.purchaseOrder.findUniqueOrThrow({
+      where: { id: fixture.po.id },
+      include: { lines: { orderBy: { position: "asc" } } },
+    });
+    const auditCount = await prisma.auditLog.count({ where: { entityId: fixture.po.id } });
+    const common = {
+      organizationId: foreignOrganization.id,
+      actorId: fixture.adminUser.id,
+      requestId: "a3-030-cross-org",
+    };
+
+    await expect(
+      addPurchaseOrderLine({
+        ...common,
+        purchaseOrderId: fixture.po.id,
+        productId: fixture.addedProduct.id,
+        qtyOrdered: 5,
+      }),
+    ).rejects.toMatchObject({ message: "poNotFound" });
+    await expect(
+      updatePurchaseOrderLine({
+        ...common,
+        lineId: fixture.po.lines[0]!.id,
+        qtyOrdered: 99,
+      }),
+    ).rejects.toMatchObject({ message: "poLineNotFound" });
+    await expect(
+      removePurchaseOrderLine({
+        ...common,
+        lineId: fixture.po.lines[1]!.id,
+      }),
+    ).rejects.toMatchObject({ message: "poLineNotFound" });
+
+    expect(
+      await prisma.purchaseOrder.findUniqueOrThrow({
+        where: { id: fixture.po.id },
+        include: { lines: { orderBy: { position: "asc" } } },
+      }),
+    ).toEqual(before);
+    expect(await prisma.auditLog.count({ where: { entityId: fixture.po.id } })).toBe(auditCount);
+    expect(sideEffects.publish).not.toHaveBeenCalled();
   });
 
   it("rejects a stale add when submit acquires the parent lock first", async () => {
