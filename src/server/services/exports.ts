@@ -65,6 +65,8 @@ const DEFAULT_EXPORT_FORMAT: ExportFormat = "csv";
 const DEFAULT_EXPORT_LIST_LIMIT = 50;
 const MAX_EXPORT_LIST_LIMIT = 200;
 const MAX_ACTIVE_EXPORT_JOBS_PER_ORG = 20;
+const MAX_EXPORT_JOBS_PER_RUN = 25;
+const EXPORT_JOB_STALE_AFTER_MS = 30 * 60 * 1000;
 const R2_STORAGE_PREFIX = "r2://";
 const EXPORT_R2_KEY_PREFIX = "exports";
 
@@ -2454,11 +2456,14 @@ export const resolveExportJobDownload = async (input: {
 
   let artifact = job.storagePath ? await openExportArtifactStream(job.storagePath) : null;
   if (!artifact) {
-    await runExportJob({
-      jobId: job.id,
-      organizationId: input.organizationId,
-      requestId: `export-download-rebuild-${job.id}`,
-    });
+    await runExportJob(
+      {
+        jobId: job.id,
+        organizationId: input.organizationId,
+        requestId: `export-download-rebuild-${job.id}`,
+      },
+      { allowCompletedRebuild: true, drainQueue: false },
+    );
     job = await prisma.exportJob.findFirst({
       where: {
         id: input.jobId,
@@ -2598,39 +2603,116 @@ export const requestExport = async (input: ExportRequestInput) => {
   return job;
 };
 
-const runExportJob = async (
-  payload?: JobPayload,
-): Promise<{ job: string; status: "ok" | "skipped"; details?: Record<string, unknown> }> => {
-  const jobId =
-    payload && typeof payload === "object" && payload !== null && "jobId" in payload
-      ? String((payload as Record<string, unknown>).jobId ?? "")
-      : "";
+type ClaimedExportJob = {
+  job: ExportJob;
+  recovered: boolean;
+};
 
-  const job = jobId
-    ? await prisma.exportJob.findFirst({ where: { id: jobId } })
-    : await prisma.exportJob.findFirst({
-        where: { status: ExportJobStatus.QUEUED },
-        orderBy: { createdAt: "asc" },
+const claimExportJob = async (input: {
+  jobId?: string;
+  requestId: string;
+  allowCompletedRebuild: boolean;
+}): Promise<ClaimedExportJob | null> => {
+  const staleCutoff = new Date(Date.now() - EXPORT_JOB_STALE_AFTER_MS);
+
+  return prisma.$transaction(async (tx) => {
+    const candidate = await tx.exportJob.findFirst({
+      where: input.jobId
+        ? {
+            id: input.jobId,
+            OR: [
+              { status: ExportJobStatus.QUEUED },
+              {
+                status: ExportJobStatus.RUNNING,
+                OR: [{ startedAt: null }, { startedAt: { lte: staleCutoff } }],
+              },
+              ...(input.allowCompletedRebuild ? [{ status: ExportJobStatus.DONE }] : []),
+            ],
+          }
+        : {
+            OR: [
+              { status: ExportJobStatus.QUEUED },
+              {
+                status: ExportJobStatus.RUNNING,
+                OR: [{ startedAt: null }, { startedAt: { lte: staleCutoff } }],
+              },
+            ],
+          },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    });
+    if (!candidate) {
+      return null;
+    }
+
+    let expectedStatus = candidate.status;
+    let recovered = false;
+    if (candidate.status === ExportJobStatus.RUNNING) {
+      const recovery = await tx.exportJob.updateMany({
+        where: {
+          id: candidate.id,
+          status: ExportJobStatus.RUNNING,
+          OR: [{ startedAt: null }, { startedAt: { lte: staleCutoff } }],
+        },
+        data: {
+          status: ExportJobStatus.QUEUED,
+          startedAt: null,
+          finishedAt: null,
+          errorMessage: "exportJobTimedOut",
+          errorJson: toJson({ reason: "exportJobTimedOut" }),
+        },
       });
+      if (recovery.count !== 1) {
+        return null;
+      }
+      const recoveredJob = await tx.exportJob.findUniqueOrThrow({ where: { id: candidate.id } });
+      await writeAuditLog(tx, {
+        organizationId: candidate.organizationId,
+        actorId: candidate.requestedById,
+        action: "EXPORT_RECOVERED",
+        entity: "ExportJob",
+        entityId: candidate.id,
+        before: toJson(candidate),
+        after: toJson(recoveredJob),
+        requestId: input.requestId || `export-recovery-${candidate.id}`,
+      });
+      expectedStatus = ExportJobStatus.QUEUED;
+      recovered = true;
+    }
 
-  if (!job) {
-    return { job: "export-job", status: "skipped", details: { reason: "empty" } };
-  }
+    const claimedAt = new Date();
+    const claimed = await tx.exportJob.updateMany({
+      where: {
+        id: candidate.id,
+        status: expectedStatus,
+      },
+      data: {
+        status: ExportJobStatus.RUNNING,
+        startedAt: claimedAt,
+        finishedAt: null,
+        errorMessage: null,
+        errorJson: Prisma.DbNull,
+      },
+    });
+    if (claimed.count !== 1) {
+      return null;
+    }
 
-  const store = await prisma.store.findFirst({
-    where: { id: job.storeId, organizationId: job.organizationId },
-    select: {
-      id: true,
-      name: true,
-      code: true,
-      currencyCode: true,
-      currencyRateKgsPerUnit: true,
-    },
+    return {
+      job: await tx.exportJob.findUniqueOrThrow({ where: { id: candidate.id } }),
+      recovered,
+    };
   });
-  if (!store) {
-    throw new AppError("storeNotFound", "NOT_FOUND", 404);
-  }
+};
 
+type ExportJobExecution = {
+  outcome: "done" | "failed" | "lost";
+  error?: unknown;
+};
+
+const executeClaimedExportJob = async (
+  job: ExportJob,
+  requestId: string,
+): Promise<ExportJobExecution> => {
   const input: ExportRequestInput = {
     organizationId: job.organizationId,
     storeId: job.storeId,
@@ -2639,23 +2721,24 @@ const runExportJob = async (
     periodStart: job.periodStart,
     periodEnd: job.periodEnd,
     requestedById: job.requestedById,
-    requestId:
-      payload && typeof payload === "object" && payload !== null && "requestId" in payload
-        ? String((payload as Record<string, unknown>).requestId ?? "")
-        : "",
+    requestId: requestId || `export-worker-${job.id}`,
   };
 
-  const running = await prisma.exportJob.update({
-    where: { id: job.id },
-    data: {
-      status: ExportJobStatus.RUNNING,
-      startedAt: new Date(),
-      errorMessage: null,
-      errorJson: Prisma.DbNull,
-    },
-  });
-
   try {
+    const store = await prisma.store.findFirst({
+      where: { id: job.storeId, organizationId: job.organizationId },
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        currencyCode: true,
+        currencyRateKgsPerUnit: true,
+      },
+    });
+    if (!store) {
+      throw new AppError("storeNotFound", "NOT_FOUND", 404);
+    }
+
     const compliance = await resolveComplianceFlags(input.organizationId, input.storeId);
     const { header, keys, rows } = await buildExportData(input, store, compliance);
     const format = input.format ?? DEFAULT_EXPORT_FORMAT;
@@ -2669,58 +2752,130 @@ const runExportJob = async (
       mimeType: file.mimeType,
     });
 
-    const updated = await prisma.exportJob.update({
-      where: { id: job.id },
-      data: {
-        status: ExportJobStatus.DONE,
-        finishedAt: new Date(),
-        fileName,
-        mimeType: file.mimeType,
-        fileSize: file.content.byteLength,
-        storagePath,
-      },
+    const updated = await prisma.$transaction(async (tx) => {
+      const finalized = await tx.exportJob.updateMany({
+        where: {
+          id: job.id,
+          status: ExportJobStatus.RUNNING,
+          startedAt: job.startedAt,
+        },
+        data: {
+          status: ExportJobStatus.DONE,
+          finishedAt: new Date(),
+          fileName,
+          mimeType: file.mimeType,
+          fileSize: file.content.byteLength,
+          storagePath,
+        },
+      });
+      if (finalized.count !== 1) {
+        return null;
+      }
+      const completed = await tx.exportJob.findUniqueOrThrow({ where: { id: job.id } });
+      await writeAuditLog(tx, {
+        organizationId: input.organizationId,
+        actorId: input.requestedById,
+        action: "EXPORT_FINISHED",
+        entity: "ExportJob",
+        entityId: completed.id,
+        before: toJson(job),
+        after: toJson(completed),
+        requestId: input.requestId,
+      });
+      return completed;
     });
 
-    await writeAuditLog(prisma, {
-      organizationId: input.organizationId,
-      actorId: input.requestedById,
-      action: "EXPORT_FINISHED",
-      entity: "ExportJob",
-      entityId: updated.id,
-      before: toJson(running),
-      after: toJson(updated),
-      requestId: input.requestId,
-    });
-
-    return { job: "export-job", status: "ok", details: { jobId: updated.id } };
+    return { outcome: updated ? "done" : "lost" };
   } catch (error) {
     const message = error instanceof Error ? error.message : "exportFailed";
-    const failed = await prisma.exportJob.update({
-      where: { id: job.id },
-      data: {
-        status: ExportJobStatus.FAILED,
-        finishedAt: new Date(),
-        errorMessage: message,
-        errorJson: toJson({ message }),
-      },
+    const failed = await prisma.$transaction(async (tx) => {
+      const finalized = await tx.exportJob.updateMany({
+        where: {
+          id: job.id,
+          status: ExportJobStatus.RUNNING,
+          startedAt: job.startedAt,
+        },
+        data: {
+          status: ExportJobStatus.FAILED,
+          finishedAt: new Date(),
+          errorMessage: message,
+          errorJson: toJson({ message }),
+        },
+      });
+      if (finalized.count !== 1) {
+        return null;
+      }
+      const failedJob = await tx.exportJob.findUniqueOrThrow({ where: { id: job.id } });
+      await writeAuditLog(tx, {
+        organizationId: input.organizationId,
+        actorId: input.requestedById,
+        action: "EXPORT_FAILED",
+        entity: "ExportJob",
+        entityId: failedJob.id,
+        before: toJson(job),
+        after: toJson(failedJob),
+        requestId: input.requestId,
+      });
+      return failedJob;
     });
 
-    await writeAuditLog(prisma, {
-      organizationId: input.organizationId,
-      actorId: input.requestedById,
-      action: "EXPORT_FAILED",
-      entity: "ExportJob",
-      entityId: failed.id,
-      before: toJson(running),
-      after: toJson(failed),
-      requestId: input.requestId,
-    });
-
-    if (error instanceof AppError) {
-      throw error;
-    }
-    throw new AppError("exportFailed", "INTERNAL_SERVER_ERROR", 500);
+    return { outcome: failed ? "failed" : "lost", error };
   }
+};
+
+const runExportJob = async (
+  payload?: JobPayload,
+  options: { allowCompletedRebuild?: boolean; drainQueue?: boolean } = {},
+): Promise<{ job: string; status: "ok" | "skipped"; details?: Record<string, unknown> }> => {
+  const jobId =
+    payload && typeof payload === "object" && payload !== null && "jobId" in payload
+      ? String((payload as Record<string, unknown>).jobId ?? "")
+      : "";
+  const requestId =
+    payload && typeof payload === "object" && payload !== null && "requestId" in payload
+      ? String((payload as Record<string, unknown>).requestId ?? "")
+      : "";
+  const drainQueue = options.drainQueue ?? true;
+  let preferredJobId = jobId || undefined;
+  let processed = 0;
+  let recovered = 0;
+  let failed = 0;
+
+  while (processed < MAX_EXPORT_JOBS_PER_RUN) {
+    const claimed = await claimExportJob({
+      jobId: preferredJobId,
+      requestId,
+      allowCompletedRebuild: Boolean(options.allowCompletedRebuild && preferredJobId),
+    });
+    if (!claimed) {
+      if (preferredJobId && drainQueue) {
+        preferredJobId = undefined;
+        continue;
+      }
+      break;
+    }
+
+    preferredJobId = undefined;
+    recovered += claimed.recovered ? 1 : 0;
+    const execution = await executeClaimedExportJob(claimed.job, requestId);
+    processed += 1;
+    if (execution.outcome === "failed") {
+      failed += 1;
+      if (options.allowCompletedRebuild) {
+        if (execution.error instanceof AppError) {
+          throw execution.error;
+        }
+        throw new AppError("exportFailed", "INTERNAL_SERVER_ERROR", 500);
+      }
+    }
+    if (!drainQueue) {
+      break;
+    }
+  }
+
+  return processed > 0
+    ? { job: "export-job", status: "ok", details: { processed, recovered, failed } }
+    : { job: "export-job", status: "skipped", details: { reason: "empty" } };
 };
 
 registerJob("export-job", {

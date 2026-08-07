@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs";
 import { beforeEach, describe, expect, it } from "vitest";
-import { ExportType } from "@prisma/client";
+import { ExportJobStatus, ExportType } from "@prisma/client";
 import * as XLSX from "xlsx";
 
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
@@ -156,6 +156,109 @@ describeDb("exports", () => {
     const header = (values[0] ?? []).map(String).join(",");
     expect(header).toBe(
       "ID организации,Код магазина,Артикул,Товар,Базовая цена KGS,Цена магазина KGS,Цена продажи KGS,Средняя себестоимость KGS,Маржа %,Наценка %",
+    );
+  });
+
+  it("drains a queued export after its concurrent runner loses the global lock", async () => {
+    const { org, store, adminUser } = await seedBase({ plan: "BUSINESS" });
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+    });
+    const periodStart = new Date("2025-01-01T00:00:00Z");
+    const periodEnd = new Date("2025-01-31T23:59:59Z");
+    const [first, second] = await Promise.all([
+      caller.exports.create({
+        storeId: store.id,
+        type: ExportType.PRICE_LIST,
+        periodStart,
+        periodEnd,
+      }),
+      caller.exports.create({
+        storeId: store.id,
+        type: ExportType.INVENTORY_ON_HAND,
+        periodStart,
+        periodEnd,
+      }),
+    ]);
+
+    const runnerResults = await Promise.all([
+      runJob("export-job", { jobId: first.id, requestId: "hard-a4-012-first" }),
+      runJob("export-job", { jobId: second.id, requestId: "hard-a4-012-second" }),
+    ]);
+    const jobs = await prisma.exportJob.findMany({
+      where: { id: { in: [first.id, second.id] } },
+      orderBy: { id: "asc" },
+    });
+
+    expect(runnerResults.map((result) => result.status).sort()).toEqual(["ok", "skipped"]);
+    expect(jobs.map((job) => job.status)).toEqual([
+      ExportJobStatus.DONE,
+      ExportJobStatus.DONE,
+    ]);
+    expect(
+      await prisma.auditLog.count({
+        where: {
+          entity: "ExportJob",
+          entityId: { in: [first.id, second.id] },
+          action: "EXPORT_FINISHED",
+        },
+      }),
+    ).toBe(2);
+    console.info(
+      `[HARDENING-EVIDENCE] HARD-A4-012-lock-drain ${JSON.stringify({
+        runnerStatuses: runnerResults.map((result) => result.status).sort(),
+        finalStatuses: jobs.map((job) => job.status),
+        finishedAuditCount: 2,
+      })}`,
+    );
+  });
+
+  it("reclaims and finishes an export abandoned in RUNNING", async () => {
+    const { org, store, adminUser } = await seedBase({ plan: "BUSINESS" });
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+    });
+    const created = await caller.exports.create({
+      storeId: store.id,
+      type: ExportType.PRICE_LIST,
+      periodStart: new Date("2025-01-01T00:00:00Z"),
+      periodEnd: new Date("2025-01-31T23:59:59Z"),
+    });
+    await prisma.exportJob.update({
+      where: { id: created.id },
+      data: {
+        status: ExportJobStatus.RUNNING,
+        startedAt: new Date(Date.now() - 31 * 60 * 1000),
+      },
+    });
+
+    await runJob("export-job", { requestId: "hard-a4-012-recovery" });
+
+    await expect(prisma.exportJob.findUniqueOrThrow({ where: { id: created.id } })).resolves.toMatchObject({
+      status: ExportJobStatus.DONE,
+      errorMessage: null,
+    });
+    expect(
+      await prisma.auditLog.count({
+        where: {
+          entity: "ExportJob",
+          entityId: created.id,
+          action: "EXPORT_RECOVERED",
+        },
+      }),
+    ).toBe(1);
+    console.info(
+      `[HARDENING-EVIDENCE] HARD-A4-012-stale-recovery ${JSON.stringify({
+        staleAgeMinutes: 31,
+        finalStatus: ExportJobStatus.DONE,
+        recoveryAuditCount: 1,
+      })}`,
     );
   });
 
