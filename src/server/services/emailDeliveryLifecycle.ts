@@ -147,6 +147,10 @@ export const lifecycleStatusForProviderEvent = (
     case "deferred":
       return "DEFERRED";
     case "delivered":
+    case "opened":
+    case "clicked":
+      // Engagement is only possible after delivery. Preserve the original event
+      // type in the immutable event row while resolving the recipient immediately.
       return "DELIVERED";
     case "bounced":
       return "BOUNCED";
@@ -168,13 +172,7 @@ export const lifecycleStatusForProviderEvent = (
 export const lifecycleStatusForProviderLookup = (
   lastEvent: string,
 ): EmailRecipientLifecycleStatus | null => {
-  const normalized = normalizedProviderEventType(lastEvent);
-  if (normalized === "opened" || normalized === "clicked") {
-    // Engagement is only possible after delivery. Resend's sent-email lookup returns
-    // the last event, so opened/clicked must reconcile to the delivered lifecycle state.
-    return "DELIVERED";
-  }
-  return lifecycleStatusForProviderEvent(normalized);
+  return lifecycleStatusForProviderEvent(lastEvent);
 };
 
 export const buildEmailProviderEventIdentity = (input: {

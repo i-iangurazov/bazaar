@@ -56,11 +56,12 @@ describe("email delivery lifecycle", () => {
     expect(resolveEmailCampaignLifecycleStatus(summary)).toBe("AWAITING_EVENTS");
   });
 
-  it("maps Resend delivery events and lookup-only engagement states", () => {
+  it("maps Resend delivery and engagement events to their durable lifecycle states", () => {
     expect(lifecycleStatusForProviderEvent("email.sent")).toBe("ACCEPTED");
     expect(lifecycleStatusForProviderEvent("email.delivery_delayed")).toBe("DEFERRED");
     expect(lifecycleStatusForProviderEvent("email.suppressed")).toBe("SUPPRESSED");
-    expect(lifecycleStatusForProviderEvent("email.opened")).toBeNull();
+    expect(lifecycleStatusForProviderEvent("email.opened")).toBe("DELIVERED");
+    expect(lifecycleStatusForProviderEvent("email.clicked")).toBe("DELIVERED");
     expect(lifecycleStatusForProviderLookup("opened")).toBe("DELIVERED");
     expect(lifecycleStatusForProviderLookup("clicked")).toBe("DELIVERED");
   });

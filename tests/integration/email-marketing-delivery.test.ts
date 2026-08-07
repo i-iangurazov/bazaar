@@ -221,6 +221,87 @@ describeDb("email marketing durable delivery", () => {
       });
   });
 
+  it("resolves an accepted recipient immediately when an engagement webhook proves delivery", async () => {
+    const { org, store } = await seedBase({ plan: "BUSINESS" });
+    const customer = await prisma.customer.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Engaged recipient",
+        email: "engaged@example.com",
+      },
+    });
+    const campaign = await prisma.emailCampaign.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        status: EmailCampaignStatus.AWAITING_EVENTS,
+        name: "Engagement delivery",
+        subject: "Engagement delivery",
+        body: "Engagement delivery",
+        recipientCount: 1,
+        acceptedCount: 1,
+        unresolvedCount: 1,
+      },
+    });
+    const acceptedAt = new Date("2026-08-07T10:00:00.000Z");
+    const eventAt = new Date("2026-08-07T10:05:00.000Z");
+    const recipient = await prisma.emailCampaignRecipient.create({
+      data: {
+        organizationId: org.id,
+        campaignId: campaign.id,
+        customerId: customer.id,
+        email: "engaged@example.com",
+        status: EmailCampaignRecipientStatus.ACCEPTED,
+        provider: "resend",
+        providerMessageId: "resend_engagement_delivery",
+        sendOperationKey: `engagement:${randomUUID()}`,
+        acceptedAt,
+      },
+    });
+
+    await expect(
+      processEmailProviderRecipientEvent({
+        provider: "resend",
+        providerMessageId: "resend_engagement_delivery",
+        providerEventId: "evt_opened_delivery",
+        eventType: "email.opened",
+        eventAt,
+        payload: { data: { tags: { campaign_id: campaign.id, store_id: store.id } } },
+      }),
+    ).resolves.toMatchObject({
+      processed: true,
+      applied: true,
+      status: EmailCampaignRecipientStatus.DELIVERED,
+    });
+
+    await expect(
+      prisma.emailCampaignRecipient.findUniqueOrThrow({ where: { id: recipient.id } }),
+    ).resolves.toMatchObject({
+      status: EmailCampaignRecipientStatus.DELIVERED,
+      providerStatus: "opened",
+      deliveredAt: eventAt,
+      terminalAt: eventAt,
+    });
+    await expect(
+      prisma.emailCampaignRecipientEvent.findFirstOrThrow({ where: { recipientId: recipient.id } }),
+    ).resolves.toMatchObject({
+      eventType: "email.opened",
+      statusBefore: EmailCampaignRecipientStatus.ACCEPTED,
+      statusAfter: EmailCampaignRecipientStatus.DELIVERED,
+      applied: true,
+    });
+    await expect(
+      prisma.emailCampaign.findUniqueOrThrow({ where: { id: campaign.id } }),
+    ).resolves.toMatchObject({
+      recipientCount: 1,
+      acceptedCount: 0,
+      deliveredCount: 1,
+      unresolvedCount: 0,
+      status: EmailCampaignStatus.COMPLETED,
+    });
+  });
+
   it("serializes concurrent recipient events before persisting campaign counters", async () => {
     const { org, store } = await seedBase({ plan: "BUSINESS" });
     const campaign = await prisma.emailCampaign.create({
@@ -620,7 +701,7 @@ describeDb("email marketing durable delivery", () => {
         reconcileEmailCampaignRecipients({
           organizationId: org.id,
           campaignId: campaign.id,
-          stuckBefore: new Date("2026-07-28T00:00:00.000Z"),
+          stuckBefore: new Date(Date.now() + 60_000),
         }),
       ).resolves.toMatchObject({ inspected: 1, reconciled: 1 });
       await expect(
