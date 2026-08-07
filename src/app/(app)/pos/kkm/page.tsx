@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 
 import { PageHeader } from "@/components/page-header";
+import { QueryErrorState } from "@/components/query-error-state";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
@@ -102,6 +103,15 @@ const PosKkmPage = () => {
     <div className="space-y-6">
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
+      {storesQuery.isError || receiptsQuery.isError ? (
+        <QueryErrorState
+          onRetry={() => {
+            if (storesQuery.isError) void storesQuery.refetch();
+            if (receiptsQuery.isError) void receiptsQuery.refetch();
+          }}
+        />
+      ) : null}
+
       <Card>
         <CardHeader>
           <CardTitle>{t("connectorTitle")}</CardTitle>
@@ -194,7 +204,9 @@ const PosKkmPage = () => {
             </div>
           ))}
 
-          {!receiptsQuery.isLoading && !(receiptsQuery.data?.items ?? []).length ? (
+          {!receiptsQuery.isLoading &&
+          !receiptsQuery.isError &&
+          !(receiptsQuery.data?.items ?? []).length ? (
             <p className="text-sm text-muted-foreground">{t("empty")}</p>
           ) : null}
         </CardContent>

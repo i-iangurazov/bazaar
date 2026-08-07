@@ -7,6 +7,7 @@ import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 
 import { PageHeader } from "@/components/page-header";
+import { QueryErrorState } from "@/components/query-error-state";
 import { CloseIcon, DownloadIcon, PrintIcon, ShareIcon, ViewIcon } from "@/components/icons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -540,6 +541,22 @@ const PosHistoryPage = () => {
         <PageHeader title={t("history.title")} subtitle={t("history.subtitle")} />
       </div>
 
+      {registersQuery.isError ||
+      currentShiftQuery.isError ||
+      salesQuery.isError ||
+      heldSalesQuery.isError ||
+      returnsQuery.isError ? (
+        <QueryErrorState
+          onRetry={() => {
+            if (registersQuery.isError) void registersQuery.refetch();
+            if (currentShiftQuery.isError) void currentShiftQuery.refetch();
+            if (salesQuery.isError) void salesQuery.refetch();
+            if (heldSalesQuery.isError) void heldSalesQuery.refetch();
+            if (returnsQuery.isError) void returnsQuery.refetch();
+          }}
+        />
+      ) : null}
+
       <div className="space-y-4 md:hidden">
         <section className="space-y-1">
           <h1 className="text-xl font-semibold text-foreground">{t("history.title")}</h1>
@@ -751,7 +768,11 @@ const PosHistoryPage = () => {
               })
             : null}
 
-          {canLoadRegisterScopedData && !mobileHistoryLoading && !visibleSales.length ? (
+          {canLoadRegisterScopedData &&
+          !mobileHistoryLoading &&
+          !salesQuery.isError &&
+          !heldSalesQuery.isError &&
+          !visibleSales.length ? (
             <div className="rounded-md border border-border bg-card p-4 text-sm text-muted-foreground">
               {t("history.empty")}
             </div>
@@ -943,6 +964,7 @@ const PosHistoryPage = () => {
 
             {canLoadRegisterScopedData &&
             !salesQuery.isLoading &&
+            !salesQuery.isError &&
             !(salesQuery.data?.items ?? []).length ? (
               <p className="text-sm text-muted-foreground">{t("history.empty")}</p>
             ) : null}
@@ -1217,10 +1239,8 @@ const PosHistoryPage = () => {
                 </div>
               ) : null}
 
-              {mobileSaleDetailQuery.error ? (
-                <p className="text-sm text-danger">
-                  {translateError(tErrors, mobileSaleDetailQuery.error)}
-                </p>
+              {mobileSaleDetailQuery.isError ? (
+                <QueryErrorState onRetry={() => void mobileSaleDetailQuery.refetch()} />
               ) : null}
 
               {detailSale ? (
@@ -1453,6 +1473,17 @@ const PosHistoryPage = () => {
         }
       >
         <div className="space-y-4">
+          {saleDetailQuery.isLoading ? (
+            <div className="flex min-h-24 items-center justify-center gap-2 text-sm text-muted-foreground">
+              <Spinner className="h-4 w-4" />
+              {tCommon("loading")}
+            </div>
+          ) : null}
+
+          {saleDetailQuery.isError ? (
+            <QueryErrorState onRetry={() => void saleDetailQuery.refetch()} />
+          ) : null}
+
           {(selectedSale?.lines ?? []).map((line) => (
             <div key={line.id} className="rounded-md border border-border bg-card p-3">
               <p className="text-sm font-medium text-foreground">{line.product.name}</p>
@@ -1513,7 +1544,7 @@ const PosHistoryPage = () => {
             </Button>
             <Button
               onClick={handleStartReturn}
-              disabled={!canOperateRegister || isReturnMutationBusy}
+              disabled={!canOperateRegister || !selectedSale || isReturnMutationBusy}
             >
               {isReturnMutationBusy ? <Spinner className="h-4 w-4" /> : null}
               {t("history.completeReturn")}

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 
 import { PageHeader } from "@/components/page-header";
+import { QueryErrorState } from "@/components/query-error-state";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -163,6 +164,16 @@ const PosDebtsPage = () => {
     <div className="space-y-6">
       <PageHeader title={t("debts.title")} subtitle={t("debts.subtitle")} />
 
+      {registersQuery.isError || currentShiftQuery.isError || debtsQuery.isError ? (
+        <QueryErrorState
+          onRetry={() => {
+            if (registersQuery.isError) void registersQuery.refetch();
+            if (currentShiftQuery.isError) void currentShiftQuery.refetch();
+            if (debtsQuery.isError) void debtsQuery.refetch();
+          }}
+        />
+      ) : null}
+
       <Card>
         <CardHeader>
           <CardTitle>{t("entry.register")}</CardTitle>
@@ -228,7 +239,7 @@ const PosDebtsPage = () => {
             />
           </div>
 
-          {!debtsQuery.isLoading && debts.length === 0 ? (
+          {!debtsQuery.isLoading && !debtsQuery.isError && debts.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t("debts.empty")}</p>
           ) : null}
 

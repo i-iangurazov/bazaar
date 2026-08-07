@@ -7,6 +7,7 @@ import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 
 import { PageHeader } from "@/components/page-header";
+import { QueryErrorState } from "@/components/query-error-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -155,6 +156,15 @@ const PosEntryPage = () => {
         <PageHeader title={t("title")} subtitle={t("cashierSubtitle")} />
       </div>
 
+      {registersQuery.isError || entryQuery.isError ? (
+        <QueryErrorState
+          onRetry={() => {
+            if (registersQuery.isError) void registersQuery.refetch();
+            if (entryQuery.isError) void entryQuery.refetch();
+          }}
+        />
+      ) : null}
+
       <section className="space-y-4 md:hidden">
         <div className="bazaar-admin-surface p-4">
           <div className="flex items-start justify-between gap-3">
@@ -199,7 +209,9 @@ const PosEntryPage = () => {
             </div>
           ) : null}
 
-          {!registersQuery.isLoading && !(registersQuery.data?.length ?? 0) ? (
+          {!registersQuery.isLoading &&
+          !registersQuery.isError &&
+          !(registersQuery.data?.length ?? 0) ? (
             <div className="bazaar-admin-empty mt-4 min-h-[8rem] gap-2 text-sm">
               {t("entry.noRegisters")}
               {canManageRegisters ? (
@@ -358,7 +370,9 @@ const PosEntryPage = () => {
               ) : null}
             </div>
 
-            {!registersQuery.isLoading && !(registersQuery.data?.length ?? 0) ? (
+            {!registersQuery.isLoading &&
+            !registersQuery.isError &&
+            !(registersQuery.data?.length ?? 0) ? (
               <div className="bazaar-admin-empty min-h-[8rem] items-start p-4 text-left">
                 <p className="text-sm text-muted-foreground">{t("entry.noRegisters")}</p>
                 {canManageRegisters ? (

@@ -7,6 +7,7 @@ import { CashDrawerMovementType } from "@prisma/client";
 import { useLocale, useTranslations } from "next-intl";
 
 import { PageHeader } from "@/components/page-header";
+import { QueryErrorState } from "@/components/query-error-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -323,6 +324,20 @@ const PosShiftsPage = () => {
     <div className="space-y-6">
       <PageHeader title={t("shifts.title")} subtitle={t("shifts.subtitle")} />
 
+      {registersQuery.isError ||
+      currentShiftQuery.isError ||
+      reportQuery.isError ||
+      historyQuery.isError ? (
+        <QueryErrorState
+          onRetry={() => {
+            if (registersQuery.isError) void registersQuery.refetch();
+            if (currentShiftQuery.isError) void currentShiftQuery.refetch();
+            if (reportQuery.isError) void reportQuery.refetch();
+            if (historyQuery.isError) void historyQuery.refetch();
+          }}
+        />
+      ) : null}
+
       <Card className="bazaar-admin-surface">
         <CardHeader className="bazaar-admin-section-header">
           <CardTitle>{t("entry.register")}</CardTitle>
@@ -364,7 +379,10 @@ const PosShiftsPage = () => {
             </div>
           ) : null}
 
-          {canOpenNewShift && !currentShiftQuery.isLoading && !currentShift ? (
+          {canOpenNewShift &&
+          !currentShiftQuery.isLoading &&
+          !currentShiftQuery.isError &&
+          !currentShift ? (
             <div className="bazaar-admin-notice flex flex-wrap items-center gap-2">
               {t("entry.shiftClosed")}
               <Button variant="secondary" asChild>
@@ -894,7 +912,10 @@ const PosShiftsPage = () => {
               {tCommon("loading")}
             </div>
           ) : null}
-          {canLoadRegisterScopedData && !historyQuery.isLoading && !historyItems.length ? (
+          {canLoadRegisterScopedData &&
+          !historyQuery.isLoading &&
+          !historyQuery.isError &&
+          !historyItems.length ? (
             <p className="bazaar-admin-empty">{t("shifts.noHistory")}</p>
           ) : null}
         </CardContent>

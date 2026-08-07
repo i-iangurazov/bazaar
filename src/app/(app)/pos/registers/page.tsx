@@ -7,6 +7,7 @@ import { useLocale, useTranslations } from "next-intl";
 
 import { DeleteIcon, EditIcon, MoreIcon, RestoreIcon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
+import { QueryErrorState } from "@/components/query-error-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -260,6 +261,15 @@ const PosRegistersPage = () => {
     <div className="space-y-6">
       <PageHeader title={t("registers.title")} subtitle={t("registers.subtitle")} />
 
+      {storesQuery.isError || registersQuery.isError ? (
+        <QueryErrorState
+          onRetry={() => {
+            if (storesQuery.isError) void storesQuery.refetch();
+            if (registersQuery.isError) void registersQuery.refetch();
+          }}
+        />
+      ) : null}
+
       {canManage ? (
         <Card className="bazaar-admin-surface">
           <CardHeader className="border-b border-border/60 bg-muted/20">
@@ -457,7 +467,7 @@ const PosRegistersPage = () => {
             ))}
           </div>
 
-          {!registersQuery.isLoading && !visibleRegisters.length ? (
+          {!registersQuery.isLoading && !registersQuery.isError && !visibleRegisters.length ? (
             <p className="bazaar-admin-empty">{t("registers.empty")}</p>
           ) : null}
         </CardContent>
