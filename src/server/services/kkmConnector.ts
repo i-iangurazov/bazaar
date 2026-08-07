@@ -256,10 +256,27 @@ export const processAdapterFiscalReceipt = async (input: {
     throw new AppError("kkmReceiptPayloadInvalid", "CONFLICT", 409);
   }
 
-  let fiscalized: Awaited<ReturnType<ReturnType<typeof getKkmAdapter>["fiscalizeReceipt"]>>;
+  const adapter = getKkmAdapter(claim.receipt.providerKey);
+  if (!adapter.supportsIdempotentFiscalization) {
+    const result = await finalize({
+      status: FiscalReceiptStatus.FAILED,
+      errorMessage: "kkmAdapterIdempotencyUnsupported",
+    });
+    if (result.finalized) {
+      incrementCounter(kkmReceiptsFailedTotal, { mode: KkmMode.ADAPTER });
+    }
+    return {
+      ...result,
+      providerCalled: false,
+      previous: claim.previous,
+    };
+  }
+
+  let fiscalized: Awaited<ReturnType<typeof adapter.fiscalizeReceipt>>;
   try {
-    const adapter = getKkmAdapter(claim.receipt.providerKey);
-    fiscalized = await adapter.fiscalizeReceipt(draft);
+    fiscalized = await adapter.fiscalizeReceipt(draft, {
+      providerCommandId: claim.receipt.idempotencyKey,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const result = await finalize({
@@ -801,7 +818,7 @@ export const runKkmRetryJob = async () => {
           requestId: `kkm-retry-job:${receipt.id}`,
         },
       });
-      if (!result.providerCalled || !result.finalized) {
+      if (!result.finalized) {
         continue;
       }
       processed += 1;

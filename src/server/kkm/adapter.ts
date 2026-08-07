@@ -40,7 +40,20 @@ export type KkmHealth = {
   message?: string;
 };
 
+export type FiscalReceiptCommandContext = {
+  /** Durable identity that the provider must deduplicate across every retry. */
+  providerCommandId: string;
+};
+
 export interface KkmAdapter {
+  /**
+   * True only when repeated providerCommandId values are guaranteed to return
+   * the original fiscal result without producing another fiscal effect.
+   */
+  supportsIdempotentFiscalization: boolean;
   health(): Promise<KkmHealth>;
-  fiscalizeReceipt(draft: FiscalReceiptDraft): Promise<FiscalReceiptResult>;
+  fiscalizeReceipt(
+    draft: FiscalReceiptDraft,
+    context: FiscalReceiptCommandContext,
+  ): Promise<FiscalReceiptResult>;
 }
