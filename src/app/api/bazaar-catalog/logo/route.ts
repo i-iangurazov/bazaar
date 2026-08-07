@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { getServerAuthToken } from "@/server/auth/token";
 import { prisma } from "@/server/db/prisma";
 import { createBazaarCatalogLogoImage } from "@/server/services/bazaarCatalog";
@@ -137,6 +139,8 @@ export const POST = async (request: Request) => {
     const image = await createBazaarCatalogLogoImage({
       organizationId: String(token.organizationId),
       storeId,
+      actorId: String(token.sub),
+      requestId: request.headers.get("x-request-id") ?? randomUUID(),
       imageUrl: uploaded.url,
     });
 

@@ -26,6 +26,7 @@ vi.mock("@/server/services/orderEmails", () => ({
 
 import { prisma } from "@/server/db/prisma";
 import {
+  createBazaarCatalogLogoImage,
   createCatalogCheckoutOrder,
   getPublicBazaarCatalog,
   listBazaarCatalogProducts,
@@ -56,6 +57,7 @@ describeDb("bazaar catalog integration", () => {
       organizationId: org.id,
       storeId: store.id,
       actorId: adminUser.id,
+      requestId: "catalog-publish",
       title: "Прайс-лист магазина",
       accentColor: "#1166dd",
       status: BazaarCatalogStatus.PUBLISHED,
@@ -68,6 +70,140 @@ describeDb("bazaar catalog integration", () => {
     expect(payload?.storeId).toBe(store.id);
     expect(payload?.title).toBe("Прайс-лист магазина");
     expect(payload?.products.some((row) => row.id === product.id)).toBe(true);
+  });
+
+  it("records scoped request audits for catalog settings and logo creation", async () => {
+    const { org, store, adminUser } = await seedBase();
+    const logo = await createBazaarCatalogLogoImage({
+      organizationId: org.id,
+      storeId: store.id,
+      actorId: adminUser.id,
+      requestId: "catalog-logo-request",
+      imageUrl: "/uploads/imported-products/catalog-logo.png",
+    });
+    const created = await upsertBazaarCatalogSettings({
+      organizationId: org.id,
+      storeId: store.id,
+      actorId: adminUser.id,
+      requestId: "catalog-settings-create",
+      title: "Catalog draft",
+      accentColor: "#2255aa",
+      logoImageId: logo.id,
+      status: BazaarCatalogStatus.DRAFT,
+    });
+    await upsertBazaarCatalogSettings({
+      organizationId: org.id,
+      storeId: store.id,
+      actorId: adminUser.id,
+      requestId: "catalog-settings-update",
+      title: "Published catalog",
+      accentColor: "#3366bb",
+      logoImageId: logo.id,
+      status: BazaarCatalogStatus.PUBLISHED,
+    });
+
+    const [logoAudit, createAudit, updateAudit] = await Promise.all([
+      prisma.auditLog.findFirstOrThrow({
+        where: { organizationId: org.id, requestId: "catalog-logo-request" },
+      }),
+      prisma.auditLog.findFirstOrThrow({
+        where: { organizationId: org.id, requestId: "catalog-settings-create" },
+      }),
+      prisma.auditLog.findFirstOrThrow({
+        where: { organizationId: org.id, requestId: "catalog-settings-update" },
+      }),
+    ]);
+
+    expect(logoAudit).toMatchObject({
+      actorId: adminUser.id,
+      action: "BAZAAR_CATALOG_LOGO_CREATED",
+      entity: "BazaarCatalogImage",
+      entityId: logo.id,
+      before: null,
+      after: { storeId: store.id, imageId: logo.id },
+    });
+    expect(createAudit).toMatchObject({
+      actorId: adminUser.id,
+      action: "BAZAAR_CATALOG_SETTINGS_CREATED",
+      entity: "BazaarCatalog",
+      entityId: created.catalog.id,
+      before: null,
+      after: {
+        storeId: store.id,
+        status: BazaarCatalogStatus.DRAFT,
+        title: "Catalog draft",
+        accentColor: "#2255aa",
+        logoImageId: logo.id,
+      },
+    });
+    expect(updateAudit).toMatchObject({
+      actorId: adminUser.id,
+      action: "BAZAAR_CATALOG_SETTINGS_UPDATED",
+      entity: "BazaarCatalog",
+      entityId: created.catalog.id,
+      before: {
+        storeId: store.id,
+        status: BazaarCatalogStatus.DRAFT,
+        title: "Catalog draft",
+        accentColor: "#2255aa",
+        logoImageId: logo.id,
+      },
+      after: {
+        storeId: store.id,
+        status: BazaarCatalogStatus.PUBLISHED,
+        title: "Published catalog",
+        accentColor: "#3366bb",
+        logoImageId: logo.id,
+      },
+    });
+  });
+
+  it("rejects cross-organization catalog mutations without records or audits", async () => {
+    const { store } = await seedBase();
+    const otherOrg = await prisma.organization.create({
+      data: { name: "Catalog audit other org" },
+    });
+    const otherAdmin = await prisma.user.create({
+      data: {
+        organizationId: otherOrg.id,
+        email: "catalog-audit-other@test.local",
+        name: "Catalog Audit Other",
+        passwordHash: "hash",
+        role: Role.ADMIN,
+        emailVerifiedAt: new Date(),
+      },
+    });
+
+    await expect(
+      createBazaarCatalogLogoImage({
+        organizationId: otherOrg.id,
+        storeId: store.id,
+        actorId: otherAdmin.id,
+        requestId: "foreign-catalog-logo",
+        imageUrl: "/uploads/imported-products/foreign-logo.png",
+      }),
+    ).rejects.toMatchObject({ message: "storeNotFound" });
+    await expect(
+      upsertBazaarCatalogSettings({
+        organizationId: otherOrg.id,
+        storeId: store.id,
+        actorId: otherAdmin.id,
+        requestId: "foreign-catalog-settings",
+        status: BazaarCatalogStatus.PUBLISHED,
+      }),
+    ).rejects.toMatchObject({ message: "storeNotFound" });
+
+    await expect(
+      prisma.bazaarCatalogImage.count({ where: { organizationId: otherOrg.id } }),
+    ).resolves.toBe(0);
+    await expect(
+      prisma.auditLog.count({
+        where: {
+          organizationId: otherOrg.id,
+          requestId: { in: ["foreign-catalog-logo", "foreign-catalog-settings"] },
+        },
+      }),
+    ).resolves.toBe(0);
   });
 
   it("creates confirmed customer order from public checkout with source=CATALOG", async () => {
@@ -97,6 +233,7 @@ describeDb("bazaar catalog integration", () => {
       organizationId: org.id,
       storeId: store.id,
       actorId: adminUser.id,
+      requestId: "catalog-checkout",
       status: BazaarCatalogStatus.PUBLISHED,
     });
 
@@ -167,6 +304,7 @@ describeDb("bazaar catalog integration", () => {
       organizationId: org.id,
       storeId: store.id,
       actorId: adminUser.id,
+      requestId: "catalog-variant-checkout",
       status: BazaarCatalogStatus.PUBLISHED,
     });
 
@@ -203,6 +341,7 @@ describeDb("bazaar catalog integration", () => {
       organizationId: org.id,
       storeId: store.id,
       actorId: adminUser.id,
+      requestId: "catalog-hidden-product",
       status: BazaarCatalogStatus.PUBLISHED,
     });
 
@@ -261,6 +400,7 @@ describeDb("bazaar catalog integration", () => {
       organizationId: orgA.id,
       storeId: storeA.id,
       actorId: adminA.id,
+      requestId: "catalog-org-a",
       status: BazaarCatalogStatus.PUBLISHED,
     });
 
@@ -319,6 +459,7 @@ describeDb("bazaar catalog integration", () => {
       organizationId: orgB.id,
       storeId: storeB.id,
       actorId: managerB.id,
+      requestId: "catalog-org-b",
       status: BazaarCatalogStatus.PUBLISHED,
     });
 

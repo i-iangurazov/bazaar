@@ -13,11 +13,15 @@ describe("bazaar catalog logo route source", () => {
     const accessCheckIndex = source.indexOf("await assertUserCanAccessStore");
     const uploadIndex = source.indexOf("await uploadProductImageBuffer");
 
-    expect(source).toContain('!token.organizationId || !token.sub || !isManagerOrAdmin(token.role)');
+    expect(source).toContain(
+      "!token.organizationId || !token.sub || !isManagerOrAdmin(token.role)",
+    );
     expect(accessCheckIndex).toBeGreaterThan(-1);
     expect(uploadIndex).toBeGreaterThan(-1);
     expect(accessCheckIndex).toBeLessThan(uploadIndex);
     expect(source).toContain('message === "forbidden" || message === "storeAccessDenied"');
+    expect(source).toContain("actorId: String(token.sub)");
+    expect(source).toContain('request.headers.get("x-request-id") ?? randomUUID()');
   });
 
   it("rejects SVG logo files at route validation", async () => {

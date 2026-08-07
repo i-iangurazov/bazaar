@@ -183,6 +183,7 @@ export const bazaarCatalogRouter = router({
           organizationId: ctx.user.organizationId,
           storeId: input.storeId,
           actorId: ctx.user.id,
+          requestId: ctx.requestId,
           title: input.title,
           accentColor: input.accentColor,
           fontFamily: input.fontFamily,

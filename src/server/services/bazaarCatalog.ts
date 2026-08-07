@@ -560,6 +560,7 @@ export const upsertBazaarCatalogSettings = async (input: {
   organizationId: string;
   storeId: string;
   actorId: string;
+  requestId: string;
   title?: string | null;
   accentColor?: string | null;
   fontFamily?: BazaarCatalogFontFamily;
@@ -599,7 +600,14 @@ export const upsertBazaarCatalogSettings = async (input: {
       },
       select: {
         id: true,
+        storeId: true,
         slug: true,
+        status: true,
+        title: true,
+        accentColor: true,
+        fontFamily: true,
+        headerStyle: true,
+        logoImageId: true,
         publishedAt: true,
       },
     });
@@ -641,6 +649,37 @@ export const upsertBazaarCatalogSettings = async (input: {
           });
         })();
 
+    await writeAuditLog(tx, {
+      organizationId: input.organizationId,
+      actorId: input.actorId,
+      action: existing ? "BAZAAR_CATALOG_SETTINGS_UPDATED" : "BAZAAR_CATALOG_SETTINGS_CREATED",
+      entity: "BazaarCatalog",
+      entityId: catalog.id,
+      before: existing
+        ? toJson({
+            storeId: existing.storeId,
+            status: existing.status,
+            title: existing.title,
+            accentColor: existing.accentColor,
+            fontFamily: existing.fontFamily,
+            headerStyle: existing.headerStyle,
+            logoImageId: existing.logoImageId,
+            publishedAt: existing.publishedAt,
+          })
+        : null,
+      after: toJson({
+        storeId: catalog.storeId,
+        status: catalog.status,
+        title: catalog.title,
+        accentColor: catalog.accentColor,
+        fontFamily: catalog.fontFamily,
+        headerStyle: catalog.headerStyle,
+        logoImageId: catalog.logoImageId,
+        publishedAt: catalog.publishedAt,
+      }),
+      requestId: input.requestId,
+    });
+
     await cacheDel(cacheKeyBySlug(catalog.slug));
 
     return {
@@ -668,23 +707,54 @@ export const upsertBazaarCatalogSettings = async (input: {
 export const createBazaarCatalogLogoImage = async (input: {
   organizationId: string;
   storeId: string;
+  actorId: string;
+  requestId: string;
   imageUrl: string;
 }) => {
-  await ensureStoreAccess(input.organizationId, input.storeId);
   const url = input.imageUrl.trim();
   if (!url) {
     throw new AppError("invalidInput", "BAD_REQUEST", 400);
   }
-  return prisma.bazaarCatalogImage.create({
-    data: {
+
+  return prisma.$transaction(async (tx) => {
+    const store = await tx.store.findFirst({
+      where: {
+        id: input.storeId,
+        organizationId: input.organizationId,
+      },
+      select: { id: true },
+    });
+    if (!store) {
+      throw new AppError("storeNotFound", "NOT_FOUND", 404);
+    }
+
+    const image = await tx.bazaarCatalogImage.create({
+      data: {
+        organizationId: input.organizationId,
+        url,
+      },
+      select: {
+        id: true,
+        url: true,
+        createdAt: true,
+      },
+    });
+
+    await writeAuditLog(tx, {
       organizationId: input.organizationId,
-      url,
-    },
-    select: {
-      id: true,
-      url: true,
-      createdAt: true,
-    },
+      actorId: input.actorId,
+      action: "BAZAAR_CATALOG_LOGO_CREATED",
+      entity: "BazaarCatalogImage",
+      entityId: image.id,
+      before: null,
+      after: toJson({
+        storeId: store.id,
+        imageId: image.id,
+      }),
+      requestId: input.requestId,
+    });
+
+    return image;
   });
 };
 

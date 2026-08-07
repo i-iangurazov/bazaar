@@ -80,6 +80,7 @@ describeDb("B0 Agent 3 public catalogue P0 runtime verification", () => {
       organizationId: org.id,
       storeId: store.id,
       actorId: adminUser.id,
+      requestId: "b0-catalog-stock",
       status: BazaarCatalogStatus.PUBLISHED,
     });
     sideEffects.publish.mockClear();
@@ -196,6 +197,7 @@ describeDb("B0 Agent 3 public catalogue P0 runtime verification", () => {
       organizationId: org.id,
       storeId: store.id,
       actorId: adminUser.id,
+      requestId: "b0-catalog-payment",
       status: BazaarCatalogStatus.PUBLISHED,
     });
     sideEffects.publish.mockClear();
@@ -248,6 +250,7 @@ describeDb("B0 Agent 3 public catalogue P0 runtime verification", () => {
       organizationId: org.id,
       storeId: store.id,
       actorId: adminUser.id,
+      requestId: "b0-catalog-forged-org",
       status: BazaarCatalogStatus.PUBLISHED,
     });
     const forgedOrganization = await prisma.organization.create({
@@ -314,6 +317,7 @@ describeDb("B0 Agent 3 public catalogue P0 runtime verification", () => {
       organizationId: org.id,
       storeId: store.id,
       actorId: adminUser.id,
+      requestId: "b0-catalog-replay",
       status: BazaarCatalogStatus.PUBLISHED,
     });
     const firstResponse = await getPublicCatalog(
@@ -387,6 +391,7 @@ describeDb("B0 Agent 3 public catalogue P0 runtime verification", () => {
       organizationId: org.id,
       storeId: store.id,
       actorId: adminUser.id,
+      requestId: "b0-catalog-cache",
       status: BazaarCatalogStatus.PUBLISHED,
     });
     const warmedResponse = await getPublicCatalog(
@@ -525,6 +530,7 @@ describeDb("B0 Agent 3 public catalogue P0 runtime verification", () => {
       organizationId: org.id,
       storeId: store.id,
       actorId: adminUser.id,
+      requestId: "b0-catalog-price-conflict",
       status: BazaarCatalogStatus.PUBLISHED,
     });
     sideEffects.publish.mockClear();
@@ -603,6 +609,7 @@ describeDb("B0 Agent 3 public catalogue P0 runtime verification", () => {
       organizationId: org.id,
       storeId: store.id,
       actorId: adminUser.id,
+      requestId: "b0-catalog-redis-outage",
       status: BazaarCatalogStatus.PUBLISHED,
     });
     const publicUrl = `http://localhost/api/public/catalog/${saved.catalog.slug}`;
