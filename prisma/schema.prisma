@@ -493,6 +493,11 @@ enum CustomerOrderEmailStatus {
   SKIPPED
 }
 
+enum MobilePlatform {
+  IOS
+  ANDROID
+}
+
 model Organization {
   id                  String                         @id @default(cuid())
   name                String
@@ -589,6 +594,7 @@ model Organization {
   esfReferences               EsfReference[]
   printerSettings             StorePrinterSettings[]
   bazaarCatalogHiddenProducts BazaarCatalogHiddenProduct[]
+  mobileDevices               MobileDevice[]
 }
 
 model User {
@@ -663,6 +669,7 @@ model User {
   storeAccesses                 UserStoreAccess[]
   storeProductsAssigned         StoreProduct[]                    @relation("storeProductsAssignedBy")
   guideState                    UserGuideState?
+  mobileDevices                 MobileDevice[]
 
   @@index([organizationId, isActive])
 }
@@ -705,6 +712,32 @@ model UserGuideState {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([updatedAt])
+}
+
+model MobileDevice {
+  id             String         @id @default(cuid())
+  organizationId String
+  userId         String
+  installationId String         @db.VarChar(160)
+  platform       MobilePlatform
+  tokenEncrypted String         @db.Text
+  tokenHash      String         @db.VarChar(64)
+  appVersion     String         @db.VarChar(40)
+  buildNumber    String         @db.VarChar(40)
+  deviceName     String?        @db.VarChar(120)
+  osVersion      String?        @db.VarChar(80)
+  enabled        Boolean        @default(true)
+  lastSeenAt     DateTime       @default(now())
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, installationId])
+  @@index([organizationId, userId, enabled])
+  @@index([tokenHash, enabled])
+  @@index([lastSeenAt])
 }
 
 model Store {

@@ -1,9 +1,9 @@
+import { shareBlobNative } from "@/lib/native/files";
+import { isNativeApp } from "@/lib/native/platform";
+
 const pdfMimeType = "application/pdf";
 
-export const fetchPdfBlob = async (input: {
-  url: string;
-  init?: RequestInit;
-}) => {
+export const fetchPdfBlob = async (input: { url: string; init?: RequestInit }) => {
   const response = await fetch(input.url, input.init);
   if (!response.ok) {
     const message = await response.text();
@@ -16,13 +16,23 @@ export const fetchPdfBlob = async (input: {
   return response.blob();
 };
 
-export const downloadPdfBlob = (blob: Blob, fileName: string) => {
+const downloadPdfInBrowser = (blob: Blob, fileName: string) => {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
   link.download = fileName;
   link.click();
   URL.revokeObjectURL(url);
+};
+
+export const downloadPdfBlob = (blob: Blob, fileName: string) => {
+  if (isNativeApp()) {
+    void shareBlobNative({ blob, fileName, title: "Bazaar PDF" }).then((shared) => {
+      if (!shared) downloadPdfInBrowser(blob, fileName);
+    });
+    return;
+  }
+  downloadPdfInBrowser(blob, fileName);
 };
 
 export type PrintPdfBlobResult = {
@@ -32,6 +42,14 @@ export type PrintPdfBlobResult = {
 };
 
 export const printPdfBlob = async (blob: Blob) => {
+  if (isNativeApp()) {
+    const shared = await shareBlobNative({
+      blob,
+      fileName: "bazaar-document.pdf",
+      title: "Bazaar",
+    });
+    return { opened: shared, autoPrintAttempted: false, fallbackUsed: !shared };
+  }
   const url = URL.createObjectURL(blob);
   const revokeLater = () => {
     window.setTimeout(() => URL.revokeObjectURL(url), 60_000);

@@ -28,6 +28,7 @@ const offlineBannerSource = readFileSync(
   join(process.cwd(), "src/components/pwa-offline-banner.tsx"),
   "utf8",
 );
+const networkSource = readFileSync(join(process.cwd(), "src/lib/native/network.ts"), "utf8");
 const loadingSource = readFileSync(join(process.cwd(), "src/components/page-loading.tsx"), "utf8");
 const appLoadingSource = readFileSync(join(process.cwd(), "src/app/(app)/loading.tsx"), "utf8");
 
@@ -53,7 +54,10 @@ describe("PWA polish source", () => {
 
   it("shows mobile offline state and app install guidance", () => {
     expect(providersSource).toContain("PwaOfflineBanner");
-    expect(offlineBannerSource).toContain("navigator.onLine");
+    expect(offlineBannerSource).toContain("initializeNativeNetwork");
+    expect(offlineBannerSource).toContain("getConnectivitySnapshot");
+    expect(networkSource).toContain("navigator.onLine");
+    expect(networkSource).toContain('Network.addListener("networkStatusChange"');
     expect(offlineBannerSource).toContain("online");
     expect(offlineBannerSource).toContain("offline");
     expect(offlineBannerSource).toContain("data-pwa-offline-banner");

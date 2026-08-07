@@ -17,3 +17,10 @@ yarn-error.log
 retail-system.zip
 uploads/
 .vercel
+*.jks
+*.keystore
+*.p12
+*.mobileprovision
+android/app/google-services.json
+ios/App/App/GoogleService-Info.plist
+ios/*.xcarchive

@@ -7,6 +7,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { SignOutIcon } from "@/components/icons";
 import { cn } from "@/lib/utils";
+import { disableNativePushBeforeSignOut } from "@/lib/native/notifications";
 
 export const SignOutButton = ({ className }: { className?: string }) => {
   const t = useTranslations("common");
@@ -21,7 +22,7 @@ export const SignOutButton = ({ className }: { className?: string }) => {
       )}
       onClick={() => {
         queryClient.clear();
-        void signOut({ callbackUrl: "/login" });
+        void disableNativePushBeforeSignOut().finally(() => signOut({ callbackUrl: "/login" }));
       }}
     >
       <SignOutIcon className="h-4 w-4" aria-hidden />

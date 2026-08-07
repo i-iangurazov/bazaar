@@ -187,6 +187,7 @@ export const MobileBottomNav = ({
   onOpenMore,
 }: MobileBottomNavProps) => (
   <nav
+    data-native-bottom-nav
     className="fixed inset-x-3 bottom-3 z-40 rounded-[1.65rem] border border-border/80 bg-card/95 px-2 py-2 shadow-[0_-12px_34px_rgba(15,23,42,0.18)] ring-1 ring-foreground/[0.03] backdrop-blur-xl md:hidden"
     style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
     aria-label={navigationLabel}
@@ -329,6 +330,7 @@ export const MobileMoreMenu = ({
 
 export const MobilePageContainer = ({ children, className }: MobilePageContainerProps) => (
   <div
+    data-native-keyboard-aware
     className={cn("min-w-0 overflow-x-hidden md:contents", className)}
     style={{ paddingBottom: "calc(6rem + env(safe-area-inset-bottom))" }}
   >
@@ -427,7 +429,8 @@ export const MobileTaskCard = ({
 
   const classNames = cn(
     "bazaar-mobile-card-surface block min-h-24 rounded-xl border border-border/80 p-3 text-left no-underline shadow-sm hover:no-underline",
-    href && "transition hover:border-primary/40 hover:bg-accent dark:hover:!bg-[hsl(var(--accent))]",
+    href &&
+      "transition hover:border-primary/40 hover:bg-accent dark:hover:!bg-[hsl(var(--accent))]",
     className,
   );
 
@@ -439,9 +442,5 @@ export const MobileTaskCard = ({
     );
   }
 
-  return (
-    <div className={classNames}>
-      {content}
-    </div>
-  );
+  return <div className={classNames}>{content}</div>;
 };

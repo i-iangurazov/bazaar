@@ -2180,7 +2180,26 @@
   },
   "pwaStatus": {
     "offlineTitle": "No connection",
-    "offlineDescription": "Data stays visible, but new actions should be retried after the network returns."
+    "offlineDescription": "Viewing remains available, but saving and payments require a connection.",
+    "reconnectingTitle": "Connection restored",
+    "reconnectingDescription": "Bazaar is refreshing shifts, drafts, and current data."
+  },
+  "nativeApp": {
+    "scanBarcode": "Scan barcode",
+    "scanInstructions": "Point the camera at the product barcode",
+    "scanCancel": "Close scanner",
+    "torchOn": "Turn torch off",
+    "torchOff": "Turn torch on",
+    "cameraPermissionDenied": "Allow camera access in device settings to scan barcodes.",
+    "scannerUnavailable": "The camera or scanner is currently unavailable.",
+    "pushTitle": "Important Bazaar events",
+    "pushDescription": "Get notifications for new orders, synchronization failures, and important operations.",
+    "pushAllow": "Allow notifications",
+    "notNow": "Not now",
+    "updateRequiredTitle": "Bazaar must be updated",
+    "updateRequiredDescription": "This app version is no longer compatible with the current Bazaar system.",
+    "updateAction": "Update app",
+    "contactSupport": "Open Bazaar Guide"
   },
   "commandPalette": {
     "openButton": "Command palette",
@@ -4824,6 +4843,7 @@
     "genericTitle": "Generic",
     "genericMessage": "Something went wrong.",
     "serviceUnavailable": "Service unavailable",
+    "nativeOffline": "No connection. The operation was not completed; reconnect and try again.",
     "tryAgain": "Try again.",
     "invalidInput": "Invalid input.",
     "catalogPriceChanged": "Catalog prices changed. Review the refreshed cart and try again.",
@@ -6620,5 +6640,29 @@
     "connectorModeStep2": "Pair the device with this store.",
     "connectorModeStep3": "After pairing, print jobs can be sent directly to the device.",
     "readOnly": "Read-only. Editing is available to ADMIN and MANAGER."
+  },
+  "privacy": {
+    "metaTitle": "Privacy policy — Bazaar",
+    "metaDescription": "How Bazaar handles and protects data in its web and mobile applications.",
+    "back": "← Bazaar",
+    "eyebrow": "Privacy",
+    "title": "Bazaar privacy policy",
+    "intro": "This policy applies to the Bazaar web application, PWA, and official Android and iOS applications. Bazaar processes only the data needed to operate the retail system.",
+    "updated": "Updated: August 8, 2026",
+    "dataTitle": "Data Bazaar uses",
+    "dataBody": "Account, organization, and store data; information entered into Bazaar workflows; security and diagnostic events; and, only with permission, device information and a push token.",
+    "purposeTitle": "Why the data is needed",
+    "purposeBody": "To authenticate users, perform authorized business operations, synchronize store data, deliver selected notifications, keep the service secure, and diagnose technical problems.",
+    "permissionsTitle": "Camera and notifications",
+    "permissionsBody": "Camera access is requested only when the barcode scanner is opened. Notifications are enabled only after an explanation and system permission. Permissions can be revoked in device settings.",
+    "securityTitle": "Storage and protection",
+    "securityBody": "Passwords are not stored in plain text. Mobile push tokens are encrypted on the server and scoped to a user and organization. Server keys and PostgreSQL or Redis data are never bundled with the mobile app.",
+    "sharingTitle": "Service providers",
+    "sharingBody": "Bazaar uses infrastructure and feature providers only to operate the service: hosting, message delivery, customer-enabled integrations, and Apple or Google system push services. Access is limited to that purpose.",
+    "controlTitle": "Your control",
+    "controlBody": "You can sign out, disable camera or notifications, update profile data, or contact support about access, correction, and deletion subject to applicable law and required business records.",
+    "supportTitle": "Questions about data",
+    "supportBody": "Open Bazaar Guide and contact support. Never send a password, API key, or payment data in a support message.",
+    "supportAction": "Open support"
   }
 }

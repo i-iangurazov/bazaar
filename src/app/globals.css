@@ -76,7 +76,28 @@
   --mobile-top-safe-area: env(safe-area-inset-top, 0px);
   --mobile-bottom-safe-area: env(safe-area-inset-bottom, 0px);
   --mobile-bottom-nav-height: calc(4.5rem + var(--mobile-bottom-safe-area));
+  --native-keyboard-height: 0px;
   color-scheme: light;
+}
+
+html.native-app,
+html.native-app body {
+  min-height: 100dvh;
+  overscroll-behavior-y: none;
+}
+
+html.native-app[data-native-keyboard="visible"] [data-native-bottom-nav] {
+  display: none;
+}
+
+html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom)) !important;
+}
+
+@media (min-width: 768px) {
+  html:not(.native-app) .pwa-desktop-hidden {
+    display: none;
+  }
 }
 
 .dark {

@@ -1,3 +1,6 @@
+import { shareBlobNative } from "@/lib/native/files";
+import { isNativeApp } from "@/lib/native/platform";
+
 export type DownloadFormat = "csv" | "xlsx";
 
 const csvDelimiter = ";";
@@ -26,7 +29,11 @@ export const sanitizeSpreadsheetValue = (value: unknown) => {
   return str;
 };
 
-const triggerDownload = (blob: Blob, fileName: string) => {
+const triggerDownload = async (blob: Blob, fileName: string) => {
+  if (isNativeApp()) {
+    const shared = await shareBlobNative({ blob, fileName, title: "Bazaar export" });
+    if (shared) return;
+  }
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -61,7 +68,7 @@ export const downloadTableFile = async (input: {
   const allRows = ensureRows(input.header, input.rows);
   if (input.format === "xlsx") {
     const content = await buildXlsx(allRows);
-    triggerDownload(
+    await triggerDownload(
       new Blob([content], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       }),
@@ -71,7 +78,7 @@ export const downloadTableFile = async (input: {
   }
 
   const content = buildCsv(allRows);
-  triggerDownload(
+  await triggerDownload(
     new Blob([content], { type: "text/csv;charset=utf-8" }),
     `${input.fileNameBase}.csv`,
   );

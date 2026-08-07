@@ -85,6 +85,7 @@ import {
 } from "@/lib/mobilePosState";
 import { parseMoneyInput } from "@/lib/moneyInput";
 import { hasMobilePosNavigationRisk } from "@/lib/mobilePosNavigationGuard";
+import { nativeHaptics } from "@/lib/native/haptics";
 import { getQzTrayBinding, printPdfBlobViaQzTray, qzTrayErrorMessageKey } from "@/lib/qzTrayPrint";
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
 import {
@@ -1233,6 +1234,7 @@ const PosSellPage = () => {
     number: string;
     kkmStatus: "NOT_SENT" | "SENT" | "FAILED";
   }) => {
+    void nativeHaptics.success();
     clearActiveDraftCache();
     setLastCompletedSale(result);
     setAutoReceiptStatus("idle");

@@ -17,6 +17,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeSync } from "@/components/theme-sync";
 import { PwaServiceWorkerRegister } from "@/components/pwa-service-worker-register";
 import { PwaOfflineBanner } from "@/components/pwa-offline-banner";
+import { NativeRuntime } from "@/components/native/native-runtime";
+import { getConnectivitySnapshot } from "@/lib/native/network";
+import { isNativeApp } from "@/lib/native/platform";
 
 type IntlMessages = ComponentProps<typeof NextIntlClientProvider>["messages"];
 
@@ -72,6 +75,13 @@ export const Providers = ({
           url: `${getBaseUrl()}/api/trpc`,
           maxURLLength: 2_048,
           fetch(url, options) {
+            if (
+              isNativeApp() &&
+              getConnectivitySnapshot().state !== "online" &&
+              String(options?.method ?? "GET").toUpperCase() !== "GET"
+            ) {
+              return Promise.reject(new Error("nativeOffline"));
+            }
             return fetch(url, { ...options, credentials: "include" });
           },
           headers() {
@@ -104,6 +114,7 @@ export const Providers = ({
             getMessageFallback={createMessageFallback(locale)}
           >
             <ThemeSync />
+            <NativeRuntime />
             <PwaServiceWorkerRegister />
             <PwaOfflineBanner />
             <TooltipProvider>

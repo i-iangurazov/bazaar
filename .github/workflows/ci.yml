@@ -87,11 +87,62 @@ jobs:
       - name: Run checks
         run: pnpm test:ci
 
+  native-android:
+    runs-on: ubuntu-latest
+    env:
+      BAZAAR_MOBILE_ENV: production
+      MOBILE_APP_VERSION: 1.0.0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - uses: android-actions/setup-android@v3
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Validate and sync native project
+        run: pnpm mobile:sync
+      - name: Compile debug APK and unsigned release AAB
+        working-directory: android
+        run: ./gradlew assembleDebug bundleRelease
+
+  native-ios:
+    runs-on: macos-15
+    env:
+      BAZAAR_MOBILE_ENV: production
+      MOBILE_APP_VERSION: 1.0.0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Validate and sync native project
+        run: pnpm mobile:sync
+      - name: Compile iOS Simulator application
+        run: >-
+          xcodebuild -project ios/App/App.xcodeproj -scheme App
+          -configuration Debug -sdk iphonesimulator
+          -derivedDataPath ios/DerivedData
+          CODE_SIGNING_ALLOWED=NO build
+
   release-gate:
     runs-on: ubuntu-latest
     needs:
       - dependency-security
       - codeql
+      - native-android
+      - native-ios
       - test
     services:
       postgres:

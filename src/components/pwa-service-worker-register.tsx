@@ -2,6 +2,8 @@
 
 import { useEffect } from "react";
 
+import { isNativeApp } from "@/lib/native/platform";
+
 const canRegisterServiceWorker = () => {
   if (typeof window === "undefined" || !("serviceWorker" in navigator)) {
     return false;
@@ -15,7 +17,7 @@ const canRegisterServiceWorker = () => {
 
 export const PwaServiceWorkerRegister = () => {
   useEffect(() => {
-    if (process.env.NODE_ENV !== "production" || !canRegisterServiceWorker()) {
+    if (process.env.NODE_ENV !== "production" || isNativeApp() || !canRegisterServiceWorker()) {
       return;
     }
 
