@@ -8,12 +8,16 @@ describe("kkm registry", () => {
     const adapter = getKkmAdapter();
     const health = await adapter.health();
     expect(health.ok).toBe(false);
+    expect(adapter.supportsIdempotentFiscalization).toBe(false);
 
     await expect(
-      adapter.fiscalizeReceipt({
-        storeId: "store",
-        lines: [{ sku: "SKU-1", name: "Item", qty: 1 }],
-      }),
+      adapter.fiscalizeReceipt(
+        {
+          storeId: "store",
+          lines: [{ sku: "SKU-1", name: "Item", qty: 1 }],
+        },
+        { providerCommandId: "fiscal-receipt-1" },
+      ),
     ).rejects.toBeInstanceOf(AppError);
   });
 });

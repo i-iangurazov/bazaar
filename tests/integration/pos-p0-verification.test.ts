@@ -7,38 +7,68 @@ import {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const kkmRuntime = vi.hoisted(() => ({
-  calls: [] as Array<{ receiptId?: string; storeId: string }>,
+  calls: [] as Array<{ providerCommandId: string; receiptId?: string; storeId: string }>,
+  externalEffects: new Map<
+    string,
+    {
+      providerReceiptId: string;
+      fiscalNumber: string;
+      fiscalizedAt: Date;
+      printedAt: Date;
+      rawJson: { mock: boolean; externalEffectNumber: number };
+    }
+  >(),
   mode: "fail" as "fail" | "success",
   gate: null as Promise<void> | null,
+  afterEffect: null as null | ((input: { providerCommandId: string }) => Promise<void>),
+  supportsIdempotentFiscalization: true,
 }));
 
 vi.mock("@/server/kkm/registry", () => ({
   getKkmAdapter: () => ({
+    supportsIdempotentFiscalization: kkmRuntime.supportsIdempotentFiscalization,
     health: async () => ({ ok: true }),
-    fiscalizeReceipt: async (draft: { receiptId?: string; storeId: string }) => {
-      const callNumber = kkmRuntime.calls.length + 1;
-      kkmRuntime.calls.push({ receiptId: draft.receiptId, storeId: draft.storeId });
+    fiscalizeReceipt: async (
+      draft: { receiptId?: string; storeId: string },
+      context: { providerCommandId: string },
+    ) => {
+      kkmRuntime.calls.push({
+        providerCommandId: context.providerCommandId,
+        receiptId: draft.receiptId,
+        storeId: draft.storeId,
+      });
       if (kkmRuntime.gate) {
         await kkmRuntime.gate;
       }
       if (kkmRuntime.mode === "fail") {
         throw new Error("mock-kkm-failure");
       }
+      const existing = kkmRuntime.externalEffects.get(context.providerCommandId);
+      if (existing) {
+        return existing;
+      }
       const now = new Date("2026-07-22T00:00:00.000Z");
-      return {
-        providerReceiptId: `mock-provider-${callNumber}`,
-        fiscalNumber: `mock-fiscal-${callNumber}`,
+      const externalEffectNumber = kkmRuntime.externalEffects.size + 1;
+      const result = {
+        providerReceiptId: `mock-provider-${externalEffectNumber}`,
+        fiscalNumber: `mock-fiscal-${externalEffectNumber}`,
         fiscalizedAt: now,
         printedAt: now,
-        rawJson: { mock: true, callNumber },
+        rawJson: { mock: true, externalEffectNumber },
       };
+      kkmRuntime.externalEffects.set(context.providerCommandId, result);
+      await kkmRuntime.afterEffect?.({ providerCommandId: context.providerCommandId });
+      return result;
     },
   }),
 }));
 
 import { prisma } from "@/server/db/prisma";
 import { adjustStock } from "@/server/services/inventory";
-import { runKkmRetryJob } from "@/server/services/kkmConnector";
+import {
+  processAdapterFiscalReceipt,
+  runKkmRetryJob,
+} from "@/server/services/kkmConnector";
 
 import { createTestCaller } from "../helpers/context";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
@@ -172,8 +202,11 @@ const waitForKkmCalls = async (count: number) => {
 describeDb("Agent 1 P0 runtime verification", () => {
   beforeEach(async () => {
     kkmRuntime.calls.length = 0;
+    kkmRuntime.externalEffects.clear();
     kkmRuntime.mode = "fail";
     kkmRuntime.gate = null;
+    kkmRuntime.afterEffect = null;
+    kkmRuntime.supportsIdempotentFiscalization = true;
     await resetDatabase();
   });
 
@@ -1625,6 +1658,7 @@ describeDb("Agent 1 P0 runtime verification", () => {
     expect(failedReceipt.status).toBe("FAILED");
     expect(failedReceipt.attemptCount).toBe(1);
     expect(kkmRuntime.calls).toHaveLength(1);
+    expect(kkmRuntime.calls[0]?.providerCommandId).toBe(failedReceipt.idempotencyKey);
 
     await prisma.fiscalReceipt.update({
       where: { id: failedReceipt.id },
@@ -1684,6 +1718,7 @@ describeDb("Agent 1 P0 runtime verification", () => {
     expect(processing.attemptCount).toBe(2);
     expect(processing.nextAttemptAt?.getTime()).toBeGreaterThan(Date.now());
     expect(kkmRuntime.calls).toHaveLength(1);
+    expect(kkmRuntime.calls[0]?.providerCommandId).toBe(failedReceipt.idempotencyKey);
     expect(new Set(kkmRuntime.calls.map((call) => call.receiptId))).toEqual(
       new Set([original.sale.number]),
     );
@@ -1753,6 +1788,7 @@ describeDb("Agent 1 P0 runtime verification", () => {
       where: { customerOrderId: original.sale.id },
     });
     expect(failedReceipt).toMatchObject({ status: "FAILED", attemptCount: 1 });
+    expect(kkmRuntime.calls[0]?.providerCommandId).toBe(failedReceipt.idempotencyKey);
     kkmRuntime.calls.length = 0;
     let releaseProvider!: () => void;
     kkmRuntime.gate = new Promise<void>((resolve) => {
@@ -1767,6 +1803,7 @@ describeDb("Agent 1 P0 runtime verification", () => {
       where: { id: failedReceipt.id },
     });
     expect(kkmRuntime.calls).toHaveLength(1);
+    expect(kkmRuntime.calls[0]?.providerCommandId).toBe(failedReceipt.idempotencyKey);
     releaseProvider();
     const [firstResult, secondResult] = await Promise.all([firstRetry, secondRetry]);
     const repeatedResult = await managerCaller.pos.kkm.retryReceipt({
@@ -1879,6 +1916,7 @@ describeDb("Agent 1 P0 runtime verification", () => {
       }),
     ]);
     expect(processing).toMatchObject({ status: "PROCESSING", attemptCount: 1 });
+    expect(kkmRuntime.calls[0]?.providerCommandId).toBe(processing.idempotencyKey);
     expect(processing.nextAttemptAt?.getTime()).toBeGreaterThan(Date.now());
     expect(persisted).toMatchObject({
       status: "SENT",
@@ -1936,6 +1974,7 @@ describeDb("Agent 1 P0 runtime verification", () => {
       where: { customerOrderId: original.sale.id },
     });
     expect(failedReceipt).toMatchObject({ status: "FAILED", attemptCount: 1 });
+    expect(kkmRuntime.calls[0]?.providerCommandId).toBe(failedReceipt.idempotencyKey);
     await prisma.fiscalReceipt.update({
       where: { id: failedReceipt.id },
       data: {
@@ -1959,6 +1998,7 @@ describeDb("Agent 1 P0 runtime verification", () => {
     const secondWorker = await runKkmRetryJob();
     expect(secondWorker.details).toMatchObject({ processed: 0, sent: 0, failed: 0 });
     expect(kkmRuntime.calls).toHaveLength(1);
+    expect(kkmRuntime.calls[0]?.providerCommandId).toBe(failedReceipt.idempotencyKey);
     releaseProvider();
     const firstWorkerResult = await firstWorker;
     const repeatedWorker = await runKkmRetryJob();
@@ -1988,5 +2028,224 @@ describeDb("Agent 1 P0 runtime verification", () => {
     expect(workerAudits).toHaveLength(1);
     expect(workerAudits[0]?.before).toMatchObject({ status: "PROCESSING", attemptCount: 2 });
     expect(workerAudits[0]?.after).toMatchObject({ status: "SENT", attemptCount: 3 });
+  });
+
+  it("HARD-A1-009 fails closed before a non-idempotent adapter can be called", async () => {
+    const { org, store, product, adminUser, managerUser, cashierUser } = await seedBase({
+      plan: "ENTERPRISE",
+    });
+    await prisma.product.update({ where: { id: product.id }, data: { basePriceKgs: 100 } });
+    await prisma.storeComplianceProfile.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        enableKkm: true,
+        kkmMode: "ADAPTER",
+        kkmProviderKey: "mock",
+      },
+    });
+    await adjustStock({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 1,
+      reason: "HARD-A1-009 unsupported adapter fixture",
+      idempotencyKey: "hard-a1-009-unsupported-stock",
+      requestId: "hard-a1-009-unsupported-stock",
+    });
+    const cashierCaller = callerFor(cashierUser);
+    const managerCaller = callerFor(managerUser);
+    const runtime = await createRegisterAndShift({
+      organizationId: org.id,
+      storeId: store.id,
+      caller: cashierCaller,
+      key: "p0009u",
+    });
+    kkmRuntime.mode = "success";
+    kkmRuntime.supportsIdempotentFiscalization = false;
+
+    const original = await createAndCompleteSale({
+      caller: cashierCaller,
+      registerId: runtime.register.id,
+      productId: product.id,
+      key: "hard-a1-009-unsupported",
+    });
+    const initial = await prisma.fiscalReceipt.findFirstOrThrow({
+      where: { customerOrderId: original.sale.id },
+    });
+    const manualResult = await managerCaller.pos.kkm.retryReceipt({ receiptId: initial.id });
+    await prisma.fiscalReceipt.update({
+      where: { id: initial.id },
+      data: { nextAttemptAt: new Date(0) },
+    });
+    const scheduledResult = await runKkmRetryJob();
+    await prisma.fiscalReceipt.update({
+      where: { id: initial.id },
+      data: { status: "PROCESSING", nextAttemptAt: new Date(0) },
+    });
+    const staleResult = await runKkmRetryJob();
+    const [persisted, persistedSale, audits] = await Promise.all([
+      prisma.fiscalReceipt.findUniqueOrThrow({ where: { id: initial.id } }),
+      prisma.customerOrder.findUniqueOrThrow({ where: { id: original.sale.id } }),
+      prisma.auditLog.findMany({
+        where: {
+          entityId: initial.id,
+          action: { in: ["KKM_RECEIPT_RETRY", "KKM_RECEIPT_RETRY_JOB"] },
+        },
+      }),
+    ]);
+
+    expect(initial).toMatchObject({
+      status: "FAILED",
+      attemptCount: 1,
+      lastError: "kkmAdapterIdempotencyUnsupported",
+    });
+    expect(manualResult).toMatchObject({
+      status: "FAILED",
+      errorMessage: "kkmAdapterIdempotencyUnsupported",
+    });
+    expect(scheduledResult.details).toMatchObject({ processed: 1, sent: 0, failed: 1 });
+    expect(staleResult.details).toMatchObject({ processed: 1, sent: 0, failed: 1 });
+    expect(persisted).toMatchObject({
+      status: "FAILED",
+      attemptCount: 4,
+      lastError: "kkmAdapterIdempotencyUnsupported",
+    });
+    expect(persistedSale).toMatchObject({ kkmStatus: "FAILED", kkmReceiptId: null });
+    expect(audits).toHaveLength(3);
+    expect(kkmRuntime.calls).toHaveLength(0);
+    expect(kkmRuntime.externalEffects.size).toBe(0);
+  });
+
+  it("HARD-A1-009 reuses one provider command after a lost DB finalization", async () => {
+    const { org, store, product, adminUser, managerUser, cashierUser } = await seedBase({
+      plan: "ENTERPRISE",
+    });
+    await prisma.product.update({ where: { id: product.id }, data: { basePriceKgs: 100 } });
+    await prisma.storeComplianceProfile.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        enableKkm: true,
+        kkmMode: "ADAPTER",
+        kkmProviderKey: "mock",
+      },
+    });
+    await adjustStock({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 1,
+      reason: "HARD-A1-009 provider/DB boundary fixture",
+      idempotencyKey: "hard-a1-009-provider-db-stock",
+      requestId: "hard-a1-009-provider-db-stock",
+    });
+    const cashierCaller = callerFor(cashierUser);
+    const runtime = await createRegisterAndShift({
+      organizationId: org.id,
+      storeId: store.id,
+      caller: cashierCaller,
+      key: "p0009db",
+    });
+    const original = await createAndCompleteSale({
+      caller: cashierCaller,
+      registerId: runtime.register.id,
+      productId: product.id,
+      key: "hard-a1-009-provider-db",
+    });
+    const receipt = await prisma.fiscalReceipt.findFirstOrThrow({
+      where: { customerOrderId: original.sale.id },
+    });
+    expect(receipt).toMatchObject({ status: "FAILED", attemptCount: 1 });
+    expect(kkmRuntime.calls[0]?.providerCommandId).toBe(receipt.idempotencyKey);
+
+    kkmRuntime.calls.length = 0;
+    kkmRuntime.mode = "success";
+    let invalidatedFinalizeCount = 0;
+    kkmRuntime.afterEffect = async ({ providerCommandId }) => {
+      expect(providerCommandId).toBe(receipt.idempotencyKey);
+      invalidatedFinalizeCount += 1;
+      await prisma.fiscalReceipt.update({
+        where: { id: receipt.id },
+        data: {
+          status: "PROCESSING",
+          attemptCount: { increment: 1 },
+          nextAttemptAt: new Date(0),
+        },
+      });
+    };
+
+    const lostFinalize = await processAdapterFiscalReceipt({
+      receiptId: receipt.id,
+      trigger: "manual",
+      waitForInProgress: false,
+      audit: {
+        actorId: managerUser.id,
+        action: "KKM_RECEIPT_RETRY",
+        entity: "FiscalReceipt",
+        requestId: "hard-a1-009-provider-db-lost-finalize",
+      },
+    });
+    kkmRuntime.afterEffect = null;
+    const staleBeforeRecovery = await prisma.fiscalReceipt.findUniqueOrThrow({
+      where: { id: receipt.id },
+    });
+    const workerResult = await runKkmRetryJob();
+    const [persisted, persistedSale, manualAudits, workerAudits, completionKeys] =
+      await Promise.all([
+        prisma.fiscalReceipt.findUniqueOrThrow({ where: { id: receipt.id } }),
+        prisma.customerOrder.findUniqueOrThrow({ where: { id: original.sale.id } }),
+        prisma.auditLog.count({
+          where: { entityId: receipt.id, action: "KKM_RECEIPT_RETRY" },
+        }),
+        prisma.auditLog.findMany({
+          where: { entityId: receipt.id, action: "KKM_RECEIPT_RETRY_JOB" },
+        }),
+        prisma.idempotencyKey.count({
+          where: {
+            key: "hard-a1-009-provider-db-complete-sale",
+            route: "pos.sales.complete",
+            userId: cashierUser.id,
+          },
+        }),
+      ]);
+    const providerResult = kkmRuntime.externalEffects.get(receipt.idempotencyKey);
+
+    expect(lostFinalize).toMatchObject({ providerCalled: true, finalized: false });
+    expect(staleBeforeRecovery).toMatchObject({ status: "PROCESSING", attemptCount: 3 });
+    expect(staleBeforeRecovery.nextAttemptAt?.getTime()).toBe(0);
+    expect(workerResult.details).toMatchObject({ processed: 1, sent: 1, failed: 0 });
+    expect(kkmRuntime.calls).toHaveLength(2);
+    expect(new Set(kkmRuntime.calls.map((call) => call.providerCommandId))).toEqual(
+      new Set([receipt.idempotencyKey]),
+    );
+    expect(kkmRuntime.externalEffects.size).toBe(1);
+    expect(invalidatedFinalizeCount).toBe(1);
+    expect(providerResult?.providerReceiptId).toBe("mock-provider-1");
+    expect(persisted).toMatchObject({
+      status: "SENT",
+      attemptCount: 4,
+      providerReceiptId: providerResult?.providerReceiptId,
+      fiscalNumber: providerResult?.fiscalNumber,
+      nextAttemptAt: null,
+    });
+    expect(persistedSale).toMatchObject({
+      kkmStatus: "SENT",
+      kkmReceiptId: providerResult?.providerReceiptId,
+    });
+    expect(manualAudits).toBe(0);
+    expect(workerAudits).toHaveLength(1);
+    expect(workerAudits[0]?.before).toMatchObject({
+      status: "PROCESSING",
+      attemptCount: 3,
+    });
+    expect(workerAudits[0]?.after).toMatchObject({
+      status: "SENT",
+      attemptCount: 4,
+      providerReceiptId: providerResult?.providerReceiptId,
+    });
+    expect(completionKeys).toBe(1);
   });
 });
