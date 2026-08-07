@@ -374,6 +374,20 @@ describeDb("B0 Agent 4 P0 runtime verification", () => {
       });
 
       expect(result.business.todaySalesKgs).toBe(900);
+      expect(result.salesSeries.map((row) => row.date)).toEqual([
+        "2026-07-16",
+        "2026-07-17",
+        "2026-07-18",
+        "2026-07-19",
+        "2026-07-20",
+        "2026-07-21",
+        "2026-07-22",
+      ]);
+      expect(result.salesSeries.at(-1)).toMatchObject({
+        date: "2026-07-22",
+        salesKgs: 900,
+        receiptsCount: 1,
+      });
       expect(shrinkage).toHaveLength(1);
       expect(shrinkage[0]).toMatchObject({ storeId: store.id, totalQty: 1 });
     } finally {

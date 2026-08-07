@@ -13,7 +13,12 @@ import { TRPCError } from "@trpc/server";
 import { logProfileSection } from "@/server/profiling/perf";
 import { enrichRecentActivity } from "@/server/services/activity";
 import { buildReorderSuggestion } from "@/server/services/reorderSuggestions";
-import { defaultTimeZone, resolveBusinessDayBounds } from "@/lib/timezone";
+import {
+  addBusinessDays,
+  businessDateKey,
+  defaultTimeZone,
+  resolveBusinessDayBounds,
+} from "@/lib/timezone";
 import {
   canAccessStore,
   listAccessibleStores,
@@ -213,8 +218,6 @@ const resolveDashboardSummaryOptions = (
 const toNumber = (value: Prisma.Decimal | bigint | number | string | null | undefined) =>
   Number(value ?? 0);
 
-const dateKey = (date: Date) => date.toISOString().slice(0, 10);
-
 const percentDelta = (current: number, previous: number) => {
   if (previous === 0) {
     return current === 0 ? 0 : null;
@@ -383,7 +386,8 @@ export const getDashboardSummary = async ({
       scope: "dashboard.summary",
     });
   }
-  const { todayStart, tomorrowStart, yesterdayStart, sevenDaysStart } = resolveBusinessDayBounds();
+  const { today, todayStart, tomorrowStart, yesterdayStart, sevenDaysStart } =
+    resolveBusinessDayBounds();
 
   const lowStockCandidatesStartedAt = Date.now();
   const lowStockCandidates = await prisma.$queryRaw<
@@ -668,7 +672,10 @@ export const getDashboardSummary = async ({
         COUNT(*) AS "receiptsCount"
       FROM (
         SELECT
-          to_char((o."completedAt" AT TIME ZONE ${defaultTimeZone})::date, 'YYYY-MM-DD') AS "date",
+          to_char(
+            (o."completedAt" AT TIME ZONE 'UTC' AT TIME ZONE ${defaultTimeZone})::date,
+            'YYYY-MM-DD'
+          ) AS "date",
           o."totalKgs" AS "totalKgs"
         FROM "CustomerOrder" o
         WHERE o."organizationId" = ${organizationId}
@@ -773,7 +780,7 @@ export const getDashboardSummary = async ({
     yesterdayReceiptsCount > 0 ? yesterdaySalesKgs / yesterdayReceiptsCount : 0;
   const salesSeriesMap = new Map(
     salesSeriesRows.map((row) => [
-      dateKey(new Date(row.date)),
+      typeof row.date === "string" ? row.date : businessDateKey(row.date),
       {
         salesKgs: toNumber(row.salesKgs),
         receiptsCount: toNumber(row.receiptsCount),
@@ -781,9 +788,7 @@ export const getDashboardSummary = async ({
     ]),
   );
   const salesSeries = Array.from({ length: 7 }, (_, index) => {
-    const date = new Date(sevenDaysStart);
-    date.setDate(sevenDaysStart.getDate() + index);
-    const key = dateKey(date);
+    const key = addBusinessDays(today, index - 6);
     const row = salesSeriesMap.get(key);
     return {
       date: key,

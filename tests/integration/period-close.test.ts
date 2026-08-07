@@ -3,6 +3,11 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "@/server/db/prisma";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 import { createTestCaller } from "../helpers/context";
+import {
+  approvePurchaseOrder,
+  createPurchaseOrder,
+  receivePurchaseOrder,
+} from "@/server/services/purchaseOrders";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
 
@@ -59,5 +64,53 @@ describeDb("period close", () => {
         where: { organizationId: org.id, action: "PERIOD_CLOSED", entity: "PeriodClose" },
       }),
     ).resolves.toBe(1);
+  });
+
+  it("uses valued purchase-order receipts in purchase totals", async () => {
+    const { org, store, supplier, product, adminUser, managerUser } = await seedBase({
+      plan: "BUSINESS",
+    });
+    const periodStart = new Date(Date.now() - 60_000);
+    const periodEnd = new Date(Date.now() + 60_000);
+    const purchaseOrder = await createPurchaseOrder({
+      organizationId: org.id,
+      storeId: store.id,
+      supplierId: supplier.id,
+      lines: [{ productId: product.id, qtyOrdered: 7, unitCost: 6 }],
+      actorId: adminUser.id,
+      requestId: "period-close-valued-po-create",
+      submit: true,
+    });
+    await approvePurchaseOrder({
+      purchaseOrderId: purchaseOrder.id,
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "period-close-valued-po-approve",
+    });
+    await receivePurchaseOrder({
+      purchaseOrderId: purchaseOrder.id,
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "period-close-valued-po-receive",
+      idempotencyKey: "period-close-valued-po-receive",
+    });
+
+    const close = await createTestCaller({
+      id: managerUser.id,
+      email: managerUser.email,
+      role: managerUser.role,
+      organizationId: org.id,
+    }).periodClose.close({ storeId: store.id, periodStart, periodEnd });
+
+    expect(close.totals).toMatchObject({ purchasesTotalKgs: 42 });
+    const movement = await prisma.stockMovement.findFirstOrThrow({
+      where: { referenceType: "PURCHASE_ORDER", referenceId: purchaseOrder.id },
+      select: { qtyDelta: true, unitCostKgs: true, lineTotalKgs: true },
+    });
+    expect({
+      qtyDelta: movement.qtyDelta,
+      unitCostKgs: Number(movement.unitCostKgs),
+      lineTotalKgs: Number(movement.lineTotalKgs),
+    }).toEqual({ qtyDelta: 7, unitCostKgs: 6, lineTotalKgs: 42 });
   });
 });

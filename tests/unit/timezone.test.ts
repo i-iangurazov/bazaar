@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  addBusinessDays,
+  businessDateKey,
   businessDateOnlyEndUtc,
   businessDateOnlyToUtc,
   resolveBusinessDayBounds,
@@ -19,10 +21,14 @@ describe("Bishkek business time boundaries", () => {
     expect(bounds.tomorrowStart.toISOString()).toBe("2026-07-22T18:00:00.000Z");
     expect(bounds.yesterdayStart.toISOString()).toBe("2026-07-20T18:00:00.000Z");
     expect(bounds.sevenDaysStart.toISOString()).toBe("2026-07-15T18:00:00.000Z");
+    expect(businessDateKey(bounds.sevenDaysStart)).toBe("2026-07-16");
+    expect(addBusinessDays(bounds.today, -6)).toBe("2026-07-16");
+    expect(addBusinessDays(bounds.today, 1)).toBe("2026-07-23");
   });
 
   it("rejects malformed and impossible calendar dates", () => {
     expect(() => businessDateOnlyToUtc("2026/07/22")).toThrow("invalidDateOnly");
     expect(() => businessDateOnlyToUtc("2026-02-30")).toThrow("invalidDateOnly");
+    expect(() => addBusinessDays("2026-07-22", 0.5)).toThrow("invalidBusinessDayOffset");
   });
 });

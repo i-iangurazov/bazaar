@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import type { InventorySnapshot, Prisma } from "@prisma/client";
-import { PurchaseOrderStatus, StockMovementType } from "@prisma/client";
+import type { InventorySnapshot } from "@prisma/client";
+import { Prisma, PurchaseOrderStatus, StockMovementType } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
@@ -680,6 +680,14 @@ export const receivePurchaseOrder = async (input: {
             variantId: line.variantId,
             qtyDelta: receiveQty,
             type: StockMovementType.RECEIVE,
+            unitCostKgs: line.unitCost === null ? null : Number(line.unitCost),
+            lineTotalKgs:
+              line.unitCost === null
+                ? null
+                : new Prisma.Decimal(line.unitCost)
+                    .mul(receiveQty)
+                    .toDecimalPlaces(2)
+                    .toNumber(),
             referenceType: "PURCHASE_ORDER",
             referenceId: po.id,
             actorId: input.actorId,

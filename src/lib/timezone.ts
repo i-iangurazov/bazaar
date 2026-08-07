@@ -29,10 +29,18 @@ export const businessDateOnlyToUtc = (value: string, extraDays = 0) => {
 export const businessDateOnlyEndUtc = (value: string) =>
   new Date(businessDateOnlyToUtc(value, 1).getTime() - 1);
 
-const businessDateKey = (value: Date) =>
+export const businessDateKey = (value: Date) =>
   new Date(value.getTime() + BUSINESS_TIME_ZONE_OFFSET_MINUTES * MINUTE_MS)
     .toISOString()
     .slice(0, 10);
+
+export const addBusinessDays = (value: string, days: number) => {
+  const { year, month, day } = parseDateOnlyParts(value);
+  if (!Number.isInteger(days)) {
+    throw new Error("invalidBusinessDayOffset");
+  }
+  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
+};
 
 export const resolveBusinessDayBounds = (now = new Date()) => {
   const today = businessDateKey(now);
