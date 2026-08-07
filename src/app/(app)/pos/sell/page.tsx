@@ -45,7 +45,7 @@ import {
   BarcodeIcon,
 } from "@/components/icons";
 import { ScanInput } from "@/components/ScanInput";
-import { PageTipsButton } from "@/components/guidance/page-tips-button";
+import { ContextualHelpButton } from "@/components/help/ContextualHelpButton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -5173,7 +5173,7 @@ const PosSellPage = () => {
               <SalesOrdersIcon className="h-3.5 w-3.5" aria-hidden />
               <span className="hidden xl:inline">{t("sell.receiptJournal")}</span>
             </Button>
-            <PageTipsButton className="h-8 w-8 shrink-0" />
+            <ContextualHelpButton className="h-8 w-8 shrink-0" />
           </div>
         </div>
       </header>
@@ -6379,7 +6379,7 @@ const PosSellPage = () => {
             <h1 className="truncate text-[19px] font-semibold leading-none tracking-normal">
               {t("entry.sell")}
             </h1>
-            <PageTipsButton className="h-10 w-10" />
+            <ContextualHelpButton className="h-10 w-10" />
             <button
               type="button"
               className="h-10 justify-self-end text-[14px] font-semibold leading-none text-primary disabled:opacity-50"
@@ -7604,7 +7604,7 @@ const PosSellPage = () => {
               </div>
             </div>
             <div className="flex shrink-0 gap-2">
-              <PageTipsButton className="h-11 w-11" />
+              <ContextualHelpButton className="h-11 w-11" />
               <Button
                 asChild
                 type="button"
