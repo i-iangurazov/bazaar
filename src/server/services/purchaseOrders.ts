@@ -136,6 +136,26 @@ const lockPurchaseOrderIds = async (tx: Prisma.TransactionClient, purchaseOrderI
   );
 };
 
+const lockPurchaseOrderForLineId = async (
+  tx: Prisma.TransactionClient,
+  lineId: string,
+  organizationId: string,
+) => {
+  const rows = await tx.$queryRaw<Array<{ id: string }>>`
+    SELECT po."id"
+    FROM "PurchaseOrder" po
+    INNER JOIN "PurchaseOrderLine" line ON line."purchaseOrderId" = po."id"
+    WHERE line."id" = ${lineId}
+      AND po."organizationId" = ${organizationId}
+    FOR UPDATE OF po
+  `;
+  const purchaseOrderId = rows[0]?.id;
+  if (!purchaseOrderId) {
+    throw new AppError("poLineNotFound", "NOT_FOUND", 404);
+  }
+  return purchaseOrderId;
+};
+
 export type CreatePurchaseOrderInput = {
   organizationId: string;
   storeId: string;
@@ -1228,6 +1248,7 @@ export const addPurchaseOrderLine = async (input: {
   const logger = getLogger(input.requestId);
 
   const result = await prisma.$transaction(async (tx) => {
+    await lockPurchaseOrderIds(tx, [input.purchaseOrderId]);
     const po = await tx.purchaseOrder.findUnique({
       where: { id: input.purchaseOrderId },
     });
@@ -1347,12 +1368,20 @@ export const updatePurchaseOrderLine = async (input: {
   const logger = getLogger(input.requestId);
 
   const result = await prisma.$transaction(async (tx) => {
+    const purchaseOrderId = await lockPurchaseOrderForLineId(
+      tx,
+      input.lineId,
+      input.organizationId,
+    );
     const line = await tx.purchaseOrderLine.findUnique({
       where: { id: input.lineId },
       include: { purchaseOrder: true },
     });
 
     if (!line) {
+      throw new AppError("poLineNotFound", "NOT_FOUND", 404);
+    }
+    if (line.purchaseOrderId !== purchaseOrderId) {
       throw new AppError("poLineNotFound", "NOT_FOUND", 404);
     }
     if (line.purchaseOrder.organizationId !== input.organizationId) {
@@ -1425,12 +1454,20 @@ export const removePurchaseOrderLine = async (input: {
   const logger = getLogger(input.requestId);
 
   const result = await prisma.$transaction(async (tx) => {
+    const purchaseOrderId = await lockPurchaseOrderForLineId(
+      tx,
+      input.lineId,
+      input.organizationId,
+    );
     const line = await tx.purchaseOrderLine.findUnique({
       where: { id: input.lineId },
       include: { purchaseOrder: true },
     });
 
     if (!line) {
+      throw new AppError("poLineNotFound", "NOT_FOUND", 404);
+    }
+    if (line.purchaseOrderId !== purchaseOrderId) {
       throw new AppError("poLineNotFound", "NOT_FOUND", 404);
     }
     if (line.purchaseOrder.organizationId !== input.organizationId) {
