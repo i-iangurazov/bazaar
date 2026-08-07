@@ -4,18 +4,7 @@ import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Legend,
-  Line,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-  type TooltipProps,
-} from "recharts";
+import dynamic from "next/dynamic";
 
 import { PageHeader } from "@/components/page-header";
 import { ReceiptPreviewModal } from "@/components/pos/receipt-preview-modal";
@@ -63,6 +52,14 @@ type SalesPoint = {
 
 const paymentMethods = ["CASH", "CARD", "TRANSFER", "OTHER"] as const;
 const pageSize = 25;
+
+const SalesOverviewChart = dynamic(
+  () =>
+    import("@/components/reports/sales-overview-chart").then(
+      (module) => module.SalesOverviewChart,
+    ),
+  { ssr: false },
+);
 
 const dateOnlyFormatter = new Intl.DateTimeFormat("en-US", {
   timeZone: defaultTimeZone,
@@ -320,29 +317,6 @@ const AnalyticsPage = () => {
 
   const renderMoney = (value: number) => formatKgsMoney(value, locale, currencySource);
 
-  const ChartTooltip = ({ active, payload, label }: TooltipProps<number, string>) => {
-    if (!active || !payload?.length) {
-      return null;
-    }
-    const point = payload[0]?.payload as SalesPoint | undefined;
-    return (
-      <div className="rounded-md border border-border bg-popover p-3 text-xs text-popover-foreground shadow-lg">
-        <p className="font-semibold text-foreground">
-          {formatDate(dateOnlyToDisplayDate(String(label)), locale)}
-        </p>
-        {point ? (
-          <div className="mt-2 space-y-1">
-            <p>{t("chart.netSales")}: {renderMoney(point.netSalesKgs)}</p>
-            <p>{t("chart.grossSales")}: {renderMoney(point.grossSalesKgs)}</p>
-            <p>{t("chart.returns")}: {renderMoney(point.returnsKgs)}</p>
-            <p>{t("chart.receipts")}: {formatNumber(point.receiptCount, locale)}</p>
-            <p>{t("chart.averageReceipt")}: {renderMoney(point.averageReceiptKgs)}</p>
-          </div>
-        ) : null}
-      </div>
-    );
-  };
-
   if (status === "loading") {
     return <Skeleton className="h-[28rem] w-full" />;
   }
@@ -562,61 +536,19 @@ const AnalyticsPage = () => {
                 <Skeleton className="h-[22rem] w-full" />
               ) : chartData.some((point) => point.grossSalesKgs || point.returnsKgs || point.receiptCount) ? (
                 <div className="h-[22rem] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 8 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis
-                        dataKey="date"
-                        tickLine={false}
-                        axisLine={false}
-                        tickFormatter={(value) => String(value).slice(5)}
-                        fontSize={12}
-                      />
-                      <YAxis yAxisId="sales" tickLine={false} axisLine={false} width={64} fontSize={12} />
-                      <YAxis
-                        yAxisId="receipts"
-                        orientation="right"
-                        tickLine={false}
-                        axisLine={false}
-                        width={42}
-                        fontSize={12}
-                      />
-                      <Tooltip content={<ChartTooltip />} />
-                      <Legend />
-                      <Bar
-                        yAxisId="sales"
-                        dataKey="netSalesKgs"
-                        name={t("chart.netSales")}
-                        fill="hsl(var(--primary))"
-                        radius={[4, 4, 0, 0]}
-                        cursor="pointer"
-                        onClick={(event: unknown) => {
-                          const payload = event as { payload?: { date?: string } };
-                          if (payload.payload?.date) {
-                            setSelectedDay(payload.payload.date);
-                          }
-                        }}
-                      />
-                      <Line
-                        yAxisId="receipts"
-                        type="monotone"
-                        dataKey="receiptCount"
-                        name={t("chart.receipts")}
-                        stroke="hsl(var(--warning))"
-                        strokeWidth={2}
-                        dot={{ r: 3 }}
-                        activeDot={{
-                          r: 6,
-                          onClick: (_event: unknown, payload: unknown) => {
-                            const point = payload as { payload?: { date?: string } };
-                            if (point.payload?.date) {
-                              setSelectedDay(point.payload.date);
-                            }
-                          },
-                        }}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <SalesOverviewChart
+                    data={chartData}
+                    labels={{
+                      netSales: t("chart.netSales"),
+                      grossSales: t("chart.grossSales"),
+                      returns: t("chart.returns"),
+                      receipts: t("chart.receipts"),
+                      averageReceipt: t("chart.averageReceipt"),
+                    }}
+                    locale={locale}
+                    currencySource={currencySource}
+                    onSelectDate={setSelectedDay}
+                  />
                 </div>
               ) : (
                 <div className="bazaar-admin-empty min-h-[18rem]">{t("emptySales")}</div>
