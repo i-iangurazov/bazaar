@@ -4,10 +4,11 @@ type MobileEnvironment = "development" | "staging" | "production";
 
 const environment = (process.env.BAZAAR_MOBILE_ENV ?? "production") as MobileEnvironment;
 const environmentUrls: Record<MobileEnvironment, string> = {
-  development: process.env.CAPACITOR_SERVER_URL ?? "http://localhost:3000",
+  development: process.env.CAPACITOR_SERVER_URL ?? "http://localhost:3000/dashboard",
   staging:
-    process.env.CAPACITOR_SERVER_URL ?? "https://bazaar-git-main-ilyas0707s-projects.vercel.app",
-  production: "https://www.bazaar.kg",
+    process.env.CAPACITOR_SERVER_URL ??
+    "https://bazaar-git-main-ilyas0707s-projects.vercel.app/dashboard",
+  production: "https://www.bazaar.kg/dashboard",
 };
 
 if (!Object.hasOwn(environmentUrls, environment)) {

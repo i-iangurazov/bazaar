@@ -21,7 +21,7 @@ describe("native runtime contract", () => {
       read("src/app/.well-known/assetlinks.json/route.ts"),
     ]);
     expect(config).toContain('appId: "kg.bazaar.app"');
-    expect(config).toContain('production: "https://www.bazaar.kg"');
+    expect(config).toContain('production: "https://www.bazaar.kg/dashboard"');
     expect(manifest).toContain('android:usesCleartextTraffic="false"');
     expect(manifest).toContain("android.permission.CAMERA");
     expect(manifest).toContain('android:autoVerify="true"');
