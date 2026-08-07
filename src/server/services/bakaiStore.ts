@@ -1,10 +1,4 @@
-import {
-  createCipheriv,
-  createDecipheriv,
-  createHash,
-  randomBytes,
-  randomUUID,
-} from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import { basename, extname, join } from "node:path";
 
@@ -243,9 +237,7 @@ const toBase64Url = (value: Buffer) => value.toString("base64url");
 const fromBase64Url = (value: string) => Buffer.from(value, "base64url");
 
 const resolveTokenSecret = () =>
-  process.env.BAKAI_STORE_TOKEN_ENCRYPTION_KEY?.trim() ||
-  process.env.NEXTAUTH_SECRET?.trim() ||
-  "";
+  process.env.BAKAI_STORE_TOKEN_ENCRYPTION_KEY?.trim() || process.env.NEXTAUTH_SECRET?.trim() || "";
 
 const tokenCipherKey = () => {
   const secret = resolveTokenSecret();
@@ -1296,7 +1288,9 @@ export const mapBazaarProductToBakaiProduct = (input: {
     attributes: specs.attributes,
     brand_name: input.selection.product.supplier?.name?.trim() || undefined,
     discount_amount:
-      discountAmount !== null && Number.isFinite(discountAmount) ? Number(discountAmount) : undefined,
+      discountAmount !== null && Number.isFinite(discountAmount)
+        ? Number(discountAmount)
+        : undefined,
     is_active: true,
   }) as BakaiStoreApiProductPayload;
 
@@ -1312,7 +1306,9 @@ const normalizeBakaiApiIssueCode = (input: {
     return "RATE_LIMITED";
   }
   const bodyText =
-    typeof input.body === "string" ? input.body.toLowerCase() : JSON.stringify(input.body).toLowerCase();
+    typeof input.body === "string"
+      ? input.body.toLowerCase()
+      : JSON.stringify(input.body).toLowerCase();
   const message = input.message?.toLowerCase() ?? "";
   if (bodyText.includes("rate") || message.includes("rate")) {
     return "RATE_LIMITED";
@@ -2143,7 +2139,8 @@ export const getBakaiStoreOverview = async (
   const apiConfigured = Boolean(integration?.apiTokenEncrypted) && hasApiBranchMappings;
 
   return {
-    configured: connectionMode === BakaiStoreConnectionMode.API ? apiConfigured : templateConfigured,
+    configured:
+      connectionMode === BakaiStoreConnectionMode.API ? apiConfigured : templateConfigured,
     status: summaryStatus,
     connectionMode,
     hasTemplate: Boolean(integration?.templateStoragePath),
@@ -2214,13 +2211,13 @@ export const getBakaiStoreSettings = async (
   const resolvedStatus = resolveOverviewStatus({
     integration: integration
       ? {
-        status: integration.status,
-        connectionMode,
-        templateStoragePath: integration.templateStoragePath,
-        templateSchemaJson: integration.templateSchemaJson,
-        apiTokenEncrypted: integration.apiTokenEncrypted,
-        hasApiBranchMappings,
-      }
+          status: integration.status,
+          connectionMode,
+          templateStoragePath: integration.templateStoragePath,
+          templateSchemaJson: integration.templateSchemaJson,
+          apiTokenEncrypted: integration.apiTokenEncrypted,
+          hasApiBranchMappings,
+        }
       : null,
   });
   const stockColumns = storedTemplateSchema?.stockColumns.length
@@ -2341,7 +2338,9 @@ export const saveBakaiStoreTemplateWorkbook = async (input: {
         select: { storeId: true },
       }),
     ]);
-    const mappedColumnKeys = new Set(mappings.map((mapping) => normalizeStockColumnKey(mapping.columnKey)));
+    const mappedColumnKeys = new Set(
+      mappings.map((mapping) => normalizeStockColumnKey(mapping.columnKey)),
+    );
     const nextStatus = resolveStoredIntegrationStatus({
       connectionMode: resolveConnectionMode(existing?.connectionMode),
       hasTemplate: true,
@@ -2666,7 +2665,9 @@ export const updateBakaiStoreSettings = async (input: {
       action: "BAKAI_STORE_CONFIG_UPDATED",
       entity: "BakaiStoreIntegration",
       entityId: saved.id,
-      before: existing ? toJson({ ...existing, apiTokenEncrypted: Boolean(existing.apiTokenEncrypted) }) : null,
+      before: existing
+        ? toJson({ ...existing, apiTokenEncrypted: Boolean(existing.apiTokenEncrypted) })
+        : null,
       after: toJson({
         ...saved,
         apiTokenEncrypted: Boolean(saved.apiTokenEncrypted),
@@ -2876,9 +2877,10 @@ export const testBakaiStoreConnection = async (input: {
     await prisma.bakaiStoreIntegration.update({
       where: { orgId: input.organizationId },
       data: {
-        status: resolveConnectionMode(integration.connectionMode) === BakaiStoreConnectionMode.API
-          ? nextStatus
-          : integration.status,
+        status:
+          resolveConnectionMode(integration.connectionMode) === BakaiStoreConnectionMode.API
+            ? nextStatus
+            : integration.status,
         lastConnectionCheckAt: checkedAt,
         lastConnectionCheckSummary: summary,
         lastErrorSummary: null,
@@ -3202,7 +3204,13 @@ const timeoutAbandonedBakaiStoreExportJobs = async (organizationId?: string) => 
       ...(organizationId ? { orgId: organizationId } : {}),
       finishedAt: null,
       OR: [
-        { status: BakaiStoreExportJobStatus.RUNNING, startedAt: { lt: timeoutBefore } },
+        {
+          status: BakaiStoreExportJobStatus.RUNNING,
+          OR: [
+            { leaseExpiresAt: { lt: new Date() } },
+            { leaseExpiresAt: null, startedAt: { lt: timeoutBefore } },
+          ],
+        },
         { status: BakaiStoreExportJobStatus.QUEUED, createdAt: { lt: timeoutBefore } },
       ],
     },
@@ -3231,7 +3239,8 @@ const timeoutAbandonedBakaiStoreExportJobs = async (organizationId?: string) => 
   const finishedAt = new Date();
   const timedOutJobIds: string[] = [];
   for (const job of jobs) {
-    const attemptedCount = job.attemptedCount ?? Number(asRecord(job.payloadStatsJson)?.productCount ?? 0);
+    const attemptedCount =
+      job.attemptedCount ?? Number(asRecord(job.payloadStatsJson)?.productCount ?? 0);
     const succeededCount = job.succeededCount ?? 0;
     const skippedCount = job.skippedCount ?? 0;
     const timedOut = await prisma.bakaiStoreExportJob.updateMany({
@@ -3239,13 +3248,21 @@ const timeoutAbandonedBakaiStoreExportJobs = async (organizationId?: string) => 
         id: job.id,
         finishedAt: null,
         OR: [
-          { status: BakaiStoreExportJobStatus.RUNNING, startedAt: { lt: timeoutBefore } },
+          {
+            status: BakaiStoreExportJobStatus.RUNNING,
+            OR: [
+              { leaseExpiresAt: { lt: new Date() } },
+              { leaseExpiresAt: null, startedAt: { lt: timeoutBefore } },
+            ],
+          },
           { status: BakaiStoreExportJobStatus.QUEUED, createdAt: { lt: timeoutBefore } },
         ],
       },
       data: {
         status: BakaiStoreExportJobStatus.TIMED_OUT,
         finishedAt,
+        leaseToken: null,
+        leaseExpiresAt: null,
         attemptedCount,
         succeededCount,
         skippedCount,
@@ -3512,10 +3529,14 @@ export const runBakaiStoreExportJob = async (
   }
 
   const startedAt = new Date();
+  const leaseToken = randomUUID();
   const claim = await prisma.bakaiStoreExportJob.updateMany({
     where: { id: job.id, status: BakaiStoreExportJobStatus.QUEUED },
     data: {
       status: BakaiStoreExportJobStatus.RUNNING,
+      attemptCount: { increment: 1 },
+      leaseToken,
+      leaseExpiresAt: new Date(startedAt.getTime() + BAKAI_STORE_EXPORT_JOB_TIMEOUT_MS),
       startedAt,
       finishedAt: null,
       storagePath: null,
@@ -3560,90 +3581,108 @@ export const runBakaiStoreExportJob = async (
     const finishedAt = new Date();
     const skippedCount = plan.mode === "READY_ONLY" ? plan.preflight.failedProducts.length : 0;
     const completedWithErrors = skippedCount > 0;
-    const finished = await prisma.bakaiStoreExportJob.update({
-      where: { id: job.id },
-      data: {
-        status: completedWithErrors
-          ? BakaiStoreExportJobStatus.COMPLETED_WITH_ERRORS
-          : BakaiStoreExportJobStatus.DONE,
-        finishedAt,
-        fileName,
-        mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        fileSize: savedFile.fileSize,
-        storagePath: savedFile.storagePath,
-        payloadStatsJson: toJson({
-          ...plan.payloadStats,
-          workbookBytes: savedFile.fileSize,
-        }),
-        attemptedCount: plan.exportRows.length,
-        succeededCount: plan.exportRows.length,
-        failedCount: 0,
-        skippedCount,
-        errorReportJson:
-          skippedCount > 0
-            ? toJson({
-                ...plan.errorReport,
-                productResults: [
-                  ...plan.preflight.failedProducts.map((product) => ({
-                    productId: product.productId,
-                    sku: product.sku,
-                    name: product.name,
-                    status: "skipped",
-                    reason: product.issues.join(", "),
-                  })),
-                  ...plan.preflight.readyProductIds.map((productId) => ({
-                    productId,
-                    sku: null,
-                    name: null,
-                    status: "exported",
-                    reason: null,
-                  })),
-                ],
-              })
-            : Prisma.DbNull,
-      },
-    });
-
-    if (plan.preflight.readyProductIds.length > 0) {
-      await prisma.bakaiStoreIncludedProduct.updateMany({
+    const completedPlan = plan;
+    const finished = await prisma.$transaction(async (tx) => {
+      const completion = await tx.bakaiStoreExportJob.updateMany({
         where: {
-          orgId: job.orgId,
-          storeId: job.storeId ?? String(plan.payloadStats.storeId),
-          productId: { in: plan.preflight.readyProductIds },
+          id: job.id,
+          status: BakaiStoreExportJobStatus.RUNNING,
+          leaseToken,
         },
         data: {
-          lastExportedAt: finishedAt,
+          status: completedWithErrors
+            ? BakaiStoreExportJobStatus.COMPLETED_WITH_ERRORS
+            : BakaiStoreExportJobStatus.DONE,
+          finishedAt,
+          leaseToken: null,
+          leaseExpiresAt: null,
+          fileName,
+          mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          fileSize: savedFile.fileSize,
+          storagePath: savedFile.storagePath,
+          payloadStatsJson: toJson({
+            ...completedPlan.payloadStats,
+            workbookBytes: savedFile.fileSize,
+          }),
+          attemptedCount: completedPlan.exportRows.length,
+          succeededCount: completedPlan.exportRows.length,
+          failedCount: 0,
+          skippedCount,
+          errorReportJson:
+            skippedCount > 0
+              ? toJson({
+                  ...completedPlan.errorReport,
+                  productResults: [
+                    ...completedPlan.preflight.failedProducts.map((product) => ({
+                      productId: product.productId,
+                      sku: product.sku,
+                      name: product.name,
+                      status: "skipped",
+                      reason: product.issues.join(", "),
+                    })),
+                    ...completedPlan.preflight.readyProductIds.map((productId) => ({
+                      productId,
+                      sku: null,
+                      name: null,
+                      status: "exported",
+                      reason: null,
+                    })),
+                  ],
+                })
+              : Prisma.DbNull,
         },
       });
-    }
-
-    await prisma.bakaiStoreIntegration.updateMany({
-      where: { orgId: job.orgId },
-      data: {
-        status: BakaiStoreIntegrationStatus.READY,
-        lastSyncAt: finishedAt,
-        lastSyncStatus: completedWithErrors
-          ? BakaiStoreLastSyncStatus.COMPLETED_WITH_ERRORS
-          : BakaiStoreLastSyncStatus.SUCCESS,
-        lastErrorSummary: completedWithErrors
+      if (completion.count !== 1) {
+        return null;
+      }
+      const completedJob = await tx.bakaiStoreExportJob.findUniqueOrThrow({
+        where: { id: job.id },
+      });
+      if (completedPlan.preflight.readyProductIds.length > 0) {
+        await tx.bakaiStoreIncludedProduct.updateMany({
+          where: {
+            orgId: job.orgId,
+            storeId: job.storeId ?? String(completedPlan.payloadStats.storeId),
+            productId: { in: completedPlan.preflight.readyProductIds },
+          },
+          data: {
+            lastExportedAt: finishedAt,
+          },
+        });
+      }
+      await tx.bakaiStoreIntegration.updateMany({
+        where: { orgId: job.orgId },
+        data: {
+          status: BakaiStoreIntegrationStatus.READY,
+          lastSyncAt: finishedAt,
+          lastSyncStatus: completedWithErrors
+            ? BakaiStoreLastSyncStatus.COMPLETED_WITH_ERRORS
+            : BakaiStoreLastSyncStatus.SUCCESS,
+          lastErrorSummary: completedWithErrors ? "BAKAI_STORE_EXPORT_COMPLETED_WITH_ERRORS" : null,
+        },
+      });
+      await writeAuditLog(tx, {
+        organizationId: job.orgId,
+        actorId: job.requestedById,
+        action: completedWithErrors
           ? "BAKAI_STORE_EXPORT_COMPLETED_WITH_ERRORS"
-          : null,
-      },
+          : "BAKAI_STORE_EXPORT_FINISHED",
+        entity: "BakaiStoreExportJob",
+        entityId: completedJob.id,
+        before: toJson(running),
+        after: toJson(completedJob),
+        requestId:
+          typeof requestPayload.requestId === "string" ? requestPayload.requestId : randomUUID(),
+      });
+      return completedJob;
     });
-
-    await writeAuditLog(prisma, {
-      organizationId: job.orgId,
-      actorId: job.requestedById,
-      action: completedWithErrors
-        ? "BAKAI_STORE_EXPORT_COMPLETED_WITH_ERRORS"
-        : "BAKAI_STORE_EXPORT_FINISHED",
-      entity: "BakaiStoreExportJob",
-      entityId: finished.id,
-      before: toJson(running),
-      after: toJson(finished),
-      requestId:
-        typeof requestPayload.requestId === "string" ? requestPayload.requestId : randomUUID(),
-    });
+    if (!finished) {
+      return {
+        job: BAKAI_STORE_EXPORT_JOB_NAME,
+        status: "skipped",
+        details: { reason: "leaseLost" },
+      };
+    }
 
     return {
       job: BAKAI_STORE_EXPORT_JOB_NAME,
@@ -3670,35 +3709,53 @@ export const runBakaiStoreExportJob = async (
           },
     );
 
-    const failed = await prisma.bakaiStoreExportJob.update({
-      where: { id: job.id },
-      data: {
-        status: BakaiStoreExportJobStatus.FAILED,
-        finishedAt: new Date(),
-        errorReportJson: errorReport,
-      },
+    const failed = await prisma.$transaction(async (tx) => {
+      const failure = await tx.bakaiStoreExportJob.updateMany({
+        where: {
+          id: job.id,
+          status: BakaiStoreExportJobStatus.RUNNING,
+          leaseToken,
+        },
+        data: {
+          status: BakaiStoreExportJobStatus.FAILED,
+          finishedAt: new Date(),
+          leaseToken: null,
+          leaseExpiresAt: null,
+          errorReportJson: errorReport,
+        },
+      });
+      if (failure.count !== 1) {
+        return null;
+      }
+      const failedJob = await tx.bakaiStoreExportJob.findUniqueOrThrow({ where: { id: job.id } });
+      await tx.bakaiStoreIntegration.updateMany({
+        where: { orgId: job.orgId },
+        data: {
+          status: BakaiStoreIntegrationStatus.ERROR,
+          lastSyncStatus: BakaiStoreLastSyncStatus.FAILED,
+          lastErrorSummary: message,
+        },
+      });
+      await writeAuditLog(tx, {
+        organizationId: job.orgId,
+        actorId: job.requestedById,
+        action: "BAKAI_STORE_EXPORT_FAILED",
+        entity: "BakaiStoreExportJob",
+        entityId: failedJob.id,
+        before: toJson(running),
+        after: toJson({ ...failedJob, errorReport }),
+        requestId:
+          typeof requestPayload.requestId === "string" ? requestPayload.requestId : randomUUID(),
+      });
+      return failedJob;
     });
-
-    await prisma.bakaiStoreIntegration.updateMany({
-      where: { orgId: job.orgId },
-      data: {
-        status: BakaiStoreIntegrationStatus.ERROR,
-        lastSyncStatus: BakaiStoreLastSyncStatus.FAILED,
-        lastErrorSummary: message,
-      },
-    });
-
-    await writeAuditLog(prisma, {
-      organizationId: job.orgId,
-      actorId: job.requestedById,
-      action: "BAKAI_STORE_EXPORT_FAILED",
-      entity: "BakaiStoreExportJob",
-      entityId: failed.id,
-      before: toJson(running),
-      after: toJson({ ...failed, errorReport }),
-      requestId:
-        typeof requestPayload.requestId === "string" ? requestPayload.requestId : randomUUID(),
-    });
+    if (!failed) {
+      return {
+        job: BAKAI_STORE_EXPORT_JOB_NAME,
+        status: "skipped",
+        details: { reason: "leaseLost" },
+      };
+    }
 
     if (error instanceof AppError) {
       throw error;
@@ -3739,10 +3796,14 @@ export const runBakaiStoreApiSyncJob = async (
   }
 
   const startedAt = new Date();
+  const leaseToken = randomUUID();
   const claim = await prisma.bakaiStoreExportJob.updateMany({
     where: { id: job.id, status: BakaiStoreExportJobStatus.QUEUED },
     data: {
       status: BakaiStoreExportJobStatus.RUNNING,
+      attemptCount: { increment: 1 },
+      leaseToken,
+      leaseExpiresAt: new Date(startedAt.getTime() + BAKAI_STORE_EXPORT_JOB_TIMEOUT_MS),
       startedAt,
       finishedAt: null,
       errorReportJson: Prisma.DbNull,
@@ -3754,7 +3815,11 @@ export const runBakaiStoreApiSyncJob = async (
     },
   });
   if (claim.count !== 1) {
-    return { job: BAKAI_STORE_API_SYNC_JOB_NAME, status: "skipped", details: { reason: "claimed" } };
+    return {
+      job: BAKAI_STORE_API_SYNC_JOB_NAME,
+      status: "skipped",
+      details: { reason: "claimed" },
+    };
   }
   const running = await prisma.bakaiStoreExportJob.findUniqueOrThrow({ where: { id: job.id } });
 
@@ -3862,169 +3927,198 @@ export const runBakaiStoreApiSyncJob = async (
           .filter(Boolean),
       ),
     );
-
-    if (succeededProductIds.size > 0) {
-      await prisma.bakaiStoreIncludedProduct.updateMany({
-        where: {
-          orgId: job.orgId,
-          storeId: job.storeId ?? String(plan.payloadStats.storeId),
-          productId: { in: Array.from(succeededProductIds) },
-        },
-        data: {
-          lastExportedAt: finishedAt,
-        },
-      });
-    }
-
-    for (const productId of succeededProductIds) {
-      const payloadProduct = plan.payloadByProductId.get(productId);
-      await prisma.bakaiStoreProductSyncState.upsert({
-        where: {
-          orgId_storeId_productId: {
-            orgId: job.orgId,
-            storeId: job.storeId ?? String(plan.payloadStats.storeId),
-            productId,
-          },
-        },
-        update: {
-          lastSyncedAt: finishedAt,
-          lastSyncStatus: BakaiStoreLastSyncStatus.SUCCESS,
-          lastPayloadChecksum: payloadProduct ? computeBakaiPayloadChecksum(payloadProduct) : null,
-        },
-        create: {
-          orgId: job.orgId,
-          storeId: job.storeId ?? String(plan.payloadStats.storeId),
-          productId,
-          lastSyncedAt: finishedAt,
-          lastSyncStatus: BakaiStoreLastSyncStatus.SUCCESS,
-          lastPayloadChecksum: payloadProduct ? computeBakaiPayloadChecksum(payloadProduct) : null,
-        },
-      });
-    }
-
-    for (const productId of failedProductIds) {
-      const payloadProduct = plan.payloadByProductId.get(productId);
-      await prisma.bakaiStoreProductSyncState.upsert({
-        where: {
-          orgId_storeId_productId: {
-            orgId: job.orgId,
-            storeId: job.storeId ?? String(plan.payloadStats.storeId),
-            productId,
-          },
-        },
-        update: {
-          lastSyncStatus: BakaiStoreLastSyncStatus.FAILED,
-          lastPayloadChecksum: payloadProduct ? computeBakaiPayloadChecksum(payloadProduct) : null,
-        },
-        create: {
-          orgId: job.orgId,
-          storeId: job.storeId ?? String(plan.payloadStats.storeId),
-          productId,
-          lastSyncStatus: BakaiStoreLastSyncStatus.FAILED,
-          lastPayloadChecksum: payloadProduct ? computeBakaiPayloadChecksum(payloadProduct) : null,
-        },
-      });
-    }
-
     const failedCount = failedProducts.length;
     const succeededCount = succeededProductIds.size;
     const skippedCount = plan.mode === "READY_ONLY" ? plan.preflight.failedProducts.length : 0;
-    const completedWithErrors =
-      succeededCount > 0 && (failedCount > 0 || skippedCount > 0);
+    const completedWithErrors = succeededCount > 0 && (failedCount > 0 || skippedCount > 0);
     const failed = failedCount > 0 && succeededCount === 0;
-    const finished = await prisma.bakaiStoreExportJob.update({
-      where: { id: job.id },
-      data: {
-        status: failed
-          ? BakaiStoreExportJobStatus.FAILED
-          : completedWithErrors
-            ? BakaiStoreExportJobStatus.COMPLETED_WITH_ERRORS
-            : BakaiStoreExportJobStatus.DONE,
-        finishedAt,
-        attemptedCount: plan.payload.products.length,
-        succeededCount,
-        failedCount,
-        skippedCount,
-        responseJson: toJson({
-          endpoint: process.env.BAKAI_STORE_IMPORT_ENDPOINT?.trim() ?? null,
-          batches: batchResults,
-          productResults: [
-            ...(plan.mode === "READY_ONLY"
-              ? plan.preflight.failedProducts.map((product) => ({
-                  productId: product.productId,
-                  sku: product.sku,
-                  name: product.name,
-                  status: "skipped",
-                  reason: product.issues.join(", "),
-                }))
-              : []),
-            ...plan.payload.products.map((product) => {
-              const productId = productIdBySku.get(normalizeSku(product.sku)) ?? null;
-              const failedProduct = failedProducts.find(
-                (failedProductRow) =>
-                  normalizeSku(failedProductRow.sku) === normalizeSku(product.sku),
-              );
-              return {
-                productId,
-                sku: product.sku,
-                name: null,
-                status: failedProduct ? "failed" : "exported",
-                reason: failedProduct ? failedProduct.reason : null,
-              };
-            }),
-          ],
-        }),
-        errorReportJson:
-          failedCount > 0 || skippedCount > 0
-            ? toJson({
-                ...plan.errorReport,
-                failedSyncProducts: failedProducts.map((product) => ({
-                  sku: product.sku,
-                  reason: product.reason,
-                })),
-              })
-            : Prisma.DbNull,
-      },
-    });
+    const completedPlan = plan;
 
-    await prisma.bakaiStoreIntegration.updateMany({
-      where: { orgId: job.orgId },
-      data: {
-        status: failed ? BakaiStoreIntegrationStatus.ERROR : BakaiStoreIntegrationStatus.READY,
-        lastSyncAt: finishedAt,
-        lastSyncStatus: failed
-          ? BakaiStoreLastSyncStatus.FAILED
-          : completedWithErrors
-            ? BakaiStoreLastSyncStatus.COMPLETED_WITH_ERRORS
-            : BakaiStoreLastSyncStatus.SUCCESS,
-        lastErrorSummary: failed
-          ? "API_REQUEST_FAILED"
+    const finished = await prisma.$transaction(async (tx) => {
+      const completion = await tx.bakaiStoreExportJob.updateMany({
+        where: {
+          id: job.id,
+          status: BakaiStoreExportJobStatus.RUNNING,
+          leaseToken,
+        },
+        data: {
+          status: failed
+            ? BakaiStoreExportJobStatus.FAILED
+            : completedWithErrors
+              ? BakaiStoreExportJobStatus.COMPLETED_WITH_ERRORS
+              : BakaiStoreExportJobStatus.DONE,
+          finishedAt,
+          leaseToken: null,
+          leaseExpiresAt: null,
+          attemptedCount: completedPlan.payload.products.length,
+          succeededCount,
+          failedCount,
+          skippedCount,
+          responseJson: toJson({
+            endpoint: process.env.BAKAI_STORE_IMPORT_ENDPOINT?.trim() ?? null,
+            batches: batchResults,
+            productResults: [
+              ...(completedPlan.mode === "READY_ONLY"
+                ? completedPlan.preflight.failedProducts.map((product) => ({
+                    productId: product.productId,
+                    sku: product.sku,
+                    name: product.name,
+                    status: "skipped",
+                    reason: product.issues.join(", "),
+                  }))
+                : []),
+              ...completedPlan.payload.products.map((product) => {
+                const productId = productIdBySku.get(normalizeSku(product.sku)) ?? null;
+                const failedProduct = failedProducts.find(
+                  (failedProductRow) =>
+                    normalizeSku(failedProductRow.sku) === normalizeSku(product.sku),
+                );
+                return {
+                  productId,
+                  sku: product.sku,
+                  name: null,
+                  status: failedProduct ? "failed" : "exported",
+                  reason: failedProduct ? failedProduct.reason : null,
+                };
+              }),
+            ],
+          }),
+          errorReportJson:
+            failedCount > 0 || skippedCount > 0
+              ? toJson({
+                  ...completedPlan.errorReport,
+                  failedSyncProducts: failedProducts.map((product) => ({
+                    sku: product.sku,
+                    reason: product.reason,
+                  })),
+                })
+              : Prisma.DbNull,
+        },
+      });
+      if (completion.count !== 1) {
+        return null;
+      }
+      if (succeededProductIds.size > 0) {
+        await tx.bakaiStoreIncludedProduct.updateMany({
+          where: {
+            orgId: job.orgId,
+            storeId: job.storeId ?? String(completedPlan.payloadStats.storeId),
+            productId: { in: Array.from(succeededProductIds) },
+          },
+          data: {
+            lastExportedAt: finishedAt,
+          },
+        });
+      }
+
+      for (const productId of succeededProductIds) {
+        const payloadProduct = completedPlan.payloadByProductId.get(productId);
+        await tx.bakaiStoreProductSyncState.upsert({
+          where: {
+            orgId_storeId_productId: {
+              orgId: job.orgId,
+              storeId: job.storeId ?? String(completedPlan.payloadStats.storeId),
+              productId,
+            },
+          },
+          update: {
+            lastSyncedAt: finishedAt,
+            lastSyncStatus: BakaiStoreLastSyncStatus.SUCCESS,
+            lastPayloadChecksum: payloadProduct
+              ? computeBakaiPayloadChecksum(payloadProduct)
+              : null,
+          },
+          create: {
+            orgId: job.orgId,
+            storeId: job.storeId ?? String(completedPlan.payloadStats.storeId),
+            productId,
+            lastSyncedAt: finishedAt,
+            lastSyncStatus: BakaiStoreLastSyncStatus.SUCCESS,
+            lastPayloadChecksum: payloadProduct
+              ? computeBakaiPayloadChecksum(payloadProduct)
+              : null,
+          },
+        });
+      }
+
+      for (const productId of failedProductIds) {
+        const payloadProduct = completedPlan.payloadByProductId.get(productId);
+        await tx.bakaiStoreProductSyncState.upsert({
+          where: {
+            orgId_storeId_productId: {
+              orgId: job.orgId,
+              storeId: job.storeId ?? String(completedPlan.payloadStats.storeId),
+              productId,
+            },
+          },
+          update: {
+            lastSyncStatus: BakaiStoreLastSyncStatus.FAILED,
+            lastPayloadChecksum: payloadProduct
+              ? computeBakaiPayloadChecksum(payloadProduct)
+              : null,
+          },
+          create: {
+            orgId: job.orgId,
+            storeId: job.storeId ?? String(completedPlan.payloadStats.storeId),
+            productId,
+            lastSyncStatus: BakaiStoreLastSyncStatus.FAILED,
+            lastPayloadChecksum: payloadProduct
+              ? computeBakaiPayloadChecksum(payloadProduct)
+              : null,
+          },
+        });
+      }
+
+      const completedJob = await tx.bakaiStoreExportJob.findUniqueOrThrow({
+        where: { id: job.id },
+      });
+      await tx.bakaiStoreIntegration.updateMany({
+        where: { orgId: job.orgId },
+        data: {
+          status: failed ? BakaiStoreIntegrationStatus.ERROR : BakaiStoreIntegrationStatus.READY,
+          lastSyncAt: finishedAt,
+          lastSyncStatus: failed
+            ? BakaiStoreLastSyncStatus.FAILED
+            : completedWithErrors
+              ? BakaiStoreLastSyncStatus.COMPLETED_WITH_ERRORS
+              : BakaiStoreLastSyncStatus.SUCCESS,
+          lastErrorSummary: failed
+            ? "API_REQUEST_FAILED"
+            : completedWithErrors
+              ? "BAKAI_STORE_API_SYNC_COMPLETED_WITH_ERRORS"
+              : null,
+        },
+      });
+
+      await writeAuditLog(tx, {
+        organizationId: job.orgId,
+        actorId: job.requestedById,
+        action: failed
+          ? "BAKAI_STORE_API_SYNC_FAILED"
           : completedWithErrors
             ? "BAKAI_STORE_API_SYNC_COMPLETED_WITH_ERRORS"
-            : null,
-      },
+            : "BAKAI_STORE_API_SYNC_FINISHED",
+        entity: "BakaiStoreExportJob",
+        entityId: completedJob.id,
+        before: toJson(running),
+        after: toJson({
+          ...completedJob,
+          responseJson: batchResults,
+          failedCount,
+          succeededCount,
+        }),
+        requestId:
+          typeof requestPayload.requestId === "string" ? requestPayload.requestId : randomUUID(),
+      });
+      return completedJob;
     });
-
-    await writeAuditLog(prisma, {
-      organizationId: job.orgId,
-      actorId: job.requestedById,
-      action: failed
-        ? "BAKAI_STORE_API_SYNC_FAILED"
-        : completedWithErrors
-          ? "BAKAI_STORE_API_SYNC_COMPLETED_WITH_ERRORS"
-          : "BAKAI_STORE_API_SYNC_FINISHED",
-      entity: "BakaiStoreExportJob",
-      entityId: finished.id,
-      before: toJson(running),
-      after: toJson({
-        ...finished,
-        responseJson: batchResults,
-        failedCount,
-        succeededCount,
-      }),
-      requestId:
-        typeof requestPayload.requestId === "string" ? requestPayload.requestId : randomUUID(),
-    });
+    if (!finished) {
+      return {
+        job: BAKAI_STORE_API_SYNC_JOB_NAME,
+        status: "skipped",
+        details: { reason: "leaseLost" },
+      };
+    }
 
     return {
       job: BAKAI_STORE_API_SYNC_JOB_NAME,
@@ -4043,45 +4137,63 @@ export const runBakaiStoreApiSyncJob = async (
       error,
       token,
     });
-    const failed = await prisma.bakaiStoreExportJob.update({
-      where: { id: job.id },
-      data: {
-        status: BakaiStoreExportJobStatus.FAILED,
-        finishedAt: new Date(),
-        attemptedCount: plan?.payload.products.length ?? 0,
-        succeededCount: 0,
-        failedCount: plan?.payload.products.length ?? 0,
-        skippedCount: 0,
-        errorReportJson: toJson({
-          ...(plan?.errorReport ?? {}),
+    const failed = await prisma.$transaction(async (tx) => {
+      const failure = await tx.bakaiStoreExportJob.updateMany({
+        where: {
+          id: job.id,
+          status: BakaiStoreExportJobStatus.RUNNING,
+          leaseToken,
+        },
+        data: {
+          status: BakaiStoreExportJobStatus.FAILED,
+          finishedAt: new Date(),
+          leaseToken: null,
+          leaseExpiresAt: null,
+          attemptedCount: plan?.payload.products.length ?? 0,
+          succeededCount: 0,
+          failedCount: plan?.payload.products.length ?? 0,
+          skippedCount: 0,
+          errorReportJson: toJson({
+            ...(plan?.errorReport ?? {}),
+            error: normalized,
+          }),
+        },
+      });
+      if (failure.count !== 1) {
+        return null;
+      }
+      const failedJob = await tx.bakaiStoreExportJob.findUniqueOrThrow({ where: { id: job.id } });
+      await tx.bakaiStoreIntegration.updateMany({
+        where: { orgId: job.orgId },
+        data: {
+          status: BakaiStoreIntegrationStatus.ERROR,
+          lastSyncStatus: BakaiStoreLastSyncStatus.FAILED,
+          lastErrorSummary: normalized.code,
+        },
+      });
+      await writeAuditLog(tx, {
+        organizationId: job.orgId,
+        actorId: job.requestedById,
+        action: "BAKAI_STORE_API_SYNC_FAILED",
+        entity: "BakaiStoreExportJob",
+        entityId: failedJob.id,
+        before: toJson(running),
+        after: toJson({
+          ...failedJob,
           error: normalized,
         }),
-      },
+        requestId:
+          typeof requestPayload.requestId === "string" ? requestPayload.requestId : randomUUID(),
+      });
+      return failedJob;
     });
-
-    await prisma.bakaiStoreIntegration.updateMany({
-      where: { orgId: job.orgId },
-      data: {
-        status: BakaiStoreIntegrationStatus.ERROR,
-        lastSyncStatus: BakaiStoreLastSyncStatus.FAILED,
-        lastErrorSummary: normalized.code,
-      },
-    });
-
-    await writeAuditLog(prisma, {
-      organizationId: job.orgId,
-      actorId: job.requestedById,
-      action: "BAKAI_STORE_API_SYNC_FAILED",
-      entity: "BakaiStoreExportJob",
-      entityId: failed.id,
-      before: toJson(running),
-      after: toJson({
-        ...failed,
-        error: normalized,
-      }),
-      requestId:
-        typeof requestPayload.requestId === "string" ? requestPayload.requestId : randomUUID(),
-    });
+    if (!failed) {
+      return {
+        job: BAKAI_STORE_API_SYNC_JOB_NAME,
+        status: "skipped",
+        details: { reason: "leaseLost" },
+      };
+    }
 
     if (error instanceof AppError) {
       throw error;

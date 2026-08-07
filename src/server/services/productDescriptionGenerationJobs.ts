@@ -46,12 +46,55 @@ const PROCESSING_JOB_TIMEOUT_MS = parsePositiveIntEnv(
   60 * 60 * 1000,
 );
 
+class ProductDescriptionLeaseLostError extends Error {
+  constructor() {
+    super("productDescriptionGenerationLeaseLost");
+    this.name = "ProductDescriptionLeaseLostError";
+  }
+}
+
+const assertProductDescriptionLease = async (
+  tx: Prisma.TransactionClient,
+  jobId: string,
+  leaseToken: string,
+) => {
+  const owned = await tx.productDescriptionGenerationJob.updateMany({
+    where: {
+      id: jobId,
+      status: ProductDescriptionGenerationJobStatus.PROCESSING,
+      leaseToken,
+    },
+    data: { leaseToken },
+  });
+  if (owned.count !== 1) {
+    throw new ProductDescriptionLeaseLostError();
+  }
+};
+
+const assertProductDescriptionItemLease = async (
+  tx: Prisma.TransactionClient,
+  input: { itemId: string; leaseToken: string },
+) => {
+  const owned = await tx.productDescriptionGenerationJobItem.updateMany({
+    where: {
+      id: input.itemId,
+      status: ProductDescriptionGenerationItemStatus.PROCESSING,
+      leaseToken: input.leaseToken,
+    },
+    data: { leaseToken: input.leaseToken },
+  });
+  if (owned.count !== 1) {
+    throw new ProductDescriptionLeaseLostError();
+  }
+};
+
 type ProductDescriptionGenerationLogger = Pick<Logger, "info" | "warn" | "error">;
 
 const normalizeProductIds = (values: string[]) =>
   Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
 
-const normalizeGenerationLocale = (value?: string | null) => normalizeLocale(value) ?? defaultLocale;
+const normalizeGenerationLocale = (value?: string | null) =>
+  normalizeLocale(value) ?? defaultLocale;
 
 const buildStoreProductWhere = (storeId: string): Prisma.ProductWhereInput => ({
   storeProducts: {
@@ -159,10 +202,8 @@ const getGenerationJob = async (organizationId: string, jobId: string) => {
   };
 };
 
-export const getProductDescriptionGenerationJob = async (
-  organizationId: string,
-  jobId: string,
-) => getGenerationJob(organizationId, jobId);
+export const getProductDescriptionGenerationJob = async (organizationId: string, jobId: string) =>
+  getGenerationJob(organizationId, jobId);
 
 export const startProductDescriptionGenerationJob = async (input: {
   organizationId: string;
@@ -185,10 +226,7 @@ export const startProductDescriptionGenerationJob = async (input: {
   }
 
   const storeId = input.storeId?.trim() || null;
-  if (
-    input.source !== ProductDescriptionGenerationSource.PRODUCTS_PAGE &&
-    !storeId
-  ) {
+  if (input.source !== ProductDescriptionGenerationSource.PRODUCTS_PAGE && !storeId) {
     throw new AppError("integrationStoreRequired", "BAD_REQUEST", 400);
   }
   if (storeId) {
@@ -357,11 +395,7 @@ const toSpecString = (value: unknown): string | null => {
   return null;
 };
 
-const addCurrentSpecValue = (
-  values: Map<string, string[]>,
-  key: string,
-  rawValue: unknown,
-) => {
+const addCurrentSpecValue = (values: Map<string, string[]>, key: string, rawValue: unknown) => {
   const value = toSpecString(rawValue);
   if (!value) {
     return;
@@ -378,6 +412,9 @@ const generateAndPersistProductSpecs = async (input: {
   actorId: string;
   requestId: string;
   jobId: string;
+  leaseToken: string;
+  itemId: string;
+  itemLeaseToken: string;
   product: {
     id: string;
     sku: string;
@@ -448,7 +485,11 @@ const generateAndPersistProductSpecs = async (input: {
 
   const currentValues = new Map<string, string[]>();
   for (const variant of input.product.variants) {
-    if (variant.attributes && typeof variant.attributes === "object" && !Array.isArray(variant.attributes)) {
+    if (
+      variant.attributes &&
+      typeof variant.attributes === "object" &&
+      !Array.isArray(variant.attributes)
+    ) {
       for (const [key, value] of Object.entries(variant.attributes as Record<string, unknown>)) {
         addCurrentSpecValue(currentValues, key, value);
       }
@@ -563,6 +604,11 @@ const generateAndPersistProductSpecs = async (input: {
   }
 
   const updated = await prisma.$transaction(async (tx) => {
+    await assertProductDescriptionLease(tx, input.jobId, input.leaseToken);
+    await assertProductDescriptionItemLease(tx, {
+      itemId: input.itemId,
+      leaseToken: input.itemLeaseToken,
+    });
     if (generatedTemplateMode) {
       const existingTemplateCount = await tx.categoryAttributeTemplate.count({
         where: {
@@ -766,55 +812,64 @@ const deriveJobStatusFromItems = (input: {
 const getProgressPercent = (processedCount: number, totalCount: number) =>
   totalCount > 0 ? Math.min(100, Math.round((processedCount / totalCount) * 100)) : 0;
 
-const refreshJobCounts = async (jobId: string) => {
-  const grouped = await prisma.productDescriptionGenerationJobItem.groupBy({
-    by: ["status"],
-    where: { jobId },
-    _count: { _all: true },
-  });
-  const countByStatus = new Map(
-    grouped.map((group) => [group.status, group._count._all] as const),
-  );
-  const successCount = countByStatus.get(ProductDescriptionGenerationItemStatus.SUCCESS) ?? 0;
-  const failedCount = countByStatus.get(ProductDescriptionGenerationItemStatus.FAILED) ?? 0;
-  const skippedCount = countByStatus.get(ProductDescriptionGenerationItemStatus.SKIPPED) ?? 0;
-  const cancelledCount = countByStatus.get(ProductDescriptionGenerationItemStatus.CANCELLED) ?? 0;
-  const pendingCount = countByStatus.get(ProductDescriptionGenerationItemStatus.PENDING) ?? 0;
-  const processingCount =
-    countByStatus.get(ProductDescriptionGenerationItemStatus.PROCESSING) ?? 0;
-  const processedCount = successCount + failedCount + skippedCount;
-  const isComplete = pendingCount === 0 && processingCount === 0;
+const refreshJobCounts = async (
+  jobId: string,
+  options?: { leaseToken?: string; complete?: boolean },
+) =>
+  prisma.$transaction(async (tx) => {
+    if (options?.leaseToken) {
+      await assertProductDescriptionLease(tx, jobId, options.leaseToken);
+    }
+    const grouped = await tx.productDescriptionGenerationJobItem.groupBy({
+      by: ["status"],
+      where: { jobId },
+      _count: { _all: true },
+    });
+    const countByStatus = new Map(
+      grouped.map((group) => [group.status, group._count._all] as const),
+    );
+    const successCount = countByStatus.get(ProductDescriptionGenerationItemStatus.SUCCESS) ?? 0;
+    const failedCount = countByStatus.get(ProductDescriptionGenerationItemStatus.FAILED) ?? 0;
+    const skippedCount = countByStatus.get(ProductDescriptionGenerationItemStatus.SKIPPED) ?? 0;
+    const cancelledCount = countByStatus.get(ProductDescriptionGenerationItemStatus.CANCELLED) ?? 0;
+    const pendingCount = countByStatus.get(ProductDescriptionGenerationItemStatus.PENDING) ?? 0;
+    const processingCount =
+      countByStatus.get(ProductDescriptionGenerationItemStatus.PROCESSING) ?? 0;
+    const processedCount = successCount + failedCount + skippedCount;
+    const isComplete = pendingCount === 0 && processingCount === 0;
 
-  return prisma.productDescriptionGenerationJob.update({
-    where: { id: jobId },
-    data: {
-      processedCount,
-      successCount,
-      failedCount,
-      skippedCount,
-      ...(isComplete
-        ? {
-            status:
-              failedCount > 0 || cancelledCount > 0
-                ? ProductDescriptionGenerationJobStatus.DONE_WITH_ERRORS
-                : ProductDescriptionGenerationJobStatus.DONE,
-            completedAt: new Date(),
-          }
-        : {}),
-    },
-    select: {
-      id: true,
-      organizationId: true,
-      createdById: true,
-      status: true,
-      totalCount: true,
-      processedCount: true,
-      successCount: true,
-      failedCount: true,
-      skippedCount: true,
-    },
+    return tx.productDescriptionGenerationJob.update({
+      where: { id: jobId },
+      data: {
+        processedCount,
+        successCount,
+        failedCount,
+        skippedCount,
+        ...(isComplete && options?.complete !== false
+          ? {
+              status:
+                failedCount > 0 || cancelledCount > 0
+                  ? ProductDescriptionGenerationJobStatus.DONE_WITH_ERRORS
+                  : ProductDescriptionGenerationJobStatus.DONE,
+              completedAt: new Date(),
+              leaseToken: null,
+              leaseExpiresAt: null,
+            }
+          : {}),
+      },
+      select: {
+        id: true,
+        organizationId: true,
+        createdById: true,
+        status: true,
+        totalCount: true,
+        processedCount: true,
+        successCount: true,
+        failedCount: true,
+        skippedCount: true,
+      },
+    });
   });
-};
 
 const timeoutAbandonedProductDescriptionWork = async (
   logger: ProductDescriptionGenerationLogger,
@@ -823,7 +878,10 @@ const timeoutAbandonedProductDescriptionWork = async (
   const staleProcessingItems = await prisma.productDescriptionGenerationJobItem.findMany({
     where: {
       status: ProductDescriptionGenerationItemStatus.PROCESSING,
-      updatedAt: { lt: itemTimeoutBefore },
+      OR: [
+        { leaseExpiresAt: { lt: new Date() } },
+        { leaseExpiresAt: null, updatedAt: { lt: itemTimeoutBefore } },
+      ],
     },
     select: { jobId: true },
     distinct: ["jobId"],
@@ -833,12 +891,17 @@ const timeoutAbandonedProductDescriptionWork = async (
     await prisma.productDescriptionGenerationJobItem.updateMany({
       where: {
         status: ProductDescriptionGenerationItemStatus.PROCESSING,
-        updatedAt: { lt: itemTimeoutBefore },
+        OR: [
+          { leaseExpiresAt: { lt: new Date() } },
+          { leaseExpiresAt: null, updatedAt: { lt: itemTimeoutBefore } },
+        ],
       },
       data: {
         status: ProductDescriptionGenerationItemStatus.FAILED,
         errorMessage: "aiDescriptionTimedOut",
         completedAt: new Date(),
+        leaseToken: null,
+        leaseExpiresAt: null,
       },
     });
 
@@ -864,8 +927,9 @@ const timeoutAbandonedProductDescriptionWork = async (
         ],
       },
       OR: [
-        { startedAt: { lt: jobTimeoutBefore } },
-        { startedAt: null, createdAt: { lt: jobTimeoutBefore } },
+        { leaseExpiresAt: { lt: new Date() } },
+        { leaseExpiresAt: null, startedAt: { lt: jobTimeoutBefore } },
+        { leaseExpiresAt: null, startedAt: null, createdAt: { lt: jobTimeoutBefore } },
       ],
     },
     select: { id: true },
@@ -875,33 +939,59 @@ const timeoutAbandonedProductDescriptionWork = async (
     return;
   }
 
-  const staleJobIds = staleJobs.map((job) => job.id);
-  await prisma.productDescriptionGenerationJobItem.updateMany({
-    where: {
-      jobId: { in: staleJobIds },
-      status: {
-        in: [
-          ProductDescriptionGenerationItemStatus.PENDING,
-          ProductDescriptionGenerationItemStatus.PROCESSING,
-        ],
-      },
-    },
-    data: {
-      status: ProductDescriptionGenerationItemStatus.FAILED,
-      errorMessage: "aiDescriptionJobTimedOut",
-      completedAt: new Date(),
-    },
-  });
-  for (const jobId of staleJobIds) {
-    await refreshJobCounts(jobId);
-    await prisma.productDescriptionGenerationJob.update({
-      where: { id: jobId },
-      data: {
-        status: ProductDescriptionGenerationJobStatus.FAILED,
-        errorMessage: "aiDescriptionJobTimedOut",
-        completedAt: new Date(),
-      },
+  const staleJobIds: string[] = [];
+  for (const staleJob of staleJobs) {
+    const timedOut = await prisma.$transaction(async (tx) => {
+      const claimed = await tx.productDescriptionGenerationJob.updateMany({
+        where: {
+          id: staleJob.id,
+          status: {
+            in: [
+              ProductDescriptionGenerationJobStatus.QUEUED,
+              ProductDescriptionGenerationJobStatus.PROCESSING,
+            ],
+          },
+          OR: [
+            { leaseExpiresAt: { lt: new Date() } },
+            { leaseExpiresAt: null, startedAt: { lt: jobTimeoutBefore } },
+            { leaseExpiresAt: null, startedAt: null, createdAt: { lt: jobTimeoutBefore } },
+          ],
+        },
+        data: {
+          status: ProductDescriptionGenerationJobStatus.FAILED,
+          errorMessage: "aiDescriptionJobTimedOut",
+          completedAt: new Date(),
+          leaseToken: null,
+          leaseExpiresAt: null,
+        },
+      });
+      if (claimed.count !== 1) {
+        return false;
+      }
+      await tx.productDescriptionGenerationJobItem.updateMany({
+        where: {
+          jobId: staleJob.id,
+          status: {
+            in: [
+              ProductDescriptionGenerationItemStatus.PENDING,
+              ProductDescriptionGenerationItemStatus.PROCESSING,
+            ],
+          },
+        },
+        data: {
+          status: ProductDescriptionGenerationItemStatus.FAILED,
+          errorMessage: "aiDescriptionJobTimedOut",
+          completedAt: new Date(),
+          leaseToken: null,
+          leaseExpiresAt: null,
+        },
+      });
+      return true;
     });
+    if (timedOut) {
+      staleJobIds.push(staleJob.id);
+      await refreshJobCounts(staleJob.id, { complete: false });
+    }
   }
   logger.warn(
     {
@@ -913,23 +1003,39 @@ const timeoutAbandonedProductDescriptionWork = async (
 };
 
 const markItem = async (input: {
+  jobId: string;
+  leaseToken: string;
   itemId: string;
+  itemLeaseToken: string;
   status: ProductDescriptionGenerationItemStatus;
   errorMessage?: string | null;
   generatedDescription?: string | null;
   previousDescription?: string | null;
   imageCount?: number;
 }) =>
-  prisma.productDescriptionGenerationJobItem.update({
-    where: { id: input.itemId },
-    data: {
-      status: input.status,
-      errorMessage: input.errorMessage ?? null,
-      generatedDescription: input.generatedDescription,
-      previousDescription: input.previousDescription,
-      imageCount: input.imageCount,
-      completedAt: new Date(),
-    },
+  prisma.$transaction(async (tx) => {
+    await assertProductDescriptionLease(tx, input.jobId, input.leaseToken);
+    const completed = await tx.productDescriptionGenerationJobItem.updateMany({
+      where: {
+        id: input.itemId,
+        status: ProductDescriptionGenerationItemStatus.PROCESSING,
+        leaseToken: input.itemLeaseToken,
+      },
+      data: {
+        status: input.status,
+        errorMessage: input.errorMessage ?? null,
+        generatedDescription: input.generatedDescription,
+        previousDescription: input.previousDescription,
+        imageCount: input.imageCount,
+        completedAt: new Date(),
+        leaseToken: null,
+        leaseExpiresAt: null,
+      },
+    });
+    if (completed.count !== 1) {
+      throw new ProductDescriptionLeaseLostError();
+    }
+    return completed;
   });
 
 const processJobItem = async (input: {
@@ -939,19 +1045,33 @@ const processJobItem = async (input: {
     createdById: string;
     locale: string | null;
     overwriteExisting: boolean;
+    leaseToken: string;
   };
   item: { id: string; productId: string };
   logger: ProductDescriptionGenerationLogger;
 }) => {
   const startedAt = new Date();
-  await prisma.productDescriptionGenerationJobItem.update({
-    where: { id: input.item.id },
-    data: {
-      status: ProductDescriptionGenerationItemStatus.PROCESSING,
-      startedAt,
-      errorMessage: null,
-      completedAt: null,
-    },
+  const itemLeaseToken = randomUUID();
+  await prisma.$transaction(async (tx) => {
+    await assertProductDescriptionLease(tx, input.job.id, input.job.leaseToken);
+    const claimed = await tx.productDescriptionGenerationJobItem.updateMany({
+      where: {
+        id: input.item.id,
+        status: ProductDescriptionGenerationItemStatus.PENDING,
+      },
+      data: {
+        status: ProductDescriptionGenerationItemStatus.PROCESSING,
+        attemptCount: { increment: 1 },
+        leaseToken: itemLeaseToken,
+        leaseExpiresAt: new Date(startedAt.getTime() + PROCESSING_ITEM_TIMEOUT_MS),
+        startedAt,
+        errorMessage: null,
+        completedAt: null,
+      },
+    });
+    if (claimed.count !== 1) {
+      throw new ProductDescriptionLeaseLostError();
+    }
   });
 
   const product = await prisma.product.findFirst({
@@ -1000,6 +1120,9 @@ const processJobItem = async (input: {
 
   if (!product) {
     await markItem({
+      jobId: input.job.id,
+      leaseToken: input.job.leaseToken,
+      itemLeaseToken,
       itemId: input.item.id,
       status: ProductDescriptionGenerationItemStatus.SKIPPED,
       errorMessage: "productNotFound",
@@ -1068,6 +1191,9 @@ const processJobItem = async (input: {
     actorId: input.job.createdById,
     requestId: randomUUID(),
     jobId: input.job.id,
+    leaseToken: input.job.leaseToken,
+    itemId: input.item.id,
+    itemLeaseToken,
     product,
     imageUrls,
     overwriteExisting: input.job.overwriteExisting,
@@ -1075,31 +1201,40 @@ const processJobItem = async (input: {
   });
 
   if (generatedDescription) {
-    await prisma.product.update({
-      where: { id: product.id },
-      data: { description: generatedDescription },
-    });
-    await writeAuditLog(prisma, {
-      organizationId: input.job.organizationId,
-      actorId: input.job.createdById,
-      action: "PRODUCT_UPDATE",
-      entity: "Product",
-      entityId: product.id,
-      requestId: randomUUID(),
-      before: toJson({ description: previousDescription || null }),
-      after: toJson({
-        description: generatedDescription,
-        generated: true,
-        generationJobId: input.job.id,
-      }),
+    await prisma.$transaction(async (tx) => {
+      await assertProductDescriptionLease(tx, input.job.id, input.job.leaseToken);
+      await assertProductDescriptionItemLease(tx, {
+        itemId: input.item.id,
+        leaseToken: itemLeaseToken,
+      });
+      await tx.product.update({
+        where: { id: product.id },
+        data: { description: generatedDescription },
+      });
+      await writeAuditLog(tx, {
+        organizationId: input.job.organizationId,
+        actorId: input.job.createdById,
+        action: "PRODUCT_UPDATE",
+        entity: "Product",
+        entityId: product.id,
+        requestId: randomUUID(),
+        before: toJson({ description: previousDescription || null }),
+        after: toJson({
+          description: generatedDescription,
+          generated: true,
+          generationJobId: input.job.id,
+        }),
+      });
     });
   }
 
-  const specsUpdated =
-    specResult.status === "generated" || specResult.status === "overwritten";
+  const specsUpdated = specResult.status === "generated" || specResult.status === "overwritten";
 
   if (generatedDescription || specsUpdated) {
     await markItem({
+      jobId: input.job.id,
+      leaseToken: input.job.leaseToken,
+      itemLeaseToken,
       itemId: input.item.id,
       status: ProductDescriptionGenerationItemStatus.SUCCESS,
       generatedDescription,
@@ -1113,6 +1248,9 @@ const processJobItem = async (input: {
     descriptionFailureReason || (specResult.status === "failed" ? specResult.reason : null);
   if (failureReason) {
     await markItem({
+      jobId: input.job.id,
+      leaseToken: input.job.leaseToken,
+      itemLeaseToken,
       itemId: input.item.id,
       status: ProductDescriptionGenerationItemStatus.FAILED,
       errorMessage: failureReason,
@@ -1127,9 +1265,12 @@ const processJobItem = async (input: {
     specResult.status === "skipped" &&
     specResult.reason === "specsAlreadyExist"
       ? "descriptionAndSpecsAlreadyExist"
-      : descriptionSkipReason ?? (specResult.status === "skipped" ? specResult.reason : null);
+      : (descriptionSkipReason ?? (specResult.status === "skipped" ? specResult.reason : null));
 
   await markItem({
+    jobId: input.job.id,
+    leaseToken: input.job.leaseToken,
+    itemLeaseToken,
     itemId: input.item.id,
     status: ProductDescriptionGenerationItemStatus.SKIPPED,
     errorMessage: skipReason ?? "aiDescriptionGenerationSkipped",
@@ -1178,11 +1319,16 @@ const processQueuedProductDescriptionGenerationJob = async (
     };
   }
 
+  const startedAt = new Date();
+  const leaseToken = randomUUID();
   const claim = await prisma.productDescriptionGenerationJob.updateMany({
     where: { id: job.id, status: ProductDescriptionGenerationJobStatus.QUEUED },
     data: {
       status: ProductDescriptionGenerationJobStatus.PROCESSING,
-      startedAt: new Date(),
+      attemptCount: { increment: 1 },
+      leaseToken,
+      leaseExpiresAt: new Date(startedAt.getTime() + PROCESSING_JOB_TIMEOUT_MS),
+      startedAt,
       errorMessage: null,
     },
   });
@@ -1207,9 +1353,9 @@ const processQueuedProductDescriptionGenerationJob = async (
 
     while (pendingItems.length > 0) {
       for (const item of pendingItems) {
-        await processJobItem({ job, item, logger });
+        await processJobItem({ job: { ...job, leaseToken }, item, logger });
       }
-      await refreshJobCounts(job.id);
+      await refreshJobCounts(job.id, { leaseToken, complete: false });
       pendingItems = await prisma.productDescriptionGenerationJobItem.findMany({
         where: {
           jobId: job.id,
@@ -1221,7 +1367,7 @@ const processQueuedProductDescriptionGenerationJob = async (
       });
     }
 
-    const finished = await refreshJobCounts(job.id);
+    const finished = await refreshJobCounts(job.id, { leaseToken, complete: true });
     await writeAuditLog(prisma, {
       organizationId: finished.organizationId,
       actorId: finished.createdById,
@@ -1251,15 +1397,35 @@ const processQueuedProductDescriptionGenerationJob = async (
       },
     };
   } catch (error) {
+    if (error instanceof ProductDescriptionLeaseLostError) {
+      return {
+        job: PRODUCT_DESCRIPTION_GENERATION_JOB_NAME,
+        status: "skipped",
+        details: { jobId: job.id, reason: "leaseLost" },
+      };
+    }
     const errorMessage = toErrorMessage(error);
-    await prisma.productDescriptionGenerationJob.update({
-      where: { id: job.id },
+    const failed = await prisma.productDescriptionGenerationJob.updateMany({
+      where: {
+        id: job.id,
+        status: ProductDescriptionGenerationJobStatus.PROCESSING,
+        leaseToken,
+      },
       data: {
         status: ProductDescriptionGenerationJobStatus.FAILED,
         errorMessage,
         completedAt: new Date(),
+        leaseToken: null,
+        leaseExpiresAt: null,
       },
     });
+    if (failed.count !== 1) {
+      return {
+        job: PRODUCT_DESCRIPTION_GENERATION_JOB_NAME,
+        status: "skipped",
+        details: { jobId: job.id, reason: "leaseLost" },
+      };
+    }
     logger.error(
       {
         jobId: job.id,
@@ -1321,4 +1487,8 @@ export const runProductDescriptionGenerationJob = async (payload?: JobPayload) =
   return processQueuedProductDescriptionGenerationJob(getPayloadJobId(payload));
 };
 
-export { ProductDescriptionGenerationItemStatus, ProductDescriptionGenerationJobStatus, ProductDescriptionGenerationSource };
+export {
+  ProductDescriptionGenerationItemStatus,
+  ProductDescriptionGenerationJobStatus,
+  ProductDescriptionGenerationSource,
+};

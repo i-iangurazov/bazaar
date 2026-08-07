@@ -16,6 +16,7 @@ import {
   listBakaiStoreExportJobs,
   requestBakaiStoreApiSync,
   requestBakaiStoreExport,
+  runBakaiStoreApiSyncJob,
   runBakaiStoreApiPreflight,
   runBakaiStorePreflight,
   saveBakaiStoreTemplateWorkbook,
@@ -28,6 +29,22 @@ import {
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
+
+const deferred = <T>() => {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+};
+
+const waitFor = async (predicate: () => boolean) => {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  throw new Error("condition not reached");
+};
 
 const createTemplateBuffer = () => {
   const workbook = XLSX.utils.book_new();
@@ -555,16 +572,14 @@ describeDb("bakai store integration", () => {
         included: true,
       });
 
-      const fetchMock = vi
-        .fn()
-        .mockResolvedValue(
-          new Response(JSON.stringify({ ok: true }), {
-            status: 200,
-            headers: {
-              "Content-Type": "application/json",
-            },
-          }),
-        );
+      const fetchMock = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }),
+      );
       vi.stubGlobal("fetch", fetchMock);
 
       const preflight = await runBakaiStoreApiPreflight(org.id);
@@ -601,13 +616,9 @@ describeDb("bakai store integration", () => {
       expect(job?.failedCount).toBe(0);
       expect(job?.skippedCount).toBe(1);
       expect(job?.errorReportJson).not.toBeNull();
-      expect(integration.lastSyncStatus).toBe(
-        BakaiStoreLastSyncStatus.COMPLETED_WITH_ERRORS,
-      );
+      expect(integration.lastSyncStatus).toBe(BakaiStoreLastSyncStatus.COMPLETED_WITH_ERRORS);
       expect(requestBody.products?.map((product) => product.sku)).toEqual(["BAKAI-1"]);
-      expect(requestBody.products?.some((product) => product.sku === "BROKEN-API-1")).toBe(
-        false,
-      );
+      expect(requestBody.products?.some((product) => product.sku === "BROKEN-API-1")).toBe(false);
     } finally {
       vi.unstubAllGlobals();
       if (previousEndpoint === undefined) {
@@ -622,4 +633,96 @@ describeDb("bakai store integration", () => {
       }
     }
   });
+
+  it.each([
+    ["success", new Response(JSON.stringify({ ok: true }), { status: 200 })],
+    ["failure", new Response("provider failed", { status: 503 })],
+  ])(
+    "fences a stale Bakai API worker after timeout on held provider %s",
+    async (_outcome, providerResponse) => {
+      const { org, store, product, adminUser } = await prepareReadyBakaiApiData();
+      vi.stubEnv("BAKAI_STORE_IMPORT_ENDPOINT", "https://bakai.test/api/products/import");
+      vi.stubEnv("BAKAI_STORE_TOKEN_ENCRYPTION_KEY", "bakai-test-secret");
+      await updateBakaiStoreSettings({
+        organizationId: org.id,
+        actorId: adminUser.id,
+        requestId: `bakai-fence-settings-${_outcome}`,
+        connectionMode: BakaiStoreConnectionMode.API,
+        apiToken: "bakai-token",
+      });
+      await updateBakaiStoreBranchMappings({
+        organizationId: org.id,
+        actorId: adminUser.id,
+        requestId: `bakai-fence-branches-${_outcome}`,
+        mappings: [{ storeId: store.id, branchId: "101" }],
+      });
+      const heldProvider = deferred<Response>();
+      const fetchMock = vi
+        .fn()
+        .mockImplementation((url: string | URL | Request) =>
+          String(url) === "https://bakai.test/api/products/import"
+            ? heldProvider.promise
+            : Promise.resolve(new Response(null, { status: 200 })),
+        );
+      vi.stubGlobal("fetch", fetchMock);
+      const requested = await requestBakaiStoreApiSync({
+        organizationId: org.id,
+        actorId: adminUser.id,
+        requestId: `bakai-fence-${_outcome}`,
+      });
+      const baselineAudits = await prisma.auditLog.count({
+        where: {
+          entity: "BakaiStoreExportJob",
+          entityId: requested.job.id,
+          action: {
+            in: ["BAKAI_STORE_API_SYNC_FINISHED", "BAKAI_STORE_API_SYNC_FAILED"],
+          },
+        },
+      });
+
+      const oldWorker = runBakaiStoreApiSyncJob({ jobId: requested.job.id });
+      await waitFor(() =>
+        fetchMock.mock.calls.some(
+          (call) => String(call[0]) === "https://bakai.test/api/products/import",
+        ),
+      );
+      await prisma.bakaiStoreExportJob.update({
+        where: { id: requested.job.id },
+        data: { leaseExpiresAt: new Date(Date.now() - 1_000) },
+      });
+      const recovery = await runBakaiStoreApiSyncJob({ jobId: requested.job.id });
+      heldProvider.resolve(providerResponse);
+      const staleResult = await oldWorker;
+      const [job, includedProduct, syncState, terminalAudits] = await Promise.all([
+        prisma.bakaiStoreExportJob.findUniqueOrThrow({ where: { id: requested.job.id } }),
+        prisma.bakaiStoreIncludedProduct.findFirstOrThrow({
+          where: { orgId: org.id, storeId: store.id, productId: product.id },
+        }),
+        prisma.bakaiStoreProductSyncState.findUnique({
+          where: {
+            orgId_storeId_productId: { orgId: org.id, storeId: store.id, productId: product.id },
+          },
+        }),
+        prisma.auditLog.count({
+          where: {
+            entity: "BakaiStoreExportJob",
+            entityId: requested.job.id,
+            action: {
+              in: ["BAKAI_STORE_API_SYNC_FINISHED", "BAKAI_STORE_API_SYNC_FAILED"],
+            },
+          },
+        }),
+      ]);
+
+      expect(recovery.status).toBe("skipped");
+      expect(staleResult).toMatchObject({ status: "skipped", details: { reason: "leaseLost" } });
+      expect(job.status).toBe(BakaiStoreExportJobStatus.TIMED_OUT);
+      expect(job.leaseToken).toBeNull();
+      expect(includedProduct.lastExportedAt).toBeNull();
+      expect(syncState).toBeNull();
+      expect(terminalAudits).toBe(baselineAudits);
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+    },
+  );
 });

@@ -1,10 +1,4 @@
-import {
-  createCipheriv,
-  createDecipheriv,
-  createHash,
-  randomBytes,
-  randomUUID,
-} from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from "node:crypto";
 
 import {
   OMarketExportJobStatus,
@@ -187,9 +181,7 @@ const toBase64Url = (value: Buffer) => value.toString("base64url");
 const fromBase64Url = (value: string) => Buffer.from(value, "base64url");
 
 const resolveTokenSecret = () =>
-  process.env.O_MARKET_TOKEN_ENCRYPTION_KEY?.trim() ||
-  process.env.NEXTAUTH_SECRET?.trim() ||
-  "";
+  process.env.O_MARKET_TOKEN_ENCRYPTION_KEY?.trim() || process.env.NEXTAUTH_SECRET?.trim() || "";
 
 const tokenCipherKey = () => {
   const secret = resolveTokenSecret();
@@ -307,11 +299,13 @@ const resolveStoredIntegrationStatus = (input: {
   return OMarketIntegrationStatus.DISABLED;
 };
 
-const resolveOverviewStatus = (integration: {
-  status: OMarketIntegrationStatus;
-  apiTokenEncrypted: string | null;
-  hasStoreMapping: boolean;
-} | null): OMarketOverviewStatus => {
+const resolveOverviewStatus = (
+  integration: {
+    status: OMarketIntegrationStatus;
+    apiTokenEncrypted: string | null;
+    hasStoreMapping: boolean;
+  } | null,
+): OMarketOverviewStatus => {
   if (!integration) {
     return "NOT_CONFIGURED";
   }
@@ -461,9 +455,7 @@ const buildVariantValuesByProduct = (
   for (const row of values) {
     const byKey = result.get(row.productId) ?? new Map<string, string[]>();
     const rawValues = Array.isArray(row.value) ? row.value : [row.value];
-    const normalized = rawValues
-      .map((value) => String(value ?? "").trim())
-      .filter(Boolean);
+    const normalized = rawValues.map((value) => String(value ?? "").trim()).filter(Boolean);
     if (normalized.length) {
       byKey.set(row.key, normalized);
     }
@@ -608,7 +600,8 @@ export const mapBazaarProductToOMarketProduct = (input: {
     addIssue(issues, "INVALID_SKU");
   }
 
-  const rawPrice = input.selection.product.storePrices[0]?.priceKgs ?? input.selection.product.basePriceKgs;
+  const rawPrice =
+    input.selection.product.storePrices[0]?.priceKgs ?? input.selection.product.basePriceKgs;
   const price = rawPrice === null || rawPrice === undefined ? null : Number(rawPrice);
   if (price === null) {
     addIssue(issues, "MISSING_PRICE");
@@ -922,8 +915,8 @@ const buildOMarketExportPlan = async (input: {
     const productValues = valuesByProduct.get(selection.productId);
     const hasLocalSpecs = Boolean(
       localTemplateKeys &&
-        productValues &&
-        Array.from(localTemplateKeys).some((key) => (productValues.get(key)?.length ?? 0) > 0),
+      productValues &&
+      Array.from(localTemplateKeys).some((key) => (productValues.get(key)?.length ?? 0) > 0),
     );
     const mapped = mapBazaarProductToOMarketProduct({
       jobType,
@@ -1199,7 +1192,9 @@ export const getOMarketSettings = async (
       orderBy: { category: "asc" },
     }),
   ]);
-  const mappedStoreCount = storeMappings.filter((mapping) => mapping.oMarketLocationId.trim()).length;
+  const mappedStoreCount = storeMappings.filter((mapping) =>
+    mapping.oMarketLocationId.trim(),
+  ).length;
   const status = resolveOverviewStatus(
     integration
       ? {
@@ -1333,7 +1328,9 @@ export const updateOMarketSettings = async (input: {
       action: "O_MARKET_CONFIG_UPDATED",
       entity: "OMarketIntegration",
       entityId: saved.id,
-      before: existing ? toJson({ ...existing, apiTokenEncrypted: Boolean(existing.apiTokenEncrypted) }) : null,
+      before: existing
+        ? toJson({ ...existing, apiTokenEncrypted: Boolean(existing.apiTokenEncrypted) })
+        : null,
       after: toJson({ ...saved, apiTokenEncrypted: Boolean(saved.apiTokenEncrypted) }),
       requestId: input.requestId,
     });
@@ -1557,7 +1554,9 @@ export const listOMarketProducts = async (input: {
         select: { productId: true, onHand: true },
       })
     : [];
-  const onHandByProductId = new Map(snapshots.map((snapshot) => [snapshot.productId, snapshot.onHand]));
+  const onHandByProductId = new Map(
+    snapshots.map((snapshot) => [snapshot.productId, snapshot.onHand]),
+  );
   return {
     items: products.map((product) => {
       const included = product.oMarketInclusions.length > 0;
@@ -1873,7 +1872,13 @@ const timeoutAbandonedOMarketExportJobs = async (organizationId?: string) => {
       ...(organizationId ? { orgId: organizationId } : {}),
       finishedAt: null,
       OR: [
-        { status: OMarketExportJobStatus.RUNNING, startedAt: { lt: timeoutBefore } },
+        {
+          status: OMarketExportJobStatus.RUNNING,
+          OR: [
+            { leaseExpiresAt: { lt: new Date() } },
+            { leaseExpiresAt: null, startedAt: { lt: timeoutBefore } },
+          ],
+        },
         { status: OMarketExportJobStatus.QUEUED, createdAt: { lt: timeoutBefore } },
       ],
     },
@@ -1902,7 +1907,8 @@ const timeoutAbandonedOMarketExportJobs = async (organizationId?: string) => {
   const finishedAt = new Date();
   const timedOutJobIds: string[] = [];
   for (const job of jobs) {
-    const attemptedCount = job.attemptedCount ?? Number(asRecord(job.payloadStatsJson)?.productCount ?? 0);
+    const attemptedCount =
+      job.attemptedCount ?? Number(asRecord(job.payloadStatsJson)?.productCount ?? 0);
     const succeededCount = job.succeededCount ?? 0;
     const skippedCount = job.skippedCount ?? 0;
     const timedOut = await prisma.oMarketExportJob.updateMany({
@@ -1910,13 +1916,21 @@ const timeoutAbandonedOMarketExportJobs = async (organizationId?: string) => {
         id: job.id,
         finishedAt: null,
         OR: [
-          { status: OMarketExportJobStatus.RUNNING, startedAt: { lt: timeoutBefore } },
+          {
+            status: OMarketExportJobStatus.RUNNING,
+            OR: [
+              { leaseExpiresAt: { lt: new Date() } },
+              { leaseExpiresAt: null, startedAt: { lt: timeoutBefore } },
+            ],
+          },
           { status: OMarketExportJobStatus.QUEUED, createdAt: { lt: timeoutBefore } },
         ],
       },
       data: {
         status: OMarketExportJobStatus.TIMED_OUT,
         finishedAt,
+        leaseToken: null,
+        leaseExpiresAt: null,
         attemptedCount,
         succeededCount,
         skippedCount,
@@ -2028,11 +2042,7 @@ const buildPerProductResults = (input: {
   return results;
 };
 
-const pollImportStatus = async (input: {
-  token: string;
-  baseUrl: string;
-  taskId: number;
-}) => {
+const pollImportStatus = async (input: { token: string; baseUrl: string; taskId: number }) => {
   let rows: OMarketImportStatusRow[] = [];
   for (let attempt = 0; attempt < O_MARKET_STATUS_POLL_ATTEMPTS; attempt += 1) {
     const response = await getOMarketImportStatus({
@@ -2075,10 +2085,14 @@ export const runOMarketExportJob = async (
     return { job: O_MARKET_EXPORT_JOB_NAME, status: "skipped", details: { reason: "empty" } };
   }
   const startedAt = new Date();
+  const leaseToken = randomUUID();
   const claim = await prisma.oMarketExportJob.updateMany({
     where: { id: job.id, status: OMarketExportJobStatus.QUEUED },
     data: {
       status: OMarketExportJobStatus.RUNNING,
+      attemptCount: { increment: 1 },
+      leaseToken,
+      leaseExpiresAt: new Date(startedAt.getTime() + O_MARKET_EXPORT_JOB_TIMEOUT_MS),
       startedAt,
       finishedAt: null,
       responseJson: Prisma.DbNull,
@@ -2159,7 +2173,9 @@ export const runOMarketExportJob = async (
         });
         throw new AppError(normalized.code, "INTERNAL_SERVER_ERROR", 502);
       }
-      taskId = Number(asRecord(response.body)?.result && asRecord(asRecord(response.body)?.result)?.task_id);
+      taskId = Number(
+        asRecord(response.body)?.result && asRecord(asRecord(response.body)?.result)?.task_id,
+      );
       if (!Number.isInteger(taskId) || taskId <= 0) {
         throw new AppError("oMarketTaskIdMissing", "INTERNAL_SERVER_ERROR", 502);
       }
@@ -2176,121 +2192,141 @@ export const runOMarketExportJob = async (
     );
     const skippedCount = productResults.filter((result) => result.status === "skipped").length;
     const finishedAt = new Date();
-
-    if (successfulProductIds.length) {
-      await prisma.oMarketIncludedProduct.updateMany({
-        where: {
-          orgId: job.orgId,
-          storeId: job.storeId ?? String(plan.payloadStats.storeId),
-          productId: { in: successfulProductIds },
-        },
-        data: { lastExportedAt: finishedAt },
-      });
-    }
-
-    for (const result of productResults) {
-      if (!result.productId || result.status === "skipped") {
-        continue;
-      }
-      const payloadProduct = plan.payloadByProductId.get(result.productId);
-      await prisma.oMarketProductSyncState.upsert({
-        where: {
-          orgId_storeId_productId: {
-            orgId: job.orgId,
-            storeId: job.storeId ?? String(plan.payloadStats.storeId),
-            productId: result.productId,
-          },
-        },
-        update: {
-          oMarketProductId: result.oMarketProductId ? String(result.oMarketProductId) : undefined,
-          lastSyncedAt:
-            result.status === "exported" || result.status === "updated" ? finishedAt : undefined,
-          lastSyncStatus:
-            result.status === "exported" || result.status === "updated"
-              ? OMarketLastSyncStatus.SUCCESS
-              : OMarketLastSyncStatus.FAILED,
-          lastPayloadChecksum: payloadProduct ? computeOMarketPayloadChecksum(payloadProduct) : null,
-          lastErrorSummary: result.reason,
-        },
-        create: {
-          orgId: job.orgId,
-          storeId: job.storeId ?? String(plan.payloadStats.storeId),
-          productId: result.productId,
-          oMarketProductId: result.oMarketProductId ? String(result.oMarketProductId) : null,
-          lastSyncedAt:
-            result.status === "exported" || result.status === "updated" ? finishedAt : null,
-          lastSyncStatus:
-            result.status === "exported" || result.status === "updated"
-              ? OMarketLastSyncStatus.SUCCESS
-              : OMarketLastSyncStatus.FAILED,
-          lastPayloadChecksum: payloadProduct ? computeOMarketPayloadChecksum(payloadProduct) : null,
-          lastErrorSummary: result.reason,
-        },
-      });
-    }
-
     const failedCount = failedProductResults.length;
     const succeededCount = successfulProductIds.length;
-    const completedWithErrors =
-      succeededCount > 0 && (failedCount > 0 || skippedCount > 0);
+    const completedWithErrors = succeededCount > 0 && (failedCount > 0 || skippedCount > 0);
     const failed = failedCount > 0 && succeededCount === 0;
-    const finished = await prisma.oMarketExportJob.update({
-      where: { id: job.id },
-      data: {
-        status: failed
-          ? OMarketExportJobStatus.FAILED
+    const completedPlan = plan;
+
+    const finished = await prisma.$transaction(async (tx) => {
+      const completion = await tx.oMarketExportJob.updateMany({
+        where: {
+          id: job.id,
+          status: OMarketExportJobStatus.RUNNING,
+          leaseToken,
+        },
+        data: {
+          status: failed
+            ? OMarketExportJobStatus.FAILED
+            : completedWithErrors
+              ? OMarketExportJobStatus.COMPLETED_WITH_ERRORS
+              : OMarketExportJobStatus.DONE,
+          finishedAt,
+          leaseToken: null,
+          leaseExpiresAt: null,
+          attemptedCount: completedPlan.payload.products.length,
+          succeededCount,
+          failedCount,
+          skippedCount,
+          payloadStatsJson: toJson({ ...completedPlan.payloadStats, taskId }),
+          responseJson: toJson({
+            taskId,
+            productResults,
+            mockMode: process.env.O_MARKET_MOCK_API === "1",
+          }),
+          errorReportJson:
+            failedCount > 0 || skippedCount > 0
+              ? toJson({ ...completedPlan.errorReport, productResults })
+              : Prisma.DbNull,
+        },
+      });
+      if (completion.count !== 1) {
+        return null;
+      }
+      if (successfulProductIds.length) {
+        await tx.oMarketIncludedProduct.updateMany({
+          where: {
+            orgId: job.orgId,
+            storeId: job.storeId ?? String(completedPlan.payloadStats.storeId),
+            productId: { in: successfulProductIds },
+          },
+          data: { lastExportedAt: finishedAt },
+        });
+      }
+
+      for (const result of productResults) {
+        if (!result.productId || result.status === "skipped") {
+          continue;
+        }
+        const payloadProduct = completedPlan.payloadByProductId.get(result.productId);
+        await tx.oMarketProductSyncState.upsert({
+          where: {
+            orgId_storeId_productId: {
+              orgId: job.orgId,
+              storeId: job.storeId ?? String(completedPlan.payloadStats.storeId),
+              productId: result.productId,
+            },
+          },
+          update: {
+            oMarketProductId: result.oMarketProductId ? String(result.oMarketProductId) : undefined,
+            lastSyncedAt:
+              result.status === "exported" || result.status === "updated" ? finishedAt : undefined,
+            lastSyncStatus:
+              result.status === "exported" || result.status === "updated"
+                ? OMarketLastSyncStatus.SUCCESS
+                : OMarketLastSyncStatus.FAILED,
+            lastPayloadChecksum: payloadProduct
+              ? computeOMarketPayloadChecksum(payloadProduct)
+              : null,
+            lastErrorSummary: result.reason,
+          },
+          create: {
+            orgId: job.orgId,
+            storeId: job.storeId ?? String(completedPlan.payloadStats.storeId),
+            productId: result.productId,
+            oMarketProductId: result.oMarketProductId ? String(result.oMarketProductId) : null,
+            lastSyncedAt:
+              result.status === "exported" || result.status === "updated" ? finishedAt : null,
+            lastSyncStatus:
+              result.status === "exported" || result.status === "updated"
+                ? OMarketLastSyncStatus.SUCCESS
+                : OMarketLastSyncStatus.FAILED,
+            lastPayloadChecksum: payloadProduct
+              ? computeOMarketPayloadChecksum(payloadProduct)
+              : null,
+            lastErrorSummary: result.reason,
+          },
+        });
+      }
+
+      const completedJob = await tx.oMarketExportJob.findUniqueOrThrow({ where: { id: job.id } });
+      await tx.oMarketIntegration.updateMany({
+        where: { orgId: job.orgId },
+        data: {
+          status: failed ? OMarketIntegrationStatus.ERROR : OMarketIntegrationStatus.READY,
+          lastSyncAt: finishedAt,
+          lastSyncStatus: failed
+            ? OMarketLastSyncStatus.FAILED
+            : completedWithErrors
+              ? OMarketLastSyncStatus.COMPLETED_WITH_ERRORS
+              : OMarketLastSyncStatus.SUCCESS,
+          lastErrorSummary: failed
+            ? "OMARKET_PRODUCT_ERRORS"
+            : completedWithErrors
+              ? "OMARKET_EXPORT_COMPLETED_WITH_ERRORS"
+              : null,
+        },
+      });
+      await writeAuditLog(tx, {
+        organizationId: job.orgId,
+        actorId: job.requestedById,
+        action: failed
+          ? "O_MARKET_EXPORT_FAILED"
           : completedWithErrors
-            ? OMarketExportJobStatus.COMPLETED_WITH_ERRORS
-            : OMarketExportJobStatus.DONE,
-        finishedAt,
-        attemptedCount: plan.payload.products.length,
-        succeededCount,
-        failedCount,
-        skippedCount,
-        payloadStatsJson: toJson({ ...plan.payloadStats, taskId }),
-        responseJson: toJson({
-          taskId,
-          productResults,
-          mockMode: process.env.O_MARKET_MOCK_API === "1",
-        }),
-        errorReportJson:
-          failedCount > 0 || skippedCount > 0
-            ? toJson({ ...plan.errorReport, productResults })
-            : Prisma.DbNull,
-      },
+            ? "O_MARKET_EXPORT_COMPLETED_WITH_ERRORS"
+            : "O_MARKET_EXPORT_FINISHED",
+        entity: "OMarketExportJob",
+        entityId: completedJob.id,
+        before: toJson(running),
+        after: toJson({ ...completedJob, productResults }),
+        requestId:
+          typeof requestPayload.requestId === "string" ? requestPayload.requestId : randomUUID(),
+      });
+      return completedJob;
     });
-    await prisma.oMarketIntegration.updateMany({
-      where: { orgId: job.orgId },
-      data: {
-        status: failed ? OMarketIntegrationStatus.ERROR : OMarketIntegrationStatus.READY,
-        lastSyncAt: finishedAt,
-        lastSyncStatus: failed
-          ? OMarketLastSyncStatus.FAILED
-          : completedWithErrors
-            ? OMarketLastSyncStatus.COMPLETED_WITH_ERRORS
-            : OMarketLastSyncStatus.SUCCESS,
-        lastErrorSummary: failed
-          ? "OMARKET_PRODUCT_ERRORS"
-          : completedWithErrors
-            ? "OMARKET_EXPORT_COMPLETED_WITH_ERRORS"
-            : null,
-      },
-    });
-    await writeAuditLog(prisma, {
-      organizationId: job.orgId,
-      actorId: job.requestedById,
-      action: failed
-        ? "O_MARKET_EXPORT_FAILED"
-        : completedWithErrors
-          ? "O_MARKET_EXPORT_COMPLETED_WITH_ERRORS"
-          : "O_MARKET_EXPORT_FINISHED",
-      entity: "OMarketExportJob",
-      entityId: finished.id,
-      before: toJson(running),
-      after: toJson({ ...finished, productResults }),
-      requestId:
-        typeof requestPayload.requestId === "string" ? requestPayload.requestId : randomUUID(),
-    });
+    if (!finished) {
+      return { job: O_MARKET_EXPORT_JOB_NAME, status: "skipped", details: { reason: "leaseLost" } };
+    }
     return {
       job: O_MARKET_EXPORT_JOB_NAME,
       status: "ok",
@@ -2304,37 +2340,53 @@ export const runOMarketExportJob = async (
     };
   } catch (error) {
     const normalized = normalizeOMarketApiError({ status: null, body: null, error, token });
-    const failed = await prisma.oMarketExportJob.update({
-      where: { id: job.id },
-      data: {
-        status: OMarketExportJobStatus.FAILED,
-        finishedAt: new Date(),
-        attemptedCount: plan?.payload.products.length ?? 0,
-        succeededCount: 0,
-        failedCount: plan?.payload.products.length ?? 0,
-        skippedCount: plan?.mode === "READY_ONLY" ? plan.preflight.failedProducts.length : 0,
-        errorReportJson: toJson({ ...(plan?.errorReport ?? {}), error: normalized }),
-      },
+    const failed = await prisma.$transaction(async (tx) => {
+      const failure = await tx.oMarketExportJob.updateMany({
+        where: {
+          id: job.id,
+          status: OMarketExportJobStatus.RUNNING,
+          leaseToken,
+        },
+        data: {
+          status: OMarketExportJobStatus.FAILED,
+          finishedAt: new Date(),
+          leaseToken: null,
+          leaseExpiresAt: null,
+          attemptedCount: plan?.payload.products.length ?? 0,
+          succeededCount: 0,
+          failedCount: plan?.payload.products.length ?? 0,
+          skippedCount: plan?.mode === "READY_ONLY" ? plan.preflight.failedProducts.length : 0,
+          errorReportJson: toJson({ ...(plan?.errorReport ?? {}), error: normalized }),
+        },
+      });
+      if (failure.count !== 1) {
+        return null;
+      }
+      const failedJob = await tx.oMarketExportJob.findUniqueOrThrow({ where: { id: job.id } });
+      await tx.oMarketIntegration.updateMany({
+        where: { orgId: job.orgId },
+        data: {
+          status: OMarketIntegrationStatus.ERROR,
+          lastSyncStatus: OMarketLastSyncStatus.FAILED,
+          lastErrorSummary: normalized.code,
+        },
+      });
+      await writeAuditLog(tx, {
+        organizationId: job.orgId,
+        actorId: job.requestedById,
+        action: "O_MARKET_EXPORT_FAILED",
+        entity: "OMarketExportJob",
+        entityId: failedJob.id,
+        before: toJson(running),
+        after: toJson({ ...failedJob, error: normalized }),
+        requestId:
+          typeof requestPayload.requestId === "string" ? requestPayload.requestId : randomUUID(),
+      });
+      return failedJob;
     });
-    await prisma.oMarketIntegration.updateMany({
-      where: { orgId: job.orgId },
-      data: {
-        status: OMarketIntegrationStatus.ERROR,
-        lastSyncStatus: OMarketLastSyncStatus.FAILED,
-        lastErrorSummary: normalized.code,
-      },
-    });
-    await writeAuditLog(prisma, {
-      organizationId: job.orgId,
-      actorId: job.requestedById,
-      action: "O_MARKET_EXPORT_FAILED",
-      entity: "OMarketExportJob",
-      entityId: failed.id,
-      before: toJson(running),
-      after: toJson({ ...failed, error: normalized }),
-      requestId:
-        typeof requestPayload.requestId === "string" ? requestPayload.requestId : randomUUID(),
-    });
+    if (!failed) {
+      return { job: O_MARKET_EXPORT_JOB_NAME, status: "skipped", details: { reason: "leaseLost" } };
+    }
     if (error instanceof AppError) {
       throw error;
     }

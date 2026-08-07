@@ -24,6 +24,22 @@ import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
 
+const deferred = <T>() => {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+};
+
+const waitFor = async (predicate: () => boolean) => {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  throw new Error("condition not reached");
+};
+
 const prepareReadyMMarketData = async () => {
   const { org, store, product, adminUser, supplier, baseUnit } = await seedBase();
 
@@ -493,9 +509,7 @@ describeDb("m-market integration", () => {
     });
 
     expect(refreshedStaleJob.status).toBe(MMarketExportJobStatus.TIMED_OUT);
-    expect(JSON.stringify(refreshedStaleJob.errorReportJson)).toContain(
-      "mMarketExportJobTimedOut",
-    );
+    expect(JSON.stringify(refreshedStaleJob.errorReportJson)).toContain("mMarketExportJobTimedOut");
     expect(requested.job.status).toBe(MMarketExportJobStatus.QUEUED);
   });
 
@@ -565,6 +579,74 @@ describeDb("m-market integration", () => {
       }
     }
   });
+
+  it.each([
+    ["success", new Response(JSON.stringify({ ok: true }), { status: 200 })],
+    ["failure", new Response("provider failed", { status: 503 })],
+  ])(
+    "fences a stale M-Market worker after timeout on held provider %s",
+    async (_outcome, providerResponse) => {
+      const { org, product, adminUser } = await prepareReadyMMarketData();
+      const previousSpecsEndpoint = process.env.MMARKET_SPECS_KEYS_ENDPOINT_DEV;
+      delete process.env.MMARKET_SPECS_KEYS_ENDPOINT_DEV;
+      const heldProvider = deferred<Response>();
+      const fetchMock = vi.fn().mockImplementation(() => heldProvider.promise);
+      vi.stubGlobal("fetch", fetchMock);
+
+      try {
+        const requested = await requestMMarketExport({
+          organizationId: org.id,
+          actorId: adminUser.id,
+          requestId: `m-market-fence-${_outcome}`,
+        });
+        const baselineTerminalAudits = await prisma.auditLog.count({
+          where: {
+            entity: "MMarketExportJob",
+            entityId: requested.job.id,
+            action: { in: ["MMARKET_EXPORT_FINISHED", "MMARKET_EXPORT_FAILED"] },
+          },
+        });
+        const oldWorker = runMMarketExportJob({ jobId: requested.job.id });
+        await waitFor(() => fetchMock.mock.calls.length === 1);
+        await prisma.mMarketExportJob.update({
+          where: { id: requested.job.id },
+          data: { leaseExpiresAt: new Date(Date.now() - 1_000) },
+        });
+
+        const recovery = await runMMarketExportJob({ jobId: requested.job.id });
+        heldProvider.resolve(providerResponse);
+        const staleResult = await oldWorker;
+        const [job, includedProduct, integration, terminalAudits] = await Promise.all([
+          prisma.mMarketExportJob.findUniqueOrThrow({ where: { id: requested.job.id } }),
+          prisma.mMarketIncludedProduct.findFirstOrThrow({
+            where: { orgId: org.id, productId: product.id },
+          }),
+          prisma.mMarketIntegration.findUniqueOrThrow({ where: { orgId: org.id } }),
+          prisma.auditLog.count({
+            where: {
+              entity: "MMarketExportJob",
+              entityId: requested.job.id,
+              action: { in: ["MMARKET_EXPORT_FINISHED", "MMARKET_EXPORT_FAILED"] },
+            },
+          }),
+        ]);
+
+        expect(recovery.status).toBe("skipped");
+        expect(staleResult).toMatchObject({ status: "skipped", details: { reason: "leaseLost" } });
+        expect(job.status).toBe(MMarketExportJobStatus.TIMED_OUT);
+        expect(job.leaseToken).toBeNull();
+        expect(includedProduct.lastExportedAt).toBeNull();
+        expect(integration.lastErrorSummary).toBe("mMarketExportJobTimedOut");
+        expect(terminalAudits).toBe(baselineTerminalAudits);
+      } finally {
+        if (previousSpecsEndpoint === undefined) {
+          delete process.env.MMARKET_SPECS_KEYS_ENDPOINT_DEV;
+        } else {
+          process.env.MMARKET_SPECS_KEYS_ENDPOINT_DEV = previousSpecsEndpoint;
+        }
+      }
+    },
+  );
 
   it("queues export for ready products even when other included products fail preflight", async () => {
     const { org, adminUser, product, store, supplier, baseUnit } = await prepareReadyMMarketData();

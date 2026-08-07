@@ -11,6 +11,7 @@ import { runJob } from "@/server/jobs";
 import {
   getProductDescriptionGenerationJob,
   PRODUCT_DESCRIPTION_GENERATION_JOB_NAME,
+  runProductDescriptionGenerationJob,
   startProductDescriptionGenerationJob,
 } from "@/server/services/productDescriptionGenerationJobs";
 import { toJson } from "@/server/services/json";
@@ -36,6 +37,22 @@ const openAiTextResponse = (outputText: string) =>
     status: 200,
     headers: { "content-type": "application/json" },
   });
+
+const deferred = <T>() => {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+};
+
+const waitFor = async (predicate: () => boolean) => {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  throw new Error("condition not reached");
+};
 
 const seedPhoneCaseSpecTemplate = async (organizationId: string, category: string) => {
   await prisma.attributeDefinition.createMany({
@@ -338,17 +355,15 @@ describeDb("product description generation jobs", () => {
       description: "Описание уже есть",
       attributes: {},
     });
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        openAiTextResponse(
-          JSON.stringify({
-            type: "Чехол",
-            color: "Черный",
-            material: "Поликарбонат",
-          }),
-        ),
-      );
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      openAiTextResponse(
+        JSON.stringify({
+          type: "Чехол",
+          color: "Черный",
+          material: "Поликарбонат",
+        }),
+      ),
+    );
     vi.stubEnv("OPENAI_API_KEY", "sk-test");
     vi.stubGlobal("fetch", fetchMock);
 
@@ -470,4 +485,83 @@ describeDb("product description generation jobs", () => {
     expect(job.items[0]?.status).toBe(ProductDescriptionGenerationItemStatus.SUCCESS);
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ["success", openAiTextResponse(generatedDescriptionText)],
+    ["failure", new Response("provider failed", { status: 503 })],
+  ])(
+    "fences a stale AI item after timeout when its held provider call returns %s",
+    async (_outcome, heldResponse) => {
+      const { org, product, adminUser } = await seedBase();
+      const category = "Аксессуары";
+      await seedPhoneCaseSpecTemplate(org.id, category);
+      const variant = await seedProductForAiJob({
+        organizationId: org.id,
+        productId: product.id,
+        category,
+        description: "Стабильное описание",
+        attributes: {},
+      });
+      const heldProvider = deferred<Response>();
+      const fetchMock = vi
+        .fn()
+        .mockImplementationOnce(() => heldProvider.promise)
+        .mockResolvedValue(
+          openAiTextResponse(
+            JSON.stringify({ type: "Чехол", color: "Черный", material: "Поликарбонат" }),
+          ),
+        );
+      vi.stubEnv("OPENAI_API_KEY", "sk-test");
+      vi.stubGlobal("fetch", fetchMock);
+      const created = await startProductDescriptionGenerationJob({
+        organizationId: org.id,
+        actorId: adminUser.id,
+        requestId: `req-description-stale-${_outcome}`,
+        source: ProductDescriptionGenerationSource.PRODUCTS_PAGE,
+        productIds: [product.id],
+        locale: "ru",
+        overwriteExisting: true,
+        runImmediately: false,
+      });
+      const baselineAudits = await prisma.auditLog.count({
+        where: { entity: "Product", entityId: product.id, action: "PRODUCT_UPDATE" },
+      });
+
+      const oldWorker = runProductDescriptionGenerationJob({ jobId: created.id });
+      await waitFor(() => fetchMock.mock.calls.length === 1);
+      const processingItem = await prisma.productDescriptionGenerationJobItem.findFirstOrThrow({
+        where: { jobId: created.id },
+      });
+      await prisma.productDescriptionGenerationJobItem.update({
+        where: { id: processingItem.id },
+        data: { leaseExpiresAt: new Date(Date.now() - 1_000) },
+      });
+
+      const recovery = await runProductDescriptionGenerationJob({ jobId: created.id });
+      heldProvider.resolve(heldResponse);
+      const staleResult = await oldWorker;
+      const [job, item, unchangedProduct, unchangedVariant, auditCount] = await Promise.all([
+        prisma.productDescriptionGenerationJob.findUniqueOrThrow({ where: { id: created.id } }),
+        prisma.productDescriptionGenerationJobItem.findUniqueOrThrow({
+          where: { id: processingItem.id },
+        }),
+        prisma.product.findUniqueOrThrow({ where: { id: product.id } }),
+        prisma.productVariant.findUniqueOrThrow({ where: { id: variant.id } }),
+        prisma.auditLog.count({
+          where: { entity: "Product", entityId: product.id, action: "PRODUCT_UPDATE" },
+        }),
+      ]);
+
+      expect(recovery.status).toBe("skipped");
+      expect(staleResult).toMatchObject({ status: "skipped", details: { reason: "leaseLost" } });
+      expect(job.status).toBe(ProductDescriptionGenerationJobStatus.DONE_WITH_ERRORS);
+      expect(job.leaseToken).toBeNull();
+      expect(item.status).toBe(ProductDescriptionGenerationItemStatus.FAILED);
+      expect(item.errorMessage).toBe("aiDescriptionTimedOut");
+      expect(item.leaseToken).toBeNull();
+      expect(unchangedProduct.description).toBe("Стабильное описание");
+      expect(unchangedVariant.attributes).toEqual({});
+      expect(auditCount).toBe(baselineAudits);
+    },
+  );
 });

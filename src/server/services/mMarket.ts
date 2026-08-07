@@ -17,7 +17,10 @@ import { runJob, type JobPayload } from "@/server/jobs";
 import { toJson } from "@/server/services/json";
 import { writeAuditLog } from "@/server/services/audit";
 import { normalizeProductImageUrl } from "@/server/services/productImageStorage";
-import { bulkGenerateProductDescriptions, bulkUpdateProductCategory } from "@/server/services/products";
+import {
+  bulkGenerateProductDescriptions,
+  bulkUpdateProductCategory,
+} from "@/server/services/products";
 import {
   inferProductSpecValueFromMetadata,
   matchProductSpecOption,
@@ -957,7 +960,8 @@ export const buildMMarketPayload = (products: MMarketPayloadProduct[]): MMarketP
     }),
 });
 
-const getPayloadBytes = (payload: MMarketPayload) => Buffer.byteLength(JSON.stringify(payload), "utf8");
+const getPayloadBytes = (payload: MMarketPayload) =>
+  Buffer.byteLength(JSON.stringify(payload), "utf8");
 
 const asRecord = (value: unknown): Record<string, unknown> | null => {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -1003,7 +1007,9 @@ const toNetworkDiagnostic = (value: unknown): MMarketNetworkErrorDiagnostic | nu
 
 const toNestedDiagnostics = (value: unknown): MMarketNetworkErrorDiagnostic[] => {
   if (value instanceof AggregateError) {
-    return Array.from(value.errors).map(toNetworkDiagnostic).filter(Boolean) as MMarketNetworkErrorDiagnostic[];
+    return Array.from(value.errors)
+      .map(toNetworkDiagnostic)
+      .filter(Boolean) as MMarketNetworkErrorDiagnostic[];
   }
 
   const record = asRecord(value);
@@ -2790,7 +2796,8 @@ export const bulkAutofillMMarketSpecs = async (input: {
               {
                 phase: "bulk-specs-ai",
                 productId: product.id,
-                error: error instanceof Error ? { message: error.message, name: error.name } : error,
+                error:
+                  error instanceof Error ? { message: error.message, name: error.name } : error,
               },
               "bulk MMarket specs AI autofill failed for item",
             );
@@ -3033,7 +3040,13 @@ const timeoutAbandonedMMarketExportJobs = async (organizationId?: string) => {
       ...(organizationId ? { orgId: organizationId } : {}),
       finishedAt: null,
       OR: [
-        { status: MMarketExportJobStatus.RUNNING, startedAt: { lt: timeoutBefore } },
+        {
+          status: MMarketExportJobStatus.RUNNING,
+          OR: [
+            { leaseExpiresAt: { lt: new Date() } },
+            { leaseExpiresAt: null, startedAt: { lt: timeoutBefore } },
+          ],
+        },
         { status: MMarketExportJobStatus.QUEUED, createdAt: { lt: timeoutBefore } },
       ],
     },
@@ -3062,13 +3075,21 @@ const timeoutAbandonedMMarketExportJobs = async (organizationId?: string) => {
         id: job.id,
         finishedAt: null,
         OR: [
-          { status: MMarketExportJobStatus.RUNNING, startedAt: { lt: timeoutBefore } },
+          {
+            status: MMarketExportJobStatus.RUNNING,
+            OR: [
+              { leaseExpiresAt: { lt: new Date() } },
+              { leaseExpiresAt: null, startedAt: { lt: timeoutBefore } },
+            ],
+          },
           { status: MMarketExportJobStatus.QUEUED, createdAt: { lt: timeoutBefore } },
         ],
       },
       data: {
         status: MMarketExportJobStatus.TIMED_OUT,
         finishedAt,
+        leaseToken: null,
+        leaseExpiresAt: null,
         errorReportJson: toJson({
           ...(asRecord(job.errorReportJson) ?? {}),
           reason: "mMarketExportJobTimedOut",
@@ -3244,10 +3265,14 @@ export const runMMarketExportJob = async (
   }
 
   const startedAt = new Date();
+  const leaseToken = randomUUID();
   const claim = await prisma.mMarketExportJob.updateMany({
     where: { id: job.id, status: MMarketExportJobStatus.QUEUED },
     data: {
       status: MMarketExportJobStatus.RUNNING,
+      attemptCount: { increment: 1 },
+      leaseToken,
+      leaseExpiresAt: new Date(startedAt.getTime() + MMARKET_EXPORT_JOB_TIMEOUT_MS),
       startedAt,
       finishedAt: null,
       errorReportJson: Prisma.DbNull,
@@ -3319,70 +3344,78 @@ export const runMMarketExportJob = async (
     ];
     const completedWithErrors =
       plan.mode === "READY_ONLY" && plan.preflight.failedProducts.length > 0;
-    const finished = await prisma.mMarketExportJob.update({
-      where: { id: job.id },
-      data: {
-        status: completedWithErrors
-          ? MMarketExportJobStatus.COMPLETED_WITH_ERRORS
-          : MMarketExportJobStatus.DONE,
-        finishedAt: exportedAt,
-        payloadStatsJson: toJson({
-          ...plan.payloadStats,
-          httpStatus: remoteResult.status,
-        }),
-        errorReportJson:
-          completedWithErrors
-            ? toJson({
-                ...plan.errorReport,
-                productResults,
-              })
-            : Prisma.DbNull,
-        responseJson: toJson({
-          httpStatus: remoteResult.status,
-          body: remoteResult.body,
-          productResults,
-        }),
-      },
-    });
-
-    if (plan.exportedProductIds.length > 0) {
-      await prisma.mMarketIncludedProduct.updateMany({
+    const completedPlan = plan;
+    const finished = await prisma.$transaction(async (tx) => {
+      const completion = await tx.mMarketExportJob.updateMany({
         where: {
-          orgId: job.orgId,
-          storeId: job.storeId ?? String(plan.payloadStats.storeId),
-          productId: { in: plan.exportedProductIds },
+          id: job.id,
+          status: MMarketExportJobStatus.RUNNING,
+          leaseToken,
         },
         data: {
-          lastExportedAt: exportedAt,
+          status: completedWithErrors
+            ? MMarketExportJobStatus.COMPLETED_WITH_ERRORS
+            : MMarketExportJobStatus.DONE,
+          finishedAt: exportedAt,
+          leaseToken: null,
+          leaseExpiresAt: null,
+          payloadStatsJson: toJson({
+            ...completedPlan.payloadStats,
+            httpStatus: remoteResult.status,
+          }),
+          errorReportJson: completedWithErrors
+            ? toJson({ ...completedPlan.errorReport, productResults })
+            : Prisma.DbNull,
+          responseJson: toJson({
+            httpStatus: remoteResult.status,
+            body: remoteResult.body,
+            productResults,
+          }),
         },
       });
+      if (completion.count !== 1) {
+        return null;
+      }
+      const completedJob = await tx.mMarketExportJob.findUniqueOrThrow({ where: { id: job.id } });
+      if (completedPlan.exportedProductIds.length > 0) {
+        await tx.mMarketIncludedProduct.updateMany({
+          where: {
+            orgId: job.orgId,
+            storeId: job.storeId ?? String(completedPlan.payloadStats.storeId),
+            productId: { in: completedPlan.exportedProductIds },
+          },
+          data: { lastExportedAt: exportedAt },
+        });
+      }
+      await tx.mMarketIntegration.updateMany({
+        where: { orgId: job.orgId },
+        data: {
+          status: MMarketIntegrationStatus.READY,
+          lastSyncAt: exportedAt,
+          lastSyncStatus: completedWithErrors
+            ? MMarketLastSyncStatus.COMPLETED_WITH_ERRORS
+            : MMarketLastSyncStatus.SUCCESS,
+          lastErrorSummary: completedWithErrors ? "MMARKET_EXPORT_COMPLETED_WITH_ERRORS" : null,
+        },
+      });
+      await writeAuditLog(tx, {
+        organizationId: job.orgId,
+        actorId: job.requestedById,
+        action: completedWithErrors
+          ? "MMARKET_EXPORT_COMPLETED_WITH_ERRORS"
+          : "MMARKET_EXPORT_FINISHED",
+        entity: "MMarketExportJob",
+        entityId: completedJob.id,
+        before: toJson(running),
+        after: toJson(completedJob),
+        requestId:
+          typeof requestPayload.requestId === "string" ? requestPayload.requestId : randomUUID(),
+      });
+      return completedJob;
+    });
+    if (!finished) {
+      return { job: MMARKET_EXPORT_JOB_NAME, status: "skipped", details: { reason: "leaseLost" } };
     }
-
-    await prisma.mMarketIntegration.updateMany({
-      where: { orgId: job.orgId },
-      data: {
-        status: MMarketIntegrationStatus.READY,
-        lastSyncAt: exportedAt,
-        lastSyncStatus: completedWithErrors
-          ? MMarketLastSyncStatus.COMPLETED_WITH_ERRORS
-          : MMarketLastSyncStatus.SUCCESS,
-        lastErrorSummary: completedWithErrors ? "MMARKET_EXPORT_COMPLETED_WITH_ERRORS" : null,
-      },
-    });
-
-    await writeAuditLog(prisma, {
-      organizationId: job.orgId,
-      actorId: job.requestedById,
-      action: completedWithErrors
-        ? "MMARKET_EXPORT_COMPLETED_WITH_ERRORS"
-        : "MMARKET_EXPORT_FINISHED",
-      entity: "MMarketExportJob",
-      entityId: finished.id,
-      before: toJson(running),
-      after: toJson(finished),
-      requestId:
-        typeof requestPayload.requestId === "string" ? requestPayload.requestId : randomUUID(),
-    });
 
     return {
       job: MMARKET_EXPORT_JOB_NAME,
@@ -3424,37 +3457,47 @@ export const runMMarketExportJob = async (
           },
     );
 
-    const failed = await prisma.mMarketExportJob.update({
-      where: { id: job.id },
-      data: {
-        status: MMarketExportJobStatus.FAILED,
-        finishedAt: new Date(),
-        errorReportJson: errorReport,
-        responseJson: remoteResponse ? toJson(remoteResponse) : Prisma.DbNull,
-      },
+    const failed = await prisma.$transaction(async (tx) => {
+      const failure = await tx.mMarketExportJob.updateMany({
+        where: { id: job.id, status: MMarketExportJobStatus.RUNNING, leaseToken },
+        data: {
+          status: MMarketExportJobStatus.FAILED,
+          finishedAt: new Date(),
+          leaseToken: null,
+          leaseExpiresAt: null,
+          errorReportJson: errorReport,
+          responseJson: remoteResponse ? toJson(remoteResponse) : Prisma.DbNull,
+        },
+      });
+      if (failure.count !== 1) {
+        return null;
+      }
+      const failedJob = await tx.mMarketExportJob.findUniqueOrThrow({ where: { id: job.id } });
+      await tx.mMarketIntegration.updateMany({
+        where: { orgId: job.orgId },
+        data: {
+          status: MMarketIntegrationStatus.ERROR,
+          lastSyncAt: new Date(),
+          lastSyncStatus: MMarketLastSyncStatus.FAILED,
+          lastErrorSummary: message,
+        },
+      });
+      await writeAuditLog(tx, {
+        organizationId: job.orgId,
+        actorId: job.requestedById,
+        action: "MMARKET_EXPORT_FAILED",
+        entity: "MMarketExportJob",
+        entityId: failedJob.id,
+        before: toJson(running),
+        after: toJson({ ...failedJob, errorReport }),
+        requestId:
+          typeof requestPayload.requestId === "string" ? requestPayload.requestId : randomUUID(),
+      });
+      return failedJob;
     });
-
-    await prisma.mMarketIntegration.updateMany({
-      where: { orgId: job.orgId },
-      data: {
-        status: MMarketIntegrationStatus.ERROR,
-        lastSyncAt: new Date(),
-        lastSyncStatus: MMarketLastSyncStatus.FAILED,
-        lastErrorSummary: message,
-      },
-    });
-
-    await writeAuditLog(prisma, {
-      organizationId: job.orgId,
-      actorId: job.requestedById,
-      action: "MMARKET_EXPORT_FAILED",
-      entity: "MMarketExportJob",
-      entityId: failed.id,
-      before: toJson(running),
-      after: toJson({ ...failed, errorReport }),
-      requestId:
-        typeof requestPayload.requestId === "string" ? requestPayload.requestId : randomUUID(),
-    });
+    if (!failed) {
+      return { job: MMARKET_EXPORT_JOB_NAME, status: "skipped", details: { reason: "leaseLost" } };
+    }
 
     if (error instanceof AppError) {
       throw error;
