@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 
 import { managerProcedure, protectedProcedure, router } from "@/server/trpc/trpc";
@@ -41,6 +42,19 @@ const definitionSchema = definitionBaseSchema.superRefine(addOptionsRequirement)
 const definitionUpdateSchema = definitionBaseSchema
   .extend({ id: z.string() })
   .superRefine(addOptionsRequirement);
+
+const normalizeOptionSet = (values?: string[]) =>
+  new Set((values ?? []).map((value) => value.trim()).filter(Boolean));
+
+const collectStoredOptionValues = (value: Prisma.JsonValue): string[] => {
+  if (typeof value === "string") {
+    return [value];
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => collectStoredOptionValues(entry));
+  }
+  return [];
+};
 
 export const attributesRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -112,16 +126,99 @@ export const attributesRouter = router({
       }
     }),
 
-  update: managerProcedure
-    .input(definitionUpdateSchema)
-    .mutation(async ({ ctx, input }) => {
-      try {
-        const existing = await ctx.prisma.attributeDefinition.findUnique({ where: { id: input.id } });
-        if (!existing || existing.organizationId !== ctx.user.organizationId) {
+  update: managerProcedure.input(definitionUpdateSchema).mutation(async ({ ctx, input }) => {
+    try {
+      const key = input.key.trim().toLowerCase();
+      return await ctx.prisma.$transaction(async (tx) => {
+        const locked = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+            SELECT "id"
+            FROM "AttributeDefinition"
+            WHERE "id" = ${input.id}
+              AND "organizationId" = ${ctx.user.organizationId}
+            FOR UPDATE
+          `);
+        if (!locked.length) {
           throw new AppError("attributeNotFound", "NOT_FOUND", 404);
         }
-        const key = input.key.trim().toLowerCase();
-        const definition = await ctx.prisma.attributeDefinition.update({
+
+        const existing = await tx.attributeDefinition.findUniqueOrThrow({
+          where: { id: input.id },
+        });
+        const usageValues = await tx.variantAttributeValue.findMany({
+          where: { organizationId: ctx.user.organizationId, key: existing.key },
+          select: { value: true },
+        });
+
+        if (usageValues.length > 0 && input.type !== existing.type) {
+          throw new AppError("attributeInUse", "CONFLICT", 409);
+        }
+
+        if (usageValues.length > 0 && (input.type === "SELECT" || input.type === "MULTI_SELECT")) {
+          const allowed = normalizeOptionSet([
+            ...(input.optionsRu ?? []),
+            ...(input.optionsKg ?? []),
+          ]);
+          const removesUsedOption = usageValues.some(({ value }) =>
+            collectStoredOptionValues(value).some((stored) => !allowed.has(stored)),
+          );
+          if (removesUsedOption) {
+            throw new AppError("attributeInUse", "CONFLICT", 409);
+          }
+        }
+
+        if (key !== existing.key) {
+          const keyOwner = await tx.attributeDefinition.findUnique({
+            where: {
+              organizationId_key: {
+                organizationId: ctx.user.organizationId,
+                key,
+              },
+            },
+            select: { id: true },
+          });
+          if (keyOwner && keyOwner.id !== existing.id) {
+            throw new AppError("attributeExists", "CONFLICT", 409);
+          }
+
+          const affectedVariants = await tx.$queryRaw<
+            Array<{ id: string; attributes: Prisma.JsonValue }>
+          >(
+            Prisma.sql`
+                SELECT variant."id", variant."attributes"
+                FROM "ProductVariant" AS variant
+                INNER JOIN "Product" AS product ON product."id" = variant."productId"
+                WHERE product."organizationId" = ${ctx.user.organizationId}
+                  AND jsonb_typeof(variant."attributes") = 'object'
+                  AND variant."attributes" ? ${existing.key}
+                ORDER BY variant."id"
+                FOR UPDATE OF variant
+              `,
+          );
+          const hasJsonKeyCollision = affectedVariants.some(({ attributes }) => {
+            if (!attributes || Array.isArray(attributes) || typeof attributes !== "object") {
+              return false;
+            }
+            return Object.prototype.hasOwnProperty.call(attributes, key);
+          });
+          if (hasJsonKeyCollision) {
+            throw new AppError("attributeExists", "CONFLICT", 409);
+          }
+
+          await tx.$executeRaw(Prisma.sql`
+              UPDATE "ProductVariant" AS variant
+              SET "attributes" =
+                    (variant."attributes" - ${existing.key}) ||
+                    jsonb_build_object(${key}, variant."attributes" -> ${existing.key}),
+                  "updatedAt" = CURRENT_TIMESTAMP
+              FROM "Product" AS product
+              WHERE product."id" = variant."productId"
+                AND product."organizationId" = ${ctx.user.organizationId}
+                AND jsonb_typeof(variant."attributes") = 'object'
+                AND variant."attributes" ? ${existing.key}
+            `);
+        }
+
+        const definition = await tx.attributeDefinition.update({
           where: { id: input.id },
           data: {
             key,
@@ -134,7 +231,7 @@ export const attributesRouter = router({
           },
         });
 
-        await writeAuditLog(ctx.prisma, {
+        await writeAuditLog(tx, {
           organizationId: ctx.user.organizationId,
           actorId: ctx.user.id,
           action: "ATTRIBUTE_UPDATE",
@@ -146,10 +243,11 @@ export const attributesRouter = router({
         });
 
         return definition;
-      } catch (error) {
-        throw toTRPCError(error);
-      }
-    }),
+      });
+    } catch (error) {
+      throw toTRPCError(error);
+    }
+  }),
 
   remove: managerProcedure
     .input(z.object({ id: z.string() }))
