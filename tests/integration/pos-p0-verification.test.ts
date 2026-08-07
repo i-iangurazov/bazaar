@@ -523,10 +523,10 @@ describeDb("Agent 1 P0 runtime verification", () => {
         },
       ],
     });
-    const assignedDraft = await adminCaller.pos.sales.createDraft({
+    const assignedDraft = await cashierCaller.pos.sales.createDraft({
       registerId: secondary.register.id,
     });
-    const assignedLine = await adminCaller.pos.sales.addLine({
+    const assignedLine = await cashierCaller.pos.sales.addLine({
       saleId: assignedDraft.id,
       productId: product.id,
       qty: 1,
@@ -789,7 +789,7 @@ describeDb("Agent 1 P0 runtime verification", () => {
     expect(afterCash).toBe(beforeCash);
   });
 
-  it("HARD-A1-004 lets another cashier complete active and held drafts and rewrites attribution", async () => {
+  it("HARD-A1-004 requires an audited ownership transfer before another cashier edits or completes a draft", async () => {
     const { org, store, product, adminUser, cashierUser } = await seedBase({ plan: "BUSINESS" });
     await prisma.product.update({ where: { id: product.id }, data: { basePriceKgs: 100 } });
     await adjustStock({
@@ -837,7 +837,99 @@ describeDb("Agent 1 P0 runtime verification", () => {
     const activeBefore = await prisma.customerOrder.findUniqueOrThrow({
       where: { id: active.id },
     });
-    await secondCaller.pos.sales.updateNotes({ saleId: active.id, notes: "changed by cashier two" });
+    await expect(
+      secondCaller.pos.sales.updateNotes({
+        saleId: active.id,
+        notes: "unauthorized cashier update",
+      }),
+    ).rejects.toMatchObject({ code: "CONFLICT", message: "posSaleOwnerMismatch" });
+    await expect(
+      secondCaller.pos.sales.addLine({ saleId: active.id, productId: product.id, qty: 1 }),
+    ).rejects.toMatchObject({ code: "CONFLICT", message: "posSaleOwnerMismatch" });
+    await expect(
+      secondCaller.pos.sales.updateLine({ lineId: activeLine.id, qty: 2 }),
+    ).rejects.toMatchObject({ code: "CONFLICT", message: "posSaleOwnerMismatch" });
+    await expect(
+      secondCaller.pos.sales.updateDiscount({ saleId: active.id, discountKgs: 10 }),
+    ).rejects.toMatchObject({ code: "CONFLICT", message: "posSaleOwnerMismatch" });
+    await expect(
+      secondCaller.pos.sales.updateCustomer({ saleId: active.id, customerId: null }),
+    ).rejects.toMatchObject({ code: "CONFLICT", message: "posSaleOwnerMismatch" });
+    await expect(secondCaller.pos.sales.holdDraft({ saleId: active.id })).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "posSaleOwnerMismatch",
+    });
+    await expect(secondCaller.pos.sales.cancelDraft({ saleId: active.id })).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "posSaleOwnerMismatch",
+    });
+    await expect(
+      secondCaller.pos.sales.upsertMarkingCodes({
+        saleId: active.id,
+        lineId: activeLine.id,
+        codes: ["UNAUTHORIZED-CODE"],
+      }),
+    ).rejects.toMatchObject({ code: "CONFLICT", message: "posSaleOwnerMismatch" });
+    await expect(
+      secondCaller.pos.sales.complete({
+        saleId: active.id,
+        idempotencyKey: "hard-a1-004-active-rejected",
+        payments: [{ method: PosPaymentMethod.CASH, amountKgs: 100 }],
+      }),
+    ).rejects.toMatchObject({ code: "CONFLICT", message: "posSaleOwnerMismatch" });
+    const activeRejected = await prisma.customerOrder.findUniqueOrThrow({
+      where: { id: active.id },
+      include: { payments: true },
+    });
+    expect(activeRejected).toMatchObject({
+      status: "DRAFT",
+      notes: null,
+      createdById: cashierUser.id,
+    });
+    expect(Number(activeRejected.discountKgs)).toBe(0);
+    expect(activeRejected.payments).toHaveLength(0);
+    expect(await prisma.customerOrderLine.findUniqueOrThrow({ where: { id: activeLine.id } })).toMatchObject({
+      qty: 1,
+    });
+    expect(await prisma.markingCodeCapture.count({ where: { saleId: active.id } })).toBe(0);
+    expect(
+      await prisma.stockMovement.count({ where: { referenceId: active.id, type: "SALE" } }),
+    ).toBe(0);
+    expect(
+      await prisma.auditLog.count({
+        where: { entityId: active.id, action: "POS_SALE_COMPLETE" },
+      }),
+    ).toBe(0);
+    expect(
+      await prisma.idempotencyKey.count({
+        where: { key: "hard-a1-004-active-rejected", route: "pos.sales.complete" },
+      }),
+    ).toBe(0);
+
+    const transfer = await secondCaller.pos.sales.transferDraft({
+      saleId: active.id,
+      reason: "Cashier handover",
+      idempotencyKey: "hard-a1-004-transfer",
+    });
+    const transferReplay = await secondCaller.pos.sales.transferDraft({
+      saleId: active.id,
+      reason: "Cashier handover",
+      idempotencyKey: "hard-a1-004-transfer",
+    });
+    expect(transfer).toEqual(transferReplay);
+    expect(transfer).toMatchObject({ ownerId: secondCashier.id, transferred: true });
+    const transferAudits = await prisma.auditLog.findMany({
+      where: { entityId: active.id, action: "POS_SALE_OWNERSHIP_TRANSFER" },
+    });
+    expect(transferAudits).toHaveLength(1);
+    expect(transferAudits[0]?.actorId).toBe(secondCashier.id);
+    expect(transferAudits[0]?.before).toMatchObject({ ownerId: cashierUser.id });
+    expect(transferAudits[0]?.after).toMatchObject({
+      ownerId: secondCashier.id,
+      reason: "Cashier handover",
+    });
+
+    await secondCaller.pos.sales.updateNotes({ saleId: active.id, notes: "authorized handover" });
     await secondCaller.pos.sales.complete({
       saleId: active.id,
       idempotencyKey: "hard-a1-004-active-complete",
@@ -856,6 +948,24 @@ describeDb("Agent 1 P0 runtime verification", () => {
     });
     await firstCaller.pos.sales.holdDraft({ saleId: held.id });
     const heldBefore = await prisma.customerOrder.findUniqueOrThrow({ where: { id: held.id } });
+    await expect(
+      secondCaller.pos.sales.complete({
+        saleId: held.id,
+        idempotencyKey: "hard-a1-004-held-rejected",
+        payments: [{ method: PosPaymentMethod.CASH, amountKgs: 100 }],
+      }),
+    ).rejects.toMatchObject({ code: "CONFLICT", message: "posSaleOwnerMismatch" });
+    const resumed = await secondCaller.pos.sales.resumeHeldDraft({
+      saleId: held.id,
+      registerId: runtime.register.id,
+    });
+    expect(resumed.isHeld).toBe(false);
+    const resumeAudit = await prisma.auditLog.findFirstOrThrow({
+      where: { entityId: held.id, action: "POS_SALE_RESUME_HELD" },
+    });
+    expect(resumeAudit.actorId).toBe(secondCashier.id);
+    expect(resumeAudit.before).toMatchObject({ ownerId: cashierUser.id, isHeld: true });
+    expect(resumeAudit.after).toMatchObject({ ownerId: secondCashier.id, isHeld: false });
     await secondCaller.pos.sales.complete({
       saleId: held.id,
       idempotencyKey: "hard-a1-004-held-complete",
@@ -869,16 +979,23 @@ describeDb("Agent 1 P0 runtime verification", () => {
     expect(activeBefore.createdById).toBe(cashierUser.id);
     expect(activeLine.customerOrderId).toBe(active.id);
     expect(activeAfter.status).toBe("COMPLETED");
-    expect(activeAfter.notes).toBe("changed by cashier two");
+    expect(activeAfter.notes).toBe("authorized handover");
     expect(activeAfter.createdById).toBe(secondCashier.id);
     expect(activeAfter.updatedById).toBe(secondCashier.id);
     expect(activeAfter.payments[0]?.createdById).toBe(secondCashier.id);
     expect(heldBefore.isHeld).toBe(true);
     expect(heldBefore.createdById).toBe(cashierUser.id);
     expect(heldAfter.status).toBe("COMPLETED");
-    expect(heldAfter.isHeld).toBe(true);
+    expect(heldAfter.isHeld).toBe(false);
     expect(heldAfter.createdById).toBe(secondCashier.id);
     expect(heldAfter.payments[0]?.createdById).toBe(secondCashier.id);
+    expect(
+      await prisma.stockMovement.aggregate({
+        where: { referenceId: { in: [active.id, held.id] }, type: "SALE" },
+        _sum: { qtyDelta: true },
+        _count: { _all: true },
+      }),
+    ).toMatchObject({ _sum: { qtyDelta: -2 }, _count: { _all: 2 } });
   });
 
   it("HARD-A1-005 serializes concurrent full-quantity returns at the source sale line", async () => {
@@ -1008,7 +1125,7 @@ describeDb("Agent 1 P0 runtime verification", () => {
     expect(returnMovements.reduce((sum, movement) => sum + movement.qtyDelta, 0)).toBe(5);
   });
 
-  it("HARD-A1-006 closes a shift with an active draft and leaves checkout blocked", async () => {
+  it("HARD-A1-006 blocks shift close until active and held drafts are resolved", async () => {
     const { org, store, product, cashierUser, managerUser } = await seedBase({ plan: "BUSINESS" });
     await prisma.product.update({ where: { id: product.id }, data: { basePriceKgs: 100 } });
     const caller = callerFor(cashierUser);
@@ -1019,42 +1136,62 @@ describeDb("Agent 1 P0 runtime verification", () => {
       caller,
       key: "p0006",
     });
-    const draft = await caller.pos.sales.createDraft({ registerId: runtime.register.id });
-    await caller.pos.sales.addLine({ saleId: draft.id, productId: product.id, qty: 1 });
-    const before = await prisma.customerOrder.findUniqueOrThrow({ where: { id: draft.id } });
+    const heldDraft = await caller.pos.sales.createDraft({ registerId: runtime.register.id });
+    await caller.pos.sales.addLine({ saleId: heldDraft.id, productId: product.id, qty: 1 });
+    await caller.pos.sales.holdDraft({ saleId: heldDraft.id });
+    const activeDraft = await caller.pos.sales.createDraft({ registerId: runtime.register.id });
+    await caller.pos.sales.addLine({ saleId: activeDraft.id, productId: product.id, qty: 1 });
 
+    await expect(
+      managerCaller.pos.shifts.close({
+        shiftId: runtime.shift.id,
+        closingCashCountedKgs: 0,
+        idempotencyKey: "hard-a1-006-close",
+      }),
+    ).rejects.toMatchObject({ code: "CONFLICT", message: "posShiftDraftsOpen" });
+    const [openShift, drafts, closeAudits, closeKeys] = await Promise.all([
+      prisma.registerShift.findUniqueOrThrow({ where: { id: runtime.shift.id } }),
+      prisma.customerOrder.findMany({
+        where: { id: { in: [heldDraft.id, activeDraft.id] } },
+        orderBy: { isHeld: "asc" },
+      }),
+      prisma.auditLog.count({
+        where: { entityId: runtime.shift.id, action: "POS_SHIFT_CLOSE" },
+      }),
+      prisma.idempotencyKey.count({
+        where: { key: "hard-a1-006-close", route: "pos.shifts.close" },
+      }),
+    ]);
+    expect(openShift.status).toBe("OPEN");
+    expect(drafts).toHaveLength(2);
+    expect(drafts.every((draft) => draft.status === "DRAFT")).toBe(true);
+    expect(drafts.map((draft) => draft.isHeld).sort()).toEqual([false, true]);
+    expect(closeAudits).toBe(0);
+    expect(closeKeys).toBe(0);
+
+    await caller.pos.sales.cancelDraft({ saleId: activeDraft.id });
+    await caller.pos.sales.cancelDraft({ saleId: heldDraft.id });
     await managerCaller.pos.shifts.close({
       shiftId: runtime.shift.id,
       closingCashCountedKgs: 0,
       idempotencyKey: "hard-a1-006-close",
     });
-    const [closedShift, orphanedDraft] = await Promise.all([
-      prisma.registerShift.findUniqueOrThrow({ where: { id: runtime.shift.id } }),
-      prisma.customerOrder.findUniqueOrThrow({ where: { id: draft.id } }),
-    ]);
-    const paymentCountBefore = await prisma.salePayment.count({
-      where: { customerOrderId: draft.id },
-    });
-    await expect(
-      caller.pos.sales.complete({
-        saleId: draft.id,
-        idempotencyKey: "hard-a1-006-complete",
-        payments: [{ method: PosPaymentMethod.CASH, amountKgs: 100 }],
+    expect(
+      await prisma.registerShift.findUniqueOrThrow({ where: { id: runtime.shift.id } }),
+    ).toMatchObject({ status: "CLOSED", closedById: managerUser.id });
+    expect(
+      await prisma.auditLog.count({
+        where: { entityId: runtime.shift.id, action: "POS_SHIFT_CLOSE" },
       }),
-    ).rejects.toMatchObject({ code: "CONFLICT", message: "posShiftClosed" });
-    const paymentCountAfter = await prisma.salePayment.count({
-      where: { customerOrderId: draft.id },
-    });
-
-    expect(before.status).toBe("DRAFT");
-    expect(before.isHeld).toBe(false);
-    expect(closedShift.status).toBe("CLOSED");
-    expect(orphanedDraft.status).toBe("DRAFT");
-    expect(orphanedDraft.shiftId).toBe(runtime.shift.id);
-    expect(paymentCountAfter).toBe(paymentCountBefore);
+    ).toBe(1);
+    expect(
+      await prisma.idempotencyKey.count({
+        where: { key: "hard-a1-006-close", route: "pos.shifts.close" },
+      }),
+    ).toBe(1);
   });
 
-  it("HARD-A1-007 deactivates a register with an open shift/draft and removes it from POS entry", async () => {
+  it("HARD-A1-007 blocks register deactivation until operational and recoverable state is resolved", async () => {
     const { org, store, product, adminUser, cashierUser } = await seedBase({ plan: "BUSINESS" });
     const cashierCaller = callerFor(cashierUser);
     const adminCaller = callerFor(adminUser);
@@ -1072,26 +1209,107 @@ describeDb("Agent 1 P0 runtime verification", () => {
     });
     const before = await prisma.posRegister.findUniqueOrThrow({ where: { id: runtime.register.id } });
 
+    const expectDeactivationBlocked = async () => {
+      await expect(
+        adminCaller.pos.registers.update({
+          registerId: runtime.register.id,
+          isActive: false,
+        }),
+      ).rejects.toMatchObject({ code: "CONFLICT", message: "posRegisterDeactivationBlocked" });
+      expect(
+        await prisma.posRegister.findUniqueOrThrow({ where: { id: runtime.register.id } }),
+      ).toMatchObject({ isActive: true });
+      expect(
+        await prisma.auditLog.count({
+          where: { entityId: runtime.register.id, action: "POS_REGISTER_UPDATE" },
+        }),
+      ).toBe(0);
+    };
+
+    await expectDeactivationBlocked();
+    expect(before.isActive).toBe(true);
+    expect(
+      await prisma.registerShift.findUniqueOrThrow({ where: { id: runtime.shift.id } }),
+    ).toMatchObject({ status: "OPEN" });
+    expect(await prisma.customerOrder.findUniqueOrThrow({ where: { id: draft.id } })).toMatchObject({
+      status: "DRAFT",
+      createdById: cashierUser.id,
+    });
+
+    await cashierCaller.pos.sales.cancelDraft({ saleId: draft.id });
+    await adminCaller.pos.shifts.close({
+      shiftId: runtime.shift.id,
+      closingCashCountedKgs: 0,
+      idempotencyKey: "hard-a1-007-close",
+    });
+
+    await prisma.customerOrder.update({
+      where: { id: draft.id },
+      data: {
+        status: "COMPLETED",
+        isDebt: true,
+        debtCustomerName: "Recovery fixture",
+        debtSettledAt: null,
+      },
+    });
+    await expectDeactivationBlocked();
+    await prisma.customerOrder.update({
+      where: { id: draft.id },
+      data: { debtSettledAt: new Date() },
+    });
+
+    const returnDraft = await prisma.saleReturn.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        registerId: runtime.register.id,
+        shiftId: runtime.shift.id,
+        originalSaleId: draft.id,
+        number: "HARD-A1-007-RETURN",
+        createdById: cashierUser.id,
+      },
+    });
+    await expectDeactivationBlocked();
+    await prisma.saleReturn.update({
+      where: { id: returnDraft.id },
+      data: { status: "CANCELED", canceledAt: new Date() },
+    });
+
+    const failedReceipt = await prisma.fiscalReceipt.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        customerOrderId: draft.id,
+        status: "FAILED",
+        mode: "ADAPTER",
+        idempotencyKey: "hard-a1-007-fiscal",
+        payloadJson: { saleId: draft.id },
+      },
+    });
+    await expectDeactivationBlocked();
+    await prisma.fiscalReceipt.update({
+      where: { id: failedReceipt.id },
+      data: { status: "SENT", sentAt: new Date() },
+    });
+
     await adminCaller.pos.registers.update({
       registerId: runtime.register.id,
       isActive: false,
     });
-    const [after, shift, persistedDraft, entry, activeRegisters] = await Promise.all([
+    const [after, entry, activeRegisters, updateAudits] = await Promise.all([
       prisma.posRegister.findUniqueOrThrow({ where: { id: runtime.register.id } }),
-      prisma.registerShift.findUniqueOrThrow({ where: { id: runtime.shift.id } }),
-      prisma.customerOrder.findUniqueOrThrow({ where: { id: draft.id } }),
       cashierCaller.pos.entry({ registerId: runtime.register.id }),
       cashierCaller.pos.registers.list({ storeId: store.id, status: "active" }),
+      prisma.auditLog.count({
+        where: { entityId: runtime.register.id, action: "POS_REGISTER_UPDATE" },
+      }),
     ]);
-
-    expect(before.isActive).toBe(true);
     expect(after.isActive).toBe(false);
-    expect(shift.status).toBe("OPEN");
-    expect(persistedDraft.status).toBe("DRAFT");
     expect(entry.selectedRegister).toBeNull();
     expect(entry.currentShift).toBeNull();
     expect(entry.registers.some((register) => register.id === runtime.register.id)).toBe(false);
     expect(activeRegisters.some((register) => register.id === runtime.register.id)).toBe(false);
+    expect(updateAudits).toBe(1);
   });
 
   it("HARD-A1-008 rejects insufficient stock without persisting checkout side effects", async () => {

@@ -372,7 +372,7 @@ describeDb("pos", () => {
         closingCashCountedKgs: 0,
         idempotencyKey: "pos-close-held-blocked-1",
       }),
-    ).rejects.toMatchObject({ message: "posHeldReceiptsOpen", code: "CONFLICT" });
+    ).rejects.toMatchObject({ message: "posShiftDraftsOpen", code: "CONFLICT" });
 
     const resumed = await caller.pos.sales.resumeHeldDraft({
       saleId: sale.id,
