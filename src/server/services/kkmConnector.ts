@@ -615,6 +615,7 @@ export const connectorPushResult = async (input: {
         id: true,
         customerOrderId: true,
         status: true,
+        connectorDeviceId: true,
       },
     });
     if (!receipt) {
@@ -626,6 +627,12 @@ export const connectorPushResult = async (input: {
         status: receipt.status,
         customerOrderId: receipt.customerOrderId,
       };
+    }
+    if (
+      receipt.status !== FiscalReceiptStatus.PROCESSING ||
+      receipt.connectorDeviceId !== device.id
+    ) {
+      throw new AppError("kkmReceiptNotFound", "NOT_FOUND", 404);
     }
 
     const nextStatus =

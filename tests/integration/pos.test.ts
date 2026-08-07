@@ -3878,9 +3878,10 @@ describeDb("pos", () => {
       });
       return pairConnectorDevice({ code: pair.code, deviceName });
     };
-    const [deviceA, deviceB] = await Promise.all([
+    const [deviceA, deviceB, deviceC] = await Promise.all([
       pairDevice("pair-kkm-timeout-a", "Connector A"),
       pairDevice("pair-kkm-timeout-b", "Connector B"),
+      pairDevice("pair-kkm-timeout-c", "Connector C"),
     ]);
 
     const firstPull = await connectorPullQueue({ token: deviceA.token, limit: 10 });
@@ -3914,15 +3915,14 @@ describeDb("pos", () => {
       data: { nextAttemptAt: new Date(Date.now() - 1_000) },
     });
     const recoveryPulls = await Promise.all([
-      connectorPullQueue({ token: deviceA.token, limit: 10 }),
       connectorPullQueue({ token: deviceB.token, limit: 10 }),
+      connectorPullQueue({ token: deviceC.token, limit: 10 }),
     ]);
     const recovered = recoveryPulls.flat();
     expect(recovered).toHaveLength(1);
     expect(recovered[0]).toMatchObject({ id: receiptId, idempotencyKey: commandId });
 
-    const recoveryDevice = recoveryPulls[0].length ? deviceA : deviceB;
-    const staleDevice = recoveryPulls[0].length ? deviceB : deviceA;
+    const recoveryDevice = recoveryPulls[0].length ? deviceB : deviceC;
     const recoveredClaim = await prisma.fiscalReceipt.findUniqueOrThrow({
       where: { id: receiptId },
       select: {
@@ -3939,6 +3939,32 @@ describeDb("pos", () => {
     });
     expect(recoveredClaim.nextAttemptAt?.getTime()).toBeGreaterThan(Date.now());
 
+    await expect(
+      connectorPushResult({
+        token: deviceA.token,
+        receiptId,
+        status: "FAILED",
+        errorMessage: "late stale result",
+      }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND", message: "kkmReceiptNotFound" });
+    const afterStaleResult = await prisma.fiscalReceipt.findUniqueOrThrow({
+      where: { id: receiptId },
+      select: {
+        status: true,
+        attemptCount: true,
+        connectorDeviceId: true,
+        lastError: true,
+        providerReceiptId: true,
+      },
+    });
+    expect(afterStaleResult).toEqual({
+      status: "PROCESSING",
+      attemptCount: 2,
+      connectorDeviceId: recoveryDevice.device.id,
+      lastError: null,
+      providerReceiptId: null,
+    });
+
     await connectorPushResult({
       token: recoveryDevice.token,
       receiptId,
@@ -3947,7 +3973,7 @@ describeDb("pos", () => {
       fiscalNumber: "fiscal-timeout-001",
     });
     await connectorPushResult({
-      token: staleDevice.token,
+      token: deviceA.token,
       receiptId,
       status: "FAILED",
       errorMessage: "late stale result",
