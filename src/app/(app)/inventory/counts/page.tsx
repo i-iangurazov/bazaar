@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 import { z } from "zod";
@@ -47,6 +48,11 @@ import { useToast } from "@/components/ui/toast";
 import { formatDateTime } from "@/lib/i18nFormat";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
+import {
+  readStockCountHistoryRouteState,
+  writeStockCountHistoryRouteState,
+  type StockCountHistoryStatus,
+} from "@/lib/inventory/historyRouteState";
 
 const statusVariants: Record<string, "default" | "warning" | "success" | "danger"> = {
   DRAFT: "default",
@@ -64,27 +70,49 @@ const StockCountsPage = () => {
   const role = session?.user?.role;
   const canManage = role === "ADMIN" || role === "MANAGER";
   const { toast } = useToast();
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialRouteState = readStockCountHistoryRouteState(searchParams);
 
   const storesQuery = trpc.stores.list.useQuery();
-  const [storeId, setStoreId] = useState<string>("");
-  const [statusFilter, setStatusFilter] = useState<string>("ALL");
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
+  const [storeId, setStoreId] = useState<string>(initialRouteState.storeId);
+  const [statusFilter, setStatusFilter] = useState<StockCountHistoryStatus>(
+    initialRouteState.status,
+  );
+  const [page, setPage] = useState(initialRouteState.page);
+  const [pageSize, setPageSize] = useState(initialRouteState.pageSize);
   const [dialogOpen, setDialogOpen] = useState(false);
 
   useEffect(() => {
-    if (!storeId && storesQuery.data?.[0]) {
-      setStoreId(storesQuery.data[0].id);
+    if (!storesQuery.data?.length) {
+      return;
     }
+    if (storeId && storesQuery.data.some((store) => store.id === storeId)) {
+      return;
+    }
+    setStoreId(storesQuery.data[0].id);
   }, [storeId, storesQuery.data]);
+
+  useEffect(() => {
+    if (!storeId) {
+      return;
+    }
+    const nextQuery = writeStockCountHistoryRouteState(searchParams.toString(), {
+      page,
+      pageSize,
+      storeId,
+      status: statusFilter,
+    });
+    if (nextQuery !== searchParams.toString()) {
+      router.replace(`${pathname}?${nextQuery}`, { scroll: false });
+    }
+  }, [page, pageSize, pathname, router, searchParams, statusFilter, storeId]);
 
   const countsQuery = trpc.stockCounts.list.useQuery(
     {
       storeId: storeId ?? "",
-      status:
-        statusFilter === "ALL"
-          ? undefined
-          : (statusFilter as "DRAFT" | "IN_PROGRESS" | "APPLIED" | "CANCELLED"),
+      status: statusFilter === "ALL" ? undefined : statusFilter,
       page,
       pageSize,
     },
@@ -179,7 +207,7 @@ const StockCountsPage = () => {
               <Select
                 value={statusFilter}
                 onValueChange={(value) => {
-                  setStatusFilter(value);
+                  setStatusFilter(value as StockCountHistoryStatus);
                   setPage(1);
                 }}
               >
@@ -200,9 +228,7 @@ const StockCountsPage = () => {
       />
 
       {countsQuery.error ? (
-        <p className="mb-4 text-sm text-danger">
-          {translateError(tErrors, countsQuery.error)}
-        </p>
+        <p className="mb-4 text-sm text-danger">{translateError(tErrors, countsQuery.error)}</p>
       ) : null}
 
       <Card className="overflow-hidden">
@@ -273,7 +299,12 @@ const StockCountsPage = () => {
                               : tCommon("notAvailable")}
                           </TableCell>
                           <TableCell>
-                            <Button variant="ghost" size="icon" asChild aria-label={tCommon("view")}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              asChild
+                              aria-label={tCommon("view")}
+                            >
                               <Link href={`/inventory/counts/${count.id}`}>
                                 <ViewIcon className="h-4 w-4" aria-hidden />
                               </Link>

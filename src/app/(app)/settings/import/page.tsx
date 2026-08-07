@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 import dynamic from "next/dynamic";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import {
   ImportDryRunPreview,
@@ -39,6 +40,7 @@ import { DownloadIcon, EmptyIcon, RestoreIcon, UploadIcon } from "@/components/i
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { formatDateTime } from "@/lib/i18nFormat";
+import { readHistoryPagination, writeHistoryPagination } from "@/lib/inventory/historyRouteState";
 
 type ImportRow = {
   sourceRowNumber: number;
@@ -1581,6 +1583,10 @@ const ImportPage = () => {
   const canUseImports = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
   const isForbidden = status === "authenticated" && !canUseImports;
   const { toast } = useToast();
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialHistoryPagination = readHistoryPagination(searchParams);
   const [importType, setImportType] = useState<ImportType>("products");
 
   const [fileName, setFileName] = useState<string | null>(null);
@@ -1619,8 +1625,8 @@ const ImportPage = () => {
   const [fileError, setFileError] = useState<string | null>(null);
   const [source, setSource] = useState<ImportSource>("csv");
   const [rollbackBatchId, setRollbackBatchId] = useState<string | null>(null);
-  const [historyPage, setHistoryPage] = useState(1);
-  const [historyPageSize, setHistoryPageSize] = useState(25);
+  const [historyPage, setHistoryPage] = useState(initialHistoryPagination.page);
+  const [historyPageSize, setHistoryPageSize] = useState(initialHistoryPagination.pageSize);
   const [defaultUnitCode, setDefaultUnitCode] = useState("");
   const [targetStoreId, setTargetStoreId] = useState("");
   const [skippedRows, setSkippedRows] = useState<number[]>([]);
@@ -1632,6 +1638,16 @@ const ImportPage = () => {
   const [dryRunPreviewPending, setDryRunPreviewPending] = useState(false);
   const dryRunRequestVersionRef = useRef(0);
   const productImportOperationRef = useRef<{ signature: string; key: string } | null>(null);
+
+  useEffect(() => {
+    const nextQuery = writeHistoryPagination(searchParams.toString(), {
+      page: historyPage,
+      pageSize: historyPageSize,
+    });
+    if (nextQuery !== searchParams.toString()) {
+      router.replace(`${pathname}?${nextQuery}`, { scroll: false });
+    }
+  }, [historyPage, historyPageSize, pathname, router, searchParams]);
 
   const batchesQuery = trpc.imports.list.useQuery(
     { type: "products", page: historyPage, pageSize: historyPageSize },
