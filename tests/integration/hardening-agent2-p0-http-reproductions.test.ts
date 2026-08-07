@@ -3,7 +3,12 @@ import { Role } from "@prisma/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { prisma } from "@/server/db/prisma";
-import { consumeZip, imageExportStore, storeZip } from "@/lib/imageExportStore";
+import {
+  clearImageExportStorageForTests,
+  consumeZip,
+  hasStoredZipForTests,
+  storeZipBuffer,
+} from "@/lib/imageExportStore";
 
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 
@@ -33,7 +38,7 @@ const describeDb = shouldRunDbTests ? describe : describe.skip;
 describeDb("Agent 2 P0 HTTP boundary reproductions", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
-    imageExportStore.clear();
+    await clearImageExportStorageForTests();
     await resetDatabase();
   });
 
@@ -302,7 +307,7 @@ describeDb("Agent 2 P0 HTTP boundary reproductions", () => {
 
     const downloadToken = randomUUID();
     const alphaBytes = new TextEncoder().encode("alpha-private-zip-canary");
-    storeZip(downloadToken, alphaBytes.buffer, "alpha-private-images.zip", {
+    await storeZipBuffer(downloadToken, alphaBytes, "alpha-private-images.zip", {
       userId: adminUser.id,
       organizationId: org.id,
     });
@@ -317,7 +322,7 @@ describeDb("Agent 2 P0 HTTP boundary reproductions", () => {
       ),
     );
     expect(missingOrganizationResponse.status).toBe(401);
-    expect(imageExportStore.has(downloadToken)).toBe(true);
+    expect(await hasStoredZipForTests(downloadToken)).toBe(true);
 
     mockGetServerAuthToken.mockResolvedValue({
       organizationId: org.id,
@@ -329,7 +334,7 @@ describeDb("Agent 2 P0 HTTP boundary reproductions", () => {
       ),
     );
     expect(missingSubjectResponse.status).toBe(401);
-    expect(imageExportStore.has(downloadToken)).toBe(true);
+    expect(await hasStoredZipForTests(downloadToken)).toBe(true);
 
     mockGetServerAuthToken.mockResolvedValue({
       sub: managerUser.id,
@@ -342,7 +347,7 @@ describeDb("Agent 2 P0 HTTP boundary reproductions", () => {
       ),
     );
     expect(sameOrgResponse.status).toBe(404);
-    expect(imageExportStore.has(downloadToken)).toBe(true);
+    expect(await hasStoredZipForTests(downloadToken)).toBe(true);
 
     mockGetServerAuthToken.mockResolvedValue({
       sub: betaUser.id,
@@ -355,7 +360,7 @@ describeDb("Agent 2 P0 HTTP boundary reproductions", () => {
       ),
     );
     expect(crossOrgResponse.status).toBe(404);
-    expect(imageExportStore.has(downloadToken)).toBe(true);
+    expect(await hasStoredZipForTests(downloadToken)).toBe(true);
 
     const tamperedResponse = await downloadImagesGet(
       new Request(
@@ -363,7 +368,7 @@ describeDb("Agent 2 P0 HTTP boundary reproductions", () => {
       ),
     );
     expect(tamperedResponse.status).toBe(404);
-    expect(imageExportStore.has(downloadToken)).toBe(true);
+    expect(await hasStoredZipForTests(downloadToken)).toBe(true);
 
     mockGetServerAuthToken.mockResolvedValue({
       sub: adminUser.id,
@@ -382,7 +387,7 @@ describeDb("Agent 2 P0 HTTP boundary reproductions", () => {
     expect(ownerResponse.headers.get("content-disposition")).toContain("alpha-private-images.zip");
     expect(downloaded).toEqual(alphaBytes);
     expect(
-      consumeZip(downloadToken, { userId: adminUser.id, organizationId: org.id }),
+      await consumeZip(downloadToken, { userId: adminUser.id, organizationId: org.id }),
     ).toBeUndefined();
   });
 });

@@ -14,10 +14,15 @@ export const GET = async (request: Request) => {
   const downloadToken = searchParams.get("token");
   if (!downloadToken) return new Response("Missing token", { status: 400 });
 
-  const zip = consumeZip(downloadToken, {
-    userId: token.sub,
-    organizationId: token.organizationId,
-  });
+  let zip;
+  try {
+    zip = await consumeZip(downloadToken, {
+      userId: token.sub,
+      organizationId: token.organizationId,
+    });
+  } catch {
+    return new Response("Image export storage unavailable", { status: 503 });
+  }
   if (!zip) return new Response("Not found or expired", { status: 404 });
 
   return new Response(zip.data, {

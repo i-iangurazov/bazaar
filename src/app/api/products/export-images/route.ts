@@ -1,14 +1,14 @@
 import { join } from "node:path";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-
-import JSZip from "jszip";
+import { tmpdir } from "node:os";
 
 import { prisma } from "@/server/db/prisma";
 import { getServerAuthToken } from "@/server/auth/token";
 import { exportProductImagesData } from "@/server/services/products/read";
 import type { StoreAccessUser } from "@/server/services/storeAccess";
-import { storeZip } from "@/lib/imageExportStore";
+import { storeZipFile } from "@/lib/imageExportStore";
+import { ImageExportZipWriter } from "@/server/services/imageExportZip";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,6 +32,17 @@ const extToMime: Record<string, string> = {
   ".avif": "image/avif",
 };
 
+const resolvePositiveByteLimit = (value: string | undefined, fallback: number) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+};
+
+const maxImageBytes = resolvePositiveByteLimit(process.env.PRODUCT_IMAGE_MAX_BYTES, 5 * 1024 * 1024);
+const maxZipBytes = resolvePositiveByteLimit(
+  process.env.IMAGE_EXPORT_MAX_BYTES,
+  512 * 1024 * 1024,
+);
+
 const getExtension = (contentType: string, url: string): string => {
   const mime = contentType.split(";")[0]?.trim() ?? "";
   if (mimeToExt[mime]) return mimeToExt[mime]!;
@@ -49,6 +60,10 @@ const fetchImageBuffer = async (
   if (url.startsWith("/uploads/")) {
     const filePath = join(process.cwd(), "public", url);
     try {
+      const file = await stat(filePath);
+      if (file.size < 1 || file.size > maxImageBytes) {
+        return null;
+      }
       const buffer = await readFile(filePath);
       const ext = url.split("?")[0].match(/\.\w{2,5}$/)?.[0] ?? "";
       return { buffer, contentType: extToMime[ext] ?? "image/jpeg" };
@@ -59,7 +74,30 @@ const fetchImageBuffer = async (
   const absoluteUrl = url.startsWith("http") ? url : `${appOrigin}${url}`;
   const response = await fetch(absoluteUrl, { signal: AbortSignal.timeout(15_000) });
   if (!response.ok) return null;
-  const buffer = Buffer.from(await response.arrayBuffer());
+  const contentLength = Number(response.headers.get("Content-Length"));
+  if (Number.isFinite(contentLength) && contentLength > maxImageBytes) {
+    return null;
+  }
+  if (!response.body) {
+    return null;
+  }
+  const chunks: Buffer[] = [];
+  let byteLength = 0;
+  const reader = response.body.getReader();
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    byteLength += value.byteLength;
+    if (byteLength > maxImageBytes) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(Buffer.from(value));
+  }
+  const buffer = Buffer.concat(chunks, byteLength);
+  if (!buffer.length) {
+    return null;
+  }
   const contentType = response.headers.get("Content-Type") ?? "";
   return { buffer, contentType };
 };
@@ -93,6 +131,9 @@ export const GET = async (request: Request) => {
 
   const stream = new ReadableStream({
     async start(controller) {
+      const temporaryDirectory = await mkdtemp(join(tmpdir(), "bazaar-image-export-"));
+      const archivePath = join(temporaryDirectory, "images.zip");
+      const zip = new ImageExportZipWriter(archivePath, maxZipBytes);
       try {
         const products = await exportProductImagesData({
           prisma,
@@ -103,9 +144,10 @@ export const GET = async (request: Request) => {
 
         controller.enqueue(send({ type: "total", count: products.length }));
 
-        const zip = new JSZip();
-
         for (let i = 0; i < products.length; i++) {
+          if (request.signal.aborted) {
+            throw new Error("imageExportAborted");
+          }
           const product = products[i]!;
           const folder = sanitizeFolderName(product.name);
 
@@ -119,7 +161,7 @@ export const GET = async (request: Request) => {
               const result = await fetchImageBuffer(imageUrl, appOrigin);
               if (result) {
                 const ext = getExtension(result.contentType, imageUrl);
-                zip.folder(folder)?.file(`image-${j + 1}${ext}`, result.buffer);
+                await zip.addFile(`${folder}/image-${j + 1}${ext}`, result.buffer);
               } else {
                 console.warn(`[export-images] Skipping (fetch failed): ${imageUrl}`);
               }
@@ -134,22 +176,29 @@ export const GET = async (request: Request) => {
         );
         controller.enqueue(send({ type: "zipping" }));
 
-        const zipBuffer = await zip.generateAsync({ type: "arraybuffer" });
+        await zip.close();
         const downloadToken = randomUUID();
         const safeStoreName = sanitizeFolderName(storeName);
         const date = new Date().toISOString().slice(0, 10);
         const filename = `images-${safeStoreName}-${date}.zip`;
 
-        storeZip(downloadToken, zipBuffer, filename, {
-          userId: user.id,
-          organizationId: user.organizationId,
-        });
+        await storeZipFile(
+          downloadToken,
+          archivePath,
+          filename,
+          {
+            userId: user.id,
+            organizationId: user.organizationId,
+          },
+        );
 
         controller.enqueue(send({ type: "ready", token: downloadToken, filename }));
       } catch (err) {
         console.error("[export-images] Fatal error:", err);
         controller.enqueue(send({ type: "error", message: "Export failed" }));
       } finally {
+        await zip.abort();
+        await rm(temporaryDirectory, { recursive: true, force: true });
         controller.close();
       }
     },
