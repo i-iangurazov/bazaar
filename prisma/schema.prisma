@@ -992,6 +992,9 @@ model MMarketExportJob {
   environment           MMarketEnvironment
   status                MMarketExportJobStatus @default(QUEUED)
   requestedById         String
+  attemptCount          Int                    @default(0)
+  leaseToken            String?                @db.VarChar(64)
+  leaseExpiresAt        DateTime?
   startedAt             DateTime?
   finishedAt            DateTime?
   payloadStatsJson      Json?
@@ -1008,6 +1011,7 @@ model MMarketExportJob {
   @@index([orgId, createdAt])
   @@index([orgId, storeId, createdAt])
   @@index([orgId, status, createdAt])
+  @@index([status, leaseExpiresAt])
 }
 
 model MMarketIncludedProduct {
@@ -1093,6 +1097,9 @@ model BakaiStoreExportJob {
   jobType               BakaiStoreJobType         @default(TEMPLATE_EXPORT)
   status                BakaiStoreExportJobStatus @default(QUEUED)
   requestedById         String
+  attemptCount          Int                       @default(0)
+  leaseToken            String?                   @db.VarChar(64)
+  leaseExpiresAt        DateTime?
   startedAt             DateTime?
   finishedAt            DateTime?
   fileName              String?
@@ -1117,6 +1124,7 @@ model BakaiStoreExportJob {
   @@index([orgId, createdAt])
   @@index([orgId, storeId, createdAt])
   @@index([orgId, status, createdAt])
+  @@index([status, leaseExpiresAt])
 }
 
 model BakaiStoreIncludedProduct {
@@ -1221,6 +1229,9 @@ model OMarketExportJob {
   jobType               OMarketJobType         @default(PRODUCT_EXPORT)
   status                OMarketExportJobStatus @default(QUEUED)
   requestedById         String
+  attemptCount          Int                    @default(0)
+  leaseToken            String?                @db.VarChar(64)
+  leaseExpiresAt        DateTime?
   startedAt             DateTime?
   finishedAt            DateTime?
   payloadStatsJson      Json?
@@ -1241,6 +1252,7 @@ model OMarketExportJob {
   @@index([orgId, createdAt])
   @@index([orgId, storeId, createdAt])
   @@index([orgId, status, createdAt])
+  @@index([status, leaseExpiresAt])
 }
 
 model OMarketIncludedProduct {
@@ -1559,6 +1571,9 @@ model ProductDescriptionGenerationJob {
   failedCount       Int                                   @default(0)
   skippedCount      Int                                   @default(0)
   errorMessage      String?                               @db.Text
+  attemptCount      Int                                   @default(0)
+  leaseToken        String?                               @db.VarChar(64)
+  leaseExpiresAt    DateTime?
   startedAt         DateTime?
   completedAt       DateTime?
   createdAt         DateTime                              @default(now())
@@ -1571,6 +1586,7 @@ model ProductDescriptionGenerationJob {
 
   @@index([organizationId, createdAt])
   @@index([organizationId, status, createdAt])
+  @@index([status, leaseExpiresAt])
   @@index([organizationId, storeId, createdAt])
   @@index([createdById, createdAt])
 }
@@ -1585,6 +1601,9 @@ model ProductDescriptionGenerationJobItem {
   generatedDescription String?                                @db.Text
   previousDescription  String?                                @db.Text
   imageCount           Int                                    @default(0)
+  attemptCount         Int                                    @default(0)
+  leaseToken           String?                                @db.VarChar(64)
+  leaseExpiresAt       DateTime?
   startedAt            DateTime?
   completedAt          DateTime?
   createdAt            DateTime                               @default(now())
@@ -1598,6 +1617,7 @@ model ProductDescriptionGenerationJobItem {
   @@index([organizationId, jobId, status])
   @@index([organizationId, productId, createdAt])
   @@index([jobId, status, createdAt])
+  @@index([status, leaseExpiresAt])
 }
 
 model ProductBarcode {
@@ -2210,6 +2230,8 @@ model CustomerOrderEmailLog {
   errorMessage      String?                  @db.Text
   operationKey      String?                  @unique @db.VarChar(191)
   attemptCount      Int                      @default(0)
+  leaseToken        String?                  @db.VarChar(64)
+  leaseExpiresAt    DateTime?
   lastAttemptAt     DateTime?
   nextAttemptAt     DateTime?
   triggeredById     String?
@@ -2225,6 +2247,7 @@ model CustomerOrderEmailLog {
   @@index([customerOrderId, createdAt])
   @@index([type, status, createdAt])
   @@index([status, nextAttemptAt, createdAt])
+  @@index([status, leaseExpiresAt])
   @@index([providerMessageId])
 }
 
