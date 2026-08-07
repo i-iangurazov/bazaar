@@ -13,7 +13,7 @@ describe("bazaar api stock source structure", () => {
 
     expect(bazaarApiService).toContain("applyBazaarApiOrderStockDeduction");
     expect(bazaarApiService).toContain("pg_advisory_xact_lock");
-    expect(bazaarApiService).toContain("bazaarApiExternalIdNote");
+    expect(bazaarApiService).toContain("externalOrderId: externalId");
     expect(bazaarApiService).toContain("bazaarApiStockImpactingStatuses");
     expect(bazaarApiService).toContain("StockMovementType.SALE");
     expect(bazaarApiService).toContain('referenceType: "CustomerOrder"');

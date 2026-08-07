@@ -30,6 +30,12 @@ describe("redis requirements", () => {
     vi.stubEnv("OPENAI_API_KEY", "");
     vi.stubEnv("IMAGE_STORAGE_PROVIDER", "local");
     vi.stubEnv("EXPORT_STORAGE_PROVIDER", "local");
+    vi.stubEnv("R2_ACCOUNT_ID", "");
+    vi.stubEnv("R2_ACCESS_KEY_ID", "");
+    vi.stubEnv("R2_SECRET_ACCESS_KEY", "");
+    vi.stubEnv("R2_BUCKET_NAME", "");
+    vi.stubEnv("R2_PUBLIC_BASE_URL", "");
+    vi.stubEnv("R2_ENDPOINT", "");
     vi.stubEnv("O_MARKET_MOCK_API", "1");
   };
 
