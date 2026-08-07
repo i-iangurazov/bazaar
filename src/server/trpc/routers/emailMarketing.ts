@@ -201,6 +201,7 @@ const campaignInputSchema = z.object({
   logoStoreId: z.string().trim().min(1).optional().nullable(),
   blocks: z.array(blockSchema).max(30).optional().nullable(),
 });
+const idempotencyKeySchema = z.string().trim().min(8).max(256);
 
 const EMAIL_CAMPAIGN_SEND_MAX_BATCHES_PER_ACTION = 10;
 
@@ -453,19 +454,23 @@ export const emailMarketingRouter = router({
 
   send: managerProcedure
     .use(rateLimit({ windowMs: 60_000, max: 20, prefix: "email-marketing-send" }))
-    .input(campaignInputSchema)
+    .input(campaignInputSchema.extend({ idempotencyKey: idempotencyKeySchema }))
     .mutation(async ({ ctx, input }) => {
       try {
+        const { idempotencyKey, ...campaign } = input;
         const result = await sendEmailCampaignToAudience({
           user: ctx.user,
           actorId: ctx.user.id,
           requestId: ctx.requestId,
-          campaign: input,
+          idempotencyKey,
+          campaign,
         });
-        const delivery = await kickEmailCampaignDelivery({
-          user: ctx.user,
-          campaignId: result.campaign.id,
-        });
+        const delivery = result.replayed
+          ? null
+          : await kickEmailCampaignDelivery({
+              user: ctx.user,
+              campaignId: result.campaign.id,
+            });
         return { ...result, delivery };
       } catch (error) {
         throw toTRPCError(error);
@@ -474,7 +479,7 @@ export const emailMarketingRouter = router({
 
   sendCampaign: managerProcedure
     .use(rateLimit({ windowMs: 60_000, max: 20, prefix: "email-marketing-send-saved" }))
-    .input(z.object({ campaignId: z.string().min(1) }))
+    .input(z.object({ campaignId: z.string().min(1), idempotencyKey: idempotencyKeySchema }))
     .mutation(async ({ ctx, input }) => {
       try {
         const result = await sendSavedEmailCampaignToAudience({
@@ -482,11 +487,14 @@ export const emailMarketingRouter = router({
           actorId: ctx.user.id,
           requestId: ctx.requestId,
           campaignId: input.campaignId,
+          idempotencyKey: input.idempotencyKey,
         });
-        const delivery = await kickEmailCampaignDelivery({
-          user: ctx.user,
-          campaignId: result.campaign.id,
-        });
+        const delivery = result.replayed
+          ? null
+          : await kickEmailCampaignDelivery({
+              user: ctx.user,
+              campaignId: result.campaign.id,
+            });
         return { ...result, delivery };
       } catch (error) {
         throw toTRPCError(error);

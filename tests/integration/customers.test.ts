@@ -486,6 +486,7 @@ describeDb("customer database", () => {
         user,
         actorId: adminUser.id,
         requestId: "email-campaign-1",
+        idempotencyKey: "email-campaign-1",
         campaign: {
           storeId: store.id,
           source: "ALL",
@@ -607,6 +608,7 @@ describeDb("customer database", () => {
         user,
         actorId: adminUser.id,
         requestId: "email-campaign-batch-queue",
+        idempotencyKey: "email-campaign-batch-queue",
         campaign: {
           storeId: store.id,
           source: "ALL",
@@ -713,6 +715,7 @@ describeDb("customer database", () => {
         user,
         actorId: adminUser.id,
         requestId: "email-campaign-auto-batch-queue",
+        idempotencyKey: "email-campaign-auto-batch-queue",
         campaign: {
           storeId: store.id,
           source: "ALL",
@@ -805,6 +808,7 @@ describeDb("customer database", () => {
         user,
         actorId: adminUser.id,
         requestId: "email-campaign-webhook-queue",
+        idempotencyKey: "email-campaign-webhook-queue",
         campaign: {
           storeId: store.id,
           source: "ALL",

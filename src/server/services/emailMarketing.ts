@@ -14,6 +14,8 @@ import {
   EmailAutomationStatus,
   EmailAutomationTrigger,
   EmailDeliveryErrorCategory,
+  OperationRequestPrincipalType,
+  OperationRequestStatus,
   Prisma,
 } from "@prisma/client";
 import type { CustomerOrderStatus, CustomerSource } from "@prisma/client";
@@ -34,6 +36,7 @@ import {
   type ResendDnsRecord,
 } from "@/server/services/email";
 import { AppError } from "@/server/services/errors";
+import { classifyDatabaseOperationFailure } from "@/server/services/databaseOperationFailure";
 import { toJson } from "@/server/services/json";
 import { writeAuditLog } from "@/server/services/audit";
 import {
@@ -48,6 +51,13 @@ import {
   isRetryableEmailDeliveryFailure,
   normalizeEmailDeliveryError,
 } from "@/server/services/emailDeliveryLifecycle";
+import {
+  OPERATION_FAILURE_SAFE_BEFORE_EFFECTS,
+  operationPrincipalKey,
+  runOperationRequest,
+  type OperationFailureDecision,
+  type RunOperationRequestInput,
+} from "@/server/services/operationRequests";
 import {
   assertUserCanAccessStore,
   listAccessibleStores,
@@ -3118,129 +3128,220 @@ export const saveEmailCampaignDraft = async (input: {
   return created;
 };
 
+type EmailCampaignQueueOperationResponse = Prisma.InputJsonObject & {
+  campaignId: string;
+};
+
+const classifyEmailCampaignQueueFailure = (error: unknown): OperationFailureDecision => {
+  if (error instanceof AppError) {
+    return {
+      classification: OPERATION_FAILURE_SAFE_BEFORE_EFFECTS,
+      responseCode: error.message,
+      responseStatus: error.status,
+    };
+  }
+  return classifyDatabaseOperationFailure(error, "emailCampaignQueueFailed");
+};
+
+const replayCompletedEmailCampaignQueueOperation = async (
+  input: RunOperationRequestInput,
+) => {
+  const completed = await prisma.operationRequest.findUnique({
+    where: {
+      organizationId_scope_principalKey_idempotencyKey: {
+        organizationId: input.organizationId,
+        scope: input.scope,
+        principalKey: operationPrincipalKey(input.principal),
+        idempotencyKey: input.idempotencyKey,
+      },
+    },
+    select: { status: true },
+  });
+  if (completed?.status !== OperationRequestStatus.COMPLETED) {
+    return null;
+  }
+  return runOperationRequest<EmailCampaignQueueOperationResponse>(input, async () => {
+    throw new AppError("operationRequestCorrupt", "INTERNAL_SERVER_ERROR", 500);
+  });
+};
+
+const loadQueuedEmailCampaign = async (input: {
+  campaignId: string;
+  organizationId: string;
+  storeId: string;
+}) => {
+  const campaign = await prisma.emailCampaign.findFirst({
+    where: {
+      id: input.campaignId,
+      organizationId: input.organizationId,
+      storeId: input.storeId,
+    },
+    include: {
+      senderIdentity: { select: { fromEmail: true } },
+      recipients: {
+        select: { id: true, email: true, status: true },
+        orderBy: { createdAt: "asc" },
+      },
+    },
+  });
+  if (!campaign) {
+    throw new AppError("operationRequestCorrupt", "INTERNAL_SERVER_ERROR", 500);
+  }
+  return campaign;
+};
+
 export const sendEmailCampaignToAudience = async (input: {
   user: StoreAccessUser;
   actorId: string;
   requestId: string;
+  idempotencyKey: string;
   campaign: EmailCampaignComposerInput;
 }) => {
   await assertUserCanAccessStore(prisma, input.user, input.campaign.storeId);
-  requireEmailMarketingPublicAppBaseUrl();
-  getEmailUnsubscribeSecret();
-
-  const campaignInput = normalizeCampaignInput(input.campaign, {
-    requireSubject: true,
-    requireContent: true,
-  });
-  const sender = await resolveCampaignSender({
-    user: input.user,
+  const operationInput: RunOperationRequestInput = {
     organizationId: input.user.organizationId,
-    storeId: campaignInput.storeId,
-    senderIdentityId: campaignInput.senderIdentityId,
-    senderDisplayName: campaignInput.senderDisplayName,
-    replyToEmail: campaignInput.replyToEmail,
-    requireVerified: true,
-  });
-  const { logo, productsById } = await prepareCampaignRenderData({
-    user: input.user,
-    campaign: campaignInput,
-    requireProducts: true,
-  });
-  assertEmailImagesPublic({ campaign: campaignInput, productsById, logoUrl: logo.logoUrl });
-  const { recipients, summary } = await resolveCampaignRecipients({
-    user: input.user,
-    campaign: campaignInput,
-  });
-  if (!recipients.length) {
-    throw new AppError("emailCampaignAudienceEmpty", "BAD_REQUEST", 400);
+    storeId: input.campaign.storeId,
+    scope: "emailMarketing.send.v1",
+    principal: {
+      type: OperationRequestPrincipalType.AUTHENTICATED_USER,
+      id: input.actorId,
+    },
+    idempotencyKey: input.idempotencyKey,
+    payload: {
+      version: "v1",
+      value: toJson(input.campaign),
+    },
+    allowedResponsePaths: ["campaignId"],
+    classifyFailure: classifyEmailCampaignQueueFailure,
+    transactionOptions: { maxWait: 10_000, timeout: 30_000 },
+  };
+  let operation = await replayCompletedEmailCampaignQueueOperation(operationInput);
+  if (!operation) {
+    const campaignInput = normalizeCampaignInput(input.campaign, {
+      requireSubject: true,
+      requireContent: true,
+    });
+    requireEmailMarketingPublicAppBaseUrl();
+    getEmailUnsubscribeSecret();
+    const sender = await resolveCampaignSender({
+      user: input.user,
+      organizationId: input.user.organizationId,
+      storeId: campaignInput.storeId,
+      senderIdentityId: campaignInput.senderIdentityId,
+      senderDisplayName: campaignInput.senderDisplayName,
+      replyToEmail: campaignInput.replyToEmail,
+      requireVerified: true,
+    });
+    const { logo, productsById } = await prepareCampaignRenderData({
+      user: input.user,
+      campaign: campaignInput,
+      requireProducts: true,
+    });
+    assertEmailImagesPublic({ campaign: campaignInput, productsById, logoUrl: logo.logoUrl });
+    const { recipients, summary } = await resolveCampaignRecipients({
+      user: input.user,
+      campaign: campaignInput,
+    });
+    if (!recipients.length) {
+      throw new AppError("emailCampaignAudienceEmpty", "BAD_REQUEST", 400);
+    }
+    const campaignId = randomUUID();
+    const recipientRecords = recipients.map((customer) => {
+      const id = randomUUID();
+      return {
+        id,
+        organizationId: input.user.organizationId,
+        customerId: customer.id,
+        email: normalizeRecipientEmail(customer.email),
+        status: EmailCampaignRecipientStatus.QUEUED,
+        sendOperationKey: `email-campaign:${campaignId}:recipient:${id}`,
+      };
+    });
+
+    operation = await runOperationRequest<EmailCampaignQueueOperationResponse>(
+      operationInput,
+      async (tx) => {
+        const created = await tx.emailCampaign.create({
+          data: {
+            id: campaignId,
+            organizationId: input.user.organizationId,
+            storeId: campaignInput.storeId,
+            createdById: input.actorId,
+            status: EmailCampaignStatus.QUEUED,
+            contentVersion: emailContentVersion,
+            campaignType: campaignInput.campaignType,
+            senderIdentityId: sender.id,
+            template: campaignInput.template,
+            templateKey: campaignInput.templateKey,
+            name: campaignInput.name,
+            subject: campaignInput.subject,
+            preheader: campaignInput.preheader,
+            body: campaignInput.legacyBody,
+            blocksJson: campaignInput.blocks as unknown as Prisma.InputJsonValue,
+            audienceJson: campaignInput.audience as unknown as Prisma.InputJsonValue,
+            audienceSummaryJson: summary as unknown as Prisma.InputJsonValue,
+            senderDisplayName: campaignInput.senderDisplayName,
+            replyToEmail: campaignInput.replyToEmail,
+            brandColor: campaignInput.brandColor,
+            buttonColor: campaignInput.buttonColor,
+            buttonTextColor: campaignInput.buttonTextColor,
+            backgroundColor: campaignInput.backgroundColor,
+            contentBackgroundColor: campaignInput.contentBackgroundColor,
+            textColor: campaignInput.textColor,
+            mutedTextColor: campaignInput.mutedTextColor,
+            borderColor: campaignInput.borderColor,
+            fontFamily: campaignInput.fontFamily,
+            logoImageId: logo.logoImageId,
+            recipientCount: recipients.length,
+            queuedCount: recipients.length,
+            unresolvedCount: recipients.length,
+            recipients: {
+              create: recipientRecords,
+            },
+          },
+        });
+        await writeAuditLog(tx, {
+          organizationId: input.user.organizationId,
+          actorId: input.actorId,
+          action: "EMAIL_CAMPAIGN_QUEUE",
+          entity: "EmailCampaign",
+          entityId: created.id,
+          before: null,
+          after: toJson({
+            storeId: campaignInput.storeId,
+            subject: campaignInput.subject,
+            recipientCount: recipients.length,
+            audienceSummary: summary,
+            senderIdentityId: sender.id,
+          }),
+          requestId: input.requestId,
+        });
+        return {
+          response: { campaignId: created.id },
+          responseStatus: 200,
+          responseCode: "queued",
+          resource: { type: "EmailCampaign", id: created.id },
+        };
+      },
+    );
   }
 
-  const campaignId = randomUUID();
-  const recipientRecords = recipients.map((customer) => {
-    const id = randomUUID();
-    return {
-      id,
-      organizationId: input.user.organizationId,
-      customerId: customer.id,
-      email: normalizeRecipientEmail(customer.email),
-      status: EmailCampaignRecipientStatus.QUEUED,
-      sendOperationKey: `email-campaign:${campaignId}:recipient:${id}`,
-    };
-  });
-
-  const campaign = await prisma.$transaction(async (tx) => {
-    const created = await tx.emailCampaign.create({
-      data: {
-        id: campaignId,
-        organizationId: input.user.organizationId,
-        storeId: campaignInput.storeId,
-        createdById: input.actorId,
-        status: EmailCampaignStatus.QUEUED,
-        contentVersion: emailContentVersion,
-        campaignType: campaignInput.campaignType,
-        senderIdentityId: sender.id,
-        template: campaignInput.template,
-        templateKey: campaignInput.templateKey,
-        name: campaignInput.name,
-        subject: campaignInput.subject,
-        preheader: campaignInput.preheader,
-        body: campaignInput.legacyBody,
-        blocksJson: campaignInput.blocks as unknown as Prisma.InputJsonValue,
-        audienceJson: campaignInput.audience as unknown as Prisma.InputJsonValue,
-        audienceSummaryJson: summary as unknown as Prisma.InputJsonValue,
-        senderDisplayName: campaignInput.senderDisplayName,
-        replyToEmail: campaignInput.replyToEmail,
-        brandColor: campaignInput.brandColor,
-        buttonColor: campaignInput.buttonColor,
-        buttonTextColor: campaignInput.buttonTextColor,
-        backgroundColor: campaignInput.backgroundColor,
-        contentBackgroundColor: campaignInput.contentBackgroundColor,
-        textColor: campaignInput.textColor,
-        mutedTextColor: campaignInput.mutedTextColor,
-        borderColor: campaignInput.borderColor,
-        fontFamily: campaignInput.fontFamily,
-        logoImageId: logo.logoImageId,
-        recipientCount: recipients.length,
-        queuedCount: recipients.length,
-        unresolvedCount: recipients.length,
-        recipients: {
-          create: recipientRecords,
-        },
-      },
-      include: {
-        recipients: {
-          select: { id: true, email: true, status: true },
-          orderBy: { createdAt: "asc" },
-        },
-      },
-    });
-    await writeAuditLog(tx, {
-      organizationId: input.user.organizationId,
-      actorId: input.actorId,
-      action: "EMAIL_CAMPAIGN_QUEUE",
-      entity: "EmailCampaign",
-      entityId: created.id,
-      before: null,
-      after: toJson({
-        storeId: campaignInput.storeId,
-        subject: campaignInput.subject,
-        recipientCount: recipients.length,
-        audienceSummary: summary,
-        senderIdentityId: sender.id,
-      }),
-      requestId: input.requestId,
-    });
-    return created;
+  const campaign = await loadQueuedEmailCampaign({
+    campaignId: operation.response.campaignId,
+    organizationId: input.user.organizationId,
+    storeId: input.campaign.storeId,
   });
 
   return {
     campaign,
     sent: 0,
     failed: 0,
-    recipientCount: recipients.length,
-    audienceSummary: summary,
+    recipientCount: campaign.recipientCount,
+    audienceSummary: campaign.audienceSummaryJson as unknown as AudienceSummary,
     queued: true,
-    from: sender.fromEmail,
+    from: campaign.senderIdentity?.fromEmail ?? MARKETING_EMAIL_FROM,
+    replayed: operation.replayed,
+    operationRequestId: operation.operationRequestId,
   };
 };
 
@@ -3249,155 +3350,180 @@ export const sendSavedEmailCampaignToAudience = async (input: {
   actorId: string;
   requestId: string;
   campaignId: string;
+  idempotencyKey: string;
 }) => {
   const existing = await prisma.emailCampaign.findFirst({
     where: {
       id: input.campaignId,
       organizationId: input.user.organizationId,
-      archivedAt: null,
     },
   });
   if (!existing) {
     throw new AppError("emailCampaignNotFound", "NOT_FOUND", 404);
   }
   await assertUserCanAccessStore(prisma, input.user, existing.storeId);
-
-  const campaignInput = normalizeCampaignInput({
-    id: existing.id,
-    storeId: existing.storeId,
-    name: existing.name,
-    campaignType: existing.campaignType,
-    senderIdentityId: existing.senderIdentityId,
-    template: existing.template,
-    templateKey: existing.templateKey,
-    subject: existing.subject,
-    preheader: existing.preheader,
-    body: existing.body,
-    blocks: parseCampaignBlocks(existing.blocksJson, [
-      { id: "fallback-text", type: "text", body: existing.body },
-      { id: "fallback-footer", type: "footer", showUnsubscribe: true },
-    ]),
-    senderDisplayName: existing.senderDisplayName,
-    replyToEmail: existing.replyToEmail,
-    brandColor: existing.brandColor,
-    buttonColor: existing.buttonColor,
-    buttonTextColor: existing.buttonTextColor,
-    backgroundColor: existing.backgroundColor,
-    contentBackgroundColor: existing.contentBackgroundColor,
-    textColor: existing.textColor,
-    mutedTextColor: existing.mutedTextColor,
-    borderColor: existing.borderColor,
-    fontFamily: existing.fontFamily,
-    audience: parseCampaignAudience(existing.audienceJson),
-  });
-  const sender = await resolveCampaignSender({
-    user: input.user,
+  const operationInput: RunOperationRequestInput = {
     organizationId: input.user.organizationId,
-    storeId: campaignInput.storeId,
-    senderIdentityId: campaignInput.senderIdentityId,
-    senderDisplayName: campaignInput.senderDisplayName,
-    replyToEmail: campaignInput.replyToEmail,
-    requireVerified: true,
-  });
-  const { logo, productsById } = await prepareCampaignRenderData({
-    user: input.user,
-    campaign: campaignInput,
-    requireProducts: true,
-  });
-  assertEmailImagesPublic({ campaign: campaignInput, productsById, logoUrl: logo.logoUrl });
+    storeId: existing.storeId,
+    scope: "emailMarketing.sendSaved.v1",
+    principal: {
+      type: OperationRequestPrincipalType.AUTHENTICATED_USER,
+      id: input.actorId,
+    },
+    idempotencyKey: input.idempotencyKey,
+    payload: {
+      version: "v1",
+      value: { campaignId: existing.id },
+    },
+    allowedResponsePaths: ["campaignId"],
+    classifyFailure: classifyEmailCampaignQueueFailure,
+    transactionOptions: { maxWait: 10_000, timeout: 30_000 },
+  };
+  let operation = await replayCompletedEmailCampaignQueueOperation(operationInput);
+  if (!operation) {
+    const campaignInput = normalizeCampaignInput({
+      id: existing.id,
+      storeId: existing.storeId,
+      name: existing.name,
+      campaignType: existing.campaignType,
+      senderIdentityId: existing.senderIdentityId,
+      template: existing.template,
+      templateKey: existing.templateKey,
+      subject: existing.subject,
+      preheader: existing.preheader,
+      body: existing.body,
+      blocks: parseCampaignBlocks(existing.blocksJson, [
+        { id: "fallback-text", type: "text", body: existing.body },
+        { id: "fallback-footer", type: "footer", showUnsubscribe: true },
+      ]),
+      senderDisplayName: existing.senderDisplayName,
+      replyToEmail: existing.replyToEmail,
+      brandColor: existing.brandColor,
+      buttonColor: existing.buttonColor,
+      buttonTextColor: existing.buttonTextColor,
+      backgroundColor: existing.backgroundColor,
+      contentBackgroundColor: existing.contentBackgroundColor,
+      textColor: existing.textColor,
+      mutedTextColor: existing.mutedTextColor,
+      borderColor: existing.borderColor,
+      fontFamily: existing.fontFamily,
+      audience: parseCampaignAudience(existing.audienceJson),
+    });
+    const sender = await resolveCampaignSender({
+      user: input.user,
+      organizationId: input.user.organizationId,
+      storeId: campaignInput.storeId,
+      senderIdentityId: campaignInput.senderIdentityId,
+      senderDisplayName: campaignInput.senderDisplayName,
+      replyToEmail: campaignInput.replyToEmail,
+      requireVerified: true,
+    });
+    const { logo, productsById } = await prepareCampaignRenderData({
+      user: input.user,
+      campaign: campaignInput,
+      requireProducts: true,
+    });
+    assertEmailImagesPublic({ campaign: campaignInput, productsById, logoUrl: logo.logoUrl });
+    const { recipients, summary } = await resolveCampaignRecipients({
+      user: input.user,
+      campaign: campaignInput,
+    });
+    if (!recipients.length) {
+      throw new AppError("emailCampaignAudienceEmpty", "BAD_REQUEST", 400);
+    }
+    const recipientRecords = recipients.map((customer) => {
+      const id = randomUUID();
+      return {
+        id,
+        organizationId: input.user.organizationId,
+        campaignId: existing.id,
+        customerId: customer.id,
+        email: normalizeRecipientEmail(customer.email),
+        status: EmailCampaignRecipientStatus.QUEUED,
+        sendOperationKey: `email-campaign:${existing.id}:recipient:${id}`,
+      };
+    });
 
-  const { recipients, summary } = await resolveCampaignRecipients({
-    user: input.user,
-    campaign: campaignInput,
-  });
-  if (!recipients.length) {
-    throw new AppError("emailCampaignAudienceEmpty", "BAD_REQUEST", 400);
+    operation = await runOperationRequest<EmailCampaignQueueOperationResponse>(
+      operationInput,
+      async (tx) => {
+        const locked = await tx.emailCampaign.updateMany({
+          where: {
+            id: existing.id,
+            organizationId: input.user.organizationId,
+            storeId: existing.storeId,
+            status: EmailCampaignStatus.DRAFT,
+            archivedAt: null,
+          },
+          data: {
+            status: EmailCampaignStatus.QUEUED,
+            senderIdentityId: sender.id,
+            recipientCount: recipients.length,
+            queuedCount: recipients.length,
+            sendingCount: 0,
+            acceptedCount: 0,
+            deferredCount: 0,
+            deliveredCount: 0,
+            bouncedCount: 0,
+            droppedCount: 0,
+            suppressedCount: 0,
+            complainedCount: 0,
+            failedCount: 0,
+            cancelledCount: 0,
+            unresolvedCount: recipients.length,
+            sentCount: 0,
+            audienceSummaryJson: summary as unknown as Prisma.InputJsonValue,
+            errorMessage: null,
+          },
+        });
+        if (locked.count !== 1) {
+          throw new AppError("emailCampaignAlreadyQueued", "CONFLICT", 409);
+        }
+        await tx.emailCampaignRecipient.deleteMany({ where: { campaignId: existing.id } });
+        await tx.emailCampaignRecipient.createMany({
+          data: recipientRecords,
+        });
+        await writeAuditLog(tx, {
+          organizationId: input.user.organizationId,
+          actorId: input.actorId,
+          action: "EMAIL_CAMPAIGN_QUEUE",
+          entity: "EmailCampaign",
+          entityId: existing.id,
+          before: toJson({ status: existing.status }),
+          after: toJson({
+            storeId: campaignInput.storeId,
+            subject: campaignInput.subject,
+            recipientCount: recipients.length,
+            senderIdentityId: sender.id,
+          }),
+          requestId: input.requestId,
+        });
+        return {
+          response: { campaignId: existing.id },
+          responseStatus: 200,
+          responseCode: "queued",
+          resource: { type: "EmailCampaign", id: existing.id },
+        };
+      },
+    );
   }
 
-  const recipientRecords = recipients.map((customer) => {
-    const id = randomUUID();
-    return {
-      id,
-      organizationId: input.user.organizationId,
-      campaignId: existing.id,
-      customerId: customer.id,
-      email: normalizeRecipientEmail(customer.email),
-      status: EmailCampaignRecipientStatus.QUEUED,
-      sendOperationKey: `email-campaign:${existing.id}:recipient:${id}`,
-    };
-  });
-
-  const queued = await prisma.$transaction(async (tx) => {
-    const locked = await tx.emailCampaign.updateMany({
-      where: {
-        id: existing.id,
-        organizationId: input.user.organizationId,
-        storeId: existing.storeId,
-        status: EmailCampaignStatus.DRAFT,
-        archivedAt: null,
-      },
-      data: {
-        status: EmailCampaignStatus.QUEUED,
-        senderIdentityId: sender.id,
-        recipientCount: recipients.length,
-        queuedCount: recipients.length,
-        sendingCount: 0,
-        acceptedCount: 0,
-        deferredCount: 0,
-        deliveredCount: 0,
-        bouncedCount: 0,
-        droppedCount: 0,
-        suppressedCount: 0,
-        complainedCount: 0,
-        failedCount: 0,
-        cancelledCount: 0,
-        unresolvedCount: recipients.length,
-        sentCount: 0,
-        audienceSummaryJson: summary as unknown as Prisma.InputJsonValue,
-        errorMessage: null,
-      },
-    });
-    if (locked.count !== 1) {
-      throw new AppError("emailCampaignAlreadyQueued", "CONFLICT", 409);
-    }
-    await tx.emailCampaignRecipient.deleteMany({ where: { campaignId: existing.id } });
-    await tx.emailCampaignRecipient.createMany({
-      data: recipientRecords,
-    });
-    await writeAuditLog(tx, {
-      organizationId: input.user.organizationId,
-      actorId: input.actorId,
-      action: "EMAIL_CAMPAIGN_QUEUE",
-      entity: "EmailCampaign",
-      entityId: existing.id,
-      before: toJson({ status: existing.status }),
-      after: toJson({
-        storeId: campaignInput.storeId,
-        subject: campaignInput.subject,
-        recipientCount: recipients.length,
-        senderIdentityId: sender.id,
-      }),
-      requestId: input.requestId,
-    });
-    return tx.emailCampaign.findUniqueOrThrow({
-      where: { id: existing.id },
-      include: {
-        recipients: {
-          select: { id: true, email: true, status: true },
-          orderBy: { createdAt: "asc" },
-        },
-      },
-    });
+  const queued = await loadQueuedEmailCampaign({
+    campaignId: operation.response.campaignId,
+    organizationId: input.user.organizationId,
+    storeId: existing.storeId,
   });
 
   return {
     campaign: queued,
     sent: 0,
     failed: 0,
-    recipientCount: recipients.length,
-    audienceSummary: summary,
+    recipientCount: queued.recipientCount,
+    audienceSummary: queued.audienceSummaryJson as unknown as AudienceSummary,
     queued: true,
-    from: sender.fromEmail,
+    from: queued.senderIdentity?.fromEmail ?? MARKETING_EMAIL_FROM,
+    replayed: operation.replayed,
+    operationRequestId: operation.operationRequestId,
   };
 };
 

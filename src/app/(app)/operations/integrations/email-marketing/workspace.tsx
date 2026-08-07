@@ -814,6 +814,7 @@ export const EmailMarketingWorkspace = () => {
   const builderDesktopReady = useMediaQuery(builderDesktopMediaQuery);
   const logoInputRef = useRef<HTMLInputElement | null>(null);
   const previewContentRef = useRef<HTMLDivElement | null>(null);
+  const sendOperationRef = useRef<{ campaignId: string; idempotencyKey: string } | null>(null);
   const utils = trpc.useUtils();
 
   const [storeId, setStoreId] = useState("");
@@ -1171,6 +1172,7 @@ export const EmailMarketingWorkspace = () => {
   });
   const sendCampaignMutation = trpc.emailMarketing.sendCampaign.useMutation({
     onSuccess: async (result) => {
+      sendOperationRef.current = null;
       setConfirmOpen(false);
       setBuilderOpen(false);
       await Promise.all([utils.emailMarketing.history.invalidate(), utils.emailMarketing.overview.invalidate()]);
@@ -1605,7 +1607,12 @@ export const EmailMarketingWorkspace = () => {
   const sendCurrentCampaign = async () => {
     const id = campaignId ?? (await saveCurrent());
     if (!id) return;
-    sendCampaignMutation.mutate({ campaignId: id });
+    const operation =
+      sendOperationRef.current?.campaignId === id
+        ? sendOperationRef.current
+        : { campaignId: id, idempotencyKey: crypto.randomUUID() };
+    sendOperationRef.current = operation;
+    sendCampaignMutation.mutate(operation);
   };
 
   const selectedCustomers = customersQuery.data?.items ?? [];
@@ -2088,7 +2095,17 @@ export const EmailMarketingWorkspace = () => {
           </div>
         </Modal>
 
-        <Modal open={confirmOpen} onOpenChange={setConfirmOpen} title="Отправить кампанию?" className="max-w-xl">
+        <Modal
+          open={confirmOpen}
+          onOpenChange={(open) => {
+            setConfirmOpen(open);
+            if (!open && !sendCampaignMutation.isLoading) {
+              sendOperationRef.current = null;
+            }
+          }}
+          title="Отправить кампанию?"
+          className="max-w-xl"
+        >
           <div className="space-y-4">
             <div className="bazaar-admin-info-tile text-sm leading-6">
               <p><strong>Кампания:</strong> {campaignName}</p>
