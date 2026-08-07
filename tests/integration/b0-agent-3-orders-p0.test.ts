@@ -1,10 +1,21 @@
 import {
   CustomerOrderSource,
   CustomerOrderStatus,
+  OperationRequestStatus,
   PurchaseOrderStatus,
   StockMovementType,
 } from "@prisma/client";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const sideEffects = vi.hoisted(() => ({
+  publish: vi.fn(),
+}));
+
+vi.mock("@/server/events/eventBus", () => ({
+  eventBus: {
+    publish: sideEffects.publish,
+  },
+}));
 
 import { prisma } from "@/server/db/prisma";
 import {
@@ -16,12 +27,14 @@ import { adjustStock } from "@/server/services/inventory";
 import {
   cancelPurchaseOrder,
   createPurchaseOrder,
+  createPurchaseOrderOperation,
 } from "@/server/services/purchaseOrders";
 import {
   addCustomerOrderLine,
   completeCustomerOrder,
   confirmCustomerOrder,
   createCustomerOrderDraft,
+  createCustomerOrderDraftOperation,
   markCustomerOrderReady,
 } from "@/server/services/salesOrders";
 
@@ -66,6 +79,7 @@ const seedStock = async (input: {
 describeDb("B0 Agent 3 order P0 runtime verification", () => {
   beforeEach(async () => {
     await resetDatabase();
+    sideEffects.publish.mockClear();
   });
 
   it("verifies HARD-A3-001: completing an API order preserves its single stock effect", async () => {
@@ -169,34 +183,128 @@ describeDb("B0 Agent 3 order P0 runtime verification", () => {
     expect(snapshot?.onHand).toBe(6);
   });
 
-  it("reproduces HARD-A3-004: ordinary sales draft creation is not idempotent", async () => {
-    const { org, store, adminUser } = await seedBase();
+  it("regresses HARD-A3-004: authenticated sales draft retries create one order", async () => {
+    const { org, store, product, adminUser, managerUser } = await seedBase();
+    await prisma.product.update({ where: { id: product.id }, data: { basePriceKgs: 100 } });
+    await prisma.storePrice.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        productId: product.id,
+        variantKey: "BASE",
+        priceKgs: 100,
+        discountType: "PERCENTAGE",
+        discountPercentage: 20,
+      },
+    });
+    sideEffects.publish.mockClear();
     const input = {
       organizationId: org.id,
       storeId: store.id,
       customerName: "Ambiguous response customer",
+      customerEmail: "ambiguous.response@example.com",
+      lines: [{ productId: product.id, qty: 1 }],
       actorId: adminUser.id,
+      idempotencyKey: "b0-a3-004-sales-create",
     };
 
-    const first = await createCustomerOrderDraft({ ...input, requestId: "b0-a3-004-sale-1" });
-    const second = await createCustomerOrderDraft({ ...input, requestId: "b0-a3-004-sale-2" });
+    const concurrent = await Promise.allSettled([
+      createCustomerOrderDraftOperation({ ...input, requestId: "b0-a3-004-sale-1" }),
+      createCustomerOrderDraftOperation({ ...input, requestId: "b0-a3-004-sale-2" }),
+    ]);
+    const replay = await createCustomerOrderDraftOperation({
+      ...input,
+      requestId: "b0-a3-004-sale-replay",
+    });
+    await expect(
+      createCustomerOrderDraftOperation({
+        ...input,
+        customerName: "Changed payload",
+        requestId: "b0-a3-004-sale-changed",
+      }),
+    ).rejects.toMatchObject({ message: "operationRequestPayloadMismatch", status: 409 });
     const drafts = await prisma.customerOrder.findMany({
       where: { organizationId: org.id, storeId: store.id, status: CustomerOrderStatus.DRAFT },
+      include: { lines: true },
       orderBy: { number: "asc" },
+    });
+    const operation = await prisma.operationRequest.findFirstOrThrow({
+      where: {
+        organizationId: org.id,
+        storeId: store.id,
+        scope: "salesOrders.createDraft.v1",
+        principalKey: `user:${adminUser.id}`,
+        idempotencyKey: input.idempotencyKey,
+      },
+    });
+    const audits = await prisma.auditLog.count({
+      where: {
+        organizationId: org.id,
+        action: "SALES_ORDER_CREATE",
+        entityId: drafts[0]?.id,
+      },
+    });
+    await prisma.userStoreAccess.deleteMany({
+      where: { organizationId: org.id, userId: managerUser.id, storeId: store.id },
+    });
+    await expect(
+      createCustomerOrderDraftOperation({
+        ...input,
+        actorId: managerUser.id,
+        idempotencyKey: "b0-a3-004-sales-revoked",
+        requestId: "b0-a3-004-sale-revoked",
+      }),
+    ).rejects.toMatchObject({ message: "storeAccessDenied", status: 403 });
+    const deniedOperation = await prisma.operationRequest.findFirstOrThrow({
+      where: {
+        organizationId: org.id,
+        storeId: store.id,
+        scope: "salesOrders.createDraft.v1",
+        principalKey: `user:${managerUser.id}`,
+        idempotencyKey: "b0-a3-004-sales-revoked",
+      },
     });
 
     evidence("HARD-A3-004-sales", {
-      firstId: first.id,
-      secondId: second.id,
+      concurrentStatuses: concurrent.map((result) => result.status),
+      replayed: replay.replayed,
+      replayOrderId: replay.response.order.id,
       draftIds: drafts.map((draft) => draft.id),
+      operationStatus: operation.status,
+      revokedOperationStatus: deniedOperation.status,
+      auditCount: audits,
+      orderCreatedEventCalls: sideEffects.publish.mock.calls.filter(
+        ([event]) => event.type === "customerOrder.created",
+      ).length,
+      discountSnapshot: drafts[0]?.lines[0]
+        ? {
+            base: Number(drafts[0].lines[0].baseUnitPriceKgs),
+            effective: Number(drafts[0].lines[0].unitPriceKgs),
+            amount: Number(drafts[0].lines[0].appliedDiscountAmountKgs),
+          }
+        : null,
     });
 
-    expect(first.id).not.toBe(second.id);
-    expect(drafts).toHaveLength(2);
+    expect(concurrent.some((result) => result.status === "fulfilled")).toBe(true);
+    expect(replay.replayed).toBe(true);
+    expect(drafts).toHaveLength(1);
+    expect(replay.response.order.id).toBe(drafts[0]?.id);
+    expect(drafts[0]?.lines[0]?.appliedDiscountType).toBe("PERCENTAGE");
+    expect(Number(drafts[0]?.lines[0]?.baseUnitPriceKgs)).toBe(100);
+    expect(Number(drafts[0]?.lines[0]?.unitPriceKgs)).toBe(80);
+    expect(Number(drafts[0]?.lines[0]?.appliedDiscountAmountKgs)).toBe(20);
+    expect(operation.status).toBe(OperationRequestStatus.COMPLETED);
+    expect(operation.resourceId).toBe(drafts[0]?.id);
+    expect(deniedOperation.status).toBe(OperationRequestStatus.FAILED);
+    expect(deniedOperation.resourceId).toBeNull();
+    expect(audits).toBe(1);
+    expect(
+      sideEffects.publish.mock.calls.filter(([event]) => event.type === "customerOrder.created"),
+    ).toHaveLength(1);
   });
 
-  it("reproduces HARD-A3-004: submitted purchase-order creation repeats on-order effects", async () => {
-    const { org, store, supplier, product, adminUser } = await seedBase();
+  it("regresses HARD-A3-004: submitted purchase-order retries apply on-order once", async () => {
+    const { org, store, supplier, product, adminUser, managerUser } = await seedBase();
     const input = {
       organizationId: org.id,
       storeId: store.id,
@@ -204,26 +312,104 @@ describeDb("B0 Agent 3 order P0 runtime verification", () => {
       lines: [{ productId: product.id, qtyOrdered: 5 }],
       actorId: adminUser.id,
       submit: true,
+      idempotencyKey: "b0-a3-004-po-create",
     };
 
-    const first = await createPurchaseOrder({ ...input, requestId: "b0-a3-004-po-1" });
-    const second = await createPurchaseOrder({ ...input, requestId: "b0-a3-004-po-2" });
+    const concurrent = await Promise.allSettled([
+      createPurchaseOrderOperation({ ...input, requestId: "b0-a3-004-po-1" }),
+      createPurchaseOrderOperation({ ...input, requestId: "b0-a3-004-po-2" }),
+    ]);
+    const replay = await createPurchaseOrderOperation({
+      ...input,
+      requestId: "b0-a3-004-po-replay",
+    });
+    await expect(
+      createPurchaseOrderOperation({
+        ...input,
+        lines: [{ productId: product.id, qtyOrdered: 6 }],
+        requestId: "b0-a3-004-po-changed",
+      }),
+    ).rejects.toMatchObject({ message: "operationRequestPayloadMismatch", status: 409 });
     const purchaseOrders = await prisma.purchaseOrder.findMany({
       where: { organizationId: org.id, storeId: store.id },
       orderBy: { createdAt: "asc" },
     });
     const snapshot = await snapshotFor(store.id, product.id);
-
-    evidence("HARD-A3-004-purchase-orders", {
-      firstId: first.id,
-      secondId: second.id,
-      purchaseOrderIds: purchaseOrders.map((order) => order.id),
-      onOrderAfterTwoEquivalentRequests: snapshot?.onOrder,
+    const operation = await prisma.operationRequest.findFirstOrThrow({
+      where: {
+        organizationId: org.id,
+        storeId: store.id,
+        scope: "purchaseOrders.create.v1",
+        principalKey: `user:${adminUser.id}`,
+        idempotencyKey: input.idempotencyKey,
+      },
+    });
+    const audits = await prisma.auditLog.count({
+      where: {
+        organizationId: org.id,
+        action: "PO_CREATE",
+        entityId: purchaseOrders[0]?.id,
+      },
+    });
+    const firstEvents = await prisma.productEvent.count({
+      where: { organizationId: org.id, type: "first_po_created" },
+    });
+    await prisma.userStoreAccess.deleteMany({
+      where: { organizationId: org.id, userId: managerUser.id, storeId: store.id },
+    });
+    await expect(
+      createPurchaseOrderOperation({
+        ...input,
+        actorId: managerUser.id,
+        idempotencyKey: "b0-a3-004-po-revoked",
+        requestId: "b0-a3-004-po-revoked",
+      }),
+    ).rejects.toMatchObject({ message: "storeAccessDenied", status: 403 });
+    const deniedOperation = await prisma.operationRequest.findFirstOrThrow({
+      where: {
+        organizationId: org.id,
+        storeId: store.id,
+        scope: "purchaseOrders.create.v1",
+        principalKey: `user:${managerUser.id}`,
+        idempotencyKey: "b0-a3-004-po-revoked",
+      },
     });
 
-    expect(first.id).not.toBe(second.id);
-    expect(purchaseOrders).toHaveLength(2);
-    expect(snapshot?.onOrder).toBe(10);
+    evidence("HARD-A3-004-purchase-orders", {
+      concurrentStatuses: concurrent.map((result) => result.status),
+      replayed: replay.replayed,
+      replayPurchaseOrderId: replay.response.purchaseOrder.id,
+      purchaseOrderIds: purchaseOrders.map((order) => order.id),
+      onOrderAfterRetries: snapshot?.onOrder,
+      operationStatus: operation.status,
+      revokedOperationStatus: deniedOperation.status,
+      auditCount: audits,
+      firstEventCount: firstEvents,
+      purchaseOrderEventCalls: sideEffects.publish.mock.calls.filter(
+        ([event]) => event.type === "purchaseOrder.updated",
+      ).length,
+      inventoryEventCalls: sideEffects.publish.mock.calls.filter(
+        ([event]) => event.type === "inventory.updated",
+      ).length,
+    });
+
+    expect(concurrent.some((result) => result.status === "fulfilled")).toBe(true);
+    expect(replay.replayed).toBe(true);
+    expect(purchaseOrders).toHaveLength(1);
+    expect(replay.response.purchaseOrder.id).toBe(purchaseOrders[0]?.id);
+    expect(snapshot?.onOrder).toBe(5);
+    expect(operation.status).toBe(OperationRequestStatus.COMPLETED);
+    expect(operation.resourceId).toBe(purchaseOrders[0]?.id);
+    expect(deniedOperation.status).toBe(OperationRequestStatus.FAILED);
+    expect(deniedOperation.resourceId).toBeNull();
+    expect(audits).toBe(1);
+    expect(firstEvents).toBe(1);
+    expect(
+      sideEffects.publish.mock.calls.filter(([event]) => event.type === "purchaseOrder.updated"),
+    ).toHaveLength(1);
+    expect(
+      sideEffects.publish.mock.calls.filter(([event]) => event.type === "inventory.updated"),
+    ).toHaveLength(1);
   });
 
   it("regresses HARD-A3-005: EXT-1 remains distinct from EXT-10", async () => {

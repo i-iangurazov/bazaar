@@ -142,6 +142,7 @@ const NewPurchaseOrderPage = () => {
   const [productCache, setProductCache] = useState<Record<string, ProductCacheEntry>>({});
   const [variantCache, setVariantCache] = useState<Record<string, string>>({});
   const qtyInputRef = useRef<HTMLInputElement | null>(null);
+  const createAttemptRef = useRef<{ payload: string; idempotencyKey: string } | null>(null);
 
   const lineForm = useForm<z.infer<typeof lineSchema>>({
     resolver: zodResolver(lineSchema),
@@ -344,6 +345,7 @@ const NewPurchaseOrderPage = () => {
 
   const createMutation = trpc.purchaseOrders.create.useMutation({
     onSuccess: (po) => {
+      createAttemptRef.current = null;
       toast({ variant: "success", description: t("createSuccess") });
       router.push(`/purchase-orders/${po.id}`);
     },
@@ -351,6 +353,24 @@ const NewPurchaseOrderPage = () => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
   });
+
+  const submitPurchaseOrderCreate = (values: z.infer<typeof schema>, submit: boolean) => {
+    const payload = {
+      storeId: values.storeId,
+      supplierId:
+        values.supplierId && values.supplierId.trim().length ? values.supplierId : undefined,
+      lines: values.lines.map(buildLinePayload),
+      submit,
+    };
+    const serializedPayload = JSON.stringify(payload);
+    const existingAttempt = createAttemptRef.current;
+    const idempotencyKey =
+      existingAttempt?.payload === serializedPayload
+        ? existingAttempt.idempotencyKey
+        : crypto.randomUUID();
+    createAttemptRef.current = { payload: serializedPayload, idempotencyKey };
+    createMutation.mutate({ ...payload, idempotencyKey });
+  };
 
   const hasCost = lines.some((line) => line.unitCost !== undefined && line.unitCost !== null);
 
@@ -671,15 +691,7 @@ const NewPurchaseOrderPage = () => {
                 variant="secondary"
                 className="w-full sm:w-auto"
                 onClick={form.handleSubmit((values) => {
-                  createMutation.mutate({
-                    storeId: values.storeId,
-                    supplierId:
-                      values.supplierId && values.supplierId.trim().length
-                        ? values.supplierId
-                        : undefined,
-                    lines: values.lines.map(buildLinePayload),
-                    submit: false,
-                  });
+                  submitPurchaseOrderCreate(values, false);
                 })}
                 disabled={createMutation.isLoading || !storeId || !fields.length}
               >
@@ -693,15 +705,7 @@ const NewPurchaseOrderPage = () => {
               <Button
                 className="w-full sm:w-auto"
                 onClick={form.handleSubmit((values) => {
-                  createMutation.mutate({
-                    storeId: values.storeId,
-                    supplierId:
-                      values.supplierId && values.supplierId.trim().length
-                        ? values.supplierId
-                        : undefined,
-                    lines: values.lines.map(buildLinePayload),
-                    submit: true,
-                  });
+                  submitPurchaseOrderCreate(values, true);
                 })}
                 disabled={createMutation.isLoading || !storeId || !fields.length}
               >

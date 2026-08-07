@@ -76,6 +76,7 @@ describeDb("tRPC contract smoke", () => {
     });
 
     const po = await caller.purchaseOrders.create({
+      idempotencyKey: "trpc-contract-po-create",
       storeId: store.id,
       supplierId: supplier.id,
       lines: [{ productId: product.id, qtyOrdered: 4 }],

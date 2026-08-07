@@ -1,6 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { InventorySnapshot } from "@prisma/client";
-import { Prisma, PurchaseOrderStatus, StockMovementType } from "@prisma/client";
+import {
+  OperationRequestPrincipalType,
+  Prisma,
+  PurchaseOrderStatus,
+  Role,
+  StockMovementType,
+} from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
@@ -15,6 +21,13 @@ import { applyStockLotAdjustment } from "@/server/services/stockLots";
 import { resolveBaseQuantity } from "@/server/services/uom";
 import { recordFirstEvent } from "@/server/services/productEvents";
 import { resolveCurrencySnapshot } from "@/lib/currencyDisplay";
+import { assertUserCanAccessStore } from "@/server/services/storeAccess";
+import { classifyDatabaseOperationFailure } from "@/server/services/databaseOperationFailure";
+import {
+  OPERATION_FAILURE_SAFE_BEFORE_EFFECTS,
+  runOperationRequest,
+  type OperationFailureDecision,
+} from "@/server/services/operationRequests";
 
 const allowedTransitions: Record<PurchaseOrderStatus, PurchaseOrderStatus[]> = {
   DRAFT: [PurchaseOrderStatus.SUBMITTED, PurchaseOrderStatus.CANCELLED],
@@ -139,136 +152,161 @@ export type CreateDraftsFromReorderInput = {
   }[];
 };
 
-export const createPurchaseOrder = async (input: CreatePurchaseOrderInput) => {
-  const logger = getLogger(input.requestId);
-  let affectedProductIds: string[] = [];
-  let affectedStoreId = input.storeId;
-
+const createPurchaseOrderTx = async (
+  tx: Prisma.TransactionClient,
+  input: CreatePurchaseOrderInput,
+) => {
   assertUniqueLines(input.lines);
 
-  const result = await prisma.$transaction(async (tx) => {
-    const store = await tx.store.findUnique({ where: { id: input.storeId } });
-    if (!store) {
-      throw new AppError("storeNotFound", "NOT_FOUND", 404);
-    }
-    if (store.organizationId !== input.organizationId) {
-      throw new AppError("storeOrgMismatch", "FORBIDDEN", 403);
-    }
-
-    let resolvedSupplierId: string | null = null;
-    if (input.supplierId) {
-      const supplier = await tx.supplier.findUnique({ where: { id: input.supplierId } });
-      if (!supplier || supplier.organizationId !== input.organizationId) {
-        throw new AppError("supplierNotFound", "NOT_FOUND", 404);
-      }
-      resolvedSupplierId = supplier.id;
-    }
-
-    const productIds = input.lines.map((line) => line.productId);
-    const products = await tx.product.findMany({
-      where: { id: { in: productIds }, organizationId: input.organizationId, isDeleted: false },
-      select: { id: true, baseUnitId: true },
-    });
-    if (products.length !== productIds.length) {
-      throw new AppError("invalidProducts", "BAD_REQUEST", 400);
-    }
-    const baseUnitMap = new Map(products.map((product) => [product.id, product.baseUnitId]));
-
-    const variantIds = input.lines.map((line) => line.variantId).filter(Boolean) as string[];
-    if (variantIds.length) {
-      const variants = await tx.productVariant.findMany({
-        where: { id: { in: variantIds }, isActive: true },
-        select: { id: true, productId: true },
-      });
-      if (variants.length !== variantIds.length) {
-        throw new AppError("variantNotFound", "NOT_FOUND", 404);
-      }
-      const variantMap = new Map<string, string>(
-        (variants as { id: string; productId: string }[]).map((variant) => [
-          variant.id,
-          variant.productId,
-        ]),
-      );
-      for (const line of input.lines) {
-        if (line.variantId && variantMap.get(line.variantId) !== line.productId) {
-          throw new AppError("variantMismatch", "BAD_REQUEST", 400);
-        }
-      }
-    }
-
-    const normalizedLines = await Promise.all(
-      input.lines.map(async (line) => {
-        const baseUnitId = baseUnitMap.get(line.productId);
-        if (!baseUnitId) {
-          throw new AppError("productNotFound", "NOT_FOUND", 404);
-        }
-        const qtyOrdered = await resolveBaseQuantity(tx, {
-          organizationId: input.organizationId,
-          productId: line.productId,
-          baseUnitId,
-          qty: line.qtyOrdered,
-          unitId: line.unitId,
-          packId: line.packId,
-          mode: "purchasing",
-        });
-        return { ...line, qtyOrdered };
-      }),
-    );
-
-    const po = await tx.purchaseOrder.create({
-      data: {
-        organizationId: input.organizationId,
-        storeId: input.storeId,
-        supplierId: resolvedSupplierId,
-        status: input.submit ? PurchaseOrderStatus.SUBMITTED : PurchaseOrderStatus.DRAFT,
-        submittedAt: input.submit ? new Date() : null,
-        ...resolveCurrencySnapshot(store),
-        createdById: input.actorId,
-        updatedById: input.actorId,
-        lines: {
-          create: normalizedLines.map((line, index) => ({
-            position: index,
-            productId: line.productId,
-            variantId: line.variantId ?? undefined,
-            variantKey: line.variantId ?? "BASE",
-            qtyOrdered: line.qtyOrdered,
-            unitCost: line.unitCost ?? undefined,
-          })),
-        },
-      },
-      include: { lines: true },
-    });
-
-    if (input.submit) {
-      for (const line of po.lines) {
-        await adjustOnOrder(
-          tx,
-          input.storeId,
-          line.productId,
-          line.variantId,
-          line.qtyOrdered,
-          store.allowNegativeStock,
-        );
-      }
-    }
-
-    affectedProductIds = po.lines.map((line) => line.productId);
-    affectedStoreId = po.storeId;
-
-    await writeAuditLog(tx, {
+  const actor = await tx.user.findFirst({
+    where: {
+      id: input.actorId,
       organizationId: input.organizationId,
-      actorId: input.actorId,
-      action: "PO_CREATE",
-      entity: "PurchaseOrder",
-      entityId: po.id,
-      before: null,
-      after: toJson(po),
-      requestId: input.requestId,
-    });
+      isActive: true,
+      role: { in: [Role.ADMIN, Role.MANAGER] },
+    },
+    select: {
+      id: true,
+      organizationId: true,
+      role: true,
+      isOrgOwner: true,
+    },
+  });
+  if (!actor || !actor.organizationId) {
+    throw new AppError("forbidden", "FORBIDDEN", 403);
+  }
+  await assertUserCanAccessStore(
+    tx,
+    { ...actor, organizationId: actor.organizationId },
+    input.storeId,
+  );
 
-    return po;
+  const store = await tx.store.findUnique({ where: { id: input.storeId } });
+  if (!store) {
+    throw new AppError("storeNotFound", "NOT_FOUND", 404);
+  }
+  if (store.organizationId !== input.organizationId) {
+    throw new AppError("storeOrgMismatch", "FORBIDDEN", 403);
+  }
+
+  let resolvedSupplierId: string | null = null;
+  if (input.supplierId) {
+    const supplier = await tx.supplier.findUnique({ where: { id: input.supplierId } });
+    if (!supplier || supplier.organizationId !== input.organizationId) {
+      throw new AppError("supplierNotFound", "NOT_FOUND", 404);
+    }
+    resolvedSupplierId = supplier.id;
+  }
+
+  const productIds = input.lines.map((line) => line.productId);
+  const products = await tx.product.findMany({
+    where: { id: { in: productIds }, organizationId: input.organizationId, isDeleted: false },
+    select: { id: true, baseUnitId: true },
+  });
+  if (products.length !== productIds.length) {
+    throw new AppError("invalidProducts", "BAD_REQUEST", 400);
+  }
+  const baseUnitMap = new Map(products.map((product) => [product.id, product.baseUnitId]));
+
+  const variantIds = input.lines.map((line) => line.variantId).filter(Boolean) as string[];
+  if (variantIds.length) {
+    const variants = await tx.productVariant.findMany({
+      where: { id: { in: variantIds }, isActive: true },
+      select: { id: true, productId: true },
+    });
+    if (variants.length !== variantIds.length) {
+      throw new AppError("variantNotFound", "NOT_FOUND", 404);
+    }
+    const variantMap = new Map<string, string>(
+      (variants as { id: string; productId: string }[]).map((variant) => [
+        variant.id,
+        variant.productId,
+      ]),
+    );
+    for (const line of input.lines) {
+      if (line.variantId && variantMap.get(line.variantId) !== line.productId) {
+        throw new AppError("variantMismatch", "BAD_REQUEST", 400);
+      }
+    }
+  }
+
+  const normalizedLines = await Promise.all(
+    input.lines.map(async (line) => {
+      const baseUnitId = baseUnitMap.get(line.productId);
+      if (!baseUnitId) {
+        throw new AppError("productNotFound", "NOT_FOUND", 404);
+      }
+      const qtyOrdered = await resolveBaseQuantity(tx, {
+        organizationId: input.organizationId,
+        productId: line.productId,
+        baseUnitId,
+        qty: line.qtyOrdered,
+        unitId: line.unitId,
+        packId: line.packId,
+        mode: "purchasing",
+      });
+      return { ...line, qtyOrdered };
+    }),
+  );
+
+  const po = await tx.purchaseOrder.create({
+    data: {
+      organizationId: input.organizationId,
+      storeId: input.storeId,
+      supplierId: resolvedSupplierId,
+      status: input.submit ? PurchaseOrderStatus.SUBMITTED : PurchaseOrderStatus.DRAFT,
+      submittedAt: input.submit ? new Date() : null,
+      ...resolveCurrencySnapshot(store),
+      createdById: input.actorId,
+      updatedById: input.actorId,
+      lines: {
+        create: normalizedLines.map((line, index) => ({
+          position: index,
+          productId: line.productId,
+          variantId: line.variantId ?? undefined,
+          variantKey: line.variantId ?? "BASE",
+          qtyOrdered: line.qtyOrdered,
+          unitCost: line.unitCost ?? undefined,
+        })),
+      },
+    },
+    include: { lines: true },
   });
 
+  if (input.submit) {
+    for (const line of po.lines) {
+      await adjustOnOrder(
+        tx,
+        input.storeId,
+        line.productId,
+        line.variantId,
+        line.qtyOrdered,
+        store.allowNegativeStock,
+      );
+    }
+  }
+
+  await writeAuditLog(tx, {
+    organizationId: input.organizationId,
+    actorId: input.actorId,
+    action: "PO_CREATE",
+    entity: "PurchaseOrder",
+    entityId: po.id,
+    before: null,
+    after: toJson(po),
+    requestId: input.requestId,
+  });
+
+  return po;
+};
+
+type PurchaseOrderCreateResult = Awaited<ReturnType<typeof createPurchaseOrderTx>>;
+
+const dispatchPurchaseOrderCreated = async (
+  input: CreatePurchaseOrderInput,
+  result: PurchaseOrderCreateResult,
+) => {
+  const logger = getLogger(input.requestId);
   await recordFirstEvent({
     organizationId: input.organizationId,
     actorId: input.actorId,
@@ -282,17 +320,101 @@ export const createPurchaseOrder = async (input: CreatePurchaseOrderInput) => {
   });
 
   if (input.submit) {
-    for (const productId of affectedProductIds) {
+    for (const productId of new Set(result.lines.map((line) => line.productId))) {
       eventBus.publish({
         type: "inventory.updated",
-        payload: { storeId: affectedStoreId, productId },
+        payload: { storeId: result.storeId, productId },
       });
     }
   }
 
   logger.info({ poId: result.id, status: result.status }, "purchase order created");
+};
 
+export const createPurchaseOrder = async (input: CreatePurchaseOrderInput) => {
+  const result = await prisma.$transaction((tx) => createPurchaseOrderTx(tx, input));
+  await dispatchPurchaseOrderCreated(input, result);
   return result;
+};
+
+type PurchaseOrderCreateOperationResponse = Prisma.InputJsonObject & {
+  purchaseOrder: {
+    id: string;
+    storeId: string;
+    status: PurchaseOrderStatus;
+  };
+};
+
+const classifyPurchaseOrderOperationFailure = (error: unknown): OperationFailureDecision => {
+  if (error instanceof AppError) {
+    return {
+      classification: OPERATION_FAILURE_SAFE_BEFORE_EFFECTS,
+      responseCode: error.message,
+      responseStatus: error.status,
+    };
+  }
+  return classifyDatabaseOperationFailure(error, "operationRequestFailed");
+};
+
+export const createPurchaseOrderOperation = async (
+  input: CreatePurchaseOrderInput & { idempotencyKey: string },
+) => {
+  let createdResult: PurchaseOrderCreateResult | null = null;
+  const operation = await runOperationRequest<PurchaseOrderCreateOperationResponse>(
+    {
+      organizationId: input.organizationId,
+      storeId: input.storeId,
+      scope: "purchaseOrders.create.v1",
+      principal: {
+        type: OperationRequestPrincipalType.AUTHENTICATED_USER,
+        id: input.actorId,
+      },
+      idempotencyKey: input.idempotencyKey,
+      payload: {
+        version: "v1",
+        value: {
+          supplierId: input.supplierId ?? null,
+          submit: input.submit ?? false,
+          lines: input.lines.map((line) => ({
+            productId: line.productId,
+            variantId: line.variantId ?? null,
+            qtyOrdered: line.qtyOrdered,
+            unitCost: line.unitCost ?? null,
+            unitId: line.unitId ?? null,
+            packId: line.packId ?? null,
+          })),
+        },
+      },
+      allowedResponsePaths: [
+        "purchaseOrder",
+        "purchaseOrder.id",
+        "purchaseOrder.storeId",
+        "purchaseOrder.status",
+      ],
+      classifyFailure: classifyPurchaseOrderOperationFailure,
+    },
+    async (tx) => {
+      const result = await createPurchaseOrderTx(tx, input);
+      createdResult = result;
+      return {
+        response: {
+          purchaseOrder: {
+            id: result.id,
+            storeId: result.storeId,
+            status: result.status,
+          },
+        },
+        responseStatus: 200,
+        responseCode: "created",
+        resource: { type: "PurchaseOrder", id: result.id },
+      };
+    },
+  );
+
+  if (createdResult) {
+    await dispatchPurchaseOrderCreated(input, createdResult);
+  }
+  return operation;
 };
 
 export const createDraftsFromReorder = async (input: CreateDraftsFromReorderInput) => {

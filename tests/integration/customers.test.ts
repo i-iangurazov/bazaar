@@ -227,6 +227,7 @@ describeDb("customer database", () => {
     const caller = createTestCaller(asCallerUser(adminUser));
 
     await caller.salesOrders.createDraft({
+      idempotencyKey: "customers-order-email",
       storeId: store.id,
       customerName: "Email Customer",
       customerEmail: "Customer@Example.COM",
@@ -234,18 +235,21 @@ describeDb("customer database", () => {
       customerAddress: "Bishkek, Chui 1",
     });
     await caller.salesOrders.createDraft({
+      idempotencyKey: "customers-order-phone",
       storeId: store.id,
       customerName: "Phone Customer",
       customerEmail: null,
       customerPhone: "+996 555 123 123",
     });
     await caller.salesOrders.createDraft({
+      idempotencyKey: "customers-order-other-store",
       storeId: otherStore.id,
       customerName: "Other Store Same Email",
       customerEmail: "customer@example.com",
       customerPhone: null,
     });
     await caller.salesOrders.createDraft({
+      idempotencyKey: "customers-order-no-contact",
       storeId: store.id,
       customerName: "No Contact",
       customerEmail: null,
