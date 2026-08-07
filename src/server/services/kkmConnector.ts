@@ -53,6 +53,7 @@ const asFiscalDraft = (value: Prisma.JsonValue): FiscalReceiptDraft | null => {
 const adapterRetryLeaseMs = 5 * 60 * 1000;
 const adapterRetryWaitMs = 10_000;
 const adapterRetryPollMs = 25;
+const connectorProcessingLeaseMs = 5 * 60 * 1000;
 
 type AdapterRetryAudit = {
   actorId: string | null;
@@ -509,6 +510,7 @@ export const connectorPullQueue = async (input: { token: string; limit?: number 
   const device = await resolveConnectorDevice(input.token);
   const limit = Math.max(1, Math.min(input.limit ?? 20, 100));
   const now = new Date();
+  const leaseExpiresAt = new Date(now.getTime() + connectorProcessingLeaseMs);
 
   return prisma.$transaction(async (tx) => {
     await tx.kkmConnectorDevice.update({
@@ -523,8 +525,16 @@ export const connectorPullQueue = async (input: { token: string; limit?: number 
       WHERE "organizationId" = ${device.organizationId}
         AND "storeId" = ${device.storeId}
         AND "mode" = ${KkmMode.CONNECTOR}::"KkmMode"
-        AND "status" = ${FiscalReceiptStatus.QUEUED}::"FiscalReceiptStatus"
-        AND ("nextAttemptAt" IS NULL OR "nextAttemptAt" <= ${now})
+        AND (
+          (
+            "status" = ${FiscalReceiptStatus.QUEUED}::"FiscalReceiptStatus"
+            AND ("nextAttemptAt" IS NULL OR "nextAttemptAt" <= ${now})
+          )
+          OR (
+            "status" = ${FiscalReceiptStatus.PROCESSING}::"FiscalReceiptStatus"
+            AND ("nextAttemptAt" IS NULL OR "nextAttemptAt" <= ${now})
+          )
+        )
       ORDER BY "createdAt" ASC
       FOR UPDATE SKIP LOCKED
       LIMIT ${limit}
@@ -548,12 +558,22 @@ export const connectorPullQueue = async (input: { token: string; limit?: number 
     await tx.fiscalReceipt.updateMany({
       where: {
         id: { in: ids },
-        status: FiscalReceiptStatus.QUEUED,
+        OR: [
+          {
+            status: FiscalReceiptStatus.QUEUED,
+            OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }],
+          },
+          {
+            status: FiscalReceiptStatus.PROCESSING,
+            OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }],
+          },
+        ],
       },
       data: {
         status: FiscalReceiptStatus.PROCESSING,
         connectorDeviceId: device.id,
         attemptCount: { increment: 1 },
+        nextAttemptAt: leaseExpiresAt,
       },
     });
 

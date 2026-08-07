@@ -3678,6 +3678,183 @@ describeDb("pos", () => {
     expect(sentSale?.kkmReceiptId).toBe("mkassa-001");
   });
 
+  it("recovers a stale connector receipt once with the same idempotency identity", async () => {
+    const { org, store, product, cashierUser, adminUser } = await seedBase({ plan: "ENTERPRISE" });
+
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { basePriceKgs: 100 },
+    });
+    await prisma.storeComplianceProfile.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        enableKkm: true,
+        kkmMode: "CONNECTOR",
+        kkmProviderKey: "mkassa",
+      },
+    });
+    await adjustStock({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 5,
+      reason: "seed",
+      idempotencyKey: "pos-seed-kkm-timeout-1",
+      requestId: "pos-seed-kkm-timeout-1",
+    });
+
+    const register = await prisma.posRegister.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Front Desk",
+        code: "FRONT",
+      },
+    });
+    const cashierCaller = createTestCaller({
+      id: cashierUser.id,
+      email: cashierUser.email,
+      role: cashierUser.role,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+    await cashierCaller.pos.shifts.open({
+      registerId: register.id,
+      openingCashKgs: 0,
+      idempotencyKey: "pos-open-kkm-timeout-1",
+    });
+    const sale = await cashierCaller.pos.sales.createDraft({ registerId: register.id });
+    await cashierCaller.pos.sales.addLine({ saleId: sale.id, productId: product.id, qty: 1 });
+    await cashierCaller.pos.sales.complete({
+      saleId: sale.id,
+      idempotencyKey: "pos-sale-complete-kkm-timeout-1",
+      payments: [{ method: "CASH", amountKgs: 100 }],
+    });
+
+    const pairDevice = async (requestId: string, deviceName: string) => {
+      const pair = await createConnectorPairingCode({
+        organizationId: org.id,
+        storeId: store.id,
+        actorId: adminUser.id,
+        user: {
+          id: adminUser.id,
+          organizationId: org.id,
+          role: adminUser.role,
+          isOrgOwner: adminUser.isOrgOwner,
+        },
+        requestId,
+      });
+      return pairConnectorDevice({ code: pair.code, deviceName });
+    };
+    const [deviceA, deviceB] = await Promise.all([
+      pairDevice("pair-kkm-timeout-a", "Connector A"),
+      pairDevice("pair-kkm-timeout-b", "Connector B"),
+    ]);
+
+    const firstPull = await connectorPullQueue({ token: deviceA.token, limit: 10 });
+    expect(firstPull).toHaveLength(1);
+    const receiptId = firstPull[0]!.id;
+    const commandId = firstPull[0]!.idempotencyKey;
+    const firstClaim = await prisma.fiscalReceipt.findUniqueOrThrow({
+      where: { id: receiptId },
+      select: {
+        status: true,
+        attemptCount: true,
+        nextAttemptAt: true,
+        connectorDeviceId: true,
+      },
+    });
+    expect(firstClaim).toMatchObject({
+      status: "PROCESSING",
+      attemptCount: 1,
+      connectorDeviceId: deviceA.device.id,
+    });
+    expect(firstClaim.nextAttemptAt?.getTime()).toBeGreaterThan(Date.now());
+
+    const activeLeasePulls = await Promise.all([
+      connectorPullQueue({ token: deviceA.token, limit: 10 }),
+      connectorPullQueue({ token: deviceB.token, limit: 10 }),
+    ]);
+    expect(activeLeasePulls.flat()).toHaveLength(0);
+
+    await prisma.fiscalReceipt.update({
+      where: { id: receiptId },
+      data: { nextAttemptAt: new Date(Date.now() - 1_000) },
+    });
+    const recoveryPulls = await Promise.all([
+      connectorPullQueue({ token: deviceA.token, limit: 10 }),
+      connectorPullQueue({ token: deviceB.token, limit: 10 }),
+    ]);
+    const recovered = recoveryPulls.flat();
+    expect(recovered).toHaveLength(1);
+    expect(recovered[0]).toMatchObject({ id: receiptId, idempotencyKey: commandId });
+
+    const recoveryDevice = recoveryPulls[0].length ? deviceA : deviceB;
+    const staleDevice = recoveryPulls[0].length ? deviceB : deviceA;
+    const recoveredClaim = await prisma.fiscalReceipt.findUniqueOrThrow({
+      where: { id: receiptId },
+      select: {
+        status: true,
+        attemptCount: true,
+        nextAttemptAt: true,
+        connectorDeviceId: true,
+      },
+    });
+    expect(recoveredClaim).toMatchObject({
+      status: "PROCESSING",
+      attemptCount: 2,
+      connectorDeviceId: recoveryDevice.device.id,
+    });
+    expect(recoveredClaim.nextAttemptAt?.getTime()).toBeGreaterThan(Date.now());
+
+    await connectorPushResult({
+      token: recoveryDevice.token,
+      receiptId,
+      status: "SENT",
+      providerReceiptId: "mkassa-timeout-001",
+      fiscalNumber: "fiscal-timeout-001",
+    });
+    await connectorPushResult({
+      token: staleDevice.token,
+      receiptId,
+      status: "FAILED",
+      errorMessage: "late stale result",
+    });
+
+    const [finalReceipt, finalSale, receiptCount] = await Promise.all([
+      prisma.fiscalReceipt.findUniqueOrThrow({
+        where: { id: receiptId },
+        select: {
+          status: true,
+          attemptCount: true,
+          nextAttemptAt: true,
+          providerReceiptId: true,
+          fiscalNumber: true,
+        },
+      }),
+      prisma.customerOrder.findUniqueOrThrow({
+        where: { id: sale.id },
+        select: { status: true, kkmStatus: true, kkmReceiptId: true },
+      }),
+      prisma.fiscalReceipt.count({ where: { customerOrderId: sale.id } }),
+    ]);
+    expect(finalReceipt).toEqual({
+      status: "SENT",
+      attemptCount: 2,
+      nextAttemptAt: null,
+      providerReceiptId: "mkassa-timeout-001",
+      fiscalNumber: "fiscal-timeout-001",
+    });
+    expect(finalSale).toEqual({
+      status: "COMPLETED",
+      kkmStatus: "SENT",
+      kkmReceiptId: "mkassa-timeout-001",
+    });
+    expect(receiptCount).toBe(1);
+  });
+
   it("blocks card refund when original sale shift differs", async () => {
     const { org, store, product, cashierUser, managerUser, adminUser } = await seedBase({
       plan: "BUSINESS",
