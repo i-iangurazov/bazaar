@@ -33,21 +33,21 @@ describe("index page source layout", () => {
     },
   );
 
-  it("chunks inventory bulk on-hand updates instead of sending huge selections in one request", async () => {
+  it("sends bulk on-hand as one durable atomic operation", async () => {
     const source = await readSource("src/app/(app)/inventory/page.tsx");
     const serviceSource = await readSource("src/server/services/inventory.ts");
     const handlerStart = source.indexOf("const handleBulkOnHandSubmit");
     const handlerSource = source.slice(handlerStart, handlerStart + 2200);
 
-    expect(source).toContain("const BULK_ON_HAND_CHUNK_SIZE = 100");
-    expect(handlerSource).toContain("index += BULK_ON_HAND_CHUNK_SIZE");
-    expect(handlerSource).toContain("snapshotIds.slice(index, index + BULK_ON_HAND_CHUNK_SIZE)");
+    expect(source).not.toContain("BULK_ON_HAND_CHUNK_SIZE");
+    expect(handlerSource).toContain("[...selectedSnapshotIds].sort()");
+    expect(handlerSource).toContain("bulkOnHandOperationRef");
     expect(handlerSource).toContain("bulkOnHandMutation.mutateAsync");
     expect(handlerSource).toContain("setBulkOnHandProgress");
-    expect(serviceSource).toContain("const BULK_SET_ON_HAND_TRANSACTION_CHUNK_SIZE = 10");
-    expect(serviceSource).toContain("index += BULK_SET_ON_HAND_TRANSACTION_CHUNK_SIZE");
-    expect(serviceSource).toContain("key: `${input.idempotencyKey}:${chunkIndex}`");
-    expect(serviceSource).toContain("{ timeout: 10_000 }");
+    expect(serviceSource).not.toContain("BULK_SET_ON_HAND_TRANSACTION_CHUNK_SIZE");
+    expect(serviceSource).toContain("key: input.idempotencyKey");
+    expect(serviceSource).toContain("snapshots.length !== snapshotIds.length");
+    expect(serviceSource).toContain("{ maxWait: 10_000, timeout: 120_000 }");
   });
 
   it("sends selected export columns to the server instead of slicing CSV indexes locally", async () => {
