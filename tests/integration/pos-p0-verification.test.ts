@@ -1125,8 +1125,10 @@ describeDb("Agent 1 P0 runtime verification", () => {
     expect(returnMovements.reduce((sum, movement) => sum + movement.qtyDelta, 0)).toBe(5);
   });
 
-  it("HARD-A1-006 blocks shift close until active and held drafts are resolved", async () => {
-    const { org, store, product, cashierUser, managerUser } = await seedBase({ plan: "BUSINESS" });
+  it("HARD-A1-006 blocks shift close until active, held, and return drafts are resolved", async () => {
+    const { org, store, product, adminUser, cashierUser, managerUser } = await seedBase({
+      plan: "BUSINESS",
+    });
     await prisma.product.update({ where: { id: product.id }, data: { basePriceKgs: 100 } });
     const caller = callerFor(cashierUser);
     const managerCaller = callerFor(managerUser);
@@ -1171,6 +1173,52 @@ describeDb("Agent 1 P0 runtime verification", () => {
 
     await caller.pos.sales.cancelDraft({ saleId: activeDraft.id });
     await caller.pos.sales.cancelDraft({ saleId: heldDraft.id });
+    await adjustStock({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 1,
+      reason: "HARD-A1-006 return recovery fixture",
+      idempotencyKey: "hard-a1-006-stock",
+      requestId: "hard-a1-006-stock",
+    });
+    const returnSource = await createAndCompleteSale({
+      caller,
+      registerId: runtime.register.id,
+      productId: product.id,
+      key: "hard-a1-006-return-source",
+    });
+    const returnDraft = await caller.pos.returns.createDraft({
+      shiftId: runtime.shift.id,
+      originalSaleId: returnSource.sale.id,
+    });
+    await caller.pos.returns.addLine({
+      saleReturnId: returnDraft.id,
+      customerOrderLineId: returnSource.line.id,
+      qty: 1,
+    });
+    await expect(
+      managerCaller.pos.shifts.close({
+        shiftId: runtime.shift.id,
+        closingCashCountedKgs: 0,
+        idempotencyKey: "hard-a1-006-close",
+      }),
+    ).rejects.toMatchObject({ code: "CONFLICT", message: "posShiftDraftsOpen" });
+    expect(await prisma.saleReturn.findUniqueOrThrow({ where: { id: returnDraft.id } })).toMatchObject({
+      status: "DRAFT",
+    });
+    expect(
+      await prisma.idempotencyKey.count({
+        where: { key: "hard-a1-006-close", route: "pos.shifts.close" },
+      }),
+    ).toBe(0);
+
+    await managerCaller.pos.returns.complete({
+      saleReturnId: returnDraft.id,
+      idempotencyKey: "hard-a1-006-return-complete",
+      payments: [{ method: PosPaymentMethod.CASH, amountKgs: returnSource.totalKgs }],
+    });
     await managerCaller.pos.shifts.close({
       shiftId: runtime.shift.id,
       closingCashCountedKgs: 0,
