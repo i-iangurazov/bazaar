@@ -393,4 +393,30 @@ describe("HARD-A3-026 public catalogue image proxy", () => {
       expect.objectContaining({ redirect: "manual" }),
     );
   });
+
+  it("resolves a relative /retails object key against the configured R2 base path", async () => {
+    process.env.R2_PUBLIC_BASE_URL = "https://images.example.com/bazaar-assets";
+    const fetchMock = vi.fn().mockResolvedValue(imageResponse());
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await requestImage("/retails/org-1/products/prod-1/public.png");
+
+    expect(response.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://images.example.com/bazaar-assets/retails/org-1/products/prod-1/public.png",
+      expect.objectContaining({ redirect: "manual" }),
+    );
+  });
+
+  it("rejects a relative /retails object key when R2 is not configured", async () => {
+    delete process.env.R2_PUBLIC_BASE_URL;
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await requestImage("/retails/org-1/products/prod-1/public.png");
+
+    expect(response.status).toBe(404);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(lookupMock).not.toHaveBeenCalled();
+  });
 });

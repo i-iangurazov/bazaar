@@ -390,6 +390,28 @@ describeDb("bazaar catalog integration", () => {
     );
   });
 
+  it("keeps relative R2 /retails product images in the public catalog payload", async () => {
+    const { org, store, product, adminUser } = await seedBase();
+    const relativeImageUrl = `/retails/${org.id}/products/${product.id}/catalog-product.jpg`;
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { photoUrl: relativeImageUrl },
+    });
+    const saved = await upsertBazaarCatalogSettings({
+      organizationId: org.id,
+      storeId: store.id,
+      actorId: adminUser.id,
+      requestId: "catalog-relative-r2-image",
+      status: BazaarCatalogStatus.PUBLISHED,
+    });
+
+    const payload = await getPublicBazaarCatalog(saved.catalog.slug);
+
+    expect(payload?.products.find((row) => row.id === product.id)?.imageUrl).toBe(
+      relativeImageUrl,
+    );
+  });
+
   it("does not leak products across orgs when resolving by slug", async () => {
     const { org: orgA, store: storeA, product: productA, adminUser: adminA } = await seedBase();
     await prisma.product.update({

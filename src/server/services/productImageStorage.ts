@@ -863,7 +863,12 @@ export const downloadRemoteImage = async (url: string) => {
 };
 
 const getManagedUrlPrefixes = () => {
-  const prefixes = ["/uploads/imported-products/", "/uploads/product-images/"];
+  const prefixes = [
+    "/uploads/imported-products/",
+    "/uploads/product-images/",
+    "/retails/",
+    "retails/",
+  ];
   const { config } = resolveR2Config();
   if (config?.publicBaseUrl) {
     prefixes.push(config.publicBaseUrl.replace(/\/+$/, ""));
@@ -891,6 +896,8 @@ export const normalizeProductImageUrl = (value?: string | null) => {
     candidate = `https:${candidate}`;
   } else if (/^www\./i.test(candidate)) {
     candidate = `https://${candidate}`;
+  } else if (candidate.startsWith("retails/")) {
+    candidate = `/${candidate}`;
   }
 
   if (candidate.startsWith("data:image/")) {

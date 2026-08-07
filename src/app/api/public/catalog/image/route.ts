@@ -144,6 +144,7 @@ const getAllowedSources = () => {
 
   return {
     appUrl,
+    r2PublicUrl,
     sources: Array.from(sources, ([origin, pathPrefixes]) => ({
       origin,
       pathPrefixes: Array.from(pathPrefixes),
@@ -160,11 +161,18 @@ const resolveAllowedManagedUrl = (rawSourceUrl: string, relativeTo?: URL) => {
     return null;
   }
 
-  const { appUrl, sources } = getAllowedSources();
+  const { appUrl, r2PublicUrl, sources } = getAllowedSources();
   let parsed: URL;
   try {
     if (relativeTo) {
       parsed = new URL(sourceUrl, relativeTo);
+    } else if (sourceUrl.startsWith("/retails/") || sourceUrl.startsWith("retails/")) {
+      if (!r2PublicUrl) {
+        return null;
+      }
+      const r2BaseUrl = new URL(r2PublicUrl);
+      r2BaseUrl.pathname = normalizePathPrefix(r2BaseUrl.pathname);
+      parsed = new URL(sourceUrl.replace(/^\/+/, ""), r2BaseUrl);
     } else if (sourceUrl.startsWith("/")) {
       if (!appUrl) {
         return null;

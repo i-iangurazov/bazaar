@@ -172,6 +172,9 @@ const isProxyableCatalogImageUrl = (sourceUrl: string | null | undefined) => {
   if (normalized.startsWith("/uploads/imported-products/")) {
     return true;
   }
+  if (normalized.startsWith("/retails/") || normalized.startsWith("retails/")) {
+    return true;
+  }
   try {
     const parsed = new URL(normalized);
     const pathname = parsed.pathname.toLowerCase();

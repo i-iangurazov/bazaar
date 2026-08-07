@@ -124,6 +124,12 @@ describe("product image storage", () => {
     expect(normalizeProductImageUrl('"https://cdn.shopify.com/photo.jpg?v=1"')).toBe(
       "https://cdn.shopify.com/photo.jpg?v=1",
     );
+    expect(normalizeProductImageUrl("retails/org-1/products/prod-1/photo.jpg")).toBe(
+      "/retails/org-1/products/prod-1/photo.jpg",
+    );
+    expect(normalizeProductImageUrl("/retails/org-1/products/prod-1/photo.jpg")).toBe(
+      "/retails/org-1/products/prod-1/photo.jpg",
+    );
   });
 
   it("can disable source-url fallback when a remote image cannot be copied", async () => {
