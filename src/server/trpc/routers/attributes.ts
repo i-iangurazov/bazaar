@@ -144,23 +144,47 @@ export const attributesRouter = router({
         const existing = await tx.attributeDefinition.findUniqueOrThrow({
           where: { id: input.id },
         });
+        const affectedVariants = await tx.$queryRaw<
+          Array<{ id: string; attributes: Prisma.JsonValue }>
+        >(
+          Prisma.sql`
+              SELECT variant."id", variant."attributes"
+              FROM "ProductVariant" AS variant
+              INNER JOIN "Product" AS product ON product."id" = variant."productId"
+              WHERE product."organizationId" = ${ctx.user.organizationId}
+                AND jsonb_typeof(variant."attributes") = 'object'
+                AND variant."attributes" ? ${existing.key}
+              ORDER BY variant."id"
+              FOR UPDATE OF variant
+            `,
+        );
         const usageValues = await tx.variantAttributeValue.findMany({
           where: { organizationId: ctx.user.organizationId, key: existing.key },
           select: { value: true },
         });
+        const rawUsageValues = affectedVariants.flatMap(({ attributes }) => {
+          if (!attributes || Array.isArray(attributes) || typeof attributes !== "object") {
+            return [];
+          }
+          const value = (attributes as Prisma.JsonObject)[existing.key];
+          return value === undefined ? [] : collectStoredOptionValues(value);
+        });
+        const hasUsage = usageValues.length > 0 || affectedVariants.length > 0;
 
-        if (usageValues.length > 0 && input.type !== existing.type) {
+        if (hasUsage && input.type !== existing.type) {
           throw new AppError("attributeInUse", "CONFLICT", 409);
         }
 
-        if (usageValues.length > 0 && (input.type === "SELECT" || input.type === "MULTI_SELECT")) {
+        if (hasUsage && (input.type === "SELECT" || input.type === "MULTI_SELECT")) {
           const allowed = normalizeOptionSet([
             ...(input.optionsRu ?? []),
             ...(input.optionsKg ?? []),
           ]);
-          const removesUsedOption = usageValues.some(({ value }) =>
-            collectStoredOptionValues(value).some((stored) => !allowed.has(stored)),
-          );
+          const storedOptionValues = [
+            ...usageValues.flatMap(({ value }) => collectStoredOptionValues(value)),
+            ...rawUsageValues,
+          ];
+          const removesUsedOption = storedOptionValues.some((stored) => !allowed.has(stored));
           if (removesUsedOption) {
             throw new AppError("attributeInUse", "CONFLICT", 409);
           }
@@ -180,20 +204,6 @@ export const attributesRouter = router({
             throw new AppError("attributeExists", "CONFLICT", 409);
           }
 
-          const affectedVariants = await tx.$queryRaw<
-            Array<{ id: string; attributes: Prisma.JsonValue }>
-          >(
-            Prisma.sql`
-                SELECT variant."id", variant."attributes"
-                FROM "ProductVariant" AS variant
-                INNER JOIN "Product" AS product ON product."id" = variant."productId"
-                WHERE product."organizationId" = ${ctx.user.organizationId}
-                  AND jsonb_typeof(variant."attributes") = 'object'
-                  AND variant."attributes" ? ${existing.key}
-                ORDER BY variant."id"
-                FOR UPDATE OF variant
-              `,
-          );
           const hasJsonKeyCollision = affectedVariants.some(({ attributes }) => {
             if (!attributes || Array.isArray(attributes) || typeof attributes !== "object") {
               return false;

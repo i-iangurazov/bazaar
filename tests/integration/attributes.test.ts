@@ -184,6 +184,101 @@ describeDb("attribute definitions", () => {
     expect(auditCountAfter).toBe(auditCountBefore);
   });
 
+  it("locks and validates organization-scoped legacy variant JSON without normalized rows", async () => {
+    const { org, product, managerUser } = await seedBase();
+    const caller = createTestCaller({
+      id: managerUser.id,
+      email: managerUser.email,
+      role: managerUser.role,
+      organizationId: org.id,
+    });
+    const definition = await caller.attributes.create({
+      key: "color",
+      labelRu: "Цвет",
+      labelKg: "Түс",
+      type: "SELECT",
+      optionsRu: ["Красный", "Синий"],
+      optionsKg: ["Кызыл", "Көк"],
+    });
+    const legacyVariant = await prisma.productVariant.create({
+      data: {
+        productId: product.id,
+        name: "Legacy red",
+        attributes: { color: "Красный", retained: "yes" },
+      },
+    });
+
+    const otherOrg = await prisma.organization.create({ data: { name: "Other Org" } });
+    const otherUnit = await prisma.unit.create({
+      data: {
+        organizationId: otherOrg.id,
+        code: "each",
+        labelRu: "шт",
+        labelKg: "даана",
+      },
+    });
+    const otherProduct = await prisma.product.create({
+      data: {
+        organizationId: otherOrg.id,
+        sku: "OTHER-1",
+        name: "Other product",
+        unit: otherUnit.code,
+        baseUnitId: otherUnit.id,
+      },
+    });
+    const otherVariant = await prisma.productVariant.create({
+      data: {
+        productId: otherProduct.id,
+        name: "Other legacy",
+        attributes: { color: "Другой tenant value" },
+      },
+    });
+
+    const baseUpdate = {
+      id: definition.id,
+      key: "color",
+      labelRu: "Цвет",
+      labelKg: "Түс",
+    };
+    await expect(
+      caller.attributes.update({
+        ...baseUpdate,
+        type: "TEXT",
+      }),
+    ).rejects.toMatchObject({ message: "attributeInUse" });
+    await expect(
+      caller.attributes.update({
+        ...baseUpdate,
+        type: "SELECT",
+        optionsRu: ["Синий"],
+        optionsKg: ["Көк"],
+      }),
+    ).rejects.toMatchObject({ message: "attributeInUse" });
+
+    const updated = await caller.attributes.update({
+      ...baseUpdate,
+      key: "shade",
+      type: "SELECT",
+      optionsRu: ["Красный", "Синий"],
+      optionsKg: ["Кызыл", "Көк"],
+    });
+    const [storedLegacyVariant, storedOtherVariant, normalizedUsage, auditCount] =
+      await Promise.all([
+        prisma.productVariant.findUniqueOrThrow({ where: { id: legacyVariant.id } }),
+        prisma.productVariant.findUniqueOrThrow({ where: { id: otherVariant.id } }),
+        prisma.variantAttributeValue.count({ where: { variantId: legacyVariant.id } }),
+        prisma.auditLog.count({
+          where: { organizationId: org.id, action: "ATTRIBUTE_UPDATE", entityId: definition.id },
+        }),
+      ]);
+
+    expect(updated.key).toBe("shade");
+    expect(storedLegacyVariant.attributes).toEqual({ shade: "Красный", retained: "yes" });
+    expect(storedOtherVariant.attributes).toEqual({ color: "Другой tenant value" });
+    expect(normalizedUsage).toBe(0);
+    expect(auditCount).toBe(1);
+  });
+
   it("rejects a rename that would overwrite an existing variant JSON key", async () => {
     const { org, product, managerUser } = await seedBase();
     const caller = createTestCaller({
