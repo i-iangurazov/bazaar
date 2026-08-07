@@ -1,5 +1,3 @@
-import * as XLSX from "xlsx";
-
 export type DownloadFormat = "csv" | "xlsx";
 
 const csvDelimiter = ";";
@@ -10,7 +8,7 @@ const escapeCsvValue = (value: unknown) => {
   }
   const str = sanitizeSpreadsheetValue(value);
   if (str.includes(csvDelimiter) || /["\r\n]/.test(str)) {
-    return `"${str.replace(/"/g, "\"\"")}"`;
+    return `"${str.replace(/"/g, '""')}"`;
   }
   return str;
 };
@@ -42,7 +40,8 @@ const buildCsv = (rows: string[][]) => {
   return `\ufeff${lines.join("\r\n")}`;
 };
 
-const buildXlsx = (rows: string[][]) => {
+const buildXlsx = async (rows: string[][]) => {
+  const XLSX = await import("xlsx");
   const workbook = XLSX.utils.book_new();
   const worksheet = XLSX.utils.aoa_to_sheet(
     rows.map((row) => row.map((value) => sanitizeSpreadsheetValue(value))),
@@ -53,7 +52,7 @@ const buildXlsx = (rows: string[][]) => {
 
 const ensureRows = (header: string[], rows: string[][]) => [header, ...rows];
 
-export const downloadTableFile = (input: {
+export const downloadTableFile = async (input: {
   format: DownloadFormat;
   fileNameBase: string;
   header: string[];
@@ -61,7 +60,7 @@ export const downloadTableFile = (input: {
 }) => {
   const allRows = ensureRows(input.header, input.rows);
   if (input.format === "xlsx") {
-    const content = buildXlsx(allRows);
+    const content = await buildXlsx(allRows);
     triggerDownload(
       new Blob([content], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -72,7 +71,10 @@ export const downloadTableFile = (input: {
   }
 
   const content = buildCsv(allRows);
-  triggerDownload(new Blob([content], { type: "text/csv;charset=utf-8" }), `${input.fileNameBase}.csv`);
+  triggerDownload(
+    new Blob([content], { type: "text/csv;charset=utf-8" }),
+    `${input.fileNameBase}.csv`,
+  );
 };
 
 export const parseCsvTextRows = (csv: string) => {
