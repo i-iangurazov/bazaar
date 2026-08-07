@@ -1,0 +1,101 @@
+{
+  "issue": "HARD-A3-023",
+  "result": "PASS",
+  "testedAt": "2026-08-08T00:51:00+06:00",
+  "baseCommit": "57e15d18cf37f00d13d95563ee87489606547c42",
+  "database": {
+    "name": "bazaar_hardening_agent3_commerce",
+    "redisDatabase": 13,
+    "migrationsApplied": 94,
+    "suites": [
+      "tests/integration/bazaar-catalog.test.ts",
+      "tests/integration/b0-agent-3-catalog-p0.test.ts"
+    ],
+    "tests": 17,
+    "status": "PASS",
+    "paginationTestDurationMsIncludingFixtureSetup": 439
+  },
+  "unit": {
+    "suites": [
+      "tests/unit/public-catalog-pagination.test.ts",
+      "tests/unit/b3-agent-3-rc11-source.test.ts",
+      "tests/unit/catalog-retails-image-source.test.ts"
+    ],
+    "tests": 5,
+    "status": "PASS"
+  },
+  "browser": {
+    "route": "/c/cghxhcge6va7",
+    "fixtureProducts": 31,
+    "initialPageSize": 24,
+    "states": 6,
+    "assertions": [
+      "initial page renders exactly 24 fixture products",
+      "load more appends the remaining seven fixture products without duplicates",
+      "server search returns one matching product",
+      "a cart item from page two survives the search/filter refresh",
+      "light and dark themes apply at each viewport",
+      "no horizontal document overflow",
+      "no console, runtime, or public catalog API errors"
+    ],
+    "maxWarmCatalogApiDurationMs": 68,
+    "matrix": [
+      {
+        "viewport": "390x844",
+        "theme": "light",
+        "initialProducts": 24,
+        "loadedProducts": 31,
+        "cartRetained": true,
+        "overflowPx": 0,
+        "apiTimingsMs": [3, 41, 29, 25]
+      },
+      {
+        "viewport": "390x844",
+        "theme": "dark",
+        "initialProducts": 24,
+        "loadedProducts": 31,
+        "cartRetained": true,
+        "overflowPx": 0,
+        "apiTimingsMs": [2, 37, 33, 33]
+      },
+      {
+        "viewport": "414x896",
+        "theme": "light",
+        "initialProducts": 24,
+        "loadedProducts": 31,
+        "cartRetained": true,
+        "overflowPx": 0,
+        "apiTimingsMs": [3, 68, 20, 22]
+      },
+      {
+        "viewport": "414x896",
+        "theme": "dark",
+        "initialProducts": 24,
+        "loadedProducts": 31,
+        "cartRetained": true,
+        "overflowPx": 0,
+        "apiTimingsMs": [2, 31, 17, 17]
+      },
+      {
+        "viewport": "1440x1000",
+        "theme": "light",
+        "initialProducts": 24,
+        "loadedProducts": 31,
+        "cartRetained": true,
+        "overflowPx": 0,
+        "apiTimingsMs": [2, 32, 18, 32]
+      },
+      {
+        "viewport": "1440x1000",
+        "theme": "dark",
+        "initialProducts": 24,
+        "loadedProducts": 31,
+        "cartRetained": true,
+        "overflowPx": 0,
+        "apiTimingsMs": [2, 33, 18, 27]
+      }
+    ],
+    "consoleErrors": [],
+    "apiErrors": []
+  }
+}

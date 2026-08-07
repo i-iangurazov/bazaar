@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
@@ -48,6 +48,13 @@ type CatalogPayload = {
   headerStyle: "COMPACT" | "STANDARD";
   logoUrl: string | null;
   categories: Array<{ key: string; name: string | null; count: number }>;
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+    hasMore: boolean;
+  };
   products: Array<{
     id: string;
     name: string;
@@ -86,6 +93,7 @@ const uncategorizedKey = "__uncategorized";
 const numericPattern = /^\d*$/;
 const baseVariantKey = "BASE";
 const catalogImageWidths = [320, 480, 720] as const;
+const catalogPageSize = 24;
 
 const formatCatalogCurrency = (
   amount: number,
@@ -225,9 +233,15 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
 
   const [catalog, setCatalog] = useState<CatalogPayload | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [knownProducts, setKnownProducts] = useState<
+    Record<string, CatalogPayload["products"][number]>
+  >({});
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
   const [cart, setCart] = useState<Record<string, number>>({});
   const [qtyInputs, setQtyInputs] = useState<Record<string, string>>({});
@@ -242,59 +256,129 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const checkoutAttemptRef = useRef<{ payload: string; idempotencyKey: string } | null>(null);
+  const loadMoreControllerRef = useRef<AbortController | null>(null);
+
+  const mergeKnownProducts = useCallback((products: CatalogPayload["products"]) => {
+    setKnownProducts((current) => {
+      const next = { ...current };
+      for (const product of products) {
+        next[product.id] = product;
+      }
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
-    let cancelled = false;
+    const timer = window.setTimeout(() => setAppliedSearch(search.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    loadMoreControllerRef.current?.abort();
+    loadMoreControllerRef.current = null;
     const load = async () => {
       setLoading(true);
+      setLoadingMore(false);
+      setLoadMoreError(null);
       setErrorMessage(null);
       try {
-        const response = await fetch(`/api/public/catalog/${encodeURIComponent(slug)}`, {
-          method: "GET",
-          cache: "no-store",
-        });
+        const params = new URLSearchParams({ page: "1", pageSize: String(catalogPageSize) });
+        if (appliedSearch) {
+          params.set("search", appliedSearch);
+        }
+        if (categoryFilter !== "all") {
+          params.set("category", categoryFilter);
+        }
+        const response = await fetch(
+          `/api/public/catalog/${encodeURIComponent(slug)}?${params.toString()}`,
+          {
+            method: "GET",
+            cache: "no-store",
+            signal: controller.signal,
+          },
+        );
         const body = (await response.json().catch(() => ({}))) as CatalogResponse;
         if (!response.ok || !("products" in body)) {
           const key = "message" in body && body.message ? body.message : "genericMessage";
           const message = tErrors.has?.(key) ? tErrors(key) : tErrors("genericMessage");
           throw new Error(message);
         }
-        if (!cancelled) {
-          setCatalog(body);
-        }
+        setCatalog(body);
+        mergeKnownProducts(body.products);
       } catch (error) {
-        if (!cancelled) {
-          setErrorMessage(error instanceof Error ? error.message : tErrors("genericMessage"));
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
         }
+        setErrorMessage(error instanceof Error ? error.message : tErrors("genericMessage"));
       } finally {
-        if (!cancelled) {
+        if (!controller.signal.aborted) {
           setLoading(false);
         }
       }
     };
     void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [slug, tErrors]);
+    return () => controller.abort();
+  }, [appliedSearch, categoryFilter, mergeKnownProducts, slug, tErrors]);
+
+  const loadMore = async () => {
+    if (!catalog?.pagination.hasMore || loadingMore) {
+      return;
+    }
+    const controller = new AbortController();
+    loadMoreControllerRef.current = controller;
+    setLoadingMore(true);
+    setLoadMoreError(null);
+    try {
+      const params = new URLSearchParams({
+        page: String(catalog.pagination.page + 1),
+        pageSize: String(catalog.pagination.pageSize),
+      });
+      if (appliedSearch) {
+        params.set("search", appliedSearch);
+      }
+      if (categoryFilter !== "all") {
+        params.set("category", categoryFilter);
+      }
+      const response = await fetch(
+        `/api/public/catalog/${encodeURIComponent(slug)}?${params.toString()}`,
+        { method: "GET", cache: "no-store", signal: controller.signal },
+      );
+      const body = (await response.json().catch(() => ({}))) as CatalogResponse;
+      if (!response.ok || !("products" in body)) {
+        throw new Error(tErrors("genericMessage"));
+      }
+      mergeKnownProducts(body.products);
+      setCatalog((current) => {
+        if (!current) {
+          return body;
+        }
+        const seen = new Set(current.products.map((product) => product.id));
+        return {
+          ...body,
+          products: [
+            ...current.products,
+            ...body.products.filter((product) => !seen.has(product.id)),
+          ],
+        };
+      });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return;
+      }
+      setLoadMoreError(error instanceof Error ? error.message : tErrors("genericMessage"));
+    } finally {
+      if (loadMoreControllerRef.current === controller) {
+        loadMoreControllerRef.current = null;
+        setLoadingMore(false);
+      }
+    }
+  };
 
   const accentColor = sanitizeAccent(catalog?.accentColor);
   const catalogCurrencyCode = catalog?.currencyCode ?? defaultCurrencyCode;
 
-  const visibleProducts = useMemo(() => {
-    if (!catalog) {
-      return [];
-    }
-    const normalizedSearch = search.trim().toLowerCase();
-    return catalog.products.filter((product) => {
-      const matchesCategory =
-        categoryFilter === "all" ? true : categoryKeyOf(product.category) === categoryFilter;
-      const matchesSearch = normalizedSearch
-        ? product.name.toLowerCase().includes(normalizedSearch)
-        : true;
-      return matchesCategory && matchesSearch;
-    });
-  }, [catalog, categoryFilter, search]);
+  const visibleProducts = useMemo(() => catalog?.products ?? [], [catalog?.products]);
 
   const groupedProducts = useMemo(() => {
     const map = new Map<
@@ -340,13 +424,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
     [visibleProducts],
   );
 
-  const productsById = useMemo(() => {
-    const map = new Map<string, CatalogPayload["products"][number]>();
-    for (const product of catalog?.products ?? []) {
-      map.set(product.id, product);
-    }
-    return map;
-  }, [catalog?.products]);
+  const productsById = useMemo(() => new Map(Object.entries(knownProducts)), [knownProducts]);
 
   const cartItems = useMemo(() => {
     return Object.entries(cart)
@@ -533,8 +611,12 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
         const key = body.message ?? "genericMessage";
         if (key === "catalogPriceChanged") {
           checkoutAttemptRef.current = null;
+          const refreshParams = new URLSearchParams();
+          for (const productId of new Set(cartItems.map((item) => item.product.id))) {
+            refreshParams.append("productId", productId);
+          }
           const refreshedResponse = await fetch(
-            `/api/public/catalog/${encodeURIComponent(catalog.slug)}`,
+            `/api/public/catalog/${encodeURIComponent(catalog.slug)}?${refreshParams.toString()}`,
             { method: "GET", cache: "no-store" },
           );
           const refreshedBody = (await refreshedResponse
@@ -543,7 +625,20 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
           if (!refreshedResponse.ok || !("products" in refreshedBody)) {
             throw new Error(tErrors("genericMessage"));
           }
-          setCatalog(refreshedBody);
+          mergeKnownProducts(refreshedBody.products);
+          const refreshedProducts = new Map(
+            refreshedBody.products.map((product) => [product.id, product]),
+          );
+          setCatalog((current) =>
+            current
+              ? {
+                  ...current,
+                  products: current.products.map(
+                    (product) => refreshedProducts.get(product.id) ?? product,
+                  ),
+                }
+              : refreshedBody,
+          );
           setSubmitError(t("checkoutPriceChanged"));
           return;
         }
@@ -946,6 +1041,33 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
             );
           })
         )}
+        {catalog.pagination.total > 0 ? (
+          <div className="flex flex-col items-center gap-3 border-t border-border/70 pt-4">
+            <p className="text-xs text-muted-foreground">
+              {t("shownCount", {
+                shown: visibleProducts.length,
+                total: catalog.pagination.total,
+              })}
+            </p>
+            {loadMoreError ? (
+              <p role="alert" className="text-center text-sm text-danger">
+                {loadMoreError}
+              </p>
+            ) : null}
+            {catalog.pagination.hasMore ? (
+              <Button
+                type="button"
+                variant="secondary"
+                className="min-h-11 w-full sm:w-auto"
+                onClick={() => void loadMore()}
+                disabled={loadingMore}
+              >
+                {loadingMore ? <Spinner className="h-4 w-4" /> : null}
+                {loadingMore ? t("loadingMore") : t("loadMore")}
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       {cartItemsCount > 0 ? (

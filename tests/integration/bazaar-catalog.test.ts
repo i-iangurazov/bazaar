@@ -72,6 +72,98 @@ describeDb("bazaar catalog integration", () => {
     expect(payload?.products.some((row) => row.id === product.id)).toBe(true);
   });
 
+  it("paginates the public catalog with stable server search and category filters", async () => {
+    const { org, store, supplier, baseUnit, adminUser } = await seedBase();
+    const products = await Promise.all(
+      Array.from({ length: 30 }, (_, index) =>
+        prisma.product.create({
+          data: {
+            organizationId: org.id,
+            supplierId: supplier.id,
+            baseUnitId: baseUnit.id,
+            unit: baseUnit.code,
+            sku: `PAGE-${String(index + 1).padStart(2, "0")}`,
+            name: `Paged Product ${String(index + 1).padStart(2, "0")}`,
+            category: index % 2 ? "Category B" : "Category A",
+            basePriceKgs: 100 + index,
+          },
+        }),
+      ),
+    );
+    await prisma.storeProduct.createMany({
+      data: products.map((product) => ({
+        organizationId: org.id,
+        storeId: store.id,
+        productId: product.id,
+        isActive: true,
+      })),
+    });
+    const saved = await upsertBazaarCatalogSettings({
+      organizationId: org.id,
+      storeId: store.id,
+      actorId: adminUser.id,
+      requestId: "catalog-pagination",
+      status: BazaarCatalogStatus.PUBLISHED,
+    });
+
+    const first = await getPublicBazaarCatalog(saved.catalog.slug, {
+      page: 1,
+      pageSize: 10,
+      search: "Paged Product",
+    });
+    const warmedAt = performance.now();
+    const second = await getPublicBazaarCatalog(saved.catalog.slug, {
+      page: 2,
+      pageSize: 10,
+      search: "Paged Product",
+    });
+    const warmedMs = performance.now() - warmedAt;
+    const category = await getPublicBazaarCatalog(saved.catalog.slug, {
+      page: 1,
+      pageSize: 10,
+      category: "category a",
+    });
+    const targeted = await getPublicBazaarCatalog(saved.catalog.slug, {
+      productIds: products.map((product) => product.id),
+    });
+
+    expect(first?.pagination).toEqual({
+      page: 1,
+      pageSize: 10,
+      total: 30,
+      totalPages: 3,
+      hasMore: true,
+    });
+    expect(first?.products.map((product) => product.name)).toEqual([
+      "Paged Product 01",
+      "Paged Product 03",
+      "Paged Product 05",
+      "Paged Product 07",
+      "Paged Product 09",
+      "Paged Product 11",
+      "Paged Product 13",
+      "Paged Product 15",
+      "Paged Product 17",
+      "Paged Product 19",
+    ]);
+    expect(second?.pagination.page).toBe(2);
+    expect(second?.products).toHaveLength(10);
+    const secondIds = new Set(second?.products.map((product) => product.id));
+    expect(first?.products.some((product) => secondIds.has(product.id))).toBe(false);
+    expect(first?.categories).toEqual(
+      expect.arrayContaining([
+        { key: "category a", name: "Category A", count: 15 },
+        { key: "category b", name: "Category B", count: 15 },
+        { key: "__uncategorized", name: null, count: 1 },
+      ]),
+    );
+    expect(category?.pagination.total).toBe(15);
+    expect(category?.products.every((product) => product.category === "Category A")).toBe(true);
+    expect(targeted?.products).toHaveLength(30);
+    expect(targeted?.pagination.hasMore).toBe(false);
+    expect(warmedMs).toBeLessThan(1_500);
+  });
+
   it("records scoped request audits for catalog settings and logo creation", async () => {
     const { org, store, adminUser } = await seedBase();
     const logo = await createBazaarCatalogLogoImage({
@@ -407,9 +499,7 @@ describeDb("bazaar catalog integration", () => {
 
     const payload = await getPublicBazaarCatalog(saved.catalog.slug);
 
-    expect(payload?.products.find((row) => row.id === product.id)?.imageUrl).toBe(
-      relativeImageUrl,
-    );
+    expect(payload?.products.find((row) => row.id === product.id)?.imageUrl).toBe(relativeImageUrl);
   });
 
   it("does not leak products across orgs when resolving by slug", async () => {

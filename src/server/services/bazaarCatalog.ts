@@ -769,6 +769,13 @@ type PublicCatalogPayload = {
   headerStyle: BazaarCatalogHeaderStyle;
   logoUrl: string | null;
   categories: Array<{ key: string; name: string | null; count: number }>;
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+    hasMore: boolean;
+  };
   products: Array<{
     id: string;
     name: string;
@@ -795,6 +802,13 @@ type PublicCatalogPayload = {
 
 export const getPublicBazaarCatalog = async (
   slug: string,
+  options: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    category?: string;
+    productIds?: string[];
+  } = {},
 ): Promise<PublicCatalogPayload | null> => {
   const normalizedSlug = slug.trim().toLowerCase();
   if (!normalizedSlug || normalizedSlug.length < 8) {
@@ -831,46 +845,82 @@ export const getPublicBazaarCatalog = async (
     return null;
   }
 
-  const products = await prisma.product.findMany({
-    where: {
-      organizationId: catalog.organizationId,
-      isDeleted: false,
-      hiddenInBazaarCatalogs: {
-        none: { storeId: catalog.storeId },
-      },
-      storeProducts: { some: { storeId: catalog.storeId, isActive: true } },
+  const productIds = Array.from(
+    new Set((options.productIds ?? []).map((value) => value.trim()).filter(Boolean)),
+  ).slice(0, 100);
+  const page = Math.max(1, Math.trunc(options.page ?? 1));
+  const requestedPageSize = Math.max(1, Math.trunc(options.pageSize ?? 24));
+  const pageSize = productIds.length
+    ? Math.min(100, Math.max(requestedPageSize, productIds.length))
+    : Math.min(60, requestedPageSize);
+  const search = normalizeOptionalText(options.search)?.slice(0, 200) ?? null;
+  const category = normalizeOptionalText(options.category)?.slice(0, 200) ?? null;
+  const baseWhere: Prisma.ProductWhereInput = {
+    organizationId: catalog.organizationId,
+    isDeleted: false,
+    hiddenInBazaarCatalogs: {
+      none: { storeId: catalog.storeId },
     },
-    select: {
-      id: true,
-      name: true,
-      category: true,
-      isBundle: true,
-      photoUrl: true,
-      basePriceKgs: true,
-      variants: {
-        where: { isActive: true },
-        select: {
-          id: true,
-          image: {
-            select: { url: true },
+    storeProducts: { some: { storeId: catalog.storeId, isActive: true } },
+  };
+  const filters: Prisma.ProductWhereInput[] = [
+    ...(search ? [{ name: { contains: search, mode: Prisma.QueryMode.insensitive } }] : []),
+    ...(category === "__uncategorized"
+      ? [{ OR: [{ category: null }, { category: "" }] }]
+      : category
+        ? [{ category: { equals: category, mode: Prisma.QueryMode.insensitive } }]
+        : []),
+    ...(productIds.length ? [{ id: { in: productIds } }] : []),
+  ];
+  const where: Prisma.ProductWhereInput = {
+    ...baseWhere,
+    ...(filters.length ? { AND: filters } : {}),
+  };
+
+  const [total, products, categoryRows] = await Promise.all([
+    prisma.product.count({ where }),
+    prisma.product.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        category: true,
+        isBundle: true,
+        photoUrl: true,
+        basePriceKgs: true,
+        variants: {
+          where: { isActive: true },
+          select: {
+            id: true,
+            image: {
+              select: { url: true },
+            },
+            name: true,
           },
-          name: true,
+          orderBy: { name: "asc" },
         },
-        orderBy: { name: "asc" },
-      },
-      images: {
-        where: {
-          url: {
-            not: { startsWith: "data:image/" },
+        images: {
+          where: {
+            url: {
+              not: { startsWith: "data:image/" },
+            },
           },
+          select: { url: true },
+          orderBy: { position: "asc" },
+          take: 1,
         },
-        select: { url: true },
-        orderBy: { position: "asc" },
-        take: 1,
       },
-    },
-    orderBy: [{ category: "asc" }, { name: "asc" }],
-  });
+      orderBy: [{ category: "asc" }, { name: "asc" }, { id: "asc" }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.product.groupBy({
+      by: ["category"],
+      where: baseWhere,
+      _count: { _all: true },
+      orderBy: { category: "asc" },
+    }),
+  ]);
 
   const storePrices = products.length
     ? await prisma.storePrice.findMany({
@@ -908,20 +958,23 @@ export const getPublicBazaarCatalog = async (
   );
 
   const categoryMap = new Map<string, { key: string; name: string | null; count: number }>();
-  const pricingNow = new Date();
-  const payloadProducts = products.map((product) => {
-    const categoryName = product.category?.trim() || null;
+  for (const row of categoryRows) {
+    const categoryName = row.category?.trim() || null;
     const categoryKey = categoryName ? categoryName.toLowerCase() : "__uncategorized";
     const existing = categoryMap.get(categoryKey);
     if (existing) {
-      existing.count += 1;
+      existing.count += row._count._all;
     } else {
       categoryMap.set(categoryKey, {
         key: categoryKey,
         name: categoryName,
-        count: 1,
+        count: row._count._all,
       });
     }
+  }
+  const pricingNow = new Date();
+  const payloadProducts = products.map((product) => {
+    const categoryName = product.category?.trim() || null;
 
     const baseRow = basePriceByProductId.get(product.id);
     const basePricing = getEffectiveProductPrice({
@@ -1015,6 +1068,13 @@ export const getPublicBazaarCatalog = async (
     categories: Array.from(categoryMap.values()).sort((left, right) =>
       (left.name ?? "").localeCompare(right.name ?? "", "ru"),
     ),
+    pagination: {
+      page,
+      pageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+      hasMore: page * pageSize < total,
+    },
     products: payloadProducts,
   };
 
