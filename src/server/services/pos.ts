@@ -6069,6 +6069,9 @@ export const retryPosSaleKkm = async (input: {
         take: 1,
         select: { id: true },
       },
+      register: {
+        select: { id: true, isActive: true },
+      },
     },
   });
 
@@ -6076,6 +6079,9 @@ export const retryPosSaleKkm = async (input: {
     throw new AppError("posSaleNotFound", "NOT_FOUND", 404);
   }
   await assertUserCanAccessStore(prisma, input.user, sale.storeId);
+  if (!sale.register?.isActive) {
+    throw new AppError("posRegisterInactive", "CONFLICT", 409);
+  }
 
   const compliance = await prisma.storeComplianceProfile.findUnique({
     where: { storeId: sale.storeId },

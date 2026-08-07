@@ -924,7 +924,7 @@ const PosHistoryPage = () => {
                       </Button>
                     </>
                   ) : null}
-                  {canRetryKkm && sale.kkmStatus === "FAILED" ? (
+                  {canOperateRegister && canRetryKkm && sale.kkmStatus === "FAILED" ? (
                     <Button
                       variant="secondary"
                       onClick={() => retryKkmMutation.mutate({ saleId: sale.id })}

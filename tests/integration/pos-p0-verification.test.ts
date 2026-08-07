@@ -2248,4 +2248,88 @@ describeDb("Agent 1 P0 runtime verification", () => {
     });
     expect(completionKeys).toBe(1);
   });
+
+  it("HARD-A1-012 blocks POS KKM retry for inactive register history without side effects", async () => {
+    const { org, store, product, adminUser, managerUser, cashierUser } = await seedBase({
+      plan: "ENTERPRISE",
+    });
+    await prisma.product.update({ where: { id: product.id }, data: { basePriceKgs: 100 } });
+    await prisma.storeComplianceProfile.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        enableKkm: true,
+        kkmMode: "ADAPTER",
+        kkmProviderKey: "mock",
+      },
+    });
+    await adjustStock({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 1,
+      reason: "HARD-A1-012 inactive register retry fixture",
+      idempotencyKey: "hard-a1-012-stock",
+      requestId: "hard-a1-012-stock",
+    });
+    const cashierCaller = callerFor(cashierUser);
+    const managerCaller = callerFor(managerUser);
+    const runtime = await createRegisterAndShift({
+      organizationId: org.id,
+      storeId: store.id,
+      caller: cashierCaller,
+      key: "p0012",
+    });
+    const original = await createAndCompleteSale({
+      caller: cashierCaller,
+      registerId: runtime.register.id,
+      productId: product.id,
+      key: "hard-a1-012-original",
+    });
+    const failedReceipt = await prisma.fiscalReceipt.findFirstOrThrow({
+      where: { customerOrderId: original.sale.id },
+    });
+    expect(failedReceipt).toMatchObject({ status: "FAILED", attemptCount: 1 });
+    expect(kkmRuntime.calls).toHaveLength(1);
+
+    await managerCaller.pos.shifts.close({
+      shiftId: runtime.shift.id,
+      closingCashCountedKgs: original.totalKgs,
+      idempotencyKey: "hard-a1-012-close",
+    });
+    // Simulates a retained legacy/recovery record. Normal deactivation is correctly blocked while
+    // a recoverable fiscal receipt exists, but read-only history must remain safe if such data does.
+    await prisma.posRegister.update({
+      where: { id: runtime.register.id },
+      data: { isActive: false },
+    });
+
+    const [saleBefore, receiptBefore, retryAuditsBefore] = await Promise.all([
+      prisma.customerOrder.findUniqueOrThrow({ where: { id: original.sale.id } }),
+      prisma.fiscalReceipt.findUniqueOrThrow({ where: { id: failedReceipt.id } }),
+      prisma.auditLog.count({
+        where: { entityId: original.sale.id, action: "POS_KKM_RETRY" },
+      }),
+    ]);
+    const providerCallsBefore = kkmRuntime.calls.length;
+    const providerEffectsBefore = kkmRuntime.externalEffects.size;
+
+    await expect(
+      managerCaller.pos.sales.retryKkm({ saleId: original.sale.id }),
+    ).rejects.toMatchObject({ code: "CONFLICT", message: "posRegisterInactive" });
+
+    const [saleAfter, receiptAfter, retryAuditsAfter] = await Promise.all([
+      prisma.customerOrder.findUniqueOrThrow({ where: { id: original.sale.id } }),
+      prisma.fiscalReceipt.findUniqueOrThrow({ where: { id: failedReceipt.id } }),
+      prisma.auditLog.count({
+        where: { entityId: original.sale.id, action: "POS_KKM_RETRY" },
+      }),
+    ]);
+    expect(kkmRuntime.calls).toHaveLength(providerCallsBefore);
+    expect(kkmRuntime.externalEffects.size).toBe(providerEffectsBefore);
+    expect(retryAuditsAfter).toBe(retryAuditsBefore);
+    expect(saleAfter).toEqual(saleBefore);
+    expect(receiptAfter).toEqual(receiptBefore);
+  });
 });
