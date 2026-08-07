@@ -11,7 +11,7 @@ describe("public landing theme isolation", () => {
     const layout = await readSource("src/app/layout.tsx");
     const themeSync = await readSource("src/components/theme-sync.tsx");
     const landingPage = await readSource("src/app/page.tsx");
-    const forceLightTheme = await readSource("src/components/landing/ForceLightTheme.tsx");
+    const marketingStyles = await readSource("src/components/marketing/marketing.module.css");
 
     expect(layout).toContain("forceLandingLightThemeScript");
     expect(layout).toContain('window.location.pathname === "/"');
@@ -23,10 +23,9 @@ describe("public landing theme isolation", () => {
     expect(themeSync).toContain('document.documentElement.classList.remove("dark")');
     expect(themeSync).toContain("pathname, session?.user.themePreference, status");
 
-    expect(landingPage).toContain("ForceLightTheme");
-    expect(landingPage).toContain("<ForceLightTheme />");
-
-    expect(forceLightTheme).toContain('root.classList.remove("dark")');
-    expect(forceLightTheme).toContain('root.dataset.forceLightTheme = "landing"');
+    expect(landingPage).toContain("MarketingLanding");
+    expect(landingPage).not.toContain("ForceLightTheme");
+    expect(marketingStyles).toContain(".marketing {");
+    expect(marketingStyles).toContain("--dark: #070b13");
   });
 });

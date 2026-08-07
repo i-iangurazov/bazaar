@@ -1,0 +1,252 @@
+{
+  "evidence": "Bazaar Retail OS landing responsive QA",
+  "before": [
+    {
+      "viewport": "mobile-390",
+      "title": "Bazaar — касса, товары и склад для розничного магазина",
+      "h1": "Современная касса и учёт товаров для вашего магазина",
+      "horizontalOverflow": 0,
+      "navigationMs": 803
+    },
+    {
+      "viewport": "desktop-1440",
+      "title": "Bazaar — касса, товары и склад для розничного магазина",
+      "h1": "Современная касса и учёт товаров для вашего магазина",
+      "horizontalOverflow": 0,
+      "navigationMs": 700
+    }
+  ],
+  "results": [
+    {
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "title": "Bazaar — Retail OS для современного магазина",
+      "canonical": "https://www.bazaar.kg/",
+      "h1Count": 1,
+      "h2Count": 9,
+      "horizontalOverflow": 0,
+      "imageCount": 13,
+      "loadedImageCount": 13,
+      "renderableImageCount": 13,
+      "missingAltCount": 0,
+      "tabCount": 6,
+      "softwareApplicationSchema": true,
+      "motionMode": "ready",
+      "navDurationMs": 259,
+      "domContentLoadedMs": 101,
+      "resourceTransferKb": 2756,
+      "imageTransferKb": 1,
+      "sectionHeadings": [
+        "Не набор модулей.\nОдин поток данных.",
+        "Продавайте за секунды",
+        "Каждый товар под контролем",
+        "Один каталог.\nВсе каналы продаж.",
+        "Видите не отчёты. Видите бизнес.",
+        "Bazaar всегда с вами",
+        "Доказательства, а не придуманные цифры.",
+        "Понятные тарифы.\nБез сложной математики.",
+        "Ваш магазин уже работает.\nТеперь пусть он работает как система."
+      ],
+      "keyboardTabs": {
+        "count": 6,
+        "selected": "02Запасы",
+        "activeRole": "tab"
+      }
+    },
+    {
+      "viewport": {
+        "width": 414,
+        "height": 896
+      },
+      "title": "Bazaar — Retail OS для современного магазина",
+      "canonical": "https://www.bazaar.kg/",
+      "h1Count": 1,
+      "h2Count": 9,
+      "horizontalOverflow": 0,
+      "imageCount": 13,
+      "loadedImageCount": 13,
+      "renderableImageCount": 13,
+      "missingAltCount": 0,
+      "tabCount": 6,
+      "softwareApplicationSchema": true,
+      "motionMode": "reduced",
+      "navDurationMs": 217,
+      "domContentLoadedMs": 75,
+      "resourceTransferKb": 2756,
+      "imageTransferKb": 1,
+      "sectionHeadings": [
+        "Не набор модулей.\nОдин поток данных.",
+        "Продавайте за секунды",
+        "Каждый товар под контролем",
+        "Один каталог.\nВсе каналы продаж.",
+        "Видите не отчёты. Видите бизнес.",
+        "Bazaar всегда с вами",
+        "Доказательства, а не придуманные цифры.",
+        "Понятные тарифы.\nБез сложной математики.",
+        "Ваш магазин уже работает.\nТеперь пусть он работает как система."
+      ],
+      "keyboardTabs": {
+        "count": 6,
+        "selected": "02Запасы",
+        "activeRole": "tab"
+      }
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "title": "Bazaar — Retail OS для современного магазина",
+      "canonical": "https://www.bazaar.kg/",
+      "h1Count": 1,
+      "h2Count": 9,
+      "horizontalOverflow": 0,
+      "imageCount": 13,
+      "loadedImageCount": 12,
+      "renderableImageCount": 13,
+      "missingAltCount": 0,
+      "tabCount": 6,
+      "softwareApplicationSchema": true,
+      "motionMode": "ready",
+      "navDurationMs": 218,
+      "domContentLoadedMs": 79,
+      "resourceTransferKb": 2755,
+      "imageTransferKb": 1,
+      "sectionHeadings": [
+        "Не набор модулей.\nОдин поток данных.",
+        "Продавайте за секунды",
+        "Каждый товар под контролем",
+        "Один каталог.\nВсе каналы продаж.",
+        "Видите не отчёты. Видите бизнес.",
+        "Bazaar всегда с вами",
+        "Доказательства, а не придуманные цифры.",
+        "Понятные тарифы.\nБез сложной математики.",
+        "Ваш магазин уже работает.\nТеперь пусть он работает как система."
+      ],
+      "keyboardTabs": {
+        "count": 6,
+        "selected": "02Запасы",
+        "activeRole": "tab"
+      }
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 900
+      },
+      "title": "Bazaar — Retail OS для современного магазина",
+      "canonical": "https://www.bazaar.kg/",
+      "h1Count": 1,
+      "h2Count": 9,
+      "horizontalOverflow": 0,
+      "imageCount": 13,
+      "loadedImageCount": 13,
+      "renderableImageCount": 13,
+      "missingAltCount": 0,
+      "tabCount": 6,
+      "softwareApplicationSchema": true,
+      "motionMode": "ready",
+      "navDurationMs": 246,
+      "domContentLoadedMs": 99,
+      "resourceTransferKb": 2756,
+      "imageTransferKb": 1,
+      "sectionHeadings": [
+        "Не набор модулей.\nОдин поток данных.",
+        "Продавайте за секунды",
+        "Каждый товар под контролем",
+        "Один каталог.\nВсе каналы продаж.",
+        "Видите не отчёты. Видите бизнес.",
+        "Bazaar всегда с вами",
+        "Доказательства, а не придуманные цифры.",
+        "Понятные тарифы.\nБез сложной математики.",
+        "Ваш магазин уже работает.\nТеперь пусть он работает как система."
+      ],
+      "keyboardTabs": {
+        "count": 6,
+        "selected": "02Запасы",
+        "activeRole": "tab"
+      }
+    },
+    {
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "title": "Bazaar — Retail OS для современного магазина",
+      "canonical": "https://www.bazaar.kg/",
+      "h1Count": 1,
+      "h2Count": 9,
+      "horizontalOverflow": 0,
+      "imageCount": 13,
+      "loadedImageCount": 13,
+      "renderableImageCount": 13,
+      "missingAltCount": 0,
+      "tabCount": 6,
+      "softwareApplicationSchema": true,
+      "motionMode": "ready",
+      "navDurationMs": 277,
+      "domContentLoadedMs": 119,
+      "resourceTransferKb": 2756,
+      "imageTransferKb": 1,
+      "sectionHeadings": [
+        "Не набор модулей.\nОдин поток данных.",
+        "Продавайте за секунды",
+        "Каждый товар под контролем",
+        "Один каталог.\nВсе каналы продаж.",
+        "Видите не отчёты. Видите бизнес.",
+        "Bazaar всегда с вами",
+        "Доказательства, а не придуманные цифры.",
+        "Понятные тарифы.\nБез сложной математики.",
+        "Ваш магазин уже работает.\nТеперь пусть он работает как система."
+      ],
+      "keyboardTabs": {
+        "count": 6,
+        "selected": "02Запасы",
+        "activeRole": "tab"
+      }
+    },
+    {
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "title": "Bazaar — Retail OS для современного магазина",
+      "canonical": "https://www.bazaar.kg/",
+      "h1Count": 1,
+      "h2Count": 9,
+      "horizontalOverflow": 0,
+      "imageCount": 13,
+      "loadedImageCount": 13,
+      "renderableImageCount": 13,
+      "missingAltCount": 0,
+      "tabCount": 6,
+      "softwareApplicationSchema": true,
+      "motionMode": "ready",
+      "navDurationMs": 212,
+      "domContentLoadedMs": 71,
+      "resourceTransferKb": 2756,
+      "imageTransferKb": 1,
+      "sectionHeadings": [
+        "Не набор модулей.\nОдин поток данных.",
+        "Продавайте за секунды",
+        "Каждый товар под контролем",
+        "Один каталог.\nВсе каналы продаж.",
+        "Видите не отчёты. Видите бизнес.",
+        "Bazaar всегда с вами",
+        "Доказательства, а не придуманные цифры.",
+        "Понятные тарифы.\nБез сложной математики.",
+        "Ваш магазин уже работает.\nТеперь пусть он работает как система."
+      ],
+      "keyboardTabs": {
+        "count": 6,
+        "selected": "02Запасы",
+        "activeRole": "tab"
+      }
+    }
+  ],
+  "consoleErrors": [],
+  "runtimeErrors": [],
+  "failedResponses": []
+}

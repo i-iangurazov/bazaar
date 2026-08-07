@@ -1,0 +1,35 @@
+{
+  "tool": "Lighthouse 12.8.2 desktop simulated throttling",
+  "viewport": "1440x1000",
+  "before": {
+    "target": "https://www.bazaar.kg/",
+    "performance": 63,
+    "accessibility": 96,
+    "bestPractices": 100,
+    "seo": 100,
+    "firstContentfulPaintMs": 3221,
+    "largestContentfulPaintMs": 3523,
+    "totalBlockingTimeMs": 0,
+    "cumulativeLayoutShift": 0.0664,
+    "transferBytes": 631289
+  },
+  "after": {
+    "target": "local optimized production build",
+    "performance": 65,
+    "accessibility": 96,
+    "bestPractices": 100,
+    "seo": 100,
+    "firstContentfulPaintMs": 2307,
+    "largestContentfulPaintMs": 4433,
+    "largestContentfulPaintObservedBreakdownMs": 682,
+    "totalBlockingTimeMs": 0,
+    "cumulativeLayoutShift": 0.0024,
+    "transferBytes": 599043
+  },
+  "notes": [
+    "The matched Lighthouse performance score improved by 2 points.",
+    "FCP improved by 914 ms, transferred bytes decreased by 32246, and CLS decreased from 0.0664 to 0.0024.",
+    "The simulated LCP score is constrained by the existing root-layout Google Fonts stylesheet; the observed LCP breakdown was 143 ms TTFB, 5 ms load delay, 25 ms image load, and 508 ms render delay.",
+    "The landing route ships 5.01 kB route JavaScript and 107 kB first-load JavaScript in the Next.js production build."
+  ]
+}
