@@ -711,6 +711,7 @@ const lockPosSaleDraftForEdit = async (
       discountKgs: true,
       totalKgs: true,
       createdById: true,
+      isHeld: true,
     },
   });
   if (!sale) {
@@ -719,7 +720,7 @@ const lockPosSaleDraftForEdit = async (
   if (input.user) {
     await assertUserCanAccessStore(tx, input.user, sale.storeId);
   }
-  if (sale.status !== CustomerOrderStatus.DRAFT) {
+  if (sale.status !== CustomerOrderStatus.DRAFT || sale.isHeld) {
     throw new AppError("posSaleNotEditable", "CONFLICT", 409);
   }
   assertPosSaleDraftOwner(sale, input.actorId);
@@ -2630,6 +2631,7 @@ export const updatePosSaleCustomer = async (input: {
         status: true,
         storeId: true,
         createdById: true,
+        isHeld: true,
         customerName: true,
         customerEmail: true,
         customerPhone: true,
@@ -2642,7 +2644,7 @@ export const updatePosSaleCustomer = async (input: {
     if (input.user) {
       await assertUserCanAccessStore(tx, input.user, sale.storeId);
     }
-    if (sale.status !== CustomerOrderStatus.DRAFT) {
+    if (sale.status !== CustomerOrderStatus.DRAFT || sale.isHeld) {
       throw new AppError("posSaleNotEditable", "CONFLICT", 409);
     }
     assertPosSaleDraftOwner(sale, input.actorId);
@@ -2724,6 +2726,7 @@ export const updatePosSaleNotes = async (input: {
         status: true,
         storeId: true,
         createdById: true,
+        isHeld: true,
         notes: true,
       },
     });
@@ -2733,7 +2736,7 @@ export const updatePosSaleNotes = async (input: {
     if (input.user) {
       await assertUserCanAccessStore(tx, input.user, sale.storeId);
     }
-    if (sale.status !== CustomerOrderStatus.DRAFT) {
+    if (sale.status !== CustomerOrderStatus.DRAFT || sale.isHeld) {
       throw new AppError("posSaleNotEditable", "CONFLICT", 409);
     }
     assertPosSaleDraftOwner(sale, input.actorId);
@@ -4127,6 +4130,7 @@ export const upsertSaleLineMarkingCodes = async (input: {
         storeId: true,
         status: true,
         createdById: true,
+        isHeld: true,
       },
     });
 
@@ -4134,7 +4138,7 @@ export const upsertSaleLineMarkingCodes = async (input: {
       throw new AppError("posSaleNotFound", "NOT_FOUND", 404);
     }
     await assertUserCanAccessStore(tx, input.user, sale.storeId);
-    if (sale.status !== CustomerOrderStatus.DRAFT) {
+    if (sale.status !== CustomerOrderStatus.DRAFT || sale.isHeld) {
       throw new AppError("posSaleNotEditable", "CONFLICT", 409);
     }
     assertPosSaleDraftOwner(sale, input.actorId);
@@ -4469,6 +4473,9 @@ export const completePosSale = async (input: {
           }
 
           if (sale.status !== CustomerOrderStatus.DRAFT) {
+            throw new AppError("posSaleNotEditable", "CONFLICT", 409);
+          }
+          if (sale.isHeld) {
             throw new AppError("posSaleNotEditable", "CONFLICT", 409);
           }
           assertPosSaleDraftOwner(sale, input.actorId);
@@ -4854,6 +4861,13 @@ export const createSaleReturnDraft = async (input: {
   user: StoreAccessUser;
 }) => {
   return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`
+      SELECT id
+      FROM "RegisterShift"
+      WHERE id = ${input.shiftId}
+        AND "organizationId" = ${input.organizationId}
+      FOR UPDATE
+    `;
     const shift = await tx.registerShift.findFirst({
       where: {
         id: input.shiftId,
