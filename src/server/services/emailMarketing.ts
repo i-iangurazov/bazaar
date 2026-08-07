@@ -548,6 +548,33 @@ const resolveEmailLinkUrl = (value?: string | null, baseUrl?: string | null) => 
   }
 };
 
+const assertEmailCampaignButtonUrlsValid = (
+  campaign: NormalizedEmailCampaign,
+  baseUrl: string,
+) => {
+  const invalid = campaign.blocks.some((block) => {
+    if (block.type === "button") {
+      return Boolean(trimOptional(block.text)) && !resolveEmailLinkUrl(block.url, baseUrl);
+    }
+    if (block.type === "hero" || block.type === "promo") {
+      return Boolean(trimOptional(block.buttonText)) && !resolveEmailLinkUrl(block.buttonUrl, baseUrl);
+    }
+    if (block.type !== "products" || !(block.showButton ?? true)) {
+      return false;
+    }
+    const sharedUrl = trimOptional(block.buttonUrl);
+    return (block.productIds ?? []).some((productId) => {
+      const productUrl = trimOptional(block.productButtonUrls?.[productId]);
+      const effectiveCustomUrl = productUrl ?? sharedUrl;
+      return Boolean(effectiveCustomUrl) && !resolveEmailLinkUrl(effectiveCustomUrl, baseUrl);
+    });
+  });
+
+  if (invalid) {
+    throw new AppError("emailCampaignCtaUrlInvalid", "BAD_REQUEST", 400);
+  }
+};
+
 const cssFontFamily = (fontFamily: EmailCampaignFontFamily) => {
   if (fontFamily === EmailCampaignFontFamily.NOTO_SANS) {
     return "Noto Sans, Inter, Segoe UI, Arial, sans-serif";
@@ -2424,7 +2451,7 @@ const buildValidationChecklist = (input: {
         !warningCodes.has("heroButtonUrlMissing") &&
         !warningCodes.has("promoButtonUrlMissing") &&
         !warningCodes.has("productLinkMissing"),
-      critical: false,
+      critical: true,
     },
   ];
 };
@@ -2979,6 +3006,7 @@ export const sendTestEmailCampaign = async (input: {
     requireSubject: true,
     requireContent: true,
   });
+  assertEmailCampaignButtonUrlsValid(campaign, baseUrl);
   const { brand, logo, productsById } = await prepareCampaignRenderData({
     user: input.user,
     campaign,
@@ -3221,7 +3249,8 @@ export const sendEmailCampaignToAudience = async (input: {
       requireSubject: true,
       requireContent: true,
     });
-    requireEmailMarketingPublicAppBaseUrl();
+    const baseUrl = requireEmailMarketingPublicAppBaseUrl();
+    assertEmailCampaignButtonUrlsValid(campaignInput, baseUrl);
     getEmailUnsubscribeSecret();
     const sender = await resolveCampaignSender({
       user: input.user,
@@ -3409,6 +3438,8 @@ export const sendSavedEmailCampaignToAudience = async (input: {
       fontFamily: existing.fontFamily,
       audience: parseCampaignAudience(existing.audienceJson),
     });
+    const baseUrl = requireEmailMarketingPublicAppBaseUrl();
+    assertEmailCampaignButtonUrlsValid(campaignInput, baseUrl);
     const sender = await resolveCampaignSender({
       user: input.user,
       organizationId: input.user.organizationId,

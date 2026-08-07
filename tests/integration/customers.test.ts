@@ -417,6 +417,121 @@ describeDb("customer database", () => {
     }
   });
 
+  it("blocks invalid custom button URLs before campaign persistence or delivery", async () => {
+    const previousEmailFrom = process.env.EMAIL_FROM;
+    const previousEmailProvider = process.env.EMAIL_PROVIDER;
+    const previousNextAuthUrl = process.env.NEXTAUTH_URL;
+    const previousNextAuthSecret = process.env.NEXTAUTH_SECRET;
+    process.env.EMAIL_FROM = MARKETING_EMAIL_FROM;
+    process.env.EMAIL_PROVIDER = "log";
+    process.env.NEXTAUTH_URL = "https://app.bazaar.test";
+    process.env.NEXTAUTH_SECRET = "test-nextauth-secret";
+
+    try {
+      const { org, store, product, adminUser } = await seedBase({ plan: "BUSINESS" });
+      const user = asCallerUser(adminUser);
+      await prisma.customer.create({
+        data: {
+          organizationId: org.id,
+          storeId: store.id,
+          name: "Button URL Customer",
+          email: "button-url@example.com",
+          source: CustomerSource.MANUAL,
+        },
+      });
+      const invalidCampaigns = [
+        {
+          storeId: store.id,
+          source: "ALL" as const,
+          subject: "Unsafe standalone link",
+          blocks: [
+            { id: "button", type: "button" as const, text: "Open", url: "javascript:alert(1)" },
+          ],
+        },
+        {
+          storeId: store.id,
+          source: "ALL" as const,
+          subject: "Unsafe product link",
+          blocks: [
+            {
+              id: "products",
+              type: "products" as const,
+              productIds: [product.id],
+              showImage: false,
+              showButton: true,
+              buttonText: "Open product",
+              productButtonUrls: { [product.id]: "data:text/html,unsafe" },
+            },
+          ],
+        },
+      ];
+
+      const preview = await previewEmailCampaign({ user, campaign: invalidCampaigns[0] });
+      expect(preview.warnings).toEqual(
+        expect.arrayContaining([expect.objectContaining({ code: "buttonUrlMissing" })]),
+      );
+      expect(preview.validationChecklist).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ key: "links", ok: false, critical: true }),
+        ]),
+      );
+
+      for (const [index, campaign] of invalidCampaigns.entries()) {
+        await expect(
+          sendEmailCampaignToAudience({
+            user,
+            actorId: adminUser.id,
+            requestId: `invalid-button-url-${index}`,
+            idempotencyKey: `invalid-button-url-${index}`,
+            campaign,
+          }),
+        ).rejects.toMatchObject({ message: "emailCampaignCtaUrlInvalid", status: 400 });
+      }
+
+      await expect(prisma.emailCampaign.count()).resolves.toBe(0);
+      await expect(
+        prisma.operationRequest.count({ where: { scope: "emailMarketing.send.v1" } }),
+      ).resolves.toBe(0);
+      await expect(
+        prisma.auditLog.count({ where: { action: "EMAIL_CAMPAIGN_QUEUE" } }),
+      ).resolves.toBe(0);
+
+      const queued = await sendEmailCampaignToAudience({
+        user,
+        actorId: adminUser.id,
+        requestId: "valid-button-url",
+        idempotencyKey: "valid-button-url",
+        campaign: {
+          storeId: store.id,
+          source: "ALL",
+          subject: "Safe product link",
+          blocks: [
+            {
+              id: "products",
+              type: "products",
+              productIds: [product.id],
+              showImage: false,
+              showButton: true,
+              buttonText: "Open product",
+              productButtonUrls: { [product.id]: "/offers/today" },
+            },
+          ],
+        },
+      });
+      expect(queued).toMatchObject({ queued: true, recipientCount: 1 });
+      await expect(prisma.emailCampaign.count()).resolves.toBe(1);
+    } finally {
+      if (previousEmailFrom === undefined) delete process.env.EMAIL_FROM;
+      else process.env.EMAIL_FROM = previousEmailFrom;
+      if (previousEmailProvider === undefined) delete process.env.EMAIL_PROVIDER;
+      else process.env.EMAIL_PROVIDER = previousEmailProvider;
+      if (previousNextAuthUrl === undefined) delete process.env.NEXTAUTH_URL;
+      else process.env.NEXTAUTH_URL = previousNextAuthUrl;
+      if (previousNextAuthSecret === undefined) delete process.env.NEXTAUTH_SECRET;
+      else process.env.NEXTAUTH_SECRET = previousNextAuthSecret;
+    }
+  });
+
   it("builds email audiences from selected-store customers with email and sends from fixed sender", async () => {
     const previousEmailFrom = process.env.EMAIL_FROM;
     const previousEmailProvider = process.env.EMAIL_PROVIDER;
