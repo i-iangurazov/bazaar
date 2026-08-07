@@ -35,6 +35,36 @@ describeDb("period close", () => {
     ).rejects.toMatchObject({ code: "CONFLICT" });
   });
 
+  it("returns a bounded, deterministic history page", async () => {
+    const { org, store, managerUser } = await seedBase({ plan: "BUSINESS" });
+    const caller = createTestCaller({
+      id: managerUser.id,
+      email: managerUser.email,
+      role: managerUser.role,
+      organizationId: org.id,
+    });
+    const base = new Date("2025-01-01T00:00:00Z");
+
+    await prisma.periodClose.createMany({
+      data: Array.from({ length: 12 }, (_, index) => ({
+        organizationId: org.id,
+        storeId: store.id,
+        periodStart: new Date(base.getTime() + index * 86_400_000),
+        periodEnd: new Date(base.getTime() + index * 86_400_000 + 3_600_000),
+        closedAt: new Date(base.getTime() + index * 86_400_000),
+        closedById: managerUser.id,
+      })),
+    });
+
+    const result = await caller.periodClose.list({ storeId: store.id, page: 2, pageSize: 10 });
+
+    expect(result).toMatchObject({ total: 12, page: 2, pageSize: 10 });
+    expect(result.items).toHaveLength(2);
+    expect(result.items[0]?.closedAt.getTime()).toBeGreaterThan(
+      result.items[1]?.closedAt.getTime() ?? 0,
+    );
+  });
+
   it("normalizes concurrent duplicate closes and commits one audit", async () => {
     const { org, store, managerUser } = await seedBase({ plan: "BUSINESS" });
     const caller = createTestCaller({

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 
@@ -55,13 +55,19 @@ const PeriodClosePage = () => {
 
   const storesQuery = trpc.stores.list.useQuery(undefined, { enabled: status === "authenticated" });
   const [storeId, setStoreId] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const now = useMemo(() => new Date(), []);
   const [month, setMonth] = useState(formatMonthInput(now));
 
   const closesQuery = trpc.periodClose.list.useQuery(
-    { storeId: storeId || undefined },
+    { storeId: storeId || undefined, page, pageSize },
     { enabled: status === "authenticated" && Boolean(canView) },
   );
+
+  useEffect(() => {
+    setPage(1);
+  }, [storeId]);
 
   const closeMutation = trpc.periodClose.close.useMutation({
     onSuccess: () => {
@@ -128,7 +134,11 @@ const PeriodClosePage = () => {
               </Select>
             </Field>
             <Field label={t("monthLabel")}>
-              <Input type="month" value={month} onChange={(event) => setMonth(event.target.value)} />
+              <Input
+                type="month"
+                value={month}
+                onChange={(event) => setMonth(event.target.value)}
+              />
             </Field>
           </FormGrid>
           <FormActions>
@@ -152,14 +162,28 @@ const PeriodClosePage = () => {
           ) : closesQuery.error ? (
             <div className="flex flex-wrap items-center gap-2 text-sm text-danger">
               <span>{translateError(tErrors, closesQuery.error)}</span>
-              <Button type="button" variant="secondary" size="sm" onClick={() => closesQuery.refetch()}>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => closesQuery.refetch()}
+              >
                 {tErrors("tryAgain")}
               </Button>
             </div>
-          ) : closesQuery.data?.length ? (
+          ) : closesQuery.data?.items.length ? (
             <ResponsiveDataList
-              items={closesQuery.data}
+              items={closesQuery.data.items}
               getKey={(close) => close.id}
+              page={page}
+              totalItems={closesQuery.data.total}
+              onPageChange={setPage}
+              onPageSizeChange={(nextPageSize) => {
+                setPageSize(nextPageSize);
+                setPage(1);
+              }}
+              paginationKey="period-close-history"
+              defaultPageSize={pageSize}
               renderDesktop={(visibleItems) => (
                 <div className="overflow-x-auto">
                   <Table className="min-w-[640px]">
@@ -192,7 +216,8 @@ const PeriodClosePage = () => {
                         return (
                           <TableRow key={close.id}>
                             <TableCell className="text-xs text-muted-foreground">
-                              {formatDate(close.periodStart, locale)} — {formatDate(close.periodEnd, locale)}
+                              {formatDate(close.periodStart, locale)} —{" "}
+                              {formatDate(close.periodEnd, locale)}
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground">
                               {formatDateTime(close.closedAt, locale)}
@@ -219,7 +244,8 @@ const PeriodClosePage = () => {
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-foreground">
-                        {formatDate(close.periodStart, locale)} — {formatDate(close.periodEnd, locale)}
+                        {formatDate(close.periodStart, locale)} —{" "}
+                        {formatDate(close.periodEnd, locale)}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {formatDateTime(close.closedAt, locale)}

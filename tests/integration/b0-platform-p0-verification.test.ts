@@ -218,12 +218,17 @@ describeDb("B0 Agent 4 P0 runtime verification", () => {
     });
 
     expect(result.storeId).toBe(store.id);
-    await expect(caller.periodClose.list({ storeId: store.id })).resolves.toEqual(
-      expect.arrayContaining([expect.objectContaining({ id: result.id, storeId: store.id })]),
-    );
-    await expect(caller.periodClose.list()).resolves.not.toEqual(
-      expect.arrayContaining([expect.objectContaining({ id: unassignedClose.id })]),
-    );
+    await expect(caller.periodClose.list({ storeId: store.id })).resolves.toMatchObject({
+      items: expect.arrayContaining([
+        expect.objectContaining({ id: result.id, storeId: store.id }),
+      ]),
+      total: 1,
+      page: 1,
+      pageSize: 25,
+    });
+    await expect(caller.periodClose.list()).resolves.toMatchObject({
+      items: expect.not.arrayContaining([expect.objectContaining({ id: unassignedClose.id })]),
+    });
     await expect(caller.periodClose.list({ storeId: unassignedStore.id })).rejects.toMatchObject({
       code: "FORBIDDEN",
     });

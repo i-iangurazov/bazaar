@@ -18,14 +18,29 @@ export const listPeriodCloses = async (
   organizationId: string,
   storeId?: string,
   storeIds?: string[],
+  page = 1,
+  pageSize = 25,
 ) => {
-  return prisma.periodClose.findMany({
-    where: {
-      organizationId,
-      ...(storeId ? { storeId } : storeIds ? { storeId: { in: storeIds } } : {}),
-    },
-    orderBy: { closedAt: "desc" },
-  });
+  const where: Prisma.PeriodCloseWhereInput = {
+    organizationId,
+    ...(storeId ? { storeId } : storeIds ? { storeId: { in: storeIds } } : {}),
+  };
+  const [items, total] = await prisma.$transaction([
+    prisma.periodClose.findMany({
+      where,
+      orderBy: [{ closedAt: "desc" }, { id: "desc" }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.periodClose.count({ where }),
+  ]);
+
+  return {
+    items,
+    total,
+    page,
+    pageSize,
+  };
 };
 
 export const closePeriod = async (input: ClosePeriodInput) => {

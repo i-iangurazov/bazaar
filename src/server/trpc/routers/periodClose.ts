@@ -27,17 +27,33 @@ const closeSchema = z.object({
 
 export const periodCloseRouter = router({
   list: periodCloseProcedure
-    .input(z.object({ storeId: z.string().optional() }).optional())
+    .input(
+      z
+        .object({
+          storeId: z.string().optional(),
+          page: z.number().int().min(1).optional(),
+          pageSize: z.number().int().min(10).max(100).optional(),
+        })
+        .optional(),
+    )
     .query(async ({ ctx, input }) => {
       try {
+        const page = input?.page ?? 1;
+        const pageSize = input?.pageSize ?? 25;
         if (input?.storeId) {
           await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
-          return await listPeriodCloses(ctx.user.organizationId, input.storeId);
+          return await listPeriodCloses(
+            ctx.user.organizationId,
+            input.storeId,
+            undefined,
+            page,
+            pageSize,
+          );
         }
         const storeIds = userHasAllStoreAccess(ctx.user)
           ? undefined
           : await resolveAccessibleStoreIds(ctx.prisma, ctx.user);
-        return await listPeriodCloses(ctx.user.organizationId, undefined, storeIds);
+        return await listPeriodCloses(ctx.user.organizationId, undefined, storeIds, page, pageSize);
       } catch (error) {
         throw toTRPCError(error);
       }
