@@ -6184,6 +6184,7 @@
     "periodEnd": "Period end",
     "generate": "Generate",
     "created": "Exports created.",
+    "exportFailed": "Could not export the filtered receipts.",
     "retrySuccess": "Retry completed.",
     "jobsTitle": "Jobs",
     "jobsDescription": "Generated files, processing status, and downloads for completed exports.",
