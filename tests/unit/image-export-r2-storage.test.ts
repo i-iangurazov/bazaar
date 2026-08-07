@@ -2,11 +2,14 @@ import { Readable } from "node:stream";
 import { randomUUID } from "node:crypto";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type * as S3ClientModule from "@aws-sdk/client-s3";
 
 const mocks = vi.hoisted(() => {
   const objects = new Map<string, Buffer>();
   const metadata = new Map<string, Record<string, string>>();
+  const metadataExpirations = new Map<string, number>();
   const expirations = new Map<string, number>();
+  const failures = { get: 0, getWithoutBody: 0, delete: 0, zrem: 0 };
   const send = vi.fn(async (command: { constructor: { name: string }; input: Record<string, unknown> }) => {
     const key = String(command.input.Key ?? "");
     if (command.constructor.name === "PutObjectCommand") {
@@ -18,11 +21,23 @@ const mocks = vi.hoisted(() => {
       return {};
     }
     if (command.constructor.name === "GetObjectCommand") {
+      if (failures.get > 0) {
+        failures.get -= 1;
+        throw new Error("getFailure");
+      }
       const data = objects.get(key);
       if (!data) throw new Error("missingObject");
+      if (failures.getWithoutBody > 0) {
+        failures.getWithoutBody -= 1;
+        return {};
+      }
       return { Body: Readable.from(data), ContentLength: data.length };
     }
     if (command.constructor.name === "DeleteObjectCommand") {
+      if (failures.delete > 0) {
+        failures.delete -= 1;
+        throw new Error("deleteFailure");
+      }
       objects.delete(key);
       return {};
     }
@@ -32,6 +47,7 @@ const mocks = vi.hoisted(() => {
     multi: vi.fn(() => {
       let key = "";
       let values: Record<string, string> = {};
+      let ttlMs = 0;
       let expiration: { member: string; score: number } | null = null;
       const chain = {
         hset(redisKey: string, ...fields: string[]) {
@@ -44,7 +60,8 @@ const mocks = vi.hoisted(() => {
           );
           return chain;
         },
-        pexpire() {
+        pexpire(_redisKey: string, nextTtlMs: number) {
+          ttlMs = nextTtlMs;
           return chain;
         },
         zadd(_key: string, score: number, member: string) {
@@ -53,6 +70,7 @@ const mocks = vi.hoisted(() => {
         },
         async exec() {
           metadata.set(key, values);
+          metadataExpirations.set(key, Date.now() + ttlMs);
           if (expiration) expirations.set(expiration.member, expiration.score);
           return [[null, 1]];
         },
@@ -61,6 +79,10 @@ const mocks = vi.hoisted(() => {
     }),
     zrangebyscore: vi.fn(async () => []),
     zrem: vi.fn(async (_key: string, member: string) => {
+      if (failures.zrem > 0) {
+        failures.zrem -= 1;
+        throw new Error("zremFailure");
+      }
       expirations.delete(member);
       return 1;
     }),
@@ -69,11 +91,19 @@ const mocks = vi.hoisted(() => {
       if (!stored || stored.userId !== userId || stored.organizationId !== orgId) {
         return null;
       }
+      const expiresAt = metadataExpirations.get(key) ?? -1;
+      const remainingTtl = expiresAt - Date.now();
+      if (remainingTtl <= 0) {
+        metadata.delete(key);
+        metadataExpirations.delete(key);
+        return null;
+      }
       metadata.delete(key);
-      return [stored.filename, stored.objectKey];
+      metadataExpirations.delete(key);
+      return [stored.filename, stored.objectKey, stored.expiresAt, remainingTtl];
     }),
   };
-  return { objects, metadata, expirations, redis, send };
+  return { objects, metadata, metadataExpirations, expirations, failures, redis, send };
 });
 
 vi.mock("@/server/redis", () => ({
@@ -81,7 +111,7 @@ vi.mock("@/server/redis", () => ({
 }));
 
 vi.mock("@aws-sdk/client-s3", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@aws-sdk/client-s3")>();
+  const actual = await importOriginal<typeof S3ClientModule>();
   return {
     ...actual,
     S3Client: class {
@@ -96,7 +126,12 @@ describe("R2 image export artifacts", () => {
   beforeEach(() => {
     mocks.objects.clear();
     mocks.metadata.clear();
+    mocks.metadataExpirations.clear();
     mocks.expirations.clear();
+    mocks.failures.get = 0;
+    mocks.failures.getWithoutBody = 0;
+    mocks.failures.delete = 0;
+    mocks.failures.zrem = 0;
     mocks.send.mockClear();
     mocks.redis.multi.mockClear();
     mocks.redis.eval.mockClear();
@@ -138,5 +173,69 @@ describe("R2 image export artifacts", () => {
     expect(mocks.objects.size).toBe(0);
     expect(mocks.expirations.size).toBe(0);
     expect(await consumeZip(token, owner)).toBeUndefined();
+  });
+
+  it("restores a failed GET with only the original remaining lease", async () => {
+    const token = randomUUID();
+    const owner = { userId: "r2-user", organizationId: "r2-org" };
+    const payload = new TextEncoder().encode("retryable-r2-zip");
+    await storeZipBuffer(token, payload, "retryable.zip", owner, { ttlMs: 60_000 });
+    const member = [...mocks.expirations.keys()][0]!;
+    const originalExpiry = mocks.expirations.get(member)!;
+    const originalMetadataExpiry = mocks.metadataExpirations.get(`image-export:${token}`)!;
+
+    mocks.failures.get = 1;
+    await expect(consumeZip(token, owner)).rejects.toThrow("getFailure");
+
+    expect(mocks.metadata.has(`image-export:${token}`)).toBe(true);
+    expect(mocks.expirations.get(member)).toBe(originalExpiry);
+    expect(mocks.metadataExpirations.get(`image-export:${token}`)).toBeLessThanOrEqual(
+      originalMetadataExpiry,
+    );
+    const consumed = await consumeZip(token, owner);
+    expect(new Uint8Array(await new Response(consumed?.data).arrayBuffer())).toEqual(payload);
+    expect(await consumeZip(token, owner)).toBeUndefined();
+  });
+
+  it("restores a GET response without a body and succeeds once on retry", async () => {
+    const token = randomUUID();
+    const owner = { userId: "r2-user", organizationId: "r2-org" };
+    await storeZipBuffer(token, new TextEncoder().encode("missing-body"), "missing.zip", owner);
+
+    mocks.failures.getWithoutBody = 1;
+    await expect(consumeZip(token, owner)).rejects.toThrow("imageExportObjectMissing");
+    expect(mocks.metadata.has(`image-export:${token}`)).toBe(true);
+    await expect(consumeZip(token, owner)).resolves.toMatchObject({ filename: "missing.zip" });
+    await expect(consumeZip(token, owner)).resolves.toBeUndefined();
+  });
+
+  it("keeps a successful retrieval one-time when object deletion fails", async () => {
+    const token = randomUUID();
+    const owner = { userId: "r2-user", organizationId: "r2-org" };
+    const payload = new TextEncoder().encode("delete-failure");
+    await storeZipBuffer(token, payload, "delete-failure.zip", owner);
+
+    mocks.failures.delete = 1;
+    const consumed = await consumeZip(token, owner);
+    expect(new Uint8Array(await new Response(consumed?.data).arrayBuffer())).toEqual(payload);
+    expect(mocks.metadata.has(`image-export:${token}`)).toBe(false);
+    expect(mocks.objects.size).toBe(1);
+    expect(mocks.expirations.size).toBe(1);
+    await expect(consumeZip(token, owner)).resolves.toBeUndefined();
+  });
+
+  it("never restores metadata after deletion when expiration cleanup fails", async () => {
+    const token = randomUUID();
+    const owner = { userId: "r2-user", organizationId: "r2-org" };
+    const payload = new TextEncoder().encode("zrem-failure");
+    await storeZipBuffer(token, payload, "zrem-failure.zip", owner);
+
+    mocks.failures.zrem = 1;
+    const consumed = await consumeZip(token, owner);
+    expect(new Uint8Array(await new Response(consumed?.data).arrayBuffer())).toEqual(payload);
+    expect(mocks.metadata.has(`image-export:${token}`)).toBe(false);
+    expect(mocks.objects.size).toBe(0);
+    expect(mocks.expirations.size).toBe(1);
+    await expect(consumeZip(token, owner)).resolves.toBeUndefined();
   });
 });

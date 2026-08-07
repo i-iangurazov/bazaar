@@ -92,9 +92,11 @@ const cleanupExpiredR2Artifacts = async (
     const separator = member.indexOf("|");
     const objectKey = separator >= 0 ? member.slice(separator + 1) : "";
     if (objectKey) {
-      await client
-        .send(new DeleteObjectCommand({ Bucket: bucketName, Key: objectKey }))
-        .catch(() => undefined);
+      try {
+        await client.send(new DeleteObjectCommand({ Bucket: bucketName, Key: objectKey }));
+      } catch {
+        continue;
+      }
     }
     await redis.zrem(redisExpirationKey, member);
   }
@@ -155,6 +157,7 @@ export const storeZipFile = async (
       }),
     );
     try {
+      const expiresAt = Date.now() + ttlMs;
       const result = await redis
         .multi()
         .hset(
@@ -167,9 +170,11 @@ export const storeZipFile = async (
           filename,
           "objectKey",
           objectKey,
+          "expiresAt",
+          String(expiresAt),
         )
         .pexpire(redisKey(token), ttlMs)
-        .zadd(redisExpirationKey, Date.now() + ttlMs, expirationMember(token, objectKey))
+        .zadd(redisExpirationKey, expiresAt, expirationMember(token, objectKey))
         .exec();
       if (!result) {
         throw new Error("imageExportStorageUnavailable");
@@ -234,6 +239,7 @@ const consumeR2Zip = async (
   if (!redis) {
     throw new Error("imageExportStorageUnavailable");
   }
+  const claimedAt = Date.now();
   const claimed = (await redis.eval(
     `
       local userId = redis.call('HGET', KEYS[1], 'userId')
@@ -241,34 +247,34 @@ const consumeR2Zip = async (
       if not userId or userId ~= ARGV[1] or organizationId ~= ARGV[2] then
         return nil
       end
-      local result = redis.call('HMGET', KEYS[1], 'filename', 'objectKey')
+      local result = redis.call('HMGET', KEYS[1], 'filename', 'objectKey', 'expiresAt')
+      local remainingTtl = redis.call('PTTL', KEYS[1])
       redis.call('DEL', KEYS[1])
-      return result
+      return {result[1], result[2], result[3], remainingTtl}
     `,
     1,
     redisKey(token),
     owner.userId,
     owner.organizationId,
-  )) as [string, string] | null;
+  )) as [string, string, string | null, number | string] | null;
   if (!claimed?.[0] || !claimed[1]) {
     return undefined;
   }
-  const client = createR2Client(r2);
-  try {
-    const object = await client.send(
-      new GetObjectCommand({ Bucket: r2.bucketName, Key: claimed[1] }),
-    );
-    if (!object.Body) {
-      return undefined;
+  const absoluteExpiry = Number(claimed[2]);
+  const remainingTtl = Number(claimed[3]);
+  const expiryCandidates = [
+    Number.isFinite(absoluteExpiry) && absoluteExpiry > claimedAt ? absoluteExpiry : null,
+    Number.isFinite(remainingTtl) && remainingTtl > 0 ? claimedAt + remainingTtl : null,
+  ].filter((value): value is number => value !== null);
+  const expiresAt = expiryCandidates.length ? Math.min(...expiryCandidates) : null;
+  const restoreClaim = async () => {
+    if (!expiresAt) {
+      return;
     }
-    const body = object.Body as unknown as Readable & {
-      transformToWebStream?: () => ReadableStream<Uint8Array>;
-    };
-    const data = body.transformToWebStream?.() ?? streamFromNode(body);
-    await client.send(new DeleteObjectCommand({ Bucket: r2.bucketName, Key: claimed[1] }));
-    await redis.zrem(redisExpirationKey, expirationMember(token, claimed[1]));
-    return { data, filename: claimed[0] };
-  } catch (error) {
+    const restoreTtl = Math.floor(expiresAt - Date.now());
+    if (restoreTtl <= 0) {
+      return;
+    }
     await redis
       .multi()
       .hset(
@@ -281,17 +287,41 @@ const consumeR2Zip = async (
         claimed[0],
         "objectKey",
         claimed[1],
+        "expiresAt",
+        String(expiresAt),
       )
-      .pexpire(redisKey(token), ZIP_TTL_MS)
-      .zadd(
-        redisExpirationKey,
-        Date.now() + ZIP_TTL_MS,
-        expirationMember(token, claimed[1]),
-      )
-      .exec()
-      .catch(() => undefined);
+      .pexpire(redisKey(token), restoreTtl)
+      .zadd(redisExpirationKey, expiresAt, expirationMember(token, claimed[1]))
+      .exec();
+  };
+  const client = createR2Client(r2);
+  let object;
+  try {
+    object = await client.send(
+      new GetObjectCommand({ Bucket: r2.bucketName, Key: claimed[1] }),
+    );
+    if (!object.Body) {
+      throw new Error("imageExportObjectMissing");
+    }
+  } catch (error) {
+    await restoreClaim().catch(() => undefined);
     throw error;
   }
+
+  const body = object.Body as unknown as Readable & {
+    transformToWebStream?: () => ReadableStream<Uint8Array>;
+  };
+  const data = body.transformToWebStream?.() ?? streamFromNode(body);
+  const deleted = await client
+    .send(new DeleteObjectCommand({ Bucket: r2.bucketName, Key: claimed[1] }))
+    .then(() => true)
+    .catch(() => false);
+  if (deleted) {
+    await redis
+      .zrem(redisExpirationKey, expirationMember(token, claimed[1]))
+      .catch(() => undefined);
+  }
+  return { data, filename: claimed[0] };
 };
 
 export const consumeZip = async (token: string, owner: ZipOwner): Promise<StoredZip | undefined> => {
