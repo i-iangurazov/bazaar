@@ -22,6 +22,16 @@ describe("mobile products source", () => {
     expect(source).toContain("mobileSheet");
   });
 
+  it("offers the same image and stock readiness filters on desktop", async () => {
+    const source = await readSource("src/app/(app)/products/page.tsx");
+    const desktopFiltersStart = source.indexOf('filtersClassName="hidden border-0 bg-transparent p-0 md:block"');
+    const desktopToolbar = source.slice(Math.max(0, desktopFiltersStart - 4_000), desktopFiltersStart);
+
+    expect(desktopFiltersStart).toBeGreaterThan(-1);
+    expect(desktopToolbar).toContain('<SelectItem value="missingImage">');
+    expect(desktopToolbar).toContain('<SelectItem value="outOfStock">');
+  });
+
   it("keeps mobile product form sectioned with an in-flow mobile save action", async () => {
     const source = await readSource("src/components/product-form.tsx");
 

@@ -3418,7 +3418,9 @@ const ProductsPage = () => {
                   {enableBarcode ? (
                     <SelectItem value="missingBarcode">{t("missingBarcode")}</SelectItem>
                   ) : null}
+                  <SelectItem value="missingImage">{t("missingImage")}</SelectItem>
                   <SelectItem value="missingPrice">{t("missingPrice")}</SelectItem>
+                  <SelectItem value="outOfStock">{t("outOfStock")}</SelectItem>
                   <SelectItem value="lowStock">{t("lowStock")}</SelectItem>
                   <SelectItem value="negativeStock">{t("negativeStock")}</SelectItem>
                 </SelectContent>
