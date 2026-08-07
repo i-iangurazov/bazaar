@@ -1452,7 +1452,7 @@ export const openRegisterShift = async (input: {
   idempotencyKey: string;
 }) => {
   const result = await prisma.$transaction(async (tx) => {
-    const { result: shift } = await withIdempotency(
+    const { result: shift, replayed } = await withIdempotency(
       tx,
       {
         key: input.idempotencyKey,
@@ -1532,16 +1532,25 @@ export const openRegisterShift = async (input: {
       },
     );
 
-    return shift;
+    return { ...shift, replayed };
   });
 
-  eventBus.publish({
-    type: "shift.opened",
-    payload: { shiftId: result.id, storeId: result.storeId, registerId: result.registerId },
-  });
-  incrementCounter(posShiftOpenedTotal);
+  if (!result.replayed) {
+    eventBus.publish({
+      type: "shift.opened",
+      payload: { shiftId: result.id, storeId: result.storeId, registerId: result.registerId },
+    });
+    incrementCounter(posShiftOpenedTotal);
+  }
 
-  return result;
+  return {
+    id: result.id,
+    registerId: result.registerId,
+    storeId: result.storeId,
+    status: result.status,
+    openedAt:
+      result.openedAt instanceof Date ? result.openedAt : new Date(result.openedAt as string),
+  };
 };
 
 export const getCurrentRegisterShift = async (input: {
@@ -1798,7 +1807,7 @@ export const closeRegisterShift = async (input: {
   idempotencyKey: string;
 }) => {
   const result = await prisma.$transaction(async (tx) => {
-    const { result: closedShift } = await withIdempotency(
+    const { result: closedShift, replayed } = await withIdempotency(
       tx,
       {
         key: input.idempotencyKey,
@@ -1947,16 +1956,34 @@ export const closeRegisterShift = async (input: {
       },
     );
 
-    return closedShift;
+    return { ...closedShift, replayed };
   });
 
-  eventBus.publish({
-    type: "shift.closed",
-    payload: { shiftId: result.id, storeId: result.storeId, registerId: result.registerId },
-  });
-  incrementCounter(posShiftClosedTotal);
+  if (!result.replayed) {
+    eventBus.publish({
+      type: "shift.closed",
+      payload: { shiftId: result.id, storeId: result.storeId, registerId: result.registerId },
+    });
+    incrementCounter(posShiftClosedTotal);
+  }
 
-  return result;
+  return {
+    id: result.id,
+    registerId: result.registerId,
+    storeId: result.storeId,
+    status: result.status,
+    closedAt:
+      result.closedAt instanceof Date
+        ? result.closedAt
+        : result.closedAt
+          ? new Date(result.closedAt as string)
+          : null,
+    expectedCashKgs: result.expectedCashKgs,
+    overWithdrawalKgs: result.overWithdrawalKgs,
+    countableCashKgs: result.countableCashKgs,
+    closingCashCountedKgs: result.closingCashCountedKgs,
+    discrepancyKgs: result.discrepancyKgs,
+  };
 };
 
 export const createPosSaleDraft = async (input: {
@@ -5761,7 +5788,7 @@ export const completeSaleReturn = async (input: {
     }
     await assertUserCanAccessStore(tx, input.user, target.storeId);
 
-    const { result: completion } = await withIdempotency(
+    const { result: completion, replayed } = await withIdempotency(
       tx,
       {
         key: input.idempotencyKey,
@@ -6004,27 +6031,29 @@ export const completeSaleReturn = async (input: {
       },
     );
 
-    return completion;
+    return { ...completion, replayed };
   });
 
-  const productIds = Array.from(new Set(result.productIds));
-  for (const productId of productIds) {
+  if (!result.replayed) {
+    const productIds = Array.from(new Set(result.productIds));
+    for (const productId of productIds) {
+      eventBus.publish({
+        type: "inventory.updated",
+        payload: { storeId: result.storeId, productId, variantId: null },
+      });
+    }
+
     eventBus.publish({
-      type: "inventory.updated",
-      payload: { storeId: result.storeId, productId, variantId: null },
+      type: "sale.refunded",
+      payload: {
+        saleReturnId: result.id,
+        storeId: result.storeId,
+        registerId: result.registerId,
+        shiftId: result.shiftId,
+        number: result.number,
+      },
     });
   }
-
-  eventBus.publish({
-    type: "sale.refunded",
-    payload: {
-      saleReturnId: result.id,
-      storeId: result.storeId,
-      registerId: result.registerId,
-      shiftId: result.shiftId,
-      number: result.number,
-    },
-  });
 
   return {
     id: result.id,
