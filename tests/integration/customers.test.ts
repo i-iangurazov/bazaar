@@ -1,11 +1,11 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CustomerSource,
   EmailCampaignRecipientStatus,
   EmailCampaignStatus,
   EmailSenderDomainStatus,
   EmailSenderIdentityStatus,
-  Role,
+  type Role,
 } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
@@ -499,7 +499,7 @@ describeDb("customer database", () => {
         recipientCount: 1,
         from: MARKETING_EMAIL_FROM,
       });
-      expect(queued.campaign.status).toBe(EmailCampaignStatus.SENDING);
+      expect(queued.campaign.status).toBe(EmailCampaignStatus.QUEUED);
 
       await expect(runJob(EMAIL_CAMPAIGN_SEND_JOB_NAME, { organizationId: org.id })).resolves.toMatchObject({
         status: "ok",
@@ -513,9 +513,9 @@ describeDb("customer database", () => {
           },
         },
       });
-      expect(sent.status).toBe(EmailCampaignStatus.SENT);
+      expect(sent.status).toBe(EmailCampaignStatus.AWAITING_EVENTS);
       expect(sent.recipients[0]?.email).toBe("one@example.com");
-      expect(sent.recipients[0]?.status).toBe(EmailCampaignRecipientStatus.SENT);
+      expect(sent.recipients[0]?.status).toBe(EmailCampaignRecipientStatus.ACCEPTED);
 
       const recipientText = await prisma.emailCampaignRecipient.findFirstOrThrow({
         where: { campaignId: queued.campaign.id },
@@ -623,12 +623,15 @@ describeDb("customer database", () => {
         processed: 1,
         sent: 2,
         failed: 0,
-        pending: 1,
+        pending: 3,
       });
       await expect(
         prisma.emailCampaign.findUniqueOrThrow({ where: { id: queued.campaign.id } }),
       ).resolves.toMatchObject({
         status: EmailCampaignStatus.SENDING,
+        queuedCount: 1,
+        acceptedCount: 2,
+        unresolvedCount: 3,
         sentCount: 2,
         failedCount: 0,
       });
@@ -643,12 +646,15 @@ describeDb("customer database", () => {
         processed: 1,
         sent: 1,
         failed: 0,
-        pending: 0,
+        pending: 3,
       });
       await expect(
         prisma.emailCampaign.findUniqueOrThrow({ where: { id: queued.campaign.id } }),
       ).resolves.toMatchObject({
-        status: EmailCampaignStatus.SENT,
+        status: EmailCampaignStatus.AWAITING_EVENTS,
+        queuedCount: 0,
+        acceptedCount: 3,
+        unresolvedCount: 3,
         sentCount: 3,
         failedCount: 0,
       });
@@ -722,12 +728,15 @@ describeDb("customer database", () => {
         processed: 2,
         sent: 3,
         failed: 0,
-        pending: 0,
+        pending: 3,
       });
       await expect(
         prisma.emailCampaign.findUniqueOrThrow({ where: { id: queued.campaign.id } }),
       ).resolves.toMatchObject({
-        status: EmailCampaignStatus.SENT,
+        status: EmailCampaignStatus.AWAITING_EVENTS,
+        queuedCount: 0,
+        acceptedCount: 3,
+        unresolvedCount: 3,
         sentCount: 3,
         failedCount: 0,
       });
@@ -758,12 +767,22 @@ describeDb("customer database", () => {
   it("updates delivered and bounced counts from Resend webhook events", async () => {
     const previousEmailFrom = process.env.EMAIL_FROM;
     const previousEmailProvider = process.env.EMAIL_PROVIDER;
+    const previousResendApiKey = process.env.RESEND_API_KEY;
     const previousNextAuthUrl = process.env.NEXTAUTH_URL;
     const previousNextAuthSecret = process.env.NEXTAUTH_SECRET;
     process.env.EMAIL_FROM = MARKETING_EMAIL_FROM;
-    process.env.EMAIL_PROVIDER = "log";
+    process.env.EMAIL_PROVIDER = "resend";
+    process.env.RESEND_API_KEY = "re_test_key";
     process.env.NEXTAUTH_URL = "https://app.bazaar.test";
     process.env.NEXTAUTH_SECRET = "test-nextauth-secret";
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          data: [{ id: "resend-webhook-1" }, { id: "resend-webhook-2" }],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
 
     try {
       const { org, store, adminUser } = await seedBase({ plan: "BUSINESS" });
@@ -805,6 +824,7 @@ describeDb("customer database", () => {
       const delivered = recipients.find((recipient) => recipient.email === "delivered@example.com");
       expect(bounced?.providerMessageId).toBeTruthy();
       expect(delivered?.providerMessageId).toBeTruthy();
+      expect(recipients.every((recipient) => recipient.provider === "resend")).toBe(true);
 
       await expect(
         handleResendEmailWebhook({
@@ -844,18 +864,21 @@ describeDb("customer database", () => {
       await expect(
         prisma.emailCampaign.findUniqueOrThrow({ where: { id: queued.campaign.id } }),
       ).resolves.toMatchObject({
-        status: EmailCampaignStatus.PARTIAL,
+        status: EmailCampaignStatus.COMPLETED_WITH_ERRORS,
         sentCount: 2,
         deliveredCount: 1,
-        failedCount: 1,
+        bouncedCount: 1,
+        failedCount: 0,
+        unresolvedCount: 0,
       });
       await expect(
         prisma.emailCampaignRecipient.findUniqueOrThrow({ where: { id: bounced?.id ?? "" } }),
       ).resolves.toMatchObject({
-        status: EmailCampaignRecipientStatus.FAILED,
+        status: EmailCampaignRecipientStatus.BOUNCED,
         providerStatus: "bounced",
       });
     } finally {
+      fetchMock.mockRestore();
       if (previousEmailFrom === undefined) {
         delete process.env.EMAIL_FROM;
       } else {
@@ -865,6 +888,11 @@ describeDb("customer database", () => {
         delete process.env.EMAIL_PROVIDER;
       } else {
         process.env.EMAIL_PROVIDER = previousEmailProvider;
+      }
+      if (previousResendApiKey === undefined) {
+        delete process.env.RESEND_API_KEY;
+      } else {
+        process.env.RESEND_API_KEY = previousResendApiKey;
       }
       if (previousNextAuthUrl === undefined) {
         delete process.env.NEXTAUTH_URL;
