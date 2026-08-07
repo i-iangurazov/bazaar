@@ -30,6 +30,7 @@ describeDb("email marketing product search", () => {
         unit: baseUnit.code,
         sku: `A-FILL-${String(index).padStart(2, "0")}`,
         name: `A filler product ${String(index).padStart(2, "0")}`,
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
       })),
     });
     const fillers = await prisma.product.findMany({
@@ -54,6 +55,7 @@ describeDb("email marketing product search", () => {
         sku: "ZEB-LAT-77",
         name: "Zebra Summit Backpack",
         basePriceKgs: 990,
+        createdAt: new Date("2026-01-15T00:00:00.000Z"),
         storeProducts: {
           create: {
             organizationId: org.id,
@@ -95,7 +97,7 @@ describeDb("email marketing product search", () => {
         unit: baseUnit.code,
         sku: "RECENT-NEW",
         name: "Recently Added Camera",
-        createdAt: new Date("2026-03-01T00:00:00.000Z"),
+        createdAt: new Date(Date.now() + 60_000),
         storeProducts: {
           create: {
             organizationId: org.id,
