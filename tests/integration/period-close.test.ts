@@ -63,6 +63,18 @@ describeDb("period close", () => {
     expect(result.items[0]?.closedAt.getTime()).toBeGreaterThan(
       result.items[1]?.closedAt.getTime() ?? 0,
     );
+
+    const beyondLastPage = await caller.periodClose.list({
+      storeId: store.id,
+      page: 99,
+      pageSize: 10,
+    });
+    expect(beyondLastPage).toMatchObject({
+      items: [],
+      total: 12,
+      page: 99,
+      pageSize: 10,
+    });
   });
 
   it("normalizes concurrent duplicate closes and commits one audit", async () => {

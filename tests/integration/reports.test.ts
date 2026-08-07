@@ -88,6 +88,50 @@ describeDb("reports", () => {
     expect(
       shrinkage.items.some((row) => row.productId === stockoutProduct.id && row.totalQty === 5),
     ).toBe(true);
+
+    const [stockoutsBeyondLastPage, slowMoversBeyondLastPage, shrinkageBeyondLastPage] =
+      await Promise.all([
+        getStockoutsReport({
+          organizationId: org.id,
+          storeId: store.id,
+          ...range,
+          page: 99,
+          pageSize: 10,
+        }),
+        getSlowMoversReport({
+          organizationId: org.id,
+          storeId: store.id,
+          ...range,
+          page: 99,
+          pageSize: 10,
+        }),
+        getShrinkageReport({
+          organizationId: org.id,
+          storeId: store.id,
+          ...range,
+          page: 99,
+          pageSize: 10,
+        }),
+      ]);
+
+    expect(stockoutsBeyondLastPage).toMatchObject({
+      items: [],
+      total: stockouts.total,
+      page: 99,
+      pageSize: 10,
+    });
+    expect(slowMoversBeyondLastPage).toMatchObject({
+      items: [],
+      total: slowMovers.total,
+      page: 99,
+      pageSize: 10,
+    });
+    expect(shrinkageBeyondLastPage).toMatchObject({
+      items: [],
+      total: shrinkage.total,
+      page: 99,
+      pageSize: 10,
+    });
   });
 
   it("bounds report rows with deterministic server pagination", async () => {
@@ -133,5 +177,19 @@ describeDb("reports", () => {
     expect(new Set([...first.items, ...second.items].map((row) => row.productId)).size).toBe(
       first.items.length + second.items.length,
     );
+
+    const beyondLastPage = await getSlowMoversReport({
+      organizationId: org.id,
+      storeId: store.id,
+      ...range,
+      page: 99,
+      pageSize: 10,
+    });
+    expect(beyondLastPage).toMatchObject({
+      items: [],
+      total: first.total,
+      page: 99,
+      pageSize: 10,
+    });
   });
 });

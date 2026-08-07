@@ -58,7 +58,7 @@ type ReportPage<T> = {
   pageSize: number;
 };
 
-type CountedRow = { totalCount: number };
+type CountedRow = { totalCount: number; pageRowPresent: boolean };
 
 const normalizePagination = (input: ReportRangeInput) => ({
   page: Math.max(1, Math.trunc(input.page ?? 1)),
@@ -79,8 +79,10 @@ const toPage = <T extends CountedRow>(
   rows: T[],
   page: number,
   pageSize: number,
-): ReportPage<Omit<T, "totalCount">> => ({
-  items: rows.map(({ totalCount: _totalCount, ...row }) => row),
+): ReportPage<Omit<T, keyof CountedRow>> => ({
+  items: rows.flatMap(({ totalCount: _totalCount, pageRowPresent, ...row }) =>
+    pageRowPresent ? [row] : [],
+  ),
   total: rows[0]?.totalCount ?? 0,
   page,
   pageSize,
@@ -147,29 +149,41 @@ export const getStockoutsReport = async (
       FROM crossings
       WHERE "beforeOnHand" > 0 AND "afterOnHand" <= 0
       GROUP BY "storeId", "productId", "variantId"
+    ), totals AS (
+      SELECT COUNT(*)::int AS "totalCount" FROM grouped
     )
     SELECT
-      grouped."storeId",
-      s.name AS "storeName",
-      grouped."productId",
-      p.name AS "productName",
-      p.sku AS "productSku",
-      grouped."variantId",
-      v.name AS "variantName",
-      grouped.count,
-      grouped."lastAt",
-      grouped."onHand",
-      COUNT(*) OVER ()::int AS "totalCount"
-    FROM grouped
-    INNER JOIN "Store" s ON s.id = grouped."storeId"
-    INNER JOIN "Product" p ON p.id = grouped."productId"
-    LEFT JOIN "ProductVariant" v ON v.id = grouped."variantId"
-    ORDER BY grouped."lastAt" DESC NULLS LAST,
-      grouped."storeId" ASC,
-      grouped."productId" ASC,
-      grouped."variantId" ASC NULLS FIRST
-    LIMIT ${pageSize}
-    OFFSET ${offset}
+      page_rows.*,
+      totals."totalCount",
+      (page_rows."productId" IS NOT NULL) AS "pageRowPresent"
+    FROM totals
+    LEFT JOIN LATERAL (
+      SELECT
+        grouped."storeId",
+        s.name AS "storeName",
+        grouped."productId",
+        p.name AS "productName",
+        p.sku AS "productSku",
+        grouped."variantId",
+        v.name AS "variantName",
+        grouped.count,
+        grouped."lastAt",
+        grouped."onHand"
+      FROM grouped
+      INNER JOIN "Store" s ON s.id = grouped."storeId"
+      INNER JOIN "Product" p ON p.id = grouped."productId"
+      LEFT JOIN "ProductVariant" v ON v.id = grouped."variantId"
+      ORDER BY grouped."lastAt" DESC NULLS LAST,
+        grouped."storeId" ASC,
+        grouped."productId" ASC,
+        grouped."variantId" ASC NULLS FIRST
+      LIMIT ${pageSize}
+      OFFSET ${offset}
+    ) page_rows ON true
+    ORDER BY page_rows."lastAt" DESC NULLS LAST,
+      page_rows."storeId" ASC,
+      page_rows."productId" ASC,
+      page_rows."variantId" ASC NULLS FIRST
   `);
   return toPage(rows, page, pageSize);
 };
@@ -215,28 +229,40 @@ export const getSlowMoversReport = async (
           last_movements."lastMovementAt" IS NULL
           OR last_movements."lastMovementAt" < ${input.from}
         )
+    ), totals AS (
+      SELECT COUNT(*)::int AS "totalCount" FROM candidates
     )
     SELECT
-      candidates."storeId",
-      s.name AS "storeName",
-      candidates."productId",
-      p.name AS "productName",
-      p.sku AS "productSku",
-      candidates."variantId",
-      v.name AS "variantName",
-      candidates."lastMovementAt",
-      candidates."onHand",
-      COUNT(*) OVER ()::int AS "totalCount"
-    FROM candidates
-    INNER JOIN "Store" s ON s.id = candidates."storeId"
-    INNER JOIN "Product" p ON p.id = candidates."productId"
-    LEFT JOIN "ProductVariant" v ON v.id = candidates."variantId"
-    ORDER BY candidates."lastMovementAt" ASC NULLS FIRST,
-      candidates."storeId" ASC,
-      candidates."productId" ASC,
-      candidates."variantId" ASC NULLS FIRST
-    LIMIT ${pageSize}
-    OFFSET ${offset}
+      page_rows.*,
+      totals."totalCount",
+      (page_rows."productId" IS NOT NULL) AS "pageRowPresent"
+    FROM totals
+    LEFT JOIN LATERAL (
+      SELECT
+        candidates."storeId",
+        s.name AS "storeName",
+        candidates."productId",
+        p.name AS "productName",
+        p.sku AS "productSku",
+        candidates."variantId",
+        v.name AS "variantName",
+        candidates."lastMovementAt",
+        candidates."onHand"
+      FROM candidates
+      INNER JOIN "Store" s ON s.id = candidates."storeId"
+      INNER JOIN "Product" p ON p.id = candidates."productId"
+      LEFT JOIN "ProductVariant" v ON v.id = candidates."variantId"
+      ORDER BY candidates."lastMovementAt" ASC NULLS FIRST,
+        candidates."storeId" ASC,
+        candidates."productId" ASC,
+        candidates."variantId" ASC NULLS FIRST
+      LIMIT ${pageSize}
+      OFFSET ${offset}
+    ) page_rows ON true
+    ORDER BY page_rows."lastMovementAt" ASC NULLS FIRST,
+      page_rows."storeId" ASC,
+      page_rows."productId" ASC,
+      page_rows."variantId" ASC NULLS FIRST
   `);
   return toPage(rows, page, pageSize);
 };
@@ -268,32 +294,45 @@ export const getShrinkageReport = async (
         AND m."createdAt" >= ${input.from}
         AND m."createdAt" <= ${input.to}
       GROUP BY m."storeId", m."productId", m."variantId", m."createdById"
+    ), totals AS (
+      SELECT COUNT(*)::int AS "totalCount" FROM grouped
     )
     SELECT
-      grouped."storeId",
-      s.name AS "storeName",
-      grouped."productId",
-      p.name AS "productName",
-      p.sku AS "productSku",
-      grouped."variantId",
-      v.name AS "variantName",
-      grouped."userId",
-      COALESCE(u.name, u.email) AS "userName",
-      grouped."totalQty",
-      grouped."movementCount",
-      COUNT(*) OVER ()::int AS "totalCount"
-    FROM grouped
-    INNER JOIN "Store" s ON s.id = grouped."storeId"
-    INNER JOIN "Product" p ON p.id = grouped."productId"
-    LEFT JOIN "ProductVariant" v ON v.id = grouped."variantId"
-    LEFT JOIN "User" u ON u.id = grouped."userId"
-    ORDER BY grouped."totalQty" DESC,
-      grouped."storeId" ASC,
-      grouped."productId" ASC,
-      grouped."variantId" ASC NULLS FIRST,
-      grouped."userId" ASC NULLS FIRST
-    LIMIT ${pageSize}
-    OFFSET ${offset}
+      page_rows.*,
+      totals."totalCount",
+      (page_rows."productId" IS NOT NULL) AS "pageRowPresent"
+    FROM totals
+    LEFT JOIN LATERAL (
+      SELECT
+        grouped."storeId",
+        s.name AS "storeName",
+        grouped."productId",
+        p.name AS "productName",
+        p.sku AS "productSku",
+        grouped."variantId",
+        v.name AS "variantName",
+        grouped."userId",
+        COALESCE(u.name, u.email) AS "userName",
+        grouped."totalQty",
+        grouped."movementCount"
+      FROM grouped
+      INNER JOIN "Store" s ON s.id = grouped."storeId"
+      INNER JOIN "Product" p ON p.id = grouped."productId"
+      LEFT JOIN "ProductVariant" v ON v.id = grouped."variantId"
+      LEFT JOIN "User" u ON u.id = grouped."userId"
+      ORDER BY grouped."totalQty" DESC,
+        grouped."storeId" ASC,
+        grouped."productId" ASC,
+        grouped."variantId" ASC NULLS FIRST,
+        grouped."userId" ASC NULLS FIRST
+      LIMIT ${pageSize}
+      OFFSET ${offset}
+    ) page_rows ON true
+    ORDER BY page_rows."totalQty" DESC NULLS LAST,
+      page_rows."storeId" ASC,
+      page_rows."productId" ASC,
+      page_rows."variantId" ASC NULLS FIRST,
+      page_rows."userId" ASC NULLS FIRST
   `);
   return toPage(rows, page, pageSize);
 };

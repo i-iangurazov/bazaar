@@ -403,7 +403,7 @@ const ReportsPage = () => {
                 {tErrors("tryAgain")}
               </Button>
             </div>
-          ) : stockoutRows.length ? (
+          ) : (stockoutsQuery.data?.total ?? 0) > 0 ? (
             <ResponsiveDataList
               items={stockoutRows}
               page={stockoutsPage}
@@ -554,7 +554,7 @@ const ReportsPage = () => {
                 {tErrors("tryAgain")}
               </Button>
             </div>
-          ) : slowMoverRows.length ? (
+          ) : (slowMoversQuery.data?.total ?? 0) > 0 ? (
             <ResponsiveDataList
               items={slowMoverRows}
               page={slowMoversPage}
@@ -701,7 +701,7 @@ const ReportsPage = () => {
                 {tErrors("tryAgain")}
               </Button>
             </div>
-          ) : shrinkageRows.length ? (
+          ) : (shrinkageQuery.data?.total ?? 0) > 0 ? (
             <ResponsiveDataList
               items={shrinkageRows}
               page={shrinkagePage}

@@ -171,7 +171,7 @@ const PeriodClosePage = () => {
                 {tErrors("tryAgain")}
               </Button>
             </div>
-          ) : closesQuery.data?.items.length ? (
+          ) : (closesQuery.data?.total ?? 0) > 0 ? (
             <ResponsiveDataList
               items={closesQuery.data.items}
               getKey={(close) => close.id}
