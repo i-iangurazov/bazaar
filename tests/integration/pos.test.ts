@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { CashDrawerMovementType, PosPaymentMethod, Prisma, StockMovementType } from "@prisma/client";
 
 import { buildPosPaymentSubmitPayload } from "@/lib/posSaleMath";
@@ -18,6 +18,38 @@ import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 const describeDb = shouldRunDbTests ? describe : describe.skip;
 
 describeDb("pos", () => {
+  let originalDatabaseTimeZone: { databaseName: string; timeZone: string } | null = null;
+
+  beforeAll(async () => {
+    const [settings] = await prisma.$queryRaw<
+      Array<{ databaseName: string; timeZone: string }>
+    >`SELECT current_database() AS "databaseName", current_setting('TimeZone') AS "timeZone"`;
+    const expectedDatabaseName = process.env.EXPECTED_TEST_DB_NAME;
+    if (
+      !settings ||
+      !expectedDatabaseName ||
+      settings.databaseName !== expectedDatabaseName ||
+      !/^[a-zA-Z0-9_]+$/.test(settings.databaseName)
+    ) {
+      throw new Error("POS timezone regression requires the guarded isolated test database");
+    }
+
+    originalDatabaseTimeZone = settings;
+    await prisma.$executeRawUnsafe(
+      `ALTER DATABASE "${settings.databaseName}" SET timezone TO 'Asia/Shanghai'`,
+    );
+    await prisma.$disconnect();
+  });
+
+  afterAll(async () => {
+    if (!originalDatabaseTimeZone) return;
+    const safeTimeZone = originalDatabaseTimeZone.timeZone.replaceAll("'", "''");
+    await prisma.$executeRawUnsafe(
+      `ALTER DATABASE "${originalDatabaseTimeZone.databaseName}" SET timezone TO '${safeTimeZone}'`,
+    );
+    await prisma.$disconnect();
+  });
+
   beforeEach(async () => {
     await resetDatabase();
   });

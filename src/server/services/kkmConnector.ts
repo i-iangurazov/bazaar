@@ -519,32 +519,50 @@ export const connectorPullQueue = async (input: { token: string; limit?: number 
     });
     setGauge(connectorOnlineGauge, { storeId: device.storeId }, 1);
 
-    const claimRows = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
-      SELECT "id"
-      FROM "FiscalReceipt"
-      WHERE "organizationId" = ${device.organizationId}
-        AND "storeId" = ${device.storeId}
-        AND "mode" = ${KkmMode.CONNECTOR}::"KkmMode"
-        AND (
-          (
-            "status" = ${FiscalReceiptStatus.QUEUED}::"FiscalReceiptStatus"
-            AND ("nextAttemptAt" IS NULL OR "nextAttemptAt" <= ${now})
+    const claimedRows = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      WITH candidates AS (
+        SELECT receipt."id"
+        FROM "FiscalReceipt" AS receipt
+        WHERE receipt."organizationId" = ${device.organizationId}
+          AND receipt."storeId" = ${device.storeId}
+          AND receipt."mode" = ${KkmMode.CONNECTOR}::"KkmMode"
+          AND (
+            (
+              receipt."status" = ${FiscalReceiptStatus.QUEUED}::"FiscalReceiptStatus"
+              AND (
+                receipt."nextAttemptAt" IS NULL
+                OR receipt."nextAttemptAt" <= (${now}::timestamptz AT TIME ZONE 'UTC')
+              )
+            )
+            OR (
+              receipt."status" = ${FiscalReceiptStatus.PROCESSING}::"FiscalReceiptStatus"
+              AND (
+                receipt."nextAttemptAt" IS NULL
+                OR receipt."nextAttemptAt" <= (${now}::timestamptz AT TIME ZONE 'UTC')
+              )
+            )
           )
-          OR (
-            "status" = ${FiscalReceiptStatus.PROCESSING}::"FiscalReceiptStatus"
-            AND ("nextAttemptAt" IS NULL OR "nextAttemptAt" <= ${now})
-          )
-        )
-      ORDER BY "createdAt" ASC
-      FOR UPDATE SKIP LOCKED
-      LIMIT ${limit}
+        ORDER BY receipt."createdAt" ASC
+        FOR UPDATE SKIP LOCKED
+        LIMIT ${limit}
+      )
+      UPDATE "FiscalReceipt" AS receipt
+      SET
+        "status" = ${FiscalReceiptStatus.PROCESSING}::"FiscalReceiptStatus",
+        "connectorDeviceId" = ${device.id},
+        "attemptCount" = receipt."attemptCount" + 1,
+        "nextAttemptAt" = (${leaseExpiresAt}::timestamptz AT TIME ZONE 'UTC'),
+        "updatedAt" = (${now}::timestamptz AT TIME ZONE 'UTC')
+      FROM candidates
+      WHERE receipt."id" = candidates."id"
+      RETURNING receipt."id"
     `);
 
-    if (!claimRows.length) {
+    if (!claimedRows.length) {
       return [];
     }
 
-    const ids = claimRows.map((item) => item.id);
+    const ids = claimedRows.map((item) => item.id);
     const receipts = await tx.fiscalReceipt.findMany({
       where: {
         id: { in: ids },
@@ -555,33 +573,11 @@ export const connectorPullQueue = async (input: { token: string; limit?: number 
       orderBy: { createdAt: "asc" },
     });
 
-    await tx.fiscalReceipt.updateMany({
-      where: {
-        id: { in: ids },
-        OR: [
-          {
-            status: FiscalReceiptStatus.QUEUED,
-            OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }],
-          },
-          {
-            status: FiscalReceiptStatus.PROCESSING,
-            OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }],
-          },
-        ],
-      },
-      data: {
-        status: FiscalReceiptStatus.PROCESSING,
-        connectorDeviceId: device.id,
-        attemptCount: { increment: 1 },
-        nextAttemptAt: leaseExpiresAt,
-      },
-    });
-
     return receipts.map((receipt) => ({
       id: receipt.id,
       customerOrderId: receipt.customerOrderId,
       idempotencyKey: receipt.idempotencyKey,
-      claimAttempt: receipt.attemptCount + 1,
+      claimAttempt: receipt.attemptCount,
       payload: receipt.payloadJson,
       createdAt: receipt.createdAt,
     }));
