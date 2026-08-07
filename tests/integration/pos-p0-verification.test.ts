@@ -338,6 +338,16 @@ describeDb("Agent 1 P0 runtime verification", () => {
       caller: adminCaller,
       key: "p0002",
     });
+    await adjustStock({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      storeId: secondary.store.id,
+      productId: product.id,
+      qtyDelta: 2,
+      reason: "HARD-A1-002 positive-control stock",
+      idempotencyKey: "hard-a1-002-stock",
+      requestId: "hard-a1-002-stock",
+    });
     const access = await prisma.userStoreAccess.findMany({
       where: { userId: cashierUser.id },
       select: { storeId: true },
@@ -565,6 +575,16 @@ describeDb("Agent 1 P0 runtime verification", () => {
       plan: "BUSINESS",
     });
     await prisma.product.update({ where: { id: product.id }, data: { basePriceKgs: 100 } });
+    await adjustStock({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 1,
+      reason: "HARD-A1-003 positive-control stock",
+      idempotencyKey: "hard-a1-003-stock",
+      requestId: "hard-a1-003-stock",
+    });
     const adminCaller = callerFor(adminUser);
     const managerCaller = callerFor(managerUser);
     const staffCaller = callerFor(staffUser);
@@ -770,8 +790,18 @@ describeDb("Agent 1 P0 runtime verification", () => {
   });
 
   it("HARD-A1-004 lets another cashier complete active and held drafts and rewrites attribution", async () => {
-    const { org, store, product, cashierUser } = await seedBase({ plan: "BUSINESS" });
+    const { org, store, product, adminUser, cashierUser } = await seedBase({ plan: "BUSINESS" });
     await prisma.product.update({ where: { id: product.id }, data: { basePriceKgs: 100 } });
+    await adjustStock({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 2,
+      reason: "HARD-A1-004 positive-control stock",
+      idempotencyKey: "hard-a1-004-stock",
+      requestId: "hard-a1-004-stock",
+    });
     const secondCashier = await prisma.user.create({
       data: {
         organizationId: org.id,
