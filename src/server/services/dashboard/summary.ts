@@ -538,8 +538,8 @@ export const getDashboardSummary = async ({
           WHERE o."organizationId" = ${organizationId}
             AND o."storeId" = ${storeId}
             AND o.status = 'COMPLETED'
-            AND o."completedAt" >= ${todayStart}
-            AND o."completedAt" < ${tomorrowStart}
+            AND (o."completedAt" AT TIME ZONE 'UTC') >= ${todayStart}
+            AND (o."completedAt" AT TIME ZONE 'UTC') < ${tomorrowStart}
         ) AS "todaySalesKgs",
         (
           SELECT COUNT(*)
@@ -547,8 +547,8 @@ export const getDashboardSummary = async ({
           WHERE o."organizationId" = ${organizationId}
             AND o."storeId" = ${storeId}
             AND o.status = 'COMPLETED'
-            AND o."completedAt" >= ${todayStart}
-            AND o."completedAt" < ${tomorrowStart}
+            AND (o."completedAt" AT TIME ZONE 'UTC') >= ${todayStart}
+            AND (o."completedAt" AT TIME ZONE 'UTC') < ${tomorrowStart}
         ) AS "receiptsCount",
         (
           SELECT COALESCE(SUM(l."lineCostTotalKgs"), 0)
@@ -558,8 +558,8 @@ export const getDashboardSummary = async ({
           WHERE o."organizationId" = ${organizationId}
             AND o."storeId" = ${storeId}
             AND o.status = 'COMPLETED'
-            AND o."completedAt" >= ${todayStart}
-            AND o."completedAt" < ${tomorrowStart}
+            AND (o."completedAt" AT TIME ZONE 'UTC') >= ${todayStart}
+            AND (o."completedAt" AT TIME ZONE 'UTC') < ${tomorrowStart}
         ) AS "todayCostKgs",
         (
           SELECT COUNT(*)
@@ -569,8 +569,8 @@ export const getDashboardSummary = async ({
           WHERE o."organizationId" = ${organizationId}
             AND o."storeId" = ${storeId}
             AND o.status = 'COMPLETED'
-            AND o."completedAt" >= ${todayStart}
-            AND o."completedAt" < ${tomorrowStart}
+            AND (o."completedAt" AT TIME ZONE 'UTC') >= ${todayStart}
+            AND (o."completedAt" AT TIME ZONE 'UTC') < ${tomorrowStart}
         ) AS "todayLineCount",
         (
           SELECT COUNT(l."lineCostTotalKgs")
@@ -580,8 +580,8 @@ export const getDashboardSummary = async ({
           WHERE o."organizationId" = ${organizationId}
             AND o."storeId" = ${storeId}
             AND o.status = 'COMPLETED'
-            AND o."completedAt" >= ${todayStart}
-            AND o."completedAt" < ${tomorrowStart}
+            AND (o."completedAt" AT TIME ZONE 'UTC') >= ${todayStart}
+            AND (o."completedAt" AT TIME ZONE 'UTC') < ${tomorrowStart}
         ) AS "todayCostedLineCount",
         (
           SELECT COUNT(*)
@@ -662,8 +662,8 @@ export const getDashboardSummary = async ({
       WHERE o."organizationId" = ${organizationId}
         AND o."storeId" = ${storeId}
         AND o.status = 'COMPLETED'
-        AND o."completedAt" >= ${yesterdayStart}
-        AND o."completedAt" < ${todayStart}
+        AND (o."completedAt" AT TIME ZONE 'UTC') >= ${yesterdayStart}
+        AND (o."completedAt" AT TIME ZONE 'UTC') < ${todayStart}
     `,
     prisma.$queryRaw<DashboardSalesSeriesRow[]>`
       SELECT
@@ -681,8 +681,8 @@ export const getDashboardSummary = async ({
         WHERE o."organizationId" = ${organizationId}
           AND o."storeId" = ${storeId}
           AND o.status = 'COMPLETED'
-          AND o."completedAt" >= ${sevenDaysStart}
-          AND o."completedAt" < ${tomorrowStart}
+          AND (o."completedAt" AT TIME ZONE 'UTC') >= ${sevenDaysStart}
+          AND (o."completedAt" AT TIME ZONE 'UTC') < ${tomorrowStart}
       ) series
       GROUP BY series."date"
       ORDER BY series."date" ASC
@@ -702,8 +702,8 @@ export const getDashboardSummary = async ({
       WHERE o."organizationId" = ${organizationId}
         AND o."storeId" = ${storeId}
         AND o.status = 'COMPLETED'
-        AND o."completedAt" >= ${sevenDaysStart}
-        AND o."completedAt" < ${tomorrowStart}
+        AND (o."completedAt" AT TIME ZONE 'UTC') >= ${sevenDaysStart}
+        AND (o."completedAt" AT TIME ZONE 'UTC') < ${tomorrowStart}
         AND p."isDeleted" = false
       GROUP BY l."productId", p.sku, p.name
       ORDER BY COALESCE(SUM(l."lineTotalKgs"), 0) DESC
