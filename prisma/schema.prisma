@@ -1520,6 +1520,10 @@ model ProductImageStudioJob {
   productId            String?
   createdById          String
   status               ProductImageStudioJobStatus    @default(QUEUED)
+  attemptCount         Int                             @default(0)
+  leaseToken           String?                         @db.VarChar(64)
+  leaseExpiresAt       DateTime?
+  activeDedupeKey      String?                         @unique @db.VarChar(64)
   sourceImageUrl       String
   sourceImageMimeType  String
   sourceImageBytes     Int?
@@ -1542,6 +1546,7 @@ model ProductImageStudioJob {
   savedProductImageId  String?
   savedAsPrimary       Boolean                        @default(false)
   savedAt              DateTime?
+  startedAt            DateTime?
   createdAt            DateTime                       @default(now())
   updatedAt            DateTime                       @updatedAt
   completedAt          DateTime?
@@ -1552,6 +1557,7 @@ model ProductImageStudioJob {
 
   @@index([organizationId, createdAt])
   @@index([organizationId, status, createdAt])
+  @@index([status, leaseExpiresAt])
   @@index([productId, createdAt])
   @@index([createdById, createdAt])
 }

@@ -130,7 +130,10 @@ const renewLock = async (lock: LockHandle) => {
       if (isProductionRuntime()) {
         throw error;
       }
-      logger.warn({ job: lock.name, error }, "redis lock renew unavailable; renewing in-memory lock only");
+      logger.warn(
+        { job: lock.name, error },
+        "redis lock renew unavailable; renewing in-memory lock only",
+      );
     }
   }
   if (isProductionRuntime() && !redis) {
@@ -160,7 +163,10 @@ const releaseLock = async (lock: LockHandle) => {
       if (isProductionRuntime()) {
         throw error;
       }
-      logger.warn({ job: lock.name, error }, "redis unlock unavailable; releasing in-memory lock only");
+      logger.warn(
+        { job: lock.name, error },
+        "redis unlock unavailable; releasing in-memory lock only",
+      );
     }
   }
   if (isProductionRuntime() && !redis) {
@@ -258,11 +264,18 @@ const jobs: Record<string, JobDefinition> = {
   },
   "product-description-generation": {
     handler: async (payload) => {
-      const { runProductDescriptionGenerationJob } = await import(
-        "@/server/services/productDescriptionGenerationJobs"
-      );
+      const { runProductDescriptionGenerationJob } =
+        await import("@/server/services/productDescriptionGenerationJobs");
       return runProductDescriptionGenerationJob(payload);
     },
+  },
+  "product-image-studio-process": {
+    handler: async (payload) => {
+      const { runProductImageStudioJob } = await import("@/server/services/productImageStudio");
+      return runProductImageStudioJob(payload);
+    },
+    maxAttempts: 1,
+    baseDelayMs: 1,
   },
 };
 
@@ -279,7 +292,10 @@ const executeJob = async (
   const logger = getLogger();
   const definition = jobs[name];
   if (!definition) {
-    return { result: { job: name, status: "skipped", details: { reason: "unknown" } }, attempts: 0 };
+    return {
+      result: { job: name, status: "skipped", details: { reason: "unknown" } },
+      attempts: 0,
+    };
   }
 
   const maxAttempts = definition.maxAttempts ?? 3;

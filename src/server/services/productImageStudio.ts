@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { extname, resolve, sep } from "node:path";
 
 import sharp from "sharp";
@@ -12,7 +12,7 @@ import {
 
 import { prisma } from "@/server/db/prisma";
 import { assertExternalProviderCallAllowed } from "@/server/config/runtime";
-import { registerJob, runJob, type JobPayload } from "@/server/jobs";
+import { runJob, type JobPayload } from "@/server/jobs";
 import { writeAuditLog } from "@/server/services/audit";
 import { AppError } from "@/server/services/errors";
 import {
@@ -34,6 +34,20 @@ const publicRootDir = resolve(process.cwd(), "public");
 const PRODUCT_IMAGE_STUDIO_MIN_DIMENSION = 512;
 const OPENAI_MAX_ATTEMPTS = 3;
 const sleep = (ms: number) => new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
+
+const parsePositiveIntEnv = (value: string | undefined, fallback: number) => {
+  const parsed = Number.parseInt(value ?? "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const PRODUCT_IMAGE_STUDIO_JOB_TIMEOUT_MS = parsePositiveIntEnv(
+  process.env.PRODUCT_IMAGE_STUDIO_JOB_TIMEOUT_MS,
+  15 * 60 * 1000,
+);
+const PRODUCT_IMAGE_STUDIO_PROVIDER_TIMEOUT_MS = parsePositiveIntEnv(
+  process.env.PRODUCT_IMAGE_STUDIO_PROVIDER_TIMEOUT_MS,
+  2 * 60 * 1000,
+);
 
 const imageMimeByExtension: Record<string, string> = {
   ".jpg": "image/jpeg",
@@ -556,6 +570,7 @@ const callOpenAiImageEnhancement = async (input: {
           Authorization: `Bearer ${config.apiKey}`,
         },
         body: JSON.stringify(requestBody),
+        signal: AbortSignal.timeout(PRODUCT_IMAGE_STUDIO_PROVIDER_TIMEOUT_MS),
       });
       responseBody = (await response.json().catch(() => null)) as OpenAiImageResponseBody | null;
     } catch (error) {
@@ -739,6 +754,8 @@ const productImageStudioJobSelect = {
   id: true,
   productId: true,
   status: true,
+  attemptCount: true,
+  leaseExpiresAt: true,
   sourceImageUrl: true,
   sourceImageMimeType: true,
   sourceImageBytes: true,
@@ -761,6 +778,7 @@ const productImageStudioJobSelect = {
   savedProductImageId: true,
   savedAsPrimary: true,
   savedAt: true,
+  startedAt: true,
   createdAt: true,
   updatedAt: true,
   completedAt: true,
@@ -876,6 +894,30 @@ export const getProductImageStudioJob = async (organizationId: string, jobId: st
   return serializeJob(job);
 };
 
+const buildProductImageStudioActiveDedupeKey = (input: {
+  organizationId: string;
+  productId: string | null;
+  sourceImageUrl: string;
+  presets: ProductImageStudioPresetInput;
+}) =>
+  createHash("sha256")
+    .update(
+      JSON.stringify({
+        organizationId: input.organizationId,
+        productId: input.productId,
+        sourceImageUrl: input.sourceImageUrl,
+        ...input.presets,
+      }),
+    )
+    .digest("hex");
+
+const dispatchProductImageStudioJob = (jobId: string, organizationId: string) => {
+  if (process.env.NODE_ENV === "test") {
+    return;
+  }
+  void runJob(PRODUCT_IMAGE_STUDIO_JOB_NAME, { jobId, organizationId }).catch(() => null);
+};
+
 export const createProductImageStudioJob = async (input: {
   organizationId: string;
   actorId: string;
@@ -909,26 +951,34 @@ export const createProductImageStudioJob = async (input: {
     }),
   ]);
 
-  const activeJob = await prisma.productImageStudioJob.findFirst({
-    where: {
-      organizationId: input.organizationId,
-      sourceImageUrl: sourceImage.normalizedUrl,
-      productId: product?.id ?? null,
-      backgroundMode: presets.backgroundMode,
-      outputFormat: presets.outputFormat,
-      centered: presets.centered,
-      improveVisibility: presets.improveVisibility,
-      softShadow: presets.softShadow,
-      tighterCrop: presets.tighterCrop,
-      brighterPresentation: presets.brighterPresentation,
-      status: {
-        in: [ProductImageStudioJobStatus.QUEUED, ProductImageStudioJobStatus.PROCESSING],
-      },
+  const activeDedupeKey = buildProductImageStudioActiveDedupeKey({
+    organizationId: input.organizationId,
+    productId: product?.id ?? null,
+    sourceImageUrl: sourceImage.normalizedUrl,
+    presets,
+  });
+  const activeJobWhere = {
+    organizationId: input.organizationId,
+    sourceImageUrl: sourceImage.normalizedUrl,
+    productId: product?.id ?? null,
+    backgroundMode: presets.backgroundMode,
+    outputFormat: presets.outputFormat,
+    centered: presets.centered,
+    improveVisibility: presets.improveVisibility,
+    softShadow: presets.softShadow,
+    tighterCrop: presets.tighterCrop,
+    brighterPresentation: presets.brighterPresentation,
+    status: {
+      in: [ProductImageStudioJobStatus.QUEUED, ProductImageStudioJobStatus.PROCESSING],
     },
+  } satisfies Prisma.ProductImageStudioJobWhereInput;
+  const activeJob = await prisma.productImageStudioJob.findFirst({
+    where: activeJobWhere,
     select: { id: true },
   });
 
   if (activeJob) {
+    dispatchProductImageStudioJob(activeJob.id, input.organizationId);
     return { jobId: activeJob.id, deduplicated: true };
   }
 
@@ -937,46 +987,76 @@ export const createProductImageStudioJob = async (input: {
     productName: product?.name ?? null,
   });
 
-  const job = await prisma.productImageStudioJob.create({
-    data: {
-      organizationId: input.organizationId,
-      productId: product?.id ?? null,
-      createdById: input.actorId,
-      status: ProductImageStudioJobStatus.QUEUED,
-      sourceImageUrl: sourceImage.normalizedUrl,
-      sourceImageMimeType: sourceImage.mimeType,
-      sourceImageBytes: sourceImage.bytes,
-      backgroundMode: presets.backgroundMode,
-      outputFormat: presets.outputFormat,
-      centered: presets.centered,
-      improveVisibility: presets.improveVisibility,
-      softShadow: presets.softShadow,
-      tighterCrop: presets.tighterCrop,
-      brighterPresentation: presets.brighterPresentation,
-      provider: PROVIDER_NAME,
-      requestPrompt: prompt,
-    },
-    select: { id: true },
-  });
+  let job: { id: string } | null = null;
+  for (let createAttempt = 0; createAttempt < 2 && !job; createAttempt += 1) {
+    const candidateId = randomUUID();
+    job = await prisma.$transaction(async (tx) => {
+      const inserted = await tx.productImageStudioJob.createMany({
+        data: [
+          {
+            id: candidateId,
+            organizationId: input.organizationId,
+            productId: product?.id ?? null,
+            createdById: input.actorId,
+            status: ProductImageStudioJobStatus.QUEUED,
+            activeDedupeKey,
+            sourceImageUrl: sourceImage.normalizedUrl,
+            sourceImageMimeType: sourceImage.mimeType,
+            sourceImageBytes: sourceImage.bytes,
+            backgroundMode: presets.backgroundMode,
+            outputFormat: presets.outputFormat,
+            centered: presets.centered,
+            improveVisibility: presets.improveVisibility,
+            softShadow: presets.softShadow,
+            tighterCrop: presets.tighterCrop,
+            brighterPresentation: presets.brighterPresentation,
+            provider: PROVIDER_NAME,
+            requestPrompt: prompt,
+          },
+        ],
+        skipDuplicates: true,
+      });
+      if (inserted.count !== 1) {
+        return null;
+      }
 
-  await writeAuditLog(prisma, {
-    organizationId: input.organizationId,
-    actorId: input.actorId,
-    action: "PRODUCT_IMAGE_STUDIO_JOB_CREATED",
-    entity: "ProductImageStudioJob",
-    entityId: job.id,
-    requestId: input.requestId,
-    after: {
-      jobId: job.id,
-      productId: product?.id ?? null,
-      backgroundMode: presets.backgroundMode,
-      outputFormat: presets.outputFormat,
-    },
-  });
+      await writeAuditLog(tx, {
+        organizationId: input.organizationId,
+        actorId: input.actorId,
+        action: "PRODUCT_IMAGE_STUDIO_JOB_CREATED",
+        entity: "ProductImageStudioJob",
+        entityId: candidateId,
+        requestId: input.requestId,
+        after: {
+          jobId: candidateId,
+          productId: product?.id ?? null,
+          backgroundMode: presets.backgroundMode,
+          outputFormat: presets.outputFormat,
+        },
+      });
+      return { id: candidateId };
+    });
 
-  await runJob(PRODUCT_IMAGE_STUDIO_JOB_NAME, {
-    jobId: job.id,
-  });
+    if (job) {
+      break;
+    }
+
+    const concurrent = await prisma.productImageStudioJob.findFirst({
+      where: { activeDedupeKey, ...activeJobWhere },
+      select: { id: true },
+    });
+    if (!concurrent) {
+      continue;
+    }
+    dispatchProductImageStudioJob(concurrent.id, input.organizationId);
+    return { jobId: concurrent.id, deduplicated: true };
+  }
+
+  if (!job) {
+    throw new AppError("requestInProgress", "CONFLICT", 409);
+  }
+
+  dispatchProductImageStudioJob(job.id, input.organizationId);
 
   return { jobId: job.id, deduplicated: false };
 };
@@ -1136,7 +1216,86 @@ export const setGeneratedImageAsPrimary = async (input: {
     setAsPrimary: true,
   });
 
+const timeoutAbandonedProductImageStudioJobs = async () => {
+  const now = new Date();
+  const timeoutBefore = new Date(now.getTime() - PRODUCT_IMAGE_STUDIO_JOB_TIMEOUT_MS);
+  const staleJobs = await prisma.productImageStudioJob.findMany({
+    where: {
+      status: {
+        in: [ProductImageStudioJobStatus.QUEUED, ProductImageStudioJobStatus.PROCESSING],
+      },
+      OR: [
+        { leaseExpiresAt: { lt: now } },
+        { leaseExpiresAt: null, startedAt: { lt: timeoutBefore } },
+        { leaseExpiresAt: null, startedAt: null, createdAt: { lt: timeoutBefore } },
+      ],
+    },
+    select: {
+      id: true,
+      organizationId: true,
+      createdById: true,
+      status: true,
+      attemptCount: true,
+      startedAt: true,
+    },
+  });
+
+  const timedOutJobIds: string[] = [];
+  for (const staleJob of staleJobs) {
+    const timedOut = await prisma.$transaction(async (tx) => {
+      const updated = await tx.productImageStudioJob.updateMany({
+        where: {
+          id: staleJob.id,
+          status: {
+            in: [ProductImageStudioJobStatus.QUEUED, ProductImageStudioJobStatus.PROCESSING],
+          },
+          OR: [
+            { leaseExpiresAt: { lt: now } },
+            { leaseExpiresAt: null, startedAt: { lt: timeoutBefore } },
+            { leaseExpiresAt: null, startedAt: null, createdAt: { lt: timeoutBefore } },
+          ],
+        },
+        data: {
+          status: ProductImageStudioJobStatus.FAILED,
+          errorMessage: "productImageStudioJobTimedOut",
+          completedAt: now,
+          activeDedupeKey: null,
+          leaseToken: null,
+          leaseExpiresAt: null,
+        },
+      });
+      if (updated.count !== 1) {
+        return false;
+      }
+      await writeAuditLog(tx, {
+        organizationId: staleJob.organizationId,
+        actorId: staleJob.createdById,
+        action: "PRODUCT_IMAGE_STUDIO_JOB_TIMED_OUT",
+        entity: "ProductImageStudioJob",
+        entityId: staleJob.id,
+        requestId: randomUUID(),
+        before: {
+          status: staleJob.status,
+          attemptCount: staleJob.attemptCount,
+          startedAt: staleJob.startedAt,
+        },
+        after: {
+          status: ProductImageStudioJobStatus.FAILED,
+          errorMessage: "productImageStudioJobTimedOut",
+          completedAt: now,
+        },
+      });
+      return true;
+    });
+    if (timedOut) {
+      timedOutJobIds.push(staleJob.id);
+    }
+  }
+  return timedOutJobIds;
+};
+
 const processQueuedProductImageStudioJob = async (jobId?: string) => {
+  await timeoutAbandonedProductImageStudioJobs();
   const job = jobId
     ? await prisma.productImageStudioJob.findFirst({
         where: {
@@ -1157,15 +1316,31 @@ const processQueuedProductImageStudioJob = async (jobId?: string) => {
     };
   }
 
-  const running = await prisma.productImageStudioJob.update({
-    where: { id: job.id },
+  const startedAt = new Date();
+  const leaseToken = randomUUID();
+  const claimed = await prisma.productImageStudioJob.updateMany({
+    where: { id: job.id, status: ProductImageStudioJobStatus.QUEUED },
     data: {
       status: ProductImageStudioJobStatus.PROCESSING,
+      attemptCount: { increment: 1 },
+      leaseToken,
+      leaseExpiresAt: new Date(startedAt.getTime() + PRODUCT_IMAGE_STUDIO_JOB_TIMEOUT_MS),
+      startedAt,
       errorMessage: null,
       providerRequestJson: Prisma.DbNull,
       providerResponseJson: Prisma.DbNull,
       completedAt: null,
     },
+  });
+  if (claimed.count !== 1) {
+    return {
+      job: job.id,
+      status: "skipped" as const,
+      details: { reason: "claimed" },
+    };
+  }
+  const running = await prisma.productImageStudioJob.findUniqueOrThrow({
+    where: { id: job.id },
   });
 
   try {
@@ -1197,6 +1372,21 @@ const processQueuedProductImageStudioJob = async (jobId?: string) => {
         brighterPresentation: running.brighterPresentation,
       },
     });
+    const stillOwned = await prisma.productImageStudioJob.findFirst({
+      where: {
+        id: running.id,
+        status: ProductImageStudioJobStatus.PROCESSING,
+        leaseToken,
+      },
+      select: { id: true },
+    });
+    if (!stillOwned) {
+      return {
+        job: running.id,
+        status: "skipped" as const,
+        details: { reason: "leaseLost" },
+      };
+    }
     const persistedOutput = await persistGeneratedImage({
       organizationId: running.organizationId,
       jobId: running.id,
@@ -1204,32 +1394,54 @@ const processQueuedProductImageStudioJob = async (jobId?: string) => {
       mimeType: providerResult.mimeType,
     });
 
-    const finished = await prisma.productImageStudioJob.update({
-      where: { id: running.id },
-      data: {
-        status: ProductImageStudioJobStatus.SUCCEEDED,
-        outputImageUrl: persistedOutput.url,
-        outputImageMimeType: persistedOutput.mimeType,
-        outputImageBytes: persistedOutput.bytes,
-        providerJobId: providerResult.providerJobId,
-        providerRequestJson: providerResult.requestSummary,
-        providerResponseJson: providerResult.responseSummary,
-        completedAt: new Date(),
-      },
+    const finished = await prisma.$transaction(async (tx) => {
+      const completed = await tx.productImageStudioJob.updateMany({
+        where: {
+          id: running.id,
+          status: ProductImageStudioJobStatus.PROCESSING,
+          leaseToken,
+        },
+        data: {
+          status: ProductImageStudioJobStatus.SUCCEEDED,
+          outputImageUrl: persistedOutput.url,
+          outputImageMimeType: persistedOutput.mimeType,
+          outputImageBytes: persistedOutput.bytes,
+          providerJobId: providerResult.providerJobId,
+          providerRequestJson: providerResult.requestSummary,
+          providerResponseJson: providerResult.responseSummary,
+          completedAt: new Date(),
+          activeDedupeKey: null,
+          leaseToken: null,
+          leaseExpiresAt: null,
+        },
+      });
+      if (completed.count !== 1) {
+        return null;
+      }
+      const completedJob = await tx.productImageStudioJob.findUniqueOrThrow({
+        where: { id: running.id },
+      });
+      await writeAuditLog(tx, {
+        organizationId: completedJob.organizationId,
+        actorId: completedJob.createdById,
+        action: "PRODUCT_IMAGE_STUDIO_JOB_SUCCEEDED",
+        entity: "ProductImageStudioJob",
+        entityId: completedJob.id,
+        requestId: randomUUID(),
+        after: {
+          jobId: completedJob.id,
+          outputImageUrl: completedJob.outputImageUrl,
+        },
+      });
+      return completedJob;
     });
-
-    await writeAuditLog(prisma, {
-      organizationId: finished.organizationId,
-      actorId: finished.createdById,
-      action: "PRODUCT_IMAGE_STUDIO_JOB_SUCCEEDED",
-      entity: "ProductImageStudioJob",
-      entityId: finished.id,
-      requestId: randomUUID(),
-      after: {
-        jobId: finished.id,
-        outputImageUrl: finished.outputImageUrl,
-      },
-    });
+    if (!finished) {
+      return {
+        job: running.id,
+        status: "skipped" as const,
+        details: { reason: "leaseLost" },
+      };
+    }
 
     return {
       job: finished.id,
@@ -1243,27 +1455,49 @@ const processQueuedProductImageStudioJob = async (jobId?: string) => {
       error instanceof AppError
         ? error
         : new AppError("productImageStudioProviderFailed", "INTERNAL_SERVER_ERROR", 502);
-    const failed = await prisma.productImageStudioJob.update({
-      where: { id: running.id },
-      data: {
-        status: ProductImageStudioJobStatus.FAILED,
-        errorMessage: appError.message,
-        completedAt: new Date(),
-      },
+    const failed = await prisma.$transaction(async (tx) => {
+      const completed = await tx.productImageStudioJob.updateMany({
+        where: {
+          id: running.id,
+          status: ProductImageStudioJobStatus.PROCESSING,
+          leaseToken,
+        },
+        data: {
+          status: ProductImageStudioJobStatus.FAILED,
+          errorMessage: appError.message,
+          completedAt: new Date(),
+          activeDedupeKey: null,
+          leaseToken: null,
+          leaseExpiresAt: null,
+        },
+      });
+      if (completed.count !== 1) {
+        return null;
+      }
+      const failedJob = await tx.productImageStudioJob.findUniqueOrThrow({
+        where: { id: running.id },
+      });
+      await writeAuditLog(tx, {
+        organizationId: failedJob.organizationId,
+        actorId: failedJob.createdById,
+        action: "PRODUCT_IMAGE_STUDIO_JOB_FAILED",
+        entity: "ProductImageStudioJob",
+        entityId: failedJob.id,
+        requestId: randomUUID(),
+        after: {
+          jobId: failedJob.id,
+          errorMessage: failedJob.errorMessage,
+        },
+      });
+      return failedJob;
     });
-
-    await writeAuditLog(prisma, {
-      organizationId: failed.organizationId,
-      actorId: failed.createdById,
-      action: "PRODUCT_IMAGE_STUDIO_JOB_FAILED",
-      entity: "ProductImageStudioJob",
-      entityId: failed.id,
-      requestId: randomUUID(),
-      after: {
-        jobId: failed.id,
-        errorMessage: failed.errorMessage,
-      },
-    });
+    if (!failed) {
+      return {
+        job: running.id,
+        status: "skipped" as const,
+        details: { reason: "leaseLost" },
+      };
+    }
 
     return {
       job: failed.id,
@@ -1275,14 +1509,10 @@ const processQueuedProductImageStudioJob = async (jobId?: string) => {
   }
 };
 
-const runProductImageStudioJob = async (payload?: JobPayload) => {
+export const runProductImageStudioJob = async (payload?: JobPayload) => {
   const requestedJobId =
     isObject(payload) && "jobId" in payload && typeof payload.jobId === "string"
       ? payload.jobId
       : undefined;
   return processQueuedProductImageStudioJob(requestedJobId);
 };
-
-registerJob(PRODUCT_IMAGE_STUDIO_JOB_NAME, {
-  handler: runProductImageStudioJob,
-});
