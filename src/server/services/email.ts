@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { getLogger } from "@/server/logging";
 import { assertExternalProviderCallAllowed, isProductionRuntime } from "@/server/config/runtime";
 import { defaultLocale, normalizeLocale, type Locale } from "@/lib/locales";
@@ -109,6 +111,48 @@ const allowLogEmailInProduction = () => {
   const normalized = value.trim().toLowerCase();
   return normalized === "1" || normalized === "true" || normalized === "yes";
 };
+
+const safeValueHash = (value: string) =>
+  createHash("sha256").update(value.trim().toLowerCase()).digest("hex").slice(0, 16);
+
+const emailDomain = (value: string) => {
+  const normalized = value.trim().toLowerCase();
+  const separator = normalized.lastIndexOf("@");
+  return separator > 0 && separator < normalized.length - 1
+    ? normalized.slice(separator + 1)
+    : "invalid";
+};
+
+const safeMessageCategories = new Set([
+  "signup_verification",
+  "password_reset",
+  "organization_invite",
+  "order_confirmation",
+  "order_cancellation",
+  "order_tracking",
+  "order_follow_up",
+  "email_marketing_test",
+  "email_marketing",
+  "email_automation_test",
+  "email_automation",
+]);
+
+const messageCategory = (payload: EmailPayload) => {
+  const value = payload.tags?.find(
+    (tag) => tag.name === "kind" || tag.name === "category",
+  )?.value;
+  if (!value) return "unspecified";
+  return safeMessageCategories.has(value) ? value : `custom_${safeValueHash(value)}`;
+};
+
+const safeLogMetadata = (payload: EmailPayload) => ({
+  provider: "log" as const,
+  messageCategory: messageCategory(payload),
+  recipientCount: 1,
+  recipientDomain: emailDomain(payload.to),
+  recipientHash: safeValueHash(payload.to),
+  subjectHash: safeValueHash(payload.subject),
+});
 
 export const assertEmailConfigured = () => {
   if (!isProductionRuntime()) {
@@ -308,16 +352,8 @@ const sendEmail = async (payload: EmailPayload): Promise<EmailSendResult> => {
   }
 
   logger.info(
-    {
-      email: payload.to,
-      subject: payload.subject,
-      text: payload.text,
-      html: payload.html,
-      from: payload.from ?? process.env.EMAIL_FROM ?? null,
-      replyTo: payload.replyTo ?? null,
-      provider: "log",
-    },
-    "email delivery fallback"
+    safeLogMetadata(payload),
+    "email delivery fallback",
   );
   return { provider: "log", id: `log_${Date.now()}_${Math.random().toString(36).slice(2, 10)}` };
 };
@@ -341,10 +377,11 @@ export const sendEmailBatch = async (
   }
   logger.info(
     {
-      count: payloads.length,
-      recipients: payloads.map((payload) => payload.to),
-      subjects: Array.from(new Set(payloads.map((payload) => payload.subject))),
       provider: "log",
+      recipientCount: payloads.length,
+      recipientDomains: Array.from(new Set(payloads.map((payload) => emailDomain(payload.to)))).sort(),
+      messageCategories: Array.from(new Set(payloads.map(messageCategory))).sort(),
+      subjectHashes: Array.from(new Set(payloads.map((payload) => safeValueHash(payload.subject)))),
     },
     "email batch delivery fallback",
   );
@@ -463,6 +500,7 @@ export const sendVerificationEmail = async (input: {
         </div>
       </div>
     `,
+    tags: [{ name: "kind", value: "signup_verification" }],
   });
 };
 
@@ -475,6 +513,7 @@ export const sendResetEmail = async (input: {
     subject: "Password reset",
     text: `Open this link to reset your password: ${input.resetLink}`,
     html: `<p>Open this link to reset your password:</p><p><a href="${input.resetLink}">${input.resetLink}</a></p>`,
+    tags: [{ name: "kind", value: "password_reset" }],
   });
 };
 
@@ -487,5 +526,6 @@ export const sendInviteEmail = async (input: {
     subject: "Organization invite",
     text: `Open this link to accept your invite: ${input.inviteLink}`,
     html: `<p>Open this link to accept your invite:</p><p><a href="${input.inviteLink}">${input.inviteLink}</a></p>`,
+    tags: [{ name: "kind", value: "organization_invite" }],
   });
 };
