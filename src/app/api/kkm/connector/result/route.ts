@@ -20,6 +20,7 @@ export const POST = async (request: Request) => {
   const body = (await request.json().catch(() => null)) as
     | {
         receiptId?: string;
+        claimAttempt?: number;
         status?: "SENT" | "FAILED";
         providerReceiptId?: string | null;
         fiscalNumber?: string | null;
@@ -32,7 +33,12 @@ export const POST = async (request: Request) => {
       }
     | null;
 
-  if (!body?.receiptId || (body.status !== "SENT" && body.status !== "FAILED")) {
+  if (
+    !body?.receiptId ||
+    !Number.isSafeInteger(body.claimAttempt) ||
+    (body.claimAttempt ?? 0) < 1 ||
+    (body.status !== "SENT" && body.status !== "FAILED")
+  ) {
     return Response.json({ message: "invalidInput" }, { status: 400 });
   }
 
@@ -40,6 +46,7 @@ export const POST = async (request: Request) => {
     const result = await connectorPushResult({
       token,
       receiptId: body.receiptId,
+      claimAttempt: body.claimAttempt!,
       status: body.status,
       providerReceiptId: body.providerReceiptId ?? null,
       fiscalNumber: body.fiscalNumber ?? null,

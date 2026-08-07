@@ -3780,6 +3780,7 @@ describeDb("pos", () => {
     await connectorPushResult({
       token: pairedDevice.token,
       receiptId: pulled[0]!.id,
+      claimAttempt: pulled[0]!.claimAttempt,
       status: "SENT",
       providerReceiptId: "mkassa-001",
       fiscalNumber: "fiscal-001",
@@ -3787,6 +3788,7 @@ describeDb("pos", () => {
     await connectorPushResult({
       token: pairedDevice.token,
       receiptId: pulled[0]!.id,
+      claimAttempt: pulled[0]!.claimAttempt,
       status: "SENT",
       providerReceiptId: "mkassa-001",
       fiscalNumber: "fiscal-001",
@@ -3914,6 +3916,27 @@ describeDb("pos", () => {
       where: { id: receiptId },
       data: { nextAttemptAt: new Date(Date.now() - 1_000) },
     });
+    const sameDeviceRecovery = await connectorPullQueue({ token: deviceA.token, limit: 10 });
+    expect(sameDeviceRecovery).toHaveLength(1);
+    expect(sameDeviceRecovery[0]).toMatchObject({
+      id: receiptId,
+      idempotencyKey: commandId,
+      claimAttempt: 2,
+    });
+    await expect(
+      connectorPushResult({
+        token: deviceA.token,
+        receiptId,
+        claimAttempt: firstPull[0]!.claimAttempt,
+        status: "FAILED",
+        errorMessage: "late result from the first same-device lease",
+      }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND", message: "kkmReceiptNotFound" });
+
+    await prisma.fiscalReceipt.update({
+      where: { id: receiptId },
+      data: { nextAttemptAt: new Date(Date.now() - 1_000) },
+    });
     const recoveryPulls = await Promise.all([
       connectorPullQueue({ token: deviceB.token, limit: 10 }),
       connectorPullQueue({ token: deviceC.token, limit: 10 }),
@@ -3934,7 +3957,7 @@ describeDb("pos", () => {
     });
     expect(recoveredClaim).toMatchObject({
       status: "PROCESSING",
-      attemptCount: 2,
+      attemptCount: 3,
       connectorDeviceId: recoveryDevice.device.id,
     });
     expect(recoveredClaim.nextAttemptAt?.getTime()).toBeGreaterThan(Date.now());
@@ -3943,6 +3966,7 @@ describeDb("pos", () => {
       connectorPushResult({
         token: deviceA.token,
         receiptId,
+        claimAttempt: sameDeviceRecovery[0]!.claimAttempt,
         status: "FAILED",
         errorMessage: "late stale result",
       }),
@@ -3959,27 +3983,31 @@ describeDb("pos", () => {
     });
     expect(afterStaleResult).toEqual({
       status: "PROCESSING",
-      attemptCount: 2,
+      attemptCount: 3,
       connectorDeviceId: recoveryDevice.device.id,
       lastError: null,
       providerReceiptId: null,
     });
 
-    await connectorPushResult({
-      token: recoveryDevice.token,
-      receiptId,
-      status: "SENT",
-      providerReceiptId: "mkassa-timeout-001",
-      fiscalNumber: "fiscal-timeout-001",
-    });
-    await connectorPushResult({
-      token: deviceA.token,
-      receiptId,
-      status: "FAILED",
-      errorMessage: "late stale result",
-    });
+    const concurrentResults = await Promise.allSettled([
+      connectorPushResult({
+        token: recoveryDevice.token,
+        receiptId,
+        claimAttempt: recovered[0]!.claimAttempt,
+        status: "SENT",
+        providerReceiptId: "mkassa-timeout-001",
+        fiscalNumber: "fiscal-timeout-001",
+      }),
+      connectorPushResult({
+        token: recoveryDevice.token,
+        receiptId,
+        claimAttempt: recovered[0]!.claimAttempt,
+        status: "FAILED",
+        errorMessage: "same-device concurrent failure",
+      }),
+    ]);
 
-    const [finalReceipt, finalSale, receiptCount] = await Promise.all([
+    const [finalReceipt, finalSale, receiptCount, resultAudits] = await Promise.all([
       prisma.fiscalReceipt.findUniqueOrThrow({
         where: { id: receiptId },
         select: {
@@ -3988,6 +4016,7 @@ describeDb("pos", () => {
           nextAttemptAt: true,
           providerReceiptId: true,
           fiscalNumber: true,
+          lastError: true,
         },
       }),
       prisma.customerOrder.findUniqueOrThrow({
@@ -3995,20 +4024,46 @@ describeDb("pos", () => {
         select: { status: true, kkmStatus: true, kkmReceiptId: true },
       }),
       prisma.fiscalReceipt.count({ where: { customerOrderId: sale.id } }),
+      prisma.auditLog.findMany({
+        where: { entityId: receiptId, action: "KKM_CONNECTOR_RESULT" },
+      }),
     ]);
-    expect(finalReceipt).toEqual({
-      status: "SENT",
-      attemptCount: 2,
-      nextAttemptAt: null,
-      providerReceiptId: "mkassa-timeout-001",
-      fiscalNumber: "fiscal-timeout-001",
-    });
-    expect(finalSale).toEqual({
-      status: "COMPLETED",
-      kkmStatus: "SENT",
-      kkmReceiptId: "mkassa-timeout-001",
-    });
+    expect(concurrentResults.some((result) => result.status === "fulfilled")).toBe(true);
+    expect(finalReceipt.attemptCount).toBe(3);
+    expect(finalReceipt.status === "SENT" || finalReceipt.status === "FAILED").toBe(true);
+    if (finalReceipt.status === "SENT") {
+      expect(finalReceipt).toMatchObject({
+        nextAttemptAt: null,
+        providerReceiptId: "mkassa-timeout-001",
+        fiscalNumber: "fiscal-timeout-001",
+        lastError: null,
+      });
+      expect(finalSale).toEqual({
+        status: "COMPLETED",
+        kkmStatus: "SENT",
+        kkmReceiptId: "mkassa-timeout-001",
+      });
+    } else {
+      expect(finalReceipt).toMatchObject({
+        providerReceiptId: null,
+        fiscalNumber: null,
+        lastError: "same-device concurrent failure",
+      });
+      expect(finalReceipt.nextAttemptAt?.getTime()).toBeGreaterThan(Date.now());
+      expect(finalSale).toEqual({
+        status: "COMPLETED",
+        kkmStatus: "FAILED",
+        kkmReceiptId: null,
+      });
+    }
     expect(receiptCount).toBe(1);
+    expect(resultAudits).toHaveLength(1);
+    expect(resultAudits[0]?.before).toMatchObject({
+      status: "PROCESSING",
+      attemptCount: recovered[0]!.claimAttempt,
+      connectorDeviceId: recoveryDevice.device.id,
+    });
+    expect(resultAudits[0]?.after).toMatchObject({ status: finalReceipt.status });
   });
 
   it("blocks card refund when original sale shift differs", async () => {

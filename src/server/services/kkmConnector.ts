@@ -581,6 +581,7 @@ export const connectorPullQueue = async (input: { token: string; limit?: number 
       id: receipt.id,
       customerOrderId: receipt.customerOrderId,
       idempotencyKey: receipt.idempotencyKey,
+      claimAttempt: receipt.attemptCount + 1,
       payload: receipt.payloadJson,
       createdAt: receipt.createdAt,
     }));
@@ -590,6 +591,7 @@ export const connectorPullQueue = async (input: { token: string; limit?: number 
 export const connectorPushResult = async (input: {
   token: string;
   receiptId: string;
+  claimAttempt: number;
   status: "SENT" | "FAILED";
   providerReceiptId?: string | null;
   fiscalNumber?: string | null;
@@ -600,41 +602,13 @@ export const connectorPushResult = async (input: {
   qrPayload?: string | null;
   errorMessage?: string | null;
 }) => {
+  if (!Number.isSafeInteger(input.claimAttempt) || input.claimAttempt < 1) {
+    throw new AppError("invalidInput", "BAD_REQUEST", 400);
+  }
   const device = await resolveConnectorDevice(input.token);
   const now = new Date();
 
-  return prisma.$transaction(async (tx) => {
-    const receipt = await tx.fiscalReceipt.findFirst({
-      where: {
-        id: input.receiptId,
-        organizationId: device.organizationId,
-        storeId: device.storeId,
-        mode: KkmMode.CONNECTOR,
-      },
-      select: {
-        id: true,
-        customerOrderId: true,
-        status: true,
-        connectorDeviceId: true,
-      },
-    });
-    if (!receipt) {
-      throw new AppError("kkmReceiptNotFound", "NOT_FOUND", 404);
-    }
-    if (receipt.status === FiscalReceiptStatus.SENT) {
-      return {
-        id: receipt.id,
-        status: receipt.status,
-        customerOrderId: receipt.customerOrderId,
-      };
-    }
-    if (
-      receipt.status !== FiscalReceiptStatus.PROCESSING ||
-      receipt.connectorDeviceId !== device.id
-    ) {
-      throw new AppError("kkmReceiptNotFound", "NOT_FOUND", 404);
-    }
-
+  const result = await prisma.$transaction(async (tx) => {
     const nextStatus =
       input.status === "SENT" ? FiscalReceiptStatus.SENT : FiscalReceiptStatus.FAILED;
     const connectorMetadata = extractFiscalMetadata({
@@ -643,8 +617,17 @@ export const connectorPushResult = async (input: {
       upfdOrFiscalMemory: input.upfdOrFiscalMemory ?? null,
       qrPayload: input.qrPayload ?? input.qr ?? null,
     });
-    const updated = await tx.fiscalReceipt.update({
-      where: { id: receipt.id },
+    const claimed = await tx.fiscalReceipt.updateMany({
+      where: {
+        id: input.receiptId,
+        organizationId: device.organizationId,
+        storeId: device.storeId,
+        mode: KkmMode.CONNECTOR,
+        status: FiscalReceiptStatus.PROCESSING,
+        connectorDeviceId: device.id,
+        attemptCount: input.claimAttempt,
+        nextAttemptAt: { gt: now },
+      },
       data: {
         status: nextStatus,
         providerReceiptId: input.providerReceiptId ?? null,
@@ -663,10 +646,32 @@ export const connectorPushResult = async (input: {
         connectorDeviceId: device.id,
       },
     });
-    setGauge(connectorOnlineGauge, { storeId: device.storeId }, 1);
+    if (claimed.count !== 1) {
+      const current = await tx.fiscalReceipt.findFirst({
+        where: {
+          id: input.receiptId,
+          organizationId: device.organizationId,
+          storeId: device.storeId,
+          mode: KkmMode.CONNECTOR,
+        },
+        select: {
+          id: true,
+          customerOrderId: true,
+          status: true,
+        },
+      });
+      if (current?.status === FiscalReceiptStatus.SENT) {
+        return { receipt: current, finalized: false, status: current.status };
+      }
+      throw new AppError("kkmReceiptNotFound", "NOT_FOUND", 404);
+    }
+
+    const updated = await tx.fiscalReceipt.findUniqueOrThrow({
+      where: { id: input.receiptId },
+    });
 
     await tx.customerOrder.update({
-      where: { id: receipt.customerOrderId },
+      where: { id: updated.customerOrderId },
       data: {
         kkmStatus: input.status,
         kkmReceiptId: input.providerReceiptId ?? null,
@@ -688,22 +693,44 @@ export const connectorPushResult = async (input: {
       },
     });
 
-    if (input.status === "SENT") {
-      incrementCounter(kkmReceiptsSentTotal, {
-        mode: KkmMode.CONNECTOR,
-      });
-    } else {
-      incrementCounter(kkmReceiptsFailedTotal, {
-        mode: KkmMode.CONNECTOR,
-      });
-    }
+    await writeAuditLog(tx, {
+      organizationId: device.organizationId,
+      actorId: null,
+      action: "KKM_CONNECTOR_RESULT",
+      entity: "FiscalReceipt",
+      entityId: updated.id,
+      before: toJson({
+        status: FiscalReceiptStatus.PROCESSING,
+        attemptCount: input.claimAttempt,
+        connectorDeviceId: device.id,
+      }),
+      after: toJson({
+        status: updated.status,
+        attemptCount: updated.attemptCount,
+        connectorDeviceId: updated.connectorDeviceId,
+        providerReceiptId: updated.providerReceiptId,
+      }),
+      requestId: `kkm-connector-result:${updated.id}:${input.claimAttempt}`,
+    });
 
-    return {
-      id: updated.id,
-      status: updated.status,
-      customerOrderId: updated.customerOrderId,
-    };
+    return { receipt: updated, finalized: true, status: nextStatus };
   });
+
+  if (result.finalized) {
+    setGauge(connectorOnlineGauge, { storeId: device.storeId }, 1);
+    incrementCounter(
+      result.status === FiscalReceiptStatus.SENT
+        ? kkmReceiptsSentTotal
+        : kkmReceiptsFailedTotal,
+      { mode: KkmMode.CONNECTOR },
+    );
+  }
+
+  return {
+    id: result.receipt.id,
+    status: result.receipt.status,
+    customerOrderId: result.receipt.customerOrderId,
+  };
 };
 
 export const listFiscalReceipts = async (input: {

@@ -26,7 +26,9 @@
 - `CONNECTOR` flow:
   - admin issues one-time pairing code,
   - connector pairs and receives token,
-  - connector heartbeats, pulls queue, pushes result.
+  - connector heartbeats and pulls the queue,
+  - each pulled item includes a durable `claimAttempt`; the connector must echo it when pushing the result,
+  - result finalization is accepted only while that exact device/attempt lease is current.
 - `ADAPTER` flow:
   - immediate attempt on complete,
   - failed receipts are retried by `kkm-retry-receipts` background job.
