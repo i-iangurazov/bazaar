@@ -26,11 +26,18 @@ describe("Bazaar Retail OS marketing landing", () => {
   it("keeps the product story, pricing, SEO and trust copy explicit and crawlable", async () => {
     const page = await readSource("src/app/page.tsx");
     const landing = await readSource("src/components/marketing/MarketingLanding.tsx");
+    const robots = await readSource("src/app/robots.ts");
+    const sitemap = await readSource("src/app/sitemap.ts");
 
     expect(page).toContain("metadataBase");
     expect(page).toContain("openGraph");
     expect(page).toContain("twitter");
     expect(page).toContain("canonical");
+    expect(robots).toContain('sitemap: "https://www.bazaar.kg/sitemap.xml"');
+    expect(robots).toContain('"/api/"');
+    expect(robots).toContain('"/dashboard"');
+    expect(sitemap).toContain('url: "https://www.bazaar.kg/"');
+    expect(sitemap).toContain('url: "https://www.bazaar.kg/signup"');
     expect(landing).toContain('"@type": "SoftwareApplication"');
     expect(landing).toContain("Весь ваш магазин. В одной системе.");
     expect(landing).toContain("Продавайте за секунды");

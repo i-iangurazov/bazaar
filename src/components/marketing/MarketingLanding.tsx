@@ -235,7 +235,6 @@ export const MarketingLanding = () => (
               width={1440}
               height={900}
               sizes="360px"
-              priority
             />
           </div>
           <div className={styles.heroPhone}>
@@ -246,7 +245,6 @@ export const MarketingLanding = () => (
               width={780}
               height={1688}
               sizes="(max-width: 767px) 36vw, 230px"
-              priority
             />
           </div>
           <div className={styles.activityStack} aria-label="Примеры активности магазина">
