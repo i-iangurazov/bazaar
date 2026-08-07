@@ -19,7 +19,14 @@ describe("mobile products source", () => {
     expect(source).toContain('variant={readiness === "missingImage" ? "primary" : "secondary"}');
     expect(source).toContain('variant={readiness === "outOfStock" ? "primary" : "secondary"}');
     expect(source).toContain("enableBarcode ? (");
-    expect(source).toContain("mobileSheet");
+  });
+
+  it("keeps the extracted duplicate dialog mobile-safe", async () => {
+    const duplicateDialogSource = await readSource(
+      "src/components/products/product-duplicate-dialog.tsx",
+    );
+
+    expect(duplicateDialogSource).toContain("mobileSheet");
   });
 
   it("offers the same image and stock readiness filters on desktop", async () => {
