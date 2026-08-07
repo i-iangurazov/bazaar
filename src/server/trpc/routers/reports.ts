@@ -18,8 +18,16 @@ import {
 const rangeSchema = z.object({
   storeId: z.string().optional(),
   days: z.number().min(7).max(365).optional(),
-  dateFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  dateTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  dateFrom: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  dateTo: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  page: z.number().int().min(1).optional(),
+  pageSize: z.number().int().min(10).max(100).optional(),
 });
 
 const parseDateOnlyBound = (value: string, endOfDay: boolean) => {
@@ -51,7 +59,10 @@ const reportsProcedure = managerProcedure.use(async ({ ctx, next }) => {
 type AuthedContext = Context & { user: NonNullable<Context["user"]> };
 type StoreScope = { storeId?: string; storeIds?: string[] };
 
-const resolveReportStoreScope = async (ctx: AuthedContext, storeId?: string): Promise<StoreScope> => {
+const resolveReportStoreScope = async (
+  ctx: AuthedContext,
+  storeId?: string,
+): Promise<StoreScope> => {
   if (storeId) {
     await assertUserCanAccessStore(ctx.prisma, ctx.user, storeId);
     return { storeId };
@@ -71,6 +82,8 @@ export const reportsRouter = router({
         organizationId: ctx.user.organizationId,
         ...storeScope,
         ...range,
+        page: input.page,
+        pageSize: input.pageSize,
       });
     } catch (error) {
       throw toTRPCError(error);
@@ -84,6 +97,8 @@ export const reportsRouter = router({
         organizationId: ctx.user.organizationId,
         ...storeScope,
         ...range,
+        page: input.page,
+        pageSize: input.pageSize,
       });
     } catch (error) {
       throw toTRPCError(error);
@@ -97,6 +112,8 @@ export const reportsRouter = router({
         organizationId: ctx.user.organizationId,
         ...storeScope,
         ...range,
+        page: input.page,
+        pageSize: input.pageSize,
       });
     } catch (error) {
       throw toTRPCError(error);

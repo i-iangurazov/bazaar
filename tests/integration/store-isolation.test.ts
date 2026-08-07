@@ -356,49 +356,57 @@ describeDb("store isolation", () => {
       targetStoreIds: [branchStore.id],
       groupName: "Explicit Branch Assortment",
     });
-    const [sourceList, branchList, separateList, sourceOwnSnapshot, sourceBranchSnapshot, branchSourceSnapshot, branchOwnSnapshot, overview] =
-      await Promise.all([
-        caller.products.list({ storeId: store.id }),
-        caller.products.list({ storeId: branchStore.id }),
-        caller.products.list({ storeId: separateStore.id }),
-        prisma.inventorySnapshot.findUnique({
-          where: {
-            storeId_productId_variantKey: {
-              storeId: store.id,
-              productId: sourceProduct.id,
-              variantKey: "BASE",
-            },
+    const [
+      sourceList,
+      branchList,
+      separateList,
+      sourceOwnSnapshot,
+      sourceBranchSnapshot,
+      branchSourceSnapshot,
+      branchOwnSnapshot,
+      overview,
+    ] = await Promise.all([
+      caller.products.list({ storeId: store.id }),
+      caller.products.list({ storeId: branchStore.id }),
+      caller.products.list({ storeId: separateStore.id }),
+      prisma.inventorySnapshot.findUnique({
+        where: {
+          storeId_productId_variantKey: {
+            storeId: store.id,
+            productId: sourceProduct.id,
+            variantKey: "BASE",
           },
-        }),
-        prisma.inventorySnapshot.findUnique({
-          where: {
-            storeId_productId_variantKey: {
-              storeId: store.id,
-              productId: branchProduct.id,
-              variantKey: "BASE",
-            },
+        },
+      }),
+      prisma.inventorySnapshot.findUnique({
+        where: {
+          storeId_productId_variantKey: {
+            storeId: store.id,
+            productId: branchProduct.id,
+            variantKey: "BASE",
           },
-        }),
-        prisma.inventorySnapshot.findUnique({
-          where: {
-            storeId_productId_variantKey: {
-              storeId: branchStore.id,
-              productId: sourceProduct.id,
-              variantKey: "BASE",
-            },
+        },
+      }),
+      prisma.inventorySnapshot.findUnique({
+        where: {
+          storeId_productId_variantKey: {
+            storeId: branchStore.id,
+            productId: sourceProduct.id,
+            variantKey: "BASE",
           },
-        }),
-        prisma.inventorySnapshot.findUnique({
-          where: {
-            storeId_productId_variantKey: {
-              storeId: branchStore.id,
-              productId: branchProduct.id,
-              variantKey: "BASE",
-            },
+        },
+      }),
+      prisma.inventorySnapshot.findUnique({
+        where: {
+          storeId_productId_variantKey: {
+            storeId: branchStore.id,
+            productId: branchProduct.id,
+            variantKey: "BASE",
           },
-        }),
-        caller.stores.assortmentOverview(),
-      ]);
+        },
+      }),
+      caller.stores.assortmentOverview(),
+    ]);
 
     expect(applied.catalogName).toBe("Explicit Branch Assortment");
     expect(sourceList.items.map((item) => item.id)).toEqual(
@@ -663,7 +671,9 @@ describeDb("store isolation", () => {
   });
 
   it("scopes reports, analytics and exports to assigned stores", async () => {
-    const { org, managerUser, adminUser, store, product, baseUnit } = await seedBase({ plan: "BUSINESS" });
+    const { org, managerUser, adminUser, store, product, baseUnit } = await seedBase({
+      plan: "BUSINESS",
+    });
     const storeB = await prisma.store.create({
       data: { organizationId: org.id, name: "Store B", code: "B" },
     });
@@ -766,13 +776,15 @@ describeDb("store isolation", () => {
     const exportJobs = await managerCaller.exports.list();
     const storeBExport = await managerCaller.exports.get({ jobId: storeBJob.id });
 
-    expect(shrinkage.map((item) => item.storeId)).toEqual([store.id]);
+    expect(shrinkage.items.map((item) => item.storeId)).toEqual([store.id]);
     expect(topProducts.items.map((item) => item.name)).toContain(product.name);
     expect(topProducts.items.map((item) => item.name)).not.toContain(storeBProduct.name);
     expect(exportJobs.map((job) => job.id)).toContain(storeAJob.id);
     expect(exportJobs.map((job) => job.id)).not.toContain(storeBJob.id);
     expect(storeBExport).toBeNull();
-    await expect(managerCaller.reports.shrinkage({ storeId: storeB.id, days: 30 })).rejects.toMatchObject({
+    await expect(
+      managerCaller.reports.shrinkage({ storeId: storeB.id, days: 30 }),
+    ).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
     await expect(

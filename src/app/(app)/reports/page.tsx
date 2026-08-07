@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
@@ -100,27 +100,39 @@ const ReportsPage = () => {
   const [dateTo, setDateTo] = useState(initialRange.to);
   const [preset, setPreset] = useState<ReportPreset | "custom">("last30");
   const [exportFormat, setExportFormat] = useState<DownloadFormat>("csv");
+  const [stockoutsPage, setStockoutsPage] = useState(1);
+  const [stockoutsPageSize, setStockoutsPageSize] = useState(25);
+  const [slowMoversPage, setSlowMoversPage] = useState(1);
+  const [slowMoversPageSize, setSlowMoversPageSize] = useState(25);
+  const [shrinkagePage, setShrinkagePage] = useState(1);
+  const [shrinkagePageSize, setShrinkagePageSize] = useState(25);
 
   const storesQuery = trpc.stores.list.useQuery(undefined, { enabled: reportsEnabled });
   const reportRangeInput = { storeId: storeId || undefined, dateFrom, dateTo };
   const stockoutsQuery = trpc.reports.stockouts.useQuery(
-    reportRangeInput,
+    { ...reportRangeInput, page: stockoutsPage, pageSize: stockoutsPageSize },
     { enabled: reportsEnabled },
   );
   const slowMoversQuery = trpc.reports.slowMovers.useQuery(
-    reportRangeInput,
+    { ...reportRangeInput, page: slowMoversPage, pageSize: slowMoversPageSize },
     { enabled: reportsEnabled },
   );
   const shrinkageQuery = trpc.reports.shrinkage.useQuery(
-    reportRangeInput,
+    { ...reportRangeInput, page: shrinkagePage, pageSize: shrinkagePageSize },
     { enabled: reportsEnabled },
   );
 
+  useEffect(() => {
+    setStockoutsPage(1);
+    setSlowMoversPage(1);
+    setShrinkagePage(1);
+  }, [storeId, dateFrom, dateTo]);
+
   const storeOptions = storesQuery.data ?? [];
 
-  const stockoutRows = useMemo(() => stockoutsQuery.data ?? [], [stockoutsQuery.data]);
-  const slowMoverRows = useMemo(() => slowMoversQuery.data ?? [], [slowMoversQuery.data]);
-  const shrinkageRows = useMemo(() => shrinkageQuery.data ?? [], [shrinkageQuery.data]);
+  const stockoutRows = useMemo(() => stockoutsQuery.data?.items ?? [], [stockoutsQuery.data]);
+  const slowMoverRows = useMemo(() => slowMoversQuery.data?.items ?? [], [slowMoversQuery.data]);
+  const shrinkageRows = useMemo(() => shrinkageQuery.data?.items ?? [], [shrinkageQuery.data]);
 
   const applyPreset = (nextPreset: ReportPreset) => {
     const range = buildPresetRange(nextPreset);
@@ -269,19 +281,26 @@ const ReportsPage = () => {
               />
             </div>
             <div className="flex w-full flex-wrap gap-2">
-              {(["today", "yesterday", "last7", "last30", "thisMonth", "lastMonth"] as ReportPreset[]).map(
-                (item) => (
-                  <Button
-                    key={item}
-                    type="button"
-                    variant={preset === item ? "primary" : "secondary"}
-                    size="sm"
-                    onClick={() => applyPreset(item)}
-                  >
-                    {t(`presets.${item}`)}
-                  </Button>
-                ),
-              )}
+              {(
+                [
+                  "today",
+                  "yesterday",
+                  "last7",
+                  "last30",
+                  "thisMonth",
+                  "lastMonth",
+                ] as ReportPreset[]
+              ).map((item) => (
+                <Button
+                  key={item}
+                  type="button"
+                  variant={preset === item ? "primary" : "secondary"}
+                  size="sm"
+                  onClick={() => applyPreset(item)}
+                >
+                  {t(`presets.${item}`)}
+                </Button>
+              ))}
             </div>
             <div className="w-full sm:max-w-xs">
               <Select
@@ -387,6 +406,15 @@ const ReportsPage = () => {
           ) : stockoutRows.length ? (
             <ResponsiveDataList
               items={stockoutRows}
+              page={stockoutsPage}
+              totalItems={stockoutsQuery.data?.total ?? 0}
+              onPageChange={setStockoutsPage}
+              onPageSizeChange={(nextPageSize) => {
+                setStockoutsPageSize(nextPageSize);
+                setStockoutsPage(1);
+              }}
+              paginationKey="reports-stockouts"
+              defaultPageSize={stockoutsPageSize}
               getKey={(row) => `${row.storeId}-${row.productId}-${row.variantId ?? "base"}`}
               renderDesktop={(visibleItems) => (
                 <div className="overflow-x-auto">
@@ -395,22 +423,30 @@ const ReportsPage = () => {
                       <TableRow>
                         <TableHead>{t("columns.store")}</TableHead>
                         <TableHead>{t("columns.product")}</TableHead>
-                        <TableHead className="hidden md:table-cell">{t("columns.variant")}</TableHead>
+                        <TableHead className="hidden md:table-cell">
+                          {t("columns.variant")}
+                        </TableHead>
                         <TableHead>{t("columns.count")}</TableHead>
-                        <TableHead className="hidden md:table-cell">{t("columns.lastAt")}</TableHead>
+                        <TableHead className="hidden md:table-cell">
+                          {t("columns.lastAt")}
+                        </TableHead>
                         <TableHead>{t("columns.onHand")}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {visibleItems.map((row) => (
-                        <TableRow key={`${row.storeId}-${row.productId}-${row.variantId ?? "base"}`}>
-                          <TableCell className="text-xs text-muted-foreground">{row.storeName}</TableCell>
+                        <TableRow
+                          key={`${row.storeId}-${row.productId}-${row.variantId ?? "base"}`}
+                        >
+                          <TableCell className="text-xs text-muted-foreground">
+                            {row.storeName}
+                          </TableCell>
                           <TableCell className="font-medium">{row.productName}</TableCell>
-                          <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
+                          <TableCell className="hidden text-xs text-muted-foreground md:table-cell">
                             {row.variantName ?? tCommon("notAvailable")}
                           </TableCell>
                           <TableCell>{formatNumber(row.count, locale)}</TableCell>
-                          <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
+                          <TableCell className="hidden text-xs text-muted-foreground md:table-cell">
                             {row.lastAt ? formatDate(row.lastAt, locale) : tCommon("notAvailable")}
                           </TableCell>
                           <TableCell>{formatNumber(row.onHand, locale)}</TableCell>
@@ -423,7 +459,9 @@ const ReportsPage = () => {
               renderMobile={(row) => (
                 <div className="rounded-md border border-border bg-card p-3">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-foreground">{row.productName}</p>
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {row.productName}
+                    </p>
                     <p className="text-xs text-muted-foreground">{row.storeName}</p>
                   </div>
                   <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
@@ -519,6 +557,15 @@ const ReportsPage = () => {
           ) : slowMoverRows.length ? (
             <ResponsiveDataList
               items={slowMoverRows}
+              page={slowMoversPage}
+              totalItems={slowMoversQuery.data?.total ?? 0}
+              onPageChange={setSlowMoversPage}
+              onPageSizeChange={(nextPageSize) => {
+                setSlowMoversPageSize(nextPageSize);
+                setSlowMoversPage(1);
+              }}
+              paginationKey="reports-slow-movers"
+              defaultPageSize={slowMoversPageSize}
               getKey={(row) => `${row.storeId}-${row.productId}-${row.variantId ?? "base"}`}
               renderDesktop={(visibleItems) => (
                 <div className="overflow-x-auto">
@@ -527,17 +574,23 @@ const ReportsPage = () => {
                       <TableRow>
                         <TableHead>{t("columns.store")}</TableHead>
                         <TableHead>{t("columns.product")}</TableHead>
-                        <TableHead className="hidden md:table-cell">{t("columns.variant")}</TableHead>
+                        <TableHead className="hidden md:table-cell">
+                          {t("columns.variant")}
+                        </TableHead>
                         <TableHead>{t("columns.lastMovement")}</TableHead>
                         <TableHead>{t("columns.onHand")}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {visibleItems.map((row) => (
-                        <TableRow key={`${row.storeId}-${row.productId}-${row.variantId ?? "base"}`}>
-                          <TableCell className="text-xs text-muted-foreground">{row.storeName}</TableCell>
+                        <TableRow
+                          key={`${row.storeId}-${row.productId}-${row.variantId ?? "base"}`}
+                        >
+                          <TableCell className="text-xs text-muted-foreground">
+                            {row.storeName}
+                          </TableCell>
                           <TableCell className="font-medium">{row.productName}</TableCell>
-                          <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
+                          <TableCell className="hidden text-xs text-muted-foreground md:table-cell">
                             {row.variantName ?? tCommon("notAvailable")}
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground">
@@ -555,7 +608,9 @@ const ReportsPage = () => {
               renderMobile={(row) => (
                 <div className="rounded-md border border-border bg-card p-3">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-foreground">{row.productName}</p>
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {row.productName}
+                    </p>
                     <p className="text-xs text-muted-foreground">{row.storeName}</p>
                   </div>
                   <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
@@ -649,6 +704,15 @@ const ReportsPage = () => {
           ) : shrinkageRows.length ? (
             <ResponsiveDataList
               items={shrinkageRows}
+              page={shrinkagePage}
+              totalItems={shrinkageQuery.data?.total ?? 0}
+              onPageChange={setShrinkagePage}
+              onPageSizeChange={(nextPageSize) => {
+                setShrinkagePageSize(nextPageSize);
+                setShrinkagePage(1);
+              }}
+              paginationKey="reports-shrinkage"
+              defaultPageSize={shrinkagePageSize}
               getKey={(row) =>
                 `${row.storeId}-${row.productId}-${row.variantId ?? "base"}-${row.userId ?? "anon"}`
               }
@@ -659,7 +723,9 @@ const ReportsPage = () => {
                       <TableRow>
                         <TableHead>{t("columns.store")}</TableHead>
                         <TableHead>{t("columns.product")}</TableHead>
-                        <TableHead className="hidden md:table-cell">{t("columns.variant")}</TableHead>
+                        <TableHead className="hidden md:table-cell">
+                          {t("columns.variant")}
+                        </TableHead>
                         <TableHead>{t("columns.user")}</TableHead>
                         <TableHead>{t("columns.qty")}</TableHead>
                         <TableHead>{t("columns.movements")}</TableHead>
@@ -670,9 +736,11 @@ const ReportsPage = () => {
                         <TableRow
                           key={`${row.storeId}-${row.productId}-${row.variantId ?? "base"}-${row.userId ?? "anon"}`}
                         >
-                          <TableCell className="text-xs text-muted-foreground">{row.storeName}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {row.storeName}
+                          </TableCell>
                           <TableCell className="font-medium">{row.productName}</TableCell>
-                          <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
+                          <TableCell className="hidden text-xs text-muted-foreground md:table-cell">
                             {row.variantName ?? tCommon("notAvailable")}
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground">
@@ -689,7 +757,9 @@ const ReportsPage = () => {
               renderMobile={(row) => (
                 <div className="rounded-md border border-border bg-card p-3">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-foreground">{row.productName}</p>
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {row.productName}
+                    </p>
                     <p className="text-xs text-muted-foreground">{row.storeName}</p>
                   </div>
                   <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
@@ -705,7 +775,9 @@ const ReportsPage = () => {
                       <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
                         {t("columns.user")}
                       </p>
-                      <p className="text-foreground/90">{row.userName ?? tCommon("notAvailable")}</p>
+                      <p className="text-foreground/90">
+                        {row.userName ?? tCommon("notAvailable")}
+                      </p>
                     </div>
                     <div>
                       <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
@@ -717,7 +789,9 @@ const ReportsPage = () => {
                       <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
                         {t("columns.movements")}
                       </p>
-                      <p className="text-foreground/90">{formatNumber(row.movementCount, locale)}</p>
+                      <p className="text-foreground/90">
+                        {formatNumber(row.movementCount, locale)}
+                      </p>
                     </div>
                   </div>
                 </div>

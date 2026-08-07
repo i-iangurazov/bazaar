@@ -393,8 +393,8 @@ describeDb("B0 Agent 4 P0 runtime verification", () => {
         salesKgs: 900,
         receiptsCount: 1,
       });
-      expect(shrinkage).toHaveLength(1);
-      expect(shrinkage[0]).toMatchObject({ storeId: store.id, totalQty: 1 });
+      expect(shrinkage.items).toHaveLength(1);
+      expect(shrinkage.items[0]).toMatchObject({ storeId: store.id, totalQty: 1 });
     } finally {
       vi.useRealTimers();
       if (previousTimeZone === undefined) {

@@ -1,4 +1,4 @@
-import { StockMovementType } from "@prisma/client";
+import { Prisma, StockMovementType } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
 
@@ -8,6 +8,8 @@ type ReportRangeInput = {
   storeIds?: string[];
   from: Date;
   to: Date;
+  page?: number;
+  pageSize?: number;
 };
 
 type StockoutRow = {
@@ -49,247 +51,249 @@ type ShrinkageRow = {
   movementCount: number;
 };
 
-const buildKey = (storeId: string, productId: string, variantId: string | null) =>
-  `${storeId}:${productId}:${variantId ?? "BASE"}`;
-
-const loadStores = async (organizationId: string, storeId?: string, limitedStoreIds?: string[]) => {
-  if (limitedStoreIds && limitedStoreIds.length === 0) {
-    return { storeIds: [], storeMap: new Map<string, string>() };
-  }
-  const stores = await prisma.store.findMany({
-    where: {
-      organizationId,
-      ...(storeId ? { id: storeId } : limitedStoreIds ? { id: { in: limitedStoreIds } } : {}),
-    },
-    select: { id: true, name: true },
-  });
-  const storeIds = stores.map((store) => store.id);
-  const storeMap = new Map(stores.map((store) => [store.id, store.name]));
-  return { storeIds, storeMap };
+type ReportPage<T> = {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
 };
 
-const loadProducts = async (productIds: string[]) => {
-  const products = await prisma.product.findMany({
-    where: { id: { in: productIds } },
-    select: { id: true, name: true, sku: true },
-  });
-  return new Map(products.map((product) => [product.id, product]));
+type CountedRow = { totalCount: number };
+
+const normalizePagination = (input: ReportRangeInput) => ({
+  page: Math.max(1, Math.trunc(input.page ?? 1)),
+  pageSize: Math.min(100, Math.max(10, Math.trunc(input.pageSize ?? 25))),
+});
+
+const buildStoreScope = (input: ReportRangeInput) => {
+  if (input.storeId) {
+    return Prisma.sql`AND s.id = ${input.storeId}`;
+  }
+  if (input.storeIds) {
+    return input.storeIds.length ? Prisma.sql`AND s.id IN (${Prisma.join(input.storeIds)})` : null;
+  }
+  return Prisma.empty;
 };
 
-const loadVariants = async (variantIds: string[]) => {
-  if (!variantIds.length) {
-    return new Map<string, { id: string; name: string | null }>();
+const toPage = <T extends CountedRow>(
+  rows: T[],
+  page: number,
+  pageSize: number,
+): ReportPage<Omit<T, "totalCount">> => ({
+  items: rows.map(({ totalCount: _totalCount, ...row }) => row),
+  total: rows[0]?.totalCount ?? 0,
+  page,
+  pageSize,
+});
+
+const emptyPage = <T>(page: number, pageSize: number): ReportPage<T> => ({
+  items: [],
+  total: 0,
+  page,
+  pageSize,
+});
+
+export const getStockoutsReport = async (
+  input: ReportRangeInput,
+): Promise<ReportPage<StockoutRow>> => {
+  const { page, pageSize } = normalizePagination(input);
+  const storeScope = buildStoreScope(input);
+  if (storeScope === null) {
+    return emptyPage(page, pageSize);
   }
-  const variants = await prisma.productVariant.findMany({
-    where: { id: { in: variantIds } },
-    select: { id: true, name: true },
-  });
-  return new Map(variants.map((variant) => [variant.id, variant]));
+  const offset = (page - 1) * pageSize;
+  const rows = await prisma.$queryRaw<Array<StockoutRow & CountedRow>>(Prisma.sql`
+    WITH scoped_movements AS (
+      SELECT
+        m.id,
+        m."storeId",
+        m."productId",
+        m."variantId",
+        m."qtyDelta",
+        m."createdAt",
+        COALESCE(snapshot."onHand", 0)::int AS "currentOnHand",
+        SUM(m."qtyDelta") OVER (
+          PARTITION BY m."storeId", m."productId", m."variantId"
+        )::int AS "rangeDelta",
+        SUM(m."qtyDelta") OVER (
+          PARTITION BY m."storeId", m."productId", m."variantId"
+          ORDER BY m."createdAt" ASC, m.id ASC
+          ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        )::int AS "cumulativeDelta"
+      FROM "StockMovement" m
+      INNER JOIN "Store" s ON s.id = m."storeId"
+      LEFT JOIN "InventorySnapshot" snapshot
+        ON snapshot."storeId" = m."storeId"
+        AND snapshot."productId" = m."productId"
+        AND snapshot."variantId" IS NOT DISTINCT FROM m."variantId"
+      WHERE s."organizationId" = ${input.organizationId}
+        ${storeScope}
+        AND m."createdAt" >= ${input.from}
+        AND m."createdAt" <= ${input.to}
+    ), crossings AS (
+      SELECT
+        *,
+        "currentOnHand" - "rangeDelta" + "cumulativeDelta" - "qtyDelta" AS "beforeOnHand",
+        "currentOnHand" - "rangeDelta" + "cumulativeDelta" AS "afterOnHand"
+      FROM scoped_movements
+    ), grouped AS (
+      SELECT
+        "storeId",
+        "productId",
+        "variantId",
+        COUNT(*)::int AS count,
+        MAX("createdAt") AS "lastAt",
+        MAX("currentOnHand")::int AS "onHand"
+      FROM crossings
+      WHERE "beforeOnHand" > 0 AND "afterOnHand" <= 0
+      GROUP BY "storeId", "productId", "variantId"
+    )
+    SELECT
+      grouped."storeId",
+      s.name AS "storeName",
+      grouped."productId",
+      p.name AS "productName",
+      p.sku AS "productSku",
+      grouped."variantId",
+      v.name AS "variantName",
+      grouped.count,
+      grouped."lastAt",
+      grouped."onHand",
+      COUNT(*) OVER ()::int AS "totalCount"
+    FROM grouped
+    INNER JOIN "Store" s ON s.id = grouped."storeId"
+    INNER JOIN "Product" p ON p.id = grouped."productId"
+    LEFT JOIN "ProductVariant" v ON v.id = grouped."variantId"
+    ORDER BY grouped."lastAt" DESC NULLS LAST,
+      grouped."storeId" ASC,
+      grouped."productId" ASC,
+      grouped."variantId" ASC NULLS FIRST
+    LIMIT ${pageSize}
+    OFFSET ${offset}
+  `);
+  return toPage(rows, page, pageSize);
 };
 
-export const getStockoutsReport = async (input: ReportRangeInput): Promise<StockoutRow[]> => {
-  const { storeIds, storeMap } = await loadStores(input.organizationId, input.storeId, input.storeIds);
-  if (!storeIds.length) {
-    return [];
+export const getSlowMoversReport = async (
+  input: ReportRangeInput,
+): Promise<ReportPage<SlowMoverRow>> => {
+  const { page, pageSize } = normalizePagination(input);
+  const storeScope = buildStoreScope(input);
+  if (storeScope === null) {
+    return emptyPage(page, pageSize);
   }
-
-  const movements = await prisma.stockMovement.findMany({
-    where: {
-      storeId: { in: storeIds },
-      createdAt: { gte: input.from, lte: input.to },
-    },
-    select: { storeId: true, productId: true, variantId: true, qtyDelta: true, createdAt: true },
-    orderBy: { createdAt: "asc" },
-  });
-
-  const snapshots = await prisma.inventorySnapshot.findMany({
-    where: { storeId: { in: storeIds } },
-    select: { storeId: true, productId: true, variantId: true, onHand: true },
-  });
-
-  const snapshotMap = new Map<string, number>();
-  snapshots.forEach((snapshot) => {
-    snapshotMap.set(
-      buildKey(snapshot.storeId, snapshot.productId, snapshot.variantId ?? null),
-      snapshot.onHand,
-    );
-  });
-
-  const movementSums = new Map<string, number>();
-  movements.forEach((movement) => {
-    const key = buildKey(movement.storeId, movement.productId, movement.variantId ?? null);
-    movementSums.set(key, (movementSums.get(key) ?? 0) + movement.qtyDelta);
-  });
-
-  const states = new Map<string, { onHand: number; count: number; lastAt: Date | null }>();
-  movements.forEach((movement) => {
-    const key = buildKey(movement.storeId, movement.productId, movement.variantId ?? null);
-    if (!states.has(key)) {
-      const currentOnHand = snapshotMap.get(key) ?? 0;
-      const netMovement = movementSums.get(key) ?? 0;
-      states.set(key, { onHand: currentOnHand - netMovement, count: 0, lastAt: null });
-    }
-    const state = states.get(key);
-    if (!state) {
-      return;
-    }
-    const prevOnHand = state.onHand;
-    state.onHand += movement.qtyDelta;
-    if (prevOnHand > 0 && state.onHand <= 0) {
-      state.count += 1;
-      state.lastAt = movement.createdAt;
-    }
-  });
-
-  const rows = Array.from(states.entries())
-    .filter(([, state]) => state.count > 0)
-    .map(([key, state]) => {
-      const [storeId, productId, variantKey] = key.split(":");
-      return {
-        storeId,
-        productId,
-        variantId: variantKey === "BASE" ? null : variantKey,
-        count: state.count,
-        lastAt: state.lastAt,
-        onHand: snapshotMap.get(key) ?? 0,
-      };
-    });
-
-  const productIds = rows.map((row) => row.productId);
-  const variantIds = rows
-    .map((row) => row.variantId)
-    .filter((value): value is string => Boolean(value));
-  const productMap = await loadProducts(productIds);
-  const variantMap = await loadVariants(variantIds);
-
-  return rows.map((row) => {
-    const product = productMap.get(row.productId);
-    const variant = row.variantId ? variantMap.get(row.variantId) : undefined;
-    return {
-      storeId: row.storeId,
-      storeName: storeMap.get(row.storeId) ?? "",
-      productId: row.productId,
-      productName: product?.name ?? "",
-      productSku: product?.sku ?? "",
-      variantId: row.variantId,
-      variantName: variant?.name ?? null,
-      count: row.count,
-      lastAt: row.lastAt,
-      onHand: row.onHand,
-    };
-  });
+  const offset = (page - 1) * pageSize;
+  const rows = await prisma.$queryRaw<Array<SlowMoverRow & CountedRow>>(Prisma.sql`
+    WITH last_movements AS (
+      SELECT
+        m."storeId",
+        m."productId",
+        m."variantId",
+        MAX(m."createdAt") AS "lastMovementAt"
+      FROM "StockMovement" m
+      INNER JOIN "Store" s ON s.id = m."storeId"
+      WHERE s."organizationId" = ${input.organizationId}
+        ${storeScope}
+        AND m."createdAt" <= ${input.to}
+      GROUP BY m."storeId", m."productId", m."variantId"
+    ), candidates AS (
+      SELECT
+        snapshot."storeId",
+        snapshot."productId",
+        snapshot."variantId",
+        snapshot."onHand"::int AS "onHand",
+        last_movements."lastMovementAt"
+      FROM "InventorySnapshot" snapshot
+      INNER JOIN "Store" s ON s.id = snapshot."storeId"
+      LEFT JOIN last_movements
+        ON last_movements."storeId" = snapshot."storeId"
+        AND last_movements."productId" = snapshot."productId"
+        AND last_movements."variantId" IS NOT DISTINCT FROM snapshot."variantId"
+      WHERE s."organizationId" = ${input.organizationId}
+        ${storeScope}
+        AND (
+          last_movements."lastMovementAt" IS NULL
+          OR last_movements."lastMovementAt" < ${input.from}
+        )
+    )
+    SELECT
+      candidates."storeId",
+      s.name AS "storeName",
+      candidates."productId",
+      p.name AS "productName",
+      p.sku AS "productSku",
+      candidates."variantId",
+      v.name AS "variantName",
+      candidates."lastMovementAt",
+      candidates."onHand",
+      COUNT(*) OVER ()::int AS "totalCount"
+    FROM candidates
+    INNER JOIN "Store" s ON s.id = candidates."storeId"
+    INNER JOIN "Product" p ON p.id = candidates."productId"
+    LEFT JOIN "ProductVariant" v ON v.id = candidates."variantId"
+    ORDER BY candidates."lastMovementAt" ASC NULLS FIRST,
+      candidates."storeId" ASC,
+      candidates."productId" ASC,
+      candidates."variantId" ASC NULLS FIRST
+    LIMIT ${pageSize}
+    OFFSET ${offset}
+  `);
+  return toPage(rows, page, pageSize);
 };
 
-export const getSlowMoversReport = async (input: ReportRangeInput): Promise<SlowMoverRow[]> => {
-  const { storeIds, storeMap } = await loadStores(input.organizationId, input.storeId, input.storeIds);
-  if (!storeIds.length) {
-    return [];
+export const getShrinkageReport = async (
+  input: ReportRangeInput,
+): Promise<ReportPage<ShrinkageRow>> => {
+  const { page, pageSize } = normalizePagination(input);
+  const storeScope = buildStoreScope(input);
+  if (storeScope === null) {
+    return emptyPage(page, pageSize);
   }
-
-  const snapshots = await prisma.inventorySnapshot.findMany({
-    where: { storeId: { in: storeIds } },
-    select: { storeId: true, productId: true, variantId: true, onHand: true },
-  });
-
-  const lastMovements = await prisma.stockMovement.groupBy({
-    by: ["storeId", "productId", "variantId"],
-    where: { storeId: { in: storeIds }, createdAt: { lte: input.to } },
-    _max: { createdAt: true },
-  });
-
-  const lastMovementMap = new Map(
-    lastMovements.map((item) => [
-      buildKey(item.storeId, item.productId, item.variantId ?? null),
-      item._max.createdAt ?? null,
-    ]),
-  );
-
-  const rows = snapshots
-    .map((snapshot) => {
-      const key = buildKey(snapshot.storeId, snapshot.productId, snapshot.variantId ?? null);
-      const lastMovementAt = lastMovementMap.get(key) ?? null;
-      return {
-        storeId: snapshot.storeId,
-        productId: snapshot.productId,
-        variantId: snapshot.variantId ?? null,
-        onHand: snapshot.onHand,
-        lastMovementAt,
-      };
-    })
-    .filter((row) => !row.lastMovementAt || row.lastMovementAt < input.from);
-
-  const productIds = rows.map((row) => row.productId);
-  const variantIds = rows
-    .map((row) => row.variantId)
-    .filter((value): value is string => Boolean(value));
-  const productMap = await loadProducts(productIds);
-  const variantMap = await loadVariants(variantIds);
-
-  return rows.map((row) => {
-    const product = productMap.get(row.productId);
-    const variant = row.variantId ? variantMap.get(row.variantId) : undefined;
-    return {
-      storeId: row.storeId,
-      storeName: storeMap.get(row.storeId) ?? "",
-      productId: row.productId,
-      productName: product?.name ?? "",
-      productSku: product?.sku ?? "",
-      variantId: row.variantId,
-      variantName: variant?.name ?? null,
-      lastMovementAt: row.lastMovementAt,
-      onHand: row.onHand,
-    };
-  });
-};
-
-export const getShrinkageReport = async (input: ReportRangeInput): Promise<ShrinkageRow[]> => {
-  const { storeIds, storeMap } = await loadStores(input.organizationId, input.storeId, input.storeIds);
-  if (!storeIds.length) {
-    return [];
-  }
-
-  const groups = await prisma.stockMovement.groupBy({
-    by: ["storeId", "productId", "variantId", "createdById"],
-    where: {
-      storeId: { in: storeIds },
-      type: StockMovementType.ADJUSTMENT,
-      qtyDelta: { lt: 0 },
-      createdAt: { gte: input.from, lte: input.to },
-    },
-    _sum: { qtyDelta: true },
-    _count: { _all: true },
-  });
-
-  const productIds = groups.map((group) => group.productId);
-  const variantIds = groups
-    .map((group) => group.variantId)
-    .filter((value): value is string => Boolean(value));
-  const userIds = groups
-    .map((group) => group.createdById)
-    .filter((value): value is string => Boolean(value));
-
-  const productMap = await loadProducts(productIds);
-  const variantMap = await loadVariants(variantIds);
-  const users = userIds.length
-    ? await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true, email: true } })
-    : [];
-  const userMap = new Map(users.map((user) => [user.id, user.name ?? user.email ?? ""]));
-
-  return groups.map((group) => {
-    const product = productMap.get(group.productId);
-    const variant = group.variantId ? variantMap.get(group.variantId) : undefined;
-    return {
-      storeId: group.storeId,
-      storeName: storeMap.get(group.storeId) ?? "",
-      productId: group.productId,
-      productName: product?.name ?? "",
-      productSku: product?.sku ?? "",
-      variantId: group.variantId ?? null,
-      variantName: variant?.name ?? null,
-      userId: group.createdById ?? null,
-      userName: group.createdById ? userMap.get(group.createdById) ?? null : null,
-      totalQty: Math.abs(group._sum.qtyDelta ?? 0),
-      movementCount: group._count._all,
-    };
-  });
+  const offset = (page - 1) * pageSize;
+  const rows = await prisma.$queryRaw<Array<ShrinkageRow & CountedRow>>(Prisma.sql`
+    WITH grouped AS (
+      SELECT
+        m."storeId",
+        m."productId",
+        m."variantId",
+        m."createdById" AS "userId",
+        ABS(SUM(m."qtyDelta"))::int AS "totalQty",
+        COUNT(*)::int AS "movementCount"
+      FROM "StockMovement" m
+      INNER JOIN "Store" s ON s.id = m."storeId"
+      WHERE s."organizationId" = ${input.organizationId}
+        ${storeScope}
+        AND m.type = ${StockMovementType.ADJUSTMENT}::"StockMovementType"
+        AND m."qtyDelta" < 0
+        AND m."createdAt" >= ${input.from}
+        AND m."createdAt" <= ${input.to}
+      GROUP BY m."storeId", m."productId", m."variantId", m."createdById"
+    )
+    SELECT
+      grouped."storeId",
+      s.name AS "storeName",
+      grouped."productId",
+      p.name AS "productName",
+      p.sku AS "productSku",
+      grouped."variantId",
+      v.name AS "variantName",
+      grouped."userId",
+      COALESCE(u.name, u.email) AS "userName",
+      grouped."totalQty",
+      grouped."movementCount",
+      COUNT(*) OVER ()::int AS "totalCount"
+    FROM grouped
+    INNER JOIN "Store" s ON s.id = grouped."storeId"
+    INNER JOIN "Product" p ON p.id = grouped."productId"
+    LEFT JOIN "ProductVariant" v ON v.id = grouped."variantId"
+    LEFT JOIN "User" u ON u.id = grouped."userId"
+    ORDER BY grouped."totalQty" DESC,
+      grouped."storeId" ASC,
+      grouped."productId" ASC,
+      grouped."variantId" ASC NULLS FIRST,
+      grouped."userId" ASC NULLS FIRST
+    LIMIT ${pageSize}
+    OFFSET ${offset}
+  `);
+  return toPage(rows, page, pageSize);
 };

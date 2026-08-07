@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { prisma } from "@/server/db/prisma";
 import { createProduct } from "@/server/services/products";
 import { adjustStock } from "@/server/services/inventory";
 import {
@@ -68,24 +69,69 @@ describeDb("reports", () => {
       storeId: store.id,
       ...range,
     });
-    expect(stockouts.some((row) => row.productId === stockoutProduct.id && row.count === 1)).toBe(
-      true,
-    );
+    expect(
+      stockouts.items.some((row) => row.productId === stockoutProduct.id && row.count === 1),
+    ).toBe(true);
 
     const slowMovers = await getSlowMoversReport({
       organizationId: org.id,
       storeId: store.id,
       ...range,
     });
-    expect(slowMovers.some((row) => row.productId === slowProduct.id)).toBe(true);
+    expect(slowMovers.items.some((row) => row.productId === slowProduct.id)).toBe(true);
 
     const shrinkage = await getShrinkageReport({
       organizationId: org.id,
       storeId: store.id,
       ...range,
     });
-    expect(shrinkage.some((row) => row.productId === stockoutProduct.id && row.totalQty === 5)).toBe(
-      true,
+    expect(
+      shrinkage.items.some((row) => row.productId === stockoutProduct.id && row.totalQty === 5),
+    ).toBe(true);
+  });
+
+  it("bounds report rows with deterministic server pagination", async () => {
+    const { org, store, baseUnit } = await seedBase();
+    const products = Array.from({ length: 15 }, (_, index) => ({
+      id: `report-page-product-${index.toString().padStart(2, "0")}`,
+      organizationId: org.id,
+      sku: `REPORT-PAGE-${index.toString().padStart(2, "0")}`,
+      name: `Report page product ${index.toString().padStart(2, "0")}`,
+      unit: baseUnit.code,
+      baseUnitId: baseUnit.id,
+    }));
+    await prisma.product.createMany({ data: products });
+    await prisma.inventorySnapshot.createMany({
+      data: products.map((product, index) => ({
+        storeId: store.id,
+        productId: product.id,
+        onHand: index + 1,
+      })),
+    });
+    const range = { from: daysAgo(30), to: new Date() };
+
+    const first = await getSlowMoversReport({
+      organizationId: org.id,
+      storeId: store.id,
+      ...range,
+      page: 1,
+      pageSize: 10,
+    });
+    const second = await getSlowMoversReport({
+      organizationId: org.id,
+      storeId: store.id,
+      ...range,
+      page: 2,
+      pageSize: 10,
+    });
+
+    expect(first).toMatchObject({ page: 1, pageSize: 10 });
+    expect(first.items).toHaveLength(10);
+    expect(first.total).toBeGreaterThanOrEqual(15);
+    expect(second).toMatchObject({ page: 2, pageSize: 10, total: first.total });
+    expect(second.items.length).toBeGreaterThan(0);
+    expect(new Set([...first.items, ...second.items].map((row) => row.productId)).size).toBe(
+      first.items.length + second.items.length,
     );
   });
 });

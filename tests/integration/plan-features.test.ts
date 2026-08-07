@@ -68,6 +68,6 @@ describeDb("plan feature gates", () => {
     expect(Array.isArray(imports)).toBe(true);
     expect(Array.isArray(exports)).toBe(true);
     expect(Array.isArray(analytics.series)).toBe(true);
-    expect(Array.isArray(reports)).toBe(true);
+    expect(Array.isArray(reports.items)).toBe(true);
   });
 });
