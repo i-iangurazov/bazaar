@@ -136,6 +136,7 @@ const getOrderForEmail = async (input: { organizationId: string; customerOrderId
     where: {
       id: input.customerOrderId,
       organizationId: input.organizationId,
+      isPosSale: false,
     },
     include: {
       store: {
@@ -663,6 +664,7 @@ export const sendDueOrderFollowUpEmails = async (input?: { now?: Date; limit?: n
 
   const orders = await prisma.customerOrder.findMany({
     where: {
+      isPosSale: false,
       followUpEmailSentAt: null,
       customerEmail: { not: null },
       status: { in: [CustomerOrderStatus.READY, CustomerOrderStatus.COMPLETED] },

@@ -4928,7 +4928,11 @@ const sampleOrderForPreview = (
 
 const loadOrderForEmail = async (input: { organizationId: string; orderId: string }) => {
   const order = await prisma.customerOrder.findFirst({
-    where: { id: input.orderId, organizationId: input.organizationId },
+    where: {
+      id: input.orderId,
+      organizationId: input.organizationId,
+      isPosSale: false,
+    },
     include: {
       store: {
         select: {
@@ -5052,6 +5056,7 @@ export const testEmailAutomation = async (input: {
       where: {
         organizationId: input.user.organizationId,
         storeId: automation.storeId,
+        isPosSale: false,
         customerEmail: { not: null },
       },
       orderBy: { createdAt: "desc" },

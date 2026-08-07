@@ -81,7 +81,11 @@ const assertCustomerOrderStoreAccess = async (
   customerOrderId: string,
 ) => {
   const order = await ctx.prisma.customerOrder.findFirst({
-    where: { id: customerOrderId, organizationId: ctx.user.organizationId },
+    where: {
+      id: customerOrderId,
+      organizationId: ctx.user.organizationId,
+      isPosSale: false,
+    },
     select: { storeId: true },
   });
   if (!order) {
@@ -94,7 +98,10 @@ const assertCustomerOrderLineStoreAccess = async (ctx: SalesOrdersContext, lineI
   const line = await ctx.prisma.customerOrderLine.findFirst({
     where: {
       id: lineId,
-      customerOrder: { organizationId: ctx.user.organizationId },
+      customerOrder: {
+        organizationId: ctx.user.organizationId,
+        isPosSale: false,
+      },
     },
     select: { customerOrder: { select: { storeId: true } } },
   });

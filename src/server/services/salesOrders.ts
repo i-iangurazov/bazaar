@@ -359,6 +359,7 @@ export const listCustomerOrders = async (input: {
 }) => {
   const where: Prisma.CustomerOrderWhereInput = {
     organizationId: input.organizationId,
+    isPosSale: false,
     ...(input.storeId
       ? { storeId: input.storeId }
       : input.storeIds
@@ -420,7 +421,11 @@ export const getCustomerOrder = async (input: {
   customerOrderId: string;
 }) => {
   const order = await prisma.customerOrder.findFirst({
-    where: { id: input.customerOrderId, organizationId: input.organizationId },
+    where: {
+      id: input.customerOrderId,
+      organizationId: input.organizationId,
+      isPosSale: false,
+    },
     include: {
       store: {
         select: {
@@ -495,6 +500,7 @@ export const getSalesOrderMetrics = async (input: {
   const orders = await prisma.customerOrder.findMany({
     where: {
       organizationId: input.organizationId,
+      isPosSale: false,
       status: CustomerOrderStatus.COMPLETED,
       ...(input.storeId
         ? { storeId: input.storeId }
@@ -885,6 +891,9 @@ export const setCustomerOrderCustomer = async (input: {
     if (order.organizationId !== input.organizationId) {
       throw new AppError("salesOrderOrgMismatch", "FORBIDDEN", 403);
     }
+    if (order.isPosSale) {
+      throw new AppError("salesOrderNotFound", "NOT_FOUND", 404);
+    }
 
     assertEditable(order.status);
 
@@ -943,6 +952,9 @@ export const updateCustomerOrderTracking = async (input: {
     }
     if (before.organizationId !== input.organizationId) {
       throw new AppError("salesOrderOrgMismatch", "FORBIDDEN", 403);
+    }
+    if (before.isPosSale) {
+      throw new AppError("salesOrderNotFound", "NOT_FOUND", 404);
     }
 
     const nextTrackingNumber = normalizeOptionalText(input.trackingNumber);
@@ -1031,6 +1043,9 @@ export const addCustomerOrderLine = async (input: {
     }
     if (order.organizationId !== input.organizationId) {
       throw new AppError("salesOrderOrgMismatch", "FORBIDDEN", 403);
+    }
+    if (order.isPosSale) {
+      throw new AppError("salesOrderNotFound", "NOT_FOUND", 404);
     }
 
     assertEditable(order.status);
@@ -1125,6 +1140,9 @@ export const updateCustomerOrderLine = async (input: {
     if (line.customerOrder.organizationId !== input.organizationId) {
       throw new AppError("salesOrderOrgMismatch", "FORBIDDEN", 403);
     }
+    if (line.customerOrder.isPosSale) {
+      throw new AppError("salesOrderLineNotFound", "NOT_FOUND", 404);
+    }
 
     assertEditable(line.customerOrder.status);
 
@@ -1178,6 +1196,9 @@ export const removeCustomerOrderLine = async (input: {
     if (line.customerOrder.organizationId !== input.organizationId) {
       throw new AppError("salesOrderOrgMismatch", "FORBIDDEN", 403);
     }
+    if (line.customerOrder.isPosSale) {
+      throw new AppError("salesOrderLineNotFound", "NOT_FOUND", 404);
+    }
 
     assertEditable(line.customerOrder.status);
 
@@ -1220,6 +1241,9 @@ const updateOrderStatus = async (input: {
     }
     if (order.organizationId !== input.organizationId) {
       throw new AppError("salesOrderOrgMismatch", "FORBIDDEN", 403);
+    }
+    if (order.isPosSale) {
+      throw new AppError("salesOrderNotFound", "NOT_FOUND", 404);
     }
 
     assertTransition(order.status, input.to);
@@ -1400,6 +1424,9 @@ export const completeCustomerOrder = async (input: {
         }
         if (order.organizationId !== input.organizationId) {
           throw new AppError("salesOrderOrgMismatch", "FORBIDDEN", 403);
+        }
+        if (order.isPosSale) {
+          throw new AppError("salesOrderNotFound", "NOT_FOUND", 404);
         }
         if (order.status === CustomerOrderStatus.COMPLETED) {
           return {
