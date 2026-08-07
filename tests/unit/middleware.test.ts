@@ -39,6 +39,8 @@ describe("middleware route protection", () => {
     "/reset",
     "/register-business",
     "/c/public-store",
+    "/help",
+    "/help/products/add-product",
   ])("keeps public route public: %s", async (path) => {
     const response = await middleware(requestFor(path));
 
@@ -84,21 +86,24 @@ describe("middleware route protection", () => {
       expectedPath: "/dashboard",
       expectedFrom: "/platform",
     },
-  ])("redirects denied $role access to $path", async ({ role, path, expectedPath, expectedFrom }) => {
-    mockGetToken.mockResolvedValue({
-      sub: "user-1",
-      role,
-      organizationId: "org-1",
-      isPlatformOwner: false,
-      isOrgOwner: false,
-    });
+  ])(
+    "redirects denied $role access to $path",
+    async ({ role, path, expectedPath, expectedFrom }) => {
+      mockGetToken.mockResolvedValue({
+        sub: "user-1",
+        role,
+        organizationId: "org-1",
+        isPlatformOwner: false,
+        isOrgOwner: false,
+      });
 
-    const response = await middleware(requestFor(path));
-    const location = new URL(response.headers.get("location") ?? "");
+      const response = await middleware(requestFor(path));
+      const location = new URL(response.headers.get("location") ?? "");
 
-    expect(location.pathname).toBe(expectedPath);
-    expect(location.searchParams.get("from")).toBe(expectedFrom);
-  });
+      expect(location.pathname).toBe(expectedPath);
+      expect(location.searchParams.get("from")).toBe(expectedFrom);
+    },
+  );
 
   it.each([
     { role: "CASHIER", path: "/pos" },

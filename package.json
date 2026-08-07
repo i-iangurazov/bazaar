@@ -28,7 +28,10 @@
     "ops:preflight": "node --import tsx scripts/ops-preflight.ts",
     "ops:email-check": "node --import tsx scripts/ops-email-flow-check.ts",
     "ops:images-backfill": "node --import tsx scripts/ops-product-images-backfill.ts",
-    "profile:hot-paths": "BAZAAR_PROFILE=1 node --import tsx scripts/profile-hot-paths.ts"
+    "profile:hot-paths": "BAZAAR_PROFILE=1 node --import tsx scripts/profile-hot-paths.ts",
+    "help:capture": "node --import tsx scripts/help-capture/capture.ts",
+    "help:verify": "node --import tsx scripts/help-capture/verify.ts",
+    "help:qa": "node --import tsx scripts/help-capture/browser-qa.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.985.0",

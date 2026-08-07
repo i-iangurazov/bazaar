@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
+import { usePathname } from "next/navigation";
 
 import {
   GuidanceTipsTriggerButton,
@@ -12,9 +14,15 @@ import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { getContextualHelpHref, getContextualHelpSummary } from "@/content/help/contextual";
+import { localize, localizedUi } from "@/content/help/ui";
+import { defaultLocale, normalizeLocale } from "@/lib/locales";
 
 export const PageTipsButton = ({ className }: { className?: string } = {}) => {
   const t = useTranslations("guidance");
+  const locale = normalizeLocale(useLocale()) ?? defaultLocale;
+  const helpUi = localizedUi(locale);
+  const pathname = usePathname();
   const {
     role,
     pageTips,
@@ -29,7 +37,9 @@ export const PageTipsButton = ({ className }: { className?: string } = {}) => {
   } = useGuidance();
   const [open, setOpen] = useState(false);
 
-  const hasGuidance = pageTips.length > 0 || pageTours.length > 0;
+  const contextualGuide = getContextualHelpSummary(pathname);
+  const contextualGuideHref = getContextualHelpHref(pathname);
+  const hasGuidance = pageTips.length > 0 || pageTours.length > 0 || Boolean(contextualGuide);
   const tipsCount = pageTips.length;
 
   const pageTour = useMemo(() => pageTours[0] ?? null, [pageTours]);
@@ -134,6 +144,28 @@ export const PageTipsButton = ({ className }: { className?: string } = {}) => {
               </div>
             </div>
           ))}
+          {contextualGuide && contextualGuideHref ? (
+            <div className="rounded-md border border-primary/25 bg-primary/5 p-4">
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-foreground">
+                  {localize(contextualGuide.title, locale)}
+                </p>
+                <ol className="mt-3 space-y-2 text-xs text-muted-foreground">
+                  {contextualGuide.steps.map((guideStep, index) => (
+                    <li key={index} className="flex gap-2">
+                      <span className="font-semibold text-primary">{index + 1}.</span>
+                      <span>{localize(guideStep, locale)}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+              <Button asChild type="button" variant="secondary" size="sm" className="mt-4">
+                <Link href={contextualGuideHref} target="_blank" rel="noopener noreferrer">
+                  {helpUi.openGuide} →
+                </Link>
+              </Button>
+            </div>
+          ) : null}
         </div>
       </Modal>
     </>

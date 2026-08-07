@@ -34,16 +34,14 @@ export const protectedPrefixes = [
   "/reports",
   "/sales",
   "/onboarding",
-  "/help",
+  "/help/compliance",
   "/settings",
   "/stores",
   "/suppliers",
 ];
 
 export const isProtectedPath = (pathname: string) =>
-  protectedPrefixes.some(
-    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
-  );
+  protectedPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 
 const resolveLocale = (request: NextRequest): Locale => {
   const cookieLocale = normalizeLocale(request.cookies.get("NEXT_LOCALE")?.value);

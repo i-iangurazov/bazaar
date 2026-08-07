@@ -22,6 +22,10 @@ const HARDCODED_COPY_ALLOWED_FILES = new Set([
     "workspace.tsx",
   ),
 ]);
+const HARDCODED_COPY_ALLOWED_ROOTS = [
+  path.join(SRC_ROOT, "components", "help"),
+  path.join(SRC_ROOT, "app", "(guide)", "help"),
+];
 const EXTRA_KEYS = [
   "purchaseOrders.status.draft",
   "purchaseOrders.status.submitted",
@@ -184,7 +188,11 @@ const main = async () => {
   for (const file of files) {
     const content = await fs.readFile(file, "utf8");
     extractKeysFromFile(content).forEach((key) => usedKeys.add(key));
-    if (isUiFile(file) && !HARDCODED_COPY_ALLOWED_FILES.has(file)) {
+    if (
+      isUiFile(file) &&
+      !HARDCODED_COPY_ALLOWED_FILES.has(file) &&
+      !HARDCODED_COPY_ALLOWED_ROOTS.some((root) => file.startsWith(root))
+    ) {
       hardcodedMatches.push(...findHardcodedStrings(content, file));
     }
   }

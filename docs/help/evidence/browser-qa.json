@@ -1,0 +1,240 @@
+{
+  "generatedAt": "2026-08-07T21:32:24.829Z",
+  "baseUrl": "http://127.0.0.1:3116",
+  "viewportResults": [
+    {
+      "name": "mobile-390",
+      "width": 390,
+      "height": 844,
+      "h1": "Как вам помочь?",
+      "tasks": 10,
+      "roleTabs": 4,
+      "categories": 8,
+      "overflow": 0,
+      "imagesWithoutAlt": 0,
+      "main": true,
+      "navigationMs": 908,
+      "domContentLoadedMs": 482
+    },
+    {
+      "name": "mobile-414",
+      "width": 414,
+      "height": 896,
+      "h1": "Как вам помочь?",
+      "tasks": 10,
+      "roleTabs": 4,
+      "categories": 8,
+      "overflow": 0,
+      "imagesWithoutAlt": 0,
+      "main": true,
+      "navigationMs": 69,
+      "domContentLoadedMs": 44
+    },
+    {
+      "name": "tablet-768",
+      "width": 768,
+      "height": 980,
+      "h1": "Как вам помочь?",
+      "tasks": 10,
+      "roleTabs": 4,
+      "categories": 8,
+      "overflow": 0,
+      "imagesWithoutAlt": 0,
+      "main": true,
+      "navigationMs": 69,
+      "domContentLoadedMs": 49
+    },
+    {
+      "name": "tablet-1024",
+      "width": 1024,
+      "height": 900,
+      "h1": "Как вам помочь?",
+      "tasks": 10,
+      "roleTabs": 4,
+      "categories": 8,
+      "overflow": 0,
+      "imagesWithoutAlt": 0,
+      "main": true,
+      "navigationMs": 63,
+      "domContentLoadedMs": 44
+    },
+    {
+      "name": "desktop-1440",
+      "width": 1440,
+      "height": 1000,
+      "h1": "Как вам помочь?",
+      "tasks": 10,
+      "roleTabs": 4,
+      "categories": 8,
+      "overflow": 0,
+      "imagesWithoutAlt": 0,
+      "main": true,
+      "navigationMs": 82,
+      "domContentLoadedMs": 62
+    },
+    {
+      "name": "wide-1920",
+      "width": 1920,
+      "height": 1080,
+      "h1": "Как вам помочь?",
+      "tasks": 10,
+      "roleTabs": 4,
+      "categories": 8,
+      "overflow": 0,
+      "imagesWithoutAlt": 0,
+      "main": true,
+      "navigationMs": 64,
+      "domContentLoadedMs": 45
+    }
+  ],
+  "searchResult": {
+    "href": "/help/pos/close-shift",
+    "text": "Как закрыть сменуСверьте деньги в кассе и завершите рабочий день без открытых чеков.",
+    "count": 5
+  },
+  "roleResult": {
+    "selected": "true",
+    "links": 8
+  },
+  "journeyResult": {
+    "steps": 6,
+    "pressed": "true",
+    "stored": 1
+  },
+  "articleResult": {
+    "h1": "Как добавить товар",
+    "steps": 4,
+    "dialogOpen": true,
+    "annotations": 1,
+    "structuredData": true,
+    "overflow": 0,
+    "dialogClosed": true
+  },
+  "localeResults": {
+    "kg": "Сизге кантип жардам беребиз?",
+    "en": "How can we help?",
+    "ru": "Как вам помочь?"
+  },
+  "routeResults": [
+    {
+      "route": "/help",
+      "status": 200
+    },
+    {
+      "route": "/help/getting-started",
+      "status": 200
+    },
+    {
+      "route": "/help/pos",
+      "status": 200
+    },
+    {
+      "route": "/help/products",
+      "status": 200
+    },
+    {
+      "route": "/help/inventory",
+      "status": 200
+    },
+    {
+      "route": "/help/orders",
+      "status": 200
+    },
+    {
+      "route": "/help/reports",
+      "status": 200
+    },
+    {
+      "route": "/help/integrations",
+      "status": 200
+    },
+    {
+      "route": "/help/settings",
+      "status": 200
+    },
+    {
+      "route": "/help/products/add-product",
+      "status": 200
+    },
+    {
+      "route": "/help/products/edit-product",
+      "status": 200
+    },
+    {
+      "route": "/help/products/import-products",
+      "status": 200
+    },
+    {
+      "route": "/help/inventory/receiving",
+      "status": 200
+    },
+    {
+      "route": "/help/inventory/transfer",
+      "status": 200
+    },
+    {
+      "route": "/help/inventory/write-off",
+      "status": 200
+    },
+    {
+      "route": "/help/inventory/inventory-count",
+      "status": 200
+    },
+    {
+      "route": "/help/pos/open-shift",
+      "status": 200
+    },
+    {
+      "route": "/help/pos/make-sale",
+      "status": 200
+    },
+    {
+      "route": "/help/pos/apply-discount",
+      "status": 200
+    },
+    {
+      "route": "/help/pos/split-payment",
+      "status": 200
+    },
+    {
+      "route": "/help/pos/hold-receipt",
+      "status": 200
+    },
+    {
+      "route": "/help/pos/resume-receipt",
+      "status": 200
+    },
+    {
+      "route": "/help/pos/return-sale",
+      "status": 200
+    },
+    {
+      "route": "/help/pos/close-shift",
+      "status": 200
+    },
+    {
+      "route": "/help/settings/add-employee",
+      "status": 200
+    },
+    {
+      "route": "/help/reports/analytics-basics",
+      "status": 200
+    },
+    {
+      "route": "/help/reports/export-reports",
+      "status": 200
+    },
+    {
+      "route": "/help/getting-started/choose-store",
+      "status": 200
+    },
+    {
+      "route": "/help/integrations/connect-marketplace",
+      "status": 200
+    }
+  ],
+  "contextualResults": [],
+  "consoleErrors": [],
+  "runtimeErrors": [],
+  "apiErrors": []
+}

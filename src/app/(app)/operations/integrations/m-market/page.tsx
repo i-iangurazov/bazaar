@@ -1843,7 +1843,7 @@ const MMarketSettingsPage = () => {
                     {(preflightData.blockers.byCode.MISSING_SPECS ?? 0) > 0 ? (
                       <p className="pt-1 text-xs">
                         <Link
-                          href="/help#mMarketSpecsSetup"
+                          href="/help/integrations/connect-marketplace"
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-primary underline-offset-2 hover:underline"
