@@ -1,7 +1,7 @@
 "use client";
 
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { useMemo, useState, type ComponentType, type ReactNode } from "react";
+import React, { useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import Link from "next/link";
 
 import { PageTipsButton } from "@/components/guidance/page-tips-button";
@@ -239,6 +239,8 @@ export const MobileMoreMenu = ({
   closeLabel,
   onClose,
 }: MobileMoreMenuProps) => {
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
+
   return (
     <DialogPrimitive.Root
       open={open}
@@ -250,7 +252,24 @@ export const MobileMoreMenu = ({
     >
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-[1000] bg-black/30 data-[state=closed]:opacity-0 data-[state=open]:opacity-100 md:hidden" />
-        <DialogPrimitive.Content className="fixed inset-x-0 bottom-0 z-[1001] max-h-[85dvh] overflow-y-auto rounded-t-[1.75rem] border-t border-border bg-card shadow-2xl transition-transform duration-200 ease-out focus:outline-none data-[state=closed]:translate-y-full data-[state=open]:translate-y-0 md:hidden">
+        <DialogPrimitive.Content
+          aria-describedby={undefined}
+          className="fixed inset-x-0 bottom-0 z-[1001] max-h-[85dvh] overflow-y-auto rounded-t-[1.75rem] border-t border-border bg-card shadow-2xl transition-transform duration-200 ease-out focus:outline-none data-[state=closed]:translate-y-full data-[state=open]:translate-y-0 md:hidden"
+          onOpenAutoFocus={() => {
+            previouslyFocusedRef.current =
+              document.activeElement instanceof HTMLElement ? document.activeElement : null;
+          }}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            const previouslyFocused = previouslyFocusedRef.current;
+            previouslyFocusedRef.current = null;
+            queueMicrotask(() => {
+              if (previouslyFocused?.isConnected) {
+                previouslyFocused.focus();
+              }
+            });
+          }}
+        >
           <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
             <DialogPrimitive.Title className="text-lg font-semibold text-foreground">
               {title}
