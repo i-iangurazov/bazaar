@@ -50,6 +50,260 @@ const asFiscalDraft = (value: Prisma.JsonValue): FiscalReceiptDraft | null => {
   return candidate as unknown as FiscalReceiptDraft;
 };
 
+const adapterRetryLeaseMs = 5 * 60 * 1000;
+const adapterRetryWaitMs = 10_000;
+const adapterRetryPollMs = 25;
+
+type AdapterRetryAudit = {
+  actorId: string | null;
+  action: string;
+  entity: "CustomerOrder" | "FiscalReceipt";
+  requestId: string;
+};
+
+const waitForAdapterReceiptOutcome = async (receiptId: string) => {
+  const deadline = Date.now() + adapterRetryWaitMs;
+  let receipt = await prisma.fiscalReceipt.findUnique({ where: { id: receiptId } });
+  while (receipt?.status === FiscalReceiptStatus.PROCESSING && Date.now() < deadline) {
+    await new Promise<void>((resolve) => setTimeout(resolve, adapterRetryPollMs));
+    receipt = await prisma.fiscalReceipt.findUnique({ where: { id: receiptId } });
+  }
+  if (!receipt) {
+    throw new AppError("kkmReceiptNotFound", "NOT_FOUND", 404);
+  }
+  return receipt;
+};
+
+export const processAdapterFiscalReceipt = async (input: {
+  receiptId: string;
+  trigger: "initial" | "manual" | "scheduled";
+  waitForInProgress?: boolean;
+  audit?: AdapterRetryAudit;
+}) => {
+  const now = new Date();
+  const claim = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`
+      SELECT id FROM "FiscalReceipt" WHERE id = ${input.receiptId} FOR UPDATE
+    `;
+    const receipt = await tx.fiscalReceipt.findUnique({ where: { id: input.receiptId } });
+    if (!receipt) {
+      throw new AppError("kkmReceiptNotFound", "NOT_FOUND", 404);
+    }
+    if (receipt.mode !== KkmMode.ADAPTER) {
+      throw new AppError("kkmRetryUnsupportedMode", "CONFLICT", 409);
+    }
+    if (receipt.status === FiscalReceiptStatus.SENT) {
+      return { receipt, claimed: false, previous: receipt };
+    }
+
+    const draft = asFiscalDraft(receipt.payloadJson);
+    if (!draft) {
+      throw new AppError("kkmReceiptPayloadInvalid", "CONFLICT", 409);
+    }
+
+    const activeClaim =
+      receipt.status === FiscalReceiptStatus.PROCESSING &&
+      receipt.nextAttemptAt !== null &&
+      receipt.nextAttemptAt > now;
+    const withinBackoff = receipt.nextAttemptAt !== null && receipt.nextAttemptAt > now;
+    const firstManualRetry =
+      input.trigger === "manual" &&
+      receipt.status === FiscalReceiptStatus.FAILED &&
+      receipt.attemptCount <= 1;
+    const scheduled =
+      receipt.status !== FiscalReceiptStatus.PROCESSING &&
+      withinBackoff &&
+      input.trigger !== "initial" &&
+      !firstManualRetry;
+    if (activeClaim || scheduled) {
+      return { receipt, claimed: false, previous: receipt };
+    }
+
+    const claimed = await tx.fiscalReceipt.update({
+      where: { id: receipt.id },
+      data: {
+        status: FiscalReceiptStatus.PROCESSING,
+        nextAttemptAt: new Date(now.getTime() + adapterRetryLeaseMs),
+        attemptCount: { increment: 1 },
+      },
+    });
+    return { receipt: claimed, claimed: true, previous: receipt, draft };
+  });
+
+  if (!claim.claimed) {
+    const receipt =
+      claim.receipt.status === FiscalReceiptStatus.PROCESSING && input.waitForInProgress !== false
+        ? await waitForAdapterReceiptOutcome(claim.receipt.id)
+        : claim.receipt;
+    return {
+      receipt,
+      providerCalled: false,
+      finalized: false,
+      previous: claim.previous,
+    };
+  }
+
+  const finalize = async (result: {
+    status: typeof FiscalReceiptStatus.SENT | typeof FiscalReceiptStatus.FAILED;
+    errorMessage: string | null;
+    providerReceiptId?: string | null;
+    fiscalNumber?: string | null;
+    kkmFactoryNumber?: string | null;
+    kkmRegistrationNumber?: string | null;
+    fiscalModeStatus?: "NOT_SENT" | "SENT" | "FAILED" | null;
+    upfdOrFiscalMemory?: string | null;
+    qrPayload?: string | null;
+    fiscalizedAt?: Date | null;
+    rawJson?: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput | null;
+  }) => {
+    const finalized = await prisma.$transaction(async (tx) => {
+      const updated = await tx.fiscalReceipt.updateMany({
+        where: {
+          id: claim.receipt.id,
+          status: FiscalReceiptStatus.PROCESSING,
+          attemptCount: claim.receipt.attemptCount,
+        },
+        data:
+          result.status === FiscalReceiptStatus.SENT
+            ? {
+                status: FiscalReceiptStatus.SENT,
+                lastError: null,
+                nextAttemptAt: null,
+                sentAt: result.fiscalizedAt,
+                fiscalizedAt: result.fiscalizedAt,
+                providerReceiptId: result.providerReceiptId,
+                fiscalNumber: result.fiscalNumber,
+                kkmFactoryNumber: result.kkmFactoryNumber,
+                kkmRegistrationNumber: result.kkmRegistrationNumber,
+                fiscalModeStatus: result.fiscalModeStatus ?? "SENT",
+                upfdOrFiscalMemory: result.upfdOrFiscalMemory,
+                qrPayload: result.qrPayload,
+                qr: result.qrPayload,
+              }
+            : {
+                status: FiscalReceiptStatus.FAILED,
+                fiscalModeStatus: "FAILED",
+                lastError: result.errorMessage,
+                nextAttemptAt: new Date(Date.now() + 60_000),
+              },
+      });
+      if (!updated.count) {
+        return false;
+      }
+
+      await tx.customerOrder.update({
+        where: { id: claim.receipt.customerOrderId },
+        data:
+          result.status === FiscalReceiptStatus.SENT
+            ? {
+                kkmStatus: "SENT",
+                kkmReceiptId: result.providerReceiptId,
+                kkmRawJson: result.rawJson ?? Prisma.DbNull,
+              }
+            : {
+                kkmStatus: "FAILED",
+                kkmReceiptId: null,
+                kkmRawJson: toJson({
+                  message: result.errorMessage,
+                  attemptCount: claim.receipt.attemptCount,
+                }) as Prisma.InputJsonValue,
+              },
+      });
+
+      if (input.audit) {
+        await writeAuditLog(tx, {
+          organizationId: claim.receipt.organizationId,
+          actorId: input.audit.actorId,
+          action: input.audit.action,
+          entity: input.audit.entity,
+          entityId:
+            input.audit.entity === "CustomerOrder"
+              ? claim.receipt.customerOrderId
+              : claim.receipt.id,
+          before: toJson({
+            status: claim.previous.status,
+            attemptCount: claim.previous.attemptCount,
+          }),
+          after: toJson({
+            status: result.status,
+            attemptCount: claim.receipt.attemptCount,
+            providerReceiptId: result.providerReceiptId ?? null,
+            errorMessage: result.errorMessage,
+          }),
+          requestId: input.audit.requestId,
+        });
+      }
+      return true;
+    });
+
+    const receipt = await prisma.fiscalReceipt.findUniqueOrThrow({
+      where: { id: claim.receipt.id },
+    });
+    if (!finalized && receipt.status === FiscalReceiptStatus.PROCESSING) {
+      return {
+        receipt:
+          input.waitForInProgress === false
+            ? receipt
+            : await waitForAdapterReceiptOutcome(receipt.id),
+        finalized,
+      };
+    }
+    return { receipt, finalized };
+  };
+
+  const draft = claim.draft;
+  if (!draft) {
+    throw new AppError("kkmReceiptPayloadInvalid", "CONFLICT", 409);
+  }
+
+  let fiscalized: Awaited<ReturnType<ReturnType<typeof getKkmAdapter>["fiscalizeReceipt"]>>;
+  try {
+    const adapter = getKkmAdapter(claim.receipt.providerKey);
+    fiscalized = await adapter.fiscalizeReceipt(draft);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const result = await finalize({
+      status: FiscalReceiptStatus.FAILED,
+      errorMessage: message,
+    });
+    if (result.finalized) {
+      incrementCounter(kkmReceiptsFailedTotal, { mode: KkmMode.ADAPTER });
+    }
+    return {
+      ...result,
+      providerCalled: true,
+      previous: claim.previous,
+    };
+  }
+
+  const fiscalMeta = resolveFiscalMetadataFromResult({
+    result: fiscalized,
+    fallbackStatus: "SENT",
+  });
+  const fiscalizedAt = fiscalized.fiscalizedAt ?? new Date();
+  const result = await finalize({
+    status: FiscalReceiptStatus.SENT,
+    errorMessage: null,
+    providerReceiptId: fiscalized.providerReceiptId,
+    fiscalNumber: fiscalized.fiscalNumber ?? null,
+    kkmFactoryNumber: fiscalMeta.kkmFactoryNumber,
+    kkmRegistrationNumber: fiscalMeta.kkmRegistrationNumber,
+    fiscalModeStatus: fiscalMeta.fiscalModeStatus ?? "SENT",
+    upfdOrFiscalMemory: fiscalMeta.upfdOrFiscalMemory,
+    qrPayload: fiscalMeta.qrPayload,
+    fiscalizedAt,
+    rawJson: fiscalized.rawJson ?? null,
+  });
+  if (result.finalized) {
+    incrementCounter(kkmReceiptsSentTotal, { mode: KkmMode.ADAPTER });
+  }
+  return {
+    ...result,
+    providerCalled: true,
+    previous: claim.previous,
+  };
+};
+
 const assertKkmFeatureEnabled = async (organizationId: string) => {
   await assertFeatureEnabled({ organizationId, feature: "kkm" });
 };
@@ -491,85 +745,41 @@ export const retryFiscalReceipt = async (input: {
     throw new AppError("kkmRetryUnsupportedMode", "CONFLICT", 409);
   }
 
-  const draft = asFiscalDraft(receipt.payloadJson);
-  if (!draft) {
-    throw new AppError("kkmReceiptPayloadInvalid", "CONFLICT", 409);
-  }
-  const adapter = getKkmAdapter(receipt.providerKey);
-  try {
-    const fiscalized = await adapter.fiscalizeReceipt(draft);
-    const fiscalMeta = resolveFiscalMetadataFromResult({
-      result: fiscalized,
-      fallbackStatus: "SENT",
-    });
-    const fiscalizedAt = fiscalized.fiscalizedAt ?? new Date();
-    const updated = await prisma.$transaction(async (tx) => {
-      const next = await tx.fiscalReceipt.update({
-        where: { id: receipt.id },
-        data: {
-          status: FiscalReceiptStatus.SENT,
-          lastError: null,
-          nextAttemptAt: null,
-          sentAt: fiscalizedAt,
-          fiscalizedAt,
-          providerReceiptId: fiscalized.providerReceiptId,
-          fiscalNumber: fiscalized.fiscalNumber ?? null,
-          kkmFactoryNumber: fiscalMeta.kkmFactoryNumber,
-          kkmRegistrationNumber: fiscalMeta.kkmRegistrationNumber,
-          fiscalModeStatus: fiscalMeta.fiscalModeStatus ?? "SENT",
-          upfdOrFiscalMemory: fiscalMeta.upfdOrFiscalMemory,
-          qrPayload: fiscalMeta.qrPayload,
-          qr: fiscalMeta.qrPayload,
-          attemptCount: { increment: 1 },
-        },
-      });
-      await tx.customerOrder.update({
-        where: { id: receipt.customerOrderId },
-        data: {
-          kkmStatus: "SENT",
-          kkmReceiptId: fiscalized.providerReceiptId,
-          kkmRawJson: fiscalized.rawJson ?? Prisma.DbNull,
-        },
-      });
-      return next;
-    });
-    incrementCounter(kkmReceiptsSentTotal, { mode: KkmMode.ADAPTER });
-
-    await writeAuditLog(prisma, {
-      organizationId: input.organizationId,
+  const result = await processAdapterFiscalReceipt({
+    receiptId: receipt.id,
+    trigger: "manual",
+    waitForInProgress: true,
+    audit: {
       actorId: input.actorId,
       action: "KKM_RECEIPT_RETRY",
       entity: "FiscalReceipt",
-      entityId: updated.id,
-      before: toJson(receipt),
-      after: toJson(updated),
       requestId: input.requestId,
-    });
-    return { id: updated.id, status: updated.status };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    const updated = await prisma.fiscalReceipt.update({
-      where: { id: receipt.id },
-      data: {
-        status: FiscalReceiptStatus.FAILED,
-        fiscalModeStatus: "FAILED",
-        lastError: message,
-        nextAttemptAt: new Date(Date.now() + 60_000),
-        attemptCount: { increment: 1 },
-      },
-    });
-    incrementCounter(kkmReceiptsFailedTotal, { mode: KkmMode.ADAPTER });
-    return { id: updated.id, status: updated.status, errorMessage: message };
-  }
+    },
+  });
+  return {
+    id: result.receipt.id,
+    status: result.receipt.status,
+    ...(result.receipt.status === FiscalReceiptStatus.FAILED
+      ? { errorMessage: result.receipt.lastError }
+      : {}),
+  };
 };
 
 export const runKkmRetryJob = async () => {
   const now = new Date();
-  const failed = await prisma.fiscalReceipt.findMany({
+  const candidates = await prisma.fiscalReceipt.findMany({
     where: {
       mode: KkmMode.ADAPTER,
-      status: FiscalReceiptStatus.FAILED,
-      OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }],
+      OR: [
+        {
+          status: { in: [FiscalReceiptStatus.FAILED, FiscalReceiptStatus.QUEUED] },
+          OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }],
+        },
+        {
+          status: FiscalReceiptStatus.PROCESSING,
+          OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }],
+        },
+      ],
     },
     orderBy: { updatedAt: "asc" },
     take: 50,
@@ -577,72 +787,39 @@ export const runKkmRetryJob = async () => {
 
   let sent = 0;
   let failedCount = 0;
-  for (const receipt of failed) {
-    const draft = asFiscalDraft(receipt.payloadJson);
-    if (!draft) {
-      failedCount += 1;
-      continue;
-    }
+  let processed = 0;
+  for (const receipt of candidates) {
     try {
-      const adapter = getKkmAdapter(receipt.providerKey);
-      const fiscalized = await adapter.fiscalizeReceipt(draft);
-      const fiscalMeta = resolveFiscalMetadataFromResult({
-        result: fiscalized,
-        fallbackStatus: "SENT",
-      });
-      const fiscalizedAt = fiscalized.fiscalizedAt ?? new Date();
-      await prisma.$transaction(async (tx) => {
-        await tx.fiscalReceipt.update({
-          where: { id: receipt.id },
-          data: {
-            status: FiscalReceiptStatus.SENT,
-            lastError: null,
-            nextAttemptAt: null,
-            sentAt: fiscalizedAt,
-            fiscalizedAt,
-            providerReceiptId: fiscalized.providerReceiptId,
-            fiscalNumber: fiscalized.fiscalNumber ?? null,
-            kkmFactoryNumber: fiscalMeta.kkmFactoryNumber,
-            kkmRegistrationNumber: fiscalMeta.kkmRegistrationNumber,
-            fiscalModeStatus: fiscalMeta.fiscalModeStatus ?? "SENT",
-            upfdOrFiscalMemory: fiscalMeta.upfdOrFiscalMemory,
-            qrPayload: fiscalMeta.qrPayload,
-            qr: fiscalMeta.qrPayload,
-            attemptCount: { increment: 1 },
-          },
-        });
-        await tx.customerOrder.update({
-          where: { id: receipt.customerOrderId },
-          data: {
-            kkmStatus: "SENT",
-            kkmReceiptId: fiscalized.providerReceiptId,
-            kkmRawJson: fiscalized.rawJson ?? Prisma.DbNull,
-          },
-        });
-      });
-      sent += 1;
-      incrementCounter(kkmReceiptsSentTotal, { mode: KkmMode.ADAPTER });
-    } catch (error) {
-      failedCount += 1;
-      const message = error instanceof Error ? error.message : String(error);
-      await prisma.fiscalReceipt.update({
-        where: { id: receipt.id },
-        data: {
-          status: FiscalReceiptStatus.FAILED,
-          fiscalModeStatus: "FAILED",
-          lastError: message,
-          nextAttemptAt: new Date(Date.now() + 60_000),
-          attemptCount: { increment: 1 },
+      const result = await processAdapterFiscalReceipt({
+        receiptId: receipt.id,
+        trigger: "scheduled",
+        waitForInProgress: false,
+        audit: {
+          actorId: null,
+          action: "KKM_RECEIPT_RETRY_JOB",
+          entity: "FiscalReceipt",
+          requestId: `kkm-retry-job:${receipt.id}`,
         },
       });
-      incrementCounter(kkmReceiptsFailedTotal, { mode: KkmMode.ADAPTER });
+      if (!result.providerCalled || !result.finalized) {
+        continue;
+      }
+      processed += 1;
+      if (result.receipt.status === FiscalReceiptStatus.SENT) {
+        sent += 1;
+      } else if (result.receipt.status === FiscalReceiptStatus.FAILED) {
+        failedCount += 1;
+      }
+    } catch {
+      processed += 1;
+      failedCount += 1;
     }
   }
 
   const result: JobResult = {
     job: "kkm-retry-receipts",
     status: "ok",
-    details: { processed: failed.length, sent, failed: failedCount },
+    details: { processed, sent, failed: failedCount },
   };
   return result;
 };
