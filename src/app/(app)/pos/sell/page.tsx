@@ -45,6 +45,7 @@ import {
   BarcodeIcon,
 } from "@/components/icons";
 import { ScanInput } from "@/components/ScanInput";
+import { PageTipsButton } from "@/components/guidance/page-tips-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -5172,6 +5173,7 @@ const PosSellPage = () => {
               <SalesOrdersIcon className="h-3.5 w-3.5" aria-hidden />
               <span className="hidden xl:inline">{t("sell.receiptJournal")}</span>
             </Button>
+            <PageTipsButton className="h-8 w-8 shrink-0" />
           </div>
         </div>
       </header>
@@ -6363,7 +6365,7 @@ const PosSellPage = () => {
       const renderMobileHeader = () => (
         <header className="sticky top-0 z-40 border-b border-border bg-card text-foreground md:hidden">
           <div
-            className="grid min-h-[68px] grid-cols-[40px_minmax(0,1fr)_58px] items-end gap-2 px-3 pb-3"
+            className="grid min-h-[68px] grid-cols-[40px_minmax(0,1fr)_40px_58px] items-end gap-2 px-3 pb-3"
             style={{ paddingTop: "calc(0.55rem + env(safe-area-inset-top))" }}
           >
             <button
@@ -6377,6 +6379,7 @@ const PosSellPage = () => {
             <h1 className="truncate text-[19px] font-semibold leading-none tracking-normal">
               {t("entry.sell")}
             </h1>
+            <PageTipsButton className="h-10 w-10" />
             <button
               type="button"
               className="h-10 justify-self-end text-[14px] font-semibold leading-none text-primary disabled:opacity-50"
@@ -7600,18 +7603,21 @@ const PosSellPage = () => {
                 </Badge>
               </div>
             </div>
-            <Button
-              asChild
-              type="button"
-              variant="secondary"
-              size="icon"
-              className="h-11 w-11 shrink-0"
-              aria-label={tCommon("back")}
-            >
-              <Link href={`/pos${registerId ? `?registerId=${registerId}` : ""}`}>
-                <BackIcon className="h-4 w-4" aria-hidden />
-              </Link>
-            </Button>
+            <div className="flex shrink-0 gap-2">
+              <PageTipsButton className="h-11 w-11" />
+              <Button
+                asChild
+                type="button"
+                variant="secondary"
+                size="icon"
+                className="h-11 w-11 shrink-0"
+                aria-label={tCommon("back")}
+              >
+                <Link href={`/pos${registerId ? `?registerId=${registerId}` : ""}`}>
+                  <BackIcon className="h-4 w-4" aria-hidden />
+                </Link>
+              </Button>
+            </div>
           </div>
 
           <div className="mt-2 text-xs leading-5 text-muted-foreground">
