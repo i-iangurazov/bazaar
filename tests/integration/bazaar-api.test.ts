@@ -1,5 +1,24 @@
 import { AttributeType, CustomerOrderStatus, Role, StockMovementType } from "@prisma/client";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const sideEffects = vi.hoisted(() => ({
+  publish: vi.fn(),
+  sendOrderConfirmationEmail: vi.fn(async () => ({ status: "sent" as const })),
+  sendOrderCancellationEmail: vi.fn(async () => ({ status: "sent" as const })),
+  sendOrderTrackingEmail: vi.fn(async () => ({ status: "sent" as const })),
+}));
+
+vi.mock("@/server/events/eventBus", () => ({
+  eventBus: {
+    publish: sideEffects.publish,
+  },
+}));
+
+vi.mock("@/server/services/orderEmails", () => ({
+  sendOrderConfirmationEmail: sideEffects.sendOrderConfirmationEmail,
+  sendOrderCancellationEmail: sideEffects.sendOrderCancellationEmail,
+  sendOrderTrackingEmail: sideEffects.sendOrderTrackingEmail,
+}));
 
 import { POST as createBazaarApiCustomerPost } from "@/app/api/bazaar/v1/customers/route";
 import {
@@ -24,6 +43,10 @@ const describeDb = shouldRunDbTests ? describe : describe.skip;
 describeDb("bazaar api integration", () => {
   beforeEach(async () => {
     await resetDatabase();
+    sideEffects.publish.mockClear();
+    sideEffects.sendOrderConfirmationEmail.mockClear();
+    sideEffects.sendOrderCancellationEmail.mockClear();
+    sideEffects.sendOrderTrackingEmail.mockClear();
   });
 
   it("returns rich product payloads with categories, product metadata and variant stock", async () => {

@@ -3,6 +3,7 @@ import {
   CustomerOrderSource,
   CustomerOrderStatus,
   CustomerSource,
+  OperationRequestPrincipalType,
   Prisma,
   StockMovementType,
 } from "@prisma/client";
@@ -32,6 +33,13 @@ import {
 import { AppError } from "@/server/services/errors";
 import { applyStockMovement } from "@/server/services/inventory";
 import { toJson } from "@/server/services/json";
+import {
+  OPERATION_BAZAAR_API_RETENTION_MS,
+  OPERATION_FAILURE_AMBIGUOUS,
+  OPERATION_FAILURE_SAFE_BEFORE_EFFECTS,
+  runOperationRequest,
+  type OperationFailureDecision,
+} from "@/server/services/operationRequests";
 import { sendOrderConfirmationEmail } from "@/server/services/orderEmails";
 import { getEffectiveProductPrice } from "@/server/services/effectiveProductPrice";
 import type { BazaarCatalogPricingJson } from "@/server/services/bazaarCatalogPricingMapper";
@@ -1463,7 +1471,7 @@ export const createBazaarApiCustomer = async (input: {
   };
 };
 
-export const createBazaarApiOrder = async (input: {
+export type CreateBazaarApiOrderInput = {
   organizationId: string;
   storeId: string;
   customerName?: string | null;
@@ -1473,7 +1481,12 @@ export const createBazaarApiOrder = async (input: {
   comment?: string | null;
   externalId?: string | null;
   lines: Array<{ productId: string; variantId?: string | null; qty: number }>;
-}) => {
+};
+
+const createBazaarApiOrderTx = async (
+  tx: Prisma.TransactionClient,
+  input: CreateBazaarApiOrderInput,
+) => {
   const externalId = normalizeBazaarExternalOrderId(input.externalId);
   const externalIdNote =
     externalId && shouldWriteLegacyBazaarApiExternalIdMarker()
@@ -1503,233 +1516,241 @@ export const createBazaarApiOrder = async (input: {
     throw new AppError("salesOrderEmpty", "BAD_REQUEST", 400);
   }
 
-  const result = await prisma.$transaction(async (tx) => {
-    const store = await tx.store.findUnique({
-      where: { id: input.storeId },
-      select: {
-        id: true,
-        organizationId: true,
-        currencyCode: true,
-        currencyRateKgsPerUnit: true,
-      },
-    });
-    if (!store || store.organizationId !== input.organizationId) {
-      throw new AppError("storeNotFound", "NOT_FOUND", 404);
-    }
+  const store = await tx.store.findUnique({
+    where: { id: input.storeId },
+    select: {
+      id: true,
+      organizationId: true,
+      currencyCode: true,
+      currencyRateKgsPerUnit: true,
+    },
+  });
+  if (!store || store.organizationId !== input.organizationId) {
+    throw new AppError("storeNotFound", "NOT_FOUND", 404);
+  }
 
-    if (externalId) {
-      const lockKey = `bazaar-api-order:${input.organizationId}:${input.storeId}:${externalId}`;
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
-      const existingOrderId = await findBazaarApiOrderIdByExternalIdentity(tx, {
-        organizationId: input.organizationId,
-        storeId: input.storeId,
-        externalOrderId: externalId,
-      });
-      const existingOrder = existingOrderId
-        ? await tx.customerOrder.findFirst({
-            where: {
-              id: existingOrderId,
-              organizationId: input.organizationId,
-              storeId: input.storeId,
-              source: CustomerOrderSource.API,
-            },
-            select: {
-              id: true,
-              number: true,
-              storeId: true,
-              status: true,
-              totalKgs: true,
-              lines: {
-                select: {
-                  productId: true,
-                  variantId: true,
-                  qty: true,
-                  unitCostKgs: true,
-                  lineTotalKgs: true,
-                },
+  if (externalId) {
+    const lockKey = `bazaar-api-order:${input.organizationId}:${input.storeId}:${externalId}`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
+    const existingOrderId = await findBazaarApiOrderIdByExternalIdentity(tx, {
+      organizationId: input.organizationId,
+      storeId: input.storeId,
+      externalOrderId: externalId,
+    });
+    const existingOrder = existingOrderId
+      ? await tx.customerOrder.findFirst({
+          where: {
+            id: existingOrderId,
+            organizationId: input.organizationId,
+            storeId: input.storeId,
+            source: CustomerOrderSource.API,
+          },
+          select: {
+            id: true,
+            number: true,
+            storeId: true,
+            status: true,
+            totalKgs: true,
+            lines: {
+              select: {
+                productId: true,
+                variantId: true,
+                qty: true,
+                unitCostKgs: true,
+                lineTotalKgs: true,
               },
             },
-          })
-        : null;
-      if (existingOrder) {
-        if (bazaarApiStockImpactingStatuses.has(existingOrder.status)) {
-          await applyBazaarApiOrderStockDeduction(tx, {
-            organizationId: input.organizationId,
-            order: existingOrder,
-          });
-        }
-        return { order: existingOrder, replayed: true };
+          },
+        })
+      : null;
+    if (existingOrder) {
+      if (bazaarApiStockImpactingStatuses.has(existingOrder.status)) {
+        await applyBazaarApiOrderStockDeduction(tx, {
+          organizationId: input.organizationId,
+          order: existingOrder,
+        });
+      }
+      return { order: existingOrder, replayed: true };
+    }
+  }
+
+  const productIds = Array.from(new Set(normalizedLines.map((line) => line.productId)));
+  const variantIds = normalizedLines
+    .map((line) => line.variantId)
+    .filter((variantId): variantId is string => Boolean(variantId));
+
+  const [products, variants, storePrices, productCosts] = await Promise.all([
+    tx.product.findMany({
+      where: {
+        organizationId: input.organizationId,
+        isDeleted: false,
+        id: { in: productIds },
+        storeProducts: {
+          some: { storeId: input.storeId, isActive: true },
+        },
+        hiddenInBazaarCatalogs: { none: { storeId: input.storeId } },
+      },
+      select: { id: true, basePriceKgs: true },
+    }),
+    variantIds.length
+      ? tx.productVariant.findMany({
+          where: { id: { in: variantIds }, isActive: true },
+          select: { id: true, productId: true },
+        })
+      : Promise.resolve([]),
+    tx.storePrice.findMany({
+      where: {
+        organizationId: input.organizationId,
+        storeId: input.storeId,
+        productId: { in: productIds },
+      },
+      select: {
+        productId: true,
+        variantId: true,
+        variantKey: true,
+        priceKgs: true,
+        discountType: true,
+        discountPercentage: true,
+        discountStartsAt: true,
+        discountEndsAt: true,
+      },
+    }),
+    tx.productCost.findMany({
+      where: { organizationId: input.organizationId, productId: { in: productIds } },
+      select: { productId: true, variantKey: true, avgCostKgs: true },
+    }),
+  ]);
+
+  const productsById = new Map(products.map((product) => [product.id, product]));
+  if (productsById.size !== productIds.length) {
+    throw new AppError("productNotFound", "NOT_FOUND", 404);
+  }
+
+  const variantsById = new Map(variants.map((variant) => [variant.id, variant]));
+  const priceByProductVariant = new Map(
+    storePrices.map((price) => [`${price.productId}:${price.variantKey}`, price]),
+  );
+  const costByProductVariant = new Map(
+    productCosts.map((cost) => [`${cost.productId}:${cost.variantKey}`, Number(cost.avgCostKgs)]),
+  );
+
+  const pricedAt = new Date();
+  const lines = normalizedLines.map((line) => {
+    const product = productsById.get(line.productId);
+    if (!product) {
+      throw new AppError("productNotFound", "NOT_FOUND", 404);
+    }
+    if (line.variantId) {
+      const variant = variantsById.get(line.variantId);
+      if (!variant || variant.productId !== line.productId) {
+        throw new AppError("variantNotFound", "NOT_FOUND", 404);
       }
     }
+    const productFallbackPrice = product.basePriceKgs ?? new Prisma.Decimal(0);
+    const priceRow =
+      priceByProductVariant.get(`${line.productId}:${line.variantKey}`) ??
+      priceByProductVariant.get(`${line.productId}:BASE`);
+    const effective = getEffectiveProductPrice({
+      basePrice: priceRow?.priceKgs ?? productFallbackPrice,
+      discount: discountFromStorePrice(priceRow),
+      now: pricedAt,
+      currency: "KGS",
+    });
+    const basePrice = effective.basePrice.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+    const unitPrice = effective.effectivePrice;
+    const discountAmount = effective.hasActiveDiscount
+      ? basePrice.minus(unitPrice).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)
+      : null;
+    const unitCost =
+      costByProductVariant.get(`${line.productId}:${line.variantKey}`) ??
+      (line.variantKey !== "BASE"
+        ? (costByProductVariant.get(`${line.productId}:BASE`) ?? null)
+        : null);
+    return {
+      productId: line.productId,
+      variantId: line.variantId,
+      variantKey: line.variantKey,
+      qty: line.qty,
+      baseUnitPriceKgs: basePrice,
+      appliedDiscountType: effective.hasActiveDiscount ? ("PERCENTAGE" as const) : null,
+      appliedDiscountPercentage: effective.hasActiveDiscount ? effective.discountPercentage : null,
+      appliedDiscountAmountKgs: discountAmount,
+      unitPriceKgs: unitPrice,
+      lineTotalKgs: unitPrice.mul(line.qty).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP),
+      unitCostKgs: unitCost,
+      lineCostTotalKgs: unitCost === null ? null : roundMoney(unitCost * line.qty),
+    };
+  });
 
-    const productIds = Array.from(new Set(normalizedLines.map((line) => line.productId)));
-    const variantIds = normalizedLines
-      .map((line) => line.variantId)
-      .filter((variantId): variantId is string => Boolean(variantId));
-
-    const [products, variants, storePrices, productCosts] = await Promise.all([
-      tx.product.findMany({
-        where: {
-          organizationId: input.organizationId,
-          isDeleted: false,
-          id: { in: productIds },
-          storeProducts: {
-            some: { storeId: input.storeId, isActive: true },
-          },
-          hiddenInBazaarCatalogs: { none: { storeId: input.storeId } },
-        },
-        select: { id: true, basePriceKgs: true },
-      }),
-      variantIds.length
-        ? tx.productVariant.findMany({
-            where: { id: { in: variantIds }, isActive: true },
-            select: { id: true, productId: true },
-          })
-        : Promise.resolve([]),
-      tx.storePrice.findMany({
-        where: {
-          organizationId: input.organizationId,
-          storeId: input.storeId,
-          productId: { in: productIds },
-        },
+  const subtotal = lines
+    .reduce((sum, line) => sum.plus(line.lineTotalKgs), new Prisma.Decimal(0))
+    .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+  const number = await nextSalesOrderNumber(tx, input.organizationId);
+  const notes = [normalizeOptionalText(input.comment), externalIdNote].filter(Boolean).join("\n");
+  const order = await tx.customerOrder.create({
+    data: {
+      organizationId: input.organizationId,
+      storeId: input.storeId,
+      number,
+      status: CustomerOrderStatus.CONFIRMED,
+      source: CustomerOrderSource.API,
+      confirmedAt: new Date(),
+      customerName: normalizeOptionalText(input.customerName),
+      customerEmail: normalizeOptionalText(input.customerEmail),
+      customerPhone: normalizeOptionalText(input.customerPhone),
+      customerAddress: normalizeOptionalText(input.customerAddress),
+      notes: notes || null,
+      externalOrderId: externalId,
+      subtotalKgs: subtotal,
+      totalKgs: subtotal,
+      ...resolveCurrencySnapshot(store),
+      lines: { create: lines },
+    },
+    select: {
+      id: true,
+      number: true,
+      storeId: true,
+      status: true,
+      totalKgs: true,
+      lines: {
         select: {
           productId: true,
           variantId: true,
-          variantKey: true,
-          priceKgs: true,
-          discountType: true,
-          discountPercentage: true,
-          discountStartsAt: true,
-          discountEndsAt: true,
-        },
-      }),
-      tx.productCost.findMany({
-        where: { organizationId: input.organizationId, productId: { in: productIds } },
-        select: { productId: true, variantKey: true, avgCostKgs: true },
-      }),
-    ]);
-
-    const productsById = new Map(products.map((product) => [product.id, product]));
-    if (productsById.size !== productIds.length) {
-      throw new AppError("productNotFound", "NOT_FOUND", 404);
-    }
-
-    const variantsById = new Map(variants.map((variant) => [variant.id, variant]));
-    const priceByProductVariant = new Map(
-      storePrices.map((price) => [`${price.productId}:${price.variantKey}`, price]),
-    );
-    const costByProductVariant = new Map(
-      productCosts.map((cost) => [`${cost.productId}:${cost.variantKey}`, Number(cost.avgCostKgs)]),
-    );
-
-    const pricedAt = new Date();
-    const lines = normalizedLines.map((line) => {
-      const product = productsById.get(line.productId);
-      if (!product) {
-        throw new AppError("productNotFound", "NOT_FOUND", 404);
-      }
-      if (line.variantId) {
-        const variant = variantsById.get(line.variantId);
-        if (!variant || variant.productId !== line.productId) {
-          throw new AppError("variantNotFound", "NOT_FOUND", 404);
-        }
-      }
-      const productFallbackPrice = product.basePriceKgs ?? new Prisma.Decimal(0);
-      const priceRow =
-        priceByProductVariant.get(`${line.productId}:${line.variantKey}`) ??
-        priceByProductVariant.get(`${line.productId}:BASE`);
-      const effective = getEffectiveProductPrice({
-        basePrice: priceRow?.priceKgs ?? productFallbackPrice,
-        discount: discountFromStorePrice(priceRow),
-        now: pricedAt,
-        currency: "KGS",
-      });
-      const basePrice = effective.basePrice.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
-      const unitPrice = effective.effectivePrice;
-      const discountAmount = effective.hasActiveDiscount
-        ? basePrice.minus(unitPrice).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)
-        : null;
-      const unitCost =
-        costByProductVariant.get(`${line.productId}:${line.variantKey}`) ??
-        (line.variantKey !== "BASE"
-          ? (costByProductVariant.get(`${line.productId}:BASE`) ?? null)
-          : null);
-      return {
-        productId: line.productId,
-        variantId: line.variantId,
-        variantKey: line.variantKey,
-        qty: line.qty,
-        baseUnitPriceKgs: basePrice,
-        appliedDiscountType: effective.hasActiveDiscount ? "PERCENTAGE" as const : null,
-        appliedDiscountPercentage: effective.hasActiveDiscount
-          ? effective.discountPercentage
-          : null,
-        appliedDiscountAmountKgs: discountAmount,
-        unitPriceKgs: unitPrice,
-        lineTotalKgs: unitPrice.mul(line.qty).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP),
-        unitCostKgs: unitCost,
-        lineCostTotalKgs: unitCost === null ? null : roundMoney(unitCost * line.qty),
-      };
-    });
-
-    const subtotal = lines
-      .reduce((sum, line) => sum.plus(line.lineTotalKgs), new Prisma.Decimal(0))
-      .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
-    const number = await nextSalesOrderNumber(tx, input.organizationId);
-    const notes = [normalizeOptionalText(input.comment), externalIdNote]
-      .filter(Boolean)
-      .join("\n");
-    const order = await tx.customerOrder.create({
-      data: {
-        organizationId: input.organizationId,
-        storeId: input.storeId,
-        number,
-        status: CustomerOrderStatus.CONFIRMED,
-        source: CustomerOrderSource.API,
-        confirmedAt: new Date(),
-        customerName: normalizeOptionalText(input.customerName),
-        customerEmail: normalizeOptionalText(input.customerEmail),
-        customerPhone: normalizeOptionalText(input.customerPhone),
-        customerAddress: normalizeOptionalText(input.customerAddress),
-        notes: notes || null,
-        externalOrderId: externalId,
-        subtotalKgs: subtotal,
-        totalKgs: subtotal,
-        ...resolveCurrencySnapshot(store),
-        lines: { create: lines },
-      },
-      select: {
-        id: true,
-        number: true,
-        storeId: true,
-        status: true,
-        totalKgs: true,
-        lines: {
-          select: {
-            productId: true,
-            variantId: true,
-            qty: true,
-            unitCostKgs: true,
-            lineTotalKgs: true,
-          },
+          qty: true,
+          unitCostKgs: true,
+          lineTotalKgs: true,
         },
       },
-    });
-    await applyBazaarApiOrderStockDeduction(tx, {
-      organizationId: input.organizationId,
-      order,
-    });
-    await upsertCustomerFromOrderTx(tx, {
-      organizationId: input.organizationId,
-      storeId: input.storeId,
-      customerName: input.customerName,
-      customerEmail: input.customerEmail,
-      customerPhone: input.customerPhone,
-      customerAddress: input.customerAddress,
-    });
-    return { order, replayed: false };
+    },
   });
+  await applyBazaarApiOrderStockDeduction(tx, {
+    organizationId: input.organizationId,
+    order,
+  });
+  await upsertCustomerFromOrderTx(tx, {
+    organizationId: input.organizationId,
+    storeId: input.storeId,
+    customerName: input.customerName,
+    customerEmail: input.customerEmail,
+    customerPhone: input.customerPhone,
+    customerAddress: input.customerAddress,
+  });
+  return { order, replayed: false };
+};
 
+type BazaarApiOrderCreateResult = Awaited<ReturnType<typeof createBazaarApiOrderTx>>;
+
+const toBazaarApiOrderCreateResponse = (result: BazaarApiOrderCreateResult) => ({
+  id: result.order.id,
+  number: result.order.number,
+  status: result.order.status,
+  totalKgs: Number(result.order.totalKgs),
+});
+
+const dispatchBazaarApiOrderCreated = async (
+  input: CreateBazaarApiOrderInput,
+  result: BazaarApiOrderCreateResult,
+) => {
   if (!result.replayed) {
     eventBus.publish({
       type: "customerOrder.created",
@@ -1752,11 +1773,90 @@ export const createBazaarApiOrder = async (input: {
     if (process.env.NODE_ENV === "test") await confirmation;
     else void confirmation;
   }
+};
 
-  return {
-    id: result.order.id,
-    number: result.order.number,
-    status: result.order.status,
-    totalKgs: Number(result.order.totalKgs),
+export const createBazaarApiOrder = async (input: CreateBazaarApiOrderInput) => {
+  const result = await prisma.$transaction((tx) => createBazaarApiOrderTx(tx, input));
+  await dispatchBazaarApiOrderCreated(input, result);
+  return toBazaarApiOrderCreateResponse(result);
+};
+
+type BazaarApiOrderOperationResponse = Prisma.InputJsonObject & {
+  order: {
+    id: string;
+    number: string;
+    status: CustomerOrderStatus;
+    totalKgs: number;
   };
+};
+
+const classifyBazaarApiOrderOperationFailure = (error: unknown): OperationFailureDecision => {
+  if (error instanceof AppError) {
+    return {
+      classification: OPERATION_FAILURE_SAFE_BEFORE_EFFECTS,
+      responseCode: error.message,
+      responseStatus: error.status,
+    };
+  }
+  return {
+    classification: OPERATION_FAILURE_AMBIGUOUS,
+    responseCode: "operationRequestFailed",
+    responseStatus: 500,
+  };
+};
+
+export const createBazaarApiOrderOperation = async (
+  input: CreateBazaarApiOrderInput & {
+    apiKeyId: string;
+    idempotencyKey: string;
+  },
+) => {
+  let createdResult: BazaarApiOrderCreateResult | null = null;
+  const operation = await runOperationRequest<BazaarApiOrderOperationResponse>(
+    {
+      organizationId: input.organizationId,
+      storeId: input.storeId,
+      scope: "bazaar-api.order.create.v1",
+      principal: {
+        type: OperationRequestPrincipalType.API_KEY,
+        id: input.apiKeyId,
+      },
+      idempotencyKey: input.idempotencyKey,
+      payload: {
+        version: "v1",
+        value: {
+          externalId: input.externalId ?? null,
+          customerName: input.customerName ?? null,
+          customerEmail: input.customerEmail ?? null,
+          customerPhone: input.customerPhone ?? null,
+          customerAddress: input.customerAddress ?? null,
+          comment: input.comment ?? null,
+          lines: input.lines.map((line) => ({
+            productId: line.productId,
+            variantId: line.variantId ?? null,
+            qty: line.qty,
+          })),
+        },
+      },
+      allowedResponsePaths: ["order", "order.id", "order.number", "order.status", "order.totalKgs"],
+      expiresAt: new Date(Date.now() + OPERATION_BAZAAR_API_RETENTION_MS),
+      classifyFailure: classifyBazaarApiOrderOperationFailure,
+    },
+    async (tx) => {
+      const result = await createBazaarApiOrderTx(tx, input);
+      if (!result.replayed) createdResult = result;
+      return {
+        response: { order: toBazaarApiOrderCreateResponse(result) },
+        responseStatus: 201,
+        responseCode: "created",
+        resource: { type: "CustomerOrder", id: result.order.id },
+      };
+    },
+  );
+
+  if (createdResult) {
+    await dispatchBazaarApiOrderCreated(input, createdResult);
+  }
+
+  return operation;
 };
