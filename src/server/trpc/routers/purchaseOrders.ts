@@ -2,11 +2,7 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import type { PrismaClient } from "@prisma/client";
 
-import {
-  managerProcedure,
-  rateLimit,
-  router,
-} from "@/server/trpc/trpc";
+import { managerProcedure, rateLimit, router } from "@/server/trpc/trpc";
 import {
   assertCommerceStoreAccess,
   resolveCommerceAccessibleStoreIds,
@@ -17,6 +13,7 @@ import { toTRPCError } from "@/server/trpc/errors";
 import {
   addPurchaseOrderLine,
   approvePurchaseOrder,
+  bulkCancelPurchaseOrders,
   cancelPurchaseOrder,
   createPurchaseOrderOperation,
   createDraftsFromReorder,
@@ -45,10 +42,7 @@ const assertPurchaseOrderAccess = async (
   await assertCommerceStoreAccess(ctx.prisma, ctx.user, purchaseOrder.storeId);
 };
 
-const assertPurchaseOrderLineAccess = async (
-  ctx: PurchaseOrderAccessContext,
-  lineId: string,
-) => {
+const assertPurchaseOrderLineAccess = async (ctx: PurchaseOrderAccessContext, lineId: string) => {
   const line = await ctx.prisma.purchaseOrderLine.findFirst({
     where: {
       id: lineId,
@@ -345,6 +339,28 @@ export const purchaseOrdersRouter = router({
           organizationId: ctx.user.organizationId,
           requestId: ctx.requestId,
         });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  bulkCancel: managerProcedure
+    .input(
+      z.object({
+        purchaseOrderIds: z.array(z.string().min(1)).min(1).max(5_000),
+        idempotencyKey: z.string().min(8),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const operation = await bulkCancelPurchaseOrders({
+          purchaseOrderIds: input.purchaseOrderIds,
+          idempotencyKey: input.idempotencyKey,
+          actorId: ctx.user.id,
+          organizationId: ctx.user.organizationId,
+          requestId: ctx.requestId,
+        });
+        return operation.response;
       } catch (error) {
         throw toTRPCError(error);
       }
