@@ -171,9 +171,10 @@ const buildInventorySnapshotWhere = (
   };
 };
 
-const buildLowStockSnapshotSql = (
+const buildInventorySnapshotSql = (
   input: z.infer<typeof inventoryListIdsInputSchema>,
   organizationId: string,
+  includeForecast = false,
 ) => {
   const searchTokens = normalizeInventorySearchTokens(input.search);
   const searchSql = searchTokens.reduce<Prisma.Sql>((sql, token) => {
@@ -201,21 +202,48 @@ const buildLowStockSnapshotSql = (
       ON sp."storeId" = s."storeId"
      AND sp."productId" = s."productId"
      AND sp."isActive" = true
-    JOIN "ReorderPolicy" rp ON rp."storeId" = s."storeId" AND rp."productId" = s."productId"
+    LEFT JOIN "ReorderPolicy" rp
+      ON rp."storeId" = s."storeId"
+     AND rp."productId" = s."productId"
+    ${
+      includeForecast
+        ? Prisma.sql`
+          LEFT JOIN LATERAL (
+            SELECT forecast_row.*
+            FROM "ForecastSnapshot" forecast_row
+            WHERE forecast_row."storeId" = s."storeId"
+              AND forecast_row."productId" = s."productId"
+            ORDER BY forecast_row."generatedAt" DESC, forecast_row.id DESC
+            LIMIT 1
+          ) forecast ON true
+        `
+        : Prisma.empty
+    }
     WHERE s."storeId" = ${input.storeId}
       AND p."organizationId" = ${organizationId}
       AND sp."organizationId" = ${organizationId}
       AND p."isDeleted" = false
-      AND rp."minStock" > 0
-      AND s."onHand" <= rp."minStock"
-      AND s."onHand" >= 0
+      ${input.stockFilter === "negativeStock" ? Prisma.sql`AND s."onHand" < 0` : Prisma.empty}
+      ${input.stockFilter === "outOfStock" ? Prisma.sql`AND s."onHand" = 0` : Prisma.empty}
+      ${
+        input.stockFilter === "lowStock"
+          ? Prisma.sql`
+            AND rp."minStock" > 0
+            AND s."onHand" <= rp."minStock"
+            AND s."onHand" >= 0
+          `
+          : Prisma.empty
+      }
       ${searchSql}
   `;
 };
 
-const fullSortInventoryKeys = new Set<InventorySortKey>(["minStock", "lowStock", "suggestedOrder"]);
+const buildLowStockSnapshotSql = (
+  input: z.infer<typeof inventoryListIdsInputSchema>,
+  organizationId: string,
+) => buildInventorySnapshotSql({ ...input, stockFilter: "lowStock" }, organizationId);
 
-const inventorySortCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+const fullSortInventoryKeys = new Set<InventorySortKey>(["minStock", "lowStock", "suggestedOrder"]);
 
 const getInventorySnapshotOrderBy = (
   sortKey: InventorySortKey,
@@ -281,6 +309,40 @@ const getLowStockOrderSql = (sortKey: InventorySortKey, sortDirection: Inventory
     default:
       return Prisma.sql`ORDER BY p."name" ${direction}, s."variantKey" ${direction}, p."sku" ASC, s."id" ASC`;
   }
+};
+
+const getAdvancedInventoryOrderSql = (
+  sortKey: Extract<InventorySortKey, "minStock" | "lowStock" | "suggestedOrder">,
+  sortDirection: InventorySortDirection,
+) => {
+  const direction = sortDirection === "desc" ? Prisma.sql`DESC` : Prisma.sql`ASC`;
+  const sortExpression =
+    sortKey === "minStock"
+      ? Prisma.sql`COALESCE(rp."minStock", 0)`
+      : sortKey === "lowStock"
+        ? Prisma.sql`CASE
+            WHEN COALESCE(rp."minStock", 0) > 0 AND s."onHand" <= rp."minStock"
+            THEN 1 ELSE 0
+          END`
+        : Prisma.sql`CASE
+            WHEN rp.id IS NULL OR forecast.id IS NULL THEN 0
+            ELSE GREATEST(
+              0,
+              CEIL(
+                forecast."p90Daily" * rp."leadTimeDays"
+                + (rp."safetyStockDays" + rp."reviewPeriodDays") * forecast."p50Daily"
+                - (s."onHand" + s."onOrder")
+              )
+            )
+          END`;
+
+  return Prisma.sql`
+    ORDER BY ${sortExpression} ${direction},
+      p."name" ${direction},
+      p."sku" ${direction},
+      s."variantKey" ${direction},
+      s.id ${direction}
+  `;
 };
 
 const inventoryProductSelect = (storeId: string, organizationId: string) =>
@@ -380,78 +442,6 @@ const inventoryListSnapshotSelect = {
   },
 } satisfies Prisma.InventorySnapshotSelect;
 
-type InventoryListSnapshot = Prisma.InventorySnapshotGetPayload<{
-  select: typeof inventoryListSnapshotSelect;
-}>;
-type InventoryListItem = {
-  snapshot: InventoryListSnapshot;
-  product: InventoryListSnapshot["product"];
-  variant: InventoryListSnapshot["variant"];
-  minStock: number;
-  lowStock: boolean;
-  reorder: ReturnType<typeof buildReorderSuggestion>;
-};
-
-const sortInventoryItems = (
-  items: InventoryListItem[],
-  sortKey: InventorySortKey,
-  sortDirection: InventorySortDirection,
-) => {
-  const directionMultiplier = sortDirection === "asc" ? 1 : -1;
-  const hasInventoryItemImage = (item: InventoryListItem) =>
-    [...(item.product.images ?? []).map((image) => image.url), item.product.photoUrl].some(
-      (url) => {
-        const trimmed = url?.trim();
-        return Boolean(trimmed && !trimmed.startsWith("data:image/"));
-      },
-    );
-  return [...items].sort((left, right) => {
-    let result = 0;
-    switch (sortKey) {
-      case "sku":
-        result = inventorySortCollator.compare(left.product.sku, right.product.sku);
-        break;
-      case "image":
-        result = Number(hasInventoryItemImage(left)) - Number(hasInventoryItemImage(right));
-        break;
-      case "product":
-        result = inventorySortCollator.compare(left.product.name, right.product.name);
-        break;
-      case "onHand":
-        result = left.snapshot.onHand - right.snapshot.onHand;
-        break;
-      case "minStock":
-        result = left.minStock - right.minStock;
-        break;
-      case "lowStock":
-        result = Number(left.lowStock) - Number(right.lowStock);
-        break;
-      case "onOrder":
-        result = left.snapshot.onOrder - right.snapshot.onOrder;
-        break;
-      case "suggestedOrder":
-        result = (left.reorder?.suggestedOrderQty ?? 0) - (right.reorder?.suggestedOrderQty ?? 0);
-        break;
-      default:
-        result = 0;
-    }
-
-    if (result === 0) {
-      result = inventorySortCollator.compare(left.product.name, right.product.name);
-    }
-    if (result === 0) {
-      result = inventorySortCollator.compare(left.product.sku, right.product.sku);
-    }
-    if (result === 0) {
-      result = inventorySortCollator.compare(left.snapshot.variantKey, right.snapshot.variantKey);
-    }
-    if (result === 0) {
-      result = left.snapshot.id.localeCompare(right.snapshot.id);
-    }
-    return result * directionMultiplier;
-  });
-};
-
 export const inventoryRouter = router({
   list: protectedProcedure.input(inventoryListInputSchema).query(async ({ ctx, input }) => {
     const page = input.page ?? 1;
@@ -477,14 +467,50 @@ export const inventoryRouter = router({
     let snapshots: Array<
       Prisma.InventorySnapshotGetPayload<{ select: typeof inventoryListSnapshotSelect }>
     > = [];
-    if (input.stockFilter === "lowStock") {
+    if (useFullSort) {
+      const advancedCountSql = buildInventorySnapshotSql(input, ctx.user.organizationId);
+      const advancedSortSql = buildInventorySnapshotSql(
+        input,
+        ctx.user.organizationId,
+        sortKey === "suggestedOrder",
+      );
+      const [countRows, idRows] = await Promise.all([
+        ctx.prisma.$queryRaw<Array<{ count: number | bigint }>>(
+          Prisma.sql`SELECT COUNT(*)::int AS count ${advancedCountSql}`,
+        ),
+        ctx.prisma.$queryRaw<Array<{ id: string }>>(
+          Prisma.sql`
+            SELECT s.id
+            ${advancedSortSql}
+            ${getAdvancedInventoryOrderSql(
+              sortKey as Extract<InventorySortKey, "minStock" | "lowStock" | "suggestedOrder">,
+              sortDirection,
+            )}
+            LIMIT ${pageSize}
+            OFFSET ${(page - 1) * pageSize}
+          `,
+        ),
+      ]);
+      total = Number(countRows[0]?.count ?? 0);
+      const snapshotIds = idRows.map((row) => row.id);
+      if (snapshotIds.length) {
+        const unorderedSnapshots = await ctx.prisma.inventorySnapshot.findMany({
+          where: { id: { in: snapshotIds } },
+          select: inventoryListSnapshotSelect,
+        });
+        const snapshotMap = new Map(unorderedSnapshots.map((snapshot) => [snapshot.id, snapshot]));
+        snapshots = snapshotIds
+          .map((snapshotId) => snapshotMap.get(snapshotId))
+          .filter(
+            (
+              snapshot,
+            ): snapshot is Prisma.InventorySnapshotGetPayload<{
+              select: typeof inventoryListSnapshotSelect;
+            }> => Boolean(snapshot),
+          );
+      }
+    } else if (input.stockFilter === "lowStock") {
       const lowStockSql = buildLowStockSnapshotSql(input, ctx.user.organizationId);
-      const lowStockOrderSql = useFullSort
-        ? Prisma.sql`ORDER BY p."name" ASC, s."variantKey" ASC, s."id" ASC`
-        : getLowStockOrderSql(sortKey, sortDirection);
-      const lowStockPaginationSql = useFullSort
-        ? Prisma.empty
-        : Prisma.sql`LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`;
       const [countRows, idRows] = await Promise.all([
         ctx.prisma.$queryRaw<Array<{ count: number | bigint }>>(
           Prisma.sql`SELECT COUNT(*)::int AS count ${lowStockSql}`,
@@ -493,8 +519,9 @@ export const inventoryRouter = router({
           Prisma.sql`
             SELECT s."id"
             ${lowStockSql}
-            ${lowStockOrderSql}
-            ${lowStockPaginationSql}
+            ${getLowStockOrderSql(sortKey, sortDirection)}
+            LIMIT ${pageSize}
+            OFFSET ${(page - 1) * pageSize}
           `,
         ),
       ]);
@@ -522,11 +549,9 @@ export const inventoryRouter = router({
         ctx.prisma.inventorySnapshot.findMany({
           where,
           select: inventoryListSnapshotSelect,
-          orderBy: useFullSort
-            ? [{ product: { name: "asc" } }, { variantKey: "asc" }, { id: "asc" }]
-            : getInventorySnapshotOrderBy(sortKey, sortDirection),
-          skip: useFullSort ? undefined : (page - 1) * pageSize,
-          take: useFullSort ? undefined : pageSize,
+          orderBy: getInventorySnapshotOrderBy(sortKey, sortDirection),
+          skip: (page - 1) * pageSize,
+          take: pageSize,
         }),
       ]);
     }
@@ -594,12 +619,7 @@ export const inventoryRouter = router({
         ),
       };
     });
-    const items = useFullSort
-      ? sortInventoryItems(enrichedItems, sortKey, sortDirection).slice(
-          (page - 1) * pageSize,
-          page * pageSize,
-        )
-      : enrichedItems;
+    const items = enrichedItems;
 
     return { items, total, page, pageSize };
   }),
@@ -964,9 +984,7 @@ export const inventoryRouter = router({
             "")
           : (aggregates.values().next().value?.storeId ?? "");
       const destinationStoreId =
-        decoded.documentType === "TRANSFER"
-          ? (document.destinationStoreId ?? null)
-          : null;
+        decoded.documentType === "TRANSFER" ? (document.destinationStoreId ?? null) : null;
 
       return {
         documentType: decoded.documentType,
@@ -1128,7 +1146,10 @@ export const inventoryRouter = router({
           (decoded.documentType !== "TRANSFER" || decoded.documentReferenceType !== "TRANSFER") &&
           (decoded.documentType !== "WRITE_OFF" || decoded.documentReferenceType !== "WRITE_OFF")
         ) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "productMovementDocumentUnsupported" });
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "productMovementDocumentUnsupported",
+          });
         }
 
         return await archiveStockMovementDocument({

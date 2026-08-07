@@ -366,7 +366,6 @@ const productListSelect = {
 
 type ProductPreviewRecord = Prisma.ProductGetPayload<{ select: typeof productPreviewSelect }>;
 type ProductListRecord = Prisma.ProductGetPayload<{ select: typeof productListSelect }>;
-type ProductListItem = ReturnType<typeof serializeProductListItem>;
 
 const productHasListImageWhere: Prisma.ProductWhereInput = {
   OR: [
@@ -446,6 +445,406 @@ const readProductsByImageSort = async ({
   }
 
   return { total, products };
+};
+
+const buildProductSqlBase = ({
+  organizationId,
+  input,
+  accessibleStoreIds,
+}: {
+  organizationId: string;
+  input: ProductListInput;
+  accessibleStoreIds?: string[];
+}) => {
+  const conditions: Prisma.Sql[] = [Prisma.sql`p."organizationId" = ${organizationId}`];
+  if (!input?.includeArchived) {
+    conditions.push(Prisma.sql`p."isDeleted" = false`);
+  }
+
+  const searchQuery = input?.search?.trim() ?? "";
+  if (searchQuery) {
+    const searchNeedle = searchQuery.toLocaleLowerCase();
+    const barcodeNeedle = (normalizeScanValue(searchQuery) || searchQuery).toLocaleLowerCase();
+    const searchTokens = tokenizeProductSearchText(searchQuery);
+    const allNameTokensSql =
+      searchTokens.length > 1
+        ? Prisma.sql`OR (${Prisma.join(
+            searchTokens.map((token) => Prisma.sql`POSITION(${token} IN LOWER(p."name")) > 0`),
+            " AND ",
+          )})`
+        : Prisma.empty;
+    conditions.push(Prisma.sql`(
+      POSITION(${searchNeedle} IN LOWER(p."name")) > 0
+      ${allNameTokensSql}
+      OR POSITION(${searchNeedle} IN LOWER(p."sku")) > 0
+      OR EXISTS (
+        SELECT 1 FROM "ProductBarcode" b
+        WHERE b."productId" = p.id
+          AND POSITION(${barcodeNeedle} IN LOWER(b."value")) > 0
+      )
+      OR EXISTS (
+        SELECT 1 FROM "ProductPack" pack
+        WHERE pack."productId" = p.id
+          AND POSITION(${barcodeNeedle} IN LOWER(pack."packBarcode")) > 0
+      )
+    )`);
+  }
+
+  if (input?.category) {
+    conditions.push(
+      Prisma.sql`(p."category" = ${input.category} OR ${input.category} = ANY(p."categories"))`,
+    );
+  }
+  if (input?.type === "product") {
+    conditions.push(Prisma.sql`p."isBundle" = false`);
+  } else if (input?.type === "bundle") {
+    conditions.push(Prisma.sql`p."isBundle" = true`);
+  }
+  if (input?.readiness === "missingBarcode") {
+    conditions.push(
+      Prisma.sql`NOT EXISTS (SELECT 1 FROM "ProductBarcode" b WHERE b."productId" = p.id)`,
+    );
+  } else if (input?.readiness === "missingImage") {
+    conditions.push(Prisma.sql`
+      NULLIF(TRIM(COALESCE(p."photoUrl", '')), '') IS NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM "ProductImage" image
+        WHERE image."productId" = p.id AND image."url" <> ''
+      )
+    `);
+  } else if (input?.readiness === "missingPrice") {
+    conditions.push(Prisma.sql`p."basePriceKgs" IS NULL`);
+  }
+
+  const scopedStoreIds = input?.storeId
+    ? [input.storeId]
+    : accessibleStoreIds !== undefined
+      ? accessibleStoreIds
+      : undefined;
+  if (scopedStoreIds !== undefined) {
+    if (!scopedStoreIds.length) {
+      conditions.push(Prisma.sql`false`);
+    } else {
+      conditions.push(Prisma.sql`EXISTS (
+        SELECT 1 FROM "StoreProduct" assignment
+        WHERE assignment."productId" = p.id
+          AND assignment."storeId" IN (${Prisma.join(scopedStoreIds)})
+          AND assignment."isActive" = true
+      )`);
+    }
+  }
+
+  if (
+    input?.readiness === "negativeStock" ||
+    input?.readiness === "outOfStock" ||
+    input?.readiness === "lowStock"
+  ) {
+    const snapshotStoreSql =
+      scopedStoreIds !== undefined
+        ? scopedStoreIds.length
+          ? Prisma.sql`AND stock."storeId" IN (${Prisma.join(scopedStoreIds)})`
+          : Prisma.sql`AND false`
+        : Prisma.sql`AND EXISTS (
+          SELECT 1 FROM "Store" stock_store
+          WHERE stock_store.id = stock."storeId"
+            AND stock_store."organizationId" = ${organizationId}
+        )`;
+    if (input.readiness === "negativeStock") {
+      conditions.push(Prisma.sql`EXISTS (
+        SELECT 1 FROM "InventorySnapshot" stock
+        WHERE stock."productId" = p.id ${snapshotStoreSql} AND stock."onHand" < 0
+      )`);
+    } else if (input.readiness === "outOfStock") {
+      conditions.push(Prisma.sql`EXISTS (
+        SELECT 1 FROM "InventorySnapshot" stock
+        WHERE stock."productId" = p.id ${snapshotStoreSql} AND stock."onHand" <= 0
+      )`);
+    } else {
+      conditions.push(Prisma.sql`EXISTS (
+        SELECT 1
+        FROM "InventorySnapshot" stock
+        INNER JOIN "ReorderPolicy" policy
+          ON policy."storeId" = stock."storeId"
+         AND policy."productId" = stock."productId"
+        WHERE stock."productId" = p.id
+          ${snapshotStoreSql}
+          AND policy."minStock" > 0
+          AND stock."onHand" <= policy."minStock"
+      )`);
+    }
+  }
+
+  return Prisma.sql`FROM "Product" p WHERE ${Prisma.join(conditions, " AND ")}`;
+};
+
+const buildProductSqlSortExpression = ({
+  organizationId,
+  input,
+  sortKey,
+  visibleStoreIds,
+  pricingTime,
+}: {
+  organizationId: string;
+  input: ProductListInput;
+  sortKey: ProductSortKey;
+  visibleStoreIds?: string[];
+  pricingTime: Date;
+}) => {
+  const snapshotScopeSql = input?.storeId
+    ? Prisma.sql`AND stock."storeId" = ${input.storeId}`
+    : visibleStoreIds !== undefined
+      ? visibleStoreIds.length
+        ? Prisma.sql`AND stock."storeId" IN (${Prisma.join(visibleStoreIds)})`
+        : Prisma.sql`AND false`
+      : Prisma.sql`AND EXISTS (
+          SELECT 1 FROM "Store" visible_store
+          WHERE visible_store.id = stock."storeId"
+            AND visible_store."organizationId" = ${organizationId}
+        )`;
+
+  switch (sortKey) {
+    case "updatedAt":
+      return Prisma.sql`p."updatedAt"`;
+    case "sku":
+      return Prisma.sql`LOWER(p."sku")`;
+    case "image":
+      return Prisma.sql`CASE WHEN (
+        (NULLIF(TRIM(COALESCE(p."photoUrl", '')), '') IS NOT NULL AND p."photoUrl" NOT LIKE 'data:image/%')
+        OR EXISTS (
+          SELECT 1 FROM "ProductImage" image
+          WHERE image."productId" = p.id AND image."url" NOT LIKE 'data:image/%'
+        )
+      ) THEN 1 ELSE 0 END`;
+    case "name":
+      return Prisma.sql`LOWER(p."name")`;
+    case "category":
+      return Prisma.sql`LOWER(COALESCE(p."category", ''))`;
+    case "unit":
+      return Prisma.sql`LOWER(COALESCE(p."unit", ''))`;
+    case "onHandQty":
+      return Prisma.sql`(
+        SELECT COALESCE(SUM(stock."onHand"), 0)
+        FROM "InventorySnapshot" stock
+        WHERE stock."productId" = p.id ${snapshotScopeSql}
+      )`;
+    case "salePrice":
+      return input?.storeId
+        ? Prisma.sql`COALESCE((
+            SELECT CASE
+              WHEN price."discountType" = 'PERCENTAGE'
+                AND price."discountPercentage" IS NOT NULL
+                AND price."discountPercentage" > 0
+                AND price."discountPercentage" < 100
+                AND (price."discountStartsAt" IS NULL OR price."discountStartsAt" <= ${pricingTime})
+                AND (price."discountEndsAt" IS NULL OR ${pricingTime} < price."discountEndsAt")
+              THEN ROUND(price."priceKgs" * (100 - price."discountPercentage") / 100, 2)
+              ELSE price."priceKgs"
+            END
+            FROM "StorePrice" price
+            WHERE price."organizationId" = ${organizationId}
+              AND price."storeId" = ${input.storeId}
+              AND price."productId" = p.id
+              AND price."variantKey" = 'BASE'
+            LIMIT 1
+          ), p."basePriceKgs")`
+        : Prisma.sql`p."basePriceKgs"`;
+    case "avgCost":
+      return Prisma.sql`(
+        SELECT cost."avgCostKgs"
+        FROM "ProductCost" cost
+        WHERE cost."organizationId" = ${organizationId}
+          AND cost."productId" = p.id
+          AND cost."variantKey" = 'BASE'
+        LIMIT 1
+      )`;
+    case "barcodes":
+      return Prisma.sql`COALESCE((
+        SELECT STRING_AGG(LOWER(barcode."value"), ', ' ORDER BY LOWER(barcode."value"))
+        FROM "ProductBarcode" barcode
+        WHERE barcode."productId" = p.id
+      ), '')`;
+    case "stores":
+      return Prisma.sql`COALESCE((
+        SELECT STRING_AGG(store_names.name, ', ' ORDER BY store_names.name)
+        FROM (
+          SELECT DISTINCT LOWER(store.name) AS name
+          FROM "InventorySnapshot" stock
+          INNER JOIN "Store" store ON store.id = stock."storeId"
+          WHERE stock."productId" = p.id
+            AND store."organizationId" = ${organizationId}
+            ${
+              input?.storeId
+                ? Prisma.sql`AND stock."storeId" = ${input.storeId}`
+                : visibleStoreIds !== undefined
+                  ? visibleStoreIds.length
+                    ? Prisma.sql`AND stock."storeId" IN (${Prisma.join(visibleStoreIds)})`
+                    : Prisma.sql`AND false`
+                  : Prisma.empty
+            }
+        ) store_names
+      ), '')`;
+  }
+
+  return Prisma.sql`LOWER(p."name")`;
+};
+
+const buildProductSearchScoreSql = (searchQuery: string) => {
+  const needle = searchQuery.toLocaleLowerCase();
+  const barcodeNeedle = (normalizeScanValue(searchQuery) || searchQuery).toLocaleLowerCase();
+  const tokens = tokenizeProductSearchText(searchQuery);
+  const missingTokensSql = tokens.length
+    ? Prisma.join(
+        tokens.map(
+          (token) => Prisma.sql`CASE WHEN EXISTS (
+            SELECT 1
+            FROM UNNEST(REGEXP_SPLIT_TO_ARRAY(LOWER(p."name"), '[^[:alnum:]]+')) name_token
+            WHERE POSITION(${token} IN name_token) > 0
+          ) THEN 0 ELSE 1 END`,
+        ),
+        " + ",
+      )
+    : Prisma.sql`0`;
+  const allTokensMatchSql =
+    tokens.length > 1 ? Prisma.sql`(${missingTokensSql}) = 0` : Prisma.sql`false`;
+
+  const rankSql = Prisma.sql`CASE
+    WHEN LOWER(p."sku") = ${needle} OR EXISTS (
+      SELECT 1 FROM "ProductBarcode" barcode
+      WHERE barcode."productId" = p.id AND LOWER(barcode."value") = ${barcodeNeedle}
+    ) THEN 0
+    WHEN LOWER(p."name") = ${needle} THEN 1
+    WHEN LEFT(LOWER(p."name"), CHAR_LENGTH(${needle})) = ${needle} THEN 2
+    WHEN EXISTS (
+      SELECT 1
+      FROM UNNEST(REGEXP_SPLIT_TO_ARRAY(LOWER(p."name"), '[^[:alnum:]]+')) name_token
+      WHERE LEFT(name_token, CHAR_LENGTH(${needle})) = ${needle}
+    ) THEN 3
+    WHEN POSITION(${needle} IN LOWER(p."name")) > 0 THEN 4
+    WHEN ${allTokensMatchSql} THEN 5
+    WHEN LEFT(LOWER(p."sku"), CHAR_LENGTH(${needle})) = ${needle} OR EXISTS (
+      SELECT 1 FROM "ProductBarcode" barcode
+      WHERE barcode."productId" = p.id
+        AND LEFT(LOWER(barcode."value"), CHAR_LENGTH(${barcodeNeedle})) = ${barcodeNeedle}
+    ) THEN 6
+    WHEN POSITION(${needle} IN LOWER(p."sku")) > 0 OR EXISTS (
+      SELECT 1 FROM "ProductBarcode" barcode
+      WHERE barcode."productId" = p.id
+        AND POSITION(${barcodeNeedle} IN LOWER(barcode."value")) > 0
+    ) THEN 7
+    ELSE 99
+  END`;
+  const tokenPrefixIndexSql = Prisma.sql`COALESCE((
+    SELECT MIN(name_token.ordinality - 1)
+    FROM UNNEST(REGEXP_SPLIT_TO_ARRAY(LOWER(p."name"), '[^[:alnum:]]+'))
+      WITH ORDINALITY AS name_token(value, ordinality)
+    WHERE LEFT(name_token.value, CHAR_LENGTH(${needle})) = ${needle}
+  ), 9007199254740991)`;
+
+  return {
+    rankSql,
+    missingTokensSql: Prisma.sql`CASE WHEN (${rankSql}) = 99 THEN 9007199254740991 ELSE (${missingTokensSql}) END`,
+    indexSql: Prisma.sql`CASE
+      WHEN (${rankSql}) = 3 THEN ${tokenPrefixIndexSql}
+      WHEN (${rankSql}) = 4 THEN POSITION(${needle} IN LOWER(p."name")) - 1
+      WHEN (${rankSql}) = 99 THEN 9007199254740991
+      ELSE 0
+    END`,
+    nameLengthSql: Prisma.sql`CASE
+      WHEN (${rankSql}) = 99 THEN 9007199254740991
+      ELSE CHAR_LENGTH(LOWER(p."name"))
+    END`,
+  };
+};
+
+const readProductsByAdvancedSqlSort = async ({
+  prisma,
+  organizationId,
+  input,
+  accessibleStoreIds,
+  sortKey,
+  sortDirection,
+  page,
+  pageSize,
+  pricingTime,
+}: {
+  prisma: PrismaDbClient;
+  organizationId: string;
+  input: ProductListInput;
+  accessibleStoreIds?: string[];
+  sortKey: ProductSortKey;
+  sortDirection: ProductSortDirection;
+  page: number;
+  pageSize: number;
+  pricingTime: Date;
+}): Promise<{ total: number; products: ProductListRecord[] }> => {
+  const baseSql = buildProductSqlBase({ organizationId, input, accessibleStoreIds });
+  const visibleStoreIds = input?.storeId ? [input.storeId] : accessibleStoreIds;
+  const sortExpression = buildProductSqlSortExpression({
+    organizationId,
+    input,
+    sortKey,
+    visibleStoreIds,
+    pricingTime,
+  });
+  const directionSql = sortDirection === "desc" ? Prisma.sql`DESC` : Prisma.sql`ASC`;
+  const nullsSql = sortDirection === "desc" ? Prisma.sql`NULLS LAST` : Prisma.sql`NULLS FIRST`;
+  const searchQuery = input?.search?.trim() ?? "";
+  const relevanceOrderSql = searchQuery
+    ? (() => {
+        const score = buildProductSearchScoreSql(searchQuery);
+        return Prisma.sql`
+          ${score.rankSql} ASC,
+          ${score.missingTokensSql} ASC,
+          ${score.indexSql} ASC,
+          ${score.nameLengthSql} ASC,
+        `;
+      })()
+    : Prisma.empty;
+  const stableOrderSql =
+    sortKey === "updatedAt" && !searchQuery
+      ? Prisma.sql`
+        ${sortExpression} ${directionSql},
+        p."createdAt" ${directionSql},
+        LOWER(p."name") ASC,
+        LOWER(p."sku") ASC,
+        p.id ASC
+      `
+      : Prisma.sql`
+        ${sortExpression} ${directionSql} ${nullsSql},
+        LOWER(p."name") ${directionSql},
+        LOWER(p."sku") ${directionSql},
+        p.id ${directionSql}
+      `;
+
+  const [countRows, idRows] = await Promise.all([
+    prisma.$queryRaw<Array<{ count: number | bigint }>>(
+      Prisma.sql`SELECT COUNT(*)::int AS count ${baseSql}`,
+    ),
+    prisma.$queryRaw<Array<{ id: string }>>(
+      Prisma.sql`
+        SELECT p.id
+        ${baseSql}
+        ORDER BY ${relevanceOrderSql} ${stableOrderSql}
+        LIMIT ${pageSize}
+        OFFSET ${(page - 1) * pageSize}
+      `,
+    ),
+  ]);
+  const productIds = idRows.map((row) => row.id);
+  if (!productIds.length) {
+    return { total: Number(countRows[0]?.count ?? 0), products: [] };
+  }
+  const unorderedProducts = await prisma.product.findMany({
+    where: { id: { in: productIds }, organizationId },
+    select: productListSelect,
+  });
+  const productMap = new Map(unorderedProducts.map((product) => [product.id, product]));
+  return {
+    total: Number(countRows[0]?.count ?? 0),
+    products: productIds
+      .map((productId) => productMap.get(productId))
+      .filter((product): product is ProductListRecord => Boolean(product)),
+  };
 };
 
 export const getSuggestedProductSku = async (organizationId: string) => {
@@ -741,167 +1140,6 @@ export const searchQuickProducts = async ({
   }));
 };
 
-const sortProductListItems = ({
-  items,
-  sortKey,
-  sortDirection,
-  storeNameById,
-  selectedStoreId,
-}: {
-  items: ProductListItem[];
-  sortKey: ProductSortKey;
-  sortDirection: ProductSortDirection;
-  storeNameById: Map<string, string>;
-  selectedStoreId?: string;
-}) => {
-  const comparator = createProductListItemComparator({
-    sortKey,
-    sortDirection,
-    storeNameById,
-    selectedStoreId,
-  });
-
-  items.sort(comparator);
-};
-
-const createProductListItemComparator = ({
-  sortKey,
-  sortDirection,
-  storeNameById,
-  selectedStoreId,
-}: {
-  sortKey: ProductSortKey;
-  sortDirection: ProductSortDirection;
-  storeNameById: Map<string, string>;
-  selectedStoreId?: string;
-}) => {
-  const sortCollator = new Intl.Collator(undefined, {
-    numeric: true,
-    sensitivity: "base",
-  });
-  const directionMultiplier = sortDirection === "asc" ? 1 : -1;
-  const resolveSalePriceForSort = (product: ProductListItem) => {
-    const value = selectedStoreId ? product.effectivePriceKgs : product.basePriceKgs;
-    return value ?? Number.NEGATIVE_INFINITY;
-  };
-  const resolveBarcodeSortValue = (product: ProductListItem) =>
-    product.barcodes
-      .map((entry) => entry.value.trim())
-      .filter(Boolean)
-      .sort((left, right) => sortCollator.compare(left, right))
-      .join(", ");
-  const hasProductImage = (product: ProductListItem) =>
-    [...(product.images ?? []).map((image) => image.url), product.photoUrl].some((url) => {
-      const trimmed = url?.trim();
-      return Boolean(trimmed && !trimmed.startsWith("data:image/"));
-    });
-  const resolveStoreSortValue = (product: ProductListItem) =>
-    Array.from(
-      new Set(
-        product.inventorySnapshots
-          .map((snapshot) => storeNameById.get(snapshot.storeId))
-          .filter((name): name is string => Boolean(name)),
-      ),
-    )
-      .sort((left, right) => sortCollator.compare(left, right))
-      .join(", ");
-
-  return (left: ProductListItem, right: ProductListItem) => {
-    let result = 0;
-    switch (sortKey) {
-      case "sku":
-        result = sortCollator.compare(left.sku, right.sku);
-        break;
-      case "image":
-        result = Number(hasProductImage(left)) - Number(hasProductImage(right));
-        break;
-      case "updatedAt":
-        result = left.updatedAt.getTime() - right.updatedAt.getTime();
-        break;
-      case "name":
-        result = sortCollator.compare(left.name, right.name);
-        break;
-      case "category":
-        result = sortCollator.compare(left.category ?? "", right.category ?? "");
-        break;
-      case "unit":
-        result = sortCollator.compare(left.unit ?? "", right.unit ?? "");
-        break;
-      case "onHandQty":
-        result = left.onHandQty - right.onHandQty;
-        break;
-      case "salePrice":
-        result = resolveSalePriceForSort(left) - resolveSalePriceForSort(right);
-        break;
-      case "avgCost":
-        result =
-          (left.avgCostKgs ?? Number.NEGATIVE_INFINITY) -
-          (right.avgCostKgs ?? Number.NEGATIVE_INFINITY);
-        break;
-      case "barcodes":
-        result = sortCollator.compare(
-          resolveBarcodeSortValue(left),
-          resolveBarcodeSortValue(right),
-        );
-        break;
-      case "stores":
-        result = sortCollator.compare(resolveStoreSortValue(left), resolveStoreSortValue(right));
-        break;
-      default:
-        result = 0;
-    }
-
-    if (result === 0) {
-      result = sortCollator.compare(left.name, right.name);
-    }
-    if (result === 0) {
-      result = sortCollator.compare(left.sku, right.sku);
-    }
-    if (result === 0) {
-      result = left.id.localeCompare(right.id);
-    }
-
-    return result * directionMultiplier;
-  };
-};
-
-const sortProductListItemsBySearchRelevance = ({
-  items,
-  query,
-  sortKey,
-  sortDirection,
-  storeNameById,
-  selectedStoreId,
-}: {
-  items: ProductListItem[];
-  query: string;
-  sortKey: ProductSortKey;
-  sortDirection: ProductSortDirection;
-  storeNameById: Map<string, string>;
-  selectedStoreId?: string;
-}) => {
-  const relevanceCollator = new Intl.Collator(undefined, {
-    numeric: true,
-    sensitivity: "base",
-  });
-  const tieBreaker = createProductListItemComparator({
-    sortKey,
-    sortDirection,
-    storeNameById,
-    selectedStoreId,
-  });
-
-  items.sort((left, right) =>
-    compareProductSearchRelevance({
-      query,
-      left,
-      right,
-      collator: relevanceCollator,
-      tieBreaker,
-    }),
-  );
-};
-
 export const listProducts = async ({
   prisma,
   organizationId,
@@ -951,57 +1189,61 @@ export const listProducts = async ({
   const sortKey = input?.sortKey ?? "updatedAt";
   const sortDirection = input?.sortDirection ?? "desc";
   const searchQuery = input?.search?.trim() ?? "";
-  const readinessProductIds = await resolveReadinessProductIds({
-    prisma,
-    organizationId,
-    input,
-    accessibleStoreIds,
-  });
+  const usesStockReadiness =
+    input?.readiness === "negativeStock" ||
+    input?.readiness === "outOfStock" ||
+    input?.readiness === "lowStock";
   const where = buildProductListWhere(
     organizationId,
     input,
-    readinessProductIds,
+    undefined,
     input?.storeId ? undefined : accessibleStoreIds,
   );
-  const imageSortDbPaginated = !searchQuery && sortKey === "image";
+  const imageSortDbPaginated = !searchQuery && !usesStockReadiness && sortKey === "image";
   const paginatedOrderBy =
-    searchQuery || imageSortDbPaginated ? null : getDbProductOrderBy(sortKey, sortDirection);
-  const databasePaginated = Boolean(paginatedOrderBy) || imageSortDbPaginated;
+    searchQuery || usesStockReadiness || imageSortDbPaginated
+      ? null
+      : getDbProductOrderBy(sortKey, sortDirection);
+  const advancedSqlPaginated = !paginatedOrderBy && !imageSortDbPaginated;
   const visibleSnapshotStoreIds = input?.storeId ? [input.storeId] : accessibleStoreIds;
+  const pricingTime = new Date();
 
   const baseReadStartedAt = Date.now();
-  const [total, products] = imageSortDbPaginated
-    ? await readProductsByImageSort({
+  const [total, products] = advancedSqlPaginated
+    ? await readProductsByAdvancedSqlSort({
         prisma,
-        where,
+        organizationId,
+        input,
+        accessibleStoreIds,
+        sortKey,
         sortDirection,
         page,
         pageSize,
+        pricingTime,
       }).then((result) => [result.total, result.products] as const)
-    : paginatedOrderBy
-      ? await Promise.all([
-        prisma.product.count({ where }),
-        prisma.product.findMany({
+    : imageSortDbPaginated
+      ? await readProductsByImageSort({
+          prisma,
           where,
-          select: productListSelect,
-          orderBy: paginatedOrderBy,
-          skip: (page - 1) * pageSize,
-          take: pageSize,
-        }),
-      ])
-      : await (async () => {
-          const fullProducts = await prisma.product.findMany({
+          sortDirection,
+          page,
+          pageSize,
+        }).then((result) => [result.total, result.products] as const)
+      : await Promise.all([
+          prisma.product.count({ where }),
+          prisma.product.findMany({
             where,
             select: productListSelect,
-            orderBy: [{ name: "asc" }, { sku: "asc" }],
-          });
-          return [fullProducts.length, fullProducts] as const;
-        })();
+            orderBy: paginatedOrderBy ?? getDbProductOrderBy("updatedAt", "desc") ?? undefined,
+            skip: (page - 1) * pageSize,
+            take: pageSize,
+          }),
+        ]);
   if (logger) {
     logProfileSection({
       logger,
       scope: "products.list",
-      section: databasePaginated ? "paginatedRead" : "fullReadForSort",
+      section: advancedSqlPaginated ? "advancedPaginatedRead" : "paginatedRead",
       startedAt: baseReadStartedAt,
       details: {
         total,
@@ -1015,7 +1257,7 @@ export const listProducts = async ({
 
   const productIds = products.map((product) => product.id);
   const enrichmentStartedAt = Date.now();
-  const [baseCosts, latestPurchaseLines, storeNames, storePrices] = productIds.length
+  const [baseCosts, latestPurchaseLines, storePrices] = productIds.length
     ? await Promise.all([
         prisma.productCost.findMany({
           where: {
@@ -1045,15 +1287,6 @@ export const listProducts = async ({
           orderBy: [{ productId: "asc" }, { purchaseOrder: { receivedAt: "desc" } }],
           distinct: ["productId"],
         }),
-        sortKey === "stores" || !databasePaginated
-          ? prisma.store.findMany({
-              where: {
-                organizationId,
-                ...(visibleSnapshotStoreIds ? { id: { in: visibleSnapshotStoreIds } } : {}),
-              },
-              select: { id: true, name: true },
-            })
-          : Promise.resolve([] as Array<{ id: string; name: string }>),
         input?.storeId
           ? prisma.storePrice.findMany({
               where: {
@@ -1071,16 +1304,18 @@ export const listProducts = async ({
                 discountEndsAt: true,
               },
             })
-          : Promise.resolve([] as Array<{
-              productId: string;
-              priceKgs: Prisma.Decimal;
-              discountType: "PERCENTAGE" | null;
-              discountPercentage: Prisma.Decimal | null;
-              discountStartsAt: Date | null;
-              discountEndsAt: Date | null;
-            }>),
+          : Promise.resolve(
+              [] as Array<{
+                productId: string;
+                priceKgs: Prisma.Decimal;
+                discountType: "PERCENTAGE" | null;
+                discountPercentage: Prisma.Decimal | null;
+                discountStartsAt: Date | null;
+                discountEndsAt: Date | null;
+              }>,
+            ),
       ])
-    : [[], [], [], []];
+    : [[], [], []];
   if (logger) {
     logProfileSection({
       logger,
@@ -1091,7 +1326,6 @@ export const listProducts = async ({
         productIds: productIds.length,
         baseCosts: baseCosts.length,
         latestPurchaseLines: latestPurchaseLines.length,
-        storeNames: storeNames.length,
         storePrices: storePrices.length,
       },
     });
@@ -1103,7 +1337,6 @@ export const listProducts = async ({
   const purchasePriceByProductId = new Map(
     latestPurchaseLines.map((line) => [line.productId, Number(line.unitCost)]),
   );
-  const storeNameById = new Map(storeNames.map((store) => [store.id, store.name]));
   const storePriceByProductId = new Map(
     storePrices.map((storePrice) => {
       const pricing = getEffectiveProductPrice({
@@ -1117,7 +1350,7 @@ export const listProducts = async ({
                 endsAt: storePrice.discountEndsAt,
               }
             : null,
-        now: new Date(),
+        now: pricingTime,
         currency: "KGS",
       });
       return [storePrice.productId, pricing.effectivePrice.toNumber()] as const;
@@ -1137,53 +1370,8 @@ export const listProducts = async ({
     }),
   );
 
-  if (searchQuery) {
-    const sortStartedAt = Date.now();
-    sortProductListItemsBySearchRelevance({
-      items,
-      query: searchQuery,
-      sortKey,
-      sortDirection,
-      storeNameById,
-      selectedStoreId: input?.storeId,
-    });
-    if (logger) {
-      logProfileSection({
-        logger,
-        scope: "products.list",
-        section: "relevanceSort",
-        startedAt: sortStartedAt,
-        details: {
-          itemCount: items.length,
-          sortKey,
-        },
-      });
-    }
-  } else if (!databasePaginated) {
-    const sortStartedAt = Date.now();
-    sortProductListItems({
-      items,
-      sortKey,
-      sortDirection,
-      storeNameById,
-      selectedStoreId: input?.storeId,
-    });
-    if (logger) {
-      logProfileSection({
-        logger,
-        scope: "products.list",
-        section: "inMemorySort",
-        startedAt: sortStartedAt,
-        details: {
-          itemCount: items.length,
-          sortKey,
-        },
-      });
-    }
-  }
-
   return {
-    items: databasePaginated ? items : items.slice((page - 1) * pageSize, page * pageSize),
+    items,
     total,
     page,
     pageSize,
