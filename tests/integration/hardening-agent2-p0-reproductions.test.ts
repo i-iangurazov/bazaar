@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { StockMovementType } from "@prisma/client";
+import { OperationRequestStatus, StockMovementType } from "@prisma/client";
 import type { Role } from "@prisma/client";
 import { beforeEach, describe, expect, it } from "vitest";
 
@@ -263,10 +263,16 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN", message: "productAccessDenied" });
     await expect(
-      caller.products.duplicate({ productId: productB.id, name: "Unauthorized duplicate" }),
+      caller.products.duplicate({
+        idempotencyKey: `a2-002-duplicate-${randomUUID()}`,
+        productId: productB.id,
+        name: "Unauthorized duplicate",
+      }),
     ).rejects.toMatchObject({ code: "FORBIDDEN", message: "productAccessDenied" });
 
-    await expect(prisma.product.findUniqueOrThrow({ where: { id: productB.id } })).resolves.toMatchObject({
+    await expect(
+      prisma.product.findUniqueOrThrow({ where: { id: productB.id } }),
+    ).resolves.toMatchObject({
       name: "Restricted Product B",
       isDeleted: false,
     });
@@ -381,6 +387,7 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
 
     await expect(
       caller.products.create({
+        idempotencyKey: `a2-004-manager-${randomUUID()}`,
         name: "Nested stock authorization probe",
         storeId: store.id,
         baseUnitId: baseUnit.id,
@@ -403,6 +410,7 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
     const { org, store, baseUnit, adminUser } = await seedBase({ plan: "BUSINESS" });
     const caller = callerFor(adminUser);
     const created = await caller.products.create({
+      idempotencyKey: `a2-004-admin-${randomUUID()}`,
       name: "Admin nested stock probe",
       storeId: store.id,
       baseUnitId: baseUnit.id,
@@ -437,11 +445,12 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
     expect(movements[0]?.createdById).toBe(adminUser.id);
   });
 
-  it("HARD-A2-005 applies identical create and percentage-price requests twice", async () => {
+  it("HARD-A2-005 replays create and relative/absolute price operations exactly once", async () => {
     const { org, store, baseUnit, product, adminUser } = await seedBase({ plan: "BUSINESS" });
     const caller = callerFor(adminUser);
     const marker = `Replay ${randomUUID()}`;
     const createInput = {
+      idempotencyKey: `a2-005-create-${randomUUID()}`,
       name: marker,
       storeId: store.id,
       baseUnitId: baseUnit.id,
@@ -450,14 +459,23 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
 
     const firstCreate = await caller.products.create(createInput);
     const secondCreate = await caller.products.create(createInput);
-    const createdRows = await prisma.product.findMany({ where: { organizationId: org.id, name: marker } });
+    const createdRows = await prisma.product.findMany({
+      where: { organizationId: org.id, name: marker },
+    });
     const createdMovements = await prisma.stockMovement.findMany({
       where: { productId: { in: [firstCreate.id, secondCreate.id] }, type: "ADJUSTMENT" },
     });
 
-    expect(firstCreate.id).not.toBe(secondCreate.id);
-    expect(createdRows).toHaveLength(2);
-    expect(createdMovements.map((movement) => movement.qtyDelta).sort()).toEqual([3, 3]);
+    expect(firstCreate.id).toBe(secondCreate.id);
+    expect(createdRows).toHaveLength(1);
+    expect(createdMovements.map((movement) => movement.qtyDelta)).toEqual([3]);
+    await expect(
+      caller.products.create({ ...createInput, name: `${marker} changed` }),
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "operationRequestPayloadMismatch",
+    });
+    expect(await prisma.product.count({ where: { organizationId: org.id, name: marker } })).toBe(1);
 
     await prisma.storePrice.create({
       data: {
@@ -470,6 +488,7 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
       },
     });
     const priceInput = {
+      idempotencyKey: `a2-005-price-${randomUUID()}`,
       storeId: store.id,
       filter: { search: product.sku },
       mode: "increasePct" as const,
@@ -477,6 +496,12 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
     };
     await caller.storePrices.bulkUpdate(priceInput);
     await caller.storePrices.bulkUpdate(priceInput);
+    await expect(caller.storePrices.bulkUpdate({ ...priceInput, value: 20 })).rejects.toMatchObject(
+      {
+        code: "CONFLICT",
+        message: "operationRequestPayloadMismatch",
+      },
+    );
 
     const afterPrice = await prisma.storePrice.findUniqueOrThrow({
       where: {
@@ -488,12 +513,133 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
         },
       },
     });
-    expect(Number(afterPrice.priceKgs)).toBe(121);
+    expect(Number(afterPrice.priceKgs)).toBe(110);
+
+    const absolutePriceInput = {
+      ...priceInput,
+      idempotencyKey: `a2-005-price-absolute-${randomUUID()}`,
+      mode: "increaseAbs" as const,
+      value: 10,
+    };
+    await caller.storePrices.bulkUpdate(absolutePriceInput);
+    await caller.storePrices.bulkUpdate(absolutePriceInput);
+    const afterAbsolutePrice = await prisma.storePrice.findUniqueOrThrow({
+      where: {
+        organizationId_storeId_productId_variantKey: {
+          organizationId: org.id,
+          storeId: store.id,
+          productId: product.id,
+          variantKey: "BASE",
+        },
+      },
+    });
+    expect(Number(afterAbsolutePrice.priceKgs)).toBe(120);
+    const operationRequests = await prisma.operationRequest.findMany({
+      where: {
+        organizationId: org.id,
+        principalKey: `user:${adminUser.id}`,
+        scope: { in: ["products.create", "storePrices.bulkUpdate"] },
+      },
+      orderBy: { scope: "asc" },
+    });
+    expect(operationRequests).toHaveLength(3);
     expect(
-      await prisma.idempotencyKey.count({
-        where: { userId: adminUser.id, route: { in: ["products.create", "storePrices.bulkUpdate"] } },
+      operationRequests.every((request) => request.status === OperationRequestStatus.COMPLETED),
+    ).toBe(true);
+    expect(operationRequests.every((request) => request.storeId === store.id)).toBe(true);
+  });
+
+  it("HARD-A2-005 replays duplicate and import operations without duplicate stock", async () => {
+    const { org, store, baseUnit, product, adminUser } = await seedBase({ plan: "BUSINESS" });
+    const caller = callerFor(adminUser);
+    const duplicateInput = {
+      idempotencyKey: `a2-005-duplicate-${randomUUID()}`,
+      productId: product.id,
+      name: `Replay duplicate ${randomUUID()}`,
+      storeId: store.id,
+      copyInventory: false,
+    };
+
+    const firstDuplicate = await caller.products.duplicate(duplicateInput);
+    const secondDuplicate = await caller.products.duplicate(duplicateInput);
+    await expect(
+      caller.products.duplicate({ ...duplicateInput, name: `${duplicateInput.name} changed` }),
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "operationRequestPayloadMismatch",
+    });
+    expect(secondDuplicate.productId).toBe(firstDuplicate.productId);
+    expect(
+      await prisma.product.count({
+        where: { id: firstDuplicate.productId, organizationId: org.id },
       }),
-    ).toBe(0);
+    ).toBe(1);
+
+    const importedSku = `REPLAY-IMPORT-${randomUUID().slice(0, 8)}`;
+    const importInput = {
+      idempotencyKey: `a2-005-import-${randomUUID()}`,
+      storeId: store.id,
+      stockBehavior: "add" as const,
+      rows: [
+        {
+          sku: importedSku,
+          name: "Replay import product",
+          unit: baseUnit.code,
+          stockQty: 4,
+        },
+      ],
+    };
+    const firstImport = await caller.products.importCsv(importInput);
+    const secondImport = await caller.products.importCsv(importInput);
+    await expect(
+      caller.products.importCsv({
+        ...importInput,
+        rows: [{ ...importInput.rows[0], stockQty: 6 }],
+      }),
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "operationRequestPayloadMismatch",
+    });
+    const imported = await prisma.product.findFirstOrThrow({
+      where: { organizationId: org.id, sku: importedSku },
+    });
+    const [snapshot, movements, batchCount] = await Promise.all([
+      prisma.inventorySnapshot.findUniqueOrThrow({
+        where: {
+          storeId_productId_variantKey: {
+            storeId: store.id,
+            productId: imported.id,
+            variantKey: "BASE",
+          },
+        },
+      }),
+      prisma.stockMovement.findMany({
+        where: {
+          storeId: store.id,
+          productId: imported.id,
+          type: "RECEIVE",
+          referenceType: "IMPORT",
+        },
+      }),
+      prisma.importBatch.count({ where: { id: firstImport.batchId } }),
+    ]);
+
+    expect(secondImport.batchId).toBe(firstImport.batchId);
+    expect(snapshot.onHand).toBe(4);
+    expect(movements.map((movement) => movement.qtyDelta)).toEqual([4]);
+    expect(batchCount).toBe(1);
+    const operationRequests = await prisma.operationRequest.findMany({
+      where: {
+        organizationId: org.id,
+        principalKey: `user:${adminUser.id}`,
+        scope: { in: ["products.duplicate", "products.importCsv"] },
+      },
+    });
+    expect(operationRequests).toHaveLength(2);
+    expect(
+      operationRequests.every((request) => request.status === OperationRequestStatus.COMPLETED),
+    ).toBe(true);
+    expect(operationRequests.every((request) => request.storeId === store.id)).toBe(true);
   });
 
   it("HARD-A2-006 increments one stock-count scan twice when the request is replayed", async () => {

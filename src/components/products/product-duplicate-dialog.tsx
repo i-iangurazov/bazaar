@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
@@ -68,6 +68,7 @@ export const ProductDuplicateDialog = ({
   const [name, setName] = useState("");
   const [status, setStatus] = useState<"ACTIVE" | "ARCHIVED">("ACTIVE");
   const [options, setOptions] = useState<DuplicateOptions>(defaultOptions);
+  const duplicateOperationRef = useRef<{ signature: string; key: string } | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -76,10 +77,12 @@ export const ProductDuplicateDialog = ({
     setName(t("duplicateNameTemplate", { name: productName }));
     setStatus("ACTIVE");
     setOptions(defaultOptions);
+    duplicateOperationRef.current = null;
   }, [open, productId, productName, t]);
 
   const duplicateMutation = trpc.products.duplicate.useMutation({
     onSuccess: async (result) => {
+      duplicateOperationRef.current = null;
       await Promise.all([
         trpcUtils.products.suggestSku.invalidate(),
         trpcUtils.products.bootstrap.invalidate(),
@@ -153,12 +156,18 @@ export const ProductDuplicateDialog = ({
           if (!productId || name.trim().length < 2 || duplicateMutation.isLoading) {
             return;
           }
-          duplicateMutation.mutate({
+          const payload = {
             productId,
             name: name.trim(),
             status,
             ...options,
-          });
+          };
+          const signature = JSON.stringify(payload);
+          const current = duplicateOperationRef.current;
+          const idempotencyKey =
+            current?.signature === signature ? current.key : crypto.randomUUID();
+          duplicateOperationRef.current = { signature, key: idempotencyKey };
+          duplicateMutation.mutate({ ...payload, idempotencyKey });
         }}
       >
         <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_180px]">

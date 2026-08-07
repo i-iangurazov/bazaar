@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
+  OperationRequestPrincipalType,
   StockMovementType,
   type AttributeType,
   type Prisma,
@@ -31,13 +32,15 @@ import {
 } from "@/server/services/productImageStorage";
 import { generateProductDescriptionFromImages } from "@/server/services/productDescriptions";
 import { normalizeScanValue } from "@/lib/scanning/normalize";
-import {
-  assignProductToStore,
-  productStoreAssignmentInWhere,
-} from "@/server/services/storeAccess";
+import { assignProductToStore, productStoreAssignmentInWhere } from "@/server/services/storeAccess";
 import { resolveProductCatalogStoresForStore } from "@/server/services/productCatalogs";
 import { getLogger } from "@/server/logging";
 import { applyStockMovement } from "@/server/services/inventory";
+import {
+  OPERATION_TRANSACTION_TIMEOUT_MAX_MS,
+  runOperationRequest,
+} from "@/server/services/operationRequests";
+import { classifyDatabaseOperationFailure } from "@/server/services/databaseOperationFailure";
 import {
   productImportMatchIsBlocking,
   productImportMatchIsExisting,
@@ -45,6 +48,7 @@ import {
 } from "@/server/services/products/importMatching";
 
 export type CreateProductInput = {
+  idempotencyKey?: string;
   organizationId: string;
   actorId: string;
   requestId: string;
@@ -122,7 +126,11 @@ const CATEGORY_ARRANGEMENT_IMAGE_BATCH_SIZE = 8;
 const CATEGORY_ARRANGEMENT_MAX_IMAGE_DATA_URL_LENGTH = 900_000;
 const PRODUCT_CREATE_TRANSACTION_TIMEOUT_MS = (() => {
   const parsed = Number(process.env.PRODUCT_CREATE_TRANSACTION_TIMEOUT_MS);
-  return Number.isFinite(parsed) && parsed >= 5_000 ? parsed : 15_000;
+  return Number.isFinite(parsed) &&
+    parsed >= 5_000 &&
+    parsed <= OPERATION_TRANSACTION_TIMEOUT_MAX_MS
+    ? parsed
+    : 15_000;
 })();
 const MEN_CATEGORY_NAME = "Мужчины";
 const WOMEN_CATEGORY_NAME = "Женщины";
@@ -1830,9 +1838,8 @@ export const createProduct = async (input: CreateProductInput) => {
   const requestedSku = input.sku?.trim();
   const shouldGenerateSku = !requestedSku;
 
-  const runCreateTransaction = () =>
-    prisma.$transaction(
-      async (tx) => {
+  const runCreateTransaction = async () => {
+    const executeCreate = async (tx: Prisma.TransactionClient) => {
         await ensureSupplier(tx, input.organizationId, input.supplierId);
         const baseUnit = await ensureUnit(tx, input.organizationId, input.baseUnitId);
         const attributeDefinitions = await loadAttributeDefinitions(tx, input.organizationId);
@@ -1988,10 +1995,65 @@ export const createProduct = async (input: CreateProductInput) => {
           requestId: input.requestId,
         });
 
-        return product;
+        return {
+          response: { productId: product.id },
+          responseStatus: 201,
+          resource: { type: "Product", id: product.id },
+        };
+    };
+    const operation = await runOperationRequest(
+      {
+        organizationId: input.organizationId,
+        storeId: input.storeId ?? null,
+        scope: "products.create",
+        principal: {
+          type: OperationRequestPrincipalType.AUTHENTICATED_USER,
+          id: input.actorId,
+        },
+        idempotencyKey: input.idempotencyKey ?? input.requestId,
+        payload: {
+          version: "products.create.v1",
+          value: toJson({
+            sku: input.sku ?? null,
+            name: input.name,
+            storeId: input.storeId ?? null,
+            category: input.category ?? null,
+            categories: input.categories ?? [],
+            baseUnitId: input.baseUnitId,
+            basePriceKgs: input.basePriceKgs ?? null,
+            purchasePriceKgs: input.purchasePriceKgs ?? null,
+            avgCostKgs: input.avgCostKgs ?? null,
+            initialOnHand: input.initialOnHand ?? null,
+            minStock: input.minStock ?? null,
+            description: input.description ?? null,
+            photoUrl: input.photoUrl ?? null,
+            images: input.images ?? [],
+            supplierId: input.supplierId ?? null,
+            barcodes: input.barcodes ?? [],
+            packs: input.packs ?? [],
+            variants: input.variants ?? [],
+            isBundle: input.isBundle ?? false,
+            bundleComponents: input.bundleComponents ?? [],
+          }),
+        },
+        allowedResponsePaths: ["productId"],
+        transactionOptions: {
+          maxWait: 10_000,
+          timeout: PRODUCT_CREATE_TRANSACTION_TIMEOUT_MS,
+        },
+        classifyFailure: (error) =>
+          classifyDatabaseOperationFailure(error, "productsCreateFailed"),
       },
-      { maxWait: 10_000, timeout: PRODUCT_CREATE_TRANSACTION_TIMEOUT_MS },
+      executeCreate,
     );
+    const product = await prisma.product.findFirst({
+      where: { id: operation.response.productId, organizationId: input.organizationId },
+    });
+    if (!product) {
+      throw new AppError("productNotFound", "NOT_FOUND", 404);
+    }
+    return product;
+  };
 
   const recordFirstProductCreated = async (productIdForEvent: string) => {
     try {
@@ -2501,6 +2563,7 @@ const resolveDuplicateSku = async (
 };
 
 export const duplicateProduct = async (input: {
+  idempotencyKey?: string;
   organizationId: string;
   actorId: string;
   requestId: string;
@@ -2520,7 +2583,7 @@ export const duplicateProduct = async (input: {
   copySku?: boolean;
   storeId?: string | null;
 }) => {
-  return prisma.$transaction(async (tx) => {
+  const executeDuplicate = async (tx: Prisma.TransactionClient) => {
     await assertWithinLimits({ organizationId: input.organizationId, kind: "products" });
 
     const source = await tx.product.findUnique({
@@ -2715,7 +2778,9 @@ export const duplicateProduct = async (input: {
               name: variant.name,
               sku: copiedVariantSku(variant.sku, index),
               attributes:
-                copyCharacteristics && variant.attributes && typeof variant.attributes === "object"
+                    copyCharacteristics &&
+                    variant.attributes &&
+                    typeof variant.attributes === "object"
                   ? (variant.attributes as Record<string, unknown>)
                   : {},
             })),
@@ -2910,7 +2975,7 @@ export const duplicateProduct = async (input: {
       requestId: input.requestId,
     });
 
-    return {
+    const response = {
       productId: duplicate.id,
       sku: duplicate.sku,
       status: input.status ?? "ACTIVE",
@@ -2919,7 +2984,57 @@ export const duplicateProduct = async (input: {
       copiedVariantsCount: copiedVariants.length,
       copiedInventoryRows,
     };
-  });
+    return {
+      response,
+      responseStatus: 201,
+      resource: { type: "Product", id: duplicate.id },
+    };
+  };
+  const operation = await runOperationRequest(
+    {
+      organizationId: input.organizationId,
+      storeId: input.storeId ?? null,
+      scope: "products.duplicate",
+      principal: {
+        type: OperationRequestPrincipalType.AUTHENTICATED_USER,
+        id: input.actorId,
+      },
+      idempotencyKey: input.idempotencyKey ?? input.requestId,
+      payload: {
+        version: "products.duplicate.v1",
+        value: toJson({
+          productId: input.productId,
+          name: input.name ?? null,
+          sku: input.sku ?? null,
+          status: input.status ?? "ACTIVE",
+          copyImages: input.copyImages ?? true,
+          copyInventory: input.copyInventory ?? false,
+          copyDescription: input.copyDescription ?? true,
+          copyCategory: input.copyCategory ?? true,
+          copyOtherDetails: input.copyOtherDetails ?? true,
+          copyPrice: input.copyPrice ?? true,
+          copyCost: input.copyCost ?? false,
+          copyVariants: input.copyVariants ?? true,
+          copyCharacteristics: input.copyCharacteristics ?? true,
+          copySku: input.copySku ?? true,
+          storeId: input.storeId ?? null,
+        }),
+      },
+      allowedResponsePaths: [
+        "productId",
+        "sku",
+        "status",
+        "copiedBarcodes",
+        "omittedBarcodesCount",
+        "copiedVariantsCount",
+        "copiedInventoryRows",
+      ],
+      classifyFailure: (error) =>
+        classifyDatabaseOperationFailure(error, "productsDuplicateFailed"),
+    },
+    executeDuplicate,
+  );
+  return operation.response;
 };
 
 export const generateProductBarcode = async (input: {
@@ -3063,9 +3178,7 @@ export const bulkGenerateProductBarcodes = async (input: {
       organizationId: input.organizationId,
       ...(input.filter?.includeArchived ? {} : { isDeleted: false }),
       ...(uniqueProductIds.length ? { id: { in: uniqueProductIds } } : {}),
-      ...(input.accessibleStoreIds
-        ? productStoreAssignmentInWhere(input.accessibleStoreIds)
-        : {}),
+      ...(input.accessibleStoreIds ? productStoreAssignmentInWhere(input.accessibleStoreIds) : {}),
       ...(filters.length ? { AND: filters } : {}),
     };
 

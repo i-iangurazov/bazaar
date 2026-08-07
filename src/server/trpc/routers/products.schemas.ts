@@ -176,6 +176,7 @@ export const productStorePricingInputSchema = z.object({
 });
 
 export const createProductInputSchema = z.object({
+  idempotencyKey: z.string().min(8),
   sku: z.preprocess(
     (value) => (typeof value === "string" && value.trim().length === 0 ? undefined : value),
     z.string().min(2).optional(),
@@ -247,6 +248,7 @@ export const inlineUpdateProductInputSchema = z.object({
 
 export const duplicateProductInputSchema = z
   .object({
+    idempotencyKey: z.string().min(8),
     productId: z.string().min(1),
     name: z.string().trim().min(2).max(300).optional(),
     sku: z.string().min(2).optional(),
@@ -352,6 +354,7 @@ export const importCsvRowSchema = z.object({
 });
 
 export const importProductsCsvInputSchema = z.object({
+  idempotencyKey: z.string().min(8),
   rows: z.array(importCsvRowSchema).min(1),
   source: importSourceEnum.optional(),
   storeId: z.string().min(1),
@@ -372,9 +375,11 @@ export const importProductsCsvInputSchema = z.object({
     .optional(),
 });
 
-export const previewProductsImportCsvInputSchema = importProductsCsvInputSchema.extend({
-  previewLimit: z.number().int().min(0).max(500).optional(),
-});
+export const previewProductsImportCsvInputSchema = importProductsCsvInputSchema
+  .omit({ idempotencyKey: true })
+  .extend({
+    previewLimit: z.number().int().min(0).max(500).optional(),
+  });
 
 export const productDuplicateDiagnosticsInputSchema = z.object({
   productId: z.string().optional(),

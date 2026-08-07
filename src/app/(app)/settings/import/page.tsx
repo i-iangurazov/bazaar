@@ -1629,6 +1629,7 @@ const ImportPage = () => {
   const [dryRunPreviewError, setDryRunPreviewError] = useState<string | null>(null);
   const [dryRunPreviewPending, setDryRunPreviewPending] = useState(false);
   const dryRunRequestVersionRef = useRef(0);
+  const productImportOperationRef = useRef<{ signature: string; key: string } | null>(null);
 
   const batchesQuery = trpc.imports.list.useQuery(undefined, { enabled: isAdmin });
   const unitsQuery = trpc.units.list.useQuery(undefined, {
@@ -2472,6 +2473,13 @@ const ImportPage = () => {
       stockBehavior,
       rowActions: Object.values(productRowActions),
     });
+    const operationSignature = JSON.stringify(chunks);
+    const existingOperation = productImportOperationRef.current;
+    const operationKey =
+      existingOperation?.signature === operationSignature
+        ? existingOperation.key
+        : crypto.randomUUID();
+    productImportOperationRef.current = { signature: operationSignature, key: operationKey };
     const aggregateSummary: ImportRunSummary = {
       source,
       mode: importMode,
@@ -2496,8 +2504,11 @@ const ImportPage = () => {
     setImportElapsedSeconds(0);
 
     try {
-      for (const chunk of chunks) {
-        const payload = await importCsvRef.current(chunk);
+      for (const [chunkIndex, chunk] of chunks.entries()) {
+        const payload = await importCsvRef.current({
+          ...chunk,
+          idempotencyKey: `${operationKey}:${chunkIndex}`,
+        });
         const summary = payload.summary as ImportRunSummary;
         importedRows += payload.results.length;
         aggregateSummary.rows =
@@ -2516,6 +2527,7 @@ const ImportPage = () => {
       }
 
       setLastImportSummary(aggregateSummary);
+      productImportOperationRef.current = null;
       toast({
         variant: "success",
         description: t("importSuccess", { count: aggregateSummary.rows ?? importedRows }),

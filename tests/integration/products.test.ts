@@ -331,11 +331,13 @@ describeDb("products", () => {
     });
 
     const withoutPhotos = await caller.products.duplicate({
+      idempotencyKey: "duplicate-without-photos",
       productId: source.id,
       storeId: store.id,
       copyImages: false,
     });
     const withPhotos = await caller.products.duplicate({
+      idempotencyKey: "duplicate-with-photos",
       productId: source.id,
       storeId: store.id,
       copyImages: true,
@@ -405,7 +407,10 @@ describeDb("products", () => {
       },
     });
 
-    const duplicate = await caller.products.duplicate({ productId: source.id });
+    const duplicate = await caller.products.duplicate({
+      idempotencyKey: "duplicate-without-store-scope",
+      productId: source.id,
+    });
 
     await expect(
       prisma.storeProduct.findMany({ where: { productId: duplicate.productId } }),
@@ -535,6 +540,7 @@ describeDb("products", () => {
     });
 
     const result = await caller.products.duplicate({
+      idempotencyKey: "advanced-duplicate-copy",
       productId: source.id,
       name: "Advanced Duplicate Copy",
       status: "ACTIVE",
@@ -611,6 +617,7 @@ describeDb("products", () => {
     ).resolves.toBe(4);
 
     const noInventoryResult = await caller.products.duplicate({
+      idempotencyKey: "advanced-duplicate-no-inventory",
       productId: source.id,
       name: "Advanced Duplicate No Inventory",
       copyInventory: false,
@@ -622,6 +629,7 @@ describeDb("products", () => {
     expect(noInventorySnapshots.every((snapshot) => snapshot.onHand === 0)).toBe(true);
 
     const noVariantsResult = await caller.products.duplicate({
+      idempotencyKey: "advanced-duplicate-no-variants",
       productId: source.id,
       name: "Advanced Duplicate No Variants",
       copyInventory: false,
@@ -1632,6 +1640,7 @@ describeDb("products", () => {
     });
 
     const created = await caller.products.create({
+      idempotencyKey: "product-list-flow-create",
       sku: "SKU-LIST-FLOW",
       name: "List Flow Product",
       category: "Initial",
@@ -1776,6 +1785,7 @@ describeDb("products", () => {
     });
 
     const unused = await adminCaller.products.create({
+      idempotencyKey: "delete-unused-product-create",
       sku: "DELETE-UNUSED",
       name: "Delete Unused Product",
       baseUnitId: baseUnit.id,
@@ -1794,6 +1804,7 @@ describeDb("products", () => {
     await expect(prisma.productBarcode.count({ where: { productId: unused.id } })).resolves.toBe(0);
 
     const withHistory = await adminCaller.products.create({
+      idempotencyKey: "delete-history-product-create",
       sku: "DELETE-HISTORY",
       name: "Delete History Product",
       baseUnitId: baseUnit.id,

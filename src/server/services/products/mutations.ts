@@ -50,6 +50,7 @@ export const createProductMutation = async ({
 }: ProductMutationContext & { input: CreateProductInput }) => {
   try {
     return await createProduct({
+      idempotencyKey: input.idempotencyKey,
       organizationId: ctx.organizationId,
       actorId: ctx.actorId,
       requestId: ctx.requestId,
@@ -209,6 +210,7 @@ export const duplicateProductMutation = async ({
   ...ctx
 }: ProductMutationContext & {
   input: {
+    idempotencyKey: string;
     productId: string;
     name?: string;
     sku?: string;
@@ -228,6 +230,7 @@ export const duplicateProductMutation = async ({
 }) => {
   try {
     return await duplicateProduct({
+      idempotencyKey: input.idempotencyKey,
       organizationId: ctx.organizationId,
       actorId: ctx.actorId,
       requestId: ctx.requestId,
@@ -401,6 +404,7 @@ export const importProductsCsvMutation = async ({
     }
 
     const result = await runProductImport({
+      idempotencyKey: input.idempotencyKey,
       organizationId: ctx.organizationId,
       actorId: ctx.actorId,
       requestId: ctx.requestId,
