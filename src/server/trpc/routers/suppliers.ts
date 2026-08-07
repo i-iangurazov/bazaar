@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 
 import { managerProcedure, router } from "@/server/trpc/trpc";
@@ -16,6 +17,40 @@ export const suppliersRouter = router({
       orderBy: { name: "asc" },
     });
   }),
+
+  listPage: managerProcedure
+    .input(
+      z.object({
+        search: z.string().trim().max(200).optional(),
+        page: z.number().int().min(1).default(1),
+        pageSize: z.number().int().min(1).max(100).default(25),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const search = input.search?.trim();
+      const where: Prisma.SupplierWhereInput = {
+        organizationId: ctx.user.organizationId,
+        ...(search
+          ? {
+              OR: [
+                { name: { contains: search, mode: "insensitive" } },
+                { email: { contains: search, mode: "insensitive" } },
+                { phone: { contains: search, mode: "insensitive" } },
+              ],
+            }
+          : {}),
+      };
+      const [items, total] = await Promise.all([
+        ctx.prisma.supplier.findMany({
+          where,
+          orderBy: [{ name: "asc" }, { id: "asc" }],
+          skip: (input.page - 1) * input.pageSize,
+          take: input.pageSize,
+        }),
+        ctx.prisma.supplier.count({ where }),
+      ]);
+      return { items, total, page: input.page, pageSize: input.pageSize };
+    }),
 
   create: managerProcedure
     .input(

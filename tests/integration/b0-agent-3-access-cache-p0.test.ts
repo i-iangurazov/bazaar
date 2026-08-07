@@ -348,6 +348,25 @@ describeDb("B0 Agent 3 access and cache P0 runtime verification", () => {
       managerCaller.purchaseOrders.cancel({ purchaseOrderId: crossOrganizationPo.id }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     const managerSuppliers = await managerCaller.suppliers.list();
+    const supplierSearchTarget = await prisma.supplier.create({
+      data: {
+        organizationId: org.id,
+        name: "Needle Supplier",
+        email: "needle@example.com",
+      },
+    });
+    await prisma.supplier.create({
+      data: {
+        organizationId: crossOrganization.id,
+        name: "Needle Foreign Supplier",
+        email: "needle-foreign@example.com",
+      },
+    });
+    const supplierPage = await managerCaller.suppliers.listPage({
+      search: "needle",
+      page: 1,
+      pageSize: 1,
+    });
     await managerCaller.purchaseOrders.cancel({ purchaseOrderId: accessiblePo.id });
 
     const persisted = await prisma.purchaseOrder.findUniqueOrThrow({ where: { id: po.id } });
@@ -373,6 +392,8 @@ describeDb("B0 Agent 3 access and cache P0 runtime verification", () => {
       targetStoreId: storeB.id,
       managerListOrderIds: managerList.items.map((order) => order.id),
       managerSupplierIds: managerSuppliers.map((row) => row.id),
+      pagedSupplierIds: supplierPage.items.map((row) => row.id),
+      pagedSupplierTotal: supplierPage.total,
       targetStatusAfterManagerCancel: persisted.status,
       accessibleStatusAfterManagerCancel: accessiblePersisted.status,
       targetOnOrderBefore: before.onOrder,
@@ -383,6 +404,8 @@ describeDb("B0 Agent 3 access and cache P0 runtime verification", () => {
     expect(managerList.items.map((order) => order.id)).toContain(accessiblePo.id);
     expect(managerList.items.map((order) => order.id)).not.toContain(po.id);
     expect(managerSuppliers.map((row) => row.id)).toContain(supplier.id);
+    expect(supplierPage).toMatchObject({ page: 1, pageSize: 1, total: 1 });
+    expect(supplierPage.items.map((row) => row.id)).toEqual([supplierSearchTarget.id]);
     expect(persisted.status).toBe("SUBMITTED");
     expect(accessiblePersisted.status).toBe("CANCELLED");
     expect(before.onOrder).toBe(5);

@@ -34,12 +34,7 @@ import {
 } from "@/components/ui/form";
 import { FormActions, FormGrid } from "@/components/form-layout";
 import { AddIcon, DeleteIcon, EditIcon, EmptyIcon, StatusSuccessIcon } from "@/components/icons";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { SelectionToolbar } from "@/components/selection-toolbar";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { RowActions } from "@/components/row-actions";
@@ -65,7 +60,19 @@ const SuppliersPage = () => {
   const { toast } = useToast();
   const { confirm, confirmDialog } = useConfirmDialog();
   const trpcUtils = trpc.useUtils();
-  const suppliersQuery = trpc.suppliers.list.useQuery();
+  const requestedPage = Number(searchParams.get("page"));
+  const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  const requestedPageSize = Number(searchParams.get("pageSize"));
+  const pageSize = [10, 25, 50, 100].includes(requestedPageSize) ? requestedPageSize : 25;
+  const directoryQuery = searchParams.get("q")?.trim() ?? "";
+  const [directorySearch, setDirectorySearch] = useState(directoryQuery);
+  const listInput = useMemo(
+    () => ({ search: directoryQuery || undefined, page, pageSize }),
+    [directoryQuery, page, pageSize],
+  );
+  const suppliersQuery = trpc.suppliers.listPage.useQuery(listInput, {
+    keepPreviousData: true,
+  });
   const inlineEditingEnabled = isInlineEditingEnabled();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -123,32 +130,35 @@ const SuppliersPage = () => {
         throw new Error(`Unsupported inline operation: ${operation.route}`);
       }
 
-      const previous = trpcUtils.suppliers.list.getData();
-      trpcUtils.suppliers.list.setData(undefined, (current) => {
+      const previous = trpcUtils.suppliers.listPage.getData(listInput);
+      trpcUtils.suppliers.listPage.setData(listInput, (current) => {
         if (!current) {
           return current;
         }
-        return current.map((supplier) =>
-          supplier.id === operation.input.supplierId
-            ? {
-                ...supplier,
-                name: operation.input.name,
-                email: operation.input.email ?? null,
-                phone: operation.input.phone ?? null,
-                notes: operation.input.notes ?? null,
-              }
-            : supplier,
-        );
+        return {
+          ...current,
+          items: current.items.map((supplier) =>
+            supplier.id === operation.input.supplierId
+              ? {
+                  ...supplier,
+                  name: operation.input.name,
+                  email: operation.input.email ?? null,
+                  phone: operation.input.phone ?? null,
+                  notes: operation.input.notes ?? null,
+                }
+              : supplier,
+          ),
+        };
       });
       try {
         await inlineUpdateMutation.mutateAsync(operation.input);
       } catch (error) {
-        trpcUtils.suppliers.list.setData(undefined, previous);
+        trpcUtils.suppliers.listPage.setData(listInput, previous);
         throw error;
       }
-      await trpcUtils.suppliers.list.invalidate();
+      await trpcUtils.suppliers.listPage.invalidate();
     },
-    [inlineUpdateMutation, trpcUtils.suppliers.list],
+    [inlineUpdateMutation, listInput, trpcUtils.suppliers.listPage],
   );
   const deleteMutation = trpc.suppliers.delete.useMutation({
     onMutate: (variables) => {
@@ -166,6 +176,40 @@ const SuppliersPage = () => {
     },
   });
   const bulkDeleteMutation = trpc.suppliers.bulkDelete.useMutation();
+
+  const replaceDirectoryParams = useCallback(
+    (updates: Record<string, string | number | null>) => {
+      const nextParams = new URLSearchParams(searchParams.toString());
+      Object.entries(updates).forEach(([key, value]) => {
+        if (value === null || value === "") {
+          nextParams.delete(key);
+        } else {
+          nextParams.set(key, String(value));
+        }
+      });
+      const nextQuery = nextParams.toString();
+      router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+    },
+    [pathname, router, searchParams],
+  );
+
+  useEffect(() => {
+    setDirectorySearch(directoryQuery);
+  }, [directoryQuery]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const normalized = directorySearch.trim();
+      if (normalized !== directoryQuery) {
+        replaceDirectoryParams({ q: normalized || null, page: null });
+      }
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [directoryQuery, directorySearch, replaceDirectoryParams]);
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [directoryQuery, page, pageSize]);
 
   useEffect(() => {
     if (searchParams.get("create") !== "1") {
@@ -209,22 +253,22 @@ const SuppliersPage = () => {
   };
 
   const selectedSuppliers = useMemo(
-    () => (suppliersQuery.data ?? []).filter((supplier) => selectedIds.has(supplier.id)),
+    () => (suppliersQuery.data?.items ?? []).filter((supplier) => selectedIds.has(supplier.id)),
     [suppliersQuery.data, selectedIds],
   );
   const allSelected =
-    Boolean(suppliersQuery.data?.length) &&
-    selectedIds.size === (suppliersQuery.data?.length ?? 0);
+    Boolean(suppliersQuery.data?.items.length) &&
+    selectedIds.size === (suppliersQuery.data?.items.length ?? 0);
 
   const toggleSelectAll = () => {
-    if (!suppliersQuery.data?.length) {
+    if (!suppliersQuery.data?.items.length) {
       return;
     }
     setSelectedIds(() => {
       if (allSelected) {
         return new Set();
       }
-      return new Set(suppliersQuery.data.map((supplier) => supplier.id));
+      return new Set(suppliersQuery.data.items.map((supplier) => supplier.id));
     });
   };
 
@@ -258,7 +302,10 @@ const SuppliersPage = () => {
       });
       await suppliersQuery.refetch();
       setSelectedIds(new Set());
-      toast({ variant: "success", description: t("bulkDeleteSuccess", { count: selectedSuppliers.length }) });
+      toast({
+        variant: "success",
+        description: t("bulkDeleteSuccess", { count: selectedSuppliers.length }),
+      });
     } catch (error) {
       toast({
         variant: "error",
@@ -408,7 +455,16 @@ const SuppliersPage = () => {
           <CardTitle>{t("directory")}</CardTitle>
         </CardHeader>
         <CardContent>
-          {canManage && (suppliersQuery.data?.length ?? 0) > 0 ? (
+          <div className="mb-4 max-w-xl">
+            <Input
+              type="search"
+              value={directorySearch}
+              onChange={(event) => setDirectorySearch(event.target.value)}
+              placeholder={tCommon("search")}
+              aria-label={tCommon("search")}
+            />
+          </div>
+          {canManage && (suppliersQuery.data?.items.length ?? 0) > 0 ? (
             <div className="mb-3 sm:hidden">
               <div className="flex flex-wrap items-center gap-2">
                 {!allSelected ? (
@@ -459,170 +515,189 @@ const SuppliersPage = () => {
             </div>
           ) : null}
           <ResponsiveDataList
-            items={suppliersQuery.data ?? []}
+            key={`suppliers-${pageSize}`}
+            items={suppliersQuery.data?.items ?? []}
             getKey={(supplier) => supplier.id}
+            page={page}
+            totalItems={suppliersQuery.data?.total ?? 0}
+            defaultPageSize={pageSize}
+            onPageChange={(nextPage) =>
+              replaceDirectoryParams({ page: nextPage > 1 ? nextPage : null })
+            }
+            onPageSizeChange={(nextPageSize) =>
+              replaceDirectoryParams({
+                pageSize: nextPageSize === 25 ? null : nextPageSize,
+                page: null,
+              })
+            }
+            scrollToTopOnPageChange
             renderDesktop={(visibleItems) => (
               <div className="bazaar-admin-table-shell bazaar-admin-table-scroll">
                 <TooltipProvider>
                   <InlineEditTableProvider>
                     <Table className="min-w-[560px]">
-                    <TableHeader>
-                      <TableRow>
-                        {canManage ? (
-                          <TableHead className="w-10">
-                            <input
-                              type="checkbox"
-                              className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                              checked={allSelected}
-                              onChange={toggleSelectAll}
-                              aria-label={t("selectAll")}
-                            />
-                          </TableHead>
-                        ) : null}
-                        <TableHead>{t("name")}</TableHead>
-                        <TableHead className="hidden sm:table-cell">{t("email")}</TableHead>
-                        <TableHead className="hidden sm:table-cell">{t("phone")}</TableHead>
-                        <TableHead className="hidden md:table-cell">{t("notes")}</TableHead>
-                        {canManage ? <TableHead>{t("actions")}</TableHead> : null}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {visibleItems.map((supplier) => (
-                        <TableRow key={supplier.id}>
+                      <TableHeader>
+                        <TableRow>
                           {canManage ? (
-                            <TableCell>
+                            <TableHead className="w-10">
                               <input
                                 type="checkbox"
                                 className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                                checked={selectedIds.has(supplier.id)}
-                                onChange={() => toggleSelect(supplier.id)}
-                                aria-label={t("selectSupplier", { name: supplier.name })}
+                                checked={allSelected}
+                                onChange={toggleSelectAll}
+                                aria-label={t("selectAll")}
+                              />
+                            </TableHead>
+                          ) : null}
+                          <TableHead>{t("name")}</TableHead>
+                          <TableHead className="hidden sm:table-cell">{t("email")}</TableHead>
+                          <TableHead className="hidden sm:table-cell">{t("phone")}</TableHead>
+                          <TableHead className="hidden md:table-cell">{t("notes")}</TableHead>
+                          {canManage ? <TableHead>{t("actions")}</TableHead> : null}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {visibleItems.map((supplier) => (
+                          <TableRow key={supplier.id}>
+                            {canManage ? (
+                              <TableCell>
+                                <input
+                                  type="checkbox"
+                                  className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                  checked={selectedIds.has(supplier.id)}
+                                  onChange={() => toggleSelect(supplier.id)}
+                                  aria-label={t("selectSupplier", { name: supplier.name })}
+                                />
+                              </TableCell>
+                            ) : null}
+                            <TableCell className="font-medium">
+                              <InlineEditableCell
+                                rowId={supplier.id}
+                                row={supplier}
+                                value={supplier.name}
+                                definition={inlineEditRegistry.suppliers.name}
+                                context={{}}
+                                role={role}
+                                locale={locale}
+                                columnLabel={t("name")}
+                                tTable={t}
+                                tCommon={tCommon}
+                                enabled={inlineEditingEnabled}
+                                executeMutation={executeInlineSupplierMutation}
                               />
                             </TableCell>
-                          ) : null}
-                          <TableCell className="font-medium">
-                            <InlineEditableCell
-                              rowId={supplier.id}
-                              row={supplier}
-                              value={supplier.name}
-                              definition={inlineEditRegistry.suppliers.name}
-                              context={{}}
-                              role={role}
-                              locale={locale}
-                              columnLabel={t("name")}
-                              tTable={t}
-                              tCommon={tCommon}
-                              enabled={inlineEditingEnabled}
-                              executeMutation={executeInlineSupplierMutation}
-                            />
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">
-                            <InlineEditableCell
-                              rowId={supplier.id}
-                              row={supplier}
-                              value={supplier.email}
-                              definition={inlineEditRegistry.suppliers.email}
-                              context={{}}
-                              role={role}
-                              locale={locale}
-                              columnLabel={t("email")}
-                              tTable={t}
-                              tCommon={tCommon}
-                              enabled={inlineEditingEnabled}
-                              executeMutation={executeInlineSupplierMutation}
-                            />
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">
-                            <InlineEditableCell
-                              rowId={supplier.id}
-                              row={supplier}
-                              value={supplier.phone}
-                              definition={inlineEditRegistry.suppliers.phone}
-                              context={{}}
-                              role={role}
-                              locale={locale}
-                              columnLabel={t("phone")}
-                              tTable={t}
-                              tCommon={tCommon}
-                              enabled={inlineEditingEnabled}
-                              executeMutation={executeInlineSupplierMutation}
-                            />
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground hidden md:table-cell">
-                            <InlineEditableCell
-                              rowId={supplier.id}
-                              row={supplier}
-                              value={supplier.notes}
-                              definition={inlineEditRegistry.suppliers.notes}
-                              context={{}}
-                              role={role}
-                              locale={locale}
-                              columnLabel={t("notes")}
-                              tTable={t}
-                              tCommon={tCommon}
-                              enabled={inlineEditingEnabled}
-                              executeMutation={executeInlineSupplierMutation}
-                            />
-                          </TableCell>
-                          {canManage ? (
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon"
-                                      className="shadow-none"
-                                      aria-label={tCommon("edit")}
-                                      onClick={() => {
-                                        setEditingId(supplier.id);
-                                        form.reset({
-                                          name: supplier.name,
-                                          email: supplier.email ?? "",
-                                          phone: supplier.phone ?? "",
-                                          notes: supplier.notes ?? "",
-                                        });
-                                        setFormOpen(true);
-                                      }}
-                                    >
-                                      <EditIcon className="h-4 w-4" aria-hidden />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>{tCommon("edit")}</TooltipContent>
-                                </Tooltip>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon"
-                                      className="text-danger shadow-none hover:text-danger"
-                                      aria-label={tCommon("delete")}
-                                      onClick={async () => {
-                                        if (!(await confirm({ description: t("confirmDelete"), confirmVariant: "danger" }))) {
-                                          return;
-                                        }
-                                        deleteMutation.mutate({ supplierId: supplier.id });
-                                      }}
-                                      disabled={deletingId === supplier.id}
-                                    >
-                                      {deletingId === supplier.id ? (
-                                        <Spinner className="h-4 w-4" />
-                                      ) : (
-                                        <DeleteIcon className="h-4 w-4" aria-hidden />
-                                      )}
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>{tCommon("delete")}</TooltipContent>
-                                </Tooltip>
-                              </div>
+                            <TableCell className="hidden text-xs text-muted-foreground sm:table-cell">
+                              <InlineEditableCell
+                                rowId={supplier.id}
+                                row={supplier}
+                                value={supplier.email}
+                                definition={inlineEditRegistry.suppliers.email}
+                                context={{}}
+                                role={role}
+                                locale={locale}
+                                columnLabel={t("email")}
+                                tTable={t}
+                                tCommon={tCommon}
+                                enabled={inlineEditingEnabled}
+                                executeMutation={executeInlineSupplierMutation}
+                              />
                             </TableCell>
-                          ) : null}
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                            <TableCell className="hidden text-xs text-muted-foreground sm:table-cell">
+                              <InlineEditableCell
+                                rowId={supplier.id}
+                                row={supplier}
+                                value={supplier.phone}
+                                definition={inlineEditRegistry.suppliers.phone}
+                                context={{}}
+                                role={role}
+                                locale={locale}
+                                columnLabel={t("phone")}
+                                tTable={t}
+                                tCommon={tCommon}
+                                enabled={inlineEditingEnabled}
+                                executeMutation={executeInlineSupplierMutation}
+                              />
+                            </TableCell>
+                            <TableCell className="hidden text-xs text-muted-foreground md:table-cell">
+                              <InlineEditableCell
+                                rowId={supplier.id}
+                                row={supplier}
+                                value={supplier.notes}
+                                definition={inlineEditRegistry.suppliers.notes}
+                                context={{}}
+                                role={role}
+                                locale={locale}
+                                columnLabel={t("notes")}
+                                tTable={t}
+                                tCommon={tCommon}
+                                enabled={inlineEditingEnabled}
+                                executeMutation={executeInlineSupplierMutation}
+                              />
+                            </TableCell>
+                            {canManage ? (
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="shadow-none"
+                                        aria-label={tCommon("edit")}
+                                        onClick={() => {
+                                          setEditingId(supplier.id);
+                                          form.reset({
+                                            name: supplier.name,
+                                            email: supplier.email ?? "",
+                                            phone: supplier.phone ?? "",
+                                            notes: supplier.notes ?? "",
+                                          });
+                                          setFormOpen(true);
+                                        }}
+                                      >
+                                        <EditIcon className="h-4 w-4" aria-hidden />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>{tCommon("edit")}</TooltipContent>
+                                  </Tooltip>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="text-danger shadow-none hover:text-danger"
+                                        aria-label={tCommon("delete")}
+                                        onClick={async () => {
+                                          if (
+                                            !(await confirm({
+                                              description: t("confirmDelete"),
+                                              confirmVariant: "danger",
+                                            }))
+                                          ) {
+                                            return;
+                                          }
+                                          deleteMutation.mutate({ supplierId: supplier.id });
+                                        }}
+                                        disabled={deletingId === supplier.id}
+                                      >
+                                        {deletingId === supplier.id ? (
+                                          <Spinner className="h-4 w-4" />
+                                        ) : (
+                                          <DeleteIcon className="h-4 w-4" aria-hidden />
+                                        )}
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>{tCommon("delete")}</TooltipContent>
+                                  </Tooltip>
+                                </div>
+                              </TableCell>
+                            ) : null}
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
                   </InlineEditTableProvider>
                 </TooltipProvider>
               </div>
@@ -652,7 +727,12 @@ const SuppliersPage = () => {
                       variant: "danger",
                       disabled: deletingId === supplier.id,
                       onSelect: async () => {
-                        if (!(await confirm({ description: t("confirmDelete"), confirmVariant: "danger" }))) {
+                        if (
+                          !(await confirm({
+                            description: t("confirmDelete"),
+                            confirmVariant: "danger",
+                          }))
+                        ) {
                           return;
                         }
                         deleteMutation.mutate({ supplierId: supplier.id });
@@ -675,7 +755,9 @@ const SuppliersPage = () => {
                         />
                       ) : null}
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-foreground">{supplier.name}</p>
+                        <p className="truncate text-sm font-medium text-foreground">
+                          {supplier.name}
+                        </p>
                         <p className="text-xs text-muted-foreground">
                           {supplier.email ?? tCommon("notAvailable")}
                         </p>
@@ -704,15 +786,7 @@ const SuppliersPage = () => {
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
-          ) : !suppliersQuery.data?.length ? (
-            <div className="bazaar-admin-empty mt-4">
-              <div className="flex items-center gap-2">
-                <EmptyIcon className="h-4 w-4" aria-hidden />
-                {t("noSuppliers")}
-              </div>
-            </div>
-          ) : null}
-          {suppliersQuery.error ? (
+          ) : suppliersQuery.error ? (
             <div className="bazaar-admin-error mt-3 flex flex-wrap items-center gap-2">
               <span>{translateError(tErrors, suppliersQuery.error)}</span>
               <Button
@@ -723,6 +797,13 @@ const SuppliersPage = () => {
               >
                 {tErrors("tryAgain")}
               </Button>
+            </div>
+          ) : !suppliersQuery.data?.items.length ? (
+            <div className="bazaar-admin-empty mt-4">
+              <div className="flex items-center gap-2">
+                <EmptyIcon className="h-4 w-4" aria-hidden />
+                {t("noSuppliers")}
+              </div>
             </div>
           ) : null}
         </CardContent>
