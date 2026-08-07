@@ -40,6 +40,7 @@ const main = async () => {
   const authUrl = env.nextAuthUrl;
   const authSecret = env.nextAuthSecret;
   const jobsSecret = env.jobsSecret;
+  const cronSecret = env.cronSecret;
   const redisUrl = env.redisUrl;
   const redisKeyPrefix = env.redisKeyPrefix;
   const emailProvider = env.emailProvider;
@@ -53,6 +54,7 @@ const main = async () => {
   ensure(Boolean(authUrl), "NEXTAUTH_URL is set");
   ensure(Boolean(authSecret), "NEXTAUTH_SECRET is set");
   ensure(Boolean(jobsSecret), "JOBS_SECRET is set");
+  ensure(cronSecret.length >= 16, "CRON_SECRET is set and at least 16 characters");
   ensure(signupMode === "invite_only" || signupMode === "open", "SIGNUP_MODE is valid");
 
   if (nodeEnv === "production") {
@@ -60,7 +62,10 @@ const main = async () => {
     if (env.vercelEnv === "preview") {
       ensure(Boolean(redisKeyPrefix), "REDIS_KEY_PREFIX is set for Preview isolation");
     }
-    ensure(emailProvider !== "log" || allowLogEmailInProduction, "EMAIL_PROVIDER is configured for production");
+    ensure(
+      emailProvider !== "log" || allowLogEmailInProduction,
+      "EMAIL_PROVIDER is configured for production",
+    );
     if (emailProvider === "resend") {
       ensure(Boolean(emailFrom), "EMAIL_FROM is set for resend");
       ensure(Boolean(resendApiKey), "RESEND_API_KEY is set for resend");

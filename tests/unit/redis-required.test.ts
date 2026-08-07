@@ -10,6 +10,7 @@ describe("redis requirements", () => {
     vi.stubEnv("NEXTAUTH_URL", "https://preview.example.com");
     vi.stubEnv("NEXTAUTH_SECRET", "nextauth-secret");
     vi.stubEnv("JOBS_SECRET", "jobs-secret");
+    vi.stubEnv("CRON_SECRET", "cron-secret-at-least-16");
     vi.stubEnv("EMAIL_PROVIDER", "log");
     vi.stubEnv("ALLOW_LOG_EMAIL_IN_PRODUCTION", "true");
   };
@@ -67,6 +68,7 @@ describe("redis requirements", () => {
     vi.stubEnv("REDIS_URL", "redis://redis.example.com:6379");
     vi.stubEnv("NEXTAUTH_URL", "https://app.example.com");
     vi.stubEnv("JOBS_SECRET", "jobs-secret");
+    vi.stubEnv("CRON_SECRET", "cron-secret-at-least-16");
     vi.stubEnv("NEXTAUTH_SECRET", "");
 
     vi.resetModules();
@@ -94,6 +96,7 @@ describe("redis requirements", () => {
     vi.stubEnv("REDIS_URL", "redis://redis.example.com:6379");
     vi.stubEnv("NEXTAUTH_URL", "https://app.example.com");
     vi.stubEnv("JOBS_SECRET", "jobs-secret");
+    vi.stubEnv("CRON_SECRET", "cron-secret-at-least-16");
     vi.stubEnv("NEXTAUTH_SECRET", "nextauth-secret");
     vi.stubEnv("EMAIL_PROVIDER", "resend");
     vi.stubEnv("EMAIL_FROM", "no-reply@example.com");

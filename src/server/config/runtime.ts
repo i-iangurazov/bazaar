@@ -19,6 +19,7 @@ const rawEnvSchema = z
     NEXTAUTH_SECRET: z.string().optional(),
     NEXTAUTH_URL: z.string().optional(),
     JOBS_SECRET: z.string().optional(),
+    CRON_SECRET: z.string().optional(),
     EMAIL_PROVIDER: z.string().optional(),
     EMAIL_FROM: z.string().optional(),
     RESEND_API_KEY: z.string().optional(),
@@ -93,6 +94,7 @@ export type RuntimeEnv = {
   nextAuthSecret: string;
   nextAuthUrl: string;
   jobsSecret: string;
+  cronSecret: string;
   emailProvider: string;
   emailFrom: string;
   resendApiKey: string;
@@ -134,6 +136,7 @@ const parseRuntimeEnv = (source: NodeJS.ProcessEnv): RuntimeEnv => {
     nextAuthSecret: parsed.NEXTAUTH_SECRET?.trim() ?? "",
     nextAuthUrl: parsed.NEXTAUTH_URL?.trim() ?? "",
     jobsSecret: parsed.JOBS_SECRET?.trim() ?? "",
+    cronSecret: parsed.CRON_SECRET?.trim() ?? "",
     emailProvider: normalizeEmailProvider(parsed.EMAIL_PROVIDER),
     emailFrom: parsed.EMAIL_FROM?.trim() ?? "",
     resendApiKey: parsed.RESEND_API_KEY?.trim() ?? "",
@@ -267,6 +270,10 @@ const assertProductionEnv = (env: RuntimeEnv, target: "build" | "runtime") => {
   assertPresent(env.nextAuthUrl, "NEXTAUTH_URL is required in production.");
   assertValidUrl(env.nextAuthUrl, "NEXTAUTH_URL");
   assertPresent(env.jobsSecret, "JOBS_SECRET is required in production.");
+  assertPresent(env.cronSecret, "CRON_SECRET is required in production.");
+  if (env.cronSecret.length < 16) {
+    throw new Error("CRON_SECRET must contain at least 16 characters.");
+  }
   assertPresent(env.redisUrl, "REDIS_URL is required in production.");
   if (env.vercelEnv === "preview") {
     assertPresent(env.redisKeyPrefix, "REDIS_KEY_PREFIX is required for Vercel Preview isolation.");
