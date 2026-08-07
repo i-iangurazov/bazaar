@@ -40,6 +40,10 @@ import {
   runOperationRequest,
   type OperationFailureDecision,
 } from "@/server/services/operationRequests";
+import {
+  orderConfirmationEmailOperationKey,
+  queueOrderConfirmationEmailTx,
+} from "@/server/services/orderEmailOutbox";
 import { sendOrderConfirmationEmail } from "@/server/services/orderEmails";
 import { getEffectiveProductPrice } from "@/server/services/effectiveProductPrice";
 import type { BazaarCatalogPricingJson } from "@/server/services/bazaarCatalogPricingMapper";
@@ -1594,6 +1598,12 @@ const createBazaarApiOrderTx = async (
     customerPhone: input.customerPhone,
     customerAddress: input.customerAddress,
   });
+  await queueOrderConfirmationEmailTx(tx, {
+    organizationId: input.organizationId,
+    storeId: input.storeId,
+    customerOrderId: order.id,
+    recipientEmail: input.customerEmail,
+  });
   return { order, replayed: false };
 };
 
@@ -1623,6 +1633,7 @@ const dispatchBazaarApiOrderCreated = async (
       organizationId: input.organizationId,
       customerOrderId: result.order.id,
       throwOnMissingEmail: false,
+      deliveryOperationKey: orderConfirmationEmailOperationKey(result.order.id),
     }).catch((error: unknown) => {
       getLogger().error(
         { error, customerOrderId: result.order.id, storeId: result.order.storeId },

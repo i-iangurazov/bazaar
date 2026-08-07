@@ -30,6 +30,10 @@ import {
   CUSTOMER_ORDER_FOLLOW_UP_JOB_NAME,
   runCustomerOrderFollowUpJob,
 } from "@/server/jobs/customerOrderFollowUps";
+import {
+  ORDER_CONFIRMATION_EMAIL_JOB_NAME,
+  runOrderConfirmationEmailJob,
+} from "@/server/jobs/orderConfirmationEmails";
 
 type InMemoryLock = {
   ownerToken: string;
@@ -214,6 +218,11 @@ const jobs: Record<string, JobDefinition> = {
     handler: runCustomerOrderFollowUpJob,
     maxAttempts: 3,
     baseDelayMs: 1000,
+  },
+  [ORDER_CONFIRMATION_EMAIL_JOB_NAME]: {
+    handler: runOrderConfirmationEmailJob,
+    maxAttempts: 1,
+    baseDelayMs: 1,
   },
   "mmarket-export": {
     handler: async (payload) => {

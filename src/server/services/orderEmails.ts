@@ -67,7 +67,12 @@ type OrderEmailRecord = {
 
 export type OrderEmailSendResult = {
   status: "sent" | "skipped";
-  reason?: "alreadySent" | "missingEmail" | "missingTracking";
+  reason?:
+    | "alreadySent"
+    | "inProgress"
+    | "missingEmail"
+    | "missingTracking"
+    | "retryScheduled";
   recipientEmail?: string | null;
 };
 
@@ -173,7 +178,7 @@ const getOrderForEmail = async (input: { organizationId: string; customerOrderId
   return order;
 };
 
-const createEmailLog = async (input: {
+const persistEmailLog = async (input: {
   order: OrderEmailRecord;
   type: CustomerOrderEmailType;
   status: CustomerOrderEmailStatus;
@@ -182,21 +187,119 @@ const createEmailLog = async (input: {
   providerMessageId?: string | null;
   errorMessage?: string | null;
   triggeredById?: string | null;
-}) =>
-  prisma.customerOrderEmailLog.create({
+  deliveryLogId?: string;
+  deliveryOperationKey?: string;
+  nextAttemptAt?: Date | null;
+}) => {
+  const data = {
+    status: input.status,
+    recipientEmail: input.recipientEmail ?? null,
+    provider: input.provider ?? null,
+    providerMessageId: input.providerMessageId ?? null,
+    errorMessage: input.errorMessage ?? null,
+    triggeredById: input.triggeredById ?? null,
+    ...(input.nextAttemptAt !== undefined ? { nextAttemptAt: input.nextAttemptAt } : {}),
+  };
+  const deliveryLog = input.deliveryLogId
+    ? await prisma.customerOrderEmailLog.findFirst({
+        where: {
+          id: input.deliveryLogId,
+          organizationId: input.order.organizationId,
+          customerOrderId: input.order.id,
+          type: input.type,
+        },
+        select: { id: true },
+      })
+    : input.deliveryOperationKey
+      ? await prisma.customerOrderEmailLog.findFirst({
+          where: {
+            operationKey: input.deliveryOperationKey,
+            organizationId: input.order.organizationId,
+            customerOrderId: input.order.id,
+            type: input.type,
+          },
+          select: { id: true },
+        })
+      : null;
+  if (deliveryLog) {
+    return prisma.customerOrderEmailLog.update({
+      where: { id: deliveryLog.id },
+      data,
+    });
+  }
+  return prisma.customerOrderEmailLog.create({
     data: {
       organizationId: input.order.organizationId,
       storeId: input.order.storeId,
       customerOrderId: input.order.id,
       type: input.type,
-      status: input.status,
-      recipientEmail: input.recipientEmail ?? null,
-      provider: input.provider ?? null,
-      providerMessageId: input.providerMessageId ?? null,
-      errorMessage: input.errorMessage ?? null,
-      triggeredById: input.triggeredById ?? null,
+      ...data,
     },
   });
+};
+
+const ORDER_CONFIRMATION_MAX_ATTEMPTS = 5;
+const ORDER_CONFIRMATION_RETRY_BASE_MS = 60_000;
+const ORDER_CONFIRMATION_PROCESSING_TIMEOUT_MS = 10 * 60 * 1000;
+
+const findDeliveryLog = (input: {
+  deliveryLogId?: string;
+  deliveryOperationKey?: string;
+  organizationId: string;
+  customerOrderId: string;
+  type: CustomerOrderEmailType;
+}) => {
+  if (!input.deliveryLogId && !input.deliveryOperationKey) {
+    return null;
+  }
+  return prisma.customerOrderEmailLog.findFirst({
+    where: {
+      ...(input.deliveryLogId ? { id: input.deliveryLogId } : {}),
+      ...(input.deliveryOperationKey ? { operationKey: input.deliveryOperationKey } : {}),
+      organizationId: input.organizationId,
+      customerOrderId: input.customerOrderId,
+      type: input.type,
+    },
+  });
+};
+
+const claimDeliveryLog = async (input: {
+  deliveryLogId?: string;
+  deliveryOperationKey?: string;
+  organizationId: string;
+  customerOrderId: string;
+  type: CustomerOrderEmailType;
+}) => {
+  const candidate = await findDeliveryLog(input);
+  if (!candidate) {
+    return { claimed: null, existing: null };
+  }
+  const now = new Date();
+  const claim = await prisma.customerOrderEmailLog.updateMany({
+    where: {
+      id: candidate.id,
+      status: { in: [CustomerOrderEmailStatus.QUEUED, CustomerOrderEmailStatus.FAILED] },
+      attemptCount: { lt: ORDER_CONFIRMATION_MAX_ATTEMPTS },
+      OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }],
+    },
+    data: {
+      status: CustomerOrderEmailStatus.PROCESSING,
+      attemptCount: { increment: 1 },
+      lastAttemptAt: now,
+      nextAttemptAt: null,
+      errorMessage: null,
+    },
+  });
+  if (claim.count !== 1) {
+    return { claimed: null, existing: await findDeliveryLog(input) };
+  }
+  return {
+    claimed: await prisma.customerOrderEmailLog.findUniqueOrThrow({
+      where: { id: candidate.id },
+    }),
+    existing: null,
+  };
+};
 
 const updateSentTimestamp = (input: {
   orderId: string;
@@ -527,10 +630,37 @@ const sendOrderEmail = async (input: {
   triggeredById?: string | null;
   force?: boolean;
   throwOnMissingEmail?: boolean;
+  deliveryLogId?: string;
+  deliveryOperationKey?: string;
 }): Promise<OrderEmailSendResult> => {
+  const delivery = await claimDeliveryLog(input);
+  if ((input.deliveryLogId || input.deliveryOperationKey) && !delivery.claimed) {
+    const existing = delivery.existing;
+    return {
+      status: "skipped",
+      reason:
+        existing?.status === CustomerOrderEmailStatus.PROCESSING
+          ? "inProgress"
+          : existing?.status === CustomerOrderEmailStatus.FAILED
+            ? "retryScheduled"
+            : "alreadySent",
+      recipientEmail: existing?.recipientEmail ?? null,
+    };
+  }
   const order = await getOrderForEmail(input);
 
   if (!input.force && (await hasSentEmail(order, input.type))) {
+    if (delivery.claimed) {
+      await persistEmailLog({
+        order,
+        type: input.type,
+        status: CustomerOrderEmailStatus.SENT,
+        recipientEmail: normalizeRecipientEmail(order.customerEmail),
+        triggeredById: input.triggeredById,
+        deliveryLogId: delivery.claimed.id,
+        nextAttemptAt: null,
+      });
+    }
     return {
       status: "skipped",
       reason: "alreadySent",
@@ -540,13 +670,16 @@ const sendOrderEmail = async (input: {
 
   const recipientEmail = normalizeRecipientEmail(order.customerEmail);
   if (!recipientEmail) {
-    await createEmailLog({
+    await persistEmailLog({
       order,
       type: input.type,
       status: CustomerOrderEmailStatus.SKIPPED,
       recipientEmail: null,
       errorMessage: "customerEmailMissing",
       triggeredById: input.triggeredById,
+      deliveryLogId: delivery.claimed?.id,
+      deliveryOperationKey: input.deliveryOperationKey,
+      nextAttemptAt: null,
     });
     if (input.throwOnMissingEmail === false) {
       return { status: "skipped", reason: "missingEmail", recipientEmail: null };
@@ -555,13 +688,16 @@ const sendOrderEmail = async (input: {
   }
 
   if (input.type === CustomerOrderEmailType.TRACKING && !trimToNull(order.trackingNumber)) {
-    await createEmailLog({
+    await persistEmailLog({
       order,
       type: input.type,
       status: CustomerOrderEmailStatus.SKIPPED,
       recipientEmail,
       errorMessage: "trackingNumberMissing",
       triggeredById: input.triggeredById,
+      deliveryLogId: delivery.claimed?.id,
+      deliveryOperationKey: input.deliveryOperationKey,
+      nextAttemptAt: null,
     });
     throw new AppError("trackingNumberMissing", "BAD_REQUEST", 400);
   }
@@ -582,7 +718,7 @@ const sendOrderEmail = async (input: {
     const result = await sendTransactionalEmail(payload);
     const sentAt = new Date();
     await updateSentTimestamp({ orderId: order.id, type: input.type, sentAt });
-    await createEmailLog({
+    await persistEmailLog({
       order,
       type: input.type,
       status: CustomerOrderEmailStatus.SENT,
@@ -590,17 +726,27 @@ const sendOrderEmail = async (input: {
       provider: result.provider,
       providerMessageId: result.id,
       triggeredById: input.triggeredById,
+      deliveryLogId: delivery.claimed?.id,
+      deliveryOperationKey: input.deliveryOperationKey,
+      nextAttemptAt: null,
     });
     return { status: "sent", recipientEmail };
   } catch (error) {
     const message = error instanceof Error ? error.message : "emailSendFailed";
-    await createEmailLog({
+    const attemptCount = delivery.claimed?.attemptCount ?? 1;
+    const retryable = Boolean(delivery.claimed) && attemptCount < ORDER_CONFIRMATION_MAX_ATTEMPTS;
+    await persistEmailLog({
       order,
       type: input.type,
       status: CustomerOrderEmailStatus.FAILED,
       recipientEmail,
       errorMessage: message,
       triggeredById: input.triggeredById,
+      deliveryLogId: delivery.claimed?.id,
+      deliveryOperationKey: input.deliveryOperationKey,
+      nextAttemptAt: retryable
+        ? new Date(Date.now() + ORDER_CONFIRMATION_RETRY_BASE_MS * 2 ** (attemptCount - 1))
+        : null,
     });
     throw new AppError("orderEmailSendFailed", "INTERNAL_SERVER_ERROR", 500);
   }
@@ -612,11 +758,76 @@ export const sendOrderConfirmationEmail = (input: {
   triggeredById?: string | null;
   force?: boolean;
   throwOnMissingEmail?: boolean;
+  deliveryLogId?: string;
+  deliveryOperationKey?: string;
 }) =>
   sendOrderEmail({
     ...input,
     type: CustomerOrderEmailType.CONFIRMATION,
   });
+
+export const processQueuedOrderConfirmationEmails = async (input?: {
+  now?: Date;
+  limit?: number;
+  logId?: string;
+}) => {
+  const now = input?.now ?? new Date();
+  const limit = Math.min(Math.max(input?.limit ?? 100, 1), 500);
+  await prisma.customerOrderEmailLog.updateMany({
+    where: {
+      type: CustomerOrderEmailType.CONFIRMATION,
+      operationKey: { startsWith: "customer-order-confirmation:" },
+      status: CustomerOrderEmailStatus.PROCESSING,
+      updatedAt: { lt: new Date(now.getTime() - ORDER_CONFIRMATION_PROCESSING_TIMEOUT_MS) },
+    },
+    data: {
+      status: CustomerOrderEmailStatus.FAILED,
+      errorMessage: "orderConfirmationEmailProcessingTimedOut",
+      nextAttemptAt: now,
+    },
+  });
+
+  const queued = await prisma.customerOrderEmailLog.findMany({
+    where: {
+      ...(input?.logId ? { id: input.logId } : {}),
+      type: CustomerOrderEmailType.CONFIRMATION,
+      operationKey: { startsWith: "customer-order-confirmation:" },
+      status: { in: [CustomerOrderEmailStatus.QUEUED, CustomerOrderEmailStatus.FAILED] },
+      attemptCount: { lt: ORDER_CONFIRMATION_MAX_ATTEMPTS },
+      OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }],
+    },
+    select: {
+      id: true,
+      organizationId: true,
+      customerOrderId: true,
+    },
+    orderBy: [{ nextAttemptAt: "asc" }, { createdAt: "asc" }],
+    take: limit,
+  });
+
+  let sent = 0;
+  let skipped = 0;
+  let failed = 0;
+  for (const emailLog of queued) {
+    try {
+      const result = await sendOrderConfirmationEmail({
+        organizationId: emailLog.organizationId,
+        customerOrderId: emailLog.customerOrderId,
+        deliveryLogId: emailLog.id,
+        throwOnMissingEmail: false,
+      });
+      if (result.status === "sent") {
+        sent += 1;
+      } else {
+        skipped += 1;
+      }
+    } catch {
+      failed += 1;
+    }
+  }
+
+  return { processed: queued.length, sent, skipped, failed };
+};
 
 export const sendOrderTrackingEmail = (input: {
   organizationId: string;

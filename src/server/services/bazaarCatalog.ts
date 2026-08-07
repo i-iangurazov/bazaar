@@ -21,6 +21,10 @@ import {
   runOperationRequest,
   type OperationFailureDecision,
 } from "@/server/services/operationRequests";
+import {
+  orderConfirmationEmailOperationKey,
+  queueOrderConfirmationEmailTx,
+} from "@/server/services/orderEmailOutbox";
 import { sendOrderConfirmationEmail } from "@/server/services/orderEmails";
 import { getRedisPublisher } from "@/server/redis";
 import { eventBus } from "@/server/events/eventBus";
@@ -1252,6 +1256,12 @@ const createCatalogCheckoutOrderTx = async (
     customerEmail,
     customerPhone,
   });
+  await queueOrderConfirmationEmailTx(tx, {
+    organizationId: catalog.organizationId,
+    storeId: catalog.storeId,
+    customerOrderId: order.id,
+    recipientEmail: customerEmail,
+  });
 
   return order;
 };
@@ -1271,6 +1281,7 @@ const dispatchCatalogCheckoutOrderCreated = async (result: CatalogCheckoutOrderR
     organizationId: result.organizationId,
     customerOrderId: result.id,
     throwOnMissingEmail: false,
+    deliveryOperationKey: orderConfirmationEmailOperationKey(result.id),
   }).catch((error: unknown) => {
     getLogger().error(
       { error, customerOrderId: result.id, storeId: result.storeId },

@@ -11,6 +11,7 @@ describe("commerce job registry", () => {
         "bakai-store-api-sync",
         "o-market-export",
         "product-description-generation",
+        "order-confirmation-email",
       ]),
     );
   });
