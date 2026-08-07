@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CustomerOrderStatus, PosPaymentMethod } from "@prisma/client";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 
@@ -31,6 +31,12 @@ import {
 import { formatDateTime } from "@/lib/i18nFormat";
 import { mergeMobilePosReceiptHistory } from "@/lib/mobilePosState";
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
+import {
+  buildPosFilterHref,
+  readPosDateParam,
+  readPosEnumParam,
+  readPosPageParam,
+} from "@/lib/posUrlFilters";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import {
@@ -47,25 +53,46 @@ const createIdempotencyKey = () => {
   return `pos-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
+const historyStatusValues = ["ALL", ...Object.values(CustomerOrderStatus)] as const;
+const historyPaymentValues = ["ALL", ...Object.values(PosPaymentMethod)] as const;
+
 const PosHistoryPage = () => {
   const t = useTranslations("pos");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const locale = useLocale();
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const searchParamsString = searchParams.toString();
   const trpcUtils = trpc.useUtils();
   const { data: session } = useSession();
   const { toast } = useToast();
 
-  const [search, setSearch] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [search, setSearch] = useState(searchParams.get("q") ?? "");
+  const [dateFrom, setDateFrom] = useState(readPosDateParam(searchParams, "from", ""));
+  const [dateTo, setDateTo] = useState(readPosDateParam(searchParams, "to", ""));
   const [statusFilter, setStatusFilter] = useState<CustomerOrderStatus | "ALL">(
-    CustomerOrderStatus.COMPLETED,
+    readPosEnumParam(
+      searchParams,
+      "status",
+      historyStatusValues,
+      CustomerOrderStatus.COMPLETED,
+    ),
   );
-  const [paymentMethodFilter, setPaymentMethodFilter] = useState<PosPaymentMethod | "ALL">("ALL");
-  const [salesPage, setSalesPage] = useState(1);
-  const [returnsPage, setReturnsPage] = useState(1);
+  const [paymentMethodFilter, setPaymentMethodFilter] = useState<PosPaymentMethod | "ALL">(
+    readPosEnumParam(searchParams, "payment", historyPaymentValues, "ALL"),
+  );
+  const [salesPage, setSalesPage] = useState(readPosPageParam(searchParams, "page"));
+  const [returnsPage, setReturnsPage] = useState(readPosPageParam(searchParams, "returnsPage"));
+  const salesFilterSignature = JSON.stringify([
+    search,
+    dateFrom,
+    dateTo,
+    statusFilter,
+    paymentMethodFilter,
+  ]);
+  const previousSalesFilterSignatureRef = useRef(salesFilterSignature);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [isPhoneScreen, setIsPhoneScreen] = useState<boolean | null>(null);
   const [resumeConflictOpen, setResumeConflictOpen] = useState(false);
@@ -177,12 +204,44 @@ const PosHistoryPage = () => {
   );
 
   useEffect(() => {
+    if (previousSalesFilterSignatureRef.current === salesFilterSignature) {
+      return;
+    }
+    previousSalesFilterSignatureRef.current = salesFilterSignature;
     setSalesPage(1);
-  }, [dateFrom, dateTo, paymentMethodFilter, registerId, search, statusFilter]);
+  }, [salesFilterSignature]);
 
   useEffect(() => {
+    const href = buildPosFilterHref(pathname, searchParamsString, {
+      q: search.trim() || null,
+      from: dateFrom || null,
+      to: dateTo || null,
+      status:
+        statusFilter === CustomerOrderStatus.COMPLETED ? null : String(statusFilter),
+      payment: paymentMethodFilter === "ALL" ? null : String(paymentMethodFilter),
+      page: salesPage === 1 ? null : salesPage,
+      returnsPage: returnsPage === 1 ? null : returnsPage,
+    });
+    const currentHref = searchParamsString ? `${pathname}?${searchParamsString}` : pathname;
+    if (href !== currentHref) router.replace(href, { scroll: false });
+  }, [
+    dateFrom,
+    dateTo,
+    pathname,
+    paymentMethodFilter,
+    returnsPage,
+    router,
+    salesPage,
+    search,
+    searchParamsString,
+    statusFilter,
+  ]);
+
+  const handleRegisterChange = (nextRegisterId: string) => {
+    setSalesPage(1);
     setReturnsPage(1);
-  }, [currentShiftQuery.data?.id, registerId]);
+    selectRegister(nextRegisterId);
+  };
 
   const createReturnMutation = trpc.pos.returns.createDraft.useMutation();
   const addReturnLineMutation = trpc.pos.returns.addLine.useMutation();
@@ -336,12 +395,12 @@ const PosHistoryPage = () => {
   const returnsTotalPages = Math.max(1, Math.ceil(returnsTotal / returnsPageSize));
 
   useEffect(() => {
-    if (salesPage > salesTotalPages) setSalesPage(salesTotalPages);
-  }, [salesPage, salesTotalPages]);
+    if (salesQuery.data && salesPage > salesTotalPages) setSalesPage(salesTotalPages);
+  }, [salesPage, salesQuery.data, salesTotalPages]);
 
   useEffect(() => {
-    if (returnsPage > returnsTotalPages) setReturnsPage(returnsTotalPages);
-  }, [returnsPage, returnsTotalPages]);
+    if (returnsQuery.data && returnsPage > returnsTotalPages) setReturnsPage(returnsTotalPages);
+  }, [returnsPage, returnsQuery.data, returnsTotalPages]);
 
   const renderSalesPagination = () =>
     salesTotalPages > 1 ? (
@@ -647,7 +706,7 @@ const PosHistoryPage = () => {
         </section>
 
         <section className="space-y-3 border border-border bg-card p-3 shadow-sm">
-          <Select value={registerId} onValueChange={selectRegister}>
+          <Select value={registerId} onValueChange={handleRegisterChange}>
             <SelectTrigger aria-label={t("entry.register")} className="h-11">
               <SelectValue placeholder={t("entry.selectRegister")} />
             </SelectTrigger>
@@ -870,7 +929,7 @@ const PosHistoryPage = () => {
             <CardTitle>{t("entry.register")}</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2">
-            <Select value={registerId} onValueChange={selectRegister}>
+            <Select value={registerId} onValueChange={handleRegisterChange}>
               <SelectTrigger aria-label={t("entry.register")}>
                 <SelectValue placeholder={t("entry.selectRegister")} />
               </SelectTrigger>

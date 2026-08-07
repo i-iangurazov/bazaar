@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { inferRouterOutputs } from "@trpc/server";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 
@@ -31,6 +32,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/toast";
 import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
 import { formatDateTime } from "@/lib/i18nFormat";
+import { buildPosFilterHref, readPosEnumParam } from "@/lib/posUrlFilters";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import type { AppRouter } from "@/server/trpc/routers/_app";
@@ -40,12 +42,17 @@ type RouterOutputs = inferRouterOutputs<AppRouter>;
 type RegisterRow = RouterOutputs["pos"]["registers"]["list"][number];
 
 const allStoresValue = "__all_stores__";
+const registerStatusValues = ["active", "inactive", "all"] as const;
 
 const PosRegistersPage = () => {
   const t = useTranslations("pos");
   const tErrors = useTranslations("errors");
   const tCommon = useTranslations("common");
   const locale = useLocale();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const searchParamsString = searchParams.toString();
   const { data: session } = useSession();
   const { toast } = useToast();
   const { confirm, confirmDialog } = useConfirmDialog();
@@ -54,8 +61,10 @@ const PosRegistersPage = () => {
 
   const storesQuery = trpc.stores.list.useQuery();
 
-  const [storeFilter, setStoreFilter] = useState(allStoresValue);
-  const [statusFilter, setStatusFilter] = useState<RegisterStatusFilter>("active");
+  const [storeFilter, setStoreFilter] = useState(searchParams.get("store") || allStoresValue);
+  const [statusFilter, setStatusFilter] = useState<RegisterStatusFilter>(
+    readPosEnumParam(searchParams, "status", registerStatusValues, "active"),
+  );
   const [createStoreId, setCreateStoreId] = useState("");
   const [createName, setCreateName] = useState("");
   const [createCode, setCreateCode] = useState("");
@@ -76,6 +85,15 @@ const PosRegistersPage = () => {
     storeId: storeFilter === allStoresValue ? undefined : storeFilter,
     status: statusFilter,
   });
+
+  useEffect(() => {
+    const href = buildPosFilterHref(pathname, searchParamsString, {
+      store: storeFilter === allStoresValue ? null : storeFilter,
+      status: statusFilter === "active" ? null : statusFilter,
+    });
+    const currentHref = searchParamsString ? `${pathname}?${searchParamsString}` : pathname;
+    if (href !== currentHref) router.replace(href, { scroll: false });
+  }, [pathname, router, searchParamsString, statusFilter, storeFilter]);
 
   const utils = trpc.useUtils();
 

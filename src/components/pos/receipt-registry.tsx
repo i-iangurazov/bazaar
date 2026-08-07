@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CustomerOrderStatus } from "@prisma/client";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 
@@ -35,6 +36,12 @@ import { downloadTableFile, type DownloadFormat } from "@/lib/fileExport";
 import { currencySourceWithFallback, formatKgsMoney } from "@/lib/currencyDisplay";
 import { formatDateTime } from "@/lib/i18nFormat";
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
+import {
+  buildPosFilterHref,
+  readPosDateParam,
+  readPosEnumParam,
+  readPosPageParam,
+} from "@/lib/posUrlFilters";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import {
@@ -59,6 +66,8 @@ const statusValues = [
 ] as const;
 
 const paymentMethods = ["CASH", "CARD", "TRANSFER", "OTHER"] as const;
+const receiptPageSizes = [10, 25, 50, 100] as const;
+const receiptStatusValues = ["ALL", ...statusValues] as const;
 
 type BadgeVariant = "default" | "success" | "warning" | "danger" | "muted";
 
@@ -69,6 +78,10 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
   const tPos = useTranslations("pos");
   const tExports = useTranslations("exports");
   const locale = useLocale();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const searchParamsString = searchParams.toString();
   const { data: session } = useSession();
   const { toast } = useToast();
   const trpcUtils = trpc.useUtils();
@@ -76,13 +89,25 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
 
   const storesQuery = trpc.stores.list.useQuery(undefined, { enabled: canView });
   const now = useMemo(() => new Date(), []);
-  const [storeId, setStoreId] = useState("");
-  const [status, setStatus] = useState<"ALL" | CustomerOrderStatus>("ALL");
   const today = businessDateKey(now);
-  const [fromDate, setFromDate] = useState(addBusinessDays(today, -30));
-  const [toDate, setToDate] = useState(today);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
+  const defaultFromDate = addBusinessDays(today, -30);
+  const [storeId, setStoreId] = useState(searchParams.get("store") ?? "");
+  const [status, setStatus] = useState<"ALL" | CustomerOrderStatus>(
+    readPosEnumParam(searchParams, "status", receiptStatusValues, "ALL"),
+  );
+  const [fromDate, setFromDate] = useState(
+    readPosDateParam(searchParams, "from", defaultFromDate),
+  );
+  const [toDate, setToDate] = useState(readPosDateParam(searchParams, "to", today));
+  const [page, setPage] = useState(readPosPageParam(searchParams, "page"));
+  const requestedPageSize = readPosPageParam(searchParams, "pageSize", 25);
+  const [pageSize, setPageSize] = useState(
+    receiptPageSizes.includes(requestedPageSize as (typeof receiptPageSizes)[number])
+      ? requestedPageSize
+      : 25,
+  );
+  const filterSignature = JSON.stringify([storeId, status, fromDate, toDate]);
+  const previousFilterSignatureRef = useRef(filterSignature);
   const [downloadFormat, setDownloadFormat] = useState<DownloadFormat>("csv");
   const [isExporting, setIsExporting] = useState(false);
   const [receiptAction, setReceiptAction] = useState<{
@@ -92,8 +117,37 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
   const [previewSaleId, setPreviewSaleId] = useState<string | null>(null);
 
   useEffect(() => {
+    if (previousFilterSignatureRef.current === filterSignature) {
+      return;
+    }
+    previousFilterSignatureRef.current = filterSignature;
     setPage(1);
-  }, [storeId, status, fromDate, toDate]);
+  }, [filterSignature]);
+
+  useEffect(() => {
+    const href = buildPosFilterHref(pathname, searchParamsString, {
+      store: storeId || null,
+      status: status === "ALL" ? null : status,
+      from: fromDate === defaultFromDate ? null : fromDate,
+      to: toDate === today ? null : toDate,
+      page: page === 1 ? null : page,
+      pageSize: pageSize === 25 ? null : pageSize,
+    });
+    const currentHref = searchParamsString ? `${pathname}?${searchParamsString}` : pathname;
+    if (href !== currentHref) router.replace(href, { scroll: false });
+  }, [
+    defaultFromDate,
+    fromDate,
+    page,
+    pageSize,
+    pathname,
+    router,
+    searchParamsString,
+    status,
+    storeId,
+    toDate,
+    today,
+  ]);
 
   const receiptFilters = {
     storeId: storeId || undefined,

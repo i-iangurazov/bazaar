@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FiscalReceiptStatus } from "@prisma/client";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 
@@ -20,14 +21,26 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
 import { formatDateTime } from "@/lib/i18nFormat";
+import {
+  buildPosFilterHref,
+  readPosEnumParam,
+  readPosPageParam,
+} from "@/lib/posUrlFilters";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
+
+const kkmStatusValues = ["ALL", ...Object.values(FiscalReceiptStatus)] as const;
+const kkmPageSize = 50;
 
 const PosKkmPage = () => {
   const t = useTranslations("pos.kkm");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const locale = useLocale();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const searchParamsString = searchParams.toString();
   const { data: session } = useSession();
   const role = session?.user?.role;
   const canView = role === "ADMIN" || role === "MANAGER";
@@ -35,18 +48,48 @@ const PosKkmPage = () => {
   const { toast } = useToast();
 
   const storesQuery = trpc.stores.list.useQuery(undefined, { enabled: canView });
-  const [storeId, setStoreId] = useState("");
-  const [status, setStatus] = useState<FiscalReceiptStatus | "ALL">("ALL");
+  const [storeId, setStoreId] = useState(searchParams.get("store") ?? "");
+  const [status, setStatus] = useState<FiscalReceiptStatus | "ALL">(
+    readPosEnumParam(searchParams, "status", kkmStatusValues, "ALL"),
+  );
+  const [page, setPage] = useState(readPosPageParam(searchParams, "page"));
+  const filterSignature = JSON.stringify([storeId, status]);
+  const previousFilterSignatureRef = useRef(filterSignature);
 
   const receiptsQuery = trpc.pos.kkm.receipts.useQuery(
     {
       storeId: storeId || undefined,
       status: status === "ALL" ? undefined : status,
-      page: 1,
-      pageSize: 50,
+      page,
+      pageSize: kkmPageSize,
     },
     { enabled: canView, refetchOnWindowFocus: true },
   );
+
+  useEffect(() => {
+    if (previousFilterSignatureRef.current === filterSignature) {
+      return;
+    }
+    previousFilterSignatureRef.current = filterSignature;
+    setPage(1);
+  }, [filterSignature]);
+
+  useEffect(() => {
+    const href = buildPosFilterHref(pathname, searchParamsString, {
+      store: storeId || null,
+      status: status === "ALL" ? null : status,
+      page: page === 1 ? null : page,
+    });
+    const currentHref = searchParamsString ? `${pathname}?${searchParamsString}` : pathname;
+    if (href !== currentHref) router.replace(href, { scroll: false });
+  }, [page, pathname, router, searchParamsString, status, storeId]);
+
+  const total = receiptsQuery.data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / kkmPageSize));
+
+  useEffect(() => {
+    if (receiptsQuery.data && page > totalPages) setPage(totalPages);
+  }, [page, receiptsQuery.data, totalPages]);
 
   const statusLabel = (value: FiscalReceiptStatus) => {
     switch (value) {
@@ -208,6 +251,32 @@ const PosKkmPage = () => {
           !receiptsQuery.isError &&
           !(receiptsQuery.data?.items ?? []).length ? (
             <p className="text-sm text-muted-foreground">{t("empty")}</p>
+          ) : null}
+
+          {totalPages > 1 ? (
+            <div className="flex items-center justify-between gap-3 border-t border-border pt-3 text-sm text-muted-foreground">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                disabled={page <= 1 || receiptsQuery.isFetching}
+              >
+                {tCommon("back")}
+              </Button>
+              <span>
+                {page} / {totalPages} · {total}
+              </span>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                disabled={page >= totalPages || receiptsQuery.isFetching}
+              >
+                {tCommon("pagination.next")}
+              </Button>
+            </div>
           ) : null}
         </CardContent>
       </Card>
