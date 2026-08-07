@@ -2498,8 +2498,6 @@ const ImportPage = () => {
         missing: 0,
       },
     };
-    let importedRows = 0;
-
     setImportStartedAt(Date.now());
     setImportElapsedSeconds(0);
 
@@ -2510,9 +2508,7 @@ const ImportPage = () => {
           idempotencyKey: `${operationKey}:${chunkIndex}`,
         });
         const summary = payload.summary as ImportRunSummary;
-        importedRows += payload.results.length;
-        aggregateSummary.rows =
-          (aggregateSummary.rows ?? 0) + (summary.rows ?? payload.results.length);
+        aggregateSummary.rows = (aggregateSummary.rows ?? 0) + (summary.rows ?? 0);
         aggregateSummary.created = (aggregateSummary.created ?? 0) + (summary.created ?? 0);
         aggregateSummary.updated = (aggregateSummary.updated ?? 0) + (summary.updated ?? 0);
         aggregateSummary.skipped = (aggregateSummary.skipped ?? 0) + (summary.skipped ?? 0);
@@ -2530,7 +2526,7 @@ const ImportPage = () => {
       productImportOperationRef.current = null;
       toast({
         variant: "success",
-        description: t("importSuccess", { count: aggregateSummary.rows ?? importedRows }),
+        description: t("importSuccess", { count: aggregateSummary.rows ?? 0 }),
       });
       await batchesQuery.refetch();
       resetImportFormState({

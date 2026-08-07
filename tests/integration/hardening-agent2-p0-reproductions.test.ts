@@ -687,6 +687,58 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
     expect(operationRequests.every((request) => request.storeId === store.id)).toBe(true);
   });
 
+  it("HARD-A2-005 keeps a high-row import replay response below the durable size cap", async () => {
+    const { org, store, baseUnit, adminUser } = await seedBase({ plan: "BUSINESS" });
+    const caller = callerFor(adminUser);
+    const skuPrefix = `REPLAY-LARGE-${randomUUID().slice(0, 8)}`;
+    const rows = Array.from({ length: 250 }, (_, index) => ({
+      sku: `${skuPrefix}-${String(index).padStart(3, "0")}-${"X".repeat(160)}`,
+      name: `Large replay product ${index}`,
+      unit: baseUnit.code,
+    }));
+    const input = {
+      idempotencyKey: `a2-005-large-import-${randomUUID()}`,
+      storeId: store.id,
+      rows,
+    };
+
+    const first = await caller.products.importCsv(input);
+    const replay = await caller.products.importCsv(input);
+    const [productCount, batchCount, eventCount, operation] = await Promise.all([
+      prisma.product.count({
+        where: { organizationId: org.id, sku: { startsWith: skuPrefix } },
+      }),
+      prisma.importBatch.count({ where: { id: first.batchId } }),
+      prisma.productEvent.count({
+        where: { organizationId: org.id, type: "first_import_completed" },
+      }),
+      prisma.operationRequest.findUniqueOrThrow({
+        where: {
+          organizationId_scope_principalKey_idempotencyKey: {
+            organizationId: org.id,
+            scope: "products.importCsv",
+            principalKey: `user:${adminUser.id}`,
+            idempotencyKey: input.idempotencyKey,
+          },
+        },
+      }),
+    ]);
+
+    expect(replay).toEqual(first);
+    expect(first.summary).toMatchObject({ rows: 250, created: 250, updated: 0, skipped: 0 });
+    expect(productCount).toBe(250);
+    expect(batchCount).toBe(1);
+    expect(eventCount).toBe(1);
+    expect(operation).toMatchObject({
+      status: OperationRequestStatus.COMPLETED,
+      responseCode: null,
+      attemptCount: 1,
+    });
+    expect(operation.response).not.toHaveProperty("results");
+    expect(operation.responseBytes).not.toBeNull();
+    expect(operation.responseBytes ?? Number.POSITIVE_INFINITY).toBeLessThan(32 * 1024);
+  });
+
   it("HARD-A2-006 replays one stock-count scan without another increment", async () => {
     const { store, product, managerUser } = await seedBase({ plan: "BUSINESS" });
     const caller = callerFor(managerUser);

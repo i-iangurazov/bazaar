@@ -421,7 +421,6 @@ export const importProductsCsvMutation = async ({
 
     return {
       batchId: result.batch.id,
-      results: result.results,
       summary: result.summary,
     };
   } catch (error) {

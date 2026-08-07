@@ -202,7 +202,7 @@ export const runProductImport = async (input: RunProductImportInput) => {
     });
 
     return {
-      response: { batchId: updatedBatch.id, results, summary },
+      response: { batchId: updatedBatch.id, summary },
       responseStatus: 201,
       resource: { type: "ImportBatch", id: updatedBatch.id },
     };
@@ -233,9 +233,6 @@ export const runProductImport = async (input: RunProductImportInput) => {
       },
       allowedResponsePaths: [
         "batchId",
-        "results",
-        "results[].sku",
-        "results[].action",
         "summary",
         "summary.source",
         "summary.mode",
@@ -269,7 +266,6 @@ export const runProductImport = async (input: RunProductImportInput) => {
   }
   const result = {
     batch,
-    results: operation.response.results,
     summary: operation.response.summary,
   };
 
