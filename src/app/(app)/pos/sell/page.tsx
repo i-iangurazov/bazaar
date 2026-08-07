@@ -110,6 +110,11 @@ import {
 } from "@/lib/scanning/scanRouter";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
+import {
+  businessDateKey,
+  businessDateOnlyEndUtc,
+  businessDateOnlyToUtc,
+} from "@/lib/timezone";
 import { usePosRegisterSelection } from "@/lib/usePosRegisterSelection";
 import { cn } from "@/lib/utils";
 const keyboardScanResetMs = 300;
@@ -136,7 +141,6 @@ const createIdempotencyKey = () => {
   return `pos-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
-const formatDateInput = (value: Date) => value.toISOString().slice(0, 10);
 
 const useDebouncedValue = (value: string, delayMs: number) => {
   const [debounced, setDebounced] = useState(value);
@@ -852,8 +856,8 @@ const PosSellPage = () => {
           : journalHeldStateFilter === "ACTIVE"
             ? "active"
             : undefined,
-      dateFrom: journalDateFrom ? new Date(`${journalDateFrom}T00:00:00`) : undefined,
-      dateTo: journalDateTo ? new Date(`${journalDateTo}T23:59:59`) : undefined,
+      dateFrom: journalDateFrom ? businessDateOnlyToUtc(journalDateFrom) : undefined,
+      dateTo: journalDateTo ? businessDateOnlyEndUtc(journalDateTo) : undefined,
       page: journalPage,
       pageSize: 25,
     },
@@ -4066,7 +4070,7 @@ const PosSellPage = () => {
                 variant="secondary"
                 className="h-10 flex-1"
                 onClick={() => {
-                  const today = formatDateInput(new Date());
+                  const today = businessDateKey(new Date());
                   setJournalDateFrom(today);
                   setJournalDateTo(today);
                 }}

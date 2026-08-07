@@ -26,6 +26,17 @@ describe("Bishkek business time boundaries", () => {
     expect(addBusinessDays(bounds.today, 1)).toBe("2026-07-23");
   });
 
+  it("keeps POS date filters on the Bishkek calendar day at the UTC boundary", () => {
+    expect(businessDateKey(new Date("2026-07-21T17:59:59.999Z"))).toBe("2026-07-21");
+    expect(businessDateKey(new Date("2026-07-21T18:00:00.000Z"))).toBe("2026-07-22");
+    expect(addBusinessDays("2026-07-22", -30)).toBe("2026-06-22");
+
+    const from = businessDateOnlyToUtc("2026-07-22");
+    const to = businessDateOnlyEndUtc("2026-07-22");
+    expect(from.toISOString()).toBe("2026-07-21T18:00:00.000Z");
+    expect(to.toISOString()).toBe("2026-07-22T17:59:59.999Z");
+  });
+
   it("rejects malformed and impossible calendar dates", () => {
     expect(() => businessDateOnlyToUtc("2026/07/22")).toThrow("invalidDateOnly");
     expect(() => businessDateOnlyToUtc("2026-02-30")).toThrow("invalidDateOnly");

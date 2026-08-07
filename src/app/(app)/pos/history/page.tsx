@@ -32,9 +32,12 @@ import { mergeMobilePosReceiptHistory } from "@/lib/mobilePosState";
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
+import {
+  businessDateKey,
+  businessDateOnlyEndUtc,
+  businessDateOnlyToUtc,
+} from "@/lib/timezone";
 import { usePosRegisterSelection } from "@/lib/usePosRegisterSelection";
-
-const formatDateInput = (value: Date) => value.toISOString().slice(0, 10);
 
 const createIdempotencyKey = () => {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -118,8 +121,8 @@ const PosHistoryPage = () => {
       registerId: registerId || undefined,
       statuses: statusFilter === "ALL" ? undefined : [statusFilter],
       search: search.trim() || undefined,
-      dateFrom: dateFrom ? new Date(`${dateFrom}T00:00:00`) : undefined,
-      dateTo: dateTo ? new Date(`${dateTo}T23:59:59`) : undefined,
+      dateFrom: dateFrom ? businessDateOnlyToUtc(dateFrom) : undefined,
+      dateTo: dateTo ? businessDateOnlyEndUtc(dateTo) : undefined,
       page: 1,
       pageSize: 30,
     },
@@ -132,8 +135,8 @@ const PosHistoryPage = () => {
       statuses: [CustomerOrderStatus.DRAFT],
       heldState: "held",
       search: search.trim() || undefined,
-      dateFrom: dateFrom ? new Date(`${dateFrom}T00:00:00`) : undefined,
-      dateTo: dateTo ? new Date(`${dateTo}T23:59:59`) : undefined,
+      dateFrom: dateFrom ? businessDateOnlyToUtc(dateFrom) : undefined,
+      dateTo: dateTo ? businessDateOnlyEndUtc(dateTo) : undefined,
       page: 1,
       pageSize: 30,
     },
@@ -318,7 +321,7 @@ const PosHistoryPage = () => {
   };
 
   const setTodayFilter = () => {
-    const today = formatDateInput(new Date());
+    const today = businessDateKey(new Date());
     setDateFrom(today);
     setDateTo(today);
   };

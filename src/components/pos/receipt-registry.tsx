@@ -37,14 +37,18 @@ import { formatDateTime } from "@/lib/i18nFormat";
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
+import {
+  addBusinessDays,
+  businessDateKey,
+  businessDateOnlyEndUtc,
+  businessDateOnlyToUtc,
+} from "@/lib/timezone";
 
 type ReceiptRegistryProps = {
   title: string;
   subtitle: string;
   compact?: boolean;
 };
-
-const formatDateInput = (value: Date) => value.toISOString().slice(0, 10);
 
 const statusValues = [
   CustomerOrderStatus.COMPLETED,
@@ -74,10 +78,9 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
   const now = useMemo(() => new Date(), []);
   const [storeId, setStoreId] = useState("");
   const [status, setStatus] = useState<"ALL" | CustomerOrderStatus>("ALL");
-  const [fromDate, setFromDate] = useState(
-    formatDateInput(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30)),
-  );
-  const [toDate, setToDate] = useState(formatDateInput(now));
+  const today = businessDateKey(now);
+  const [fromDate, setFromDate] = useState(addBusinessDays(today, -30));
+  const [toDate, setToDate] = useState(today);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [downloadFormat, setDownloadFormat] = useState<DownloadFormat>("csv");
@@ -95,8 +98,8 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
   const receiptFilters = {
     storeId: storeId || undefined,
     statuses: status === "ALL" ? undefined : [status],
-    dateFrom: fromDate ? new Date(`${fromDate}T00:00:00`) : undefined,
-    dateTo: toDate ? new Date(`${toDate}T23:59:59`) : undefined,
+    dateFrom: fromDate ? businessDateOnlyToUtc(fromDate) : undefined,
+    dateTo: toDate ? businessDateOnlyEndUtc(toDate) : undefined,
   };
 
   const receiptsQuery = trpc.pos.receipts.useQuery(
@@ -196,7 +199,7 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
       });
       downloadTableFile({
         format: downloadFormat,
-        fileNameBase: `receipts-registry-${formatDateInput(new Date())}`,
+        fileNameBase: `receipts-registry-${businessDateKey(new Date())}`,
         header: [
           "receiptNumber",
           "createdAtIso",
