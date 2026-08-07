@@ -255,6 +255,7 @@ enum MMarketEnvironment {
 
 enum MMarketLastSyncStatus {
   SUCCESS
+  COMPLETED_WITH_ERRORS
   FAILED
 }
 
@@ -262,6 +263,8 @@ enum MMarketExportJobStatus {
   QUEUED
   RUNNING
   DONE
+  COMPLETED_WITH_ERRORS
+  TIMED_OUT
   FAILED
   RATE_LIMITED
 }
@@ -282,6 +285,8 @@ enum BakaiStoreExportJobStatus {
   QUEUED
   RUNNING
   DONE
+  COMPLETED_WITH_ERRORS
+  TIMED_OUT
   FAILED
 }
 
@@ -292,6 +297,7 @@ enum BakaiStoreJobType {
 
 enum BakaiStoreLastSyncStatus {
   SUCCESS
+  COMPLETED_WITH_ERRORS
   FAILED
 }
 
@@ -306,6 +312,8 @@ enum OMarketExportJobStatus {
   QUEUED
   RUNNING
   DONE
+  COMPLETED_WITH_ERRORS
+  TIMED_OUT
   FAILED
 }
 
@@ -317,6 +325,7 @@ enum OMarketJobType {
 
 enum OMarketLastSyncStatus {
   SUCCESS
+  COMPLETED_WITH_ERRORS
   FAILED
 }
 
@@ -477,6 +486,8 @@ enum CustomerOrderEmailType {
 }
 
 enum CustomerOrderEmailStatus {
+  QUEUED
+  PROCESSING
   SENT
   FAILED
   SKIPPED
@@ -2197,8 +2208,13 @@ model CustomerOrderEmailLog {
   provider          String?
   providerMessageId String?
   errorMessage      String?                  @db.Text
+  operationKey      String?                  @unique @db.VarChar(191)
+  attemptCount      Int                      @default(0)
+  lastAttemptAt     DateTime?
+  nextAttemptAt     DateTime?
   triggeredById     String?
   createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
 
   organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   store         Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
@@ -2208,6 +2224,7 @@ model CustomerOrderEmailLog {
   @@index([organizationId, storeId, createdAt])
   @@index([customerOrderId, createdAt])
   @@index([type, status, createdAt])
+  @@index([status, nextAttemptAt, createdAt])
   @@index([providerMessageId])
 }
 
