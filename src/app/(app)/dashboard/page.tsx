@@ -412,6 +412,20 @@ const DashboardPage = () => {
   const mobileAlertItems = visibleAttentionItems.filter((item) => item.value > 0).slice(0, 4);
   const mobileRecentActivity = activity.slice(0, 4);
 
+  if (dashboardQuery.isError && !dashboardQuery.data) {
+    return (
+      <div>
+        <div className="md:hidden">
+          <QueryErrorState onRetry={() => void dashboardQuery.refetch()} />
+        </div>
+        <div className="hidden md:block">
+          <PageHeader title={t("title")} subtitle={t("businessSubtitle")} />
+          <QueryErrorState onRetry={() => void dashboardQuery.refetch()} />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
       <div className="space-y-4 md:hidden">
