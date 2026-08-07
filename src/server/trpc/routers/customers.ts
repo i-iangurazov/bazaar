@@ -44,6 +44,8 @@ const customerFiltersSchema = z.object({
     .union([z.nativeEnum(CustomerSource), z.literal("ALL")])
     .optional()
     .nullable(),
+  sortBy: z.enum(["createdAt", "name", "orderCount", "lastOrderAt"]).optional(),
+  sortDirection: z.enum(["asc", "desc"]).optional(),
 });
 
 export const customersRouter = router({
@@ -65,6 +67,8 @@ export const customersRouter = router({
           source: input?.source,
           page: input?.page,
           pageSize: input?.pageSize,
+          sortBy: input?.sortBy,
+          sortDirection: input?.sortDirection,
         });
       } catch (error) {
         throw toTRPCError(error);
@@ -78,6 +82,8 @@ export const customersRouter = router({
         storeId: input.storeId,
         search: input.search,
         source: input.source,
+        sortBy: input.sortBy,
+        sortDirection: input.sortDirection,
       });
     } catch (error) {
       throw toTRPCError(error);

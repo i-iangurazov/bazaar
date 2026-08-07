@@ -436,6 +436,8 @@ export const listCustomers = async (input: {
   source?: CustomerSource | "ALL" | null;
   page?: number;
   pageSize?: number;
+  sortBy?: "createdAt" | "name" | "orderCount" | "lastOrderAt";
+  sortDirection?: "asc" | "desc";
 }) => {
   const accessibleStoreIds = await resolveAccessibleStoreIds(prisma, input.user);
   if (!accessibleStoreIds.length) {
@@ -458,6 +460,17 @@ export const listCustomers = async (input: {
   const pageSize = Math.min(100, Math.max(1, Math.trunc(input.pageSize ?? 25)));
   const search = normalizeOptionalText(input.search);
   const source = input.source && input.source !== "ALL" ? input.source : null;
+  const sortDirection = input.sortDirection ?? "desc";
+  const orderBy: Prisma.CustomerOrderByWithRelationInput[] = [
+    input.sortBy === "name"
+      ? { name: sortDirection }
+      : input.sortBy === "orderCount"
+        ? { orderCount: sortDirection }
+        : input.sortBy === "lastOrderAt"
+          ? { lastOrderAt: sortDirection }
+          : { createdAt: sortDirection },
+    { id: sortDirection },
+  ];
   const where = buildCustomerListWhere({
     organizationId: input.user.organizationId,
     storeId,
@@ -469,7 +482,7 @@ export const listCustomers = async (input: {
     prisma.customer.count({ where }),
     prisma.customer.findMany({
       where,
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      orderBy,
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
@@ -507,6 +520,8 @@ export const listCustomersForExport = async (input: {
   storeId?: string | null;
   search?: string | null;
   source?: CustomerSource | "ALL" | null;
+  sortBy?: "createdAt" | "name" | "orderCount" | "lastOrderAt";
+  sortDirection?: "asc" | "desc";
 }) => {
   const accessibleStoreIds = await resolveAccessibleStoreIds(prisma, input.user);
   if (!accessibleStoreIds.length) {
@@ -521,6 +536,17 @@ export const listCustomersForExport = async (input: {
 
   const search = normalizeOptionalText(input.search);
   const source = input.source && input.source !== "ALL" ? input.source : null;
+  const sortDirection = input.sortDirection ?? "desc";
+  const orderBy: Prisma.CustomerOrderByWithRelationInput[] = [
+    input.sortBy === "name"
+      ? { name: sortDirection }
+      : input.sortBy === "orderCount"
+        ? { orderCount: sortDirection }
+        : input.sortBy === "lastOrderAt"
+          ? { lastOrderAt: sortDirection }
+          : { createdAt: sortDirection },
+    { id: sortDirection },
+  ];
 
   return prisma.customer.findMany({
     where: buildCustomerListWhere({
@@ -539,7 +565,7 @@ export const listCustomersForExport = async (input: {
       lastOrderAt: true,
       orderCount: true,
     },
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    orderBy,
   });
 };
 

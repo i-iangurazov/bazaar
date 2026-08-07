@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, PurchaseOrderStatus } from "@prisma/client";
 import { z } from "zod";
 import type { PrismaClient } from "@prisma/client";
 
@@ -56,14 +56,58 @@ const assertPurchaseOrderLineAccess = async (ctx: PurchaseOrderAccessContext, li
   await assertCommerceStoreAccess(ctx.prisma, ctx.user, line.purchaseOrder.storeId);
 };
 
+const purchaseOrderListFiltersSchema = z.object({
+  storeId: z.string().min(1).optional(),
+  status: z.nativeEnum(PurchaseOrderStatus).optional(),
+  search: z.string().trim().max(200).optional(),
+  sortBy: z.enum(["createdAt", "status", "supplier", "store"]).optional(),
+  sortDirection: z.enum(["asc", "desc"]).optional(),
+});
+
+const buildPurchaseOrderListWhere = (input: {
+  organizationId: string;
+  accessibleStoreIds: string[] | null;
+  storeId?: string;
+  status?: PurchaseOrderStatus;
+  search?: string;
+}): Prisma.PurchaseOrderWhereInput => ({
+  organizationId: input.organizationId,
+  ...(input.storeId
+    ? { storeId: input.storeId }
+    : input.accessibleStoreIds
+      ? { storeId: { in: input.accessibleStoreIds } }
+      : {}),
+  ...(input.status ? { status: input.status } : {}),
+  ...(input.search
+    ? {
+        OR: [
+          { id: { contains: input.search, mode: "insensitive" } },
+          { supplier: { is: { name: { contains: input.search, mode: "insensitive" } } } },
+          { store: { name: { contains: input.search, mode: "insensitive" } } },
+        ],
+      }
+    : {}),
+});
+
+const buildPurchaseOrderListOrderBy = (
+  sortBy: "createdAt" | "status" | "supplier" | "store" = "createdAt",
+  sortDirection: "asc" | "desc" = "desc",
+): Prisma.PurchaseOrderOrderByWithRelationInput[] => [
+  sortBy === "status"
+    ? { status: sortDirection }
+    : sortBy === "supplier"
+      ? { supplier: { name: sortDirection } }
+      : sortBy === "store"
+        ? { store: { name: sortDirection } }
+        : { createdAt: sortDirection },
+  { id: sortDirection },
+];
+
 export const purchaseOrdersRouter = router({
   list: managerProcedure
     .input(
-      z
-        .object({
-          status: z
-            .enum(["DRAFT", "SUBMITTED", "APPROVED", "PARTIALLY_RECEIVED", "RECEIVED", "CANCELLED"])
-            .optional(),
+      purchaseOrderListFiltersSchema
+        .extend({
           page: z.number().int().min(1).optional(),
           pageSize: z.number().int().min(1).max(200).optional(),
         })
@@ -72,12 +116,17 @@ export const purchaseOrdersRouter = router({
     .query(async ({ ctx, input }) => {
       const page = input?.page ?? 1;
       const pageSize = input?.pageSize ?? 25;
+      if (input?.storeId) {
+        await assertCommerceStoreAccess(ctx.prisma, ctx.user, input.storeId);
+      }
       const accessibleStoreIds = await resolveCommerceAccessibleStoreIds(ctx.prisma, ctx.user);
-      const where = {
+      const where = buildPurchaseOrderListWhere({
         organizationId: ctx.user.organizationId,
-        ...(accessibleStoreIds ? { storeId: { in: accessibleStoreIds } } : {}),
-        ...(input?.status ? { status: input.status } : {}),
-      };
+        accessibleStoreIds,
+        storeId: input?.storeId,
+        status: input?.status,
+        search: input?.search,
+      });
 
       const [total, orders] = await Promise.all([
         ctx.prisma.purchaseOrder.count({ where }),
@@ -87,7 +136,7 @@ export const purchaseOrdersRouter = router({
             supplier: true,
             store: true,
           },
-          orderBy: { createdAt: "desc" },
+          orderBy: buildPurchaseOrderListOrderBy(input?.sortBy, input?.sortDirection),
           skip: (page - 1) * pageSize,
           take: pageSize,
         }),
@@ -131,26 +180,23 @@ export const purchaseOrdersRouter = router({
     }),
 
   listIds: managerProcedure
-    .input(
-      z
-        .object({
-          status: z
-            .enum(["DRAFT", "SUBMITTED", "APPROVED", "PARTIALLY_RECEIVED", "RECEIVED", "CANCELLED"])
-            .optional(),
-        })
-        .optional(),
-    )
+    .input(purchaseOrderListFiltersSchema.optional())
     .query(async ({ ctx, input }) => {
+      if (input?.storeId) {
+        await assertCommerceStoreAccess(ctx.prisma, ctx.user, input.storeId);
+      }
       const accessibleStoreIds = await resolveCommerceAccessibleStoreIds(ctx.prisma, ctx.user);
-      const where = {
+      const where = buildPurchaseOrderListWhere({
         organizationId: ctx.user.organizationId,
-        ...(accessibleStoreIds ? { storeId: { in: accessibleStoreIds } } : {}),
-        ...(input?.status ? { status: input.status } : {}),
-      };
+        accessibleStoreIds,
+        storeId: input?.storeId,
+        status: input?.status,
+        search: input?.search,
+      });
       const rows = await ctx.prisma.purchaseOrder.findMany({
         where,
         select: { id: true },
-        orderBy: { createdAt: "desc" },
+        orderBy: buildPurchaseOrderListOrderBy(input?.sortBy, input?.sortDirection),
       });
       return rows.map((row) => row.id);
     }),

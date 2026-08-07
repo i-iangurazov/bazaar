@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { PurchaseOrderStatus } from "@prisma/client";
 import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +30,14 @@ import {
 } from "@/components/icons";
 import { useToast } from "@/components/ui/toast";
 import { Spinner } from "@/components/ui/spinner";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { SelectionToolbar } from "@/components/selection-toolbar";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
@@ -41,26 +50,82 @@ import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { useSse } from "@/lib/useSse";
 
+const purchaseOrderStatuses = Object.values(PurchaseOrderStatus);
+const purchaseOrderSortOptions = ["createdAt", "status", "supplier", "store"] as const;
+
+const parsePositiveInteger = (value: string | null, fallback: number, max: number) => {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= max ? parsed : fallback;
+};
+
+const parseOption = <T extends string>(value: string | null, options: readonly T[], fallback: T) =>
+  value && options.includes(value as T) ? (value as T) : fallback;
+
 const PurchaseOrdersPage = () => {
   const t = useTranslations("purchaseOrders");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const locale = useLocale();
   const router = useRouter();
+  const pathname = usePathname() ?? "/purchase-orders";
+  const searchParams = useSearchParams();
   const { data: session } = useSession();
   const canManage = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
   const { toast } = useToast();
   const { confirm, confirmDialog } = useConfirmDialog();
   const trpcUtils = trpc.useUtils();
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
+  const currentQueryString = searchParams.toString();
+  const page = parsePositiveInteger(searchParams.get("page"), 1, 10_000);
+  const pageSize = parsePositiveInteger(searchParams.get("pageSize"), 25, 200);
+  const search = searchParams.get("search") ?? "";
+  const storeId = searchParams.get("storeId") || "all";
+  const status = parseOption(
+    searchParams.get("status"),
+    purchaseOrderStatuses,
+    "all" as PurchaseOrderStatus | "all",
+  );
+  const sortBy = parseOption(searchParams.get("sortBy"), purchaseOrderSortOptions, "createdAt");
+  const sortDirection = parseOption(
+    searchParams.get("sortDirection"),
+    ["asc", "desc"] as const,
+    "desc",
+  );
   const [cancelingId, setCancelingId] = useState<string | null>(null);
   const [bulkCanceling, setBulkCanceling] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectingAllResults, setSelectingAllResults] = useState(false);
   const bulkCancelAttemptRef = useRef<{ payload: string; idempotencyKey: string } | null>(null);
+  const updateListParams = useCallback(
+    (updates: Record<string, string | number | null>) => {
+      const params = new URLSearchParams(currentQueryString);
+      Object.entries(updates).forEach(([key, value]) => {
+        if (value === null || value === "") {
+          params.delete(key);
+        } else {
+          params.set(key, String(value));
+        }
+      });
+      const nextQuery = params.toString();
+      router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+    },
+    [currentQueryString, pathname, router],
+  );
+  const setPage = (value: number) => updateListParams({ page: value === 1 ? null : value });
+  const setPageSize = (value: number) =>
+    updateListParams({ pageSize: value === 25 ? null : value, page: null });
+  const setFilter = (key: string, value: string | null) =>
+    updateListParams({ [key]: value, page: null });
+  const listFilters = {
+    search: search.trim() || undefined,
+    storeId: storeId === "all" ? undefined : storeId,
+    status: status === "all" ? undefined : status,
+    sortBy,
+    sortDirection,
+  };
+  const storesQuery = trpc.stores.list.useQuery();
+  const stores = storesQuery.data ?? [];
   const listQuery = trpc.purchaseOrders.list.useQuery(
-    { page, pageSize },
+    { ...listFilters, page, pageSize },
     { keepPreviousData: true },
   );
   const orders = useMemo(() => listQuery.data?.items ?? [], [listQuery.data?.items]);
@@ -123,7 +188,7 @@ const PurchaseOrdersPage = () => {
   const handleSelectAllResults = async () => {
     setSelectingAllResults(true);
     try {
-      const ids = await trpcUtils.purchaseOrders.listIds.fetch();
+      const ids = await trpcUtils.purchaseOrders.listIds.fetch(listFilters);
       setSelectedIds(new Set(ids));
     } catch (error) {
       toast({
@@ -209,6 +274,69 @@ const PurchaseOrdersPage = () => {
           <CardTitle>{t("title")}</CardTitle>
         </CardHeader>
         <CardContent>
+          <div className="bazaar-admin-toolbar mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <Input
+              value={search}
+              onChange={(event) => setFilter("search", event.target.value)}
+              placeholder={t("searchPlaceholder")}
+              aria-label={t("searchPlaceholder")}
+              className="min-h-11"
+            />
+            <Select
+              value={storeId}
+              onValueChange={(value) => setFilter("storeId", value === "all" ? null : value)}
+            >
+              <SelectTrigger aria-label={t("store")} className="min-h-11">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{tCommon("allStores")}</SelectItem>
+                {stores.map((store) => (
+                  <SelectItem key={store.id} value={store.id}>
+                    {store.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={status}
+              onValueChange={(value) => setFilter("status", value === "all" ? null : value)}
+            >
+              <SelectTrigger aria-label={t("statusLabel")} className="min-h-11">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t("allStatuses")}</SelectItem>
+                {purchaseOrderStatuses.map((value) => (
+                  <SelectItem key={value} value={value}>
+                    {statusLabel(value)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={`${sortBy}:${sortDirection}`}
+              onValueChange={(value) => {
+                const [nextSortBy, nextDirection] = value.split(":");
+                updateListParams({
+                  sortBy: nextSortBy === "createdAt" ? null : nextSortBy,
+                  sortDirection: nextDirection === "desc" ? null : nextDirection,
+                  page: null,
+                });
+              }}
+            >
+              <SelectTrigger aria-label={t("sortLabel")} className="min-h-11">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="createdAt:desc">{t("sortNewest")}</SelectItem>
+                <SelectItem value="createdAt:asc">{t("sortOldest")}</SelectItem>
+                <SelectItem value="supplier:asc">{t("sortSupplier")}</SelectItem>
+                <SelectItem value="store:asc">{t("sortStore")}</SelectItem>
+                <SelectItem value="status:asc">{t("sortStatus")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           {canManage && orders.length ? (
             <div className="mb-3 sm:hidden">
               <div className="flex flex-wrap items-center gap-2">
@@ -290,156 +418,159 @@ const PurchaseOrdersPage = () => {
             </div>
           ) : null}
           <ResponsiveDataList
+            key={`purchase-orders-${pageSize}`}
             items={orders}
             getKey={(po) => po.id}
             page={page}
             totalItems={totalOrders}
+            defaultPageSize={pageSize}
             onPageChange={setPage}
             onPageSizeChange={setPageSize}
             renderDesktop={(visibleItems) => (
               <div className="bazaar-admin-table-shell">
                 <div className="bazaar-admin-table-scroll">
-                <TooltipProvider>
-                  <Table className="min-w-[760px]" data-tour="po-table">
-                    <TableHeader>
-                      <TableRow>
-                        {canManage ? (
-                          <TableHead className="w-10">
-                            <input
-                              type="checkbox"
-                              className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                              checked={allSelected}
-                              onChange={toggleSelectAll}
-                              aria-label={t("selectAll")}
-                            />
-                          </TableHead>
-                        ) : null}
-                        <TableHead>{t("number")}</TableHead>
-                        <TableHead>{t("supplier")}</TableHead>
-                        <TableHead>{t("store")}</TableHead>
-                        <TableHead>{t("statusLabel")}</TableHead>
-                        <TableHead>{t("total")}</TableHead>
-                        <TableHead className="hidden md:table-cell">{t("created")}</TableHead>
-                        <TableHead>{tCommon("actions")}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {visibleItems.map((po) => (
-                        <TableRow key={po.id}>
+                  <TooltipProvider>
+                    <Table className="min-w-[760px]" data-tour="po-table">
+                      <TableHeader>
+                        <TableRow>
                           {canManage ? (
-                            <TableCell>
+                            <TableHead className="w-10">
                               <input
                                 type="checkbox"
                                 className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                                checked={selectedIds.has(po.id)}
-                                onChange={() => toggleSelect(po.id)}
-                                aria-label={t("selectPurchaseOrder", {
-                                  number: po.id.slice(0, 8).toUpperCase(),
-                                })}
+                                checked={allSelected}
+                                onChange={toggleSelectAll}
+                                aria-label={t("selectAll")}
                               />
-                            </TableCell>
+                            </TableHead>
                           ) : null}
-                          <TableCell className="text-xs text-muted-foreground" title={po.id}>
-                            {po.id.slice(0, 8).toUpperCase()}
-                          </TableCell>
-                          <TableCell>
-                            <Link
-                              className="font-medium text-foreground"
-                              href={`/purchase-orders/${po.id}`}
-                            >
-                              {po.supplier?.name ?? tCommon("supplierUnassigned")}
-                            </Link>
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground">
-                            {po.store.name}
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              variant={
-                                po.status === "RECEIVED"
-                                  ? "success"
-                                  : po.status === "PARTIALLY_RECEIVED"
-                                    ? "warning"
-                                    : po.status === "CANCELLED"
-                                      ? "danger"
-                                      : "warning"
-                              }
-                            >
-                              {(() => {
-                                const Icon = statusIcon(po.status);
-                                return <Icon className="h-3 w-3" aria-hidden />;
-                              })()}
-                              {statusLabel(po.status)}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground">
-                            {po.hasCost
-                              ? formatStoreMoney(
-                                  po.total,
-                                  locale,
-                                  currencySourceWithFallback(po, po.store),
-                                )
-                              : tCommon("notAvailable")}
-                          </TableCell>
-                          <TableCell className="hidden text-xs text-muted-foreground md:table-cell">
-                            {formatDate(po.createdAt, locale)}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    className="shadow-none"
-                                    aria-label={tCommon("view")}
-                                    onClick={() => router.push(`/purchase-orders/${po.id}`)}
-                                  >
-                                    <ViewIcon className="h-4 w-4" aria-hidden />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>{tCommon("view")}</TooltipContent>
-                              </Tooltip>
-                              {canManage && (po.status === "DRAFT" || po.status === "SUBMITTED") ? (
+                          <TableHead>{t("number")}</TableHead>
+                          <TableHead>{t("supplier")}</TableHead>
+                          <TableHead>{t("store")}</TableHead>
+                          <TableHead>{t("statusLabel")}</TableHead>
+                          <TableHead>{t("total")}</TableHead>
+                          <TableHead className="hidden md:table-cell">{t("created")}</TableHead>
+                          <TableHead>{tCommon("actions")}</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {visibleItems.map((po) => (
+                          <TableRow key={po.id}>
+                            {canManage ? (
+                              <TableCell>
+                                <input
+                                  type="checkbox"
+                                  className="h-4 w-4 rounded border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                  checked={selectedIds.has(po.id)}
+                                  onChange={() => toggleSelect(po.id)}
+                                  aria-label={t("selectPurchaseOrder", {
+                                    number: po.id.slice(0, 8).toUpperCase(),
+                                  })}
+                                />
+                              </TableCell>
+                            ) : null}
+                            <TableCell className="text-xs text-muted-foreground" title={po.id}>
+                              {po.id.slice(0, 8).toUpperCase()}
+                            </TableCell>
+                            <TableCell>
+                              <Link
+                                className="font-medium text-foreground"
+                                href={`/purchase-orders/${po.id}`}
+                              >
+                                {po.supplier?.name ?? tCommon("supplierUnassigned")}
+                              </Link>
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {po.store.name}
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant={
+                                  po.status === "RECEIVED"
+                                    ? "success"
+                                    : po.status === "PARTIALLY_RECEIVED"
+                                      ? "warning"
+                                      : po.status === "CANCELLED"
+                                        ? "danger"
+                                        : "warning"
+                                }
+                              >
+                                {(() => {
+                                  const Icon = statusIcon(po.status);
+                                  return <Icon className="h-3 w-3" aria-hidden />;
+                                })()}
+                                {statusLabel(po.status)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {po.hasCost
+                                ? formatStoreMoney(
+                                    po.total,
+                                    locale,
+                                    currencySourceWithFallback(po, po.store),
+                                  )
+                                : tCommon("notAvailable")}
+                            </TableCell>
+                            <TableCell className="hidden text-xs text-muted-foreground md:table-cell">
+                              {formatDate(po.createdAt, locale)}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <Button
                                       type="button"
                                       variant="ghost"
                                       size="icon"
-                                      className="text-danger shadow-none hover:text-danger"
-                                      aria-label={t("cancelOrder")}
-                                      onClick={async () => {
-                                        if (
-                                          !(await confirm({
-                                            description: t("confirmCancel"),
-                                            confirmVariant: "danger",
-                                          }))
-                                        ) {
-                                          return;
-                                        }
-                                        cancelMutation.mutate({ purchaseOrderId: po.id });
-                                      }}
-                                      disabled={cancelingId === po.id}
+                                      className="shadow-none"
+                                      aria-label={tCommon("view")}
+                                      onClick={() => router.push(`/purchase-orders/${po.id}`)}
                                     >
-                                      {cancelingId === po.id ? (
-                                        <Spinner className="h-4 w-4" />
-                                      ) : (
-                                        <CloseIcon className="h-4 w-4" aria-hidden />
-                                      )}
+                                      <ViewIcon className="h-4 w-4" aria-hidden />
                                     </Button>
                                   </TooltipTrigger>
-                                  <TooltipContent>{t("cancelOrder")}</TooltipContent>
+                                  <TooltipContent>{tCommon("view")}</TooltipContent>
                                 </Tooltip>
-                              ) : null}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TooltipProvider>
+                                {canManage &&
+                                (po.status === "DRAFT" || po.status === "SUBMITTED") ? (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="text-danger shadow-none hover:text-danger"
+                                        aria-label={t("cancelOrder")}
+                                        onClick={async () => {
+                                          if (
+                                            !(await confirm({
+                                              description: t("confirmCancel"),
+                                              confirmVariant: "danger",
+                                            }))
+                                          ) {
+                                            return;
+                                          }
+                                          cancelMutation.mutate({ purchaseOrderId: po.id });
+                                        }}
+                                        disabled={cancelingId === po.id}
+                                      >
+                                        {cancelingId === po.id ? (
+                                          <Spinner className="h-4 w-4" />
+                                        ) : (
+                                          <CloseIcon className="h-4 w-4" aria-hidden />
+                                        )}
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>{t("cancelOrder")}</TooltipContent>
+                                  </Tooltip>
+                                ) : null}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TooltipProvider>
                 </div>
               </div>
             )}

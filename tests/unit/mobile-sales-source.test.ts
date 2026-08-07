@@ -40,7 +40,7 @@ describe("mobile sales and receipts source", () => {
 
     expect(source).toContain('className="bazaar-admin-toolbar space-y-3 md:hidden"');
     expect(source).toContain(
-      'className="bazaar-admin-toolbar hidden grid-cols-1 gap-3 md:grid md:grid-cols-4"',
+      'className="bazaar-admin-toolbar hidden grid-cols-1 gap-3 md:grid md:grid-cols-5"',
     );
     expect(source).toContain("setMobileFiltersOpen(true)");
     expect(source).toContain("renderMobile={(order) => (");

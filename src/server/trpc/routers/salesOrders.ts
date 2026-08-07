@@ -28,18 +28,15 @@ import {
   updateCustomerOrderLine,
 } from "@/server/services/salesOrders";
 
-const optionalEmailSchema = z
-  .string()
-  .trim()
-  .email()
-  .max(254)
-  .optional()
-  .nullable();
+const optionalEmailSchema = z.string().trim().email().max(254).optional().nullable();
 const optionalTrackingTextSchema = z.string().trim().max(512).optional().nullable();
 
 const salesOrdersProtectedProcedure = protectedProcedure.use(async ({ ctx, next }) => {
   try {
-    await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "customerOrders" });
+    await assertFeatureEnabled({
+      organizationId: ctx.user.organizationId,
+      feature: "customerOrders",
+    });
   } catch (error) {
     throw toTRPCError(error);
   }
@@ -48,7 +45,10 @@ const salesOrdersProtectedProcedure = protectedProcedure.use(async ({ ctx, next 
 
 const salesOrdersManagerProcedure = managerProcedure.use(async ({ ctx, next }) => {
   try {
-    await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "customerOrders" });
+    await assertFeatureEnabled({
+      organizationId: ctx.user.organizationId,
+      feature: "customerOrders",
+    });
   } catch (error) {
     throw toTRPCError(error);
   }
@@ -60,10 +60,7 @@ type SalesOrdersContext = {
   user: StoreAccessUser;
 };
 
-const resolveSalesOrderStoreScope = async (
-  ctx: SalesOrdersContext,
-  requestedStoreId?: string,
-) => {
+const resolveSalesOrderStoreScope = async (ctx: SalesOrdersContext, requestedStoreId?: string) => {
   if (requestedStoreId) {
     await assertUserCanAccessStore(ctx.prisma, ctx.user, requestedStoreId);
     return { storeId: requestedStoreId };
@@ -76,10 +73,7 @@ const resolveSalesOrderStoreScope = async (
   return { storeIds: await resolveAccessibleStoreIds(ctx.prisma, ctx.user) };
 };
 
-const assertCustomerOrderStoreAccess = async (
-  ctx: SalesOrdersContext,
-  customerOrderId: string,
-) => {
+const assertCustomerOrderStoreAccess = async (ctx: SalesOrdersContext, customerOrderId: string) => {
   const order = await ctx.prisma.customerOrder.findFirst({
     where: {
       id: customerOrderId,
@@ -147,6 +141,8 @@ export const salesOrdersRouter = router({
           dateTo: z.coerce.date().optional(),
           page: z.number().int().min(1).optional(),
           pageSize: z.number().int().min(1).max(200).optional(),
+          sortBy: z.enum(["createdAt", "number", "totalKgs", "customerName"]).optional(),
+          sortDirection: z.enum(["asc", "desc"]).optional(),
         })
         .optional(),
     )
@@ -162,6 +158,8 @@ export const salesOrdersRouter = router({
           dateTo: input?.dateTo,
           page: input?.page ?? 1,
           pageSize: input?.pageSize ?? 25,
+          sortBy: input?.sortBy,
+          sortDirection: input?.sortDirection,
         });
       } catch (error) {
         throw toTRPCError(error);

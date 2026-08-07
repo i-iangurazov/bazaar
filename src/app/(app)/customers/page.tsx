@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { CustomerSource } from "@prisma/client";
 import { useLocale, useTranslations } from "next-intl";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { PageHeader } from "@/components/page-header";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
@@ -66,19 +66,41 @@ const sourceValues = [
   CustomerSource.ORDER,
   CustomerSource.INTEGRATION,
 ];
+const customerSortOptions = ["createdAt", "name", "orderCount", "lastOrderAt"] as const;
+
+const parsePositiveInteger = (value: string | null, fallback: number, max: number) => {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= max ? parsed : fallback;
+};
+
+const parseOption = <T extends string>(value: string | null, options: readonly T[], fallback: T) =>
+  value && options.includes(value as T) ? (value as T) : fallback;
 
 const CustomerDatabasePage = () => {
   const t = useTranslations("customers");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const locale = useLocale();
+  const router = useRouter();
+  const pathname = usePathname() ?? "/customers";
   const searchParams = useSearchParams();
   const { toast } = useToast();
-  const [storeId, setStoreId] = useState("");
-  const [search, setSearch] = useState("");
-  const [source, setSource] = useState<"ALL" | CustomerSource>("ALL");
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
+  const currentQueryString = searchParams.toString();
+  const storeId = searchParams.get("storeId") ?? "";
+  const search = searchParams.get("search") ?? "";
+  const source = parseOption(
+    searchParams.get("source"),
+    sourceValues,
+    "ALL" as CustomerSource | "ALL",
+  );
+  const page = parsePositiveInteger(searchParams.get("page"), 1, 10_000);
+  const pageSize = parsePositiveInteger(searchParams.get("pageSize"), 25, 100);
+  const sortBy = parseOption(searchParams.get("sortBy"), customerSortOptions, "createdAt");
+  const sortDirection = parseOption(
+    searchParams.get("sortDirection"),
+    ["asc", "desc"] as const,
+    "desc",
+  );
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState<CustomerFormState>(emptyForm);
   const [detailCustomerId, setDetailCustomerId] = useState<string | null>(null);
@@ -88,14 +110,35 @@ const CustomerDatabasePage = () => {
     ...CUSTOMER_EXPORT_COLUMN_KEYS,
   ]);
 
+  const updateListParams = useCallback(
+    (updates: Record<string, string | number | null>) => {
+      const params = new URLSearchParams(currentQueryString);
+      Object.entries(updates).forEach(([key, value]) => {
+        if (value === null || value === "") {
+          params.delete(key);
+        } else {
+          params.set(key, String(value));
+        }
+      });
+      const nextQuery = params.toString();
+      router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+    },
+    [currentQueryString, pathname, router],
+  );
+  const setPage = (value: number) => updateListParams({ page: value === 1 ? null : value });
+  const setPageSize = (value: number) =>
+    updateListParams({ pageSize: value === 25 ? null : value, page: null });
+  const setFilter = (key: string, value: string | null) =>
+    updateListParams({ [key]: value, page: null });
+
   const storesQuery = trpc.stores.list.useQuery();
   const stores = useMemo(() => storesQuery.data ?? [], [storesQuery.data]);
 
   useEffect(() => {
     if (!storeId && stores.length) {
-      setStoreId(stores[0]?.id ?? "");
+      updateListParams({ storeId: stores[0]?.id ?? null });
     }
-  }, [storeId, stores]);
+  }, [storeId, stores, updateListParams]);
 
   useEffect(() => {
     if (searchParams.get("add") === "1") {
@@ -111,6 +154,8 @@ const CustomerDatabasePage = () => {
       source,
       page,
       pageSize,
+      sortBy,
+      sortDirection,
     },
     { enabled: Boolean(storeId) },
   );
@@ -119,6 +164,8 @@ const CustomerDatabasePage = () => {
       storeId: storeId || undefined,
       search: search || undefined,
       source,
+      sortBy,
+      sortDirection,
     },
     { enabled: false },
   );
@@ -291,9 +338,7 @@ const CustomerDatabasePage = () => {
 
   const emptyState = (
     <Card className="bazaar-admin-surface">
-      <CardContent className="bazaar-admin-empty">
-        {t("empty")}
-      </CardContent>
+      <CardContent className="bazaar-admin-empty">{t("empty")}</CardContent>
     </Card>
   );
 
@@ -325,8 +370,7 @@ const CustomerDatabasePage = () => {
               <Select
                 value={storeId}
                 onValueChange={(value) => {
-                  setStoreId(value);
-                  setPage(1);
+                  setFilter("storeId", value);
                 }}
               >
                 <SelectTrigger id="customer-store">
@@ -347,8 +391,7 @@ const CustomerDatabasePage = () => {
                 id="customer-search"
                 value={search}
                 onChange={(event) => {
-                  setSearch(event.target.value);
-                  setPage(1);
+                  setFilter("search", event.target.value);
                 }}
                 placeholder={t("filters.searchPlaceholder")}
               />
@@ -358,8 +401,7 @@ const CustomerDatabasePage = () => {
               <Select
                 value={source}
                 onValueChange={(value) => {
-                  setSource(value as "ALL" | CustomerSource);
-                  setPage(1);
+                  setFilter("source", value === "ALL" ? null : value);
                 }}
               >
                 <SelectTrigger id="customer-source">
@@ -375,6 +417,33 @@ const CustomerDatabasePage = () => {
                 </SelectContent>
               </Select>
             </div>
+            <div className="w-full sm:w-56">
+              <Label htmlFor="customer-sort">{t("filters.sort")}</Label>
+              <Select
+                value={`${sortBy}:${sortDirection}`}
+                onValueChange={(value) => {
+                  const [nextSortBy, nextDirection] = value.split(":");
+                  updateListParams({
+                    sortBy: nextSortBy === "createdAt" ? null : nextSortBy,
+                    sortDirection: nextDirection === "desc" ? null : nextDirection,
+                    page: null,
+                  });
+                }}
+              >
+                <SelectTrigger id="customer-sort">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="createdAt:desc">{t("filters.sortNewest")}</SelectItem>
+                  <SelectItem value="createdAt:asc">{t("filters.sortOldest")}</SelectItem>
+                  <SelectItem value="name:asc">{t("filters.sortName")}</SelectItem>
+                  <SelectItem value="lastOrderAt:desc">
+                    {t("filters.sortRecentPurchase")}
+                  </SelectItem>
+                  <SelectItem value="orderCount:desc">{t("filters.sortPurchases")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         }
       />
@@ -384,8 +453,7 @@ const CustomerDatabasePage = () => {
           <Select
             value={storeId}
             onValueChange={(value) => {
-              setStoreId(value);
-              setPage(1);
+              setFilter("storeId", value);
             }}
           >
             <SelectTrigger className="min-h-11">
@@ -403,8 +471,7 @@ const CustomerDatabasePage = () => {
             className="min-h-11"
             value={search}
             onChange={(event) => {
-              setSearch(event.target.value);
-              setPage(1);
+              setFilter("search", event.target.value);
             }}
             placeholder={t("filters.mobileSearchPlaceholder")}
           />
@@ -419,8 +486,7 @@ const CustomerDatabasePage = () => {
               variant={source === "ALL" ? "primary" : "secondary"}
               className="min-h-10 shrink-0"
               onClick={() => {
-                setSource("ALL");
-                setPage(1);
+                setFilter("source", null);
               }}
             >
               {t("filters.allSources")}
@@ -433,14 +499,35 @@ const CustomerDatabasePage = () => {
                 variant={source === value ? "primary" : "secondary"}
                 className="min-h-10 shrink-0"
                 onClick={() => {
-                  setSource(value);
-                  setPage(1);
+                  setFilter("source", value);
                 }}
               >
                 {renderSource(value)}
               </Button>
             ))}
           </div>
+          <Select
+            value={`${sortBy}:${sortDirection}`}
+            onValueChange={(value) => {
+              const [nextSortBy, nextDirection] = value.split(":");
+              updateListParams({
+                sortBy: nextSortBy === "createdAt" ? null : nextSortBy,
+                sortDirection: nextDirection === "desc" ? null : nextDirection,
+                page: null,
+              });
+            }}
+          >
+            <SelectTrigger className="min-h-11" aria-label={t("filters.sort")}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="createdAt:desc">{t("filters.sortNewest")}</SelectItem>
+              <SelectItem value="createdAt:asc">{t("filters.sortOldest")}</SelectItem>
+              <SelectItem value="name:asc">{t("filters.sortName")}</SelectItem>
+              <SelectItem value="lastOrderAt:desc">{t("filters.sortRecentPurchase")}</SelectItem>
+              <SelectItem value="orderCount:desc">{t("filters.sortPurchases")}</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <div className="grid grid-cols-2 gap-2">
           <Button
@@ -474,15 +561,13 @@ const CustomerDatabasePage = () => {
       ) : null}
 
       <ResponsiveDataList
+        key={`customers-${pageSize}`}
         items={customers}
         page={page}
         totalItems={customersQuery.data?.total ?? 0}
         defaultPageSize={pageSize}
         onPageChange={setPage}
-        onPageSizeChange={(nextPageSize) => {
-          setPageSize(nextPageSize);
-          setPage(1);
-        }}
+        onPageSizeChange={setPageSize}
         paginationKey="customers"
         mobileItemsClassName="space-y-3"
         empty={emptyState}
@@ -872,9 +957,7 @@ const CustomerDatabasePage = () => {
                   ))}
                 </div>
               ) : (
-                <div className="bazaar-admin-empty min-h-24 p-4">
-                  {t("detail.noReceipts")}
-                </div>
+                <div className="bazaar-admin-empty min-h-24 p-4">{t("detail.noReceipts")}</div>
               )}
             </section>
           </div>

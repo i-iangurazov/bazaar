@@ -1,0 +1,25 @@
+{
+  "issue": "HARD-A3-019",
+  "baseCommit": "57e15d18cf37f00d13d95563ee87489606547c42",
+  "testedAt": "2026-08-08T00:40:00+06:00",
+  "database": "bazaar_hardening_agent3_commerce",
+  "redisDb": 13,
+  "routes": ["/sales/orders", "/customers", "/purchase-orders"],
+  "viewports": ["390x844", "414x896", "1440x1000"],
+  "themes": ["light", "dark"],
+  "cells": 18,
+  "assertions": {
+    "directPage2Reload": "PASS (18/18)",
+    "recordNavigateBack": "PASS (12/12 applicable; /customers has no record route)",
+    "horizontalOverflow": "PASS (18/18, 0px)",
+    "consoleErrors": "PASS (18/18, none)",
+    "apiErrors": "PASS (18/18, none)",
+    "responsiveContent": "PASS (18/18)",
+    "themeApplied": "PASS (18/18)"
+  },
+  "notes": [
+    "Each direct URL included server search/store/status-or-source/sort/page/pageSize state with page=2.",
+    "Sales-order and purchase-order detail navigation returned to the exact original query URL.",
+    "Customer details are modal-only, so record-route Back navigation is not applicable."
+  ]
+}

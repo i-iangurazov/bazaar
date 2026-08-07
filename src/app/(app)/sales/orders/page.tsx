@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 import { CustomerOrderStatus } from "@prisma/client";
@@ -37,6 +38,17 @@ import { getCustomerOrderStatusLabel } from "@/lib/i18n/status";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 
+const salesOrderStatuses = Object.values(CustomerOrderStatus);
+const salesOrderSortOptions = ["createdAt", "number", "totalKgs", "customerName"] as const;
+
+const parsePositiveInteger = (value: string | null, fallback: number, max: number) => {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= max ? parsed : fallback;
+};
+
+const parseOption = <T extends string>(value: string | null, options: readonly T[], fallback: T) =>
+  value && options.includes(value as T) ? (value as T) : fallback;
+
 const SalesOrdersPage = () => {
   const t = useTranslations("salesOrders");
   const tCommon = useTranslations("common");
@@ -45,30 +57,53 @@ const SalesOrdersPage = () => {
   const { data: session } = useSession();
   const { toast } = useToast();
   const { confirm, confirmDialog } = useConfirmDialog();
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
-  const [search, setSearch] = useState("");
-  const [storeId, setStoreId] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<CustomerOrderStatus | "all">("all");
+  const router = useRouter();
+  const pathname = usePathname() ?? "/sales/orders";
+  const searchParams = useSearchParams();
+  const currentQueryString = searchParams.toString();
+  const page = parsePositiveInteger(searchParams.get("page"), 1, 10_000);
+  const pageSize = parsePositiveInteger(searchParams.get("pageSize"), 25, 200);
+  const search = searchParams.get("search") ?? "";
+  const storeId = searchParams.get("storeId") || "all";
+  const statusFilter = parseOption(
+    searchParams.get("status"),
+    salesOrderStatuses,
+    "all" as CustomerOrderStatus | "all",
+  );
+  const sortBy = parseOption(searchParams.get("sortBy"), salesOrderSortOptions, "createdAt");
+  const sortDirection = parseOption(
+    searchParams.get("sortDirection"),
+    ["asc", "desc"] as const,
+    "desc",
+  );
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+
+  const updateListParams = useCallback(
+    (updates: Record<string, string | number | null>) => {
+      const params = new URLSearchParams(currentQueryString);
+      Object.entries(updates).forEach(([key, value]) => {
+        if (value === null || value === "") {
+          params.delete(key);
+        } else {
+          params.set(key, String(value));
+        }
+      });
+      const nextQuery = params.toString();
+      router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+    },
+    [currentQueryString, pathname, router],
+  );
+  const setPage = (value: number) => updateListParams({ page: value === 1 ? null : value });
+  const setPageSize = (value: number) =>
+    updateListParams({ pageSize: value === 25 ? null : value, page: null });
+  const setFilter = (key: string, value: string | null) =>
+    updateListParams({ [key]: value, page: null });
 
   const canFinalize = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
 
   const storesQuery = trpc.stores.list.useQuery();
   const stores = useMemo(() => storesQuery.data ?? [], [storesQuery.data]);
   const showAllStoresFilter = stores.length !== 1;
-
-  useEffect(() => {
-    setStoreId((current) => {
-      if (!stores.length) {
-        return "all";
-      }
-      if (current !== "all" && stores.some((store) => store.id === current)) {
-        return current;
-      }
-      return showAllStoresFilter ? "all" : stores[0].id;
-    });
-  }, [showAllStoresFilter, stores]);
 
   const listQuery = trpc.salesOrders.list.useQuery(
     {
@@ -77,6 +112,8 @@ const SalesOrdersPage = () => {
       search: search.trim() || undefined,
       storeId: storeId === "all" ? undefined : storeId,
       status: statusFilter === "all" ? undefined : statusFilter,
+      sortBy,
+      sortDirection,
     },
     { keepPreviousData: true },
   );
@@ -122,6 +159,7 @@ const SalesOrdersPage = () => {
     search.trim(),
     storeId !== "all" ? storeId : "",
     statusFilter !== "all" ? statusFilter : "",
+    sortBy !== "createdAt" || sortDirection !== "desc" ? sortBy : "",
   ].filter(Boolean).length;
 
   const statusVariant = (
@@ -185,8 +223,7 @@ const SalesOrdersPage = () => {
             <Input
               value={search}
               onChange={(event) => {
-                setSearch(event.target.value);
-                setPage(1);
+                setFilter("search", event.target.value);
               }}
               placeholder={t("searchPlaceholder")}
               aria-label={t("searchPlaceholder")}
@@ -199,8 +236,7 @@ const SalesOrdersPage = () => {
                 variant={statusFilter === "all" ? "default" : "secondary"}
                 className="h-10 shrink-0"
                 onClick={() => {
-                  setStatusFilter("all");
-                  setPage(1);
+                  setFilter("status", null);
                 }}
               >
                 {t("allStatuses")}
@@ -211,8 +247,7 @@ const SalesOrdersPage = () => {
                 variant={statusFilter === CustomerOrderStatus.READY ? "default" : "secondary"}
                 className="h-10 shrink-0"
                 onClick={() => {
-                  setStatusFilter(CustomerOrderStatus.READY);
-                  setPage(1);
+                  setFilter("status", CustomerOrderStatus.READY);
                 }}
               >
                 {getCustomerOrderStatusLabel(t, "READY")}
@@ -229,12 +264,11 @@ const SalesOrdersPage = () => {
             </div>
           </div>
 
-          <div className="bazaar-admin-toolbar hidden grid-cols-1 gap-3 md:grid md:grid-cols-4">
+          <div className="bazaar-admin-toolbar hidden grid-cols-1 gap-3 md:grid md:grid-cols-5">
             <Input
               value={search}
               onChange={(event) => {
-                setSearch(event.target.value);
-                setPage(1);
+                setFilter("search", event.target.value);
               }}
               placeholder={t("searchPlaceholder")}
               aria-label={t("searchPlaceholder")}
@@ -242,8 +276,7 @@ const SalesOrdersPage = () => {
             <Select
               value={storeId}
               onValueChange={(value) => {
-                setStoreId(value);
-                setPage(1);
+                setFilter("storeId", value === "all" ? null : value);
               }}
             >
               <SelectTrigger aria-label={t("store")}>
@@ -263,8 +296,7 @@ const SalesOrdersPage = () => {
             <Select
               value={statusFilter}
               onValueChange={(value) => {
-                setStatusFilter(value as CustomerOrderStatus | "all");
-                setPage(1);
+                setFilter("status", value === "all" ? null : value);
               }}
             >
               <SelectTrigger aria-label={t("statusLabel")}>
@@ -285,140 +317,168 @@ const SalesOrdersPage = () => {
                 </SelectItem>
               </SelectContent>
             </Select>
+            <Select
+              value={`${sortBy}:${sortDirection}`}
+              onValueChange={(value) => {
+                const [nextSortBy, nextDirection] = value.split(":") as [
+                  (typeof salesOrderSortOptions)[number],
+                  "asc" | "desc",
+                ];
+                updateListParams({
+                  sortBy: nextSortBy === "createdAt" ? null : nextSortBy,
+                  sortDirection: nextDirection === "desc" ? null : nextDirection,
+                  page: null,
+                });
+              }}
+            >
+              <SelectTrigger aria-label={t("sortLabel")}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="createdAt:desc">{t("sortNewest")}</SelectItem>
+                <SelectItem value="createdAt:asc">{t("sortOldest")}</SelectItem>
+                <SelectItem value="number:asc">{t("sortNumberAsc")}</SelectItem>
+                <SelectItem value="customerName:asc">{t("sortCustomerAsc")}</SelectItem>
+                <SelectItem value="totalKgs:desc">{t("sortTotalDesc")}</SelectItem>
+                <SelectItem value="totalKgs:asc">{t("sortTotalAsc")}</SelectItem>
+              </SelectContent>
+            </Select>
             <div className="flex items-center text-sm text-muted-foreground">
               {t("totalLabel", { count: totalItems })}
             </div>
           </div>
 
           <ResponsiveDataList
+            key={`sales-orders-${pageSize}`}
             items={items}
             getKey={(item) => item.id}
             page={page}
             totalItems={totalItems}
+            defaultPageSize={pageSize}
             onPageChange={setPage}
             onPageSizeChange={setPageSize}
             renderDesktop={(visibleItems) => (
               <div className="bazaar-admin-table-shell">
                 <div className="bazaar-admin-table-scroll">
-                <Table className="min-w-[980px]" data-tour="sales-orders-table">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t("number")}</TableHead>
-                      <TableHead>{t("customer")}</TableHead>
-                      <TableHead>{t("customerAddress")}</TableHead>
-                      <TableHead>{t("store")}</TableHead>
-                      <TableHead>{t("statusLabel")}</TableHead>
-                      <TableHead>{t("sourceLabel")}</TableHead>
-                      <TableHead>{t("total")}</TableHead>
-                      <TableHead>{t("created")}</TableHead>
-                      <TableHead className="text-right">{tCommon("actions")}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {visibleItems.map((order) => (
-                      <TableRow key={order.id}>
-                        <TableCell>
-                          <Link
-                            className="font-medium text-foreground"
-                            href={`/sales/orders/${order.id}`}
-                          >
-                            {order.number}
-                          </Link>
-                        </TableCell>
-                        <TableCell>{order.customerName || tCommon("notAvailable")}</TableCell>
-                        <TableCell className="max-w-[220px] truncate">
-                          {order.customerAddress || tCommon("notAvailable")}
-                        </TableCell>
-                        <TableCell>{order.store.name}</TableCell>
-                        <TableCell>
-                          <Badge variant={statusVariant(order.status)}>
-                            {getCustomerOrderStatusLabel(t, order.status)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={
-                              order.source === "API"
-                                ? "success"
-                                : order.source === "CATALOG"
-                                  ? "warning"
-                                  : "muted"
-                            }
-                          >
-                            {sourceLabel(order.source)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          {formatKgsMoney(
-                            order.totalKgs,
-                            locale,
-                            currencySourceWithFallback(order, order.store),
-                          )}
-                        </TableCell>
-                        <TableCell>{formatDate(order.createdAt, locale)}</TableCell>
-                        <TableCell>
-                          <div className="flex justify-end">
-                            <RowActions
-                              moreLabel={tCommon("moreActions")}
-                              actions={[
-                                {
-                                  key: "view",
-                                  label: tCommon("view"),
-                                  icon: ViewIcon,
-                                  href: `/sales/orders/${order.id}`,
-                                },
-                                ...(canFinalize && order.status === CustomerOrderStatus.READY
-                                  ? [
-                                      {
-                                        key: "complete",
-                                        label: t("complete"),
-                                        icon: CheckIcon,
-                                        onSelect: () => {
-                                          void completeMutation.mutateAsync({
-                                            customerOrderId: order.id,
-                                            idempotencyKey:
-                                              typeof crypto !== "undefined" &&
-                                              "randomUUID" in crypto
-                                                ? crypto.randomUUID()
-                                                : `sales-order-${Date.now()}`,
-                                          });
-                                        },
-                                        disabled: completeMutation.isLoading,
-                                      },
-                                    ]
-                                  : []),
-                                ...(canFinalize && canCancel(order.status)
-                                  ? [
-                                      {
-                                        key: "cancel",
-                                        label: t("cancel"),
-                                        icon: CloseIcon,
-                                        variant: "danger",
-                                        onSelect: async () => {
-                                          if (
-                                            !(await confirm({
-                                              description: t("confirmCancel"),
-                                              confirmVariant: "danger",
-                                            }))
-                                          ) {
-                                            return;
-                                          }
-                                          void cancelMutation.mutateAsync({
-                                            customerOrderId: order.id,
-                                          });
-                                        },
-                                        disabled: cancelMutation.isLoading,
-                                      },
-                                    ]
-                                  : []),
-                              ]}
-                            />
-                          </div>
-                        </TableCell>
+                  <Table className="min-w-[980px]" data-tour="sales-orders-table">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{t("number")}</TableHead>
+                        <TableHead>{t("customer")}</TableHead>
+                        <TableHead>{t("customerAddress")}</TableHead>
+                        <TableHead>{t("store")}</TableHead>
+                        <TableHead>{t("statusLabel")}</TableHead>
+                        <TableHead>{t("sourceLabel")}</TableHead>
+                        <TableHead>{t("total")}</TableHead>
+                        <TableHead>{t("created")}</TableHead>
+                        <TableHead className="text-right">{tCommon("actions")}</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {visibleItems.map((order) => (
+                        <TableRow key={order.id}>
+                          <TableCell>
+                            <Link
+                              className="font-medium text-foreground"
+                              href={`/sales/orders/${order.id}`}
+                            >
+                              {order.number}
+                            </Link>
+                          </TableCell>
+                          <TableCell>{order.customerName || tCommon("notAvailable")}</TableCell>
+                          <TableCell className="max-w-[220px] truncate">
+                            {order.customerAddress || tCommon("notAvailable")}
+                          </TableCell>
+                          <TableCell>{order.store.name}</TableCell>
+                          <TableCell>
+                            <Badge variant={statusVariant(order.status)}>
+                              {getCustomerOrderStatusLabel(t, order.status)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={
+                                order.source === "API"
+                                  ? "success"
+                                  : order.source === "CATALOG"
+                                    ? "warning"
+                                    : "muted"
+                              }
+                            >
+                              {sourceLabel(order.source)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {formatKgsMoney(
+                              order.totalKgs,
+                              locale,
+                              currencySourceWithFallback(order, order.store),
+                            )}
+                          </TableCell>
+                          <TableCell>{formatDate(order.createdAt, locale)}</TableCell>
+                          <TableCell>
+                            <div className="flex justify-end">
+                              <RowActions
+                                moreLabel={tCommon("moreActions")}
+                                actions={[
+                                  {
+                                    key: "view",
+                                    label: tCommon("view"),
+                                    icon: ViewIcon,
+                                    href: `/sales/orders/${order.id}`,
+                                  },
+                                  ...(canFinalize && order.status === CustomerOrderStatus.READY
+                                    ? [
+                                        {
+                                          key: "complete",
+                                          label: t("complete"),
+                                          icon: CheckIcon,
+                                          onSelect: () => {
+                                            void completeMutation.mutateAsync({
+                                              customerOrderId: order.id,
+                                              idempotencyKey:
+                                                typeof crypto !== "undefined" &&
+                                                "randomUUID" in crypto
+                                                  ? crypto.randomUUID()
+                                                  : `sales-order-${Date.now()}`,
+                                            });
+                                          },
+                                          disabled: completeMutation.isLoading,
+                                        },
+                                      ]
+                                    : []),
+                                  ...(canFinalize && canCancel(order.status)
+                                    ? [
+                                        {
+                                          key: "cancel",
+                                          label: t("cancel"),
+                                          icon: CloseIcon,
+                                          variant: "danger",
+                                          onSelect: async () => {
+                                            if (
+                                              !(await confirm({
+                                                description: t("confirmCancel"),
+                                                confirmVariant: "danger",
+                                              }))
+                                            ) {
+                                              return;
+                                            }
+                                            void cancelMutation.mutateAsync({
+                                              customerOrderId: order.id,
+                                            });
+                                          },
+                                          disabled: cancelMutation.isLoading,
+                                        },
+                                      ]
+                                    : []),
+                                ]}
+                              />
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
               </div>
             )}
@@ -585,8 +645,7 @@ const SalesOrdersPage = () => {
                 <Select
                   value={storeId}
                   onValueChange={(value) => {
-                    setStoreId(value);
-                    setPage(1);
+                    setFilter("storeId", value === "all" ? null : value);
                   }}
                 >
                   <SelectTrigger aria-label={t("store")} className="h-11">
@@ -610,8 +669,7 @@ const SalesOrdersPage = () => {
                 <Select
                   value={statusFilter}
                   onValueChange={(value) => {
-                    setStatusFilter(value as CustomerOrderStatus | "all");
-                    setPage(1);
+                    setFilter("status", value === "all" ? null : value);
                   }}
                 >
                   <SelectTrigger aria-label={t("statusLabel")} className="h-11">
@@ -633,6 +691,33 @@ const SalesOrdersPage = () => {
                   </SelectContent>
                 </Select>
               </label>
+
+              <label className="space-y-1.5">
+                <span className="text-sm font-medium text-foreground">{t("sortLabel")}</span>
+                <Select
+                  value={`${sortBy}:${sortDirection}`}
+                  onValueChange={(value) => {
+                    const [nextSortBy, nextDirection] = value.split(":");
+                    updateListParams({
+                      sortBy: nextSortBy === "createdAt" ? null : nextSortBy,
+                      sortDirection: nextDirection === "desc" ? null : nextDirection,
+                      page: null,
+                    });
+                  }}
+                >
+                  <SelectTrigger aria-label={t("sortLabel")} className="h-11">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="createdAt:desc">{t("sortNewest")}</SelectItem>
+                    <SelectItem value="createdAt:asc">{t("sortOldest")}</SelectItem>
+                    <SelectItem value="number:asc">{t("sortNumberAsc")}</SelectItem>
+                    <SelectItem value="customerName:asc">{t("sortCustomerAsc")}</SelectItem>
+                    <SelectItem value="totalKgs:desc">{t("sortTotalDesc")}</SelectItem>
+                    <SelectItem value="totalKgs:asc">{t("sortTotalAsc")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </label>
             </div>
 
             <div className="mt-5 grid grid-cols-2 gap-2">
@@ -641,10 +726,14 @@ const SalesOrdersPage = () => {
                 variant="secondary"
                 className="h-11"
                 onClick={() => {
-                  setSearch("");
-                  setStoreId(showAllStoresFilter ? "all" : (stores[0]?.id ?? "all"));
-                  setStatusFilter("all");
-                  setPage(1);
+                  updateListParams({
+                    search: null,
+                    storeId: null,
+                    status: null,
+                    sortBy: null,
+                    sortDirection: null,
+                    page: null,
+                  });
                 }}
               >
                 {tCommon("clearSelection")}

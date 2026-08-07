@@ -215,8 +215,7 @@ const resolveUnitPrice = async (input: {
   const effective = getEffectiveProductPrice({
     basePrice: override?.priceKgs ?? product.basePriceKgs ?? 0,
     discount:
-      override?.discountType === CatalogDiscountType.PERCENTAGE &&
-      override.discountPercentage
+      override?.discountType === CatalogDiscountType.PERCENTAGE && override.discountPercentage
         ? {
             type: "PERCENTAGE",
             percentage: override.discountPercentage,
@@ -227,21 +226,14 @@ const resolveUnitPrice = async (input: {
     now: new Date(),
     currency: "KGS",
   });
-  const baseUnitPriceKgs = effective.basePrice.toDecimalPlaces(
-    2,
-    Prisma.Decimal.ROUND_HALF_UP,
-  );
+  const baseUnitPriceKgs = effective.basePrice.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
   const unitPriceKgs = effective.effectivePrice;
 
   return {
     variantKey,
     baseUnitPriceKgs,
-    appliedDiscountType: effective.hasActiveDiscount
-      ? CatalogDiscountType.PERCENTAGE
-      : null,
-    appliedDiscountPercentage: effective.hasActiveDiscount
-      ? effective.discountPercentage
-      : null,
+    appliedDiscountType: effective.hasActiveDiscount ? CatalogDiscountType.PERCENTAGE : null,
+    appliedDiscountPercentage: effective.hasActiveDiscount ? effective.discountPercentage : null,
     appliedDiscountAmountKgs: effective.hasActiveDiscount
       ? baseUnitPriceKgs.minus(unitPriceKgs).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)
       : null,
@@ -356,6 +348,8 @@ export const listCustomerOrders = async (input: {
   dateTo?: Date;
   page: number;
   pageSize: number;
+  sortBy?: "createdAt" | "number" | "totalKgs" | "customerName";
+  sortDirection?: "asc" | "desc";
 }) => {
   const where: Prisma.CustomerOrderWhereInput = {
     organizationId: input.organizationId,
@@ -387,6 +381,18 @@ export const listCustomerOrders = async (input: {
       : {}),
   };
 
+  const sortDirection = input.sortDirection ?? "desc";
+  const orderBy: Prisma.CustomerOrderOrderByWithRelationInput[] = [
+    input.sortBy === "number"
+      ? { number: sortDirection }
+      : input.sortBy === "totalKgs"
+        ? { totalKgs: sortDirection }
+        : input.sortBy === "customerName"
+          ? { customerName: sortDirection }
+          : { createdAt: sortDirection },
+    { id: sortDirection },
+  ];
+
   const [total, items] = await Promise.all([
     prisma.customerOrder.count({ where }),
     prisma.customerOrder.findMany({
@@ -402,7 +408,7 @@ export const listCustomerOrders = async (input: {
           },
         },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy,
       skip: (input.page - 1) * input.pageSize,
       take: input.pageSize,
     }),
