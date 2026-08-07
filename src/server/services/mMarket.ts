@@ -13,7 +13,7 @@ import { prisma } from "@/server/db/prisma";
 import { assertExternalProviderCallAllowed } from "@/server/config/runtime";
 import { AppError } from "@/server/services/errors";
 import { getRedisPublisher } from "@/server/redis";
-import { registerJob, runJob, type JobPayload } from "@/server/jobs";
+import { runJob, type JobPayload } from "@/server/jobs";
 import { toJson } from "@/server/services/json";
 import { writeAuditLog } from "@/server/services/audit";
 import { normalizeProductImageUrl } from "@/server/services/productImageStorage";
@@ -37,7 +37,7 @@ const MMARKET_SPECS_ENDPOINTS: Partial<Record<MMarketEnvironment, string>> = {
 
 const MMARKET_EXPORT_LOCK_PREFIX = "mmarket:export:";
 const MMARKET_EXPORT_COOLDOWN_MS = 15 * 60 * 1000;
-const MMARKET_EXPORT_JOB_NAME = "mmarket-export";
+export const MMARKET_EXPORT_JOB_NAME = "mmarket-export";
 const MMARKET_REQUEST_TIMEOUT_MS = 90_000;
 const MMARKET_SPEC_REQUEST_TIMEOUT_MS = 5_000;
 
@@ -3031,15 +3031,19 @@ const timeoutAbandonedMMarketExportJobs = async (organizationId?: string) => {
   const jobs = await prisma.mMarketExportJob.findMany({
     where: {
       ...(organizationId ? { orgId: organizationId } : {}),
-      status: MMarketExportJobStatus.RUNNING,
-      startedAt: { lt: timeoutBefore },
       finishedAt: null,
+      OR: [
+        { status: MMarketExportJobStatus.RUNNING, startedAt: { lt: timeoutBefore } },
+        { status: MMarketExportJobStatus.QUEUED, createdAt: { lt: timeoutBefore } },
+      ],
     },
     select: {
       id: true,
       orgId: true,
       storeId: true,
       requestIdempotencyKey: true,
+      status: true,
+      createdAt: true,
       startedAt: true,
       payloadStatsJson: true,
       errorReportJson: true,
@@ -3051,9 +3055,17 @@ const timeoutAbandonedMMarketExportJobs = async (organizationId?: string) => {
   }
 
   const finishedAt = new Date();
+  const timedOutJobIds: string[] = [];
   for (const job of jobs) {
-    await prisma.mMarketExportJob.update({
-      where: { id: job.id },
+    const timedOut = await prisma.mMarketExportJob.updateMany({
+      where: {
+        id: job.id,
+        finishedAt: null,
+        OR: [
+          { status: MMarketExportJobStatus.RUNNING, startedAt: { lt: timeoutBefore } },
+          { status: MMarketExportJobStatus.QUEUED, createdAt: { lt: timeoutBefore } },
+        ],
+      },
       data: {
         status: MMarketExportJobStatus.FAILED,
         finishedAt,
@@ -3071,6 +3083,10 @@ const timeoutAbandonedMMarketExportJobs = async (organizationId?: string) => {
         }),
       },
     });
+    if (timedOut.count !== 1) {
+      continue;
+    }
+    timedOutJobIds.push(job.id);
     await prisma.mMarketIntegration.updateMany({
       where: { orgId: job.orgId },
       data: {
@@ -3082,7 +3098,7 @@ const timeoutAbandonedMMarketExportJobs = async (organizationId?: string) => {
     });
   }
 
-  return jobs.map((job) => job.id);
+  return timedOutJobIds;
 };
 
 export const requestMMarketExport = async (input: {
@@ -3203,7 +3219,7 @@ export const requestMMarketExport = async (input: {
   };
 };
 
-const runMMarketExportJob = async (
+export const runMMarketExportJob = async (
   payload?: JobPayload,
 ): Promise<{ job: string; status: "ok" | "skipped"; details?: Record<string, unknown> }> => {
   await timeoutAbandonedMMarketExportJobs();
@@ -3227,16 +3243,21 @@ const runMMarketExportJob = async (
     return { job: MMARKET_EXPORT_JOB_NAME, status: "skipped", details: { reason: "empty" } };
   }
 
-  const running = await prisma.mMarketExportJob.update({
-    where: { id: job.id },
+  const startedAt = new Date();
+  const claim = await prisma.mMarketExportJob.updateMany({
+    where: { id: job.id, status: MMarketExportJobStatus.QUEUED },
     data: {
       status: MMarketExportJobStatus.RUNNING,
-      startedAt: new Date(),
+      startedAt,
       finishedAt: null,
       errorReportJson: Prisma.DbNull,
       responseJson: Prisma.DbNull,
     },
   });
+  if (claim.count !== 1) {
+    return { job: MMARKET_EXPORT_JOB_NAME, status: "skipped", details: { reason: "claimed" } };
+  }
+  const running = await prisma.mMarketExportJob.findUniqueOrThrow({ where: { id: job.id } });
 
   let plan: MMarketExportPlan | null = null;
 
@@ -3433,12 +3454,6 @@ const runMMarketExportJob = async (
     throw new AppError("mMarketExportFailed", "INTERNAL_SERVER_ERROR", 500);
   }
 };
-
-registerJob(MMARKET_EXPORT_JOB_NAME, {
-  handler: runMMarketExportJob,
-  maxAttempts: 1,
-  baseDelayMs: 1,
-});
 
 export const __resetMMarketCooldownForTests = () => {
   if (process.env.NODE_ENV !== "test") {

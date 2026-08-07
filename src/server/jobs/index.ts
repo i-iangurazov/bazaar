@@ -215,6 +215,46 @@ const jobs: Record<string, JobDefinition> = {
     maxAttempts: 3,
     baseDelayMs: 1000,
   },
+  "mmarket-export": {
+    handler: async (payload) => {
+      const { runMMarketExportJob } = await import("@/server/services/mMarket");
+      return runMMarketExportJob(payload);
+    },
+    maxAttempts: 1,
+    baseDelayMs: 1,
+  },
+  "bakai-store-export": {
+    handler: async (payload) => {
+      const { runBakaiStoreExportJob } = await import("@/server/services/bakaiStore");
+      return runBakaiStoreExportJob(payload);
+    },
+    maxAttempts: 1,
+    baseDelayMs: 1,
+  },
+  "bakai-store-api-sync": {
+    handler: async (payload) => {
+      const { runBakaiStoreApiSyncJob } = await import("@/server/services/bakaiStore");
+      return runBakaiStoreApiSyncJob(payload);
+    },
+    maxAttempts: 1,
+    baseDelayMs: 1,
+  },
+  "o-market-export": {
+    handler: async (payload) => {
+      const { runOMarketExportJob } = await import("@/server/services/oMarket");
+      return runOMarketExportJob(payload);
+    },
+    maxAttempts: 1,
+    baseDelayMs: 1,
+  },
+  "product-description-generation": {
+    handler: async (payload) => {
+      const { runProductDescriptionGenerationJob } = await import(
+        "@/server/services/productDescriptionGenerationJobs"
+      );
+      return runProductDescriptionGenerationJob(payload);
+    },
+  },
 };
 
 export const registerJob = (name: string, definition: JobDefinition) => {

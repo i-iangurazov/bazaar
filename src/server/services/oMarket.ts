@@ -16,7 +16,7 @@ import {
 } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
-import { registerJob, runJob, type JobPayload } from "@/server/jobs";
+import { runJob, type JobPayload } from "@/server/jobs";
 import { writeAuditLog } from "@/server/services/audit";
 import { AppError } from "@/server/services/errors";
 import { toJson } from "@/server/services/json";
@@ -37,7 +37,7 @@ import {
   type OMarketImportStatusRow,
 } from "@/server/services/oMarketApiClient";
 
-const O_MARKET_EXPORT_JOB_NAME = "o-market-export";
+export const O_MARKET_EXPORT_JOB_NAME = "o-market-export";
 const O_MARKET_PRODUCT_SELECTION_AUDIT_ACTION = "O_MARKET_PRODUCT_SELECTION_UPDATED";
 const O_MARKET_STATUS_POLL_ATTEMPTS = 3;
 const O_MARKET_STATUS_POLL_DELAY_MS = 500;
@@ -1871,9 +1871,11 @@ const timeoutAbandonedOMarketExportJobs = async (organizationId?: string) => {
   const jobs = await prisma.oMarketExportJob.findMany({
     where: {
       ...(organizationId ? { orgId: organizationId } : {}),
-      status: OMarketExportJobStatus.RUNNING,
-      startedAt: { lt: timeoutBefore },
       finishedAt: null,
+      OR: [
+        { status: OMarketExportJobStatus.RUNNING, startedAt: { lt: timeoutBefore } },
+        { status: OMarketExportJobStatus.QUEUED, createdAt: { lt: timeoutBefore } },
+      ],
     },
     select: {
       id: true,
@@ -1881,6 +1883,8 @@ const timeoutAbandonedOMarketExportJobs = async (organizationId?: string) => {
       storeId: true,
       jobType: true,
       requestIdempotencyKey: true,
+      status: true,
+      createdAt: true,
       startedAt: true,
       attemptedCount: true,
       succeededCount: true,
@@ -1896,12 +1900,20 @@ const timeoutAbandonedOMarketExportJobs = async (organizationId?: string) => {
   }
 
   const finishedAt = new Date();
+  const timedOutJobIds: string[] = [];
   for (const job of jobs) {
     const attemptedCount = job.attemptedCount ?? Number(asRecord(job.payloadStatsJson)?.productCount ?? 0);
     const succeededCount = job.succeededCount ?? 0;
     const skippedCount = job.skippedCount ?? 0;
-    await prisma.oMarketExportJob.update({
-      where: { id: job.id },
+    const timedOut = await prisma.oMarketExportJob.updateMany({
+      where: {
+        id: job.id,
+        finishedAt: null,
+        OR: [
+          { status: OMarketExportJobStatus.RUNNING, startedAt: { lt: timeoutBefore } },
+          { status: OMarketExportJobStatus.QUEUED, createdAt: { lt: timeoutBefore } },
+        ],
+      },
       data: {
         status: OMarketExportJobStatus.FAILED,
         finishedAt,
@@ -1924,6 +1936,10 @@ const timeoutAbandonedOMarketExportJobs = async (organizationId?: string) => {
         }),
       },
     });
+    if (timedOut.count !== 1) {
+      continue;
+    }
+    timedOutJobIds.push(job.id);
     await prisma.oMarketIntegration.updateMany({
       where: { orgId: job.orgId },
       data: {
@@ -1935,7 +1951,7 @@ const timeoutAbandonedOMarketExportJobs = async (organizationId?: string) => {
     });
   }
 
-  return jobs.map((job) => job.id);
+  return timedOutJobIds;
 };
 
 const formatOMarketErrorData = (errorData: Array<Record<string, unknown>>) => {
@@ -2037,7 +2053,7 @@ const pollImportStatus = async (input: {
   return rows;
 };
 
-const runOMarketExportJob = async (
+export const runOMarketExportJob = async (
   payload?: JobPayload,
 ): Promise<{ job: string; status: "ok" | "skipped"; details?: Record<string, unknown> }> => {
   await timeoutAbandonedOMarketExportJobs();
@@ -2058,16 +2074,21 @@ const runOMarketExportJob = async (
   if (!job) {
     return { job: O_MARKET_EXPORT_JOB_NAME, status: "skipped", details: { reason: "empty" } };
   }
-  const running = await prisma.oMarketExportJob.update({
-    where: { id: job.id },
+  const startedAt = new Date();
+  const claim = await prisma.oMarketExportJob.updateMany({
+    where: { id: job.id, status: OMarketExportJobStatus.QUEUED },
     data: {
       status: OMarketExportJobStatus.RUNNING,
-      startedAt: new Date(),
+      startedAt,
       finishedAt: null,
       responseJson: Prisma.DbNull,
       errorReportJson: Prisma.DbNull,
     },
   });
+  if (claim.count !== 1) {
+    return { job: O_MARKET_EXPORT_JOB_NAME, status: "skipped", details: { reason: "claimed" } };
+  }
+  const running = await prisma.oMarketExportJob.findUniqueOrThrow({ where: { id: job.id } });
   let plan: OMarketExportPlan | null = null;
   let token: string | null = null;
   try {
@@ -2302,12 +2323,6 @@ const runOMarketExportJob = async (
     throw new AppError("oMarketExportFailed", "INTERNAL_SERVER_ERROR", 500);
   }
 };
-
-registerJob(O_MARKET_EXPORT_JOB_NAME, {
-  handler: runOMarketExportJob,
-  maxAttempts: 1,
-  baseDelayMs: 1,
-});
 
 export const __buildOMarketExportPlanForTests = async (
   organizationId: string,

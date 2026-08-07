@@ -19,7 +19,7 @@ import {
 import * as XLSX from "xlsx";
 
 import { prisma } from "@/server/db/prisma";
-import { registerJob, runJob, type JobPayload } from "@/server/jobs";
+import { runJob, type JobPayload } from "@/server/jobs";
 import { writeAuditLog } from "@/server/services/audit";
 import {
   BAKAI_STORE_MAX_PRODUCTS_PER_REQUEST,
@@ -34,8 +34,8 @@ import { AppError } from "@/server/services/errors";
 import { toJson } from "@/server/services/json";
 import { normalizeProductImageUrl } from "@/server/services/productImageStorage";
 
-const BAKAI_STORE_EXPORT_JOB_NAME = "bakai-store-export";
-const BAKAI_STORE_API_SYNC_JOB_NAME = "bakai-store-api-sync";
+export const BAKAI_STORE_EXPORT_JOB_NAME = "bakai-store-export";
+export const BAKAI_STORE_API_SYNC_JOB_NAME = "bakai-store-api-sync";
 const BAKAI_STORE_STORAGE_ROOT = join(process.cwd(), "uploads", "bakai-store");
 const BAKAI_TEMPLATE_MAX_BYTES = 10 * 1024 * 1024;
 const BAKAI_PRODUCT_SELECTION_AUDIT_ACTION = "BAKAI_STORE_PRODUCT_SELECTION_UPDATED";
@@ -3200,9 +3200,11 @@ const timeoutAbandonedBakaiStoreExportJobs = async (organizationId?: string) => 
   const jobs = await prisma.bakaiStoreExportJob.findMany({
     where: {
       ...(organizationId ? { orgId: organizationId } : {}),
-      status: BakaiStoreExportJobStatus.RUNNING,
-      startedAt: { lt: timeoutBefore },
       finishedAt: null,
+      OR: [
+        { status: BakaiStoreExportJobStatus.RUNNING, startedAt: { lt: timeoutBefore } },
+        { status: BakaiStoreExportJobStatus.QUEUED, createdAt: { lt: timeoutBefore } },
+      ],
     },
     select: {
       id: true,
@@ -3210,6 +3212,8 @@ const timeoutAbandonedBakaiStoreExportJobs = async (organizationId?: string) => 
       storeId: true,
       jobType: true,
       requestIdempotencyKey: true,
+      status: true,
+      createdAt: true,
       startedAt: true,
       attemptedCount: true,
       succeededCount: true,
@@ -3225,12 +3229,20 @@ const timeoutAbandonedBakaiStoreExportJobs = async (organizationId?: string) => 
   }
 
   const finishedAt = new Date();
+  const timedOutJobIds: string[] = [];
   for (const job of jobs) {
     const attemptedCount = job.attemptedCount ?? Number(asRecord(job.payloadStatsJson)?.productCount ?? 0);
     const succeededCount = job.succeededCount ?? 0;
     const skippedCount = job.skippedCount ?? 0;
-    await prisma.bakaiStoreExportJob.update({
-      where: { id: job.id },
+    const timedOut = await prisma.bakaiStoreExportJob.updateMany({
+      where: {
+        id: job.id,
+        finishedAt: null,
+        OR: [
+          { status: BakaiStoreExportJobStatus.RUNNING, startedAt: { lt: timeoutBefore } },
+          { status: BakaiStoreExportJobStatus.QUEUED, createdAt: { lt: timeoutBefore } },
+        ],
+      },
       data: {
         status: BakaiStoreExportJobStatus.FAILED,
         finishedAt,
@@ -3253,6 +3265,10 @@ const timeoutAbandonedBakaiStoreExportJobs = async (organizationId?: string) => 
         }),
       },
     });
+    if (timedOut.count !== 1) {
+      continue;
+    }
+    timedOutJobIds.push(job.id);
     await prisma.bakaiStoreIntegration.updateMany({
       where: { orgId: job.orgId },
       data: {
@@ -3264,7 +3280,7 @@ const timeoutAbandonedBakaiStoreExportJobs = async (organizationId?: string) => 
     });
   }
 
-  return jobs.map((job) => job.id);
+  return timedOutJobIds;
 };
 
 export const requestBakaiStoreExport = async (input: {
@@ -3464,7 +3480,7 @@ export const requestBakaiStoreApiSync = async (input: {
   };
 };
 
-const runBakaiStoreExportJob = async (
+export const runBakaiStoreExportJob = async (
   payload?: JobPayload,
 ): Promise<{ job: string; status: "ok" | "skipped"; details?: Record<string, unknown> }> => {
   await timeoutAbandonedBakaiStoreExportJobs();
@@ -3495,11 +3511,12 @@ const runBakaiStoreExportJob = async (
     return { job: BAKAI_STORE_EXPORT_JOB_NAME, status: "skipped", details: { reason: "empty" } };
   }
 
-  const running = await prisma.bakaiStoreExportJob.update({
-    where: { id: job.id },
+  const startedAt = new Date();
+  const claim = await prisma.bakaiStoreExportJob.updateMany({
+    where: { id: job.id, status: BakaiStoreExportJobStatus.QUEUED },
     data: {
       status: BakaiStoreExportJobStatus.RUNNING,
-      startedAt: new Date(),
+      startedAt,
       finishedAt: null,
       storagePath: null,
       fileName: null,
@@ -3508,6 +3525,10 @@ const runBakaiStoreExportJob = async (
       errorReportJson: Prisma.DbNull,
     },
   });
+  if (claim.count !== 1) {
+    return { job: BAKAI_STORE_EXPORT_JOB_NAME, status: "skipped", details: { reason: "claimed" } };
+  }
+  const running = await prisma.bakaiStoreExportJob.findUniqueOrThrow({ where: { id: job.id } });
 
   let plan: BakaiStoreExportPlan | null = null;
 
@@ -3677,7 +3698,7 @@ const runBakaiStoreExportJob = async (
   }
 };
 
-const runBakaiStoreApiSyncJob = async (
+export const runBakaiStoreApiSyncJob = async (
   payload?: JobPayload,
 ): Promise<{ job: string; status: "ok" | "skipped"; details?: Record<string, unknown> }> => {
   await timeoutAbandonedBakaiStoreExportJobs();
@@ -3708,11 +3729,12 @@ const runBakaiStoreApiSyncJob = async (
     return { job: BAKAI_STORE_API_SYNC_JOB_NAME, status: "skipped", details: { reason: "empty" } };
   }
 
-  const running = await prisma.bakaiStoreExportJob.update({
-    where: { id: job.id },
+  const startedAt = new Date();
+  const claim = await prisma.bakaiStoreExportJob.updateMany({
+    where: { id: job.id, status: BakaiStoreExportJobStatus.QUEUED },
     data: {
       status: BakaiStoreExportJobStatus.RUNNING,
-      startedAt: new Date(),
+      startedAt,
       finishedAt: null,
       errorReportJson: Prisma.DbNull,
       responseJson: Prisma.DbNull,
@@ -3722,6 +3744,10 @@ const runBakaiStoreApiSyncJob = async (
       storagePath: null,
     },
   });
+  if (claim.count !== 1) {
+    return { job: BAKAI_STORE_API_SYNC_JOB_NAME, status: "skipped", details: { reason: "claimed" } };
+  }
+  const running = await prisma.bakaiStoreExportJob.findUniqueOrThrow({ where: { id: job.id } });
 
   let plan: BakaiStoreApiPreflightPlan | null = null;
   let token: string | null = null;
@@ -4038,18 +4064,6 @@ const runBakaiStoreApiSyncJob = async (
     throw new AppError("bakaiStoreApiSyncFailed", "INTERNAL_SERVER_ERROR", 500);
   }
 };
-
-registerJob(BAKAI_STORE_EXPORT_JOB_NAME, {
-  handler: runBakaiStoreExportJob,
-  maxAttempts: 1,
-  baseDelayMs: 1,
-});
-
-registerJob(BAKAI_STORE_API_SYNC_JOB_NAME, {
-  handler: runBakaiStoreApiSyncJob,
-  maxAttempts: 1,
-  baseDelayMs: 1,
-});
 
 export const __buildBakaiStoreExportPlanForTests = async (
   organizationId: string,

@@ -9,6 +9,7 @@ import {
   assignDefaultCategoryToMMarketProducts,
   listMMarketProducts,
   requestMMarketExport,
+  runMMarketExportJob,
   runMMarketPreflight,
   updateMMarketBranchMappings,
   updateMMarketConnection,
@@ -491,6 +492,73 @@ describeDb("m-market integration", () => {
       "mMarketExportJobTimedOut",
     );
     expect(requested.job.status).toBe(MMarketExportJobStatus.QUEUED);
+  });
+
+  it("recovers a stale queued export without calling the marketplace provider", async () => {
+    const { org, store, adminUser } = await prepareReadyMMarketData();
+    const staleJob = await prisma.mMarketExportJob.create({
+      data: {
+        orgId: org.id,
+        storeId: store.id,
+        environment: MMarketEnvironment.DEV,
+        status: MMarketExportJobStatus.QUEUED,
+        requestedById: adminUser.id,
+        requestIdempotencyKey: "stale-queued-mmarket-job",
+        payloadStatsJson: { productCount: 1 },
+        createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+      },
+    });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await runMMarketExportJob({ jobId: staleJob.id });
+    const refreshed = await prisma.mMarketExportJob.findUniqueOrThrow({
+      where: { id: staleJob.id },
+    });
+
+    expect(result).toMatchObject({ status: "skipped", details: { reason: "empty" } });
+    expect(refreshed.status).toBe(MMarketExportJobStatus.FAILED);
+    expect(JSON.stringify(refreshed.errorReportJson)).toContain("mMarketExportJobTimedOut");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("claims a queued export once under concurrent worker dispatch", async () => {
+    const { org, adminUser } = await prepareReadyMMarketData();
+    const previousSpecsEndpoint = process.env.MMARKET_SPECS_KEYS_ENDPOINT_DEV;
+    delete process.env.MMARKET_SPECS_KEYS_ENDPOINT_DEV;
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const requested = await requestMMarketExport({
+        organizationId: org.id,
+        actorId: adminUser.id,
+        requestId: "concurrent-export",
+      });
+      const results = await Promise.all([
+        runMMarketExportJob({ jobId: requested.job.id }),
+        runMMarketExportJob({ jobId: requested.job.id }),
+      ]);
+      const refreshed = await prisma.mMarketExportJob.findUniqueOrThrow({
+        where: { id: requested.job.id },
+      });
+
+      expect(results.filter((result) => result.status === "ok")).toHaveLength(1);
+      expect(results.filter((result) => result.status === "skipped")).toHaveLength(1);
+      expect(refreshed.status).toBe(MMarketExportJobStatus.DONE);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      if (previousSpecsEndpoint === undefined) {
+        delete process.env.MMARKET_SPECS_KEYS_ENDPOINT_DEV;
+      } else {
+        process.env.MMARKET_SPECS_KEYS_ENDPOINT_DEV = previousSpecsEndpoint;
+      }
+    }
   });
 
   it("queues export for ready products even when other included products fail preflight", async () => {

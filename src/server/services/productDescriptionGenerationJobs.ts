@@ -11,7 +11,7 @@ import type { Logger } from "pino";
 import { defaultLocale, normalizeLocale } from "@/lib/locales";
 import { prisma } from "@/server/db/prisma";
 import { getLogger } from "@/server/logging";
-import { registerJob, runJob, type JobPayload, type JobResult } from "@/server/jobs";
+import { runJob, type JobPayload, type JobResult } from "@/server/jobs";
 import { writeAuditLog } from "@/server/services/audit";
 import { AppError } from "@/server/services/errors";
 import { toJson } from "@/server/services/json";
@@ -1156,12 +1156,7 @@ const processQueuedProductDescriptionGenerationJob = async (
   const job = await prisma.productDescriptionGenerationJob.findFirst({
     where: {
       ...(requestedJobId ? { id: requestedJobId } : {}),
-      status: {
-        in: [
-          ProductDescriptionGenerationJobStatus.QUEUED,
-          ProductDescriptionGenerationJobStatus.PROCESSING,
-        ],
-      },
+      status: ProductDescriptionGenerationJobStatus.QUEUED,
     },
     select: {
       id: true,
@@ -1183,15 +1178,20 @@ const processQueuedProductDescriptionGenerationJob = async (
     };
   }
 
-  if (job.status === ProductDescriptionGenerationJobStatus.QUEUED) {
-    await prisma.productDescriptionGenerationJob.update({
-      where: { id: job.id },
-      data: {
-        status: ProductDescriptionGenerationJobStatus.PROCESSING,
-        startedAt: new Date(),
-        errorMessage: null,
-      },
-    });
+  const claim = await prisma.productDescriptionGenerationJob.updateMany({
+    where: { id: job.id, status: ProductDescriptionGenerationJobStatus.QUEUED },
+    data: {
+      status: ProductDescriptionGenerationJobStatus.PROCESSING,
+      startedAt: new Date(),
+      errorMessage: null,
+    },
+  });
+  if (claim.count !== 1) {
+    return {
+      job: PRODUCT_DESCRIPTION_GENERATION_JOB_NAME,
+      status: "skipped",
+      details: { reason: "claimed" },
+    };
   }
 
   try {
@@ -1317,12 +1317,8 @@ export const retryFailedProductDescriptionGenerationItems = async (input: {
   });
 };
 
-const runProductDescriptionGenerationJob = async (payload?: JobPayload) => {
+export const runProductDescriptionGenerationJob = async (payload?: JobPayload) => {
   return processQueuedProductDescriptionGenerationJob(getPayloadJobId(payload));
 };
-
-registerJob(PRODUCT_DESCRIPTION_GENERATION_JOB_NAME, {
-  handler: runProductDescriptionGenerationJob,
-});
 
 export { ProductDescriptionGenerationItemStatus, ProductDescriptionGenerationJobStatus, ProductDescriptionGenerationSource };
