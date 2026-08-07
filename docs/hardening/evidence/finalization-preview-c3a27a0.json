@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-08-07T17:11:00Z",
+  "deployment": {
+    "id": "dpl_5fUi29rSBYexAm4NDgW6r9C6Bsyy",
+    "url": "https://bazaar-q0t8wdsxu-ilyas0707s-projects.vercel.app",
+    "sha": "c3a27a0865fc061c686adc6302b90bf4c42b69b9",
+    "environment": "preview",
+    "protected": true,
+    "functionRegion": "iad1"
+  },
+  "infrastructure": {
+    "database": "bazaar_final_preview_iad",
+    "databaseRegion": "aws-us-east-1",
+    "syntheticOnly": true,
+    "migrationsApplied": 91,
+    "pendingMigrations": 0,
+    "redisIsolation": "dedicated preview key prefix",
+    "externalProviders": "disabled_or_mocked"
+  },
+  "results": {
+    "api": { "passed": 11, "total": 11 },
+    "ssrf": { "passed": 13, "total": 13 },
+    "browser": { "passed": 32, "total": 32 },
+    "viewports": [390, 414, 768, 1440],
+    "themes": ["light", "dark"],
+    "roles": ["ADMIN", "MANAGER", "CASHIER", "STAFF"],
+    "horizontalOverflowFailures": 0,
+    "browserConsoleErrors": 0,
+    "browserHttp5xx": 0
+  },
+  "security": {
+    "crossOrganizationReadDenied": true,
+    "crossStoreReadDenied": true,
+    "revokedApiKeyDenied": true,
+    "idempotentApiOrder": {
+      "orderCount": 1,
+      "stockBefore": 10,
+      "stockAfter": 8,
+      "movementCount": 1,
+      "operationStatus": "COMPLETED",
+      "attemptCount": 1,
+      "boundedResponseBytes": 101
+    },
+    "rawSecretsInResponses": false
+  },
+  "performance": {
+    "maxBrowserElapsedMs": 2754,
+    "samplesOver2500Ms": 2,
+    "note": "Two authorization redirect samples exceeded the preferred 2.5s target; retained as P2 performance follow-up."
+  },
+  "cleanup": {
+    "syntheticUsersDeactivated": true,
+    "syntheticApiKeysRevoked": true,
+    "databaseRetainedForFinalization": true
+  }
+}
