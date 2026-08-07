@@ -5,6 +5,7 @@ import {
   createBazaarApiOrderOperation,
   listBazaarApiOrders,
 } from "@/server/services/bazaarApi";
+import { mapBazaarApiError } from "@/app/api/bazaar/v1/error-response";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,39 +42,6 @@ const ordersQuerySchema = z.object({
   cursor: z.string().trim().max(256).optional().nullable(),
 });
 
-const toStatus = (message: string) => {
-  if (message === "apiUnauthorized") {
-    return 401;
-  }
-  if (
-    message === "invalidInput" ||
-    message === "invalidExternalOrderId" ||
-    message === "idempotencyKeyRequired" ||
-    message === "invalidQuantity" ||
-    message === "salesOrderEmpty"
-  ) {
-    return 400;
-  }
-  if (
-    message === "storeNotFound" ||
-    message === "productNotFound" ||
-    message === "variantNotFound"
-  ) {
-    return 404;
-  }
-  if (
-    message === "externalOrderIdConflict" ||
-    message === "operationRequestIdentityMismatch" ||
-    message === "operationRequestPayloadMismatch" ||
-    message === "operationRequestUnavailable" ||
-    message === "operationRequestReconciliationRequired" ||
-    message === "requestInProgress"
-  ) {
-    return 409;
-  }
-  return 500;
-};
-
 const parseDateQuery = (value: string | null | undefined, endOfDay = false) => {
   const normalized = value?.trim();
   if (!normalized) {
@@ -81,9 +49,7 @@ const parseDateQuery = (value: string | null | undefined, endOfDay = false) => {
   }
   const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(normalized);
   const date = new Date(
-    dateOnly
-      ? `${normalized}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}Z`
-      : normalized,
+    dateOnly ? `${normalized}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}Z` : normalized,
   );
   if (Number.isNaN(date.getTime())) {
     return { ok: false as const, value: null };
@@ -131,8 +97,8 @@ export const GET = async (request: Request) => {
     });
     return Response.json(result, { status: 200 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "genericMessage";
-    return Response.json({ message }, { status: toStatus(message) });
+    const mapped = mapBazaarApiError(error, "orders.list");
+    return Response.json({ message: mapped.message }, { status: mapped.status });
   }
 };
 
@@ -173,7 +139,7 @@ export const POST = async (request: Request) => {
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "genericMessage";
-    return Response.json({ message }, { status: toStatus(message) });
+    const mapped = mapBazaarApiError(error, "orders.create");
+    return Response.json({ message: mapped.message }, { status: mapped.status });
   }
 };

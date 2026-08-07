@@ -1,7 +1,5 @@
-import {
-  authenticateBazaarApiRequest,
-  getBazaarApiOrder,
-} from "@/server/services/bazaarApi";
+import { authenticateBazaarApiRequest, getBazaarApiOrder } from "@/server/services/bazaarApi";
+import { mapBazaarApiError } from "@/app/api/bazaar/v1/error-response";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,22 +8,6 @@ type RouteParams = {
   params: {
     id: string;
   };
-};
-
-const toStatus = (message: string) => {
-  if (message === "apiUnauthorized") {
-    return 401;
-  }
-  if (message === "invalidInput" || message === "invalidExternalOrderId") {
-    return 400;
-  }
-  if (message === "orderNotFound") {
-    return 404;
-  }
-  if (message === "externalOrderIdConflict") {
-    return 409;
-  }
-  return 500;
 };
 
 const errorBody = (message: string) => {
@@ -45,7 +27,7 @@ export const GET = async (request: Request, { params }: RouteParams) => {
     });
     return Response.json({ order }, { status: 200 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "genericMessage";
-    return Response.json(errorBody(message), { status: toStatus(message) });
+    const mapped = mapBazaarApiError(error, "orders.get");
+    return Response.json(errorBody(mapped.message), { status: mapped.status });
   }
 };

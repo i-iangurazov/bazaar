@@ -1,9 +1,7 @@
 import { z } from "zod";
 
-import {
-  authenticateBazaarApiRequest,
-  listBazaarApiProducts,
-} from "@/server/services/bazaarApi";
+import { authenticateBazaarApiRequest, listBazaarApiProducts } from "@/server/services/bazaarApi";
+import { mapBazaarApiError } from "@/app/api/bazaar/v1/error-response";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,16 +11,6 @@ const querySchema = z.object({
   page: z.coerce.number().int().min(1).optional(),
   pageSize: z.coerce.number().int().min(1).max(100).optional(),
 });
-
-const toStatus = (message: string) => {
-  if (message === "apiUnauthorized") {
-    return 401;
-  }
-  if (message === "storeNotFound") {
-    return 404;
-  }
-  return 500;
-};
 
 export const GET = async (request: Request) => {
   const url = new URL(request.url);
@@ -46,7 +34,7 @@ export const GET = async (request: Request) => {
     });
     return Response.json(result, { status: 200 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "genericMessage";
-    return Response.json({ message }, { status: toStatus(message) });
+    const mapped = mapBazaarApiError(error, "products.list");
+    return Response.json({ message: mapped.message }, { status: mapped.status });
   }
 };

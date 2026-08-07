@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { authenticateBazaarApiRequest, createBazaarApiCustomer } from "@/server/services/bazaarApi";
+import { mapBazaarApiError } from "@/app/api/bazaar/v1/error-response";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,19 +12,6 @@ const customerSchema = z.object({
   phone: z.string().trim().min(1).max(64),
   address: z.string().trim().max(512).optional().nullable(),
 });
-
-const toStatus = (message: string) => {
-  if (message === "apiUnauthorized") {
-    return 401;
-  }
-  if (message === "invalidInput") {
-    return 400;
-  }
-  if (message === "storeNotFound") {
-    return 404;
-  }
-  return 500;
-};
 
 export const POST = async (request: Request) => {
   const body = await request.json().catch(() => null);
@@ -45,7 +33,7 @@ export const POST = async (request: Request) => {
     });
     return Response.json(result, { status: result.action === "created" ? 201 : 200 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "genericMessage";
-    return Response.json({ message }, { status: toStatus(message) });
+    const mapped = mapBazaarApiError(error, "customers.create");
+    return Response.json({ message: mapped.message }, { status: mapped.status });
   }
 };
