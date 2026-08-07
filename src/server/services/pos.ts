@@ -1849,22 +1849,34 @@ export const closeRegisterShift = async (input: {
           };
         }
 
-        const openDrafts = await tx.customerOrder.findMany({
-          where: {
-            organizationId: input.organizationId,
-            shiftId: shift.id,
-            isPosSale: true,
-            status: CustomerOrderStatus.DRAFT,
-          },
-          select: {
-            number: true,
-            isHeld: true,
-          },
-          orderBy: { createdAt: "asc" },
-          take: 10,
-        });
+        const [openDrafts, openReturnDrafts] = await Promise.all([
+          tx.customerOrder.findMany({
+            where: {
+              organizationId: input.organizationId,
+              shiftId: shift.id,
+              isPosSale: true,
+              status: CustomerOrderStatus.DRAFT,
+            },
+            select: {
+              number: true,
+              isHeld: true,
+            },
+            orderBy: { createdAt: "asc" },
+            take: 10,
+          }),
+          tx.saleReturn.findMany({
+            where: {
+              organizationId: input.organizationId,
+              shiftId: shift.id,
+              status: PosReturnStatus.DRAFT,
+            },
+            select: { number: true },
+            orderBy: { createdAt: "asc" },
+            take: 10,
+          }),
+        ]);
 
-        if (openDrafts.length) {
+        if (openDrafts.length || openReturnDrafts.length) {
           throw new AppError("posShiftDraftsOpen", "CONFLICT", 409);
         }
 
