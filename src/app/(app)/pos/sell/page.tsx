@@ -110,11 +110,7 @@ import {
 } from "@/lib/scanning/scanRouter";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
-import {
-  businessDateKey,
-  businessDateOnlyEndUtc,
-  businessDateOnlyToUtc,
-} from "@/lib/timezone";
+import { businessDateKey, businessDateOnlyEndUtc, businessDateOnlyToUtc } from "@/lib/timezone";
 import { usePosRegisterSelection } from "@/lib/usePosRegisterSelection";
 import { cn } from "@/lib/utils";
 const keyboardScanResetMs = 300;
@@ -141,7 +137,6 @@ const createIdempotencyKey = () => {
   }
   return `pos-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
-
 
 const useDebouncedValue = (value: string, delayMs: number) => {
   const [debounced, setDebounced] = useState(value);
@@ -1113,10 +1108,7 @@ const PosSellPage = () => {
       return;
     }
     const deepLinkKey = `${mode}:${registerId}:${receiptId}`;
-    if (
-      heldReceiptResumeDeepLinkRef.current === deepLinkKey ||
-      resumeHeldDraftMutation.isLoading
-    ) {
+    if (heldReceiptResumeDeepLinkRef.current === deepLinkKey || resumeHeldDraftMutation.isLoading) {
       return;
     }
     heldReceiptResumeDeepLinkRef.current = deepLinkKey;
@@ -1725,17 +1717,13 @@ const PosSellPage = () => {
     }
   }, [catalogPage, catalogTotalPages]);
 
-  const renderCatalogPagination = (variant: "default" | "dark" = "default") => {
+  const renderCatalogPagination = () => {
     if (catalogTotalPages <= 1) {
       return null;
     }
-    const dark = variant === "dark";
     return (
       <div
-        className={cn(
-          "mt-3 flex items-center justify-between gap-3 border-t pt-3 text-sm",
-          dark ? "border-slate-800 text-slate-400" : "border-border text-muted-foreground",
-        )}
+        className="mt-3 flex items-center justify-between gap-3 border-t border-border pt-3 text-sm text-muted-foreground"
         data-testid="pos-catalog-pagination"
       >
         <Button
@@ -3659,8 +3647,7 @@ const PosSellPage = () => {
   const selectedRegisterLabel = selectedRegister
     ? `${selectedRegister.store.name} / ${selectedRegister.name}`
     : t("entry.selectRegister");
-  const currentCashierName =
-    session?.user?.name || session?.user?.email || tCommon("notAvailable");
+  const currentCashierName = session?.user?.name || session?.user?.email || tCommon("notAvailable");
   const currentCashierLabel = t("sell.currentCashier", { name: currentCashierName });
   const shiftOpenedLabel = shiftQuery.data?.openedAt
     ? new Intl.DateTimeFormat(locale, {
@@ -6374,14 +6361,14 @@ const PosSellPage = () => {
       };
 
       const renderMobileHeader = () => (
-        <header className="sticky top-0 z-40 border-b border-slate-800 bg-slate-950 text-white md:hidden">
+        <header className="sticky top-0 z-40 border-b border-border bg-card text-foreground md:hidden">
           <div
             className="grid min-h-[68px] grid-cols-[40px_minmax(0,1fr)_58px] items-end gap-2 px-3 pb-3"
             style={{ paddingTop: "calc(0.55rem + env(safe-area-inset-top))" }}
           >
             <button
               type="button"
-              className="grid h-10 w-10 place-items-center text-white no-underline hover:no-underline"
+              className="grid h-10 w-10 place-items-center text-foreground no-underline hover:no-underline"
               onClick={requestMobileExit}
               aria-label={tCommon("back")}
             >
@@ -6399,12 +6386,12 @@ const PosSellPage = () => {
               {t("sell.done")}
             </button>
           </div>
-          <div className="grid h-10 grid-cols-2 bg-slate-900 text-[15px] font-semibold">
+          <div className="grid h-10 grid-cols-2 bg-muted text-[15px] font-semibold">
             <button
               type="button"
               className={cn(
-                "relative text-center text-slate-400",
-                mobileSaleTab === "document" && "text-white",
+                "relative text-center text-muted-foreground",
+                mobileSaleTab === "document" && "text-foreground",
               )}
               onClick={() => setMobileSaleTab("document")}
             >
@@ -6416,8 +6403,8 @@ const PosSellPage = () => {
             <button
               type="button"
               className={cn(
-                "relative text-center text-slate-400",
-                mobileSaleTab === "payment" && "text-white",
+                "relative text-center text-muted-foreground",
+                mobileSaleTab === "payment" && "text-foreground",
               )}
               onClick={() => setMobileSaleTab("payment")}
             >
@@ -6427,7 +6414,7 @@ const PosSellPage = () => {
               ) : null}
             </button>
           </div>
-          <div className="border-t border-slate-800 bg-slate-950 px-3 py-2 text-[11px] leading-4 text-slate-400">
+          <div className="border-t border-border bg-card px-3 py-2 text-[11px] leading-4 text-muted-foreground">
             <p className="break-words">
               {t("entry.register")}: {selectedRegisterLabel} · {currentCashierLabel}
             </p>
@@ -6455,9 +6442,14 @@ const PosSellPage = () => {
       }) => {
         const content = (
           <>
-            <span className="grid h-8 w-8 shrink-0 place-items-center text-slate-400">{icon}</span>
+            <span className="grid h-8 w-8 shrink-0 place-items-center text-muted-foreground">
+              {icon}
+            </span>
             <span
-              className={cn("min-w-0 flex-1 text-[14px] leading-none", muted && "text-slate-400")}
+              className={cn(
+                "min-w-0 flex-1 text-[14px] leading-none",
+                muted && "text-muted-foreground",
+              )}
             >
               {label}
             </span>
@@ -6467,7 +6459,7 @@ const PosSellPage = () => {
               </span>
             ) : null}
             {chevron ? (
-              <ChevronRightIcon className="h-5 w-5 shrink-0 text-slate-400" aria-hidden />
+              <ChevronRightIcon className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
             ) : null}
           </>
         );
@@ -6476,7 +6468,7 @@ const PosSellPage = () => {
           return (
             <button
               type="button"
-              className="flex min-h-[48px] w-full items-center gap-2 border-b border-slate-700 py-2 pl-3 pr-2.5 text-left last:border-b-0"
+              className="flex min-h-[48px] w-full items-center gap-2 border-b border-border py-2 pl-3 pr-2.5 text-left last:border-b-0"
               onClick={action}
             >
               {content}
@@ -6485,7 +6477,7 @@ const PosSellPage = () => {
         }
 
         return (
-          <div className="flex min-h-[48px] items-center gap-2 border-b border-slate-700 py-2 pl-3 pr-2.5 last:border-b-0">
+          <div className="flex min-h-[48px] items-center gap-2 border-b border-border py-2 pl-3 pr-2.5 last:border-b-0">
             {content}
           </div>
         );
@@ -6493,14 +6485,14 @@ const PosSellPage = () => {
 
       const renderRegisterPanel = () =>
         showMobileRegisterPanel ? (
-          <section className="mx-0 border-y border-slate-800 bg-slate-950/95 px-3 py-3">
-            <label className="text-sm font-semibold uppercase tracking-wide text-slate-400">
+          <section className="mx-0 border-y border-border bg-card/95 px-3 py-3">
+            <label className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               {t("entry.register")}
             </label>
             <Select value={registerId} onValueChange={handleRegisterChange}>
               <SelectTrigger
                 aria-label={t("entry.changeRegister")}
-                className="mt-2 h-12 border-slate-700 bg-slate-950 text-base text-white"
+                className="mt-2 h-12 border-border bg-card text-base text-foreground"
               >
                 <SelectValue placeholder={t("entry.selectRegister")} />
               </SelectTrigger>
@@ -6513,7 +6505,7 @@ const PosSellPage = () => {
               </SelectContent>
             </Select>
             {registerSelectionIssue ? (
-              <p role="alert" className="mt-2 text-sm text-amber-300">
+              <p role="alert" className="mt-2 text-sm text-warning">
                 {t("entry.registerUnavailable")}
               </p>
             ) : null}
@@ -6527,8 +6519,8 @@ const PosSellPage = () => {
 
       const renderDraftNotice = () =>
         activeDraft && !saleId ? (
-          <section className="border-y border-[#4d3d1f] bg-[#2a2417] px-3 py-3 text-sm text-[#f7d58a]">
-            <p className="font-semibold text-white">{t("sell.draftDetectedTitle")}</p>
+          <section className="border-y border-warning/40 bg-warning/10 px-3 py-3 text-sm text-foreground">
+            <p className="font-semibold text-foreground">{t("sell.draftDetectedTitle")}</p>
             <p className="mt-1">{t("sell.draftDetectedHint", { number: activeDraft.number })}</p>
             <div className="mt-3 grid grid-cols-2 gap-2">
               <Button type="button" className="h-11" onClick={handleResumeActiveDraft}>
@@ -6548,20 +6540,22 @@ const PosSellPage = () => {
 
       const renderOrderSection = () =>
         hasCartLines ? (
-          <section className="border-y border-slate-800 bg-slate-950/95 px-3 py-3">
+          <section className="border-y border-border bg-card/95 px-3 py-3">
             <div className="mb-2">
               <h2 className="text-[15px] font-semibold leading-none text-primary">
                 {t("sell.mobile.order")}
               </h2>
-              <p className="mt-1.5 text-[13px] leading-none text-slate-400">{orderStatusLabel}</p>
+              <p className="mt-1.5 text-[13px] leading-none text-muted-foreground">
+                {orderStatusLabel}
+              </p>
             </div>
             <div>
               {renderMobileRow({
                 icon: <ClipboardText className="h-5 w-5" aria-hidden />,
                 label: tCommon("status"),
                 value: (
-                  <span className="inline-flex h-7 w-12 items-center rounded-full bg-[#30d158] p-0.5 align-middle">
-                    <span className="ml-auto h-6 w-6 rounded-full bg-[#f7f7f9]" />
+                  <span className="inline-flex h-7 w-12 items-center rounded-full bg-success p-0.5 align-middle">
+                    <span className="ml-auto h-6 w-6 rounded-full bg-success-foreground" />
                   </span>
                 ),
                 chevron: false,
@@ -6586,7 +6580,7 @@ const PosSellPage = () => {
               <div className="mt-3 flex justify-end">
                 <button
                   type="button"
-                  className="min-h-10 rounded-[9px] bg-[#3a2426] px-4 text-[14px] font-semibold text-[#ff6b67]"
+                  className="min-h-10 rounded-[9px] bg-danger/10 px-4 text-[14px] font-semibold text-danger"
                   onClick={() => void handleDiscardSale()}
                   disabled={cancelDraftMutation.isLoading || completeMutation.isLoading}
                 >
@@ -6598,7 +6592,7 @@ const PosSellPage = () => {
         ) : null;
 
       const renderPropertiesSection = () => (
-        <section className="border-y border-slate-800 bg-slate-950/95">
+        <section className="border-y border-border bg-card/95">
           <button
             type="button"
             className="flex min-h-[48px] w-full items-center justify-between px-3 text-left"
@@ -6609,13 +6603,13 @@ const PosSellPage = () => {
               {t("sell.mobile.properties")}
             </span>
             {mobilePropertiesExpanded ? (
-              <ChevronDownIcon className="h-5 w-5 rotate-180 text-slate-400" aria-hidden />
+              <ChevronDownIcon className="h-5 w-5 rotate-180 text-muted-foreground" aria-hidden />
             ) : (
-              <ChevronDownIcon className="h-5 w-5 text-slate-400" aria-hidden />
+              <ChevronDownIcon className="h-5 w-5 text-muted-foreground" aria-hidden />
             )}
           </button>
           {mobilePropertiesExpanded ? (
-            <div className="border-t border-slate-800">
+            <div className="border-t border-border">
               {renderMobileRow({
                 icon: <Hash className="h-5 w-5" aria-hidden />,
                 label: t("sell.mobile.documentNumber"),
@@ -6628,7 +6622,7 @@ const PosSellPage = () => {
                 label: tCommon("status"),
                 value: (
                   <span className="inline-flex h-7 w-12 items-center rounded-full bg-primary p-0.5 align-middle">
-                    <span className="ml-auto h-6 w-6 rounded-full bg-[#f7f7f9]" />
+                    <span className="ml-auto h-6 w-6 rounded-full bg-primary-foreground" />
                   </span>
                 ),
                 chevron: false,
@@ -6654,7 +6648,7 @@ const PosSellPage = () => {
       );
 
       const renderCounterpartiesSection = () => (
-        <section className="border-y border-slate-800 bg-slate-950/95 px-3 py-3">
+        <section className="border-y border-border bg-card/95 px-3 py-3">
           <h2 className="mb-2 text-[15px] font-semibold leading-none text-primary">
             {t("sell.mobile.counterparties")}
           </h2>
@@ -6676,7 +6670,7 @@ const PosSellPage = () => {
       );
 
       const renderAddProductsBar = () => (
-        <section className="border-y border-slate-800 bg-slate-950/95 px-3 py-3">
+        <section className="border-y border-border bg-card/95 px-3 py-3">
           <div className="grid grid-cols-[minmax(0,1fr)_50px] gap-2.5">
             <button
               type="button"
@@ -6701,11 +6695,11 @@ const PosSellPage = () => {
 
       const renderMobileLines = () =>
         hasCartLines ? (
-          <section className="border-y border-slate-800 bg-slate-950/95 px-3 py-3">
+          <section className="border-y border-border bg-card/95 px-3 py-3">
             <h2 className="mb-2 text-[15px] font-semibold text-primary">
               {t("sell.mobile.products")}
             </h2>
-            <div className="divide-y divide-slate-800">
+            <div className="divide-y divide-border">
               {saleLines.map((line) => {
                 const lineDiscountKgs = lineDiscountById.get(line.id) ?? 0;
                 const lineNetTotalKgs = roundMoney(
@@ -6720,7 +6714,7 @@ const PosSellPage = () => {
                     data-product-id={getCartLineProductId(line)}
                     onClick={() => openMobileLineSheet(line.id, "qty")}
                   >
-                    <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-[9px] bg-slate-800 text-slate-300">
+                    <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-[9px] bg-secondary text-secondary-foreground">
                       {line.product.primaryImage ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
@@ -6733,14 +6727,14 @@ const PosSellPage = () => {
                       )}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="line-clamp-2 text-[14px] font-semibold leading-tight text-white">
+                      <span className="line-clamp-2 text-[14px] font-semibold leading-tight text-foreground">
                         {line.product.name}
                       </span>
-                      <span className="mt-0.5 block text-[12px] text-slate-400">
+                      <span className="mt-0.5 block text-[12px] text-muted-foreground">
                         {line.qty} x {formatSaleMoney(line.unitPriceKgs)}
                       </span>
                     </span>
-                    <span className="shrink-0 text-right text-[14px] font-semibold text-white">
+                    <span className="shrink-0 text-right text-[14px] font-semibold text-foreground">
                       {formatSaleMoney(lineNetTotalKgs)}
                     </span>
                   </button>
@@ -6751,8 +6745,8 @@ const PosSellPage = () => {
         ) : null;
 
       const renderCommentBar = () => (
-        <section className="border-y border-slate-800 bg-slate-950/95 px-3 py-2">
-          <label className="flex min-h-[44px] items-center gap-2.5 text-slate-400">
+        <section className="border-y border-border bg-card/95 px-3 py-2">
+          <label className="flex min-h-[44px] items-center gap-2.5 text-muted-foreground">
             <ChatCircle className="h-6 w-6 shrink-0" aria-hidden />
             <input
               value={mobileComment}
@@ -6763,7 +6757,7 @@ const PosSellPage = () => {
                 }
               }}
               placeholder={t("sell.mobile.commentPlaceholder")}
-              className="min-w-0 flex-1 border-0 bg-transparent text-[15px] text-white shadow-none outline-none ring-0 placeholder:text-slate-400 focus:outline-none focus:ring-0 focus-visible:ring-0"
+              className="min-w-0 flex-1 border-0 bg-transparent text-[15px] text-foreground shadow-none outline-none ring-0 placeholder:text-muted-foreground focus:outline-none focus:ring-0 focus-visible:ring-0"
             />
           </label>
         </section>
@@ -6774,7 +6768,7 @@ const PosSellPage = () => {
           {renderRegisterPanel()}
           {renderDraftNotice()}
           {saleId && saleQuery.error ? (
-            <div className="mx-4 border border-[#5a2525] bg-[#2b1717] p-3 text-sm text-[#ff8a8a]">
+            <div className="mx-4 border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
               {translateError(tErrors, saleQuery.error)}
             </div>
           ) : null}
@@ -6785,10 +6779,10 @@ const PosSellPage = () => {
           {renderCounterpartiesSection()}
           {renderCommentBar()}
           {hasCartLines ? (
-            <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-800 bg-[#070b14] px-4 pb-[calc(1.25rem_+_env(safe-area-inset-bottom))] pt-3 md:hidden">
+            <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background px-4 pb-[calc(1.25rem_+_env(safe-area-inset-bottom))] pt-3 md:hidden">
               <button
                 type="button"
-                className="min-h-[48px] w-full rounded-[12px] bg-primary px-3 text-[15px] font-semibold text-white shadow-[0_12px_28px_rgba(64,156,255,0.24)]"
+                className="min-h-[48px] w-full rounded-[12px] bg-primary px-3 text-[15px] font-semibold text-primary-foreground shadow-[0_12px_28px_rgba(64,156,255,0.24)]"
                 onClick={() => setMobileSaleTab("payment")}
                 aria-label={t("sell.openCart")}
               >
@@ -6811,8 +6805,10 @@ const PosSellPage = () => {
           {lastCompletedSale ? (
             <div className="grid min-h-[calc(100dvh-224px)] place-items-start px-4 pt-9">
               <section className="w-full border border-success/30 bg-success/10 p-4 text-center">
-                <h2 className="text-lg font-semibold text-white">{t("sell.saleCompletedTitle")}</h2>
-                <p className="mt-2 text-sm text-slate-300">
+                <h2 className="text-lg font-semibold text-foreground">
+                  {t("sell.saleCompletedTitle")}
+                </h2>
+                <p className="mt-2 text-sm text-secondary-foreground">
                   {t("sell.completeSuccess", { number: lastCompletedSale.number })}
                 </p>
                 <div className="mt-4 grid gap-2">
@@ -6840,14 +6836,14 @@ const PosSellPage = () => {
           ) : !hasCartLines ? (
             <>
               <div className="grid min-h-[calc(100dvh-224px)] place-items-start justify-center pt-9">
-                <p className="text-[14px] leading-none text-slate-400">
+                <p className="text-[14px] leading-none text-muted-foreground">
                   {t("sell.mobile.paymentEmpty")}
                 </p>
               </div>
-              <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-800 bg-[#070b14] px-4 pb-[calc(1.25rem_+_env(safe-area-inset-bottom))] pt-3 md:hidden">
+              <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background px-4 pb-[calc(1.25rem_+_env(safe-area-inset-bottom))] pt-3 md:hidden">
                 <button
                   type="button"
-                  className="min-h-[50px] w-full rounded-[12px] bg-primary text-[15px] font-semibold text-white"
+                  className="min-h-[50px] w-full rounded-[12px] bg-primary text-[15px] font-semibold text-primary-foreground"
                   onClick={() => setMobileSaleTab("document")}
                 >
                   {t("sell.newSale")}
@@ -6857,20 +6853,20 @@ const PosSellPage = () => {
           ) : (
             <div className="space-y-3 pt-3">
               {renderOrderSection()}
-              <section className="border-y border-slate-800 bg-slate-950/95 px-3 py-3">
+              <section className="border-y border-border bg-card/95 px-3 py-3">
                 <h2 className="text-[15px] font-semibold leading-none text-primary">
                   {t("sell.mobile.paymentSummary")}
                 </h2>
                 <div className="mt-3 space-y-2 text-[14px]">
-                  <div className="flex justify-between gap-3 text-slate-400">
+                  <div className="flex justify-between gap-3 text-muted-foreground">
                     <span>{t("sell.subtotal")}</span>
-                    <span className="text-white">{formatSaleMoney(cartSubtotalKgs)}</span>
+                    <span className="text-foreground">{formatSaleMoney(cartSubtotalKgs)}</span>
                   </div>
-                  <div className="flex justify-between gap-3 text-slate-400">
+                  <div className="flex justify-between gap-3 text-muted-foreground">
                     <span>{t("sell.discount")}</span>
                     <button
                       type="button"
-                      className="rounded px-1 text-right font-semibold text-primary disabled:text-white disabled:opacity-60"
+                      className="rounded px-1 text-right font-semibold text-primary disabled:text-foreground disabled:opacity-60"
                       onClick={openMobileDiscountEditor}
                       disabled={
                         !saleId || !hasCartLines || isLineBusy || completeMutation.isLoading
@@ -6881,11 +6877,14 @@ const PosSellPage = () => {
                         : `+ ${t("sell.addDiscount")}`}
                     </button>
                   </div>
-                  <div className="flex items-end justify-between gap-3 border-t border-slate-700 pt-2.5">
-                    <span className="text-[15px] font-semibold text-white">
+                  <div className="flex items-end justify-between gap-3 border-t border-border pt-2.5">
+                    <span className="text-[15px] font-semibold text-foreground">
                       {t("sell.amountDue")}
                     </span>
-                    <span className="text-[19px] font-bold text-white" data-testid="pos-cart-total">
+                    <span
+                      className="text-[19px] font-bold text-foreground"
+                      data-testid="pos-cart-total"
+                    >
                       {formatSaleMoney(cartTotalKgs)}
                     </span>
                   </div>
@@ -6894,13 +6893,13 @@ const PosSellPage = () => {
 
               <section
                 ref={paymentsSectionRef}
-                className="border-y border-slate-800 bg-slate-950/95 px-3 py-3"
+                className="border-y border-border bg-card/95 px-3 py-3"
               >
                 <div className="flex items-center justify-between gap-3">
                   <h2 className="text-[15px] font-semibold leading-none text-primary">
                     {t("sell.paymentsTitle")}
                   </h2>
-                  <label className="flex items-center gap-2 text-sm text-slate-400">
+                  <label className="flex items-center gap-2 text-sm text-muted-foreground">
                     <span>{t("sell.sellInDebt")}</span>
                     <Switch checked={sellInDebt} onCheckedChange={handleSellInDebtChange} />
                   </label>
@@ -6908,12 +6907,12 @@ const PosSellPage = () => {
 
                 {sellInDebt ? (
                   <div className="mt-4 space-y-3">
-                    <p className="text-sm text-slate-400">{t("sell.sellInDebtHint")}</p>
+                    <p className="text-sm text-muted-foreground">{t("sell.sellInDebtHint")}</p>
                     <Input
                       value={debtFullName}
                       onChange={(event) => setDebtFullName(event.target.value)}
                       placeholder={t("sell.debtFullNamePlaceholder")}
-                      className="h-12 border-slate-700 bg-slate-950 text-white"
+                      className="h-12 border-border bg-card text-foreground"
                     />
                   </div>
                 ) : (
@@ -6924,7 +6923,7 @@ const PosSellPage = () => {
                           key={method}
                           type="button"
                           className={cn(
-                            "min-h-11 rounded-[10px] border border-slate-700 bg-slate-950 px-3 text-left text-[14px] font-semibold text-white",
+                            "min-h-11 rounded-[10px] border border-border bg-card px-3 text-left text-[14px] font-semibold text-foreground",
                             payments[0]?.method === method && "border-primary text-primary",
                           )}
                           onClick={() =>
@@ -6959,7 +6958,7 @@ const PosSellPage = () => {
                               )
                             }
                           >
-                            <SelectTrigger className="h-11 border-slate-700 bg-slate-950 text-white">
+                            <SelectTrigger className="h-11 border-border bg-card text-foreground">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -6995,7 +6994,7 @@ const PosSellPage = () => {
                             placeholder={t("sell.paymentAmount")}
                             inputMode="decimal"
                             readOnly={payments.length === 1}
-                            className="h-11 border-slate-700 bg-slate-950 text-white"
+                            className="h-11 border-border bg-card text-foreground"
                           />
                           <Button
                             type="button"
@@ -7022,7 +7021,7 @@ const PosSellPage = () => {
                           {t("sell.addPayment")}
                         </Button>
                         {showPaymentTotalSummary ? (
-                          <p className="text-sm text-slate-400">
+                          <p className="text-sm text-muted-foreground">
                             {t("sell.paymentTotal")}: {paymentTotalLabel}
                           </p>
                         ) : null}
@@ -7032,10 +7031,10 @@ const PosSellPage = () => {
                 )}
               </section>
 
-              <div className="fixed inset-x-0 bottom-0 z-30 space-y-2 border-t border-slate-800 bg-[#070b14] px-4 pb-[calc(1.25rem_+_env(safe-area-inset-bottom))] pt-3 md:hidden">
+              <div className="fixed inset-x-0 bottom-0 z-30 space-y-2 border-t border-border bg-background px-4 pb-[calc(1.25rem_+_env(safe-area-inset-bottom))] pt-3 md:hidden">
                 <button
                   type="button"
-                  className="min-h-11 w-full rounded-[11px] bg-[#2f3640] text-[14px] font-semibold text-white disabled:opacity-50"
+                  className="min-h-11 w-full rounded-[11px] bg-secondary text-[14px] font-semibold text-secondary-foreground disabled:opacity-50"
                   onClick={() => void handleHoldReceipt()}
                   disabled={!saleId || !hasCartLines || isLineBusy || completeMutation.isLoading}
                 >
@@ -7043,7 +7042,7 @@ const PosSellPage = () => {
                 </button>
                 <button
                   type="button"
-                  className="min-h-[50px] w-full rounded-[12px] bg-primary text-[15px] font-semibold text-white disabled:opacity-50"
+                  className="min-h-[50px] w-full rounded-[12px] bg-primary text-[15px] font-semibold text-primary-foreground disabled:opacity-50"
                   onClick={handleComplete}
                   disabled={completeDisabled}
                 >
@@ -7060,22 +7059,22 @@ const PosSellPage = () => {
       );
 
       const renderSaleScreen = () => (
-        <div className="min-h-[100dvh] bg-[#070b14] text-white md:hidden">
+        <div className="min-h-[100dvh] bg-background text-foreground md:hidden">
           {renderMobileHeader()}
           {mobileSaleTab === "document" ? renderDocumentTab() : renderPaymentTab()}
         </div>
       );
 
       const renderCatalogScreen = () => (
-        <div className="min-h-[100dvh] bg-[#070b14] text-white md:hidden">
-          <header className="sticky top-0 z-40 border-b border-slate-800 bg-slate-950">
+        <div className="min-h-[100dvh] bg-background text-foreground md:hidden">
+          <header className="sticky top-0 z-40 border-b border-border bg-card">
             <div
               className="grid min-h-[68px] grid-cols-[40px_minmax(0,1fr)] items-end gap-2 px-3 pb-3"
               style={{ paddingTop: "calc(0.55rem + env(safe-area-inset-top))" }}
             >
               <button
                 type="button"
-                className="grid h-10 w-10 place-items-center text-white"
+                className="grid h-10 w-10 place-items-center text-foreground"
                 onClick={() => setMobileScreen("sale")}
                 aria-label={tCommon("back")}
               >
@@ -7085,7 +7084,7 @@ const PosSellPage = () => {
                 <h1 className="truncate text-[19px] font-semibold leading-none tracking-normal">
                   {t("sell.mobile.catalog")}
                 </h1>
-                <p className="mt-1 text-[12px] leading-none text-slate-400">
+                <p className="mt-1 text-[12px] leading-none text-muted-foreground">
                   {t("sell.mobile.itemCount", { count: visibleProducts.length })}
                 </p>
               </div>
@@ -7093,8 +7092,8 @@ const PosSellPage = () => {
           </header>
 
           <main className="pb-[calc(2rem_+_env(safe-area-inset-bottom))]">
-            <div className="flex min-h-[50px] items-center gap-2.5 border-b border-slate-800 bg-slate-900 px-3">
-              <SearchIcon className="h-6 w-6 shrink-0 text-slate-400" aria-hidden />
+            <div className="flex min-h-[50px] items-center gap-2.5 border-b border-border bg-muted px-3">
+              <SearchIcon className="h-6 w-6 shrink-0 text-muted-foreground" aria-hidden />
               <ScanInput
                 ref={lineSearchInputRef}
                 context="pos"
@@ -7107,27 +7106,27 @@ const PosSellPage = () => {
                 showDropdown={false}
                 disabled={!hasOpenShift}
                 className="min-w-0 flex-1"
-                inputClassName="h-10 border-0 bg-transparent px-0 text-[15px] text-white shadow-none placeholder:text-slate-400 focus-visible:ring-0"
+                inputClassName="h-10 border-0 bg-transparent px-0 text-[15px] text-foreground shadow-none placeholder:text-muted-foreground focus-visible:ring-0"
               />
             </div>
 
-            <div className="flex min-h-[46px] w-full items-center gap-2.5 border-b border-slate-800 bg-slate-900 px-3 text-left">
-              <StoresIcon className="h-5 w-5 shrink-0 text-slate-500" aria-hidden />
-              <span className="min-w-0 flex-1 truncate text-[14px] font-semibold text-slate-500">
+            <div className="flex min-h-[46px] w-full items-center gap-2.5 border-b border-border bg-muted px-3 text-left">
+              <StoresIcon className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
+              <span className="min-w-0 flex-1 truncate text-[14px] font-semibold text-muted-foreground">
                 {mobileStoreName || selectedRegisterLabel}
               </span>
             </div>
 
             {visibleProductCategories.length ? (
-              <div className="scrollbar-none overflow-x-auto border-b border-slate-800 bg-slate-950/95 px-3 py-2">
+              <div className="scrollbar-none overflow-x-auto border-b border-border bg-card/95 px-3 py-2">
                 <div className="flex w-max min-w-full gap-2">
                   <button
                     type="button"
                     className={cn(
                       "min-h-9 shrink-0 rounded-[9px] border px-3 text-[13px] font-semibold",
                       selectedCategory
-                        ? "border-slate-700 bg-slate-900 text-slate-300"
-                        : "border-primary bg-primary text-white",
+                        ? "border-border bg-muted text-secondary-foreground"
+                        : "border-primary bg-primary text-primary-foreground",
                     )}
                     onClick={() => {
                       setSelectedCategory("");
@@ -7143,8 +7142,8 @@ const PosSellPage = () => {
                       className={cn(
                         "min-h-9 shrink-0 rounded-[9px] border px-3 text-[13px] font-semibold",
                         selectedCategory === category
-                          ? "border-primary bg-primary text-white"
-                          : "border-slate-700 bg-slate-900 text-slate-300",
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border bg-muted text-secondary-foreground",
                       )}
                       onClick={() => setSelectedCategory(category)}
                     >
@@ -7156,19 +7155,19 @@ const PosSellPage = () => {
             ) : null}
 
             {catalogProductsQuery.error ? (
-              <div className="m-4 border border-[#5a2525] bg-[#2b1717] p-3 text-sm text-[#ff8a8a]">
+              <div className="m-4 border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
                 {translateError(tErrors, catalogProductsQuery.error)}
               </div>
             ) : null}
 
             {productGridLoading ? (
-              <div className="grid min-h-40 place-items-center text-slate-400">
+              <div className="grid min-h-40 place-items-center text-muted-foreground">
                 <Spinner className="h-5 w-5" />
               </div>
             ) : null}
 
             {!productGridLoading && !visibleProducts.length ? (
-              <div className="grid min-h-56 place-items-center text-center text-slate-400">
+              <div className="grid min-h-56 place-items-center text-center text-muted-foreground">
                 <div>
                   <EmptyIcon className="mx-auto h-8 w-8" aria-hidden />
                   <p className="mt-3 text-base">
@@ -7181,7 +7180,7 @@ const PosSellPage = () => {
             ) : null}
 
             {visibleProducts.length ? (
-              <div className="divide-y divide-slate-800">
+              <div className="divide-y divide-border">
                 {visibleProducts.map((product) => {
                   const priceKgs = product.effectivePriceKgs ?? product.basePriceKgs ?? null;
                   const primaryImage = product.images?.[0]?.url ?? product.photoUrl;
@@ -7207,7 +7206,7 @@ const PosSellPage = () => {
                         completeMutation.isLoading
                       }
                     >
-                      <span className="grid h-10 w-10 place-items-center overflow-hidden rounded-[10px] bg-slate-800 text-slate-300">
+                      <span className="grid h-10 w-10 place-items-center overflow-hidden rounded-[10px] bg-secondary text-secondary-foreground">
                         {primaryImage ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
@@ -7220,21 +7219,21 @@ const PosSellPage = () => {
                         )}
                       </span>
                       <span className="min-w-0">
-                        <span className="line-clamp-2 text-[14px] font-semibold leading-tight text-white">
+                        <span className="line-clamp-2 text-[14px] font-semibold leading-tight text-foreground">
                           {product.name}
                         </span>
                         {productIdentifier ? (
-                          <span className="mt-0.5 block truncate text-[11px] leading-tight text-slate-400">
+                          <span className="mt-0.5 block truncate text-[11px] leading-tight text-muted-foreground">
                             {productIdentifier}
                           </span>
                         ) : null}
-                        <span className="mt-0.5 block text-[12px] font-semibold leading-none text-slate-300">
+                        <span className="mt-0.5 block text-[12px] font-semibold leading-none text-secondary-foreground">
                           {priceKgs === null
                             ? t("sell.mobile.freePriceProduct")
                             : formatSaleMoney(priceKgs)}
                         </span>
                       </span>
-                      <span className="text-right text-[13px] font-semibold text-slate-300">
+                      <span className="text-right text-[13px] font-semibold text-secondary-foreground">
                         {product.onHandQty === null || product.onHandQty === undefined
                           ? "0"
                           : formatNumber(product.onHandQty, locale)}
@@ -7244,21 +7243,21 @@ const PosSellPage = () => {
                 })}
               </div>
             ) : null}
-            <div className="px-3 pb-3">{renderCatalogPagination("dark")}</div>
+            <div className="px-3 pb-3">{renderCatalogPagination()}</div>
           </main>
         </div>
       );
 
       const renderScannerScreen = () => (
-        <div className="min-h-[100dvh] bg-[#070b14] text-white md:hidden">
-          <header className="sticky top-0 z-40 bg-slate-950">
+        <div className="min-h-[100dvh] bg-background text-foreground md:hidden">
+          <header className="sticky top-0 z-40 bg-card">
             <div
               className="grid min-h-[68px] grid-cols-[40px_minmax(0,1fr)] items-end gap-2 px-3 pb-3"
               style={{ paddingTop: "calc(0.55rem + env(safe-area-inset-top))" }}
             >
               <button
                 type="button"
-                className="grid h-10 w-10 place-items-center text-white"
+                className="grid h-10 w-10 place-items-center text-foreground"
                 onClick={() => setMobileScreen("sale")}
                 aria-label={tCommon("back")}
               >
@@ -7271,16 +7270,16 @@ const PosSellPage = () => {
           </header>
           <main className="grid min-h-[calc(100dvh-68px)] place-items-center px-5 pb-[env(safe-area-inset-bottom)]">
             <section className="w-full max-w-sm text-center">
-              <div className="mx-auto grid h-20 w-20 place-items-center rounded-full border border-slate-800 bg-slate-950">
+              <div className="mx-auto grid h-20 w-20 place-items-center rounded-full border border-border bg-card">
                 <BarcodeIcon className="h-9 w-9 text-primary" aria-hidden />
               </div>
               <h1 className="mt-4 text-[15px] font-semibold">
                 {t("sell.mobile.scannerUnavailableTitle")}
               </h1>
-              <p className="mt-2 text-[13px] leading-5 text-slate-400">
+              <p className="mt-2 text-[13px] leading-5 text-muted-foreground">
                 {t("sell.mobile.scannerUnavailableDescription")}
               </p>
-              <div className="mt-5 rounded-[12px] border border-slate-800 bg-slate-950/95 px-3 py-2">
+              <div className="mt-5 rounded-[12px] border border-border bg-card/95 px-3 py-2">
                 <ScanInput
                   context="pos"
                   value={lineSearch}
@@ -7299,7 +7298,7 @@ const PosSellPage = () => {
                   showDropdown={false}
                   disabled={!hasOpenShift}
                   className="w-full"
-                  inputClassName="h-10 border-0 bg-transparent px-0 text-center text-[14px] text-white shadow-none placeholder:text-slate-500 focus-visible:ring-0"
+                  inputClassName="h-10 border-0 bg-transparent px-0 text-center text-[14px] text-foreground shadow-none placeholder:text-muted-foreground focus-visible:ring-0"
                 />
               </div>
             </section>
@@ -7324,10 +7323,10 @@ const PosSellPage = () => {
               role="dialog"
               aria-modal="true"
               aria-label={t("sell.saleDiscount")}
-              className="absolute inset-x-0 bottom-0 rounded-t-[20px] bg-slate-950 px-3 pb-[calc(0.75rem_+_env(safe-area-inset-bottom))] pt-3 text-white shadow-2xl"
+              className="absolute inset-x-0 bottom-0 rounded-t-[20px] bg-card px-3 pb-[calc(0.75rem_+_env(safe-area-inset-bottom))] pt-3 text-foreground shadow-2xl"
               data-testid="pos-mobile-discount-sheet"
             >
-              <div className="mx-auto h-1 w-12 rounded-full bg-[#5b5b62]" />
+              <div className="mx-auto h-1 w-12 rounded-full bg-muted-foreground/50" />
               <form
                 className="mt-4 space-y-4"
                 onSubmit={(event) => {
@@ -7340,13 +7339,13 @@ const PosSellPage = () => {
                     <h2 className="text-[17px] font-semibold leading-none">
                       {t("sell.saleDiscount")}
                     </h2>
-                    <p className="mt-1.5 text-[13px] text-slate-400">
+                    <p className="mt-1.5 text-[13px] text-muted-foreground">
                       {t("sell.subtotal")}: {formatSaleMoney(cartSubtotalKgs)}
                     </p>
                   </div>
                   <button
                     type="button"
-                    className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-slate-800 text-slate-200"
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-secondary text-secondary-foreground"
                     onClick={closeMobileDiscountEditor}
                     aria-label={tCommon("close")}
                   >
@@ -7355,7 +7354,7 @@ const PosSellPage = () => {
                 </div>
 
                 <label className="block space-y-2">
-                  <span className="text-[13px] font-semibold text-slate-300">
+                  <span className="text-[13px] font-semibold text-secondary-foreground">
                     {t("sell.discount")}
                   </span>
                   <div className="grid grid-cols-[minmax(0,1fr)_72px] gap-2">
@@ -7366,26 +7365,26 @@ const PosSellPage = () => {
                       placeholder={t("sell.discountPlaceholder")}
                       inputMode="decimal"
                       disabled={isLineBusy || completeMutation.isLoading}
-                      className="h-12 border-slate-700 bg-slate-950 text-right text-[18px] font-semibold text-white"
+                      className="h-12 border-border bg-card text-right text-[18px] font-semibold text-foreground"
                       data-testid="pos-mobile-discount-input"
                       autoFocus
                     />
-                    <span className="flex h-12 items-center justify-center rounded-md border border-slate-700 bg-slate-900 px-2 text-xs font-semibold text-slate-300">
+                    <span className="flex h-12 items-center justify-center rounded-md border border-border bg-muted px-2 text-xs font-semibold text-secondary-foreground">
                       {discountCurrencyCode}
                     </span>
                   </div>
                 </label>
 
-                <div className="rounded-[12px] border border-slate-800 bg-slate-900/70 p-3">
-                  <div className="flex justify-between gap-3 text-[13px] text-slate-400">
+                <div className="rounded-[12px] border border-border bg-muted/70 p-3">
+                  <div className="flex justify-between gap-3 text-[13px] text-muted-foreground">
                     <span>{t("sell.discount")}</span>
-                    <span className="text-white">{formatSaleMoney(cartDiscountKgs)}</span>
+                    <span className="text-foreground">{formatSaleMoney(cartDiscountKgs)}</span>
                   </div>
-                  <div className="mt-2 flex items-end justify-between gap-3 border-t border-slate-800 pt-2">
-                    <span className="text-[14px] font-semibold text-white">
+                  <div className="mt-2 flex items-end justify-between gap-3 border-t border-border pt-2">
+                    <span className="text-[14px] font-semibold text-foreground">
                       {t("sell.amountDue")}
                     </span>
-                    <span className="text-[19px] font-bold text-white">
+                    <span className="text-[19px] font-bold text-foreground">
                       {formatSaleMoney(cartTotalKgs)}
                     </span>
                   </div>
@@ -7395,7 +7394,7 @@ const PosSellPage = () => {
                   {canRemoveDiscount ? (
                     <button
                       type="button"
-                      className="min-h-11 rounded-[11px] bg-[#2b1717] px-3 text-[14px] font-semibold text-[#ff8a8a] disabled:opacity-50"
+                      className="min-h-11 rounded-[11px] bg-danger/10 px-3 text-[14px] font-semibold text-danger disabled:opacity-50"
                       onClick={() => void handleMobileRemoveDiscount()}
                       disabled={isLineBusy || completeMutation.isLoading}
                       data-testid="pos-mobile-discount-remove"
@@ -7405,7 +7404,7 @@ const PosSellPage = () => {
                   ) : (
                     <button
                       type="button"
-                      className="min-h-11 rounded-[11px] bg-slate-800 px-3 text-[14px] font-semibold text-slate-200"
+                      className="min-h-11 rounded-[11px] bg-secondary px-3 text-[14px] font-semibold text-secondary-foreground"
                       onClick={closeMobileDiscountEditor}
                     >
                       {tCommon("cancel")}
@@ -7413,7 +7412,7 @@ const PosSellPage = () => {
                   )}
                   <button
                     type="submit"
-                    className="min-h-11 rounded-[11px] bg-primary px-3 text-[14px] font-semibold text-white disabled:opacity-50"
+                    className="min-h-11 rounded-[11px] bg-primary px-3 text-[14px] font-semibold text-primary-foreground disabled:opacity-50"
                     disabled={!saleId || isLineBusy || completeMutation.isLoading}
                     data-testid="pos-mobile-discount-apply"
                   >
@@ -7441,14 +7440,14 @@ const PosSellPage = () => {
               role="dialog"
               aria-modal="true"
               aria-label={activeLine.product.name}
-              className="absolute inset-x-0 bottom-0 rounded-t-[20px] bg-slate-950 px-3 pb-[calc(0.65rem_+_env(safe-area-inset-bottom))] pt-3 text-white shadow-2xl"
+              className="absolute inset-x-0 bottom-0 rounded-t-[20px] bg-card px-3 pb-[calc(0.65rem_+_env(safe-area-inset-bottom))] pt-3 text-foreground shadow-2xl"
             >
-              <div className="mx-auto h-1 w-12 rounded-full bg-[#5b5b62]" />
+              <div className="mx-auto h-1 w-12 rounded-full bg-muted-foreground/50" />
               <div className="mt-4">
                 <h2 className="line-clamp-2 text-[15px] font-semibold leading-tight">
                   {activeLine.product.name}
                 </h2>
-                <p className="mt-1 truncate text-[13px] text-slate-400">
+                <p className="mt-1 truncate text-[13px] text-muted-foreground">
                   {activeLine.product.name}
                 </p>
               </div>
@@ -7458,14 +7457,14 @@ const PosSellPage = () => {
                   type="button"
                   className={cn(
                     "flex min-h-[50px] w-full items-center justify-between rounded-[11px] border px-3 text-left",
-                    mobileLineInputMode === "price" ? "border-primary" : "border-slate-700",
+                    mobileLineInputMode === "price" ? "border-primary" : "border-border",
                   )}
                   onClick={() => {
                     setMobileLineInputMode("price");
                     setMobileKeypadReplaceNext(true);
                   }}
                 >
-                  <span className="text-[15px] font-semibold text-slate-300">
+                  <span className="text-[15px] font-semibold text-secondary-foreground">
                     {t("sell.mobile.salePrice")}
                   </span>
                   <span className="text-[19px] font-semibold" data-testid="pos-line-price">
@@ -7477,14 +7476,14 @@ const PosSellPage = () => {
                   type="button"
                   className={cn(
                     "flex min-h-[50px] w-full items-center justify-between rounded-[11px] border px-3 text-left",
-                    mobileLineInputMode === "qty" ? "border-primary" : "border-slate-700",
+                    mobileLineInputMode === "qty" ? "border-primary" : "border-border",
                   )}
                   onClick={() => {
                     setMobileLineInputMode("qty");
                     setMobileKeypadReplaceNext(true);
                   }}
                 >
-                  <span className="text-[15px] font-semibold text-slate-300">
+                  <span className="text-[15px] font-semibold text-secondary-foreground">
                     {t("sell.mobile.quantity")}
                   </span>
                   <span className="flex items-center gap-2.5">
@@ -7494,7 +7493,7 @@ const PosSellPage = () => {
                     <span
                       role="button"
                       tabIndex={-1}
-                      className="grid h-7 w-9 place-items-center rounded-[7px] bg-slate-300 text-slate-950"
+                      className="grid h-7 w-9 place-items-center rounded-[7px] bg-muted-foreground text-background"
                       onClick={(event) => {
                         event.stopPropagation();
                         handleMobileKeypadPress("clear");
@@ -7508,7 +7507,7 @@ const PosSellPage = () => {
 
               <button
                 type="button"
-                className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-[10px] border border-[#5a2525] bg-[#2b1717] px-3 text-[14px] font-semibold text-[#ff8a8a] disabled:opacity-50"
+                className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-[10px] border border-danger/40 bg-danger/10 px-3 text-[14px] font-semibold text-danger disabled:opacity-50"
                 data-testid="pos-line-remove"
                 onClick={handleMobileRemoveActiveLine}
                 disabled={isLineBusy || completeMutation.isLoading}
@@ -7523,7 +7522,7 @@ const PosSellPage = () => {
                     <button
                       key={key}
                       type="button"
-                      className="h-11 rounded-[7px] bg-slate-800 text-[19px] font-semibold text-white"
+                      className="h-11 rounded-[7px] bg-secondary text-[19px] font-semibold text-foreground"
                       onClick={() => handleMobileKeypadPress(key)}
                     >
                       {key}
@@ -7532,7 +7531,7 @@ const PosSellPage = () => {
                 )}
                 <button
                   type="button"
-                  className="col-span-2 h-11 rounded-[7px] bg-primary text-[19px] font-semibold text-white"
+                  className="col-span-2 h-11 rounded-[7px] bg-primary text-[19px] font-semibold text-primary-foreground"
                   onClick={() => handleMobileKeypadPress("enter")}
                 >
                   ↵
