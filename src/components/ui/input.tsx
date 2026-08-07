@@ -18,7 +18,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
       }
 
       const preventWheelStep = (event: WheelEvent) => {
-        if (document.activeElement === input) {
+        if (document.activeElement === input && !event.ctrlKey && !event.metaKey) {
           event.preventDefault();
         }
       };

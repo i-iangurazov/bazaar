@@ -5,6 +5,9 @@ import { useEffect } from "react";
 export const GlobalNumberInputGuard = () => {
   useEffect(() => {
     const preventWheelStep = (event: WheelEvent) => {
+      if (event.ctrlKey || event.metaKey) {
+        return;
+      }
       const target = event.target;
       if (
         target instanceof HTMLInputElement &&

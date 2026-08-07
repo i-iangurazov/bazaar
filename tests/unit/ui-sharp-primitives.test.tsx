@@ -281,6 +281,14 @@ describe("soft-rounded UI primitives", () => {
 
     expect(wheelEvent.defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(input);
+
+    const zoomEvent = new WheelEvent("wheel", {
+      deltaY: -100,
+      cancelable: true,
+      ctrlKey: true,
+    });
+    input.dispatchEvent(zoomEvent);
+    expect(zoomEvent.defaultPrevented).toBe(false);
   });
 
   it("prevents trackpad wheel changes on native number inputs globally", () => {
@@ -299,6 +307,14 @@ describe("soft-rounded UI primitives", () => {
 
     expect(wheelEvent.defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(input);
+
+    const zoomEvent = new WheelEvent("wheel", {
+      deltaY: 100,
+      cancelable: true,
+      metaKey: true,
+    });
+    input.dispatchEvent(zoomEvent);
+    expect(zoomEvent.defaultPrevented).toBe(false);
   });
 
   it("sorts table rows from reusable headers", () => {
