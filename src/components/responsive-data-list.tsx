@@ -64,6 +64,7 @@ export const ResponsiveDataList = <T,>({
   const storageKey = paginationKey ? `responsive-list:${paginationKey}:page-size` : null;
   const [internalPage, setInternalPage] = useState(1);
   const [pageSize, setPageSize] = useState(defaultPageSize);
+  const previousPageSizeRef = useRef(pageSize);
   const page = isServerPagination ? Math.max(1, externalPage ?? 1) : internalPage;
   const onPageChangeRef = useRef(onPageChange);
   onPageChangeRef.current = onPageChange;
@@ -90,6 +91,10 @@ export const ResponsiveDataList = <T,>({
   }, [isServerPagination, storageKey, pageSizeOptions]);
 
   useEffect(() => {
+    if (previousPageSizeRef.current === pageSize) {
+      return;
+    }
+    previousPageSizeRef.current = pageSize;
     if (isServerPagination) {
       onPageChangeRef.current?.(1);
       return;

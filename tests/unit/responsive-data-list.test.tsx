@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import React from "react";
-import { render, waitFor } from "@testing-library/react";
+import { render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ResponsiveDataList } from "@/components/responsive-data-list";
@@ -13,11 +13,11 @@ vi.mock("next-intl", () => ({
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-const renderServerPaginatedList = (onPageChange: (page: number) => void) => (
+const renderServerPaginatedList = (onPageChange: (page: number) => void, page = 1) => (
   <ResponsiveDataList
     items={[{ id: "row-1", label: "Movement" }]}
     getKey={(item) => item.id}
-    page={1}
+    page={page}
     totalItems={40}
     onPageChange={onPageChange}
     onPageSizeChange={() => undefined}
@@ -33,17 +33,15 @@ const renderServerPaginatedList = (onPageChange: (page: number) => void) => (
 );
 
 describe("ResponsiveDataList", () => {
-  it("does not reset server pagination only because the callback identity changed", async () => {
+  it("preserves the requested server page on mount and callback changes", async () => {
     const firstOnPageChange = vi.fn();
     const secondOnPageChange = vi.fn();
-    const { rerender } = render(renderServerPaginatedList(firstOnPageChange));
+    const { rerender } = render(renderServerPaginatedList(firstOnPageChange, 2));
 
-    await waitFor(() => {
-      expect(firstOnPageChange).toHaveBeenCalledTimes(1);
-    });
-    expect(firstOnPageChange).toHaveBeenCalledWith(1);
+    await tick();
+    expect(firstOnPageChange).not.toHaveBeenCalled();
 
-    rerender(renderServerPaginatedList(secondOnPageChange));
+    rerender(renderServerPaginatedList(secondOnPageChange, 2));
     await tick();
 
     expect(secondOnPageChange).not.toHaveBeenCalled();
