@@ -63,12 +63,22 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
     env:
       DATABASE_URL: postgresql://inventory:inventory@localhost:5432/bazaar_hardening_ci?schema=public
       DATABASE_TEST_URL: postgresql://inventory:inventory@localhost:5432/bazaar_hardening_ci?schema=public
       RUN_DB_TESTS: "1"
       ALLOW_TEST_DB_RESET: "1"
       EXPECTED_TEST_DB_NAME: bazaar_hardening_ci
+      REDIS_URL: redis://localhost:6379/13
       NEXTAUTH_SECRET: ci-secret
       NEXTAUTH_URL: http://localhost:3000
     steps:
@@ -175,6 +185,7 @@ jobs:
       NEXTAUTH_URL: http://localhost:3000
       REDIS_URL: redis://localhost:6379
       JOBS_SECRET: ci-jobs-secret
+      CRON_SECRET: ci-cron-secret-20260808
       EMAIL_PROVIDER: resend
       EMAIL_FROM: no-reply@example.com
       RESEND_API_KEY: ci-resend-key
