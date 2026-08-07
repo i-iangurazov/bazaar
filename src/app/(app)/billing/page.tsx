@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 
 import { CheckIcon, LockIcon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
+import { QueryErrorState } from "@/components/query-error-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -149,6 +150,8 @@ const BillingPage = () => {
           <Spinner className="h-4 w-4" />
           {tCommon("loading")}
         </div>
+      ) : billingQuery.isError ? (
+        <QueryErrorState onRetry={() => void billingQuery.refetch()} />
       ) : billingQuery.data ? (
         <div className="space-y-4">
           {billingQuery.data.limitState === "LIMIT_EXCEEDED" ? (

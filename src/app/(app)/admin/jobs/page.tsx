@@ -4,6 +4,7 @@ import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 
 import { PageHeader } from "@/components/page-header";
+import { QueryErrorState } from "@/components/query-error-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -80,6 +81,8 @@ const AdminJobsPage = () => {
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
+          ) : jobsQuery.isError ? (
+            <QueryErrorState onRetry={() => void jobsQuery.refetch()} />
           ) : !(jobsQuery.data ?? []).length ? (
             <p className="text-sm text-muted-foreground">{t("empty")}</p>
           ) : (

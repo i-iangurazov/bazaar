@@ -6,6 +6,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 
 import { PageHeader } from "@/components/page-header";
+import { QueryErrorState } from "@/components/query-error-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -143,6 +144,8 @@ const AdminSupportPage = () => {
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
+          ) : usersQuery.isError ? (
+            <QueryErrorState onRetry={() => void usersQuery.refetch()} />
           ) : (
             <div className="grid gap-3 md:grid-cols-[1fr_auto_auto] md:items-center">
               <Select value={selectedUserId} onValueChange={setSelectedUserId}>
@@ -196,6 +199,8 @@ const AdminSupportPage = () => {
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
+          ) : storeFlagsQuery.isError ? (
+            <QueryErrorState onRetry={() => void storeFlagsQuery.refetch()} />
           ) : (
             (storeFlagsQuery.data ?? []).map((store) => (
               <div key={store.id} className="rounded-md border border-border/70 p-4">

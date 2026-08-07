@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 import { MobileQuickActionButton, MobileTaskCard } from "@/components/mobile-app-shell";
 import { PageHeader } from "@/components/page-header";
+import { QueryErrorState } from "@/components/query-error-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,7 +42,6 @@ import { toIntlLocale } from "@/lib/locales";
 import { getPurchaseOrderStatusLabel } from "@/lib/i18n/status";
 import { hasPermission, type AppPermission, type RoleAccess } from "@/lib/roleAccess";
 import { trpc } from "@/lib/trpc";
-import { translateError } from "@/lib/translateError";
 import { useSse } from "@/lib/useSse";
 import { cn } from "@/lib/utils";
 
@@ -57,7 +57,6 @@ const DashboardPage = () => {
   const tCommon = useTranslations("common");
   const tNav = useTranslations("nav");
   const tInventory = useTranslations("inventory");
-  const tErrors = useTranslations("errors");
   const locale = useLocale();
   const { data: session } = useSession();
   const access: RoleAccess = useMemo(
@@ -417,7 +416,7 @@ const DashboardPage = () => {
     <div>
       <div className="space-y-4 md:hidden">
         {dashboardQuery.error ? (
-          <p className="text-sm text-danger">{translateError(tErrors, dashboardQuery.error)}</p>
+          <QueryErrorState onRetry={() => void dashboardQuery.refetch()} />
         ) : null}
 
         <section className="rounded-md border border-border bg-card p-4 shadow-sm">
@@ -536,6 +535,8 @@ const DashboardPage = () => {
           <h2 className="text-lg font-semibold text-foreground">{t("recentActivity")}</h2>
           {activityQuery.isLoading ? (
             loadingState
+          ) : activityQuery.isError ? (
+            <QueryErrorState onRetry={() => void activityQuery.refetch()} />
           ) : mobileRecentActivity.length ? (
             <div className="grid gap-2">
               {mobileRecentActivity.map((item) => (
@@ -588,9 +589,10 @@ const DashboardPage = () => {
           }
         />
         {dashboardQuery.error ? (
-          <p className="mb-6 text-sm text-danger">
-            {translateError(tErrors, dashboardQuery.error)}
-          </p>
+          <QueryErrorState
+            className="mb-6"
+            onRetry={() => void dashboardQuery.refetch()}
+          />
         ) : null}
 
         <div className="grid gap-4 lg:grid-cols-3 xl:grid-cols-6">
@@ -889,6 +891,8 @@ const DashboardPage = () => {
             <CardContent>
               {activityQuery.isLoading ? (
                 loadingState
+              ) : activityQuery.isError ? (
+                <QueryErrorState onRetry={() => void activityQuery.refetch()} />
               ) : activity.length ? (
                 <div className="space-y-2">
                   {activity.map((item) => (

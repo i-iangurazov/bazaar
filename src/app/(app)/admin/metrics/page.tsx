@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 
 import { PageHeader } from "@/components/page-header";
+import { QueryErrorState } from "@/components/query-error-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -332,6 +333,8 @@ const AdminMetricsPage = () => {
             <MetricSkeleton key={index} />
           ))}
         </div>
+      ) : metricsQuery.isError && !data ? (
+        <QueryErrorState onRetry={() => void metricsQuery.refetch()} />
       ) : data && inventory && summary ? (
         <>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
