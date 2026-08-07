@@ -3,10 +3,18 @@ import { describe, expect, it } from "vitest";
 import {
   buildSavedLabelPrintValues,
   hasSavedLabelPrintProfile,
+  resolveLabelPrintDispatch,
   resolveLabelPrintFlowAction,
 } from "@/lib/labelPrintFlow";
 
 describe("label print flow", () => {
+  it("keeps only QZ and browser PDF on supported label dispatch paths", () => {
+    expect(resolveLabelPrintDispatch("QZ_TRAY")).toBe("qzTray");
+    expect(resolveLabelPrintDispatch("DISABLED")).toBe("browserPdf");
+    expect(resolveLabelPrintDispatch(null)).toBe("browserPdf");
+    expect(resolveLabelPrintDispatch("KIOSK_SILENT_PRINT")).toBe("unsupportedConnector");
+  });
+
   it("quick prints when a saved profile exists", () => {
     expect(
       resolveLabelPrintFlowAction({

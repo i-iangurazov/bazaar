@@ -85,6 +85,7 @@ import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
 import { getQzTrayBinding, printPdfBlobViaQzTray, qzTrayErrorMessageKey } from "@/lib/qzTrayPrint";
 import {
   buildSavedLabelPrintValues,
+  resolveLabelPrintDispatch,
   resolveLabelPrintFlowAction,
   resolveSavedLabelCopies,
   resolveSavedLabelTemplate,
@@ -1034,6 +1035,16 @@ const ProductDetailPage = () => {
         settings,
         storeId: labelStoreId,
       });
+      const dispatch = resolveLabelPrintDispatch(settings?.labelPrintProvider);
+      if (mode === "print" && dispatch === "unsupportedConnector") {
+        toast({
+          variant: "error",
+          description: tErrors("printerConnectorNotImplemented"),
+          actionLabel: t("changePrintSettings"),
+          actionHref: "/settings/printing",
+        });
+        return;
+      }
       const template = resolveSavedLabelTemplate(settings?.labelTemplate);
       const quantity = resolveSavedLabelCopies(settings?.labelDefaultCopies);
       const blob = await fetchPdfBlob({
@@ -1075,7 +1086,7 @@ const ProductDetailPage = () => {
       });
       if (mode === "print") {
         const printStoreId = printValues.storeId || labelStoreId;
-        if (settings?.labelPrintProvider === "QZ_TRAY" && printStoreId) {
+        if (dispatch === "qzTray" && printStoreId) {
           const binding = getQzTrayBinding(printStoreId);
           await printPdfBlobViaQzTray({
             blob,

@@ -4,12 +4,11 @@ import { join } from "node:path";
 import { z } from "zod";
 import { PrinterPrintMode } from "@prisma/client";
 
-import { printLabels } from "@/server/printing/adapter";
 import { getServerAuthToken } from "@/server/auth/token";
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
 import { assertUserCanAccessStore, type StoreAccessUser } from "@/server/services/storeAccess";
-import { defaultLocale, normalizeLocale, toIntlLocale } from "@/lib/locales";
+import { defaultLocale, normalizeLocale } from "@/lib/locales";
 import { getMessageFromFallback } from "@/lib/i18nFallback";
 import { PRICE_TAG_TEMPLATES } from "@/lib/priceTags";
 
@@ -74,7 +73,6 @@ export const POST = async (request: Request) => {
   }
 
   const tErrors = createTranslator(messages, "errors");
-  const tPriceTags = createTranslator(messages, "priceTags");
 
   const token = await getServerAuthToken();
   if (!token) {
@@ -142,30 +140,5 @@ export const POST = async (request: Request) => {
     return new Response(tErrors("printerConnectorModeRequired"), { status: 409 });
   }
 
-  const quantities = Object.fromEntries(parsed.data.items.map((item) => [item.productId, item.quantity]));
-
-  try {
-    await printLabels({
-      organizationId: token.organizationId as string,
-      job: {
-        storeId: store.id,
-        productIds: parsed.data.items.map((item) => item.productId),
-        template: parsed.data.template,
-        quantities,
-        locale: toIntlLocale(locale),
-        labels: [],
-        storeName: store.name,
-        noPriceLabel: tPriceTags("noPrice"),
-        noBarcodeLabel: tPriceTags("noBarcode"),
-        skuLabel: tPriceTags("sku"),
-      },
-    });
-
-    return Response.json({ ok: true });
-  } catch (error) {
-    if (error instanceof AppError) {
-      return new Response(tErrors(error.message), { status: error.status });
-    }
-    return new Response(tErrors("unexpectedError"), { status: 500 });
-  }
+  return new Response(tErrors("printerConnectorNotImplemented"), { status: 409 });
 };

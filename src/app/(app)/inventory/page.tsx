@@ -103,7 +103,11 @@ import {
   ROLL_PRICE_TAG_TEMPLATE,
   isRollPriceTagTemplate,
 } from "@/lib/priceTags";
-import { buildSavedLabelPrintValues, resolveLabelPrintFlowAction } from "@/lib/labelPrintFlow";
+import {
+  buildSavedLabelPrintValues,
+  resolveLabelPrintDispatch,
+  resolveLabelPrintFlowAction,
+} from "@/lib/labelPrintFlow";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import {
@@ -1415,6 +1419,16 @@ const InventoryPage = () => {
       toast({ variant: "info", description: t("printProfileLoading") });
       return;
     }
+    const dispatch = resolveLabelPrintDispatch(printProfileSettings?.labelPrintProvider);
+    if (dispatch === "unsupportedConnector") {
+      toast({
+        variant: "error",
+        description: tErrors("printerConnectorNotImplemented"),
+        actionLabel: t("changePrintSettings"),
+        actionHref: "/settings/printing",
+      });
+      return;
+    }
 
     const loadedMissingBarcode = selectedPrintItems.filter(
       (item) => !hasPrintableBarcode(item.product as BarcodePrintProduct),
@@ -1489,7 +1503,7 @@ const InventoryPage = () => {
         },
       });
       const printStoreId = printValues.storeId || storeId || "";
-      if (printProfileSettings?.labelPrintProvider === "QZ_TRAY" && printStoreId) {
+      if (dispatch === "qzTray" && printStoreId) {
         const binding = getQzTrayBinding(printStoreId);
         await printPdfBlobViaQzTray({
           blob,
@@ -1546,6 +1560,16 @@ const InventoryPage = () => {
         return;
       }
       const legacySettings = legacyPrintHardwareQuery.data?.settings;
+      const dispatch = resolveLabelPrintDispatch(legacySettings?.labelPrintProvider);
+      if (mode === "print" && dispatch === "unsupportedConnector") {
+        toast({
+          variant: "error",
+          description: tErrors("printerConnectorNotImplemented"),
+          actionLabel: t("changePrintSettings"),
+          actionHref: "/settings/printing",
+        });
+        return;
+      }
       const blob = await fetchPdfBlob({
         url: "/api/price-tags/pdf",
         init: {
@@ -1584,7 +1608,7 @@ const InventoryPage = () => {
         },
       });
       if (mode === "print") {
-        if (legacySettings?.labelPrintProvider === "QZ_TRAY" && values.storeId) {
+        if (dispatch === "qzTray" && values.storeId) {
           const binding = getQzTrayBinding(values.storeId);
           await printPdfBlobViaQzTray({
             blob,

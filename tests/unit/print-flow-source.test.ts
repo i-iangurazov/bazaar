@@ -17,6 +17,10 @@ describe("print flow source wiring", () => {
 
     expect(source).toContain("const handleInventoryQuickPrint");
     expect(source).toContain("resolveLabelPrintFlowAction");
+    expect(quickPrintSource).toContain("resolveLabelPrintDispatch");
+    expect(quickPrintSource.indexOf('dispatch === "unsupportedConnector"')).toBeLessThan(
+      quickPrintSource.indexOf("fetchPdfBlob"),
+    );
     expect(source).toContain("setPrintSetupOpen(true)");
     expect(quickPrintSource).toContain("trpcUtils.products.byIds.fetch");
     expect(quickPrintSource).toContain("printMissingBarcodeCount");
@@ -31,9 +35,15 @@ describe("print flow source wiring", () => {
     const quickPrintStart = source.indexOf("const openPrintForProducts");
     const quickPrintEnd = source.indexOf("const getProductActions", quickPrintStart);
     const quickPrintSource = source.slice(quickPrintStart, quickPrintEnd);
+    const dispatchStart = source.indexOf("const performPrintTags");
+    const dispatchSource = source.slice(dispatchStart, quickPrintStart);
     const legacyOpenMatches = [...source.matchAll(/setLegacyProductsPrintModalOpen\(true\)/g)];
 
     expect(quickPrintSource).toContain("resolveLabelPrintFlowAction");
+    expect(dispatchSource).toContain("resolveLabelPrintDispatch");
+    expect(dispatchSource.indexOf('dispatch === "unsupportedConnector"')).toBeLessThan(
+      dispatchSource.indexOf("fetchPdfBlob"),
+    );
     expect(quickPrintSource).toContain("trpcUtils.products.byIds.fetch");
     expect(quickPrintSource).toContain("printMissingBarcodeCount");
     expect(quickPrintSource).toContain("performPrintTags(activeIds, savedValues, \"print\")");
@@ -48,6 +58,19 @@ describe("print flow source wiring", () => {
     expect(legacyOpenMatches).toHaveLength(1);
     expect(source.slice(Math.max(0, legacyOpenMatches[0].index - 350), legacyOpenMatches[0].index))
       .toContain("__seedLegacyProductsPrintModalQueue");
+  });
+
+  it("product detail rejects unsupported connector printing before PDF generation", async () => {
+    const source = await readSource("src/app/(app)/products/[id]/page.tsx");
+    const handlerStart = source.indexOf("const handleProductLabelPdf");
+    const handlerEnd = source.indexOf("if (productQuery.isLoading", handlerStart);
+    const handlerSource = source.slice(handlerStart, handlerEnd);
+
+    expect(handlerSource).toContain("resolveLabelPrintDispatch");
+    expect(handlerSource.indexOf('dispatch === "unsupportedConnector"')).toBeLessThan(
+      handlerSource.indexOf("fetchPdfBlob"),
+    );
+    expect(handlerSource).toContain('actionHref: "/settings/printing"');
   });
 
   it("products quick print can use an existing saved store profile when no store filter is selected", async () => {

@@ -132,7 +132,7 @@ describeDb("Agent 2 P0 HTTP boundary reproductions", () => {
     ).toBe(0);
   });
 
-  it("HARD-A2-009 preserves PDF and mocked connector printing for an assigned store", async () => {
+  it("HARD-A2-012 preserves PDF but truthfully rejects the unsupported label connector", async () => {
     const { org, store, product, managerUser } = await seedBase({ plan: "BUSINESS" });
     await prisma.product.update({ where: { id: product.id }, data: { basePriceKgs: 456 } });
     await prisma.productBarcode.create({
@@ -142,15 +142,28 @@ describeDb("Agent 2 P0 HTTP boundary reproductions", () => {
         value: `21${Date.now().toString().slice(-10)}`,
       },
     });
+    const connector = await prisma.kkmConnectorDevice.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Paired but label-incompatible connector",
+        tokenHash: `labels-${randomUUID()}`,
+      },
+    });
     await prisma.storePrinterSettings.create({
-      data: { organizationId: org.id, storeId: store.id, labelPrintMode: "CONNECTOR" },
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        labelPrintMode: "CONNECTOR",
+        labelPrintProvider: "KIOSK_SILENT_PRINT",
+        connectorDeviceId: connector.id,
+      },
     });
     mockGetServerAuthToken.mockResolvedValue({
       sub: managerUser.id,
       organizationId: org.id,
       role: managerUser.role,
     });
-    mockPrintLabels.mockResolvedValue({ ok: true });
 
     const pdfResponse = await priceTagsPost(
       new Request("http://localhost/api/price-tags/pdf", {
@@ -176,8 +189,9 @@ describeDb("Agent 2 P0 HTTP boundary reproductions", () => {
         }),
       }),
     );
-    expect(connectorResponse.status).toBe(200);
-    expect(mockPrintLabels).toHaveBeenCalledTimes(1);
+    expect(connectorResponse.status).toBe(409);
+    expect(await connectorResponse.text()).toContain("Connector");
+    expect(mockPrintLabels).not.toHaveBeenCalled();
   });
 
   it("HARD-A2-009 rejects same-org product ID tampering and cross-org store IDs", async () => {

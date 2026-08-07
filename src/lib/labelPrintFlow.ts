@@ -7,6 +7,7 @@ import {
 
 export type LabelPrintProfileLike = {
   id?: string | null;
+  labelPrintProvider?: string | null;
   labelTemplate?: string | null;
   labelDefaultCopies?: number | null;
   labelWidthMm?: number | null;
@@ -14,9 +15,20 @@ export type LabelPrintProfileLike = {
 } | null | undefined;
 
 export type LabelPrintFlowAction = "quickPrint" | "setupRequired" | "openSettings" | "loading";
+export type LabelPrintDispatch = "browserPdf" | "qzTray" | "unsupportedConnector";
 
 export const hasSavedLabelPrintProfile = (settings: LabelPrintProfileLike) =>
   Boolean(settings?.id);
+
+export const resolveLabelPrintDispatch = (provider?: string | null): LabelPrintDispatch => {
+  if (provider === "QZ_TRAY") {
+    return "qzTray";
+  }
+  if (provider === "KIOSK_SILENT_PRINT") {
+    return "unsupportedConnector";
+  }
+  return "browserPdf";
+};
 
 export const resolveLabelPrintFlowAction = ({
   settings,

@@ -98,7 +98,11 @@ import {
   ROLL_PRICE_TAG_TEMPLATE,
   isRollPriceTagTemplate,
 } from "@/lib/priceTags";
-import { buildSavedLabelPrintValues, resolveLabelPrintFlowAction } from "@/lib/labelPrintFlow";
+import {
+  buildSavedLabelPrintValues,
+  resolveLabelPrintDispatch,
+  resolveLabelPrintFlowAction,
+} from "@/lib/labelPrintFlow";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { normalizeCurrencyCode } from "@/lib/currency";
@@ -1980,6 +1984,16 @@ const ProductsPage = () => {
       }
       try {
         const settings = printProfileSettings;
+        const dispatch = resolveLabelPrintDispatch(settings?.labelPrintProvider);
+        if (mode === "print" && dispatch === "unsupportedConnector") {
+          toast({
+            variant: "error",
+            description: tErrors("printerConnectorNotImplemented"),
+            actionLabel: t("changePrintSettings"),
+            actionHref: "/settings/printing",
+          });
+          return false;
+        }
         const blob = await fetchPdfBlob({
           url: "/api/price-tags/pdf",
           init: {
@@ -2022,7 +2036,7 @@ const ProductsPage = () => {
         const fileName = `price-tags-${values.template}.pdf`;
         if (mode === "print") {
           const printStoreId = values.storeId || defaultPrintStoreId;
-          if (settings?.labelPrintProvider === "QZ_TRAY" && printStoreId) {
+          if (dispatch === "qzTray" && printStoreId) {
             const binding = getQzTrayBinding(printStoreId);
             await printPdfBlobViaQzTray({
               blob,
