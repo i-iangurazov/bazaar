@@ -4316,7 +4316,7 @@ export const listPosReceipts = async (input: {
           },
         },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       skip: (input.page - 1) * input.pageSize,
       take: input.pageSize,
     }),

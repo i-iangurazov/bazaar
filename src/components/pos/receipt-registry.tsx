@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CustomerOrderStatus } from "@prisma/client";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
@@ -30,6 +30,7 @@ import {
 import { useToast } from "@/components/ui/toast";
 import { DownloadIcon, PrintIcon, ShareIcon, ViewIcon } from "@/components/icons";
 import { ReceiptPreviewModal } from "@/components/pos/receipt-preview-modal";
+import { fetchAllReceiptPages } from "@/components/pos/receipt-registry-export";
 import { downloadTableFile, type DownloadFormat } from "@/lib/fileExport";
 import { currencySourceWithFallback, formatKgsMoney } from "@/lib/currencyDisplay";
 import { formatDateTime } from "@/lib/i18nFormat";
@@ -66,6 +67,7 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
   const locale = useLocale();
   const { data: session } = useSession();
   const { toast } = useToast();
+  const trpcUtils = trpc.useUtils();
   const canView = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
 
   const storesQuery = trpc.stores.list.useQuery(undefined, { enabled: canView });
@@ -76,21 +78,32 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
     formatDateInput(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30)),
   );
   const [toDate, setToDate] = useState(formatDateInput(now));
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [downloadFormat, setDownloadFormat] = useState<DownloadFormat>("csv");
+  const [isExporting, setIsExporting] = useState(false);
   const [receiptAction, setReceiptAction] = useState<{
     saleId: string;
     mode: "download" | "print" | "share";
   } | null>(null);
   const [previewSaleId, setPreviewSaleId] = useState<string | null>(null);
 
+  useEffect(() => {
+    setPage(1);
+  }, [storeId, status, fromDate, toDate]);
+
+  const receiptFilters = {
+    storeId: storeId || undefined,
+    statuses: status === "ALL" ? undefined : [status],
+    dateFrom: fromDate ? new Date(`${fromDate}T00:00:00`) : undefined,
+    dateTo: toDate ? new Date(`${toDate}T23:59:59`) : undefined,
+  };
+
   const receiptsQuery = trpc.pos.receipts.useQuery(
     {
-      storeId: storeId || undefined,
-      statuses: status === "ALL" ? undefined : [status],
-      dateFrom: fromDate ? new Date(`${fromDate}T00:00:00`) : undefined,
-      dateTo: toDate ? new Date(`${toDate}T23:59:59`) : undefined,
-      page: 1,
-      pageSize: 100,
+      ...receiptFilters,
+      page,
+      pageSize,
     },
     { enabled: canView, refetchOnWindowFocus: true },
   );
@@ -145,7 +158,7 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
     return "muted";
   };
 
-  const exportRows = receipts.map((receipt) => {
+  const toExportRow = (receipt: (typeof receipts)[number]) => {
     const currencySource = currencySourceWithFallback(receipt, receipt.store);
     return [
       receipt.number,
@@ -165,32 +178,50 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
       receipt.fiscalReceipt?.fiscalNumber ?? "",
       receipt.fiscalReceipt?.lastError ?? "",
     ];
-  });
+  };
 
-  const handleExportCurrentView = () => {
-    downloadTableFile({
-      format: downloadFormat,
-      fileNameBase: `receipts-registry-${formatDateInput(new Date())}`,
-      header: [
-        "receiptNumber",
-        "createdAtIso",
-        "storeCode",
-        "storeName",
-        "registerCode",
-        "cashierEmail",
-        "totalKgs",
-        "cashKgs",
-        "cardKgs",
-        "transferKgs",
-        "otherKgs",
-        "status",
-        "kkmStatus",
-        "fiscalReceiptId",
-        "fiscalNumber",
-        "fiscalError",
-      ],
-      rows: exportRows,
-    });
+  const handleExportCurrentView = async () => {
+    if (isExporting) {
+      return;
+    }
+    setIsExporting(true);
+    try {
+      const allReceipts = await fetchAllReceiptPages({
+        fetchPage: (nextPage, nextPageSize) =>
+          trpcUtils.pos.receipts.fetch({
+            ...receiptFilters,
+            page: nextPage,
+            pageSize: nextPageSize,
+          }),
+      });
+      downloadTableFile({
+        format: downloadFormat,
+        fileNameBase: `receipts-registry-${formatDateInput(new Date())}`,
+        header: [
+          "receiptNumber",
+          "createdAtIso",
+          "storeCode",
+          "storeName",
+          "registerCode",
+          "cashierEmail",
+          "totalKgs",
+          "cashKgs",
+          "cardKgs",
+          "transferKgs",
+          "otherKgs",
+          "status",
+          "kkmStatus",
+          "fiscalReceiptId",
+          "fiscalNumber",
+          "fiscalError",
+        ],
+        rows: allReceipts.map(toExportRow),
+      });
+    } catch {
+      toast({ variant: "error", description: tExports("exportFailed") });
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const handleReceiptPdf = async (saleId: string, number: string, mode: "download" | "print") => {
@@ -337,9 +368,14 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
                   type="button"
                   variant="outline"
                   className="shrink-0"
-                  onClick={handleExportCurrentView}
+                  onClick={() => void handleExportCurrentView()}
+                  disabled={isExporting}
                 >
-                  <DownloadIcon className="h-4 w-4" aria-hidden />
+                  {isExporting ? (
+                    <Spinner className="h-4 w-4" />
+                  ) : (
+                    <DownloadIcon className="h-4 w-4" aria-hidden />
+                  )}
                   {t("export")}
                 </Button>
               </div>
@@ -351,7 +387,7 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
               <CardTitle className="text-base">{t("title")}</CardTitle>
               {!receiptsQuery.isLoading && !receiptsQuery.error ? (
                 <p className="text-xs text-muted-foreground">
-                  {t("receiptCount", { count: receipts.length })}
+                  {t("receiptCount", { count: receiptsQuery.data?.total ?? 0 })}
                 </p>
               ) : null}
             </CardHeader>
@@ -369,6 +405,17 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
                 <ResponsiveDataList
                   items={receipts}
                   getKey={(item) => item.id}
+                  page={page}
+                  totalItems={receiptsQuery.data?.total ?? 0}
+                  defaultPageSize={pageSize}
+                  pageSizeOptions={[10, 25, 50, 100]}
+                  onPageChange={setPage}
+                  onPageSizeChange={(nextPageSize) => {
+                    setPageSize(nextPageSize);
+                    setPage(1);
+                  }}
+                  paginationKey="pos-receipts"
+                  scrollToTopOnPageChange
                   desktopClassName="border-0"
                   mobileClassName="p-3 sm:p-4"
                   renderDesktop={(items) => (

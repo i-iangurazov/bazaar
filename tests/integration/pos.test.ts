@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { CashDrawerMovementType, PosPaymentMethod, Prisma, StockMovementType } from "@prisma/client";
 
 import { buildPosPaymentSubmitPayload } from "@/lib/posSaleMath";
+import { fetchAllReceiptPages } from "@/components/pos/receipt-registry-export";
 import { prisma } from "@/server/db/prisma";
 import { adjustStock } from "@/server/services/inventory";
 import {
@@ -238,6 +239,55 @@ describeDb("pos", () => {
 
     expect(completedOnly.items).toHaveLength(0);
     expect(draftOnly.items).toHaveLength(1);
+  });
+
+  it("exports every filtered receipt across server pages beyond 100 rows", async () => {
+    const { org, store, cashierUser } = await seedBase({ plan: "BUSINESS" });
+    const register = await prisma.posRegister.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Archive Register",
+        code: "ARCHIVE",
+      },
+    });
+    await prisma.customerOrder.createMany({
+      data: Array.from({ length: 235 }, (_, index) => ({
+        organizationId: org.id,
+        storeId: store.id,
+        registerId: register.id,
+        number: `S-EXPORT-${String(index + 1).padStart(4, "0")}`,
+        status: "COMPLETED" as const,
+        isPosSale: true,
+        totalKgs: index + 1,
+        createdById: cashierUser.id,
+        completedAt: new Date(),
+        createdAt: new Date("2026-08-07T12:00:00.000Z"),
+      })),
+    });
+    const caller = createTestCaller({
+      id: cashierUser.id,
+      email: cashierUser.email,
+      role: "MANAGER",
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+
+    const receipts = await fetchAllReceiptPages({
+      fetchPage: (page, pageSize) =>
+        caller.pos.receipts({
+          storeId: store.id,
+          statuses: ["COMPLETED"],
+          page,
+          pageSize,
+        }),
+    });
+
+    expect(receipts).toHaveLength(235);
+    expect(new Set(receipts.map((receipt) => receipt.id))).toHaveProperty("size", 235);
+    expect(receipts.map((receipt) => receipt.number)).toEqual(
+      expect.arrayContaining(["S-EXPORT-0001", "S-EXPORT-0235"]),
+    );
   });
 
   it("holds and resumes draft receipts and blocks shift close while held", async () => {
