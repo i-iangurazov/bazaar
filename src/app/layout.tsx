@@ -5,12 +5,10 @@ import { cookies } from "next/headers";
 import "./globals.css";
 import { Providers } from "./providers";
 import { GlobalNumberInputGuard } from "@/components/global-number-input-guard";
+import { bazaarBaseFontStylesheetHref } from "@/lib/catalogFonts";
 import { defaultLocale } from "@/lib/locales";
 import { defaultTimeZone } from "@/lib/timezone";
 import { resolveThemePreference, themeClassName, themeCookieName } from "@/lib/theme";
-
-const catalogFontsStylesheetHref =
-  "https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Roboto:wght@400;500;700&family=Open+Sans:wght@400;600;700&family=Montserrat:wght@400;600;700&family=Lato:wght@400;700&family=PT+Sans:wght@400;700&family=Source+Sans+3:wght@400;600;700&family=Manrope:wght@400;600;700&display=swap&subset=cyrillic";
 
 const forceLandingLightThemeScript = `
 (function () {
@@ -75,7 +73,7 @@ const RootLayout = async ({ children }: { children: React.ReactNode }) => {
         <script dangerouslySetInnerHTML={{ __html: forceLandingLightThemeScript }} />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link rel="stylesheet" href={catalogFontsStylesheetHref} />
+        <link rel="stylesheet" href={bazaarBaseFontStylesheetHref} />
       </head>
       <body className="font-sans min-h-screen bg-gradient-to-br from-background via-background to-secondary/40">
         <Providers locale={locale} messages={messages} timeZone={defaultTimeZone}>
