@@ -2,6 +2,7 @@ import {
   CatalogDiscountType,
   CashDrawerMovementType,
   CustomerOrderStatus,
+  FiscalReceiptStatus,
   KkmMode,
   MarkingCodeStatus,
   MarkingMode,
@@ -305,6 +306,72 @@ const hasPosRegisterBusinessHistory = (
   counts.payments > 0 ||
   counts.cashMovements > 0;
 
+const getPosRegisterBlockingStateCounts = async (
+  tx: Prisma.TransactionClient,
+  input: { organizationId: string; registerId: string },
+) => {
+  const [openShifts, saleDrafts, unsettledDebts, returnDrafts, recoverableReceipts] =
+    await Promise.all([
+      tx.registerShift.count({
+        where: {
+          organizationId: input.organizationId,
+          registerId: input.registerId,
+          status: RegisterShiftStatus.OPEN,
+        },
+      }),
+      tx.customerOrder.count({
+        where: {
+          organizationId: input.organizationId,
+          registerId: input.registerId,
+          isPosSale: true,
+          status: CustomerOrderStatus.DRAFT,
+        },
+      }),
+      tx.customerOrder.count({
+        where: {
+          organizationId: input.organizationId,
+          registerId: input.registerId,
+          isPosSale: true,
+          status: CustomerOrderStatus.COMPLETED,
+          isDebt: true,
+          debtSettledAt: null,
+        },
+      }),
+      tx.saleReturn.count({
+        where: {
+          organizationId: input.organizationId,
+          registerId: input.registerId,
+          status: PosReturnStatus.DRAFT,
+        },
+      }),
+      tx.fiscalReceipt.count({
+        where: {
+          organizationId: input.organizationId,
+          customerOrder: { registerId: input.registerId },
+          status: {
+            in: [
+              FiscalReceiptStatus.QUEUED,
+              FiscalReceiptStatus.PROCESSING,
+              FiscalReceiptStatus.FAILED,
+            ],
+          },
+        },
+      }),
+    ]);
+
+  return {
+    openShifts,
+    saleDrafts,
+    unsettledDebts,
+    returnDrafts,
+    recoverableReceipts,
+  };
+};
+
+const hasPosRegisterBlockingState = (
+  counts: Awaited<ReturnType<typeof getPosRegisterBlockingStateCounts>>,
+) => Object.values(counts).some((count) => count > 0);
+
 const resolvePosCustomerSelectionTx = async (
   tx: Prisma.TransactionClient,
   input: {
@@ -606,11 +673,27 @@ const lockCustomerOrderForUpdate = async (
   `;
 };
 
+const lockPosRegisterForUpdate = async (tx: Prisma.TransactionClient, registerId: string) => {
+  await tx.$queryRaw`
+    SELECT id FROM "PosRegister" WHERE id = ${registerId} FOR UPDATE
+  `;
+};
+
+const assertPosSaleDraftOwner = (
+  sale: { createdById: string | null },
+  actorId: string,
+) => {
+  if (sale.createdById !== actorId) {
+    throw new AppError("posSaleOwnerMismatch", "CONFLICT", 409);
+  }
+};
+
 const lockPosSaleDraftForEdit = async (
   tx: Prisma.TransactionClient,
   input: {
     organizationId: string;
     saleId: string;
+    actorId: string;
     user?: StoreAccessUser;
   },
 ) => {
@@ -628,6 +711,7 @@ const lockPosSaleDraftForEdit = async (
       subtotalKgs: true,
       discountKgs: true,
       totalKgs: true,
+      createdById: true,
     },
   });
   if (!sale) {
@@ -639,6 +723,7 @@ const lockPosSaleDraftForEdit = async (
   if (sale.status !== CustomerOrderStatus.DRAFT) {
     throw new AppError("posSaleNotEditable", "CONFLICT", 409);
   }
+  assertPosSaleDraftOwner(sale, input.actorId);
   return sale;
 };
 
@@ -682,13 +767,28 @@ const requireOpenShift = async (
     registerId: string;
   },
 ) => {
-  const shift = await tx.registerShift.findFirst({
+  const candidate = await tx.registerShift.findFirst({
     where: {
       organizationId: input.organizationId,
       registerId: input.registerId,
       status: RegisterShiftStatus.OPEN,
     },
     orderBy: { openedAt: "desc" },
+    select: { id: true },
+  });
+  if (!candidate) {
+    throw new AppError("posShiftNotOpen", "CONFLICT", 409);
+  }
+  await tx.$queryRaw`
+    SELECT id FROM "RegisterShift" WHERE id = ${candidate.id} FOR UPDATE
+  `;
+  const shift = await tx.registerShift.findFirst({
+    where: {
+      id: candidate.id,
+      organizationId: input.organizationId,
+      registerId: input.registerId,
+      status: RegisterShiftStatus.OPEN,
+    },
     include: {
       register: {
         select: {
@@ -1118,6 +1218,7 @@ export const updatePosRegister = async (input: {
   requestId: string;
 }) => {
   return prisma.$transaction(async (tx) => {
+    await lockPosRegisterForUpdate(tx, input.registerId);
     const register = await tx.posRegister.findFirst({
       where: { id: input.registerId, organizationId: input.organizationId },
     });
@@ -1151,6 +1252,16 @@ export const updatePosRegister = async (input: {
         !accessibleStoreIds.includes(input.storeId)
       ) {
         throw new AppError("storeAccessDenied", "FORBIDDEN", 403);
+      }
+    }
+
+    if (register.isActive && input.isActive === false) {
+      const blockingState = await getPosRegisterBlockingStateCounts(tx, {
+        organizationId: input.organizationId,
+        registerId: register.id,
+      });
+      if (hasPosRegisterBlockingState(blockingState)) {
+        throw new AppError("posRegisterDeactivationBlocked", "CONFLICT", 409);
       }
     }
 
@@ -1349,6 +1460,7 @@ export const openRegisterShift = async (input: {
         userId: input.actorId,
       },
       async () => {
+        await lockPosRegisterForUpdate(tx, input.registerId);
         const register = await tx.posRegister.findFirst({
           where: { id: input.registerId, organizationId: input.organizationId },
           select: {
@@ -1737,23 +1849,23 @@ export const closeRegisterShift = async (input: {
           };
         }
 
-        const heldReceipts = await tx.customerOrder.findMany({
+        const openDrafts = await tx.customerOrder.findMany({
           where: {
             organizationId: input.organizationId,
             shiftId: shift.id,
             isPosSale: true,
             status: CustomerOrderStatus.DRAFT,
-            isHeld: true,
           },
           select: {
             number: true,
+            isHeld: true,
           },
-          orderBy: { heldAt: "asc" },
+          orderBy: { createdAt: "asc" },
           take: 10,
         });
 
-        if (heldReceipts.length) {
-          throw new AppError("posHeldReceiptsOpen", "CONFLICT", 409);
+        if (openDrafts.length) {
+          throw new AppError("posShiftDraftsOpen", "CONFLICT", 409);
         }
 
         const report = await loadShiftReport(tx, {
@@ -2182,6 +2294,7 @@ export const holdPosSaleDraft = async (input: {
       },
       select: {
         ...selectPosSaleDraftSummary,
+        createdById: true,
         lines: { select: { id: true } },
       },
     });
@@ -2194,6 +2307,7 @@ export const holdPosSaleDraft = async (input: {
     if (sale.status !== CustomerOrderStatus.DRAFT) {
       throw new AppError("posSaleNotEditable", "CONFLICT", 409);
     }
+    assertPosSaleDraftOwner(sale, input.actorId);
     if (!sale.lines.length) {
       throw new AppError("posHeldReceiptEmpty", "BAD_REQUEST", 400);
     }
@@ -2264,6 +2378,7 @@ export const resumeHeldPosSaleDraft = async (input: {
         storeId: true,
         registerId: true,
         shiftId: true,
+        createdById: true,
         isHeld: true,
         lines: { select: { id: true } },
       },
@@ -2334,11 +2449,13 @@ export const resumeHeldPosSaleDraft = async (input: {
         isHeld: sale.isHeld,
         registerId: sale.registerId,
         shiftId: sale.shiftId,
+        ownerId: sale.createdById,
       }),
       after: toJson({
         isHeld: updated.isHeld,
         registerId: updated.registerId,
         shiftId: updated.shiftId,
+        ownerId: input.actorId,
       }),
       requestId: input.requestId,
     });
@@ -2347,6 +2464,137 @@ export const resumeHeldPosSaleDraft = async (input: {
       ...updated,
       lineCount: sale.lines.length,
     };
+  });
+};
+
+export const transferPosSaleDraftOwnership = async (input: {
+  organizationId: string;
+  saleId: string;
+  reason: string;
+  actorId: string;
+  user?: StoreAccessUser;
+  requestId: string;
+  idempotencyKey: string;
+}) => {
+  const reason = input.reason.trim();
+  if (!reason) {
+    throw new AppError("invalidInput", "BAD_REQUEST", 400);
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const { result } = await withIdempotency(
+      tx,
+      {
+        key: input.idempotencyKey,
+        route: "pos.sales.transferDraft",
+        userId: input.actorId,
+      },
+      async () => {
+        const target = await tx.customerOrder.findFirst({
+          where: {
+            id: input.saleId,
+            organizationId: input.organizationId,
+            isPosSale: true,
+          },
+          select: { storeId: true, registerId: true },
+        });
+        if (!target) {
+          throw new AppError("posSaleNotFound", "NOT_FOUND", 404);
+        }
+        if (input.user) {
+          await assertUserCanAccessStore(tx, input.user, target.storeId);
+        }
+        if (!target.registerId) {
+          throw new AppError("posSaleMissingShift", "CONFLICT", 409);
+        }
+
+        const shift = await requireOpenShift(tx, {
+          organizationId: input.organizationId,
+          registerId: target.registerId,
+        });
+        await lockCustomerOrderForUpdate(tx, input.saleId);
+        const sale = await tx.customerOrder.findFirst({
+          where: {
+            id: input.saleId,
+            organizationId: input.organizationId,
+            isPosSale: true,
+          },
+          select: {
+            id: true,
+            number: true,
+            status: true,
+            storeId: true,
+            registerId: true,
+            shiftId: true,
+            createdById: true,
+            isHeld: true,
+          },
+        });
+        if (!sale) {
+          throw new AppError("posSaleNotFound", "NOT_FOUND", 404);
+        }
+        if (sale.status !== CustomerOrderStatus.DRAFT || sale.isHeld) {
+          throw new AppError("posSaleNotEditable", "CONFLICT", 409);
+        }
+        if (sale.registerId !== shift.registerId || sale.shiftId !== shift.id) {
+          throw new AppError("posShiftMismatch", "CONFLICT", 409);
+        }
+        if (sale.createdById === input.actorId) {
+          return {
+            id: sale.id,
+            number: sale.number,
+            ownerId: input.actorId,
+            transferred: false,
+          };
+        }
+
+        const existingDraft = await tx.customerOrder.findFirst({
+          where: {
+            organizationId: input.organizationId,
+            registerId: sale.registerId,
+            createdById: input.actorId,
+            isPosSale: true,
+            status: CustomerOrderStatus.DRAFT,
+            isHeld: false,
+            id: { not: sale.id },
+            shiftId: shift.id,
+          },
+          select: { id: true },
+        });
+        if (existingDraft) {
+          throw new AppError("posActiveDraftExists", "CONFLICT", 409);
+        }
+
+        const updated = await tx.customerOrder.update({
+          where: { id: sale.id },
+          data: {
+            createdById: input.actorId,
+            updatedById: input.actorId,
+          },
+          select: { id: true, number: true, createdById: true },
+        });
+
+        await writeAuditLog(tx, {
+          organizationId: input.organizationId,
+          actorId: input.actorId,
+          action: "POS_SALE_OWNERSHIP_TRANSFER",
+          entity: "CustomerOrder",
+          entityId: sale.id,
+          before: toJson({ ownerId: sale.createdById }),
+          after: toJson({ ownerId: updated.createdById, reason }),
+          requestId: input.requestId,
+        });
+
+        return {
+          id: updated.id,
+          number: updated.number,
+          ownerId: updated.createdById,
+          transferred: true,
+        };
+      },
+    );
+
+    return result;
   });
 };
 
@@ -2359,6 +2607,7 @@ export const updatePosSaleCustomer = async (input: {
   requestId: string;
 }) => {
   return prisma.$transaction(async (tx) => {
+    await lockCustomerOrderForUpdate(tx, input.saleId);
     const sale = await tx.customerOrder.findFirst({
       where: {
         id: input.saleId,
@@ -2369,6 +2618,7 @@ export const updatePosSaleCustomer = async (input: {
         id: true,
         status: true,
         storeId: true,
+        createdById: true,
         customerName: true,
         customerEmail: true,
         customerPhone: true,
@@ -2384,6 +2634,7 @@ export const updatePosSaleCustomer = async (input: {
     if (sale.status !== CustomerOrderStatus.DRAFT) {
       throw new AppError("posSaleNotEditable", "CONFLICT", 409);
     }
+    assertPosSaleDraftOwner(sale, input.actorId);
 
     const selectedCustomer = input.customerId
       ? await resolvePosCustomerSelectionTx(tx, {
@@ -2450,6 +2701,7 @@ export const updatePosSaleNotes = async (input: {
   requestId: string;
 }) => {
   return prisma.$transaction(async (tx) => {
+    await lockCustomerOrderForUpdate(tx, input.saleId);
     const sale = await tx.customerOrder.findFirst({
       where: {
         id: input.saleId,
@@ -2460,6 +2712,7 @@ export const updatePosSaleNotes = async (input: {
         id: true,
         status: true,
         storeId: true,
+        createdById: true,
         notes: true,
       },
     });
@@ -2472,6 +2725,7 @@ export const updatePosSaleNotes = async (input: {
     if (sale.status !== CustomerOrderStatus.DRAFT) {
       throw new AppError("posSaleNotEditable", "CONFLICT", 409);
     }
+    assertPosSaleDraftOwner(sale, input.actorId);
 
     const notes = input.notes?.trim() || null;
     const updated = await tx.customerOrder.update({
@@ -2509,6 +2763,7 @@ export const cancelPosSaleDraft = async (input: {
   requestId: string;
 }) => {
   return prisma.$transaction(async (tx) => {
+    await lockCustomerOrderForUpdate(tx, input.saleId);
     const sale = await tx.customerOrder.findFirst({
       where: {
         id: input.saleId,
@@ -2530,6 +2785,7 @@ export const cancelPosSaleDraft = async (input: {
     if (sale.status !== CustomerOrderStatus.DRAFT) {
       throw new AppError("posSaleNotEditable", "CONFLICT", 409);
     }
+    assertPosSaleDraftOwner(sale, input.actorId);
 
     const canceled = await tx.customerOrder.update({
       where: { id: sale.id },
@@ -3537,6 +3793,7 @@ export const addPosSaleLine = async (input: {
     const sale = await lockPosSaleDraftForEdit(tx, {
       organizationId: input.organizationId,
       saleId: input.saleId,
+      actorId: input.actorId,
       user: input.user,
     });
 
@@ -3668,6 +3925,7 @@ export const updatePosSaleLine = async (input: {
     await lockPosSaleDraftForEdit(tx, {
       organizationId: input.organizationId,
       saleId: line.customerOrderId,
+      actorId: input.actorId,
       user: input.user,
     });
     if (input.qty === undefined && input.unitPriceKgs === undefined) {
@@ -3748,6 +4006,7 @@ export const removePosSaleLine = async (input: {
     await lockPosSaleDraftForEdit(tx, {
       organizationId: input.organizationId,
       saleId: line.customerOrderId,
+      actorId: input.actorId,
       user: input.user,
     });
 
@@ -3786,6 +4045,7 @@ export const updatePosSaleDiscount = async (input: {
     const sale = await lockPosSaleDraftForEdit(tx, {
       organizationId: input.organizationId,
       saleId: input.saleId,
+      actorId: input.actorId,
       user: input.user,
     });
 
@@ -3844,6 +4104,7 @@ export const upsertSaleLineMarkingCodes = async (input: {
   }
 
   return prisma.$transaction(async (tx) => {
+    await lockCustomerOrderForUpdate(tx, input.saleId);
     const sale = await tx.customerOrder.findFirst({
       where: {
         id: input.saleId,
@@ -3854,6 +4115,7 @@ export const upsertSaleLineMarkingCodes = async (input: {
         id: true,
         storeId: true,
         status: true,
+        createdById: true,
       },
     });
 
@@ -3864,6 +4126,7 @@ export const upsertSaleLineMarkingCodes = async (input: {
     if (sale.status !== CustomerOrderStatus.DRAFT) {
       throw new AppError("posSaleNotEditable", "CONFLICT", 409);
     }
+    assertPosSaleDraftOwner(sale, input.actorId);
 
     const line = await tx.customerOrderLine.findUnique({
       where: { id: input.lineId },
@@ -4197,6 +4460,7 @@ export const completePosSale = async (input: {
           if (sale.status !== CustomerOrderStatus.DRAFT) {
             throw new AppError("posSaleNotEditable", "CONFLICT", 409);
           }
+          assertPosSaleDraftOwner(sale, input.actorId);
 
           const orderTotalMinorUnits = moneyToMinorUnits(toMoney(sale.totalKgs)) ?? 0;
           const visibleCartTotalMinorUnits =
@@ -4339,7 +4603,6 @@ export const completePosSale = async (input: {
               status: CustomerOrderStatus.COMPLETED,
               completedAt: new Date(),
               completedEventId: input.idempotencyKey,
-              createdById: input.actorId,
               isDebt: Boolean(debtCustomerName),
               debtCustomerName,
               customerName: debtCustomerName ?? sale.customerName,

@@ -50,6 +50,7 @@ import {
   removeSaleReturnLine,
   resumeHeldPosSaleDraft,
   settlePosDebt,
+  transferPosSaleDraftOwnership,
   upsertSaleLineMarkingCodes,
   updatePosSaleCustomer,
   updatePosSaleNotes,
@@ -858,6 +859,31 @@ export const posRouter = router({
             actorId: ctx.user.id,
             user: ctx.user,
             requestId: ctx.requestId,
+          });
+        } catch (error) {
+          throw toTRPCError(error);
+        }
+      }),
+
+    transferDraft: cashierProcedure
+      .use(rateLimit({ windowMs: 10_000, max: 20, prefix: "pos-sales-transfer-draft" }))
+      .input(
+        z.object({
+          saleId: z.string().min(1),
+          reason: z.string().trim().min(1).max(500),
+          idempotencyKey: z.string().min(8),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        try {
+          return await transferPosSaleDraftOwnership({
+            organizationId: ctx.user.organizationId,
+            saleId: input.saleId,
+            reason: input.reason,
+            actorId: ctx.user.id,
+            user: ctx.user,
+            requestId: ctx.requestId,
+            idempotencyKey: input.idempotencyKey,
           });
         } catch (error) {
           throw toTRPCError(error);
