@@ -8,6 +8,7 @@ import { AddIcon, DeleteIcon } from "@/components/icons";
 import { FormGrid } from "@/components/form-layout";
 import { PageHeader } from "@/components/page-header";
 import { ProductSearchResultItem } from "@/components/product-search-result-item";
+import { SalesOrderReturnRedirect } from "@/components/sales-order-return-redirect";
 import { ScanInput } from "@/components/ScanInput";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,7 @@ import { formatKgsMoney } from "@/lib/currencyDisplay";
 import { translateError } from "@/lib/translateError";
 import { trpc } from "@/lib/trpc";
 import type { ScanResolvedResult } from "@/lib/scanning/scanRouter";
+import { resolveLegacySalesReturnRedirect } from "@/lib/salesOrderReturnRoute";
 
 type ProductSearchResult = {
   id: string;
@@ -58,7 +60,7 @@ const NewSalesOrderPage = () => {
   const searchParams = useSearchParams();
   const utils = trpc.useUtils();
   const { toast } = useToast();
-  const isReturnMode = searchParams.get("mode") === "return";
+  const legacyReturnRedirect = resolveLegacySalesReturnRedirect(searchParams);
 
   const storesQuery = trpc.stores.list.useQuery();
   const [storeId, setStoreId] = useState<string>("");
@@ -78,6 +80,7 @@ const NewSalesOrderPage = () => {
       setStoreId(storesQuery.data[0].id);
     }
   }, [storeId, storesQuery.data]);
+
   const selectedStore = storesQuery.data?.find((store) => store.id === storeId) ?? null;
 
   const productSearchQuery = trpc.products.searchQuick.useQuery(
@@ -252,15 +255,13 @@ const NewSalesOrderPage = () => {
     [draftLines],
   );
 
+  if (legacyReturnRedirect) {
+    return <SalesOrderReturnRedirect href={legacyReturnRedirect} label={tCommon("loading")} />;
+  }
+
   return (
     <div>
-      <PageHeader
-        title={isReturnMode ? t("newReturn") : t("new")}
-        subtitle={isReturnMode ? t("newReturnSubtitle") : t("newSubtitle")}
-      />
-      {isReturnMode ? (
-        <p className="mb-4 text-sm text-muted-foreground">{t("returnModeHint")}</p>
-      ) : null}
+      <PageHeader title={t("new")} subtitle={t("newSubtitle")} />
 
       <Card>
         <CardHeader>

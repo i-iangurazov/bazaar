@@ -584,7 +584,7 @@ describeDb("B0 Agent 3 order P0 runtime verification", () => {
     ).resolves.toBe(2);
   });
 
-  it("provides HARD-A3-011 DB evidence: the return-page payload completes as an ordinary sale", async () => {
+  it("verifies HARD-A3-011 domain separation: customer-order drafts remain ordinary sales", async () => {
     const { org, store, product, adminUser } = await seedBase({ allowNegativeStock: true });
     await prisma.product.update({ where: { id: product.id }, data: { basePriceKgs: 100 } });
     await seedStock({
@@ -634,7 +634,7 @@ describeDb("B0 Agent 3 order P0 runtime verification", () => {
     });
     const returnCount = await prisma.saleReturn.count({ where: { originalSaleId: order.id } });
 
-    evidence("HARD-A3-011-domain", {
+    evidence("HARD-A3-011-domain-separation", {
       orderId: order.id,
       source: persisted.source,
       status: persisted.status,
