@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
-import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import React, { useState } from "react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { ColumnDef } from "@tanstack/react-table";
 
@@ -160,6 +161,42 @@ describe("soft-rounded UI primitives", () => {
     const footer = screen.getByRole("button", { name: "Apply" }).parentElement;
     expect(footer?.className).toContain("flex-col-reverse");
     expect(footer?.className).toContain("sm:justify-end");
+  });
+
+  it("traps modal focus, hides the background, and restores the trigger", async () => {
+    const user = userEvent.setup();
+    const Harness = () => {
+      const [open, setOpen] = useState(false);
+      return (
+        <div>
+          <button type="button" onClick={() => setOpen(true)}>
+            Open editor
+          </button>
+          <Modal open={open} onOpenChange={setOpen} title="Edit product" usePortal>
+            <input aria-label="Product title" />
+            <Button>Save product</Button>
+          </Modal>
+        </div>
+      );
+    };
+
+    render(<Harness />);
+    const trigger = screen.getByRole("button", { name: "Open editor" });
+    await user.click(trigger);
+
+    const dialog = screen.getByRole("dialog", { name: "Edit product" });
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    expect(trigger.closest("[aria-hidden='true']")).not.toBeNull();
+
+    const close = within(dialog).getByRole("button", { name: "close" });
+    const save = within(dialog).getByRole("button", { name: "Save product" });
+    close.focus();
+    await user.tab({ shift: true });
+    expect(document.activeElement).toBe(save);
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "Edit product" })).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
   });
 
   it("renders shadcn-style dialog and sheet surfaces with reachable footers", () => {

@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useEffect, useId, useRef, useState } from "react";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
+import React, { useId, useRef } from "react";
 import { useTranslations } from "next-intl";
-import { createPortal } from "react-dom";
 
 import { Button } from "@/components/ui/button";
 import { CloseIcon } from "@/components/icons";
@@ -34,90 +34,44 @@ export const Modal = ({
   animated?: boolean;
 }) => {
   const tCommon = useTranslations("common");
-  const titleId = useId();
   const subtitleId = useId();
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const [entered, setEntered] = useState(false);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const handler = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onOpenChange(false);
-      }
-    };
-    document.addEventListener("keydown", handler);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener("keydown", handler);
-    };
-  }, [open, onOpenChange]);
-
-  useEffect(() => {
-    if (!open) {
-      setEntered(false);
-      return;
-    }
-    if (!animated) {
-      setEntered(true);
-      return;
-    }
-    const id = requestAnimationFrame(() => {
-      setEntered(true);
-    });
-    return () => {
-      cancelAnimationFrame(id);
-    };
-  }, [animated, open]);
-
-  if (!open) {
-    return null;
-  }
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
 
   const content = (
-    <div
-      className={cn(
-        "fixed inset-0 z-[1000] overflow-hidden",
-        mobileSheet
-          ? "flex items-end justify-center px-0 py-0 sm:grid sm:place-items-center sm:px-4 sm:py-6"
-          : "grid place-items-center px-3 py-4 sm:px-4 sm:py-6",
-      )}
-    >
-      <button
-        type="button"
+    <>
+      <DialogPrimitive.Overlay
         className={cn(
-          "absolute inset-0 z-0 bg-black/40 backdrop-blur-[1px]",
-          animated && "transition-opacity duration-200",
-          animated && (entered ? "opacity-100" : "opacity-0"),
+          "fixed inset-0 z-[1000] bg-black/40 backdrop-blur-[1px]",
+          animated &&
+            "transition-opacity duration-200 data-[state=closed]:opacity-0 data-[state=open]:opacity-100",
         )}
-        onClick={() => onOpenChange(false)}
-        aria-label={tCommon("close")}
       />
-      <div
-        ref={containerRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
+      <DialogPrimitive.Content
         aria-describedby={subtitle ? subtitleId : undefined}
-        tabIndex={-1}
+        onOpenAutoFocus={() => {
+          previouslyFocusedRef.current =
+            document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        }}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          const previouslyFocused = previouslyFocusedRef.current;
+          previouslyFocusedRef.current = null;
+          queueMicrotask(() => {
+            if (previouslyFocused?.isConnected) {
+              previouslyFocused.focus();
+            }
+          });
+        }}
         className={cn(
-          "relative z-10 flex w-full flex-col overflow-hidden border border-border bg-card text-card-foreground shadow-2xl",
+          "fixed z-[1001] flex w-[calc(100vw-1.5rem)] flex-col overflow-hidden border border-border bg-card text-card-foreground shadow-2xl focus:outline-none",
           mobileSheet
-            ? "max-h-[90dvh] rounded-md border-b-0 sm:max-h-[85dvh] sm:border-b"
-            : "max-h-[85dvh] max-w-lg rounded-md",
+            ? "bottom-0 left-0 right-0 max-h-[90dvh] w-full rounded-md border-b-0 sm:bottom-auto sm:left-1/2 sm:right-auto sm:top-1/2 sm:max-h-[85dvh] sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:border-b"
+            : "left-1/2 top-1/2 max-h-[85dvh] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-md",
           animated && "duration-250 transition-all ease-out will-change-transform",
           animated &&
             (mobileSheet
-              ? entered
-                ? "translate-y-0 opacity-100"
-                : "translate-y-10 opacity-0 sm:translate-y-4"
-              : entered
-                ? "scale-100 opacity-100"
-                : "scale-95 opacity-0"),
+              ? "data-[state=closed]:translate-y-10 data-[state=open]:translate-y-0 data-[state=closed]:opacity-0 data-[state=open]:opacity-100 sm:data-[state=closed]:translate-y-4"
+              : "data-[state=closed]:scale-95 data-[state=open]:scale-100 data-[state=closed]:opacity-0 data-[state=open]:opacity-100"),
           className,
         )}
       >
@@ -128,36 +82,40 @@ export const Modal = ({
           )}
         >
           <div>
-            <h2 id={titleId} className="text-lg font-semibold text-foreground">
+            <DialogPrimitive.Title className="text-lg font-semibold text-foreground">
               {title}
-            </h2>
+            </DialogPrimitive.Title>
             {subtitle ? (
-              <p id={subtitleId} className="text-sm text-muted-foreground">
+              <DialogPrimitive.Description
+                id={subtitleId}
+                className="text-sm text-muted-foreground"
+              >
                 {subtitle}
-              </p>
+              </DialogPrimitive.Description>
             ) : null}
           </div>
-          <Button
-            type="button"
-            variant="secondary"
-            size="icon"
-            onClick={() => onOpenChange(false)}
-            aria-label={tCommon("close")}
-            title={tCommon("close")}
-          >
-            <CloseIcon className="h-4 w-4" aria-hidden />
-          </Button>
+          <DialogPrimitive.Close asChild>
+            <Button
+              type="button"
+              variant="secondary"
+              size="icon"
+              aria-label={tCommon("close")}
+              title={tCommon("close")}
+            >
+              <CloseIcon className="h-4 w-4" aria-hidden />
+            </Button>
+          </DialogPrimitive.Close>
         </div>
         <div className={cn("flex-1 overflow-y-auto bg-card p-6", bodyClassName)}>{children}</div>
-      </div>
-    </div>
+      </DialogPrimitive.Content>
+    </>
   );
 
-  if (usePortal && typeof document !== "undefined") {
-    return createPortal(content, document.body);
-  }
-
-  return content;
+  return (
+    <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
+      {usePortal ? <DialogPrimitive.Portal>{content}</DialogPrimitive.Portal> : content}
+    </DialogPrimitive.Root>
+  );
 };
 
 export const ModalFooter = ({

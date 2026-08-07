@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
+import { useMemo, useState, type ComponentType, type ReactNode } from "react";
 import Link from "next/link";
 
 import { PageTipsButton } from "@/components/guidance/page-tips-button";
@@ -238,106 +239,72 @@ export const MobileMoreMenu = ({
   closeLabel,
   onClose,
 }: MobileMoreMenuProps) => {
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onClose();
-      }
-    };
-
-    document.body.style.overflow = "hidden";
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.body.style.overflow = "";
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [onClose, open]);
-
   return (
-    <div
-      className={cn(
-        "fixed inset-0 z-50 md:hidden",
-        open ? "pointer-events-auto" : "pointer-events-none",
-      )}
-      aria-hidden={!open}
+    <DialogPrimitive.Root
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) {
+          onClose();
+        }
+      }}
     >
-      <button
-        type="button"
-        className={cn(
-          "absolute inset-0 bg-black/30 transition-opacity",
-          open ? "opacity-100" : "opacity-0",
-        )}
-        onClick={onClose}
-        aria-label={closeLabel}
-      />
-      <section
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        className={cn(
-          "absolute inset-x-0 bottom-0 max-h-[85dvh] overflow-y-auto rounded-t-[1.75rem] border-t border-border bg-card shadow-2xl transition-transform duration-200 ease-out",
-          open ? "translate-y-0" : "translate-y-full",
-        )}
-      >
-        <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
-          <h2 className="text-lg font-semibold text-foreground">{title}</h2>
-          <Button
-            type="button"
-            variant="secondary"
-            size="icon"
-            onClick={onClose}
-            aria-label={closeLabel}
-          >
-            <CloseIcon className="h-4 w-4" aria-hidden />
-          </Button>
-        </div>
-
-        <div className="grid gap-2 px-4 py-4">
-          {items.map((item) => (
-            <Link
-              key={item.key}
-              href={item.href}
-              onClick={onClose}
-              className={cn(
-                "flex min-h-12 items-center gap-3 rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold no-underline shadow-sm transition hover:border-primary/40 hover:bg-accent hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
-                item.active &&
-                  "border-primary/30 bg-primary/10 text-primary ring-1 ring-primary/20",
-              )}
-            >
-              <item.icon className="h-4 w-4 shrink-0" aria-hidden />
-              <span className="min-w-0">
-                <span className="block truncate">{item.label}</span>
-                {item.description ? (
-                  <span className="block truncate text-xs font-normal text-muted-foreground">
-                    {item.description}
-                  </span>
-                ) : null}
-              </span>
-            </Link>
-          ))}
-        </div>
-
-        <div className="space-y-2 border-t border-border/70 bg-muted/25 px-4 py-4">
-          <div className="flex min-h-11 items-center justify-center rounded-xl border border-border/70 bg-background/80 px-3 py-2 shadow-sm">
-            <LanguageSwitcher
-              compact
-              className="border-0 bg-transparent p-0 shadow-none"
-              inactiveButtonClassName="bg-secondary"
-            />
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="fixed inset-0 z-[1000] bg-black/30 data-[state=closed]:opacity-0 data-[state=open]:opacity-100 md:hidden" />
+        <DialogPrimitive.Content className="fixed inset-x-0 bottom-0 z-[1001] max-h-[85dvh] overflow-y-auto rounded-t-[1.75rem] border-t border-border bg-card shadow-2xl transition-transform duration-200 ease-out focus:outline-none data-[state=closed]:translate-y-full data-[state=open]:translate-y-0 md:hidden">
+          <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+            <DialogPrimitive.Title className="text-lg font-semibold text-foreground">
+              {title}
+            </DialogPrimitive.Title>
+            <DialogPrimitive.Close asChild>
+              <Button type="button" variant="secondary" size="icon" aria-label={closeLabel}>
+                <CloseIcon className="h-4 w-4" aria-hidden />
+              </Button>
+            </DialogPrimitive.Close>
           </div>
-          <PwaInstallButton
-            presentation="card"
-            className="min-h-11 rounded-xl border-border/70 bg-background/80 shadow-sm"
-          />
-          <SignOutButton className="min-h-11 rounded-xl border-border/70 bg-background/80 shadow-sm" />
-        </div>
-        <div style={{ height: "max(1rem, env(safe-area-inset-bottom))" }} />
-      </section>
-    </div>
+
+          <div className="grid gap-2 px-4 py-4">
+            {items.map((item) => (
+              <Link
+                key={item.key}
+                href={item.href}
+                onClick={onClose}
+                className={cn(
+                  "flex min-h-12 items-center gap-3 rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold no-underline shadow-sm transition hover:border-primary/40 hover:bg-accent hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
+                  item.active &&
+                    "border-primary/30 bg-primary/10 text-primary ring-1 ring-primary/20",
+                )}
+              >
+                <item.icon className="h-4 w-4 shrink-0" aria-hidden />
+                <span className="min-w-0">
+                  <span className="block truncate">{item.label}</span>
+                  {item.description ? (
+                    <span className="block truncate text-xs font-normal text-muted-foreground">
+                      {item.description}
+                    </span>
+                  ) : null}
+                </span>
+              </Link>
+            ))}
+          </div>
+
+          <div className="space-y-2 border-t border-border/70 bg-muted/25 px-4 py-4">
+            <div className="flex min-h-11 items-center justify-center rounded-xl border border-border/70 bg-background/80 px-3 py-2 shadow-sm">
+              <LanguageSwitcher
+                compact
+                className="border-0 bg-transparent p-0 shadow-none"
+                inactiveButtonClassName="bg-secondary"
+              />
+            </div>
+            <PwaInstallButton
+              presentation="card"
+              className="min-h-11 rounded-xl border-border/70 bg-background/80 shadow-sm"
+            />
+            <SignOutButton className="min-h-11 rounded-xl border-border/70 bg-background/80 shadow-sm" />
+          </div>
+          <div style={{ height: "max(1rem, env(safe-area-inset-bottom))" }} />
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 };
 
