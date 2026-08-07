@@ -9,11 +9,30 @@ const readSource = (relativePath: string) =>
 describe("receiving product creation handoff source", () => {
   const receivingWorkflowPath = "src/components/inventory/receiving-workflow.tsx";
 
+  it("passes server-authenticated draft ownership into create and edit workflows", async () => {
+    const [createRoute, editRoute, workflow] = await Promise.all([
+      readSource("src/app/(app)/inventory/receiving/page.tsx"),
+      readSource("src/app/(app)/inventory/receiving/[id]/edit/page.tsx"),
+      readSource(receivingWorkflowPath),
+    ]);
+
+    for (const route of [createRoute, editRoute]) {
+      expect(route).toContain("getServerSession(authOptions)");
+      expect(route).toContain("session.user.organizationId");
+      expect(route).toContain("draftOwner={draftOwner}");
+    }
+    expect(workflow).toContain("session?.user?.id === draftOwner.userId");
+    expect(workflow).toContain("session.user.organizationId === draftOwner.organizationId");
+  });
+
   it("saves the current receiving draft before navigating to product creation", async () => {
     const source = await readSource(receivingWorkflowPath);
+    const storageSource = await readSource("src/components/inventory/receiving-draft-storage.ts");
 
-    expect(source).toContain("bazaar:inventory-receiving-draft:");
-    expect(source).toContain("writeReceivingDraft(draftKey");
+    expect(storageSource).toContain("bazaar:inventory-receiving-draft:");
+    expect(source).toContain("writeReceivingDraft(");
+    expect(source).toContain("draftKey,");
+    expect(source).toContain("authenticatedDraftOwner");
     expect(source).toContain("createReceivingReturnParams");
     expect(source).toContain('return "/inventory/receiving"');
     expect(source).toContain("returnTo,");
@@ -26,7 +45,9 @@ describe("receiving product creation handoff source", () => {
   it("restores the receiving draft search without replacing it with the created product name", async () => {
     const source = await readSource(receivingWorkflowPath);
 
-    expect(source).toContain("readReceivingDraft(returningDraftKey)");
+    expect(source).toContain("consumeReceivingDraft(returningDraftKey, namespace)");
+    expect(source).toContain("returningStoreId");
+    expect(source).toContain("removeReceivingDraft(returningDraftKey)");
     expect(source).toContain("setLines(draft.lines)");
     expect(source).toContain("setSearch(draft.search)");
     expect(source).toContain("searchResultsScrollTop");
@@ -82,8 +103,12 @@ describe("receiving product creation handoff source", () => {
     expect(receivingSource).toContain('const receivingProductSearchFields: ["name"] = ["name"]');
     expect(receivingSource).toContain("searchFields: receivingProductSearchFields");
     expect(receivingSource).not.toContain("exactBarcodeMatch");
-    expect(inventoryRouterSource).toContain("searchFields: z.array(inventoryProductSearchFieldSchema).optional()");
-    expect(inventoryRouterSource).toContain("buildInventoryProductSearchWhere(searchTokens, input.searchFields)");
+    expect(inventoryRouterSource).toContain(
+      "searchFields: z.array(inventoryProductSearchFieldSchema).optional()",
+    );
+    expect(inventoryRouterSource).toContain(
+      "buildInventoryProductSearchWhere(searchTokens, input.searchFields)",
+    );
   });
 
   it("opens product edit from receiving and returns through the preserved draft", async () => {

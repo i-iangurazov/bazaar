@@ -39,41 +39,19 @@ import { formatNumber } from "@/lib/i18nFormat";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { cn } from "@/lib/utils";
+import {
+  consumeReceivingDraft,
+  removeReceivingDraft,
+  writeReceivingDraft,
+  type ReceivingDraftFocus,
+  type ReceivingDraftIdentity,
+  type ReceivingDraftLine,
+} from "@/components/inventory/receiving-draft-storage";
 
-type ReceivingLine = {
-  key: string;
-  productId: string;
-  variantId: string | null;
-  productName: string;
-  variantName: string | null;
-  sku: string;
-  barcode: string | null;
-  imageUrl: string | null;
-  currentStock: number;
-  unitCostInput: string;
-  quantityInput: string;
-  duplicateHint?: boolean;
-  storeWarning?: "notAssigned";
-};
+type ReceivingLine = ReceivingDraftLine;
 
 type ReceivingInputField = "quantity" | "unitCost";
 type ReceivingInputViewport = "desktop" | "mobile";
-type ReceivingDraftFocus =
-  | { target: "search" }
-  | { target: "lineInput"; key: string; field: ReceivingInputField };
-type ReceivingDraft = {
-  version: 1;
-  storeId: string;
-  dateTime: string;
-  supplierName: string;
-  referenceNumber: string;
-  note: string;
-  search: string;
-  lines: ReceivingLine[];
-  pageScrollY?: number;
-  searchResultsScrollTop?: number;
-  focusedElement?: ReceivingDraftFocus | null;
-};
 
 const toDateTimeLocalValue = (date: Date) => {
   const offsetMs = date.getTimezoneOffset() * 60_000;
@@ -88,7 +66,6 @@ const receivingInputRefKey = (
   field: ReceivingInputField,
   viewport: ReceivingInputViewport,
 ) => `${key}:${field}:${viewport}`;
-const receivingDraftStoragePrefix = "bazaar:inventory-receiving-draft:";
 const receivingReturnSource = "stockReceiving";
 const receivingProductSearchFields: ["name"] = ["name"];
 
@@ -123,63 +100,17 @@ const focusReceivingInputElement = (
 const createReceivingDraftKey = () =>
   `receiving-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-const getReceivingDraftStorageKey = (key: string) => `${receivingDraftStoragePrefix}${key}`;
-
-const readReceivingDraft = (key: string): ReceivingDraft | null => {
-  if (typeof window === "undefined") {
-    return null;
-  }
-  try {
-    const raw = window.sessionStorage.getItem(getReceivingDraftStorageKey(key));
-    if (!raw) {
-      return null;
-    }
-    const parsed = JSON.parse(raw) as Partial<ReceivingDraft>;
-    if (parsed.version !== 1 || !parsed.storeId || !Array.isArray(parsed.lines)) {
-      return null;
-    }
-    return {
-      version: 1,
-      storeId: parsed.storeId,
-      dateTime: parsed.dateTime ?? "",
-      supplierName: parsed.supplierName ?? "",
-      referenceNumber: parsed.referenceNumber ?? "",
-      note: parsed.note ?? "",
-      search: parsed.search ?? "",
-      lines: parsed.lines,
-      pageScrollY: typeof parsed.pageScrollY === "number" ? parsed.pageScrollY : undefined,
-      searchResultsScrollTop:
-        typeof parsed.searchResultsScrollTop === "number"
-          ? parsed.searchResultsScrollTop
-          : undefined,
-      focusedElement: parsed.focusedElement ?? null,
-    };
-  } catch {
-    return null;
-  }
-};
-
-const writeReceivingDraft = (key: string, draft: ReceivingDraft) => {
-  if (typeof window === "undefined") {
-    return false;
-  }
-  try {
-    window.sessionStorage.setItem(getReceivingDraftStorageKey(key), JSON.stringify(draft));
-    return true;
-  } catch {
-    return false;
-  }
-};
-
 type InventoryReceivingPageProps = {
+  draftOwner: Omit<ReceivingDraftIdentity, "storeId"> | null;
   editDocumentKey?: string;
   editBackHref?: string;
 };
 
 export const InventoryReceivingPage = ({
+  draftOwner,
   editDocumentKey,
   editBackHref = "/inventory/movements",
-}: InventoryReceivingPageProps = {}) => {
+}: InventoryReceivingPageProps) => {
   const t = useTranslations("inventory");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
@@ -187,13 +118,13 @@ export const InventoryReceivingPage = ({
   const router = useRouter();
   const searchParams = useSearchParams();
   const returningDraftKey = searchParams?.get("receivingDraftKey")?.trim() ?? "";
+  const returningStoreId = searchParams?.get("storeId")?.trim() ?? "";
   const returnSource = searchParams?.get("returnSource")?.trim() ?? "";
   const createdProductId = searchParams?.get("createdProductId")?.trim() ?? "";
   const { data: session, status: sessionStatus } = useSession();
   const { toast } = useToast();
   const trpcUtils = trpc.useUtils();
-  const canManageStock =
-    session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
+  const canManageStock = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
   const isEditMode = Boolean(editDocumentKey);
   const loadedEditDocumentRef = useRef("");
 
@@ -224,6 +155,21 @@ export const InventoryReceivingPage = ({
   } | null>(null);
   const handledCreatedProductRef = useRef("");
   const storeRefreshSequenceRef = useRef(0);
+  const activeDraftKeyRef = useRef("");
+
+  const authenticatedDraftOwner =
+    sessionStatus === "authenticated" &&
+    draftOwner &&
+    session?.user?.id === draftOwner.userId &&
+    session.user.organizationId === draftOwner.organizationId
+      ? draftOwner
+      : null;
+
+  const clearReceivingDraft = useCallback(() => {
+    const keys = new Set([returningDraftKey, activeDraftKeyRef.current].filter(Boolean));
+    keys.forEach((key) => removeReceivingDraft(key));
+    activeDraftKeyRef.current = "";
+  }, [returningDraftKey]);
 
   const selectedStore = stores.find((store) => store.id === storeId) ?? null;
   const enableSku = selectedStore?.enableSku ?? true;
@@ -254,7 +200,11 @@ export const InventoryReceivingPage = ({
   }, [storeId, stores]);
 
   useEffect(() => {
-    if (!editableDocument || !editDocumentKey || loadedEditDocumentRef.current === editDocumentKey) {
+    if (
+      !editableDocument ||
+      !editDocumentKey ||
+      loadedEditDocumentRef.current === editDocumentKey
+    ) {
       return;
     }
     loadedEditDocumentRef.current = editDocumentKey;
@@ -289,9 +239,23 @@ export const InventoryReceivingPage = ({
       return;
     }
 
-    const draft = readReceivingDraft(returningDraftKey);
+    if (sessionStatus === "loading" || storesQuery.isLoading) {
+      return;
+    }
+
+    const namespace =
+      authenticatedDraftOwner &&
+      canManageStock &&
+      returningStoreId &&
+      stores.some((store) => store.id === returningStoreId)
+        ? { ...authenticatedDraftOwner, storeId: returningStoreId }
+        : null;
+    const draft = namespace ? consumeReceivingDraft(returningDraftKey, namespace) : null;
+    if (!namespace) {
+      removeReceivingDraft(returningDraftKey);
+    }
+    setRestoredDraftKey(returningDraftKey);
     if (!draft) {
-      setRestoredDraftKey(returningDraftKey);
       return;
     }
 
@@ -307,9 +271,19 @@ export const InventoryReceivingPage = ({
       searchResultsScrollTop: draft.searchResultsScrollTop,
       focusedElement: draft.focusedElement ?? null,
     };
-    setRestoredDraftKey(returningDraftKey);
     void trpcUtils.inventory.searchProducts.invalidate();
-  }, [restoredDraftKey, returningDraftKey, returnSource, trpcUtils.inventory.searchProducts]);
+  }, [
+    authenticatedDraftOwner,
+    canManageStock,
+    restoredDraftKey,
+    returningDraftKey,
+    returningStoreId,
+    returnSource,
+    sessionStatus,
+    stores,
+    storesQuery.isLoading,
+    trpcUtils.inventory.searchProducts,
+  ]);
 
   const handleStoreChange = (nextStoreId: string) => {
     if (nextStoreId === storeId) {
@@ -363,8 +337,7 @@ export const InventoryReceivingPage = ({
               storeWarning: "notAssigned" as const,
             };
           }
-          const imageUrl =
-            result.product.images?.[0]?.url ?? result.product.photoUrl ?? null;
+          const imageUrl = result.product.images?.[0]?.url ?? result.product.photoUrl ?? null;
           return {
             ...line,
             productName: result.product.name,
@@ -609,25 +582,33 @@ export const InventoryReceivingPage = ({
       toast({ variant: "error", description: t("receivingValidationNoStore") });
       return null;
     }
+    if (!authenticatedDraftOwner) {
+      toast({ variant: "error", description: t("receivingDraftSaveFailed") });
+      return null;
+    }
 
     const draftKey = createReceivingDraftKey();
-    const saved = writeReceivingDraft(draftKey, {
-      version: 1,
-      storeId,
-      dateTime,
-      supplierName,
-      referenceNumber,
-      note,
-      search,
-      lines,
-      pageScrollY: window.scrollY,
-      searchResultsScrollTop: searchResultsRef.current?.scrollTop ?? 0,
-      focusedElement: lastFocusedElementRef.current,
-    });
+    const saved = writeReceivingDraft(
+      draftKey,
+      { ...authenticatedDraftOwner, storeId },
+      {
+        storeId,
+        dateTime,
+        supplierName,
+        referenceNumber,
+        note,
+        search,
+        lines,
+        pageScrollY: window.scrollY,
+        searchResultsScrollTop: searchResultsRef.current?.scrollTop ?? 0,
+        focusedElement: lastFocusedElementRef.current,
+      },
+    );
     if (!saved) {
       toast({ variant: "error", description: t("receivingDraftSaveFailed") });
       return null;
     }
+    activeDraftKeyRef.current = draftKey;
 
     const returnTo = (() => {
       if (!isEditMode || typeof window === "undefined") {
@@ -768,6 +749,7 @@ export const InventoryReceivingPage = ({
       await trpcUtils.inventory.searchProducts.invalidate();
       await trpcUtils.inventory.productMovements.invalidate();
       await trpcUtils.inventory.productMovementDocument.invalidate();
+      clearReceivingDraft();
       toast({ variant: "success", description: t("receivingSuccess") });
       router.push(
         `/inventory/movements/${encodeURIComponent(
@@ -789,6 +771,7 @@ export const InventoryReceivingPage = ({
       await trpcUtils.inventory.productMovements.invalidate();
       await trpcUtils.inventory.productMovementDocument.invalidate();
       await trpcUtils.inventory.editableProductMovementDocument.invalidate();
+      clearReceivingDraft();
       toast({ variant: "success", description: t("receivingEditSuccess") });
       const params = new URLSearchParams({ from: "movements", returnTo: editBackHref });
       router.push(
@@ -868,7 +851,7 @@ export const InventoryReceivingPage = ({
           subtitle={pageSubtitle}
           action={
             <Button asChild variant="secondary">
-              <Link href={backHref}>
+              <Link href={backHref} onClick={clearReceivingDraft}>
                 <BackIcon className="h-4 w-4" aria-hidden />
                 {isEditMode ? t("backToMovements") : tCommon("back")}
               </Link>
@@ -890,7 +873,7 @@ export const InventoryReceivingPage = ({
           subtitle={pageSubtitle}
           action={
             <Button asChild variant="secondary">
-              <Link href={backHref}>
+              <Link href={backHref} onClick={clearReceivingDraft}>
                 <BackIcon className="h-4 w-4" aria-hidden />
                 {t("backToMovements")}
               </Link>
@@ -910,7 +893,7 @@ export const InventoryReceivingPage = ({
           subtitle={pageSubtitle}
           action={
             <Button asChild variant="secondary">
-              <Link href={backHref}>
+              <Link href={backHref} onClick={clearReceivingDraft}>
                 <BackIcon className="h-4 w-4" aria-hidden />
                 {t("backToMovements")}
               </Link>
@@ -931,7 +914,7 @@ export const InventoryReceivingPage = ({
         subtitle={pageSubtitle}
         action={
           <Button asChild variant="secondary">
-            <Link href={backHref}>
+            <Link href={backHref} onClick={clearReceivingDraft}>
               <BackIcon className="h-4 w-4" aria-hidden />
               {isEditMode ? t("backToMovements") : tCommon("back")}
             </Link>
@@ -947,7 +930,7 @@ export const InventoryReceivingPage = ({
               {t("receivingDetailsTitle")}
             </h3>
             <Button asChild variant="ghost" size="sm" className="md:hidden">
-              <Link href={backHref}>
+              <Link href={backHref} onClick={clearReceivingDraft}>
                 <BackIcon className="h-4 w-4" aria-hidden />
                 {isEditMode ? t("backToMovements") : tCommon("back")}
               </Link>
@@ -1080,10 +1063,7 @@ export const InventoryReceivingPage = ({
                 autoComplete="off"
               />
             </div>
-            <div
-              ref={searchResultsRef}
-              className="bazaar-doc-search-list"
-            >
+            <div ref={searchResultsRef} className="bazaar-doc-search-list">
               {searchQuery.isFetching ? (
                 <div className="flex items-center gap-2 px-3 py-3 text-sm text-muted-foreground">
                   <Spinner className="h-4 w-4" />
@@ -1094,10 +1074,7 @@ export const InventoryReceivingPage = ({
                   const key = lineKey(result.product.id, result.snapshot.variantId);
                   const added = lines.some((line) => line.key === key);
                   return (
-                    <div
-                      key={key}
-                      className="bazaar-doc-search-row"
-                    >
+                    <div key={key} className="bazaar-doc-search-row">
                       <button
                         type="button"
                         className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left text-sm disabled:cursor-not-allowed disabled:opacity-60"
@@ -1221,9 +1198,7 @@ export const InventoryReceivingPage = ({
                       className="bazaar-doc-line-row grid gap-3 md:grid-cols-[minmax(0,1fr)_3.75rem_5rem_4.75rem_4rem_2rem] md:items-center md:gap-1.5"
                     >
                       <div className="flex min-w-0 items-center gap-2.5">
-                        <span className="bazaar-doc-line-index">
-                          {lineNumber}
-                        </span>
+                        <span className="bazaar-doc-line-index">{lineNumber}</span>
                         <span className="bazaar-doc-line-thumb">
                           {line.imageUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
@@ -1369,7 +1344,9 @@ export const InventoryReceivingPage = ({
               </h3>
               <div className="flex flex-wrap gap-2">
                 <Button asChild variant="secondary">
-                  <Link href={backHref}>{tCommon("cancel")}</Link>
+                  <Link href={backHref} onClick={clearReceivingDraft}>
+                    {tCommon("cancel")}
+                  </Link>
                 </Button>
                 <Button
                   type="button"
@@ -1447,7 +1424,9 @@ export const InventoryReceivingPage = ({
           </div>
           <div className="grid grid-cols-[0.8fr_1.2fr] gap-2">
             <Button asChild variant="secondary" className="min-h-11">
-              <Link href={backHref}>{tCommon("cancel")}</Link>
+              <Link href={backHref} onClick={clearReceivingDraft}>
+                {tCommon("cancel")}
+              </Link>
             </Button>
             <Button
               type="button"
@@ -1460,12 +1439,8 @@ export const InventoryReceivingPage = ({
               ) : (
                 <ReceiveIcon className="h-4 w-4" aria-hidden />
               )}
-              <span className="sm:hidden">
-                {saving ? tCommon("saving") : submitShortLabel}
-              </span>
-              <span className="hidden sm:inline">
-                {saving ? tCommon("saving") : submitLabel}
-              </span>
+              <span className="sm:hidden">{saving ? tCommon("saving") : submitShortLabel}</span>
+              <span className="hidden sm:inline">{saving ? tCommon("saving") : submitLabel}</span>
             </Button>
           </div>
         </div>
