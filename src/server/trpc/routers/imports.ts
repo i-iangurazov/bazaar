@@ -10,14 +10,29 @@ const ensureImportsFeature = async (organizationId: string) => {
 };
 
 export const importsRouter = router({
-  list: adminProcedure.query(async ({ ctx }) => {
-    try {
-      await ensureImportsFeature(ctx.user.organizationId);
-      return await listImportBatches({ organizationId: ctx.user.organizationId });
-    } catch (error) {
-      throw toTRPCError(error);
-    }
-  }),
+  list: adminProcedure
+    .input(
+      z
+        .object({
+          type: z.string().trim().min(1).max(64).optional(),
+          page: z.number().int().min(1).default(1),
+          pageSize: z.number().int().min(1).max(100).default(25),
+        })
+        .optional(),
+    )
+    .query(async ({ ctx, input }) => {
+      try {
+        await ensureImportsFeature(ctx.user.organizationId);
+        return await listImportBatches({
+          organizationId: ctx.user.organizationId,
+          type: input?.type,
+          page: input?.page,
+          pageSize: input?.pageSize,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
 
   get: adminProcedure
     .input(z.object({ batchId: z.string() }))

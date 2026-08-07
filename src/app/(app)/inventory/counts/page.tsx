@@ -68,6 +68,8 @@ const StockCountsPage = () => {
   const storesQuery = trpc.stores.list.useQuery();
   const [storeId, setStoreId] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [dialogOpen, setDialogOpen] = useState(false);
 
   useEffect(() => {
@@ -83,12 +85,14 @@ const StockCountsPage = () => {
         statusFilter === "ALL"
           ? undefined
           : (statusFilter as "DRAFT" | "IN_PROGRESS" | "APPLIED" | "CANCELLED"),
+      page,
+      pageSize,
     },
     { enabled: Boolean(storeId) },
   );
 
-  type CountRow = NonNullable<typeof countsQuery.data>[number];
-  const counts: CountRow[] = countsQuery.data ?? [];
+  type CountRow = NonNullable<typeof countsQuery.data>["items"][number];
+  const counts: CountRow[] = countsQuery.data?.items ?? [];
 
   const createSchema = useMemo(
     () =>
@@ -152,7 +156,13 @@ const StockCountsPage = () => {
         filters={
           <div className="flex w-full flex-col gap-3 sm:flex-row">
             <div className="w-full sm:max-w-xs">
-              <Select value={storeId} onValueChange={setStoreId}>
+              <Select
+                value={storeId}
+                onValueChange={(value) => {
+                  setStoreId(value);
+                  setPage(1);
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder={tCommon("selectStore")} />
                 </SelectTrigger>
@@ -166,7 +176,13 @@ const StockCountsPage = () => {
               </Select>
             </div>
             <div className="w-full sm:max-w-xs">
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <Select
+                value={statusFilter}
+                onValueChange={(value) => {
+                  setStatusFilter(value);
+                  setPage(1);
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder={t("statusAll")} />
                 </SelectTrigger>
@@ -213,6 +229,15 @@ const StockCountsPage = () => {
           ) : counts.length ? (
             <ResponsiveDataList
               items={counts}
+              page={page}
+              totalItems={countsQuery.data?.total ?? 0}
+              defaultPageSize={pageSize}
+              onPageChange={setPage}
+              onPageSizeChange={(nextPageSize) => {
+                setPageSize(nextPageSize);
+                setPage(1);
+              }}
+              paginationKey="stock-counts"
               getKey={(count) => count.id}
               renderDesktop={(visibleItems) => (
                 <div className="overflow-x-auto">

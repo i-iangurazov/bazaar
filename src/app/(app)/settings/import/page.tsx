@@ -1619,6 +1619,8 @@ const ImportPage = () => {
   const [fileError, setFileError] = useState<string | null>(null);
   const [source, setSource] = useState<ImportSource>("csv");
   const [rollbackBatchId, setRollbackBatchId] = useState<string | null>(null);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyPageSize, setHistoryPageSize] = useState(25);
   const [defaultUnitCode, setDefaultUnitCode] = useState("");
   const [targetStoreId, setTargetStoreId] = useState("");
   const [skippedRows, setSkippedRows] = useState<number[]>([]);
@@ -1631,7 +1633,10 @@ const ImportPage = () => {
   const dryRunRequestVersionRef = useRef(0);
   const productImportOperationRef = useRef<{ signature: string; key: string } | null>(null);
 
-  const batchesQuery = trpc.imports.list.useQuery(undefined, { enabled: isAdmin });
+  const batchesQuery = trpc.imports.list.useQuery(
+    { type: "products", page: historyPage, pageSize: historyPageSize },
+    { enabled: isAdmin },
+  );
   const unitsQuery = trpc.units.list.useQuery(undefined, {
     enabled: isAdmin && importType === "products",
   });
@@ -1686,7 +1691,7 @@ const ImportPage = () => {
     },
   });
 
-  const batches = (batchesQuery.data ?? []).filter((batch) => batch.type === "products");
+  const batches = batchesQuery.data?.items ?? [];
   const rollbackBatch = batches.find((batch) => batch.id === rollbackBatchId) ?? null;
   const resolveEntityLabel = (entityType: string) => {
     switch (entityType) {
@@ -3285,6 +3290,15 @@ const ImportPage = () => {
           ) : (
             <ResponsiveDataList
               items={batches}
+              page={historyPage}
+              totalItems={batchesQuery.data?.total ?? 0}
+              defaultPageSize={historyPageSize}
+              onPageChange={setHistoryPage}
+              onPageSizeChange={(nextPageSize) => {
+                setHistoryPageSize(nextPageSize);
+                setHistoryPage(1);
+              }}
+              paginationKey="product-import-history"
               getKey={(batch) => batch.id}
               renderDesktop={(visibleItems) => (
                 <div className="bazaar-admin-table-shell bazaar-admin-table-scroll">

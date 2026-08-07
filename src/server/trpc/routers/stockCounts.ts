@@ -37,6 +37,8 @@ export const stockCountsRouter = router({
       z.object({
         storeId: z.string(),
         status: z.enum(["DRAFT", "IN_PROGRESS", "APPLIED", "CANCELLED"]).optional(),
+        page: z.number().int().min(1).default(1),
+        pageSize: z.number().int().min(1).max(100).default(25),
       }),
     )
     .query(async ({ ctx, input }) => {
@@ -46,18 +48,26 @@ export const stockCountsRouter = router({
         throw toTRPCError(error);
       }
 
-      return ctx.prisma.stockCount.findMany({
-        where: {
-          organizationId: ctx.user.organizationId,
-          storeId: input.storeId,
-          ...(input.status ? { status: input.status } : {}),
-        },
-        include: {
-          _count: { select: { lines: true } },
-          createdBy: { select: { name: true, email: true } },
-        },
-        orderBy: { createdAt: "desc" },
-      });
+      const where = {
+        organizationId: ctx.user.organizationId,
+        storeId: input.storeId,
+        ...(input.status ? { status: input.status } : {}),
+      };
+      const [items, total] = await ctx.prisma.$transaction([
+        ctx.prisma.stockCount.findMany({
+          where,
+          include: {
+            _count: { select: { lines: true } },
+            createdBy: { select: { name: true, email: true } },
+          },
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          skip: (input.page - 1) * input.pageSize,
+          take: input.pageSize,
+        }),
+        ctx.prisma.stockCount.count({ where }),
+      ]);
+
+      return { items, total, page: input.page, pageSize: input.pageSize };
     }),
 
   get: stockCountsProtectedProcedure

@@ -225,9 +225,10 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
       countedQty: 4,
     });
 
-    await expect(caller.stockCounts.list({ storeId: store.id })).resolves.toEqual(
-      expect.arrayContaining([expect.objectContaining({ id: count.id })]),
-    );
+    await expect(caller.stockCounts.list({ storeId: store.id })).resolves.toMatchObject({
+      items: expect.arrayContaining([expect.objectContaining({ id: count.id })]),
+      total: 1,
+    });
     await expect(caller.stockCounts.get({ stockCountId: count.id })).resolves.toMatchObject({
       id: count.id,
     });

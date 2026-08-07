@@ -281,17 +281,35 @@ export const runProductImport = async (input: RunProductImportInput) => {
   return result;
 };
 
-export const listImportBatches = async (input: { organizationId: string }) => {
+export const listImportBatches = async (input: {
+  organizationId: string;
+  type?: string;
+  page?: number;
+  pageSize?: number;
+}) => {
   await assertFeatureEnabled({ organizationId: input.organizationId, feature: "imports" });
-  return prisma.importBatch.findMany({
-    where: { organizationId: input.organizationId },
-    include: {
-      createdBy: { select: { id: true, name: true, email: true } },
-      rollbackReport: { select: { id: true, createdAt: true } },
-      _count: { select: { entities: true } },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+  const page = Math.max(1, input.page ?? 1);
+  const pageSize = Math.max(1, Math.min(input.pageSize ?? 25, 100));
+  const where: Prisma.ImportBatchWhereInput = {
+    organizationId: input.organizationId,
+    ...(input.type ? { type: input.type } : {}),
+  };
+  const [items, total] = await prisma.$transaction([
+    prisma.importBatch.findMany({
+      where,
+      include: {
+        createdBy: { select: { id: true, name: true, email: true } },
+        rollbackReport: { select: { id: true, createdAt: true } },
+        _count: { select: { entities: true } },
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.importBatch.count({ where }),
+  ]);
+
+  return { items, total, page, pageSize };
 };
 
 export const getImportBatch = async (input: { organizationId: string; batchId: string }) => {
