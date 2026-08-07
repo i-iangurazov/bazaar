@@ -3244,7 +3244,7 @@ const timeoutAbandonedBakaiStoreExportJobs = async (organizationId?: string) => 
         ],
       },
       data: {
-        status: BakaiStoreExportJobStatus.FAILED,
+        status: BakaiStoreExportJobStatus.TIMED_OUT,
         finishedAt,
         attemptedCount,
         succeededCount,
@@ -3559,10 +3559,13 @@ export const runBakaiStoreExportJob = async (
 
     const finishedAt = new Date();
     const skippedCount = plan.mode === "READY_ONLY" ? plan.preflight.failedProducts.length : 0;
+    const completedWithErrors = skippedCount > 0;
     const finished = await prisma.bakaiStoreExportJob.update({
       where: { id: job.id },
       data: {
-        status: BakaiStoreExportJobStatus.DONE,
+        status: completedWithErrors
+          ? BakaiStoreExportJobStatus.COMPLETED_WITH_ERRORS
+          : BakaiStoreExportJobStatus.DONE,
         finishedAt,
         fileName,
         mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -3619,15 +3622,21 @@ export const runBakaiStoreExportJob = async (
       data: {
         status: BakaiStoreIntegrationStatus.READY,
         lastSyncAt: finishedAt,
-        lastSyncStatus: BakaiStoreLastSyncStatus.SUCCESS,
-        lastErrorSummary: null,
+        lastSyncStatus: completedWithErrors
+          ? BakaiStoreLastSyncStatus.COMPLETED_WITH_ERRORS
+          : BakaiStoreLastSyncStatus.SUCCESS,
+        lastErrorSummary: completedWithErrors
+          ? "BAKAI_STORE_EXPORT_COMPLETED_WITH_ERRORS"
+          : null,
       },
     });
 
     await writeAuditLog(prisma, {
       organizationId: job.orgId,
       actorId: job.requestedById,
-      action: "BAKAI_STORE_EXPORT_FINISHED",
+      action: completedWithErrors
+        ? "BAKAI_STORE_EXPORT_COMPLETED_WITH_ERRORS"
+        : "BAKAI_STORE_EXPORT_FINISHED",
       entity: "BakaiStoreExportJob",
       entityId: finished.id,
       before: toJson(running),
@@ -3920,11 +3929,17 @@ export const runBakaiStoreApiSyncJob = async (
     const failedCount = failedProducts.length;
     const succeededCount = succeededProductIds.size;
     const skippedCount = plan.mode === "READY_ONLY" ? plan.preflight.failedProducts.length : 0;
+    const completedWithErrors =
+      succeededCount > 0 && (failedCount > 0 || skippedCount > 0);
+    const failed = failedCount > 0 && succeededCount === 0;
     const finished = await prisma.bakaiStoreExportJob.update({
       where: { id: job.id },
       data: {
-        status:
-          failedCount > 0 ? BakaiStoreExportJobStatus.FAILED : BakaiStoreExportJobStatus.DONE,
+        status: failed
+          ? BakaiStoreExportJobStatus.FAILED
+          : completedWithErrors
+            ? BakaiStoreExportJobStatus.COMPLETED_WITH_ERRORS
+            : BakaiStoreExportJobStatus.DONE,
         finishedAt,
         attemptedCount: plan.payload.products.length,
         succeededCount,
@@ -3960,7 +3975,7 @@ export const runBakaiStoreApiSyncJob = async (
           ],
         }),
         errorReportJson:
-          failedCount > 0
+          failedCount > 0 || skippedCount > 0
             ? toJson({
                 ...plan.errorReport,
                 failedSyncProducts: failedProducts.map((product) => ({
@@ -3975,19 +3990,29 @@ export const runBakaiStoreApiSyncJob = async (
     await prisma.bakaiStoreIntegration.updateMany({
       where: { orgId: job.orgId },
       data: {
-        status:
-          failedCount > 0 ? BakaiStoreIntegrationStatus.ERROR : BakaiStoreIntegrationStatus.READY,
+        status: failed ? BakaiStoreIntegrationStatus.ERROR : BakaiStoreIntegrationStatus.READY,
         lastSyncAt: finishedAt,
-        lastSyncStatus:
-          failedCount > 0 ? BakaiStoreLastSyncStatus.FAILED : BakaiStoreLastSyncStatus.SUCCESS,
-        lastErrorSummary: failedCount > 0 ? "API_REQUEST_FAILED" : null,
+        lastSyncStatus: failed
+          ? BakaiStoreLastSyncStatus.FAILED
+          : completedWithErrors
+            ? BakaiStoreLastSyncStatus.COMPLETED_WITH_ERRORS
+            : BakaiStoreLastSyncStatus.SUCCESS,
+        lastErrorSummary: failed
+          ? "API_REQUEST_FAILED"
+          : completedWithErrors
+            ? "BAKAI_STORE_API_SYNC_COMPLETED_WITH_ERRORS"
+            : null,
       },
     });
 
     await writeAuditLog(prisma, {
       organizationId: job.orgId,
       actorId: job.requestedById,
-      action: failedCount > 0 ? "BAKAI_STORE_API_SYNC_FAILED" : "BAKAI_STORE_API_SYNC_FINISHED",
+      action: failed
+        ? "BAKAI_STORE_API_SYNC_FAILED"
+        : completedWithErrors
+          ? "BAKAI_STORE_API_SYNC_COMPLETED_WITH_ERRORS"
+          : "BAKAI_STORE_API_SYNC_FINISHED",
       entity: "BakaiStoreExportJob",
       entityId: finished.id,
       before: toJson(running),

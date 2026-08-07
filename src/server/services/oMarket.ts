@@ -1915,7 +1915,7 @@ const timeoutAbandonedOMarketExportJobs = async (organizationId?: string) => {
         ],
       },
       data: {
-        status: OMarketExportJobStatus.FAILED,
+        status: OMarketExportJobStatus.TIMED_OUT,
         finishedAt,
         attemptedCount,
         succeededCount,
@@ -2231,10 +2231,17 @@ export const runOMarketExportJob = async (
 
     const failedCount = failedProductResults.length;
     const succeededCount = successfulProductIds.length;
+    const completedWithErrors =
+      succeededCount > 0 && (failedCount > 0 || skippedCount > 0);
+    const failed = failedCount > 0 && succeededCount === 0;
     const finished = await prisma.oMarketExportJob.update({
       where: { id: job.id },
       data: {
-        status: failedCount > 0 ? OMarketExportJobStatus.FAILED : OMarketExportJobStatus.DONE,
+        status: failed
+          ? OMarketExportJobStatus.FAILED
+          : completedWithErrors
+            ? OMarketExportJobStatus.COMPLETED_WITH_ERRORS
+            : OMarketExportJobStatus.DONE,
         finishedAt,
         attemptedCount: plan.payload.products.length,
         succeededCount,
@@ -2255,17 +2262,28 @@ export const runOMarketExportJob = async (
     await prisma.oMarketIntegration.updateMany({
       where: { orgId: job.orgId },
       data: {
-        status: failedCount > 0 ? OMarketIntegrationStatus.ERROR : OMarketIntegrationStatus.READY,
+        status: failed ? OMarketIntegrationStatus.ERROR : OMarketIntegrationStatus.READY,
         lastSyncAt: finishedAt,
-        lastSyncStatus:
-          failedCount > 0 ? OMarketLastSyncStatus.FAILED : OMarketLastSyncStatus.SUCCESS,
-        lastErrorSummary: failedCount > 0 ? "OMARKET_PRODUCT_ERRORS" : null,
+        lastSyncStatus: failed
+          ? OMarketLastSyncStatus.FAILED
+          : completedWithErrors
+            ? OMarketLastSyncStatus.COMPLETED_WITH_ERRORS
+            : OMarketLastSyncStatus.SUCCESS,
+        lastErrorSummary: failed
+          ? "OMARKET_PRODUCT_ERRORS"
+          : completedWithErrors
+            ? "OMARKET_EXPORT_COMPLETED_WITH_ERRORS"
+            : null,
       },
     });
     await writeAuditLog(prisma, {
       organizationId: job.orgId,
       actorId: job.requestedById,
-      action: failedCount > 0 ? "O_MARKET_EXPORT_FAILED" : "O_MARKET_EXPORT_FINISHED",
+      action: failed
+        ? "O_MARKET_EXPORT_FAILED"
+        : completedWithErrors
+          ? "O_MARKET_EXPORT_COMPLETED_WITH_ERRORS"
+          : "O_MARKET_EXPORT_FINISHED",
       entity: "OMarketExportJob",
       entityId: finished.id,
       before: toJson(running),

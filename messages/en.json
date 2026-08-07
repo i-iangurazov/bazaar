@@ -1048,7 +1048,15 @@
         "empty": "No O! Market jobs yet.",
         "createdBy": "{date} by {user}",
         "userFallback": "User",
-        "counts": "{ok} ok / {failed} failed / {skipped} skipped"
+        "counts": "{ok} ok / {failed} failed / {skipped} skipped",
+        "status": {
+          "QUEUED": "Queued",
+          "RUNNING": "Running",
+          "DONE": "Completed",
+          "COMPLETED_WITH_ERRORS": "Completed with issues",
+          "FAILED": "Failed",
+          "TIMED_OUT": "Timed out"
+        }
       },
       "toasts": {
         "settingsSaved": "O! Market settings saved.",
@@ -1620,7 +1628,9 @@
         "QUEUED": "Queued",
         "RUNNING": "Running",
         "DONE": "Done",
+        "COMPLETED_WITH_ERRORS": "Completed with issues",
         "FAILED": "Failed",
+        "TIMED_OUT": "Timed out",
         "RATE_LIMITED": "Rate limited"
       }
     }
@@ -1864,7 +1874,9 @@
         "QUEUED": "Queued",
         "RUNNING": "Running",
         "DONE": "Done",
-        "FAILED": "Failed"
+        "COMPLETED_WITH_ERRORS": "Completed with issues",
+        "FAILED": "Failed",
+        "TIMED_OUT": "Timed out"
       }
     }
   },

@@ -340,7 +340,7 @@ describeDb("bakai store integration", () => {
     const jobs = await listBakaiStoreExportJobs(org.id);
 
     expect(result.status).toBe("ok");
-    expect(job?.status).toBe(BakaiStoreExportJobStatus.DONE);
+    expect(job?.status).toBe(BakaiStoreExportJobStatus.COMPLETED_WITH_ERRORS);
     expect(job?.storagePath).toBeTruthy();
     expect(job?.fileName?.endsWith(".xlsx")).toBe(true);
     expect(jobs[0]?.id).toBe(requested.job.id);
@@ -587,16 +587,23 @@ describeDb("bakai store integration", () => {
         organizationId: org.id,
       });
       const job = await getBakaiStoreExportJob(org.id, requested.job.id);
+      const integration = await prisma.bakaiStoreIntegration.findUniqueOrThrow({
+        where: { orgId: org.id },
+      });
       const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body ?? "{}")) as {
         products?: Array<Record<string, unknown>>;
       };
 
       expect(result.status).toBe("ok");
-      expect(job?.status).toBe(BakaiStoreExportJobStatus.DONE);
+      expect(job?.status).toBe(BakaiStoreExportJobStatus.COMPLETED_WITH_ERRORS);
       expect(job?.attemptedCount).toBe(1);
       expect(job?.succeededCount).toBe(1);
       expect(job?.failedCount).toBe(0);
       expect(job?.skippedCount).toBe(1);
+      expect(job?.errorReportJson).not.toBeNull();
+      expect(integration.lastSyncStatus).toBe(
+        BakaiStoreLastSyncStatus.COMPLETED_WITH_ERRORS,
+      );
       expect(requestBody.products?.map((product) => product.sku)).toEqual(["BAKAI-1"]);
       expect(requestBody.products?.some((product) => product.sku === "BROKEN-API-1")).toBe(
         false,

@@ -123,10 +123,17 @@ const statusBadgeVariant = (status: MMarketExportJobStatus) => {
   if (status === MMarketExportJobStatus.DONE) {
     return "success" as const;
   }
-  if (status === MMarketExportJobStatus.FAILED || status === MMarketExportJobStatus.RATE_LIMITED) {
+  if (
+    status === MMarketExportJobStatus.FAILED ||
+    status === MMarketExportJobStatus.TIMED_OUT ||
+    status === MMarketExportJobStatus.RATE_LIMITED
+  ) {
     return "danger" as const;
   }
-  if (status === MMarketExportJobStatus.RUNNING) {
+  if (
+    status === MMarketExportJobStatus.RUNNING ||
+    status === MMarketExportJobStatus.COMPLETED_WITH_ERRORS
+  ) {
     return "warning" as const;
   }
   return "muted" as const;

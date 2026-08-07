@@ -144,10 +144,16 @@ const jobBadgeVariant = (status: BakaiStoreExportJobStatus) => {
   if (status === BakaiStoreExportJobStatus.DONE) {
     return "success" as const;
   }
-  if (status === BakaiStoreExportJobStatus.FAILED) {
+  if (
+    status === BakaiStoreExportJobStatus.FAILED ||
+    status === BakaiStoreExportJobStatus.TIMED_OUT
+  ) {
     return "danger" as const;
   }
-  if (status === BakaiStoreExportJobStatus.RUNNING) {
+  if (
+    status === BakaiStoreExportJobStatus.RUNNING ||
+    status === BakaiStoreExportJobStatus.COMPLETED_WITH_ERRORS
+  ) {
     return "warning" as const;
   }
   return "muted" as const;

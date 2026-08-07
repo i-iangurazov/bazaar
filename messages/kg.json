@@ -1048,7 +1048,15 @@
         "empty": "O! Market тапшырмалары азырынча жок.",
         "createdBy": "{date}, {user}",
         "userFallback": "Колдонуучу",
-        "counts": "{ok} ийгиликтүү / {failed} ката / {skipped} өткөрүлгөн"
+        "counts": "{ok} ийгиликтүү / {failed} ката / {skipped} өткөрүлгөн",
+        "status": {
+          "QUEUED": "Кезекте",
+          "RUNNING": "Аткарылууда",
+          "DONE": "Аяктады",
+          "COMPLETED_WITH_ERRORS": "Эскертүүлөр менен аяктады",
+          "FAILED": "Ката",
+          "TIMED_OUT": "Убакыт бүттү"
+        }
       },
       "toasts": {
         "settingsSaved": "O! Market жөндөөлөрү сакталды.",
@@ -1620,7 +1628,9 @@
         "QUEUED": "Кезекте",
         "RUNNING": "Аткарылууда",
         "DONE": "Даяр",
+        "COMPLETED_WITH_ERRORS": "Эскертүүлөр менен аяктады",
         "FAILED": "Ката",
+        "TIMED_OUT": "Убакыт бүттү",
         "RATE_LIMITED": "API чеги"
       }
     }
@@ -1864,7 +1874,9 @@
         "QUEUED": "Кезекте",
         "RUNNING": "Аткарылууда",
         "DONE": "Даяр",
-        "FAILED": "Ката"
+        "COMPLETED_WITH_ERRORS": "Эскертүүлөр менен аяктады",
+        "FAILED": "Ката",
+        "TIMED_OUT": "Убакыт бүттү"
       }
     }
   },

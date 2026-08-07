@@ -3067,7 +3067,7 @@ const timeoutAbandonedMMarketExportJobs = async (organizationId?: string) => {
         ],
       },
       data: {
-        status: MMarketExportJobStatus.FAILED,
+        status: MMarketExportJobStatus.TIMED_OUT,
         finishedAt,
         errorReportJson: toJson({
           ...(asRecord(job.errorReportJson) ?? {}),
@@ -3317,17 +3317,21 @@ export const runMMarketExportJob = async (
         reason: null,
       })),
     ];
+    const completedWithErrors =
+      plan.mode === "READY_ONLY" && plan.preflight.failedProducts.length > 0;
     const finished = await prisma.mMarketExportJob.update({
       where: { id: job.id },
       data: {
-        status: MMarketExportJobStatus.DONE,
+        status: completedWithErrors
+          ? MMarketExportJobStatus.COMPLETED_WITH_ERRORS
+          : MMarketExportJobStatus.DONE,
         finishedAt: exportedAt,
         payloadStatsJson: toJson({
           ...plan.payloadStats,
           httpStatus: remoteResult.status,
         }),
         errorReportJson:
-          plan.mode === "READY_ONLY" && plan.preflight.failedProducts.length > 0
+          completedWithErrors
             ? toJson({
                 ...plan.errorReport,
                 productResults,
@@ -3359,15 +3363,19 @@ export const runMMarketExportJob = async (
       data: {
         status: MMarketIntegrationStatus.READY,
         lastSyncAt: exportedAt,
-        lastSyncStatus: MMarketLastSyncStatus.SUCCESS,
-        lastErrorSummary: null,
+        lastSyncStatus: completedWithErrors
+          ? MMarketLastSyncStatus.COMPLETED_WITH_ERRORS
+          : MMarketLastSyncStatus.SUCCESS,
+        lastErrorSummary: completedWithErrors ? "MMARKET_EXPORT_COMPLETED_WITH_ERRORS" : null,
       },
     });
 
     await writeAuditLog(prisma, {
       organizationId: job.orgId,
       actorId: job.requestedById,
-      action: "MMARKET_EXPORT_FINISHED",
+      action: completedWithErrors
+        ? "MMARKET_EXPORT_COMPLETED_WITH_ERRORS"
+        : "MMARKET_EXPORT_FINISHED",
       entity: "MMarketExportJob",
       entityId: finished.id,
       before: toJson(running),

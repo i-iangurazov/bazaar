@@ -51,10 +51,20 @@ const statusVariant = (status?: string | null): BadgeVariant => {
   if (status === "READY" || status === "DONE" || status === "exported" || status === "updated") {
     return "success";
   }
-  if (status === "ERROR" || status === "FAILED" || status === "failed") {
+  if (
+    status === "ERROR" ||
+    status === "FAILED" ||
+    status === "TIMED_OUT" ||
+    status === "failed"
+  ) {
     return "danger";
   }
-  if (status === "DRAFT" || status === "RUNNING" || status === "processing") {
+  if (
+    status === "DRAFT" ||
+    status === "RUNNING" ||
+    status === "COMPLETED_WITH_ERRORS" ||
+    status === "processing"
+  ) {
     return "warning";
   }
   return "muted";
@@ -865,7 +875,9 @@ const OMarketPage = () => {
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Badge variant={statusVariant(job.status)}>{job.status}</Badge>
+                    <Badge variant={statusVariant(job.status)}>
+                      {t(`jobs.status.${job.status}`)}
+                    </Badge>
                     <Badge variant="muted">
                       {t("jobs.counts", {
                         ok: job.succeededCount ?? 0,

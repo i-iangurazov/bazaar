@@ -1048,7 +1048,15 @@
         "empty": "Задач O! Market пока нет.",
         "createdBy": "{date}, {user}",
         "userFallback": "Пользователь",
-        "counts": "{ok} успешно / {failed} ошибок / {skipped} пропущено"
+        "counts": "{ok} успешно / {failed} ошибок / {skipped} пропущено",
+        "status": {
+          "QUEUED": "В очереди",
+          "RUNNING": "Выполняется",
+          "DONE": "Завершено",
+          "COMPLETED_WITH_ERRORS": "Завершено с замечаниями",
+          "FAILED": "Ошибка",
+          "TIMED_OUT": "Превышено время"
+        }
       },
       "toasts": {
         "settingsSaved": "Настройки O! Market сохранены.",
@@ -1620,7 +1628,9 @@
         "QUEUED": "В очереди",
         "RUNNING": "В обработке",
         "DONE": "Готово",
+        "COMPLETED_WITH_ERRORS": "Завершено с замечаниями",
         "FAILED": "Ошибка",
+        "TIMED_OUT": "Превышено время",
         "RATE_LIMITED": "Лимит API"
       }
     }
@@ -1864,7 +1874,9 @@
         "QUEUED": "В очереди",
         "RUNNING": "В обработке",
         "DONE": "Готово",
-        "FAILED": "Ошибка"
+        "COMPLETED_WITH_ERRORS": "Завершено с замечаниями",
+        "FAILED": "Ошибка",
+        "TIMED_OUT": "Превышено время"
       }
     }
   },

@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { AttributeType, MMarketEnvironment, MMarketExportJobStatus } from "@prisma/client";
+import {
+  AttributeType,
+  MMarketEnvironment,
+  MMarketExportJobStatus,
+  MMarketLastSyncStatus,
+} from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
 import { runJob } from "@/server/jobs";
@@ -463,7 +468,7 @@ describeDb("m-market integration", () => {
     expect(second.remainingSeconds).toBeGreaterThan(0);
   });
 
-  it("marks stale running export jobs failed before accepting a new export request", async () => {
+  it("marks stale running export jobs timed out before accepting a new export request", async () => {
     const { org, store, adminUser } = await prepareReadyMMarketData();
     const staleJob = await prisma.mMarketExportJob.create({
       data: {
@@ -487,7 +492,7 @@ describeDb("m-market integration", () => {
       where: { id: staleJob.id },
     });
 
-    expect(refreshedStaleJob.status).toBe(MMarketExportJobStatus.FAILED);
+    expect(refreshedStaleJob.status).toBe(MMarketExportJobStatus.TIMED_OUT);
     expect(JSON.stringify(refreshedStaleJob.errorReportJson)).toContain(
       "mMarketExportJobTimedOut",
     );
@@ -517,7 +522,7 @@ describeDb("m-market integration", () => {
     });
 
     expect(result).toMatchObject({ status: "skipped", details: { reason: "empty" } });
-    expect(refreshed.status).toBe(MMarketExportJobStatus.FAILED);
+    expect(refreshed.status).toBe(MMarketExportJobStatus.TIMED_OUT);
     expect(JSON.stringify(refreshed.errorReportJson)).toContain("mMarketExportJobTimedOut");
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -628,12 +633,19 @@ describeDb("m-market integration", () => {
       });
 
       const result = await runJob("mmarket-export", { jobId: requested.job.id });
+      const [finishedJob, integration] = await Promise.all([
+        prisma.mMarketExportJob.findUniqueOrThrow({ where: { id: requested.job.id } }),
+        prisma.mMarketIntegration.findUniqueOrThrow({ where: { orgId: org.id } }),
+      ]);
       const payload = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body ?? "{}")) as {
         products?: Array<{ sku: string }>;
       };
 
       expect(requested.job.status).toBe(MMarketExportJobStatus.QUEUED);
       expect(result.status).toBe("ok");
+      expect(finishedJob.status).toBe(MMarketExportJobStatus.COMPLETED_WITH_ERRORS);
+      expect(finishedJob.errorReportJson).not.toBeNull();
+      expect(integration.lastSyncStatus).toBe(MMarketLastSyncStatus.COMPLETED_WITH_ERRORS);
       expect(payload.products?.map((row) => row.sku)).toEqual([product.sku]);
       expect(payload.products?.some((row) => row.sku === brokenProduct.sku)).toBe(false);
     } finally {
