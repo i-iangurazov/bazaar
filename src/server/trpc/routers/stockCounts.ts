@@ -128,6 +128,7 @@ export const stockCountsRouter = router({
         mode: z.enum(["increment", "set"]).optional().default("increment"),
         countedQty: z.number().int().optional(),
         countedDelta: z.number().int().optional(),
+        idempotencyKey: z.string().min(8),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -143,6 +144,7 @@ export const stockCountsRouter = router({
           actorId: ctx.user.id,
           organizationId: ctx.user.organizationId,
           requestId: ctx.requestId,
+          idempotencyKey: input.idempotencyKey,
         });
       } catch (error) {
         throw toTRPCError(error);

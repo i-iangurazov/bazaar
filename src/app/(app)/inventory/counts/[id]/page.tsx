@@ -141,6 +141,7 @@ const StockCountDetailPage = () => {
         storeId: count.storeId,
         barcodeOrQuery,
         mode: "increment",
+        idempotencyKey: crypto.randomUUID(),
       });
       return true;
     } catch {

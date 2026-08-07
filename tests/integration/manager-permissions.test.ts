@@ -84,6 +84,7 @@ describeDb("manager operational permissions", () => {
     });
 
     const created = await caller.products.create({
+      idempotencyKey: "manager-product-create",
       sku: "MGR-PRODUCT-1",
       name: "Manager Product",
       baseUnitId: baseUnit.id,
@@ -128,6 +129,7 @@ describeDb("manager operational permissions", () => {
 
     await expect(
       caller.products.create({
+        idempotencyKey: "manager-stock-product-create",
         sku: "MGR-STOCK-1",
         name: "Manager Stock Product",
         baseUnitId: baseUnit.id,
@@ -240,6 +242,7 @@ describeDb("manager operational permissions", () => {
       notes: "manager count",
     });
     await caller.stockCounts.addOrUpdateLineByScan({
+      idempotencyKey: "manager-stock-count-scan",
       stockCountId: stockCount.id,
       storeId: store.id,
       barcodeOrQuery: product.sku,
