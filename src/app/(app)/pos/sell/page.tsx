@@ -119,6 +119,7 @@ import { usePosRegisterSelection } from "@/lib/usePosRegisterSelection";
 import { cn } from "@/lib/utils";
 const keyboardScanResetMs = 300;
 const keyboardScanMaxLength = 128;
+const catalogPageSize = 40;
 
 const isEditableElement = (target: EventTarget | null): boolean => {
   if (!(target instanceof HTMLElement)) {
@@ -534,6 +535,7 @@ const PosSellPage = () => {
   const [saleId, setSaleId] = useState<string | null>(null);
   const [lineSearch, setLineSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
+  const [catalogPage, setCatalogPage] = useState(1);
   const [markingInput, setMarkingInput] = useState<Record<string, string>>({});
   const [payments, setPaymentsState] = useState<PosPaymentDraft[]>(() => [
     createDefaultPosPaymentDraft(),
@@ -807,8 +809,8 @@ const PosSellPage = () => {
       search: searchTerm || undefined,
       category: selectedCategory || undefined,
       storeId: activeStoreId,
-      page: 1,
-      pageSize: 80,
+      page: catalogPage,
+      pageSize: catalogPageSize,
       sortKey: "name",
       sortDirection: "asc",
     },
@@ -819,6 +821,10 @@ const PosSellPage = () => {
       staleTime: 30_000,
     },
   );
+
+  useEffect(() => {
+    setCatalogPage(1);
+  }, [activeStoreId, searchTerm, selectedCategory]);
   const customerSearchQuery = trpc.pos.customers.search.useQuery(
     {
       storeId: activeStoreId ?? "",
@@ -1702,6 +1708,8 @@ const PosSellPage = () => {
     ? (catalogProductsQuery.data?.items ?? [])
     : [];
   const visibleProducts = productResults;
+  const catalogTotal = catalogProductsQuery.data?.total ?? 0;
+  const catalogTotalPages = Math.max(1, Math.ceil(catalogTotal / catalogPageSize));
   const productGridLoading = Boolean(
     activeStoreId && catalogProductsQuery.isLoading && !catalogProductsQuery.data,
   );
@@ -1710,6 +1718,50 @@ const PosSellPage = () => {
   useEffect(() => {
     visibleProductsRef.current = visibleProducts;
   }, [visibleProducts]);
+
+  useEffect(() => {
+    if (catalogPage > catalogTotalPages) {
+      setCatalogPage(catalogTotalPages);
+    }
+  }, [catalogPage, catalogTotalPages]);
+
+  const renderCatalogPagination = (variant: "default" | "dark" = "default") => {
+    if (catalogTotalPages <= 1) {
+      return null;
+    }
+    const dark = variant === "dark";
+    return (
+      <div
+        className={cn(
+          "mt-3 flex items-center justify-between gap-3 border-t pt-3 text-sm",
+          dark ? "border-slate-800 text-slate-400" : "border-border text-muted-foreground",
+        )}
+        data-testid="pos-catalog-pagination"
+      >
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={() => setCatalogPage((current) => Math.max(1, current - 1))}
+          disabled={catalogPage <= 1 || catalogProductsQuery.isFetching}
+        >
+          {tCommon("back")}
+        </Button>
+        <span>
+          {catalogPage} / {catalogTotalPages} · {catalogTotal}
+        </span>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={() => setCatalogPage((current) => Math.min(catalogTotalPages, current + 1))}
+          disabled={catalogPage >= catalogTotalPages || catalogProductsQuery.isFetching}
+        >
+          {t("sell.nextPage")}
+        </Button>
+      </div>
+    );
+  };
 
   const getCurrentCartLines = useCallback(
     () => optimisticSaleLinesRef.current ?? (sale?.lines as PosCartLine[] | undefined) ?? [],
@@ -5263,6 +5315,7 @@ const PosSellPage = () => {
                   ))}
                 </div>
               ) : null}
+              {renderCatalogPagination()}
             </div>
 
             <footer className="grid min-h-12 grid-cols-[1fr_auto_1fr] items-center border-t border-border bg-card px-4 py-2 text-sm text-muted-foreground">
@@ -7191,6 +7244,7 @@ const PosSellPage = () => {
                 })}
               </div>
             ) : null}
+            <div className="px-3 pb-3">{renderCatalogPagination("dark")}</div>
           </main>
         </div>
       );
@@ -7745,6 +7799,7 @@ const PosSellPage = () => {
                 ))}
               </div>
             ) : null}
+            {renderCatalogPagination()}
           </section>
         </main>
 

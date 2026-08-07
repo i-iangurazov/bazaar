@@ -64,6 +64,7 @@ const PosShiftsPage = () => {
   const [cashComment, setCashComment] = useState("");
   const [cashOutReason, setCashOutReason] = useState("collection");
   const [cashType, setCashType] = useState<CashDrawerMovementType>(CashDrawerMovementType.PAY_IN);
+  const [historyPage, setHistoryPage] = useState(1);
 
   useEffect(() => {
     const selectedType = parsePosCashMovementType(requestedCashType);
@@ -112,9 +113,13 @@ const PosShiftsPage = () => {
   );
 
   const historyQuery = trpc.pos.shifts.list.useQuery(
-    { registerId: registerId || undefined, page: 1, pageSize: 20 },
+    { registerId: registerId || undefined, page: historyPage, pageSize: 20 },
     { enabled: canLoadRegisterScopedData, refetchOnWindowFocus: true },
   );
+
+  useEffect(() => {
+    setHistoryPage(1);
+  }, [registerId]);
 
   const closeShiftMutation = trpc.pos.shifts.close.useMutation({
     onSuccess: async () => {
@@ -317,6 +322,9 @@ const PosShiftsPage = () => {
   };
 
   const historyItems = historyQuery.data?.items ?? [];
+  const historyTotal = historyQuery.data?.total ?? 0;
+  const historyPageSize = historyQuery.data?.pageSize ?? 20;
+  const historyTotalPages = Math.max(1, Math.ceil(historyTotal / historyPageSize));
   const formatCurrentShiftMoney = (amountKgs: number) =>
     formatKgsMoney(amountKgs, locale, currentShiftCurrencySource);
 
@@ -917,6 +925,34 @@ const PosShiftsPage = () => {
           !historyQuery.isError &&
           !historyItems.length ? (
             <p className="bazaar-admin-empty">{t("shifts.noHistory")}</p>
+          ) : null}
+
+          {canLoadRegisterScopedData && historyTotalPages > 1 ? (
+            <div className="flex items-center justify-between gap-3 border-t border-border pt-3 text-sm text-muted-foreground">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setHistoryPage((current) => Math.max(1, current - 1))}
+                disabled={historyPage <= 1 || historyQuery.isFetching}
+              >
+                {tCommon("back")}
+              </Button>
+              <span>
+                {historyPage} / {historyTotalPages} · {historyTotal}
+              </span>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() =>
+                  setHistoryPage((current) => Math.min(historyTotalPages, current + 1))
+                }
+                disabled={historyPage >= historyTotalPages || historyQuery.isFetching}
+              >
+                {t("sell.nextPage")}
+              </Button>
+            </div>
           ) : null}
         </CardContent>
       </Card>

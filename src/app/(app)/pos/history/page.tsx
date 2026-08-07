@@ -64,6 +64,8 @@ const PosHistoryPage = () => {
     CustomerOrderStatus.COMPLETED,
   );
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<PosPaymentMethod | "ALL">("ALL");
+  const [salesPage, setSalesPage] = useState(1);
+  const [returnsPage, setReturnsPage] = useState(1);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [isPhoneScreen, setIsPhoneScreen] = useState<boolean | null>(null);
   const [resumeConflictOpen, setResumeConflictOpen] = useState(false);
@@ -121,10 +123,11 @@ const PosHistoryPage = () => {
     {
       registerId: registerId || undefined,
       statuses: statusFilter === "ALL" ? undefined : [statusFilter],
+      paymentMethod: paymentMethodFilter === "ALL" ? undefined : paymentMethodFilter,
       search: search.trim() || undefined,
       dateFrom: dateFrom ? businessDateOnlyToUtc(dateFrom) : undefined,
       dateTo: dateTo ? businessDateOnlyEndUtc(dateTo) : undefined,
-      page: 1,
+      page: salesPage,
       pageSize: 30,
     },
     { enabled: canLoadRegisterScopedData, refetchOnWindowFocus: true },
@@ -135,15 +138,17 @@ const PosHistoryPage = () => {
       registerId: registerId || undefined,
       statuses: [CustomerOrderStatus.DRAFT],
       heldState: "held",
+      paymentMethod: paymentMethodFilter === "ALL" ? undefined : paymentMethodFilter,
       search: search.trim() || undefined,
       dateFrom: dateFrom ? businessDateOnlyToUtc(dateFrom) : undefined,
       dateTo: dateTo ? businessDateOnlyEndUtc(dateTo) : undefined,
       page: 1,
-      pageSize: 30,
+      pageSize: 100,
     },
     {
       enabled:
         isPhoneScreen === true &&
+        salesPage === 1 &&
         canLoadRegisterScopedData &&
         statusFilter === CustomerOrderStatus.COMPLETED,
       refetchOnMount: "always",
@@ -165,11 +170,19 @@ const PosHistoryPage = () => {
     {
       shiftId: currentShiftQuery.data?.id ?? undefined,
       registerId: registerId || undefined,
-      page: 1,
+      page: returnsPage,
       pageSize: 20,
     },
     { enabled: canLoadRegisterScopedData, refetchOnWindowFocus: true },
   );
+
+  useEffect(() => {
+    setSalesPage(1);
+  }, [dateFrom, dateTo, paymentMethodFilter, registerId, search, statusFilter]);
+
+  useEffect(() => {
+    setReturnsPage(1);
+  }, [currentShiftQuery.data?.id, registerId]);
 
   const createReturnMutation = trpc.pos.returns.createDraft.useMutation();
   const addReturnLineMutation = trpc.pos.returns.addLine.useMutation();
@@ -290,13 +303,15 @@ const PosHistoryPage = () => {
 
   const mobileHistorySales = useMemo(
     () =>
-      isPhoneScreen === true && statusFilter === CustomerOrderStatus.COMPLETED
+      isPhoneScreen === true &&
+      salesPage === 1 &&
+      statusFilter === CustomerOrderStatus.COMPLETED
         ? mergeMobilePosReceiptHistory(
             salesQuery.data?.items ?? [],
             heldSalesQuery.data?.items ?? [],
           )
         : (salesQuery.data?.items ?? []),
-    [heldSalesQuery.data?.items, isPhoneScreen, salesQuery.data?.items, statusFilter],
+    [heldSalesQuery.data?.items, isPhoneScreen, salesPage, salesQuery.data?.items, statusFilter],
   );
 
   const visibleSales = useMemo(
@@ -313,6 +328,74 @@ const PosHistoryPage = () => {
     (isPhoneScreen === true &&
       statusFilter === CustomerOrderStatus.COMPLETED &&
       heldSalesQuery.isLoading);
+  const salesTotal = salesQuery.data?.total ?? 0;
+  const salesPageSize = salesQuery.data?.pageSize ?? 30;
+  const salesTotalPages = Math.max(1, Math.ceil(salesTotal / salesPageSize));
+  const returnsTotal = returnsQuery.data?.total ?? 0;
+  const returnsPageSize = returnsQuery.data?.pageSize ?? 20;
+  const returnsTotalPages = Math.max(1, Math.ceil(returnsTotal / returnsPageSize));
+
+  useEffect(() => {
+    if (salesPage > salesTotalPages) setSalesPage(salesTotalPages);
+  }, [salesPage, salesTotalPages]);
+
+  useEffect(() => {
+    if (returnsPage > returnsTotalPages) setReturnsPage(returnsTotalPages);
+  }, [returnsPage, returnsTotalPages]);
+
+  const renderSalesPagination = () =>
+    salesTotalPages > 1 ? (
+      <div className="flex items-center justify-between gap-3 border-t border-border pt-3 text-sm text-muted-foreground">
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={() => setSalesPage((current) => Math.max(1, current - 1))}
+          disabled={salesPage <= 1 || salesQuery.isFetching}
+        >
+          {tCommon("back")}
+        </Button>
+        <span>
+          {salesPage} / {salesTotalPages} · {salesTotal}
+        </span>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={() => setSalesPage((current) => Math.min(salesTotalPages, current + 1))}
+          disabled={salesPage >= salesTotalPages || salesQuery.isFetching}
+        >
+          {t("sell.nextPage")}
+        </Button>
+      </div>
+    ) : null;
+
+  const renderReturnsPagination = () =>
+    returnsTotalPages > 1 ? (
+      <div className="flex items-center justify-between gap-3 border-t border-border pt-3 text-sm text-muted-foreground">
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={() => setReturnsPage((current) => Math.max(1, current - 1))}
+          disabled={returnsPage <= 1 || returnsQuery.isFetching}
+        >
+          {tCommon("back")}
+        </Button>
+        <span>
+          {returnsPage} / {returnsTotalPages} · {returnsTotal}
+        </span>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={() => setReturnsPage((current) => Math.min(returnsTotalPages, current + 1))}
+          disabled={returnsPage >= returnsTotalPages || returnsQuery.isFetching}
+        >
+          {t("sell.nextPage")}
+        </Button>
+      </div>
+    ) : null;
 
   const handleResumeHeldReceipt = (saleId: string) => {
     if (!registerId || !canOperateRegister || resumeHeldDraftMutation.isLoading) {
@@ -777,6 +860,7 @@ const PosHistoryPage = () => {
               {t("history.empty")}
             </div>
           ) : null}
+          {canLoadRegisterScopedData ? renderSalesPagination() : null}
         </section>
       </div>
 
@@ -968,6 +1052,7 @@ const PosHistoryPage = () => {
             !(salesQuery.data?.items ?? []).length ? (
               <p className="text-sm text-muted-foreground">{t("history.empty")}</p>
             ) : null}
+            {canLoadRegisterScopedData ? renderSalesPagination() : null}
           </CardContent>
         </Card>
 
@@ -1027,6 +1112,7 @@ const PosHistoryPage = () => {
                 {tCommon("loading")}
               </div>
             ) : null}
+            {canLoadRegisterScopedData ? renderReturnsPagination() : null}
           </CardContent>
         </Card>
       </div>
