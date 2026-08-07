@@ -290,6 +290,86 @@ describeDb("pos", () => {
     );
   });
 
+  it("keeps inactive register history and legacy debt visible without enabling operations", async () => {
+    const { org, store, cashierUser } = await seedBase({ plan: "BUSINESS" });
+    const register = await prisma.posRegister.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Retired Register",
+        code: "RETIRED",
+      },
+    });
+    const closedShift = await prisma.registerShift.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        registerId: register.id,
+        status: "CLOSED",
+        openedById: cashierUser.id,
+        closedById: cashierUser.id,
+        openedAt: new Date("2026-07-01T04:00:00.000Z"),
+        closedAt: new Date("2026-07-01T12:00:00.000Z"),
+        openingCashKgs: 0,
+        closingCashCountedKgs: 0,
+        expectedCashKgs: 0,
+      },
+    });
+    const debt = await prisma.customerOrder.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        registerId: register.id,
+        shiftId: closedShift.id,
+        number: "S-RETIRED-DEBT-1",
+        status: "COMPLETED",
+        isPosSale: true,
+        isDebt: true,
+        debtCustomerName: "Legacy Debt Customer",
+        totalKgs: 500,
+        completedAt: new Date("2026-07-01T10:00:00.000Z"),
+        createdById: cashierUser.id,
+      },
+    });
+    await prisma.posRegister.update({
+      where: { id: register.id },
+      data: { isActive: false },
+    });
+
+    const caller = createTestCaller({
+      id: cashierUser.id,
+      email: cashierUser.email,
+      role: cashierUser.role,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+    const [activeRegisters, allRegisters, sales, shifts, debts, entry] = await Promise.all([
+      caller.pos.registers.list(),
+      caller.pos.registers.list({ status: "all" }),
+      caller.pos.sales.list({ registerId: register.id, page: 1, pageSize: 20 }),
+      caller.pos.shifts.list({ registerId: register.id, page: 1, pageSize: 20 }),
+      caller.pos.debts.list({ registerId: register.id, page: 1, pageSize: 20 }),
+      caller.pos.entry({ registerId: register.id }),
+    ]);
+
+    expect(activeRegisters).toHaveLength(0);
+    expect(allRegisters).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: register.id, isActive: false })]),
+    );
+    expect(sales.items.map((sale) => sale.id)).toContain(debt.id);
+    expect(shifts.items.map((shift) => shift.id)).toContain(closedShift.id);
+    expect(debts.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: debt.id,
+          register: expect.objectContaining({ id: register.id, code: "RETIRED" }),
+        }),
+      ]),
+    );
+    expect(entry.selectedRegister).toBeNull();
+    expect(entry.currentShift).toBeNull();
+  });
+
   it("holds and resumes draft receipts and blocks shift close while held", async () => {
     const { org, store, product, cashierUser, managerUser, adminUser } = await seedBase({
       plan: "BUSINESS",

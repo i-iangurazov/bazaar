@@ -81,11 +81,13 @@ const PosHistoryPage = () => {
   } = usePosRegisterSelection({
     registers: registersQuery.data ?? [],
     registersReady: registersQuery.data !== undefined,
+    allowInactive: true,
   });
   const selectedRegister = (registersQuery.data ?? []).find((item) => item.id === registerId);
   const registerExists = (registersQuery.data ?? []).some((item) => item.id === registerId);
   const canLoadRegisterScopedData = Boolean(registerId) && registerExists;
-  const canLoadCurrentShift = canLoadRegisterScopedData && Boolean(selectedRegister?.isActive);
+  const canOperateRegister = canLoadRegisterScopedData && Boolean(selectedRegister?.isActive);
+  const canLoadCurrentShift = canOperateRegister;
 
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
@@ -309,7 +311,7 @@ const PosHistoryPage = () => {
       heldSalesQuery.isLoading);
 
   const handleResumeHeldReceipt = (saleId: string) => {
-    if (!registerId || resumeHeldDraftMutation.isLoading) {
+    if (!registerId || !canOperateRegister || resumeHeldDraftMutation.isLoading) {
       return;
     }
     resumeHeldDraftMutation.mutate({ saleId, registerId });
@@ -550,6 +552,7 @@ const PosHistoryPage = () => {
               {(registersQuery.data ?? []).map((item) => (
                 <SelectItem key={item.id} value={item.id}>
                   {item.store.name} · {item.name} ({item.code})
+                  {!item.isActive ? ` · ${t("registers.statusInactive")}` : ""}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -634,7 +637,9 @@ const PosHistoryPage = () => {
                       onClick={() =>
                         isHeldReceipt ? handleResumeHeldReceipt(sale.id) : setDetailSaleId(sale.id)
                       }
-                      disabled={isHeldReceipt && resumeHeldDraftMutation.isLoading}
+                      disabled={
+                        isHeldReceipt && (!canOperateRegister || resumeHeldDraftMutation.isLoading)
+                      }
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
@@ -694,7 +699,7 @@ const PosHistoryPage = () => {
                         type="button"
                         className="mt-3 h-11 w-full"
                         onClick={() => handleResumeHeldReceipt(sale.id)}
-                        disabled={resumeHeldDraftMutation.isLoading}
+                        disabled={!canOperateRegister || resumeHeldDraftMutation.isLoading}
                       >
                         {resumeHeldDraftMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
                         {t("sell.resumeHeldReceipt")}
@@ -732,7 +737,7 @@ const PosHistoryPage = () => {
                           variant="secondary"
                           className="col-span-2 h-10"
                           onClick={() => setReturnSaleId(sale.id)}
-                          disabled={!canReturn}
+                          disabled={!canOperateRegister || !canReturn}
                         >
                           {t("history.return")}
                         </Button>
@@ -765,6 +770,7 @@ const PosHistoryPage = () => {
                 {(registersQuery.data ?? []).map((item) => (
                   <SelectItem key={item.id} value={item.id}>
                     {item.store.name} · {item.name} ({item.code})
+                    {!item.isActive ? ` · ${t("registers.statusInactive")}` : ""}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -844,6 +850,7 @@ const PosHistoryPage = () => {
                     variant="secondary"
                     onClick={() => setReturnSaleId(sale.id)}
                     disabled={
+                      !canOperateRegister ||
                       sale.status !== "COMPLETED" ||
                       ((sale.returnedTotalKgs ?? 0) > 0 &&
                         sale.returnedTotalKgs >= sale.totalKgs - 0.009)
@@ -1501,7 +1508,10 @@ const PosHistoryPage = () => {
             >
               {tCommon("cancel")}
             </Button>
-            <Button onClick={handleStartReturn} disabled={isReturnMutationBusy}>
+            <Button
+              onClick={handleStartReturn}
+              disabled={!canOperateRegister || isReturnMutationBusy}
+            >
               {isReturnMutationBusy ? <Spinner className="h-4 w-4" /> : null}
               {t("history.completeReturn")}
             </Button>

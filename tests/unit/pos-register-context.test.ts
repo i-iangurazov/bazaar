@@ -79,4 +79,21 @@ describe("POS register context", () => {
       issue: null,
     });
   });
+
+  it("permits inactive register selection only for explicit read-only contexts", () => {
+    expect(
+      resolvePosRegisterContext({
+        explicitRegisterId: "register-disabled",
+        registers,
+      }),
+    ).toMatchObject({ registerId: null, issue: "invalid-explicit" });
+
+    expect(
+      resolvePosRegisterContext({
+        explicitRegisterId: "register-disabled",
+        registers,
+        allowInactive: true,
+      }),
+    ).toMatchObject({ registerId: "register-disabled", source: "explicit", issue: null });
+  });
 });

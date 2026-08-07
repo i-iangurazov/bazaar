@@ -52,7 +52,7 @@ const PosDebtsPage = () => {
   const deferredSearch = useDeferredValue(search);
   const normalizedSearch = deferredSearch.trim().replace(/\s+/g, " ");
 
-  const registersQuery = trpc.pos.registers.list.useQuery();
+  const registersQuery = trpc.pos.registers.list.useQuery({ status: "all" });
   const {
     registerId,
     selectRegister,
@@ -60,6 +60,7 @@ const PosDebtsPage = () => {
   } = usePosRegisterSelection({
     registers: registersQuery.data ?? [],
     registersReady: registersQuery.data !== undefined,
+    allowInactive: true,
   });
   const selectedRegister = useMemo(
     () => (registersQuery.data ?? []).find((item) => item.id === registerId) ?? null,
@@ -67,6 +68,7 @@ const PosDebtsPage = () => {
   );
   const registerExists = (registersQuery.data ?? []).some((item) => item.id === registerId);
   const canLoadRegisterScopedData = Boolean(registerId) && registerExists;
+  const canOperateRegister = canLoadRegisterScopedData && Boolean(selectedRegister?.isActive);
 
   useEffect(() => {
     if (!registerSelectionIssue) {
@@ -81,7 +83,7 @@ const PosDebtsPage = () => {
 
   const currentShiftQuery = trpc.pos.shifts.current.useQuery(
     { registerId },
-    { enabled: canLoadRegisterScopedData, refetchOnWindowFocus: true },
+    { enabled: canOperateRegister, refetchOnWindowFocus: true },
   );
 
   const debtsQuery = trpc.pos.debts.list.useQuery(
@@ -175,20 +177,31 @@ const PosDebtsPage = () => {
                 {(registersQuery.data ?? []).map((item) => (
                   <SelectItem key={item.id} value={item.id}>
                     {item.store.name} · {item.name} ({item.code})
+                    {!item.isActive ? ` · ${t("registers.statusInactive")}` : ""}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <div className="flex flex-col gap-2 sm:flex-row">
-              <Button variant="secondary" asChild>
-                <Link href={`/pos?registerId=${registerId}`}>{t("title")}</Link>
-              </Button>
+              {canOperateRegister ? (
+                <Button variant="secondary" asChild>
+                  <Link href={`/pos?registerId=${registerId}`}>{t("title")}</Link>
+                </Button>
+              ) : (
+                <Button variant="secondary" disabled>
+                  {t("title")}
+                </Button>
+              )}
               <Button variant="secondary" asChild>
                 <Link href={`/pos/history?registerId=${registerId}`}>{t("entry.history")}</Link>
               </Button>
-              <Button asChild>
-                <Link href={`/pos/sell?registerId=${registerId}`}>{t("entry.sell")}</Link>
-              </Button>
+              {canOperateRegister ? (
+                <Button asChild>
+                  <Link href={`/pos/sell?registerId=${registerId}`}>{t("entry.sell")}</Link>
+                </Button>
+              ) : (
+                <Button disabled>{t("entry.sell")}</Button>
+              )}
             </div>
           </div>
           {!currentShift && canLoadRegisterScopedData ? (

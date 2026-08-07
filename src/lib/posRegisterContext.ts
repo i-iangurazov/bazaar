@@ -32,23 +32,27 @@ export const resolvePosRegisterContext = ({
   persistedRegisterId,
   serverPreferenceId,
   registers,
+  allowInactive = false,
 }: {
   explicitRegisterId?: string | null;
   persistedRegisterId?: string | null;
   serverPreferenceId?: string | null;
   registers: readonly PosRegisterCandidate[];
+  allowInactive?: boolean;
 }): {
   registerId: string | null;
   source: PosRegisterResolutionSource;
   issue: PosRegisterResolutionIssue;
   clearPersistedRegister: boolean;
 } => {
-  const activeRegisterIds = new Set(
-    registers.filter((register) => register.isActive).map((register) => register.id),
+  const selectableRegisterIds = new Set(
+    registers
+      .filter((register) => allowInactive || register.isActive)
+      .map((register) => register.id),
   );
 
   if (explicitRegisterId) {
-    if (activeRegisterIds.has(explicitRegisterId)) {
+    if (selectableRegisterIds.has(explicitRegisterId)) {
       return {
         registerId: explicitRegisterId,
         source: "explicit",
@@ -65,7 +69,7 @@ export const resolvePosRegisterContext = ({
   }
 
   if (persistedRegisterId) {
-    if (activeRegisterIds.has(persistedRegisterId)) {
+    if (selectableRegisterIds.has(persistedRegisterId)) {
       return {
         registerId: persistedRegisterId,
         source: "persisted",
@@ -81,7 +85,7 @@ export const resolvePosRegisterContext = ({
     };
   }
 
-  if (serverPreferenceId && activeRegisterIds.has(serverPreferenceId)) {
+  if (serverPreferenceId && selectableRegisterIds.has(serverPreferenceId)) {
     return {
       registerId: serverPreferenceId,
       source: "server-preference",
@@ -90,9 +94,9 @@ export const resolvePosRegisterContext = ({
     };
   }
 
-  if (activeRegisterIds.size === 1) {
+  if (selectableRegisterIds.size === 1) {
     return {
-      registerId: Array.from(activeRegisterIds)[0] ?? null,
+      registerId: Array.from(selectableRegisterIds)[0] ?? null,
       source: "only-accessible",
       issue: null,
       clearPersistedRegister: false,

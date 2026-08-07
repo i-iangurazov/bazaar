@@ -63,6 +63,7 @@ const PosShiftsPage = () => {
   } = usePosRegisterSelection({
     registers: registersQuery.data ?? [],
     registersReady: registersQuery.data !== undefined,
+    allowInactive: true,
   });
   const selectedRegister = (registersQuery.data ?? []).find((item) => item.id === registerId);
   const registerExists = (registersQuery.data ?? []).some((item) => item.id === registerId);
@@ -290,9 +291,10 @@ const PosShiftsPage = () => {
             </SelectTrigger>
             <SelectContent>
               {(registersQuery.data ?? []).map((item) => (
-                <SelectItem key={item.id} value={item.id}>
-                  {item.store.name} · {item.name} ({item.code})
-                </SelectItem>
+              <SelectItem key={item.id} value={item.id}>
+                {item.store.name} · {item.name} ({item.code})
+                {!item.isActive ? ` · ${t("registers.statusInactive")}` : ""}
+              </SelectItem>
               ))}
             </SelectContent>
           </Select>

@@ -35,6 +35,7 @@ vi.mock("next-auth/react", () => ({
 const registers = [
   { id: "register-a", isActive: true },
   { id: "register-b", isActive: true },
+  { id: "register-inactive", isActive: false },
 ];
 
 describe("usePosRegisterSelection", () => {
@@ -155,5 +156,21 @@ describe("usePosRegisterSelection", () => {
     expect(result.current.registerId).toBe("");
     expect(window.localStorage.getItem(userBKey)).toBeNull();
     expect(navigation.replace).toHaveBeenCalledWith("/pos", { scroll: false });
+  });
+
+  it("selects an inactive register only when the route opts into read-only history", async () => {
+    const key = buildPosRegisterStorageKey({ organizationId: "org-a", userId: "user-a" });
+    if (!key) {
+      throw new Error("expected scoped key");
+    }
+    navigation.search = "registerId=register-inactive";
+
+    const { result } = renderHook(() =>
+      usePosRegisterSelection({ registers, registersReady: true, allowInactive: true }),
+    );
+
+    await waitFor(() => expect(result.current.registerId).toBe("register-inactive"));
+    expect(result.current.issue).toBeNull();
+    expect(window.localStorage.getItem(key)).toBe("register-inactive");
   });
 });

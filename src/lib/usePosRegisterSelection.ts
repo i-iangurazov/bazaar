@@ -28,10 +28,12 @@ export const usePosRegisterSelection = ({
   registers,
   registersReady,
   serverPreferenceId,
+  allowInactive = false,
 }: {
   registers: readonly PosRegisterOption[];
   registersReady: boolean;
   serverPreferenceId?: string | null;
+  allowInactive?: boolean;
 }) => {
   const router = useRouter();
   const pathname = usePathname();
@@ -108,6 +110,7 @@ export const usePosRegisterSelection = ({
       persistedRegisterId,
       serverPreferenceId,
       registers: stableRegisters,
+      allowInactive,
     });
 
     try {
@@ -142,6 +145,7 @@ export const usePosRegisterSelection = ({
       replaceRegisterInUrl(null);
     }
   }, [
+    allowInactive,
     explicitRegisterId,
     registerFingerprint,
     registersReady,
@@ -154,7 +158,12 @@ export const usePosRegisterSelection = ({
 
   const selectRegister = useCallback(
     (registerId: string) => {
-      if (!storageKey || !stableRegisters.some((item) => item.id === registerId && item.isActive)) {
+      if (
+        !storageKey ||
+        !stableRegisters.some(
+          (item) => item.id === registerId && (allowInactive || item.isActive),
+        )
+      ) {
         setState({
           scopeKey: storageKey,
           registerId: "",
@@ -173,7 +182,7 @@ export const usePosRegisterSelection = ({
       setState({ scopeKey: storageKey, registerId, issue: null, isReady: true });
       replaceRegisterInUrl(registerId);
     },
-    [replaceRegisterInUrl, stableRegisters, storageKey],
+    [allowInactive, replaceRegisterInUrl, stableRegisters, storageKey],
   );
 
   const isCurrentScope = state.scopeKey === storageKey;
