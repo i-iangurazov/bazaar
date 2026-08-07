@@ -44,6 +44,7 @@ import {
   addRecentCommandPaletteSearch,
   parseRecentCommandPaletteSearches,
 } from "@/lib/command-palette-recent";
+import { buildPosCashMovementHref } from "@/lib/posCashMovementRoute";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import {
@@ -313,7 +314,7 @@ export const CommandPalette = ({
         label: t("actions.cash"),
         keywords: [t("keywords.cash"), t("keywords.other")],
         sublabel: null,
-        href: "/pos",
+        href: buildPosCashMovementHref(),
         icon: BillingIcon,
         group: "actions",
         category: "other",
@@ -324,7 +325,7 @@ export const CommandPalette = ({
         label: t("actions.income"),
         keywords: [t("keywords.finance"), t("keywords.income"), t("keywords.payment")],
         sublabel: null,
-        href: "/finance/income",
+        href: buildPosCashMovementHref("PAY_IN"),
         icon: ArrowDownIcon,
         group: "actions",
         category: "payments",
@@ -335,7 +336,7 @@ export const CommandPalette = ({
         label: t("actions.expense"),
         keywords: [t("keywords.finance"), t("keywords.expense"), t("keywords.payment")],
         sublabel: null,
-        href: "/finance/expense",
+        href: buildPosCashMovementHref("PAY_OUT"),
         icon: ArrowUpIcon,
         group: "actions",
         category: "payments",

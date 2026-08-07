@@ -48,4 +48,12 @@ describe("conservative command palette role filtering source", () => {
     expect(source).toContain('permission: "manageUsers"');
     expect(source).toContain('permission: "viewInventory"');
   });
+
+  it("routes cash actions to the real POS cash movement form", () => {
+    expect(source).toContain("href: buildPosCashMovementHref()");
+    expect(source).toContain('href: buildPosCashMovementHref("PAY_IN")');
+    expect(source).toContain('href: buildPosCashMovementHref("PAY_OUT")');
+    expect(source).not.toContain('href: "/finance/income"');
+    expect(source).not.toContain('href: "/finance/expense"');
+  });
 });

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { CashDrawerMovementType } from "@prisma/client";
 import { useLocale, useTranslations } from "next-intl";
 
@@ -28,6 +29,11 @@ import {
 } from "@/lib/currencyDisplay";
 import { formatDateTime } from "@/lib/i18nFormat";
 import { buildHeldReceiptResumeHref } from "@/lib/mobilePosState";
+import {
+  POS_CASH_MOVEMENT_ANCHOR,
+  POS_CASH_MOVEMENT_QUERY_PARAM,
+  parsePosCashMovementType,
+} from "@/lib/posCashMovementRoute";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { usePosRegisterSelection } from "@/lib/usePosRegisterSelection";
@@ -45,6 +51,9 @@ const PosShiftsPage = () => {
   const tErrors = useTranslations("errors");
   const locale = useLocale();
   const { toast } = useToast();
+  const searchParams = useSearchParams();
+  const requestedCashType = searchParams.get(POS_CASH_MOVEMENT_QUERY_PARAM);
+  const cashMovementAnchorRequested = useRef(false);
 
   const [countedCash, setCountedCash] = useState("");
   const [closeNote, setCloseNote] = useState("");
@@ -54,6 +63,20 @@ const PosShiftsPage = () => {
   const [cashComment, setCashComment] = useState("");
   const [cashOutReason, setCashOutReason] = useState("collection");
   const [cashType, setCashType] = useState<CashDrawerMovementType>(CashDrawerMovementType.PAY_IN);
+
+  useEffect(() => {
+    const selectedType = parsePosCashMovementType(requestedCashType);
+    if (selectedType) {
+      cashMovementAnchorRequested.current = true;
+      setCashType(selectedType);
+    }
+  }, [requestedCashType]);
+
+  useEffect(() => {
+    if (window.location.hash === `#${POS_CASH_MOVEMENT_ANCHOR}`) {
+      cashMovementAnchorRequested.current = true;
+    }
+  }, []);
 
   const registersQuery = trpc.pos.registers.list.useQuery({ status: "all" });
   const {
@@ -123,6 +146,26 @@ const PosShiftsPage = () => {
   });
 
   const currentShift = currentShiftQuery.data;
+
+  useEffect(() => {
+    if (!currentShift || reportQuery.isLoading || !cashMovementAnchorRequested.current) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      if (window.location.hash !== `#${POS_CASH_MOVEMENT_ANCHOR}`) {
+        window.history.replaceState(
+          window.history.state,
+          "",
+          `${window.location.pathname}${window.location.search}#${POS_CASH_MOVEMENT_ANCHOR}`,
+        );
+      }
+      document.getElementById(POS_CASH_MOVEMENT_ANCHOR)?.scrollIntoView({ block: "start" });
+      cashMovementAnchorRequested.current = false;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [currentShift, reportQuery.isLoading, requestedCashType]);
+
   const currentShiftCurrencySource = currencySourceWithFallback(
     currentShift,
     currentShift?.store ?? null,
@@ -495,7 +538,10 @@ const PosShiftsPage = () => {
                 </div>
               ) : null}
 
-              <div className="bazaar-admin-toolbar grid gap-3 md:grid-cols-[180px_160px_1fr_auto]">
+              <div
+                id={POS_CASH_MOVEMENT_ANCHOR}
+                className="bazaar-admin-toolbar scroll-mt-24 grid gap-3 md:grid-cols-[180px_160px_1fr_auto]"
+              >
                 <Select
                   value={cashType}
                   onValueChange={(value) => setCashType(value as CashDrawerMovementType)}
