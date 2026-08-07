@@ -8,14 +8,29 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "@/server/db/prisma";
 import { ORDER_CONFIRMATION_EMAIL_JOB_NAME } from "@/server/jobs/orderConfirmationEmails";
 import { runJob } from "@/server/jobs";
-import {
-  createBazaarApiKey,
-  createBazaarApiOrderOperation,
-} from "@/server/services/bazaarApi";
+import { createBazaarApiKey, createBazaarApiOrderOperation } from "@/server/services/bazaarApi";
 import { sendOrderConfirmationEmail } from "@/server/services/orderEmails";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
+
+const deferred = <T>() => {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+};
+
+const waitFor = async (predicate: () => boolean) => {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  throw new Error("condition not reached");
+};
 
 describeDb("API order confirmation email recovery", () => {
   beforeEach(async () => {
@@ -200,4 +215,97 @@ describeDb("API order confirmation email recovery", () => {
     expect(sentLog.attemptCount).toBe(2);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
+
+  it.each([
+    {
+      newerOutcome: "sent" as const,
+      newerResponse: new Response(JSON.stringify({ id: "newer-sent" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+      staleResponse: new Response("stale failed", { status: 503 }),
+    },
+    {
+      newerOutcome: "failed" as const,
+      newerResponse: new Response("newer failed", { status: 503 }),
+      staleResponse: new Response(JSON.stringify({ id: "stale-sent" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    },
+  ])(
+    "fences a stale provider attempt after recovery leaves the newer attempt $newerOutcome",
+    async ({ newerOutcome, newerResponse, staleResponse }) => {
+      const { org, store, product, adminUser } = await seedBase({ allowNegativeStock: true });
+      await prisma.product.update({ where: { id: product.id }, data: { basePriceKgs: 125 } });
+      const { apiKey } = await createBazaarApiKey({
+        organizationId: org.id,
+        storeId: store.id,
+        actorId: adminUser.id,
+        requestId: `email-fence-api-key-${newerOutcome}`,
+        name: `email-fence-${newerOutcome}`,
+      });
+      const heldAttempt = deferred<Response>();
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(new Response("initial failure", { status: 503 }))
+        .mockImplementationOnce(() => heldAttempt.promise)
+        .mockResolvedValueOnce(newerResponse);
+      vi.stubGlobal("fetch", fetchMock);
+
+      const created = await createBazaarApiOrderOperation({
+        organizationId: org.id,
+        storeId: store.id,
+        apiKeyId: apiKey.id,
+        idempotencyKey: `api-order-email-fence-${newerOutcome}`,
+        customerName: "Fenced Customer",
+        customerEmail: "fenced.customer@example.test",
+        lines: [{ productId: product.id, qty: 1 }],
+      });
+      const emailLog = await prisma.customerOrderEmailLog.findFirstOrThrow({
+        where: { customerOrderId: created.response.order.id },
+      });
+      await prisma.customerOrderEmailLog.update({
+        where: { id: emailLog.id },
+        data: { nextAttemptAt: new Date(Date.now() - 1_000) },
+      });
+
+      const staleAttempt = sendOrderConfirmationEmail({
+        organizationId: org.id,
+        customerOrderId: created.response.order.id,
+        deliveryLogId: emailLog.id,
+        throwOnMissingEmail: false,
+      });
+      await waitFor(() => fetchMock.mock.calls.length === 2);
+      await prisma.customerOrderEmailLog.update({
+        where: { id: emailLog.id },
+        data: { leaseExpiresAt: new Date(Date.now() - 1_000) },
+      });
+
+      const recovered = await runJob(ORDER_CONFIRMATION_EMAIL_JOB_NAME, { logId: emailLog.id });
+      heldAttempt.resolve(staleResponse);
+      const staleResult = await staleAttempt;
+      const [finalLog, order] = await Promise.all([
+        prisma.customerOrderEmailLog.findUniqueOrThrow({ where: { id: emailLog.id } }),
+        prisma.customerOrder.findUniqueOrThrow({ where: { id: created.response.order.id } }),
+      ]);
+
+      expect(staleResult).toMatchObject({ status: "skipped", reason: "inProgress" });
+      expect(finalLog.attemptCount).toBe(3);
+      expect(finalLog.leaseToken).toBeNull();
+      expect(finalLog.leaseExpiresAt).toBeNull();
+      if (newerOutcome === "sent") {
+        expect(recovered).toMatchObject({ details: { sent: 1, failed: 0 } });
+        expect(finalLog.status).toBe(CustomerOrderEmailStatus.SENT);
+        expect(finalLog.providerMessageId).toBe("newer-sent");
+        expect(order.confirmationEmailSentAt).toBeInstanceOf(Date);
+      } else {
+        expect(recovered).toMatchObject({ details: { sent: 0, failed: 1 } });
+        expect(finalLog.status).toBe(CustomerOrderEmailStatus.FAILED);
+        expect(finalLog.providerMessageId).toBeNull();
+        expect(order.confirmationEmailSentAt).toBeNull();
+      }
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    },
+  );
 });
