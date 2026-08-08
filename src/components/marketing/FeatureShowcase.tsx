@@ -13,7 +13,7 @@ const features = [
     title: "Продажа без лишних экранов",
     body: "Каталог, текущий чек, скидка, клиент и оплата находятся в одном рабочем контексте.",
     details: ["Штрихкод и поиск", "Разделённая оплата", "Отложить и продолжить"],
-    image: "/marketing/captures/pos-desktop.webp",
+    image: "/marketing/captures/pos-desktop-wide.webp",
     alt: "Интерфейс кассы Bazaar",
   },
   {
@@ -23,7 +23,7 @@ const features = [
     title: "Остаток с понятным происхождением",
     body: "Каждое изменение связано с продажей, поставкой, перемещением, списанием или пересчётом.",
     details: ["По магазинам", "По вариантам", "С полной историей"],
-    image: "/marketing/captures/movements.webp",
+    image: "/marketing/captures/movements-wide.webp",
     alt: "Журнал движения товаров Bazaar",
   },
   {
@@ -33,7 +33,7 @@ const features = [
     title: "Каталог, готовый к любому каналу",
     body: "Цены, варианты, штрихкоды, фото и доступность по магазинам управляются централизованно.",
     details: ["Варианты и опции", "Цены и скидки", "Импорт и bulk-действия"],
-    image: "/marketing/captures/products.webp",
+    image: "/marketing/captures/products-wide.webp",
     alt: "Каталог товаров Bazaar",
   },
   {
@@ -43,7 +43,7 @@ const features = [
     title: "Покупатель остаётся частью истории",
     body: "Контакты, заказы и маркетинговая доступность собраны в одной клиентской базе.",
     details: ["История заказов", "Сегменты", "Email Marketing"],
-    image: "/marketing/captures/dashboard.webp",
+    image: "/marketing/captures/dashboard-wide.webp",
     alt: "Рабочая панель Bazaar с данными магазина",
   },
   {
@@ -53,7 +53,7 @@ const features = [
     title: "Один источник данных для всех каналов",
     body: "Bazaar API и маркетплейсы получают актуальные товары, цены и остатки из одной системы.",
     details: ["Bazaar API", "M-Market и Bakai", "O! Market"],
-    image: "/marketing/captures/integrations.webp",
+    image: "/marketing/captures/integrations-wide.webp",
     alt: "Интеграции Bazaar",
   },
   {
@@ -63,7 +63,7 @@ const features = [
     title: "Цифры, связанные с операциями",
     body: "Продажи, себестоимость, маржа и запасы рассчитываются из реальных движений бизнеса.",
     details: ["Выручка", "Валовая прибыль", "Топ товаров"],
-    image: "/marketing/captures/dashboard.webp",
+    image: "/marketing/captures/dashboard-wide.webp",
     alt: "Аналитика Bazaar",
   },
 ] as const;
@@ -139,8 +139,8 @@ export const FeatureShowcase = () => {
           <Image
             src={active.image}
             alt={active.alt}
-            width={1440}
-            height={active.image.includes("pos-desktop") ? 1000 : 900}
+            width={1920}
+            height={1080}
             sizes="(max-width: 767px) 92vw, (max-width: 1199px) 62vw, 820px"
           />
         </div>

@@ -13,6 +13,18 @@ const port = Number(process.env.HELP_CAPTURE_CDP_PORT ?? "9333");
 const output = path.resolve(process.env.HELP_CAPTURE_OUTPUT ?? "tmp/help-captures-review");
 const chromeBinary =
   process.env.HELP_CAPTURE_CHROME ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+const requestedTargets = new Set(
+  (process.env.HELP_CAPTURE_TARGETS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean),
+);
+const captureTargets = requestedTargets.size
+  ? helpCaptureTargets.filter((target) => requestedTargets.has(target.name))
+  : helpCaptureTargets;
+const posRegisterId = process.env.HELP_CAPTURE_POS_REGISTER_ID?.trim();
+const addFirstPosProduct = process.env.HELP_CAPTURE_POS_ADD_FIRST_PRODUCT === "1";
+const completePosSale = process.env.HELP_CAPTURE_POS_COMPLETE_SALE === "1";
 
 const assertSafeEnvironment = () => {
   const url = new URL(baseUrl);
@@ -49,11 +61,19 @@ const navigate = async (client: CdpClient, url: string) => {
   const loaded = client.waitFor("Page.loadEventFired");
   await client.send("Page.navigate", { url });
   await loaded;
-  await new Promise((resolve) => setTimeout(resolve, 800));
+  await new Promise((resolve) => setTimeout(resolve, 1_500));
+};
+
+const stopChrome = async (chrome: ReturnType<typeof spawn>) => {
+  if (chrome.exitCode !== null || chrome.signalCode !== null) return;
+  const stopped = new Promise<void>((resolve) => chrome.once("exit", () => resolve()));
+  chrome.kill("SIGTERM");
+  await Promise.race([stopped, new Promise<void>((resolve) => setTimeout(resolve, 2_000))]);
 };
 
 const main = async () => {
   assertSafeEnvironment();
+  if (!captureTargets.length) throw new Error("HELP_CAPTURE_TARGETS did not match any target.");
   const email = process.env.HELP_CAPTURE_EMAIL;
   const password = process.env.HELP_CAPTURE_PASSWORD;
   if (!email || !password)
@@ -89,25 +109,51 @@ const main = async () => {
         const csrf = await fetch('/api/auth/csrf').then((response) => response.json());
         const body = new URLSearchParams({ csrfToken: csrf.csrfToken, email: ${JSON.stringify(email)}, password: ${JSON.stringify(password)}, callbackUrl: ${JSON.stringify(baseUrl + "/dashboard")}, json: 'true' });
         const response = await fetch('/api/auth/callback/credentials', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body, credentials: 'include' });
-        return response.status;
+        const result = await response.json().catch(() => ({}));
+        const session = await fetch('/api/auth/session', { credentials: 'include' }).then((sessionResponse) => sessionResponse.json());
+        return { status: response.status, authenticated: Boolean(session?.user?.email), error: result?.error ?? null };
       })()
     `;
-    const login = await client.send<{ result: { value?: number } }>("Runtime.evaluate", {
+    const login = await client.send<{
+      result: { value?: { status?: number; authenticated?: boolean; error?: string | null } };
+    }>("Runtime.evaluate", {
       expression: loginExpression,
       awaitPromise: true,
       returnByValue: true,
     });
-    if (login.result.value !== 200)
-      throw new Error(`Synthetic login failed with ${login.result.value ?? "unknown"}.`);
+    if (login.result.value?.status !== 200 || !login.result.value.authenticated) {
+      throw new Error(
+        `Synthetic login failed (${login.result.value?.error ?? login.result.value?.status ?? "unknown"}).`,
+      );
+    }
 
-    for (const targetConfig of helpCaptureTargets) {
+    for (const targetConfig of captureTargets) {
       await client.send("Emulation.setDeviceMetricsOverride", {
         width: targetConfig.width,
         height: targetConfig.height,
         deviceScaleFactor: 1,
         mobile: targetConfig.width < 600,
       });
-      await navigate(client, `${baseUrl}${targetConfig.path}`);
+      const targetUrl = new URL(targetConfig.path, baseUrl);
+      if (targetConfig.name.startsWith("pos-") && posRegisterId) {
+        targetUrl.searchParams.set("registerId", posRegisterId);
+      }
+      await navigate(client, targetUrl.toString());
+      if (targetConfig.name === "pos-entry") {
+        await new Promise((resolve) => setTimeout(resolve, 2_000));
+      }
+      if (targetConfig.name === "pos-desktop-wide" && addFirstPosProduct) {
+        await client.send("Runtime.evaluate", {
+          expression: `Array.from(document.querySelectorAll('button')).find((button) => button.textContent?.trim().includes('Добавить'))?.click()`,
+        });
+        await new Promise((resolve) => setTimeout(resolve, 1_000));
+      }
+      if (targetConfig.name === "pos-desktop-wide" && completePosSale) {
+        await client.send("Runtime.evaluate", {
+          expression: `Array.from(document.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Завершить продажу')?.click()`,
+        });
+        await new Promise((resolve) => setTimeout(resolve, 1_500));
+      }
       const shot = await client.send<{ data: string }>("Page.captureScreenshot", {
         format: "png",
         fromSurface: true,
@@ -118,9 +164,9 @@ const main = async () => {
         .toFile(path.join(output, `${targetConfig.name}.webp`));
     }
     client.close();
-    process.stdout.write(`Captured ${helpCaptureTargets.length} synthetic screens to ${output}\n`);
+    process.stdout.write(`Captured ${captureTargets.length} synthetic screens to ${output}\n`);
   } finally {
-    chrome.kill("SIGTERM");
+    await stopChrome(chrome);
     await rm(profile, { recursive: true, force: true });
   }
 };

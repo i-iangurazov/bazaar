@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { getLocale } from "next-intl/server";
 
@@ -14,13 +15,9 @@ export const HelpHeader = async () => {
     <header className={styles.header}>
       <div className={styles.headerInner}>
         <Link href="/help" className={styles.brand} aria-label="Bazaar Guide">
-          <span className={styles.brandMark} aria-hidden>
-            B
-          </span>
-          <span>
-            <strong>Bazaar</strong>
-            <em>Guide</em>
-          </span>
+          <Image src="/brand/icon.png" width={34} height={34} alt="" priority />
+          <strong>BAZAAR</strong>
+          <em>Guide</em>
         </Link>
         <nav className={styles.headerNav} aria-label={ui.guides}>
           <Link href="/help#getting-started">{ui.journeyTitle}</Link>

@@ -14,12 +14,12 @@ describe("Bazaar Retail OS marketing landing", () => {
     expect(page).toContain("@/components/marketing/MarketingLanding");
     expect(page).not.toContain("@/components/ui/");
     expect(landing).toContain('from "next/image"');
-    expect(landing).toContain("/marketing/captures/pos-desktop.webp");
+    expect(landing).toContain("/marketing/captures/pos-desktop-wide.webp");
     expect(landing).toContain("/marketing/captures/pos-mobile.webp");
-    expect(landing).toContain("/marketing/captures/products.webp");
-    expect(landing).toContain("/marketing/captures/movements.webp");
-    expect(landing).toContain("/marketing/captures/dashboard.webp");
-    expect(landing).toContain("/marketing/captures/integrations.webp");
+    expect(landing).toContain("/marketing/captures/products-wide.webp");
+    expect(landing).toContain("/marketing/captures/movements-wide.webp");
+    expect(landing).toContain("/marketing/captures/dashboard-wide.webp");
+    expect(landing).toContain("/marketing/captures/integrations-wide.webp");
     expect(landing).not.toContain("data:image");
   });
 
@@ -64,5 +64,18 @@ describe("Bazaar Retail OS marketing landing", () => {
     expect(motion).toContain("IntersectionObserver");
     expect(motion).toContain("prefers-reduced-motion: reduce");
     expect(styles).toContain("@media (prefers-reduced-motion: reduce)");
+  });
+
+  it("uses a readable 16:9 product frame and a structured channel status surface", async () => {
+    const landing = await readSource("src/components/marketing/MarketingLanding.tsx");
+    const styles = await readSource("src/components/marketing/marketing.module.css");
+
+    expect(landing).toContain("width={1920}");
+    expect(landing).toContain("height={1080}");
+    expect(landing).toContain("integrationConsole");
+    expect(landing).toContain("Один источник данных для всех каналов");
+    expect(styles).toContain("aspect-ratio: 16 / 9");
+    expect(styles).not.toContain(".flowLines");
+    expect(styles).not.toContain(".integrationNode");
   });
 });

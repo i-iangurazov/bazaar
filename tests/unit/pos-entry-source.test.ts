@@ -16,6 +16,16 @@ describe("pos entry navigation", () => {
     expect(source).toContain('t("entry.readyToSell")');
   });
 
+  it("does not show a permanent entry spinner while no register is selected", async () => {
+    const source = await readSource("src/app/(app)/pos/page.tsx");
+
+    expect(source).toContain(
+      "const entryLoading = Boolean(selectedRegister && entryQuery.isLoading);",
+    );
+    expect(source).not.toContain("registersQuery.isLoading || entryQuery.isLoading");
+    expect(source).not.toContain("{entryQuery.isLoading ? (");
+  });
+
   it("shows a scoped close-shift path from the open-shift POS hub", async () => {
     const source = await readSource("src/app/(app)/pos/page.tsx");
 

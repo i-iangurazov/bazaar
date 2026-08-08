@@ -160,7 +160,7 @@ export const HelpHome = ({ locale, data }: { locale: HelpLocale; data: HelpHomeD
         <div className={styles.helpHeroVisual}>
           <div className={styles.heroImageFrame}>
             <Image
-              src="/marketing/captures/pos-desktop.webp"
+              src="/marketing/captures/pos-desktop-wide.webp"
               alt={localize({ ru: "Касса Bazaar", kg: "Bazaar кассасы", en: "Bazaar POS" }, locale)}
               fill
               priority

@@ -91,8 +91,7 @@ const PosEntryPage = () => {
   }, [registerSelectionIssue, t, toast]);
 
   const role = session?.user?.role;
-  const currentCashierName =
-    session?.user?.name || session?.user?.email || tCommon("notAvailable");
+  const currentCashierName = session?.user?.name || session?.user?.email || tCommon("notAvailable");
   const canManageRegisters = role === "ADMIN" || role === "MANAGER";
   const selectedRegister = useMemo(() => {
     if (!registersQuery.data?.length) {
@@ -100,6 +99,7 @@ const PosEntryPage = () => {
     }
     return registersQuery.data.find((item) => item.id === registerId) ?? null;
   }, [registerId, registersQuery.data]);
+  const entryLoading = Boolean(selectedRegister && entryQuery.isLoading);
 
   const openShift = entryQuery.data?.currentShift;
   const previousClosedShift = entryQuery.data?.previousClosedShift ?? null;
@@ -181,7 +181,7 @@ const PosEntryPage = () => {
                   : t("entry.selectRegister")}
               </p>
             </div>
-            {registersQuery.isLoading || entryQuery.isLoading ? (
+            {registersQuery.isLoading || entryLoading ? (
               <Spinner className="mt-1 h-5 w-5 text-muted-foreground" />
             ) : null}
           </div>
@@ -237,9 +237,7 @@ const PosEntryPage = () => {
             <Button
               className="mt-4 h-14 w-full text-base"
               onClick={() => setOpenShiftDialogOpen(true)}
-              disabled={
-                registersQuery.isLoading || entryQuery.isLoading || openShiftMutation.isLoading
-              }
+              disabled={registersQuery.isLoading || entryLoading || openShiftMutation.isLoading}
             >
               {openShiftMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
               {t("entry.openShift")}
@@ -383,7 +381,7 @@ const PosEntryPage = () => {
               </div>
             ) : null}
 
-            {entryQuery.isLoading ? (
+            {entryLoading ? (
               <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
                 <Spinner className="h-4 w-4" />
                 {t("loading")}

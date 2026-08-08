@@ -17,7 +17,7 @@ export const metadata: Metadata = {
     type: "website",
     images: [
       {
-        url: "/marketing/captures/pos-desktop.webp",
+        url: "/marketing/captures/pos-desktop-wide.webp",
         width: 1440,
         height: 1000,
         alt: "Bazaar Guide",

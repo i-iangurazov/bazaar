@@ -58,21 +58,6 @@ export const AnnotatedScreenshot = ({
           {item.number}
         </span>
       ))}
-      {media.annotations
-        .filter((item) => item.width && item.height)
-        .map((item) => (
-          <span
-            key={`spotlight-${item.number}`}
-            className={styles.annotationSpotlight}
-            style={{
-              left: `${item.x - 2}%`,
-              top: `${item.y - 2}%`,
-              width: `${item.width}%`,
-              height: `${item.height}%`,
-            }}
-            aria-hidden
-          />
-        ))}
     </div>
   );
 
@@ -102,7 +87,14 @@ export const AnnotatedScreenshot = ({
         }}
       >
         <button type="button" className={styles.zoomClose} onClick={() => setOpen(false)}>
-          <span aria-hidden>×</span>
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden>
+            <path
+              d="m5 5 10 10M15 5 5 15"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+            />
+          </svg>
           <span className={styles.srOnly}>{ui.closeImage}</span>
         </button>
         {image(true)}

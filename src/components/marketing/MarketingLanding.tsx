@@ -77,8 +77,8 @@ const ProductWindow = ({
       <Image
         src={src}
         alt={alt}
-        width={1440}
-        height={src.includes("pos-desktop") ? 1000 : 900}
+        width={1920}
+        height={1080}
         sizes="(max-width: 767px) 94vw, (max-width: 1199px) 88vw, 1120px"
         priority={priority}
       />
@@ -132,32 +132,56 @@ const Story = ({
   </section>
 );
 
+const integrationChannels = [
+  { mark: "API", label: "Bazaar API", data: "Товары · остатки · заказы" },
+  { mark: "M", label: "M-Market", data: "Каталог · цены · наличие" },
+  { mark: "B", label: "Bakai Store", data: "Каталог · цены · наличие" },
+  { mark: "O!", label: "O! Market", data: "Товары · остатки · заказы" },
+  { mark: "@", label: "Email Marketing", data: "Клиенты · кампании" },
+] as const;
+
 const IntegrationFlow = () => (
-  <div className={styles.integrationFlow} aria-label="Каналы продаж, синхронизированные с Bazaar">
-    <div className={styles.flowLines} aria-hidden="true" />
-    <div className={`${styles.integrationNode} ${styles.integrationCore}`}>
-      <Image src="/brand/icon.png" width={40} height={40} alt="" />
-      <span>Bazaar</span>
-      <small>единый каталог</small>
-    </div>
-    {[
-      ["API", "Bazaar API"],
-      ["M", "M-Market"],
-      ["B", "Bakai Store"],
-      ["O!", "O! Market"],
-      ["@", "Email Marketing"],
-    ].map(([mark, label], index) => (
-      <div
-        key={label}
-        className={`${styles.integrationNode} ${
-          [styles.node1, styles.node2, styles.node3, styles.node4, styles.node5][index]
-        }`}
-      >
-        <b>{mark}</b>
-        <span>{label}</span>
-        <small>синхронизировано</small>
+  <div
+    className={styles.integrationConsole}
+    aria-label="Каналы продаж, синхронизированные с Bazaar"
+  >
+    <div className={styles.integrationConsoleHeader}>
+      <div className={styles.integrationIdentity}>
+        <Image src="/brand/icon.png" width={42} height={42} alt="" />
+        <p>
+          <strong>Единый каталог Bazaar</strong>
+          <span>Один источник данных для всех каналов</span>
+        </p>
       </div>
-    ))}
+      <span className={styles.liveStatus}>
+        <i aria-hidden="true" />
+        Синхронизация включена
+      </span>
+    </div>
+    <div className={styles.integrationPipeline} aria-hidden="true">
+      <span>Товары</span>
+      <b>→</b>
+      <span>Цены</span>
+      <b>→</b>
+      <span>Остатки</span>
+      <b>→</b>
+      <span>Заказы</span>
+    </div>
+    <div className={styles.integrationChannels}>
+      {integrationChannels.map((channel) => (
+        <div className={styles.integrationChannel} key={channel.label}>
+          <b>{channel.mark}</b>
+          <p>
+            <strong>{channel.label}</strong>
+            <span>{channel.data}</span>
+          </p>
+          <small>
+            <i aria-hidden="true" />
+            Актуально
+          </small>
+        </div>
+      ))}
+    </div>
   </div>
 );
 
@@ -223,17 +247,17 @@ export const MarketingLanding = () => (
         <div className={styles.heroVisual}>
           <div className={styles.heroDesktop}>
             <ProductWindow
-              src="/marketing/captures/pos-desktop.webp"
+              src="/marketing/captures/pos-desktop-wide.webp"
               alt="Настоящий интерфейс настольной кассы Bazaar с каталогом и текущим чеком"
               priority
             />
           </div>
           <div className={styles.heroProducts} aria-hidden="true">
             <Image
-              src="/marketing/captures/products.webp"
+              src="/marketing/captures/products-wide.webp"
               alt=""
-              width={1440}
-              height={900}
+              width={1920}
+              height={1080}
               sizes="360px"
             />
           </div>
@@ -318,7 +342,10 @@ export const MarketingLanding = () => (
         "Отложенные чеки, возвраты и журнал",
       ]}
       visual={
-        <ProductWindow src="/marketing/captures/pos-desktop.webp" alt="Настольная касса Bazaar" />
+        <ProductWindow
+          src="/marketing/captures/pos-desktop-wide.webp"
+          alt="Настольная касса Bazaar"
+        />
       }
       dark
     />
@@ -336,7 +363,7 @@ export const MarketingLanding = () => (
       ]}
       visual={
         <ProductWindow
-          src="/marketing/captures/movements.webp"
+          src="/marketing/captures/movements-wide.webp"
           alt="История движения товаров в Bazaar"
         />
       }
@@ -362,7 +389,7 @@ export const MarketingLanding = () => (
         <IntegrationFlow />
         <div className={styles.commerceScreenshot} data-reveal>
           <ProductWindow
-            src="/marketing/captures/integrations.webp"
+            src="/marketing/captures/integrations-wide.webp"
             alt="Центр интеграций Bazaar"
           />
         </div>
@@ -382,7 +409,7 @@ export const MarketingLanding = () => (
       ]}
       visual={
         <ProductWindow
-          src="/marketing/captures/dashboard.webp"
+          src="/marketing/captures/dashboard-wide.webp"
           alt="Бизнес-панель Bazaar с продажами и маржой"
         />
       }
@@ -408,10 +435,10 @@ export const MarketingLanding = () => (
       <div className={styles.deviceStage} data-reveal>
         <div className={styles.tabletFrame}>
           <Image
-            src="/marketing/captures/dashboard.webp"
+            src="/marketing/captures/dashboard-wide.webp"
             alt="Bazaar на планшете"
-            width={1440}
-            height={900}
+            width={1920}
+            height={1080}
             sizes="700px"
           />
         </div>

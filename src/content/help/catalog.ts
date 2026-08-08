@@ -13,12 +13,12 @@ import type {
 } from "./types";
 
 const captures = {
-  products: "/marketing/captures/products.webp",
-  movements: "/marketing/captures/movements.webp",
-  posDesktop: "/marketing/captures/pos-desktop.webp",
+  products: "/marketing/captures/products-wide.webp",
+  movements: "/marketing/captures/movements-wide.webp",
+  posDesktop: "/marketing/captures/pos-desktop-wide.webp",
   posMobile: "/marketing/captures/pos-mobile.webp",
-  dashboard: "/marketing/captures/dashboard.webp",
-  integrations: "/marketing/captures/integrations.webp",
+  dashboard: "/marketing/captures/dashboard-wide.webp",
+  integrations: "/marketing/captures/integrations-wide.webp",
 } as const;
 
 const annotation = (

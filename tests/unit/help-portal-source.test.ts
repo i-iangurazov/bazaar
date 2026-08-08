@@ -14,7 +14,7 @@ describe("Bazaar Guide isolation and visual contract", () => {
     expect(layout).not.toContain("AppShell");
     expect(page).toContain("HelpHome");
     expect(home).not.toContain("Что вы хотите сделать?");
-    expect(home).toContain("/marketing/captures/pos-desktop.webp");
+    expect(home).toContain("/marketing/captures/pos-desktop-wide.webp");
   });
 
   it("keeps visual annotations translatable and separate from image pixels", async () => {
@@ -24,7 +24,19 @@ describe("Bazaar Guide isolation and visual contract", () => {
     expect(annotated).toContain("localize(item.label, locale)");
     expect(annotated).toContain('from "next/image"');
     expect(annotated).toContain("showModal");
+    expect(annotated).not.toContain("annotationSpotlight");
+    expect(annotated).toContain('viewBox="0 0 20 20"');
     expect(catalog).toContain("annotations");
+  });
+
+  it("uses the Bazaar product mark with an explicit Guide wordmark", async () => {
+    const header = await read("src/components/help/HelpHeader.tsx");
+    const styles = await read("src/components/help/help.module.css");
+
+    expect(header).toContain('src="/brand/icon.png"');
+    expect(header).toContain("<strong>BAZAAR</strong>");
+    expect(header).toContain("<em>Guide</em>");
+    expect(styles).toContain("aspect-ratio: 16 / 9");
   });
 
   it("does not import application data services or Prisma into help UI/content", async () => {

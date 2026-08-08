@@ -57,6 +57,7 @@ describe("PWA polish source", () => {
     expect(offlineBannerSource).toContain("initializeNativeNetwork");
     expect(offlineBannerSource).toContain("getConnectivitySnapshot");
     expect(networkSource).toContain("navigator.onLine");
+    expect(networkSource).toContain("getConnectivityServerSnapshot = () => serverSnapshot");
     expect(networkSource).toContain('Network.addListener("networkStatusChange"');
     expect(offlineBannerSource).toContain("online");
     expect(offlineBannerSource).toContain("offline");

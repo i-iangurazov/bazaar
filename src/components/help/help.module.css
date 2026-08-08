@@ -59,40 +59,33 @@
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 11px;
   color: var(--help-text);
   text-decoration: none;
 }
 
-.brandMark {
-  display: grid;
-  width: 36px;
-  height: 36px;
-  place-items: center;
-  border-radius: 11px;
-  color: white;
-  background: linear-gradient(145deg, #2563eb, #0ea5e9);
+.brand img {
+  border-radius: 8px;
   box-shadow: 0 8px 24px rgba(37, 99, 235, 0.25);
-  font-size: 19px;
-  font-weight: 850;
-}
-
-.brand > span:last-child {
-  display: flex;
-  align-items: baseline;
-  gap: 5px;
 }
 
 .brand strong {
   font-size: 17px;
-  letter-spacing: -0.02em;
+  font-weight: 750;
+  letter-spacing: 0.14em;
 }
 
 .brand em {
+  display: inline-flex;
+  min-height: 26px;
+  padding: 0 10px;
+  align-items: center;
+  border-left: 1px solid var(--help-line);
   color: var(--help-blue);
-  font-size: 14px;
+  font-size: 13px;
   font-style: normal;
   font-weight: 750;
+  letter-spacing: -0.01em;
 }
 
 .headerNav {
@@ -369,7 +362,7 @@
 }
 .heroImageFrame {
   width: 94%;
-  aspect-ratio: 1.44;
+  aspect-ratio: 16 / 9;
   right: -9%;
   top: 18px;
   border-radius: 20px;
@@ -387,6 +380,7 @@
 .heroImageFrame img,
 .heroMiniFrame img {
   object-fit: cover;
+  object-position: top left;
 }
 .heroCallout,
 .heroCalloutAlt {
@@ -1111,7 +1105,7 @@
 .annotatedCanvas {
   position: relative;
   width: 100%;
-  aspect-ratio: 1.6;
+  aspect-ratio: 16 / 9;
   overflow: hidden;
 }
 .annotatedPortrait {
@@ -1121,6 +1115,7 @@
 }
 .annotatedImage {
   object-fit: cover;
+  object-position: top left;
 }
 .annotationMarker {
   position: absolute;
@@ -1137,15 +1132,6 @@
   font-size: 11px;
   font-weight: 900;
   transform: translate(-50%, -50%);
-}
-.annotationSpotlight {
-  position: absolute;
-  z-index: 2;
-  border: 2px solid #60a5fa;
-  border-radius: 8px;
-  background: rgba(37, 99, 235, 0.08);
-  box-shadow: 0 0 0 999px rgba(2, 8, 23, 0.09);
-  pointer-events: none;
 }
 .zoomHint {
   position: absolute;
@@ -1203,18 +1189,24 @@
 .zoomClose {
   position: absolute;
   z-index: 10;
-  display: grid;
+  display: flex;
   width: 34px;
   height: 34px;
+  padding: 0;
   right: 10px;
   top: 8px;
-  place-items: center;
+  align-items: center;
+  justify-content: center;
   border: 1px solid #334155;
   border-radius: 50%;
   color: white;
   background: #111827;
-  font-size: 24px;
   cursor: pointer;
+}
+.zoomClose svg {
+  display: block;
+  width: 18px;
+  height: 18px;
 }
 .annotatedFullscreen {
   max-height: calc(96vh - 110px);
@@ -1436,9 +1428,6 @@
     padding: 0 16px;
     gap: 10px;
   }
-  .brand > span:last-child em {
-    display: none;
-  }
   .signInLink {
     display: none;
   }
@@ -1551,10 +1540,9 @@
 }
 
 @media (max-width: 520px) {
-  .brandMark {
+  .brand img {
     width: 32px;
     height: 32px;
-    border-radius: 9px;
   }
   .brand strong {
     font-size: 15px;

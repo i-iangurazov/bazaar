@@ -12,6 +12,10 @@ let snapshot: BazaarConnectivity = {
   state: typeof navigator !== "undefined" && navigator.onLine === false ? "offline" : "online",
   connectionType: "unknown",
 };
+const serverSnapshot: BazaarConnectivity = {
+  state: "online",
+  connectionType: "unknown",
+};
 const listeners = new Set<() => void>();
 let nativeListener: PluginListenerHandle | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -42,10 +46,7 @@ const applyConnection = (connected: boolean, connectionType: ConnectionType) => 
 };
 
 export const getConnectivitySnapshot = () => snapshot;
-export const getConnectivityServerSnapshot = (): BazaarConnectivity => ({
-  state: "online",
-  connectionType: "unknown",
-});
+export const getConnectivityServerSnapshot = () => serverSnapshot;
 export const subscribeConnectivity = (listener: () => void) => {
   listeners.add(listener);
   return () => listeners.delete(listener);

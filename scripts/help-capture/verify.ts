@@ -52,6 +52,12 @@ for (const mediaPath of mediaPaths) {
     const metadata = await sharp(filePath).metadata();
     if (!metadata.width || !metadata.height || metadata.width < 700)
       failures.push(`${mediaPath}: invalid dimensions`);
+    if (
+      !mediaPath.includes("pos-mobile") &&
+      (metadata.width !== 1920 || metadata.height !== 1080)
+    ) {
+      failures.push(`${mediaPath}: desktop capture must be 1920x1080`);
+    }
   } catch {
     failures.push(`${mediaPath}: missing or unreadable`);
   }

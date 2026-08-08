@@ -24,7 +24,7 @@ export const metadata: Metadata = {
     type: "website",
     images: [
       {
-        url: "/marketing/captures/dashboard.webp",
+        url: "/marketing/captures/dashboard-wide.webp",
         width: 1440,
         height: 900,
         alt: "Рабочая панель Bazaar Retail OS",
@@ -35,7 +35,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Bazaar — Retail OS для современного магазина",
     description: "Касса, запасы, товары, клиенты, commerce и аналитика в одной системе.",
-    images: ["/marketing/captures/dashboard.webp"],
+    images: ["/marketing/captures/dashboard-wide.webp"],
   },
   robots: {
     index: true,

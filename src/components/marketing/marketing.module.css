@@ -351,7 +351,7 @@
 }
 
 .productWindowViewport {
-  aspect-ratio: 1.48;
+  aspect-ratio: 16 / 9;
   overflow: hidden;
   background: #eef2f7;
 }
@@ -690,6 +690,7 @@
 
 .featureImage {
   align-self: stretch;
+  aspect-ratio: 16 / 9;
   overflow: hidden;
   border: 1px solid var(--line);
   border-right: 0;
@@ -700,7 +701,7 @@
 }
 
 .featureImage > img {
-  min-height: calc(100% - 36px);
+  height: calc(100% - 36px);
   object-fit: cover;
   object-position: left top;
 }
@@ -819,119 +820,153 @@
   gap: 48px;
 }
 
-.integrationFlow {
-  position: relative;
-  height: 520px;
+.integrationConsole {
+  overflow: hidden;
+  border: 1px solid rgba(30, 90, 232, 0.13);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 32px 84px rgba(31, 51, 84, 0.12);
 }
 
-.flowLines {
-  position: absolute;
-  inset: 40px 20px;
-  border-radius: 50%;
-  background:
-    linear-gradient(
-      35deg,
-      transparent 48%,
-      rgba(30, 90, 232, 0.18) 49%,
-      rgba(30, 90, 232, 0.18) 50%,
-      transparent 51%
-    ),
-    linear-gradient(
-      -35deg,
-      transparent 48%,
-      rgba(30, 90, 232, 0.18) 49%,
-      rgba(30, 90, 232, 0.18) 50%,
-      transparent 51%
-    );
+.integrationConsoleHeader {
+  display: flex;
+  min-height: 98px;
+  padding: 22px 24px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  border-bottom: 1px solid var(--line);
 }
 
-.integrationNode {
-  position: absolute;
+.integrationIdentity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 13px;
+}
+
+.integrationIdentity img {
+  flex: 0 0 auto;
+  border-radius: 11px;
+  box-shadow: 0 10px 30px rgba(30, 90, 232, 0.22);
+}
+
+.integrationIdentity p,
+.integrationChannel p {
   display: grid;
-  width: 150px;
-  min-height: 108px;
-  place-content: center;
-  border: 1px solid rgba(30, 90, 232, 0.14);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.94);
-  padding: 16px;
-  box-shadow: 0 20px 50px rgba(31, 51, 84, 0.11);
-  text-align: center;
+  min-width: 0;
+  margin: 0;
 }
 
-.integrationNode::after {
-  position: absolute;
-  top: -2px;
-  right: -2px;
-  width: 10px;
-  height: 10px;
-  border: 2px solid #f2f5fa;
-  border-radius: 50%;
-  background: #1eb86f;
-  content: "";
-}
-
-.integrationNode b {
-  display: inline-grid;
-  width: 34px;
-  height: 34px;
-  margin: 0 auto 9px;
-  place-content: center;
-  border-radius: 10px;
-  background: #e8efff;
-  color: var(--blue);
-  font-size: 12px;
-}
-
-.integrationNode span {
+.integrationIdentity strong {
   color: var(--ink);
-  font-size: 13px;
+  font-size: 15px;
+  font-weight: 690;
+  letter-spacing: -0.02em;
+}
+
+.integrationIdentity span {
+  margin-top: 4px;
+  color: var(--ink-soft);
+  font-size: 10px;
+}
+
+.liveStatus,
+.integrationChannel small {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  color: #168353;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.liveStatus {
+  border: 1px solid rgba(22, 163, 74, 0.16);
+  border-radius: 999px;
+  background: #effcf5;
+  padding: 8px 10px;
+}
+
+.liveStatus i,
+.integrationChannel small i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #20b971;
+  box-shadow: 0 0 0 4px rgba(32, 185, 113, 0.1);
+}
+
+.integrationPipeline {
+  display: grid;
+  padding: 16px 24px;
+  grid-template-columns: repeat(7, auto);
+  align-items: center;
+  justify-content: start;
+  gap: 8px;
+  border-bottom: 1px solid var(--line);
+  background: #f7f9fd;
+}
+
+.integrationPipeline span {
+  border: 1px solid #dbe4f1;
+  border-radius: 8px;
+  background: #fff;
+  padding: 6px 8px;
+  color: #516078;
+  font-size: 9px;
   font-weight: 650;
 }
-.integrationNode small {
-  margin-top: 4px;
-  color: #8290a5;
-  font-size: 9px;
+
+.integrationPipeline b {
+  color: #9bacbf;
+  font-size: 10px;
+  font-weight: 600;
 }
 
-.integrationCore {
-  top: 50%;
-  left: 50%;
-  z-index: 3;
-  width: 170px;
-  min-height: 138px;
-  border-color: rgba(30, 90, 232, 0.35);
-  transform: translate(-50%, -50%);
-  box-shadow: 0 30px 70px rgba(30, 90, 232, 0.2);
+.integrationChannels {
+  display: grid;
 }
 
-.integrationCore::after {
-  background: var(--cyan);
+.integrationChannel {
+  display: grid;
+  min-height: 71px;
+  padding: 14px 22px;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--line);
 }
-.integrationCore img {
-  margin: 0 auto 10px;
+
+.integrationChannel:last-child {
+  border-bottom: 0;
+}
+
+.integrationChannel > b {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
   border-radius: 10px;
+  color: var(--blue);
+  background: #eaf0ff;
+  font-size: 11px;
 }
-.node1 {
-  top: 4px;
-  left: 18px;
+
+.integrationChannel p strong {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 680;
 }
-.node2 {
-  top: 12px;
-  right: 7px;
-}
-.node3 {
-  bottom: 12px;
-  left: 0;
-}
-.node4 {
-  right: 0;
-  bottom: 8px;
-}
-.node5 {
-  top: 50%;
-  right: -22px;
-  transform: translateY(-50%);
+
+.integrationChannel p span {
+  margin-top: 3px;
+  overflow: hidden;
+  color: #7a879a;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .commerceScreenshot {
@@ -1529,7 +1564,7 @@
   .storyVisual {
     margin-top: 30px;
   }
-  .integrationFlow {
+  .integrationConsole {
     max-width: 620px;
     margin: 0 auto;
   }
@@ -1619,7 +1654,7 @@
     height: 27px;
   }
   .heroDesktop .productWindowViewport {
-    aspect-ratio: 1.42;
+    aspect-ratio: 16 / 9;
   }
   .heroProducts {
     display: none;
@@ -1737,11 +1772,11 @@
     font-size: 14px;
   }
   .featureImage {
-    min-height: 280px;
+    min-height: 0;
     border-radius: 13px 0 0 0;
   }
   .featureImage > img {
-    min-height: 244px;
+    min-height: 0;
     object-position: 12% top;
   }
   .storyGrid {
@@ -1764,32 +1799,34 @@
     height: 28px;
   }
   .productWindowViewport {
-    aspect-ratio: 1.15;
+    aspect-ratio: 16 / 9;
   }
   .productWindowViewport img {
     height: 100%;
     object-fit: cover;
-    object-position: 16% top;
+    object-position: left top;
   }
   .commerceGrid {
     gap: 24px;
   }
-  .integrationFlow {
-    height: 440px;
-    transform: scale(0.9);
-    transform-origin: center;
+  .integrationConsole {
+    border-radius: 18px;
   }
-  .integrationNode {
-    width: 128px;
-    min-height: 96px;
-    padding: 12px;
+  .integrationConsoleHeader {
+    padding: 18px;
+    align-items: flex-start;
   }
-  .integrationCore {
-    width: 148px;
-    min-height: 126px;
+  .liveStatus {
+    padding: 7px;
+    font-size: 0;
   }
-  .node5 {
-    right: -8px;
+  .integrationPipeline {
+    padding: 13px 16px;
+    overflow-x: auto;
+  }
+  .integrationChannel {
+    min-height: 68px;
+    padding: 13px 16px;
   }
   .commerceScreenshot .productWindow {
     width: 112%;
@@ -1879,9 +1916,15 @@
     right: 84px;
     width: 196px;
   }
-  .integrationFlow {
-    margin: -18px -24px;
-    transform: scale(0.78);
+  .integrationConsole {
+    margin: 0 -4px;
+  }
+  .integrationIdentity span,
+  .integrationChannel p span {
+    font-size: 8px;
+  }
+  .integrationChannel small {
+    font-size: 0;
   }
   .footerLinks {
     grid-template-columns: 1fr 1fr;
