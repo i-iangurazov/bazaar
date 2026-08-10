@@ -1,5 +1,10 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { CashDrawerMovementType, PosPaymentMethod, Prisma, StockMovementType } from "@prisma/client";
+import {
+  CashDrawerMovementType,
+  PosPaymentMethod,
+  Prisma,
+  StockMovementType,
+} from "@prisma/client";
 
 import { buildPosPaymentSubmitPayload } from "@/lib/posSaleMath";
 import { fetchAllReceiptPages } from "@/components/pos/receipt-registry-export";
@@ -2284,22 +2289,24 @@ describeDb("pos", () => {
       }),
     ).rejects.toMatchObject({ code: "CONFLICT", message: "insufficientStock" });
 
-    const [rejectedSale, rejectedSnapshot, rejectedMovements, rejectedPayments] = await Promise.all([
-      prisma.customerOrder.findUniqueOrThrow({ where: { id: sale.id } }),
-      prisma.inventorySnapshot.findUnique({
-        where: {
-          storeId_productId_variantKey: {
-            storeId: store.id,
-            productId: product.id,
-            variantKey: "BASE",
+    const [rejectedSale, rejectedSnapshot, rejectedMovements, rejectedPayments] = await Promise.all(
+      [
+        prisma.customerOrder.findUniqueOrThrow({ where: { id: sale.id } }),
+        prisma.inventorySnapshot.findUnique({
+          where: {
+            storeId_productId_variantKey: {
+              storeId: store.id,
+              productId: product.id,
+              variantKey: "BASE",
+            },
           },
-        },
-      }),
-      prisma.stockMovement.findMany({
-        where: { type: StockMovementType.SALE, referenceId: sale.id },
-      }),
-      prisma.salePayment.findMany({ where: { customerOrderId: sale.id } }),
-    ]);
+        }),
+        prisma.stockMovement.findMany({
+          where: { type: StockMovementType.SALE, referenceId: sale.id },
+        }),
+        prisma.salePayment.findMany({ where: { customerOrderId: sale.id } }),
+      ],
+    );
     expect(rejectedSale.status).toBe("DRAFT");
     expect(rejectedSnapshot).toBeNull();
     expect(rejectedMovements).toHaveLength(0);
@@ -3600,7 +3607,11 @@ describeDb("pos", () => {
     await cashierCaller.pos.sales.cancelDraft({ saleId: canceledSale.id });
 
     const activeDraft = await cashierCaller.pos.sales.createDraft({ registerId: register.id });
-    await cashierCaller.pos.sales.addLine({ saleId: activeDraft.id, productId: product.id, qty: 1 });
+    await cashierCaller.pos.sales.addLine({
+      saleId: activeDraft.id,
+      productId: product.id,
+      qty: 1,
+    });
 
     await prisma.salePayment.createMany({
       data: [heldSale.id, canceledSale.id, activeDraft.id].map((customerOrderId, index) => ({
@@ -3648,10 +3659,10 @@ describeDb("pos", () => {
     expect(history.items[0]?.paymentsByMethod.CASH.refundsKgs).toBe(20);
   });
 
-  it("blocks managers from closing shifts outside assigned stores", async () => {
-    const { org, store, managerUser, adminUser } = await seedBase({ plan: "BUSINESS" });
+  it("blocks cashiers from closing shifts outside assigned stores", async () => {
+    const { org, store, cashierUser, adminUser } = await seedBase({ plan: "BUSINESS" });
     await prisma.userStoreAccess.createMany({
-      data: [{ organizationId: org.id, userId: managerUser.id, storeId: store.id }],
+      data: [{ organizationId: org.id, userId: cashierUser.id, storeId: store.id }],
       skipDuplicates: true,
     });
     const otherStore = await prisma.store.create({
@@ -3674,16 +3685,16 @@ describeDb("pos", () => {
         openingCashKgs: 0,
       },
     });
-    const managerCaller = createTestCaller({
-      id: managerUser.id,
-      email: managerUser.email,
-      role: managerUser.role,
+    const cashierCaller = createTestCaller({
+      id: cashierUser.id,
+      email: cashierUser.email,
+      role: cashierUser.role,
       organizationId: org.id,
       isOrgOwner: false,
     });
 
     await expect(
-      managerCaller.pos.shifts.close({
+      cashierCaller.pos.shifts.close({
         shiftId: otherShift.id,
         closingCashCountedKgs: 0,
         idempotencyKey: "pos-shift-close-other-store",
@@ -4434,10 +4445,7 @@ describeDb("pos", () => {
         movementCount: movements.length,
         movementQty: movements.reduce((sum, movement) => sum + movement.qtyDelta, 0),
         paymentCount: payments.length,
-        paymentTotalKgs: payments.reduce(
-          (sum, payment) => sum + Number(payment.amountKgs),
-          0,
-        ),
+        paymentTotalKgs: payments.reduce((sum, payment) => sum + Number(payment.amountKgs), 0),
         paymentMethods: payments.map((payment) => payment.method).sort(),
       };
     };
@@ -4495,12 +4503,13 @@ describeDb("pos", () => {
       qty: 4,
     });
     await cashierCaller.pos.sales.holdDraft({ saleId: heldSale.id });
-    const [heldBeforeResume, heldMovementCount, heldPaymentCount, stockWhileHeld] = await Promise.all([
-      prisma.customerOrder.findUniqueOrThrow({ where: { id: heldSale.id } }),
-      prisma.stockMovement.count({ where: { referenceId: heldSale.id, type: "SALE" } }),
-      prisma.salePayment.count({ where: { customerOrderId: heldSale.id } }),
-      stockOnHand(),
-    ]);
+    const [heldBeforeResume, heldMovementCount, heldPaymentCount, stockWhileHeld] =
+      await Promise.all([
+        prisma.customerOrder.findUniqueOrThrow({ where: { id: heldSale.id } }),
+        prisma.stockMovement.count({ where: { referenceId: heldSale.id, type: "SALE" } }),
+        prisma.salePayment.count({ where: { customerOrderId: heldSale.id } }),
+        stockOnHand(),
+      ]);
     await cashierCaller.pos.sales.resumeHeldDraft({
       saleId: heldSale.id,
       registerId: register.id,

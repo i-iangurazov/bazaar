@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { CashDrawerMovementType } from "@prisma/client";
 import { useLocale, useTranslations } from "next-intl";
 
@@ -29,6 +29,7 @@ import {
   formatKgsMoney,
 } from "@/lib/currencyDisplay";
 import { formatDateTime } from "@/lib/i18nFormat";
+import { parseMoneyInput } from "@/lib/moneyInput";
 import { buildHeldReceiptResumeHref } from "@/lib/mobilePosState";
 import {
   POS_CASH_MOVEMENT_ANCHOR,
@@ -52,6 +53,7 @@ const PosShiftsPage = () => {
   const tErrors = useTranslations("errors");
   const locale = useLocale();
   const { toast } = useToast();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const requestedCashType = searchParams.get(POS_CASH_MOVEMENT_QUERY_PARAM);
   const cashMovementAnchorRequested = useRef(false);
@@ -138,6 +140,26 @@ const PosShiftsPage = () => {
     },
   });
 
+  const transferDraftMutation = trpc.pos.sales.transferDraft.useMutation({
+    onSuccess: async () => {
+      await currentShiftQuery.refetch();
+      router.push(`/pos/sell?registerId=${encodeURIComponent(registerId)}`);
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+
+  const cancelReturnMutation = trpc.pos.returns.cancel.useMutation({
+    onSuccess: async () => {
+      toast({ variant: "success", description: t("shifts.returnDraftCanceled") });
+      await currentShiftQuery.refetch();
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+
   const cashMovementMutation = trpc.pos.cash.record.useMutation({
     onSuccess: async () => {
       setCashAmount("");
@@ -179,12 +201,18 @@ const PosShiftsPage = () => {
   const report = reportQuery.data;
   const heldReceipts = currentShift?.heldReceipts ?? [];
   const heldReceiptCount = currentShift?.heldReceiptCount ?? heldReceipts.length;
+  const activeReceipts = currentShift?.activeReceipts ?? [];
+  const activeReceiptCount = currentShift?.activeReceiptCount ?? activeReceipts.length;
+  const returnDrafts = currentShift?.returnDrafts ?? [];
+  const returnDraftCount = currentShift?.returnDraftCount ?? returnDrafts.length;
+  const unresolvedDraftCount = heldReceiptCount + activeReceiptCount + returnDraftCount;
   const expectedCash = report?.summary.expectedCashKgs ?? 0;
   const overWithdrawalKgs =
     report?.summary.overWithdrawalKgs ?? Math.round(Math.max(0, -expectedCash) * 100) / 100;
   const countableCashKgs =
     report?.summary.countableCashKgs ?? Math.round(Math.max(0, expectedCash) * 100) / 100;
-  const countedCashNumber = Number(countedCash);
+  const countedCashNumber = parseMoneyInput(countedCash) ?? Number.NaN;
+  const countedCashIsNegative = countedCash.includes("-");
   const countedCashKgs = displayMoneyToKgs(countedCashNumber, currentShiftCurrencySource);
   const countedCashValid =
     Number.isFinite(countedCashNumber) && countedCashNumber >= 0 && Number.isFinite(countedCashKgs);
@@ -201,8 +229,11 @@ const PosShiftsPage = () => {
           : "balanced";
   const closeNoteRequired = cashDifference !== null && Math.abs(cashDifference) > 0.009;
   const closeNoteValid = !closeNoteRequired || closeNote.trim().length > 0;
-  const closeBlockingMessage =
-    countedCashNumber < 0 ? t("shifts.countedCashNegative") : null;
+  const closeBlockingMessage = countedCashIsNegative
+    ? t("shifts.countedCashNegative")
+    : countedCash.length > 0 && !Number.isFinite(countedCashNumber)
+      ? t("shifts.invalidAmount")
+      : null;
   const closeWarningMessage =
     report && overWithdrawalKgs > 0.009
       ? t("shifts.overWithdrawalWarning", {
@@ -247,16 +278,25 @@ const PosShiftsPage = () => {
     if (!currentShift) {
       return;
     }
-    if (heldReceiptCount > 0) {
-      toast({ variant: "error", description: t("shifts.heldReceiptsBlockClose") });
+    if (unresolvedDraftCount > 0) {
+      toast({ variant: "error", description: t("shifts.unresolvedDraftsBlockClose") });
       return;
     }
-    const amount = Number(countedCash);
-    const amountKgs = displayMoneyToKgs(amount, currentShiftCurrencySource);
-    if (!Number.isFinite(amount) || amount < 0 || !Number.isFinite(amountKgs)) {
+    const amount = parseMoneyInput(countedCash);
+    if (amount === null) {
       toast({
         variant: "error",
-        description: amount < 0 ? t("shifts.countedCashNegative") : t("shifts.invalidAmount"),
+        description: countedCashIsNegative
+          ? t("shifts.countedCashNegative")
+          : t("shifts.invalidAmount"),
+      });
+      return;
+    }
+    const amountKgs = displayMoneyToKgs(amount, currentShiftCurrencySource);
+    if (!Number.isFinite(amountKgs)) {
+      toast({
+        variant: "error",
+        description: t("shifts.invalidAmount"),
       });
       return;
     }
@@ -285,7 +325,11 @@ const PosShiftsPage = () => {
     if (!currentShift) {
       return;
     }
-    const amount = Number(cashAmount);
+    const amount = parseMoneyInput(cashAmount);
+    if (amount === null) {
+      toast({ variant: "error", description: t("shifts.invalidAmount") });
+      return;
+    }
     const amountKgs = displayMoneyToKgs(amount, currentShiftCurrencySource);
     const selectedCashOutReason =
       cashOutReasonOptions.find((option) => option.value === cashOutReason)?.label ??
@@ -294,12 +338,7 @@ const PosShiftsPage = () => {
       cashType === CashDrawerMovementType.PAY_OUT
         ? [selectedCashOutReason, cashComment.trim()].filter(Boolean).join(": ")
         : cashReason.trim();
-    if (
-      !Number.isFinite(amount) ||
-      amount <= 0 ||
-      !Number.isFinite(amountKgs) ||
-      reason.length < 2
-    ) {
+    if (amount <= 0 || !Number.isFinite(amountKgs) || reason.length < 2) {
       toast({ variant: "error", description: t("shifts.cashMovementInvalid") });
       return;
     }
@@ -357,10 +396,10 @@ const PosShiftsPage = () => {
             </SelectTrigger>
             <SelectContent>
               {(registersQuery.data ?? []).map((item) => (
-              <SelectItem key={item.id} value={item.id}>
-                {item.store.name} · {item.name} ({item.code})
-                {!item.isActive ? ` · ${t("registers.statusInactive")}` : ""}
-              </SelectItem>
+                <SelectItem key={item.id} value={item.id}>
+                  {item.store.name} · {item.name} ({item.code})
+                  {!item.isActive ? ` · ${t("registers.statusInactive")}` : ""}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -541,10 +580,7 @@ const PosShiftsPage = () => {
                     </p>
                     <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                       {paymentBreakdown.map((entry) => (
-                        <div
-                          key={entry.method}
-                          className="bazaar-admin-info-tile px-3 py-2"
-                        >
+                        <div key={entry.method} className="bazaar-admin-info-tile px-3 py-2">
                           <div className="flex items-center justify-between gap-2">
                             <p className="text-sm font-medium text-foreground">{entry.label}</p>
                             <p className="text-sm font-semibold text-foreground">
@@ -566,7 +602,7 @@ const PosShiftsPage = () => {
 
               <div
                 id={POS_CASH_MOVEMENT_ANCHOR}
-                className="bazaar-admin-toolbar scroll-mt-24 grid gap-3 md:grid-cols-[180px_160px_1fr_auto]"
+                className="bazaar-admin-toolbar grid scroll-mt-24 gap-3 md:grid-cols-[180px_160px_1fr_auto]"
               >
                 <Select
                   value={cashType}
@@ -731,6 +767,106 @@ const PosShiftsPage = () => {
                   </div>
                 ) : null}
 
+                {activeReceiptCount > 0 ? (
+                  <div className="bazaar-admin-status-tile-warning">
+                    <p className="text-sm font-semibold text-foreground">
+                      {t("shifts.activeReceiptsBlockClose")}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {t("shifts.activeReceiptsBlockCloseCount", { count: activeReceiptCount })}
+                    </p>
+                    {activeReceipts.length ? (
+                      <div className="mt-3 space-y-2">
+                        {activeReceipts.map((receipt) => (
+                          <div
+                            key={receipt.id}
+                            className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/70 bg-background/70 p-2"
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium text-foreground">
+                                {receipt.number}
+                              </p>
+                              <p className="truncate text-xs text-muted-foreground">
+                                {t("shifts.draftOwner", { name: receipt.createdByName })}
+                              </p>
+                            </div>
+                            {receipt.ownedByCurrentUser ? (
+                              <Button size="sm" variant="secondary" asChild>
+                                <Link
+                                  href={`/pos/sell?registerId=${encodeURIComponent(registerId)}`}
+                                >
+                                  {t("shifts.resolveReceipt")}
+                                </Link>
+                              </Button>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                disabled={transferDraftMutation.isLoading}
+                                onClick={() =>
+                                  transferDraftMutation.mutate({
+                                    saleId: receipt.id,
+                                    reason: t("shifts.shiftCloseTransferReason"),
+                                    idempotencyKey: createIdempotencyKey(),
+                                  })
+                                }
+                              >
+                                {t("shifts.takeReceipt")}
+                              </Button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {returnDraftCount > 0 ? (
+                  <div className="bazaar-admin-status-tile-warning">
+                    <p className="text-sm font-semibold text-foreground">
+                      {t("shifts.returnDraftsBlockClose")}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {t("shifts.returnDraftsBlockCloseCount", { count: returnDraftCount })}
+                    </p>
+                    {returnDrafts.length ? (
+                      <div className="mt-3 space-y-2">
+                        {returnDrafts.map((saleReturn) => (
+                          <div
+                            key={saleReturn.id}
+                            className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/70 bg-background/70 p-2"
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium text-foreground">
+                                {saleReturn.number}
+                              </p>
+                              <p className="truncate text-xs text-muted-foreground">
+                                {t("shifts.draftOwner", { name: saleReturn.createdByName })}
+                              </p>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              disabled={!saleReturn.canCancel || cancelReturnMutation.isLoading}
+                              onClick={() => {
+                                if (!window.confirm(t("shifts.cancelReturnDraftConfirm"))) {
+                                  return;
+                                }
+                                cancelReturnMutation.mutate({
+                                  saleReturnId: saleReturn.id,
+                                  idempotencyKey: createIdempotencyKey(),
+                                });
+                              }}
+                            >
+                              {t("shifts.cancelReturnDraft")}
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
                 {closeBlockingMessage ? (
                   <div className="bazaar-admin-status-tile-warning">
                     <p className="text-sm font-semibold text-foreground">{closeBlockingMessage}</p>
@@ -765,7 +901,7 @@ const PosShiftsPage = () => {
                       Boolean(closeBlockingMessage) ||
                       !closeConfirmed ||
                       !closeNoteValid ||
-                      heldReceiptCount > 0
+                      unresolvedDraftCount > 0
                     }
                   >
                     {closeShiftMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
@@ -831,35 +967,19 @@ const PosShiftsPage = () => {
                   <div className="grid gap-x-5 gap-y-1 text-xs text-muted-foreground sm:grid-cols-2 sm:text-right">
                     <p>
                       {t("shifts.cashSales")}:{" "}
-                      {formatKgsMoney(
-                        shift.summary.cashSalesKgs,
-                        locale,
-                        historyCurrencySource,
-                      )}
+                      {formatKgsMoney(shift.summary.cashSalesKgs, locale, historyCurrencySource)}
                     </p>
                     <p>
                       {t("shifts.nonCashSales")}:{" "}
-                      {formatKgsMoney(
-                        shift.summary.nonCashSalesKgs,
-                        locale,
-                        historyCurrencySource,
-                      )}
+                      {formatKgsMoney(shift.summary.nonCashSalesKgs, locale, historyCurrencySource)}
                     </p>
                     <p>
                       {t("shifts.totalSales")}:{" "}
-                      {formatKgsMoney(
-                        shift.summary.totalSalesKgs,
-                        locale,
-                        historyCurrencySource,
-                      )}
+                      {formatKgsMoney(shift.summary.totalSalesKgs, locale, historyCurrencySource)}
                     </p>
                     <p>
                       {t("shifts.returnsTotal")}:{" "}
-                      {formatKgsMoney(
-                        shift.summary.totalRefundsKgs,
-                        locale,
-                        historyCurrencySource,
-                      )}
+                      {formatKgsMoney(shift.summary.totalRefundsKgs, locale, historyCurrencySource)}
                     </p>
                     <p>
                       {t("entry.openingCash")}:{" "}
@@ -883,7 +1003,11 @@ const PosShiftsPage = () => {
                       {t("shifts.countedCash")}:{" "}
                       {shift.closingCashCountedKgs === null
                         ? tCommon("notAvailable")
-                        : formatKgsMoney(shift.closingCashCountedKgs, locale, historyCurrencySource)}
+                        : formatKgsMoney(
+                            shift.closingCashCountedKgs,
+                            locale,
+                            historyCurrencySource,
+                          )}
                     </p>
                     <p
                       className={

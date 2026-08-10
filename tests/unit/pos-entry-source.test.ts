@@ -73,6 +73,24 @@ describe("pos entry navigation", () => {
     expect(ruMessages).toContain("Инкассация");
   });
 
+  it("lets assigned-store cashiers close shifts and exposes every recoverable blocker", async () => {
+    const pageSource = await readSource("src/app/(app)/pos/shifts/page.tsx");
+    const serviceSource = await readSource("src/server/services/pos.ts");
+    const routerSource = await readSource("src/server/trpc/routers/pos.ts");
+
+    expect(routerSource).toContain("close: cashierProcedure");
+    expect(routerSource).toContain("complete: cashierProcedure");
+    expect(routerSource).toContain("cancel: cashierProcedure");
+    expect(serviceSource).toContain("activeReceiptCount");
+    expect(serviceSource).toContain("returnDraftCount");
+    expect(serviceSource).toContain('route: "pos.returns.cancel"');
+    expect(serviceSource).toContain('action: "POS_RETURN_CANCEL"');
+    expect(pageSource).toContain("unresolvedDraftCount");
+    expect(pageSource).toContain("transferDraftMutation");
+    expect(pageSource).toContain("cancelReturnMutation");
+    expect(pageSource).toContain("parseMoneyInput(countedCash)");
+  });
+
   it("shows cash and non-cash payment totals in shift close and shift history UI", async () => {
     const source = await readSource("src/app/(app)/pos/shifts/page.tsx");
 

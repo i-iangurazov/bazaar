@@ -70,9 +70,22 @@ describeDb("POS idempotent event publication", () => {
         closingCashCountedKgs: 25,
         idempotencyKey: "p2-shift-close-replay-1",
       });
+      const alreadyClosed = await managerCaller.pos.shifts.close({
+        shiftId: firstOpen.id,
+        closingCashCountedKgs: 25,
+        idempotencyKey: "p2-shift-close-new-key-1",
+      });
+      await expect(
+        managerCaller.pos.shifts.close({
+          shiftId: firstOpen.id,
+          closingCashCountedKgs: 30,
+          idempotencyKey: "p2-shift-close-replay-1",
+        }),
+      ).rejects.toMatchObject({ code: "CONFLICT", message: "idempotencyKeyPayloadMismatch" });
 
       expect(replayedOpen).toEqual(firstOpen);
       expect(replayedClose).toEqual(firstClose);
+      expect(alreadyClosed).toEqual(firstClose);
       expect(events.filter((event) => event.type === "shift.opened")).toHaveLength(1);
       expect(events.filter((event) => event.type === "shift.closed")).toHaveLength(1);
 

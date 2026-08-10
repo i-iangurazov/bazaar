@@ -21,6 +21,7 @@ import {
   addPosSaleLine,
   addSaleReturnLine,
   cancelPosSaleDraft,
+  cancelSaleReturnDraft,
   closeRegisterShift,
   completePosSale,
   completeSaleReturn,
@@ -335,7 +336,7 @@ export const posRouter = router({
         }
       }),
 
-    close: managerProcedure
+    close: cashierProcedure
       .use(rateLimit({ windowMs: 10_000, max: 20, prefix: "pos-shifts-close" }))
       .input(
         z.object({
@@ -1106,7 +1107,30 @@ export const posRouter = router({
         }
       }),
 
-    complete: managerProcedure
+    cancel: cashierProcedure
+      .use(rateLimit({ windowMs: 10_000, max: 20, prefix: "pos-returns-cancel" }))
+      .input(
+        z.object({
+          saleReturnId: z.string().min(1),
+          idempotencyKey: z.string().min(8),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        try {
+          return await cancelSaleReturnDraft({
+            organizationId: ctx.user.organizationId,
+            saleReturnId: input.saleReturnId,
+            actorId: ctx.user.id,
+            user: ctx.user,
+            requestId: ctx.requestId,
+            idempotencyKey: input.idempotencyKey,
+          });
+        } catch (error) {
+          throw toTRPCError(error);
+        }
+      }),
+
+    complete: cashierProcedure
       .use(rateLimit({ windowMs: 10_000, max: 20, prefix: "pos-returns-complete" }))
       .input(
         z.object({
