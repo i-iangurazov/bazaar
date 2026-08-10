@@ -106,8 +106,7 @@ export const InventoryTransfersPage = ({
   const { data: session, status: sessionStatus } = useSession();
   const { toast } = useToast();
   const trpcUtils = trpc.useUtils();
-  const canManageStock =
-    session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
+  const canManageStock = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
   const isEditMode = Boolean(editDocumentKey);
   const loadedEditDocumentRef = useRef("");
 
@@ -177,7 +176,11 @@ export const InventoryTransfersPage = ({
   }, [fromStoreId, initialFromStoreId, initialToStoreId, stores, toStoreId]);
 
   useEffect(() => {
-    if (!editableDocument || !editDocumentKey || loadedEditDocumentRef.current === editDocumentKey) {
+    if (
+      !editableDocument ||
+      !editDocumentKey ||
+      loadedEditDocumentRef.current === editDocumentKey
+    ) {
       return;
     }
     loadedEditDocumentRef.current = editDocumentKey;
@@ -215,19 +218,22 @@ export const InventoryTransfersPage = ({
   const getDisplayName = (result: SearchResult) =>
     result.variant?.name ? `${result.product.name} • ${result.variant.name}` : result.product.name;
 
-  const getBaseUnitLabel = useCallback((result: SearchResult) => {
-    const unit = result.product.baseUnit;
-    if (!unit) {
-      return t("unit");
-    }
-    if (locale === "kg") {
-      return unit.labelKg || unit.code;
-    }
-    if (locale === "ru") {
-      return unit.labelRu || unit.code;
-    }
-    return unit.code || unit.labelRu || t("unit");
-  }, [locale, t]);
+  const getBaseUnitLabel = useCallback(
+    (result: SearchResult) => {
+      const unit = result.product.baseUnit;
+      if (!unit) {
+        return t("unit");
+      }
+      if (locale === "kg") {
+        return unit.labelKg || unit.code;
+      }
+      if (locale === "ru") {
+        return unit.labelRu || unit.code;
+      }
+      return unit.code || unit.labelRu || t("unit");
+    },
+    [locale, t],
+  );
 
   const setTransferInputRef = (
     key: string,
@@ -273,7 +279,9 @@ export const InventoryTransfersPage = ({
     if (nextStoreId === toStoreId) {
       setToStoreId(stores.find((store) => store.id !== nextStoreId)?.id ?? "");
     }
-    setLines([]);
+    if (!isEditMode) {
+      setLines([]);
+    }
     setSearch("");
   };
 
@@ -282,7 +290,9 @@ export const InventoryTransfersPage = ({
       return;
     }
     setToStoreId(nextStoreId);
-    setLines([]);
+    if (!isEditMode) {
+      setLines([]);
+    }
   };
 
   const addSearchResult = useCallback(
@@ -603,6 +613,7 @@ export const InventoryTransfersPage = ({
     if (isEditMode && editDocumentKey) {
       editMutation.mutate({
         documentKey: editDocumentKey,
+        sourceStoreId: fromStoreId,
         destinationStoreId: toStoreId,
         notes: note.trim() || undefined,
         reason: note.trim() || t("transferEditReason"),
@@ -814,10 +825,7 @@ export const InventoryTransfersPage = ({
                   const key = lineKey(result.product.id, result.snapshot.variantId);
                   const added = lines.some((line) => line.key === key);
                   return (
-                    <div
-                      key={key}
-                      className="bazaar-doc-search-row"
-                    >
+                    <div key={key} className="bazaar-doc-search-row">
                       <button
                         type="button"
                         className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left text-sm disabled:cursor-wait disabled:opacity-60"
@@ -900,9 +908,7 @@ export const InventoryTransfersPage = ({
                       className="bazaar-doc-line-row grid gap-3 lg:grid-cols-[minmax(0,1fr)_3.75rem_4rem_4rem_4.25rem_4.25rem_2rem] lg:items-center lg:gap-1.5"
                     >
                       <div className="flex min-w-0 items-center gap-2.5">
-                        <span className="bazaar-doc-line-index">
-                          {lineNumber}
-                        </span>
+                        <span className="bazaar-doc-line-index">{lineNumber}</span>
                         <span className="bazaar-doc-line-thumb">
                           {line.imageUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
@@ -1124,12 +1130,8 @@ export const InventoryTransfersPage = ({
               ) : (
                 <TransferIcon className="h-4 w-4" aria-hidden />
               )}
-              <span className="sm:hidden">
-                {saving ? tCommon("saving") : submitShortLabel}
-              </span>
-              <span className="hidden sm:inline">
-                {saving ? tCommon("saving") : submitLabel}
-              </span>
+              <span className="sm:hidden">{saving ? tCommon("saving") : submitShortLabel}</span>
+              <span className="hidden sm:inline">{saving ? tCommon("saving") : submitLabel}</span>
             </Button>
           </div>
         </div>

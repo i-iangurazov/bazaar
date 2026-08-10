@@ -13,10 +13,7 @@ import { withIdempotency } from "@/server/services/idempotency";
 import { eventBus } from "@/server/events/eventBus";
 import { getLogger } from "@/server/logging";
 import { toJson } from "@/server/services/json";
-import {
-  replaceProductCostContribution,
-  updateProductCost,
-} from "@/server/services/productCost";
+import { replaceProductCostContribution, updateProductCost } from "@/server/services/productCost";
 import { classifyDatabaseOperationFailure } from "@/server/services/databaseOperationFailure";
 import { runOperationRequest } from "@/server/services/operationRequests";
 import { applyStockLotAdjustment } from "@/server/services/stockLots";
@@ -1528,6 +1525,7 @@ export type EditStockMovementDocumentInput = {
   documentType: EditableStockMovementDocumentType;
   referenceType: string;
   referenceId: string;
+  sourceStoreId?: string | null;
   destinationStoreId?: string | null;
   lines: EditStockMovementDocumentLineInput[];
   reason?: string | null;
@@ -1642,9 +1640,7 @@ const aggregateStockDocumentLines = (
       variantKey: line.variantKey,
       quantity: Math.max(0, quantity),
       unitCostKgs:
-        total !== null && quantity > 0
-          ? roundStockMoney(total / quantity)
-          : line.latestUnitCostKgs,
+        total !== null && quantity > 0 ? roundStockMoney(total / quantity) : line.latestUnitCostKgs,
       lineTotalKgs: total,
     });
   });
@@ -1696,7 +1692,9 @@ const normalizeStockDocumentEditLines = (
     const unitCostKgs =
       line.unitCostKgs !== null && line.unitCostKgs !== undefined
         ? roundStockMoney(line.unitCostKgs)
-        : (unitCostMap.get(key) ?? unitCostMap.get(stockDocumentLineKey(line.productId, "BASE")) ?? 0);
+        : (unitCostMap.get(key) ??
+          unitCostMap.get(stockDocumentLineKey(line.productId, "BASE")) ??
+          0);
     if (!Number.isFinite(unitCostKgs) || unitCostKgs < 0) {
       throw new AppError("unitCostInvalid", "BAD_REQUEST", 400);
     }
@@ -1728,6 +1726,20 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
         key: input.idempotencyKey,
         route: "inventory.productMovement.editDocument",
         userId: input.actorId,
+        request: {
+          documentType: input.documentType,
+          referenceType: input.referenceType,
+          referenceId: input.referenceId,
+          sourceStoreId: input.sourceStoreId?.trim() || null,
+          destinationStoreId: input.destinationStoreId?.trim() || null,
+          reason: input.reason?.trim() || null,
+          lines: input.lines.map((line) => ({
+            productId: line.productId,
+            variantId: line.variantId ?? null,
+            quantity: line.quantity,
+            unitCostKgs: line.unitCostKgs ?? null,
+          })),
+        },
       },
       async () => {
         await tx.$queryRaw`
@@ -1759,14 +1771,17 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
           );
         }
 
-        const sourceStoreIds =
-          input.documentType === "TRANSFER"
-            ? getNetStockMovementStoreIds(
-                movements,
-                StockMovementType.TRANSFER_OUT,
-                (quantity) => quantity < 0,
-              )
-            : storeIds;
+        const sourceStoreIds = getNetStockMovementStoreIds(
+          movements,
+          input.documentType === "STOCK_RECEIVING"
+            ? StockMovementType.RECEIVE
+            : input.documentType === "TRANSFER"
+              ? StockMovementType.TRANSFER_OUT
+              : StockMovementType.WRITE_OFF,
+          input.documentType === "STOCK_RECEIVING"
+            ? (quantity) => quantity > 0
+            : (quantity) => quantity < 0,
+        );
         const destinationStoreIds =
           input.documentType === "TRANSFER"
             ? getNetStockMovementStoreIds(
@@ -1782,11 +1797,12 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
           throw new AppError("productMovementDocumentUnsupported", "CONFLICT", 409);
         }
 
-        const sourceStoreId = sourceStoreIds[0]!;
+        const oldSourceStoreId = sourceStoreIds[0]!;
+        const sourceStoreId = input.sourceStoreId?.trim() || oldSourceStoreId;
         const oldDestinationStoreId = destinationStoreIds[0] ?? null;
         const destinationStoreId =
           input.documentType === "TRANSFER"
-            ? (input.destinationStoreId?.trim() || oldDestinationStoreId)
+            ? input.destinationStoreId?.trim() || oldDestinationStoreId
             : null;
         if (input.documentType === "TRANSFER") {
           if (!destinationStoreId || !oldDestinationStoreId) {
@@ -1805,6 +1821,16 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
           if (input.user) {
             await assertUserCanAccessStore(tx, input.user, destinationStoreId);
           }
+        }
+        const sourceStore = await tx.store.findFirst({
+          where: { id: sourceStoreId, organizationId: input.organizationId },
+          select: { id: true },
+        });
+        if (!sourceStore) {
+          throw new AppError("storeNotFound", "NOT_FOUND", 404);
+        }
+        if (input.user) {
+          await assertUserCanAccessStore(tx, input.user, sourceStoreId);
         }
         const productIds = Array.from(new Set(input.lines.map((line) => line.productId)));
         const products = await tx.product.findMany({
@@ -1861,7 +1887,10 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
           select: { productId: true, variantKey: true, avgCostKgs: true },
         });
         const unitCostMap = new Map(
-          costs.map((cost) => [stockDocumentLineKey(cost.productId, cost.variantKey), Number(cost.avgCostKgs)]),
+          costs.map((cost) => [
+            stockDocumentLineKey(cost.productId, cost.variantKey),
+            Number(cost.avgCostKgs),
+          ]),
         );
 
         const beforeLines = aggregateStockDocumentLines(movements, input.documentType);
@@ -1897,13 +1926,61 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
           const unitCostKgs = desiredLine?.unitCostKgs ?? beforeLine?.unitCostKgs ?? null;
 
           if (input.documentType === "STOCK_RECEIVING") {
-            const qtyDelta = newQuantity - oldQuantity;
-            if (qtyDelta !== 0 || lineTotalDelta !== 0) {
+            if (sourceStoreId !== oldSourceStoreId) {
+              if (oldQuantity !== 0 || oldLineTotal !== 0) {
+                const reversed = await applyStockMovement(tx, {
+                  storeId: oldSourceStoreId,
+                  productId: movementLine.productId,
+                  variantId: movementLine.variantId,
+                  qtyDelta: -oldQuantity,
+                  type: StockMovementType.RECEIVE,
+                  referenceType: input.referenceType,
+                  referenceId: input.referenceId,
+                  linePosition,
+                  unitCostKgs: beforeLine?.unitCostKgs ?? unitCostKgs,
+                  lineTotalKgs: -oldLineTotal,
+                  note: reason,
+                  actorId: input.actorId,
+                  organizationId: input.organizationId,
+                  allowNegativeStock: true,
+                });
+                changedItems.set(`${oldSourceStoreId}:${key}`, {
+                  storeId: oldSourceStoreId,
+                  productId: movementLine.productId,
+                  variantId: movementLine.variantId,
+                  onHand: reversed.snapshot.onHand,
+                });
+              }
+              if (newQuantity !== 0 || newLineTotal !== 0) {
+                const applied = await applyStockMovement(tx, {
+                  storeId: sourceStoreId,
+                  productId: movementLine.productId,
+                  variantId: movementLine.variantId,
+                  qtyDelta: newQuantity,
+                  type: StockMovementType.RECEIVE,
+                  referenceType: input.referenceType,
+                  referenceId: input.referenceId,
+                  linePosition,
+                  unitCostKgs,
+                  lineTotalKgs: newLineTotal,
+                  note: reason,
+                  actorId: input.actorId,
+                  organizationId: input.organizationId,
+                  allowNegativeStock: true,
+                });
+                changedItems.set(`${sourceStoreId}:${key}`, {
+                  storeId: sourceStoreId,
+                  productId: movementLine.productId,
+                  variantId: movementLine.variantId,
+                  onHand: applied.snapshot.onHand,
+                });
+              }
+            } else if (newQuantity - oldQuantity !== 0 || lineTotalDelta !== 0) {
               const movement = await applyStockMovement(tx, {
                 storeId: sourceStoreId,
                 productId: movementLine.productId,
                 variantId: movementLine.variantId,
-                qtyDelta,
+                qtyDelta: newQuantity - oldQuantity,
                 type: StockMovementType.RECEIVE,
                 referenceType: input.referenceType,
                 referenceId: input.referenceId,
@@ -1915,6 +1992,18 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
                 organizationId: input.organizationId,
                 allowNegativeStock: true,
               });
+              changedItems.set(`${sourceStoreId}:${key}`, {
+                storeId: sourceStoreId,
+                productId: movementLine.productId,
+                variantId: movementLine.variantId,
+                onHand: movement.snapshot.onHand,
+              });
+            }
+            if (
+              sourceStoreId !== oldSourceStoreId ||
+              newQuantity !== oldQuantity ||
+              lineTotalDelta !== 0
+            ) {
               await replaceProductCostContribution(tx, {
                 organizationId: input.organizationId,
                 productId: movementLine.productId,
@@ -1924,24 +2013,66 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
                 nextQuantity: newQuantity,
                 nextLineTotalKgs: newLineTotal,
               });
-              changedItems.set(`${sourceStoreId}:${key}`, {
-                storeId: sourceStoreId,
-                productId: movementLine.productId,
-                variantId: movementLine.variantId,
-                onHand: movement.snapshot.onHand,
-              });
             }
             continue;
           }
 
           if (input.documentType === "WRITE_OFF") {
-            const qtyDelta = oldQuantity - newQuantity;
-            if (qtyDelta !== 0 || lineTotalDelta !== 0) {
+            if (sourceStoreId !== oldSourceStoreId) {
+              if (oldQuantity !== 0 || oldLineTotal !== 0) {
+                const reversed = await applyStockMovement(tx, {
+                  storeId: oldSourceStoreId,
+                  productId: movementLine.productId,
+                  variantId: movementLine.variantId,
+                  qtyDelta: oldQuantity,
+                  type: StockMovementType.WRITE_OFF,
+                  referenceType: input.referenceType,
+                  referenceId: input.referenceId,
+                  linePosition,
+                  unitCostKgs: beforeLine?.unitCostKgs ?? unitCostKgs,
+                  lineTotalKgs: -oldLineTotal,
+                  note: reason,
+                  actorId: input.actorId,
+                  organizationId: input.organizationId,
+                  allowNegativeStock: true,
+                });
+                changedItems.set(`${oldSourceStoreId}:${key}`, {
+                  storeId: oldSourceStoreId,
+                  productId: movementLine.productId,
+                  variantId: movementLine.variantId,
+                  onHand: reversed.snapshot.onHand,
+                });
+              }
+              if (newQuantity !== 0 || newLineTotal !== 0) {
+                const applied = await applyStockMovement(tx, {
+                  storeId: sourceStoreId,
+                  productId: movementLine.productId,
+                  variantId: movementLine.variantId,
+                  qtyDelta: -newQuantity,
+                  type: StockMovementType.WRITE_OFF,
+                  referenceType: input.referenceType,
+                  referenceId: input.referenceId,
+                  linePosition,
+                  unitCostKgs,
+                  lineTotalKgs: newLineTotal,
+                  note: reason,
+                  actorId: input.actorId,
+                  organizationId: input.organizationId,
+                  allowNegativeStock: true,
+                });
+                changedItems.set(`${sourceStoreId}:${key}`, {
+                  storeId: sourceStoreId,
+                  productId: movementLine.productId,
+                  variantId: movementLine.variantId,
+                  onHand: applied.snapshot.onHand,
+                });
+              }
+            } else if (oldQuantity - newQuantity !== 0 || lineTotalDelta !== 0) {
               const movement = await applyStockMovement(tx, {
                 storeId: sourceStoreId,
                 productId: movementLine.productId,
                 variantId: movementLine.variantId,
-                qtyDelta,
+                qtyDelta: oldQuantity - newQuantity,
                 type: StockMovementType.WRITE_OFF,
                 referenceType: input.referenceType,
                 referenceId: input.referenceId,
@@ -1965,6 +2096,96 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
 
           if (!destinationStoreId || !oldDestinationStoreId) {
             throw new AppError("productMovementDocumentUnsupported", "CONFLICT", 409);
+          }
+          if (sourceStoreId !== oldSourceStoreId || destinationStoreId !== oldDestinationStoreId) {
+            if (oldQuantity !== 0) {
+              const reversedOut = await applyStockMovement(tx, {
+                storeId: oldSourceStoreId,
+                productId: movementLine.productId,
+                variantId: movementLine.variantId,
+                qtyDelta: oldQuantity,
+                type: StockMovementType.TRANSFER_OUT,
+                referenceType: input.referenceType,
+                referenceId: input.referenceId,
+                linePosition,
+                unitCostKgs: beforeLine?.unitCostKgs ?? unitCostKgs,
+                lineTotalKgs: -oldLineTotal,
+                note: reason,
+                actorId: input.actorId,
+                organizationId: input.organizationId,
+                allowNegativeStock: true,
+              });
+              const reversedIn = await applyStockMovement(tx, {
+                storeId: oldDestinationStoreId,
+                productId: movementLine.productId,
+                variantId: movementLine.variantId,
+                qtyDelta: -oldQuantity,
+                type: StockMovementType.TRANSFER_IN,
+                referenceType: input.referenceType,
+                referenceId: input.referenceId,
+                linePosition,
+                note: reason,
+                actorId: input.actorId,
+                organizationId: input.organizationId,
+                allowNegativeStock: true,
+              });
+              changedItems.set(`${oldSourceStoreId}:${key}`, {
+                storeId: oldSourceStoreId,
+                productId: movementLine.productId,
+                variantId: movementLine.variantId,
+                onHand: reversedOut.snapshot.onHand,
+              });
+              changedItems.set(`${oldDestinationStoreId}:${key}`, {
+                storeId: oldDestinationStoreId,
+                productId: movementLine.productId,
+                variantId: movementLine.variantId,
+                onHand: reversedIn.snapshot.onHand,
+              });
+            }
+            if (newQuantity !== 0) {
+              const appliedOut = await applyStockMovement(tx, {
+                storeId: sourceStoreId,
+                productId: movementLine.productId,
+                variantId: movementLine.variantId,
+                qtyDelta: -newQuantity,
+                type: StockMovementType.TRANSFER_OUT,
+                referenceType: input.referenceType,
+                referenceId: input.referenceId,
+                linePosition,
+                unitCostKgs,
+                lineTotalKgs: newLineTotal,
+                note: reason,
+                actorId: input.actorId,
+                organizationId: input.organizationId,
+                allowNegativeStock: true,
+              });
+              const appliedIn = await applyStockMovement(tx, {
+                storeId: destinationStoreId,
+                productId: movementLine.productId,
+                variantId: movementLine.variantId,
+                qtyDelta: newQuantity,
+                type: StockMovementType.TRANSFER_IN,
+                referenceType: input.referenceType,
+                referenceId: input.referenceId,
+                linePosition,
+                note: reason,
+                actorId: input.actorId,
+                organizationId: input.organizationId,
+              });
+              changedItems.set(`${sourceStoreId}:${key}`, {
+                storeId: sourceStoreId,
+                productId: movementLine.productId,
+                variantId: movementLine.variantId,
+                onHand: appliedOut.snapshot.onHand,
+              });
+              changedItems.set(`${destinationStoreId}:${key}`, {
+                storeId: destinationStoreId,
+                productId: movementLine.productId,
+                variantId: movementLine.variantId,
+                onHand: appliedIn.snapshot.onHand,
+              });
+            }
+            continue;
           }
           const outQtyDelta = oldQuantity - newQuantity;
           if (outQtyDelta !== 0 || lineTotalDelta !== 0) {
@@ -2071,7 +2292,7 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
             documentType: input.documentType,
             referenceType: input.referenceType,
             referenceId: input.referenceId,
-            sourceStoreId,
+            sourceStoreId: oldSourceStoreId,
             destinationStoreId: oldDestinationStoreId,
             lines: Array.from(beforeLines.values()),
           }),
@@ -2145,9 +2366,7 @@ const stockMovementDocumentArchiveKey = (input: {
   referenceId: string;
 }) => `${input.documentType}:${input.referenceType}:${input.referenceId}`;
 
-export const archiveStockMovementDocument = async (
-  input: ArchiveStockMovementDocumentInput,
-) => {
+export const archiveStockMovementDocument = async (input: ArchiveStockMovementDocumentInput) => {
   if (
     (input.documentType === "STOCK_RECEIVING" && input.referenceType !== "STOCK_RECEIVING") ||
     (input.documentType === "TRANSFER" && input.referenceType !== "TRANSFER") ||
@@ -2221,7 +2440,9 @@ export const archiveStockMovementDocument = async (
           );
         }
 
-        const lines = Array.from(aggregateStockDocumentLines(movements, input.documentType).values());
+        const lines = Array.from(
+          aggregateStockDocumentLines(movements, input.documentType).values(),
+        );
         if (!lines.length) {
           throw new AppError("productMovementDocumentNotFound", "NOT_FOUND", 404);
         }

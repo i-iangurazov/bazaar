@@ -807,6 +807,7 @@ export const InventoryReceivingPage = ({
     if (isEditMode && editDocumentKey) {
       editMutation.mutate({
         documentKey: editDocumentKey,
+        sourceStoreId: storeId,
         notes: note.trim() || undefined,
         reason: note.trim() || t("receivingEditReason"),
         lines: normalizedLines.map((line) => ({

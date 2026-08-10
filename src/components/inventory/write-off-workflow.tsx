@@ -111,8 +111,7 @@ export const InventoryWriteOffsPage = ({
   const { data: session, status: sessionStatus } = useSession();
   const { toast } = useToast();
   const trpcUtils = trpc.useUtils();
-  const canManageStock =
-    session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
+  const canManageStock = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
   const isEditMode = Boolean(editDocumentKey);
   const loadedEditDocumentRef = useRef("");
 
@@ -173,7 +172,11 @@ export const InventoryWriteOffsPage = ({
   }, [initialStoreId, storeId, stores]);
 
   useEffect(() => {
-    if (!editableDocument || !editDocumentKey || loadedEditDocumentRef.current === editDocumentKey) {
+    if (
+      !editableDocument ||
+      !editDocumentKey ||
+      loadedEditDocumentRef.current === editDocumentKey
+    ) {
       return;
     }
     loadedEditDocumentRef.current = editDocumentKey;
@@ -273,7 +276,9 @@ export const InventoryWriteOffsPage = ({
       return;
     }
     setStoreId(nextStoreId);
-    setLines([]);
+    if (!isEditMode) {
+      setLines([]);
+    }
     setSearch("");
   };
 
@@ -539,6 +544,7 @@ export const InventoryWriteOffsPage = ({
     if (isEditMode && editDocumentKey) {
       editMutation.mutate({
         documentKey: editDocumentKey,
+        sourceStoreId: storeId,
         notes: comment.trim() || undefined,
         reason,
         lines: normalizedLines,
@@ -733,9 +739,7 @@ export const InventoryWriteOffsPage = ({
               <h3 className="text-base font-semibold text-foreground">
                 {t("writeOffSearchTitle")}
               </h3>
-              {selectedStore ? (
-                <Badge variant="muted">{selectedStore.name}</Badge>
-              ) : null}
+              {selectedStore ? <Badge variant="muted">{selectedStore.name}</Badge> : null}
             </div>
             <div className="relative">
               <SearchIcon
@@ -763,10 +767,7 @@ export const InventoryWriteOffsPage = ({
                   const key = lineKey(result.product.id, result.snapshot.variantId);
                   const added = lines.some((line) => line.key === key);
                   return (
-                    <div
-                      key={key}
-                      className="bazaar-doc-search-row"
-                    >
+                    <div key={key} className="bazaar-doc-search-row">
                       <button
                         type="button"
                         className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left text-sm disabled:cursor-wait disabled:opacity-60"
@@ -849,9 +850,7 @@ export const InventoryWriteOffsPage = ({
                       className="bazaar-doc-line-row grid gap-3 lg:grid-cols-[minmax(0,1fr)_3.75rem_4rem_4rem_4.25rem_4.25rem_2rem] lg:items-center lg:gap-1.5"
                     >
                       <div className="flex min-w-0 items-center gap-2.5">
-                        <span className="bazaar-doc-line-index">
-                          {lineNumber}
-                        </span>
+                        <span className="bazaar-doc-line-index">{lineNumber}</span>
                         <span className="bazaar-doc-line-thumb">
                           {line.imageUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
@@ -903,10 +902,7 @@ export const InventoryWriteOffsPage = ({
                           min={1}
                           step={1}
                           data-write-off-input="quantity"
-                          className={cn(
-                            "h-8 px-2",
-                            !metric?.quantityValid && "border-danger/60",
-                          )}
+                          className={cn("h-8 px-2", !metric?.quantityValid && "border-danger/60")}
                         />
                       </div>
                       <div>
@@ -1075,12 +1071,8 @@ export const InventoryWriteOffsPage = ({
               ) : (
                 <ArchiveIcon className="h-4 w-4" aria-hidden />
               )}
-              <span className="sm:hidden">
-                {saving ? tCommon("saving") : submitShortLabel}
-              </span>
-              <span className="hidden sm:inline">
-                {saving ? tCommon("saving") : submitLabel}
-              </span>
+              <span className="sm:hidden">{saving ? tCommon("saving") : submitShortLabel}</span>
+              <span className="hidden sm:inline">{saving ? tCommon("saving") : submitLabel}</span>
             </Button>
           </div>
         </div>

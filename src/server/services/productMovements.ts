@@ -243,8 +243,7 @@ const stockReceivingArchiveReferenceType = "STOCK_RECEIVING_ARCHIVE";
 
 const isEditableStockDocumentType = (
   value: string,
-): value is "STOCK_RECEIVING" | "TRANSFER" | "WRITE_OFF" =>
-  editableStockDocumentTypes.has(value);
+): value is "STOCK_RECEIVING" | "TRANSFER" | "WRITE_OFF" => editableStockDocumentTypes.has(value);
 
 const getEffectiveMovementType = (documentType: "STOCK_RECEIVING" | "TRANSFER" | "WRITE_OFF") => {
   switch (documentType) {
@@ -301,8 +300,9 @@ const buildProductMovementDocumentLabel = (input: {
   documentNumber?: string | null;
   documentId: string;
 }) => {
-  const number = normalizeProductMovementDocumentNumber(input.documentNumber, input.documentId)
-    ?? buildShortProductMovementDocumentReference(input.documentId);
+  const number =
+    normalizeProductMovementDocumentNumber(input.documentNumber, input.documentId) ??
+    buildShortProductMovementDocumentReference(input.documentId);
   return `${documentTypeFallbackLabels[input.documentType] ?? documentTypeFallbackLabels.OTHER} #${number}`;
 };
 
@@ -310,7 +310,10 @@ const uuidLikePattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const buildShortProductMovementDocumentReference = (documentId: string) =>
-  documentId.replace(/[^a-z0-9]/gi, "").slice(0, 8).toUpperCase() || documentId.slice(0, 8);
+  documentId
+    .replace(/[^a-z0-9]/gi, "")
+    .slice(0, 8)
+    .toUpperCase() || documentId.slice(0, 8);
 
 const normalizeProductMovementDocumentNumber = (
   documentNumber: string | null | undefined,
@@ -421,6 +424,24 @@ const buildProductMovementJournalCte = (baseWhereSql: Prisma.Sql) => Prisma.sql`
       b."storeName",
       b."movementType"
   ),
+  stock_document_store_net AS (
+    SELECT
+      b."documentType",
+      b."documentReferenceType",
+      b."documentReferenceId",
+      b."storeId",
+      b."storeName",
+      COALESCE(SUM(b."qtyDelta"), 0) AS "netQty"
+    FROM movement_base b
+    WHERE (b."documentType" = 'STOCK_RECEIVING' AND b."movementType" = 'RECEIVE')
+       OR (b."documentType" = 'WRITE_OFF' AND b."movementType" = 'WRITE_OFF')
+    GROUP BY
+      b."documentType",
+      b."documentReferenceType",
+      b."documentReferenceId",
+      b."storeId",
+      b."storeName"
+  ),
   movement_grouped AS (
     SELECT
       b."documentType",
@@ -443,7 +464,23 @@ const buildProductMovementJournalCte = (baseWhereSql: Prisma.Sql) => Prisma.sql`
           AND ln."documentReferenceType" = b."documentReferenceType"
           AND ln."documentReferenceId" = b."documentReferenceId"
       ), 0)::int AS "totalQuantity",
-      STRING_AGG(DISTINCT b."storeName", ', ') AS "storeName",
+      CASE
+        WHEN b."documentType" IN ('STOCK_RECEIVING', 'WRITE_OFF') THEN COALESCE(
+          (
+            SELECT STRING_AGG(DISTINCT ss."storeName", ', ')
+            FROM stock_document_store_net ss
+            WHERE ss."documentType" = b."documentType"
+              AND ss."documentReferenceType" = b."documentReferenceType"
+              AND ss."documentReferenceId" = b."documentReferenceId"
+              AND (
+                (b."documentType" = 'STOCK_RECEIVING' AND ss."netQty" > 0)
+                OR (b."documentType" = 'WRITE_OFF' AND ss."netQty" < 0)
+              )
+          ),
+          STRING_AGG(DISTINCT b."storeName", ', ')
+        )
+        ELSE STRING_AGG(DISTINCT b."storeName", ', ')
+      END AS "storeName",
       (ARRAY_AGG(b."organizationName" ORDER BY b."createdAt" DESC) FILTER (WHERE b."organizationName" IS NOT NULL AND BTRIM(b."organizationName") <> ''))[1] AS "organizationName",
       COALESCE(
         (
@@ -1062,10 +1099,15 @@ export const getProductMovementDocument = async (
     ? buildEffectiveStockDocumentLines(lines, decoded.documentType)
     : null;
   const normalizedLines = effectiveStockLines ?? lines.map(normalizeProductMovementDocumentLine);
-  const sourceStoreId =
-    decoded.documentType === "TRANSFER"
-      ? getNetStoreIdForMovementType(lines, "TRANSFER_OUT", (quantity) => quantity < 0)
-      : (normalizedLines[0]?.storeId ?? lines[0]?.storeId ?? null);
+  const sourceStoreId = isEditableStockDocumentType(decoded.documentType)
+    ? getNetStoreIdForMovementType(
+        lines,
+        getEffectiveMovementType(decoded.documentType),
+        decoded.documentType === "STOCK_RECEIVING"
+          ? (quantity) => quantity > 0
+          : (quantity) => quantity < 0,
+      )
+    : (normalizedLines[0]?.storeId ?? lines[0]?.storeId ?? null);
   const destinationStoreId =
     decoded.documentType === "TRANSFER"
       ? getNetStoreIdForMovementType(lines, "TRANSFER_IN", (quantity) => quantity > 0)

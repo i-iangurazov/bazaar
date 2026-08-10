@@ -1038,6 +1038,7 @@ export const inventoryRouter = router({
         customerAddress: z.string().max(512).optional().nullable(),
         notes: z.string().max(2_000).optional().nullable(),
         reason: z.string().max(500).optional().nullable(),
+        sourceStoreId: z.string().optional().nullable(),
         destinationStoreId: z.string().optional().nullable(),
         idempotencyKey: z.string().min(8),
       }),
@@ -1103,6 +1104,7 @@ export const inventoryRouter = router({
             documentType: decoded.documentType,
             referenceType: decoded.documentReferenceType,
             referenceId: decoded.documentReferenceId,
+            sourceStoreId: input.sourceStoreId,
             destinationStoreId: input.destinationStoreId,
             reason: input.reason,
             lines: input.lines.map((line) => ({

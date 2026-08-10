@@ -465,11 +465,7 @@ describeDb("inventory service", () => {
       orderBy: { createdAt: "asc" },
     });
     expect(movements.map((movement) => movement.qtyDelta).sort((a, b) => a - b)).toEqual([
-      -3,
-      -2,
-      2,
-      3,
-      10,
+      -3, -2, 2, 3, 10,
     ]);
 
     const journal = await caller.inventory.productMovements({
@@ -486,10 +482,7 @@ describeDb("inventory service", () => {
     expect(document?.positionsCount).toBe(2);
     expect(document?.totalQuantity).toBe(10);
     expect(document?.totalAmount).toBe(63);
-    expect(document?.lines.map((line) => line.productId)).toEqual([
-      product.id,
-      addedProduct.id,
-    ]);
+    expect(document?.lines.map((line) => line.productId)).toEqual([product.id, addedProduct.id]);
     expect(document?.lines).toHaveLength(2);
     expect(document?.lines.some((line) => line.productId === removedProduct.id)).toBe(false);
   });
@@ -554,7 +547,9 @@ describeDb("inventory service", () => {
       idempotencyKey: "receiving-five-to-three-save-1",
     });
 
-    const editableDocument = await caller.inventory.editableProductMovementDocument({ documentKey });
+    const editableDocument = await caller.inventory.editableProductMovementDocument({
+      documentKey,
+    });
     expect(editableDocument.lines.map((line) => line.productId)).toEqual(
       originalProducts.slice(0, 3).map((lineProduct) => lineProduct.id),
     );
@@ -582,6 +577,167 @@ describeDb("inventory service", () => {
     expect(journal.items[0]?.positionsCount).toBe(3);
     expect(journal.items[0]?.totalQuantity).toBe(6);
     expect(journal.items[0]?.totalAmount).toBe(12);
+  });
+
+  it("moves receiving, transfer, and write-off documents to corrected stores atomically", async () => {
+    const { org, store: storeA, product, adminUser } = await seedBase();
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+      isOrgOwner: adminUser.isOrgOwner,
+    });
+    const [storeB, storeC, storeD] = await Promise.all(
+      [
+        { name: "Corrected Receiving Store", code: "COR-RCV" },
+        { name: "Corrected Transfer Source", code: "COR-SRC" },
+        { name: "Corrected Transfer Destination", code: "COR-DST" },
+      ].map((data) => prisma.store.create({ data: { organizationId: org.id, ...data } })),
+    );
+    await Promise.all(
+      [storeB.id, storeC.id, storeD.id].map((storeId) =>
+        assignProductToStoreForTest({
+          organizationId: org.id,
+          storeId,
+          productId: product.id,
+          assignedById: adminUser.id,
+        }),
+      ),
+    );
+    for (const [index, storeId] of [storeA.id, storeC.id].entries()) {
+      await adjustStock({
+        storeId,
+        productId: product.id,
+        qtyDelta: 20,
+        reason: "store correction fixture",
+        actorId: adminUser.id,
+        organizationId: org.id,
+        requestId: `store-correction-stock-${index}`,
+        idempotencyKey: `store-correction-stock-${index}`,
+      });
+    }
+
+    const receiving = await postStockReceiving({
+      storeId: storeA.id,
+      lines: [{ productId: product.id, quantity: 5, unitCost: 4 }],
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "store-correction-receiving-create",
+      idempotencyKey: "store-correction-receiving-create",
+    });
+    const receivingKey = `STOCK_RECEIVING:STOCK_RECEIVING:${receiving.receivingId}`;
+    const receivingEdit = {
+      documentKey: receivingKey,
+      sourceStoreId: storeB.id,
+      reason: "correct receiving store",
+      lines: [{ productId: product.id, quantity: 5, unitCostKgs: 4 }],
+      idempotencyKey: "store-correction-receiving-edit",
+    };
+    await caller.inventory.editProductMovementDocument(receivingEdit);
+    await caller.inventory.editProductMovementDocument(receivingEdit);
+
+    const writeOff = await postStockWriteOff({
+      storeId: storeA.id,
+      reason: "Порча",
+      lines: [{ productId: product.id, qty: 3 }],
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "store-correction-writeoff-create",
+      idempotencyKey: "store-correction-writeoff-create",
+    });
+    const writeOffKey = `WRITE_OFF:WRITE_OFF:${writeOff.writeOffId}`;
+    await caller.inventory.editProductMovementDocument({
+      documentKey: writeOffKey,
+      sourceStoreId: storeC.id,
+      reason: "correct write-off store",
+      lines: [{ productId: product.id, quantity: 3, unitCostKgs: 4 }],
+      idempotencyKey: "store-correction-writeoff-edit",
+    });
+
+    const transfer = await transferStock({
+      fromStoreId: storeA.id,
+      toStoreId: storeB.id,
+      lines: [{ productId: product.id, qty: 2 }],
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "store-correction-transfer-create",
+      idempotencyKey: "store-correction-transfer-create",
+    });
+    const transferKey = `TRANSFER:TRANSFER:${transfer.transferId}`;
+    await caller.inventory.editProductMovementDocument({
+      documentKey: transferKey,
+      sourceStoreId: storeC.id,
+      destinationStoreId: storeD.id,
+      reason: "correct both transfer stores",
+      lines: [{ productId: product.id, quantity: 2, unitCostKgs: 4 }],
+      idempotencyKey: "store-correction-transfer-edit",
+    });
+
+    const snapshots = await prisma.inventorySnapshot.findMany({
+      where: {
+        storeId: { in: [storeA.id, storeB.id, storeC.id, storeD.id] },
+        productId: product.id,
+      },
+    });
+    const onHand = (storeId: string) =>
+      snapshots.find((snapshot) => snapshot.storeId === storeId)?.onHand ?? 0;
+    expect(onHand(storeA.id)).toBe(20);
+    expect(onHand(storeB.id)).toBe(5);
+    expect(onHand(storeC.id)).toBe(15);
+    expect(onHand(storeD.id)).toBe(2);
+    const productCost = await prisma.productCost.findUniqueOrThrow({
+      where: {
+        organizationId_productId_variantKey: {
+          organizationId: org.id,
+          productId: product.id,
+          variantKey: "BASE",
+        },
+      },
+    });
+    expect({ avgCostKgs: Number(productCost.avgCostKgs), basis: productCost.costBasisQty }).toEqual(
+      {
+        avgCostKgs: 4,
+        basis: 5,
+      },
+    );
+
+    await expect(
+      caller.inventory.productMovementDocument({ documentKey: receivingKey }),
+    ).resolves.toMatchObject({
+      sourceStoreId: storeB.id,
+      storeName: storeB.name,
+      totalQuantity: 5,
+    });
+    await expect(
+      caller.inventory.productMovementDocument({ documentKey: writeOffKey }),
+    ).resolves.toMatchObject({
+      sourceStoreId: storeC.id,
+      storeName: storeC.name,
+      totalQuantity: 3,
+    });
+    await expect(
+      caller.inventory.productMovementDocument({ documentKey: transferKey }),
+    ).resolves.toMatchObject({
+      sourceStoreId: storeC.id,
+      destinationStoreId: storeD.id,
+      senderName: storeC.name,
+      recipientName: storeD.name,
+      totalQuantity: 2,
+    });
+    await expect(
+      caller.inventory.editProductMovementDocument({
+        ...receivingEdit,
+        sourceStoreId: storeC.id,
+      }),
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "idempotencyKeyPayloadMismatch",
+    });
+
+    for (const storeId of [storeA.id, storeB.id, storeC.id, storeD.id]) {
+      await assertSnapshotMatchesLedger(storeId, product.id);
+    }
   });
 
   it("can restrict inventory product search to product name only", async () => {
@@ -1166,10 +1322,7 @@ describeDb("inventory service", () => {
     expect(document?.totalQuantity).toBe(7);
     expect(document?.sourceStoreId).toBe(store.id);
     expect(document?.destinationStoreId).toBe(storeC.id);
-    expect(document?.lines.map((line) => line.productId)).toEqual([
-      product.id,
-      addedProduct.id,
-    ]);
+    expect(document?.lines.map((line) => line.productId)).toEqual([product.id, addedProduct.id]);
     expect(document?.lines.map((line) => line.movementType)).toEqual([
       "TRANSFER_OUT",
       "TRANSFER_OUT",

@@ -147,7 +147,14 @@ describe("product movement journal source", () => {
       expect(source).toContain("editDocumentKey");
       expect(source).toContain("saveChanges");
       expect(source).toContain("backToMovements");
+      expect(source).toContain("sourceStoreId:");
     }
+    expect(receivingWorkflowSource).toContain("sourceStoreId: storeId");
+    expect(writeOffWorkflowSource).toContain("sourceStoreId: storeId");
+    expect(transferWorkflowSource).toContain("sourceStoreId: fromStoreId");
+    expect(transferWorkflowSource).toContain("destinationStoreId: toStoreId");
+    expect(writeOffWorkflowSource).toContain("if (!isEditMode)");
+    expect(transferWorkflowSource.match(/if \(!isEditMode\)/g)).toHaveLength(2);
     await expect(
       access(
         path.join(process.cwd(), "src/components/inventory/product-movement-document-editor.tsx"),
@@ -209,7 +216,7 @@ describe("product movement journal source", () => {
     expect(pageSource).toContain('document?.documentType === "WRITE_OFF"');
     expect(pageSource).toContain("formatMovementNote");
     expect(pageSource).toContain('target="_blank"');
-    expect(pageSource).toContain("auto: \"1\"");
+    expect(pageSource).toContain('auto: "1"');
     expect(pageSource).toContain("document.lines");
     expect(pageSource).toContain('paginationKey="product-movement-document-lines"');
     expect(pageSource).not.toContain("window.print()");
