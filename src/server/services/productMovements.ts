@@ -160,6 +160,9 @@ type ProductMovementJournalSqlRow = {
   comment: string | null;
   description: string | null;
   detailUrl: string | null;
+  isArchived?: boolean;
+  groupedTotalCount?: number | bigint | null;
+  totalCount?: number | bigint;
 };
 
 type ProductMovementDocumentLineSqlRow = {
@@ -349,7 +352,11 @@ const buildMovementDocumentTypeSql = (referenceTypeSql: Prisma.Sql, movementType
     END
   `;
 
-const buildProductMovementJournalCte = (baseWhereSql: Prisma.Sql) => Prisma.sql`
+const buildProductMovementJournalCte = (input: {
+  baseWhereSql: Prisma.Sql;
+  organizationId: string;
+  documentPageSql?: Prisma.Sql;
+}) => Prisma.sql`
   WITH movement_base AS (
     SELECT
       m."id",
@@ -382,7 +389,70 @@ const buildProductMovementJournalCte = (baseWhereSql: Prisma.Sql) => Prisma.sql`
     INNER JOIN "Product" p ON p."id" = m."productId"
     INNER JOIN "Organization" o ON o."id" = s."organizationId"
     LEFT JOIN "User" u ON u."id" = m."createdById"
-    ${baseWhereSql}
+    ${input.baseWhereSql}
+  ),
+  archive_references AS MATERIALIZED (
+    SELECT
+      archive_m."referenceType",
+      archive_m."referenceId"
+    FROM "StockMovement" archive_m
+    INNER JOIN "Store" archive_s ON archive_s."id" = archive_m."storeId"
+    WHERE archive_s."organizationId" = ${input.organizationId}
+      AND archive_m."referenceType" IN (
+        ${stockDocumentArchiveReferenceType},
+        ${stockReceivingArchiveReferenceType}
+      )
+      AND archive_m."referenceId" IS NOT NULL
+    GROUP BY archive_m."referenceType", archive_m."referenceId"
+  ),
+  document_index_base AS (
+    SELECT
+      b."documentType",
+      b."documentReferenceType",
+      b."documentReferenceId",
+      MAX(b."createdAt") AS "documentDate"
+    FROM movement_base b
+    GROUP BY b."documentType", b."documentReferenceType", b."documentReferenceId"
+  ),
+  document_index AS (
+    SELECT
+      d.*,
+      (
+        archived_document."referenceId" IS NOT NULL
+        OR archived_receiving."referenceId" IS NOT NULL
+      ) AS "isArchived"
+    FROM document_index_base d
+    LEFT JOIN archive_references archived_document
+      ON archived_document."referenceType" = ${stockDocumentArchiveReferenceType}
+     AND archived_document."referenceId" = CONCAT(
+       d."documentType", ':', d."documentReferenceType", ':', d."documentReferenceId"
+     )
+    LEFT JOIN archive_references archived_receiving
+      ON d."documentType" = 'STOCK_RECEIVING'
+     AND archived_receiving."referenceType" = ${stockReceivingArchiveReferenceType}
+     AND archived_receiving."referenceId" = d."documentReferenceId"
+  ),
+  document_page AS (
+    ${
+      input.documentPageSql ??
+      Prisma.sql`
+        SELECT
+          d.*,
+          NULL::int AS "groupedTotalCount"
+        FROM document_index d
+      `
+    }
+  ),
+  movement_scope AS (
+    SELECT
+      b.*,
+      d."isArchived",
+      d."groupedTotalCount"
+    FROM movement_base b
+    INNER JOIN document_page d
+      ON d."documentType" = b."documentType"
+     AND d."documentReferenceType" = b."documentReferenceType"
+     AND d."documentReferenceId" = b."documentReferenceId"
   ),
   movement_line_net AS (
     SELECT
@@ -396,7 +466,7 @@ const buildProductMovementJournalCte = (baseWhereSql: Prisma.Sql) => Prisma.sql`
         THEN COALESCE(SUM(b."qtyDelta") FILTER (WHERE b."movementType" = 'TRANSFER_OUT'), 0)
         ELSE COALESCE(SUM(b."qtyDelta"), 0)
       END AS "netQty"
-    FROM movement_base b
+    FROM movement_scope b
     GROUP BY
       b."documentType",
       b."documentReferenceType",
@@ -413,7 +483,7 @@ const buildProductMovementJournalCte = (baseWhereSql: Prisma.Sql) => Prisma.sql`
       b."storeName",
       b."movementType",
       COALESCE(SUM(b."qtyDelta"), 0) AS "netQty"
-    FROM movement_base b
+    FROM movement_scope b
     WHERE b."documentType" = 'TRANSFER'
       AND b."movementType" IN ('TRANSFER_OUT', 'TRANSFER_IN')
     GROUP BY
@@ -432,7 +502,7 @@ const buildProductMovementJournalCte = (baseWhereSql: Prisma.Sql) => Prisma.sql`
       b."storeId",
       b."storeName",
       COALESCE(SUM(b."qtyDelta"), 0) AS "netQty"
-    FROM movement_base b
+    FROM movement_scope b
     WHERE (b."documentType" = 'STOCK_RECEIVING' AND b."movementType" = 'RECEIVE')
        OR (b."documentType" = 'WRITE_OFF' AND b."movementType" = 'WRITE_OFF')
     GROUP BY
@@ -442,79 +512,113 @@ const buildProductMovementJournalCte = (baseWhereSql: Prisma.Sql) => Prisma.sql`
       b."storeId",
       b."storeName"
   ),
-  movement_grouped AS (
+  movement_line_totals AS (
+    SELECT
+      ln."documentType",
+      ln."documentReferenceType",
+      ln."documentReferenceId",
+      COUNT(*) FILTER (WHERE ABS(ln."netQty") > 0)::int AS "positionsCount",
+      COALESCE(SUM(ABS(ln."netQty")), 0)::int AS "totalQuantity"
+    FROM movement_line_net ln
+    GROUP BY
+      ln."documentType",
+      ln."documentReferenceType",
+      ln."documentReferenceId"
+  ),
+  transfer_document_stores AS (
+    SELECT
+      ts."documentType",
+      ts."documentReferenceType",
+      ts."documentReferenceId",
+      STRING_AGG(DISTINCT ts."storeName", ', ') FILTER (
+        WHERE ts."movementType" = 'TRANSFER_OUT' AND ABS(ts."netQty") > 0
+      ) AS "sourceStoreName",
+      STRING_AGG(DISTINCT ts."storeName", ', ') FILTER (
+        WHERE ts."movementType" = 'TRANSFER_IN' AND ABS(ts."netQty") > 0
+      ) AS "destinationStoreName"
+    FROM transfer_store_net ts
+    GROUP BY
+      ts."documentType",
+      ts."documentReferenceType",
+      ts."documentReferenceId"
+  ),
+  stock_document_stores AS (
+    SELECT
+      ss."documentType",
+      ss."documentReferenceType",
+      ss."documentReferenceId",
+      STRING_AGG(DISTINCT ss."storeName", ', ') FILTER (
+        WHERE (ss."documentType" = 'STOCK_RECEIVING' AND ss."netQty" > 0)
+           OR (ss."documentType" = 'WRITE_OFF' AND ss."netQty" < 0)
+      ) AS "effectiveStoreName"
+    FROM stock_document_store_net ss
+    GROUP BY
+      ss."documentType",
+      ss."documentReferenceType",
+      ss."documentReferenceId"
+  ),
+  movement_grouped_base AS (
     SELECT
       b."documentType",
       b."documentReferenceType",
       b."documentReferenceId",
       MAX(b."createdAt") AS "documentDate",
       MIN(b."createdAt") AS "firstMovementAt",
-      COALESCE((
-        SELECT COUNT(*)::int
-        FROM movement_line_net ln
-        WHERE ln."documentType" = b."documentType"
-          AND ln."documentReferenceType" = b."documentReferenceType"
-          AND ln."documentReferenceId" = b."documentReferenceId"
-          AND ABS(ln."netQty") > 0
-      ), 0)::int AS "positionsCount",
-      COALESCE((
-        SELECT SUM(ABS(ln."netQty"))::int
-        FROM movement_line_net ln
-        WHERE ln."documentType" = b."documentType"
-          AND ln."documentReferenceType" = b."documentReferenceType"
-          AND ln."documentReferenceId" = b."documentReferenceId"
-      ), 0)::int AS "totalQuantity",
-      CASE
-        WHEN b."documentType" IN ('STOCK_RECEIVING', 'WRITE_OFF') THEN COALESCE(
-          (
-            SELECT STRING_AGG(DISTINCT ss."storeName", ', ')
-            FROM stock_document_store_net ss
-            WHERE ss."documentType" = b."documentType"
-              AND ss."documentReferenceType" = b."documentReferenceType"
-              AND ss."documentReferenceId" = b."documentReferenceId"
-              AND (
-                (b."documentType" = 'STOCK_RECEIVING' AND ss."netQty" > 0)
-                OR (b."documentType" = 'WRITE_OFF' AND ss."netQty" < 0)
-              )
-          ),
-          STRING_AGG(DISTINCT b."storeName", ', ')
-        )
-        ELSE STRING_AGG(DISTINCT b."storeName", ', ')
-      END AS "storeName",
+      STRING_AGG(DISTINCT b."storeName", ', ') AS "storeName",
       (ARRAY_AGG(b."organizationName" ORDER BY b."createdAt" DESC) FILTER (WHERE b."organizationName" IS NOT NULL AND BTRIM(b."organizationName") <> ''))[1] AS "organizationName",
-      COALESCE(
-        (
-          SELECT STRING_AGG(DISTINCT ts."storeName", ', ')
-          FROM transfer_store_net ts
-          WHERE ts."documentType" = b."documentType"
-            AND ts."documentReferenceType" = b."documentReferenceType"
-            AND ts."documentReferenceId" = b."documentReferenceId"
-            AND ts."movementType" = 'TRANSFER_OUT'
-            AND ABS(ts."netQty") > 0
-        ),
-        STRING_AGG(DISTINCT CASE WHEN b."movementType" = 'TRANSFER_OUT' THEN b."storeName" END, ', ')
-      ) AS "sourceStoreName",
-      COALESCE(
-        (
-          SELECT STRING_AGG(DISTINCT ts."storeName", ', ')
-          FROM transfer_store_net ts
-          WHERE ts."documentType" = b."documentType"
-            AND ts."documentReferenceType" = b."documentReferenceType"
-            AND ts."documentReferenceId" = b."documentReferenceId"
-            AND ts."movementType" = 'TRANSFER_IN'
-            AND ABS(ts."netQty") > 0
-        ),
-        STRING_AGG(DISTINCT CASE WHEN b."movementType" = 'TRANSFER_IN' THEN b."storeName" END, ', ')
-      ) AS "destinationStoreName",
+      STRING_AGG(DISTINCT CASE WHEN b."movementType" = 'TRANSFER_OUT' THEN b."storeName" END, ', ') AS "sourceStoreName",
+      STRING_AGG(DISTINCT CASE WHEN b."movementType" = 'TRANSFER_IN' THEN b."storeName" END, ', ') AS "destinationStoreName",
       STRING_AGG(DISTINCT b."productName", ', ') AS "productPreview",
       SUM(b."lineTotalKgs") AS "movementLineTotalAmount",
       BOOL_OR(b."lineTotalKgs" IS NOT NULL) AS "hasMovementLineTotal",
       (ARRAY_AGG(b."note" ORDER BY b."createdAt" DESC) FILTER (WHERE b."note" IS NOT NULL AND BTRIM(b."note") <> ''))[1] AS "comment",
       (ARRAY_AGG(b."createdById" ORDER BY b."createdAt" DESC) FILTER (WHERE b."createdById" IS NOT NULL))[1] AS "authorId",
       (ARRAY_AGG(b."authorName" ORDER BY b."createdAt" DESC) FILTER (WHERE b."authorName" IS NOT NULL AND BTRIM(b."authorName") <> ''))[1] AS "authorName",
-      (ARRAY_AGG(b."authorEmail" ORDER BY b."createdAt" DESC) FILTER (WHERE b."authorEmail" IS NOT NULL AND BTRIM(b."authorEmail") <> ''))[1] AS "authorEmail"
-    FROM movement_base b
+      (ARRAY_AGG(b."authorEmail" ORDER BY b."createdAt" DESC) FILTER (WHERE b."authorEmail" IS NOT NULL AND BTRIM(b."authorEmail") <> ''))[1] AS "authorEmail",
+      BOOL_OR(b."isArchived") AS "isArchived",
+      (ARRAY_AGG(b."groupedTotalCount") FILTER (WHERE b."groupedTotalCount" IS NOT NULL))[1] AS "groupedTotalCount"
+    FROM movement_scope b
     GROUP BY b."documentType", b."documentReferenceType", b."documentReferenceId"
+  ),
+  movement_grouped AS (
+    SELECT
+      g."documentType",
+      g."documentReferenceType",
+      g."documentReferenceId",
+      g."documentDate",
+      g."firstMovementAt",
+      COALESCE(lt."positionsCount", 0)::int AS "positionsCount",
+      COALESCE(lt."totalQuantity", 0)::int AS "totalQuantity",
+      CASE
+        WHEN g."documentType" IN ('STOCK_RECEIVING', 'WRITE_OFF')
+        THEN COALESCE(sd."effectiveStoreName", g."storeName")
+        ELSE g."storeName"
+      END AS "storeName",
+      g."organizationName",
+      COALESCE(td."sourceStoreName", g."sourceStoreName") AS "sourceStoreName",
+      COALESCE(td."destinationStoreName", g."destinationStoreName") AS "destinationStoreName",
+      g."productPreview",
+      g."movementLineTotalAmount",
+      g."hasMovementLineTotal",
+      g."comment",
+      g."authorId",
+      g."authorName",
+      g."authorEmail",
+      g."isArchived",
+      g."groupedTotalCount"
+    FROM movement_grouped_base g
+    LEFT JOIN movement_line_totals lt
+      ON lt."documentType" = g."documentType"
+     AND lt."documentReferenceType" = g."documentReferenceType"
+     AND lt."documentReferenceId" = g."documentReferenceId"
+    LEFT JOIN transfer_document_stores td
+      ON td."documentType" = g."documentType"
+     AND td."documentReferenceType" = g."documentReferenceType"
+     AND td."documentReferenceId" = g."documentReferenceId"
+    LEFT JOIN stock_document_stores sd
+      ON sd."documentType" = g."documentType"
+     AND sd."documentReferenceType" = g."documentReferenceType"
+     AND sd."documentReferenceId" = g."documentReferenceId"
   ),
   movement_enriched AS (
     SELECT
@@ -576,7 +680,9 @@ const buildProductMovementJournalCte = (baseWhereSql: Prisma.Sql) => Prisma.sql`
       END AS "paidAmount",
       COALESCE(co."notes", sr."notes", sc."notes", g."comment") AS "comment",
       COALESCE(g."comment", g."productPreview") AS "description",
-      NULL AS "detailUrl"
+      NULL AS "detailUrl",
+      g."isArchived" AS "isArchived",
+      g."groupedTotalCount" AS "groupedTotalCount"
     FROM movement_grouped g
     LEFT JOIN "CustomerOrder" co
       ON g."documentReferenceType" = 'CustomerOrder' AND co."id" = g."documentReferenceId"
@@ -951,67 +1057,111 @@ export const listProductMovementJournal = async (
   if (input.orderStatus?.trim()) {
     finalConditions.push(Prisma.sql`"orderStatus" = ${input.orderStatus.trim()}`);
   }
-  normalizeSearchTokens(input.search).forEach((token) => {
+  const searchTokens = normalizeSearchTokens(input.search);
+  searchTokens.forEach((token) => {
     finalConditions.push(buildSearchCondition(token));
   });
   finalConditions.push(...buildTextFilterCondition('"authorName"', input.authorSearch));
   finalConditions.push(...buildTextFilterCondition('"senderName"', input.senderSearch));
   finalConditions.push(...buildTextFilterCondition('"recipientName"', input.recipientSearch));
-  const archiveExistsCondition = Prisma.sql`
-    EXISTS (
-      SELECT 1
-      FROM "StockMovement" archive_m
-      INNER JOIN "Store" archive_s ON archive_s."id" = archive_m."storeId"
-      WHERE archive_s."organizationId" = ${user.organizationId}
-        AND (
-          (
-            archive_m."referenceType" = ${stockDocumentArchiveReferenceType}
-            AND archive_m."referenceId" = movement_enriched."id"
-          )
-          OR (
-            movement_enriched."documentType" = 'STOCK_RECEIVING'
-            AND archive_m."referenceType" = ${stockReceivingArchiveReferenceType}
-            AND archive_m."referenceId" = movement_enriched."documentReferenceId"
-          )
-        )
-    )
-  `;
   const archiveMode = input.archiveMode ?? "ACTIVE";
   if (archiveMode === "ACTIVE") {
-    finalConditions.push(Prisma.sql`NOT ${archiveExistsCondition}`);
+    finalConditions.push(Prisma.sql`"isArchived" = false`);
   } else if (archiveMode === "ARCHIVED") {
-    finalConditions.push(archiveExistsCondition);
+    finalConditions.push(Prisma.sql`"isArchived" = true`);
   }
 
-  const cte = buildProductMovementJournalCte(buildWhereSql(baseConditions));
   const finalWhereSql = buildWhereSql(finalConditions);
-  const orderBySql = getOrderBySql(input.sortBy ?? "date", input.sortDirection ?? "desc");
+  const sortBy = input.sortBy ?? "date";
+  const sortDirection = input.sortDirection ?? "desc";
+  const orderBySql = getOrderBySql(sortBy, sortDirection);
+  const canPageBeforeEnrichment =
+    !input.status?.trim() &&
+    !input.paymentStatus &&
+    !input.orderStatus?.trim() &&
+    searchTokens.length === 0 &&
+    normalizeSearchTokens(input.authorSearch).length === 0 &&
+    normalizeSearchTokens(input.senderSearch).length === 0 &&
+    normalizeSearchTokens(input.recipientSearch).length === 0 &&
+    sortBy === "date";
+  const documentPageConditions: Prisma.Sql[] = [];
+  if (input.type) {
+    documentPageConditions.push(Prisma.sql`d."documentType" = ${input.type}`);
+  }
+  if (archiveMode === "ACTIVE") {
+    documentPageConditions.push(Prisma.sql`d."isArchived" = false`);
+  } else if (archiveMode === "ARCHIVED") {
+    documentPageConditions.push(Prisma.sql`d."isArchived" = true`);
+  }
+  const documentPageWhereSql = buildWhereSql(documentPageConditions);
+  const groupedDateDirection = sortDirection === "asc" ? Prisma.sql`ASC` : Prisma.sql`DESC`;
+  const documentPageSql = canPageBeforeEnrichment
+    ? Prisma.sql`
+        SELECT
+          d.*,
+          (COUNT(*) OVER())::int AS "groupedTotalCount"
+        FROM document_index d
+        ${documentPageWhereSql}
+        ORDER BY
+          d."documentDate" ${groupedDateDirection},
+          CONCAT(d."documentType", ':', d."documentReferenceType", ':', d."documentReferenceId") DESC
+        LIMIT ${pageSize}
+        OFFSET ${(page - 1) * pageSize}
+      `
+    : undefined;
+  const cte = buildProductMovementJournalCte({
+    baseWhereSql: buildWhereSql(baseConditions),
+    organizationId: user.organizationId,
+    documentPageSql,
+  });
 
-  const [countRows, rows] = await Promise.all([
-    prisma.$queryRaw<Array<{ count: number | bigint }>>(
+  const rows = canPageBeforeEnrichment
+    ? await prisma.$queryRaw<ProductMovementJournalSqlRow[]>(
+        Prisma.sql`
+          ${cte}
+          SELECT *
+          FROM movement_enriched
+          ORDER BY ${orderBySql}
+        `,
+      )
+    : await prisma.$queryRaw<ProductMovementJournalSqlRow[]>(
+        Prisma.sql`
+          ${cte}
+          SELECT
+            movement_enriched.*,
+            (COUNT(*) OVER())::int AS "totalCount"
+          FROM movement_enriched
+          ${finalWhereSql}
+          ORDER BY ${orderBySql}
+          LIMIT ${pageSize}
+          OFFSET ${(page - 1) * pageSize}
+        `,
+      );
+
+  let total = Number(
+    canPageBeforeEnrichment ? (rows[0]?.groupedTotalCount ?? 0) : (rows[0]?.totalCount ?? 0),
+  );
+  if (!rows.length && page > 1) {
+    const countCte = canPageBeforeEnrichment
+      ? buildProductMovementJournalCte({
+          baseWhereSql: buildWhereSql(baseConditions),
+          organizationId: user.organizationId,
+        })
+      : cte;
+    const countRows = await prisma.$queryRaw<Array<{ count: number | bigint }>>(
       Prisma.sql`
-        ${cte}
+        ${countCte}
         SELECT COUNT(*)::int AS count
         FROM movement_enriched
         ${finalWhereSql}
       `,
-    ),
-    prisma.$queryRaw<ProductMovementJournalSqlRow[]>(
-      Prisma.sql`
-        ${cte}
-        SELECT *
-        FROM movement_enriched
-        ${finalWhereSql}
-        ORDER BY ${orderBySql}
-        LIMIT ${pageSize}
-        OFFSET ${(page - 1) * pageSize}
-      `,
-    ),
-  ]);
+    );
+    total = Number(countRows[0]?.count ?? 0);
+  }
 
   return {
     items: rows.map(normalizeProductMovementJournalRow),
-    total: Number(countRows[0]?.count ?? 0),
+    total,
     page,
     pageSize,
   };
@@ -1032,7 +1182,19 @@ export const getProductMovementDocument = async (
     return null;
   }
 
-  const cte = buildProductMovementJournalCte(buildWhereSql(baseConditions));
+  const cte = buildProductMovementJournalCte({
+    baseWhereSql: buildWhereSql(baseConditions),
+    organizationId: user.organizationId,
+    documentPageSql: Prisma.sql`
+      SELECT
+        d.*,
+        NULL::int AS "groupedTotalCount"
+      FROM document_index d
+      WHERE d."documentType" = ${decoded.documentType}
+        AND d."documentReferenceType" = ${decoded.documentReferenceType}
+        AND d."documentReferenceId" = ${decoded.documentReferenceId}
+    `,
+  });
   const [row] = await prisma.$queryRaw<ProductMovementJournalSqlRow[]>(
     Prisma.sql`
       ${cte}
