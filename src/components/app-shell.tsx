@@ -696,6 +696,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                                   <SidebarMenuButton asChild isActive={isChildActive}>
                                     <Link
                                       href={child.href ?? "/"}
+                                      prefetch={false}
                                       onClick={onNavigate}
                                       data-tour={`nav-${child.key}`}
                                       className="min-h-9 rounded-lg text-[13px] [&>svg]:h-[18px] [&>svg]:w-[18px]"
@@ -717,7 +718,12 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                     return (
                       <SidebarMenuItem key={item.key}>
                         <SidebarMenuButton asChild isActive={isActive}>
-                          <Link href={item.href} onClick={onNavigate} data-tour={`nav-${item.key}`}>
+                          <Link
+                            href={item.href}
+                            prefetch={false}
+                            onClick={onNavigate}
+                            data-tour={`nav-${item.key}`}
+                          >
                             <item.icon aria-hidden />
                             <span>{tNav(item.key)}</span>
                           </Link>
@@ -789,6 +795,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
   const renderProfileShortcut = (onNavigate?: () => void) => (
     <Link
       href="/settings/profile"
+      prefetch={false}
       onClick={onNavigate}
       aria-label={tNav("profile")}
       className="group flex min-h-11 w-full items-center justify-between rounded-xl border border-transparent bg-transparent px-2 py-1.5 text-left no-underline transition hover:border-sidebar-primary/20 hover:bg-sidebar-accent/75 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar group-data-[state=collapsed]/sidebar-wrapper:mx-auto group-data-[state=collapsed]/sidebar-wrapper:h-10 group-data-[state=collapsed]/sidebar-wrapper:min-h-10 group-data-[state=collapsed]/sidebar-wrapper:w-10 group-data-[state=collapsed]/sidebar-wrapper:justify-center group-data-[state=collapsed]/sidebar-wrapper:px-0 group-data-[state=collapsed]/sidebar-wrapper:py-0"
@@ -1067,6 +1074,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
             <SidebarHeader className="space-y-3 p-3 group-data-[state=collapsed]/sidebar-wrapper:space-y-2 group-data-[state=collapsed]/sidebar-wrapper:px-2.5">
               <Link
                 href="/dashboard"
+                prefetch={false}
                 className="flex min-h-10 items-center rounded-lg no-underline hover:no-underline group-data-[state=collapsed]/sidebar-wrapper:justify-center"
                 aria-label={tNav("brand")}
               >

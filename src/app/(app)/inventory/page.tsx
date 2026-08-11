@@ -2119,7 +2119,7 @@ const InventoryPage = () => {
               <>
                 {canManageStock ? (
                   <Button asChild className="w-full sm:w-auto" data-tour="inventory-receive">
-                    <Link href="/inventory/receiving">
+                    <Link href="/inventory/receiving" prefetch={false}>
                       <ReceiveIcon className="h-4 w-4" aria-hidden />
                       {t("stockReceiving")}
                     </Link>
@@ -2134,7 +2134,7 @@ const InventoryPage = () => {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="min-w-[240px]">
                     <DropdownMenuItem asChild>
-                      <Link href="/inventory/counts">
+                      <Link href="/inventory/counts" prefetch={false}>
                         <ViewIcon className="h-4 w-4" aria-hidden />
                         {t("stockCounts")}
                       </Link>
@@ -2273,7 +2273,7 @@ const InventoryPage = () => {
           <div data-mobile-inventory-actions className="grid grid-cols-[1fr_auto] gap-2">
             {canManageStock ? (
               <Button asChild className="min-h-12 justify-center px-3 text-sm">
-                <Link href="/inventory/receiving">
+                <Link href="/inventory/receiving" prefetch={false}>
                   <ReceiveIcon className="h-4 w-4 shrink-0" aria-hidden />
                   <span className="leading-tight">{t("stockReceiving")}</span>
                 </Link>
@@ -2311,7 +2311,7 @@ const InventoryPage = () => {
                 ) : null}
                 {canManage ? (
                   <DropdownMenuItem asChild>
-                    <Link href="/inventory/counts">
+                    <Link href="/inventory/counts" prefetch={false}>
                       <ViewIcon className="h-4 w-4" aria-hidden />
                       {t("countAdjustAction")}
                     </Link>
@@ -3093,7 +3093,7 @@ const InventoryPage = () => {
                 {t("noInventory")}
               </div>
               {isAdmin ? (
-                <Link href="/products/new" className="w-full sm:w-auto">
+                <Link href="/products/new" prefetch={false} className="w-full sm:w-auto">
                   <Button className="w-full sm:w-auto">
                     <AddIcon className="h-4 w-4" aria-hidden />
                     {t("addProduct")}

@@ -159,6 +159,7 @@ export const MobileTopBar = ({
         <PwaInstallButton className="bazaar-mobile-header-button" />
         <Link
           href="/settings/profile"
+          prefetch={false}
           className="button-focus-ring bazaar-mobile-header-button inline-flex shrink-0 items-center justify-center focus:outline-none focus-visible:outline-none"
           aria-label={profileLabel}
         >
@@ -220,6 +221,7 @@ export const MobileBottomNav = ({
 const MobileBottomNavLink = ({ item }: { item: MobileShellNavItem }) => (
   <Link
     href={item.href}
+    prefetch={false}
     className={cn(
       "flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-[1.1rem] px-1 py-1 text-[11px] font-semibold no-underline transition hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-card",
       item.active
@@ -287,6 +289,7 @@ export const MobileMoreMenu = ({
               <Link
                 key={item.key}
                 href={item.href}
+                prefetch={false}
                 onClick={onClose}
                 className={cn(
                   "flex min-h-12 items-center gap-3 rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold no-underline shadow-sm transition hover:border-primary/40 hover:bg-accent hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
@@ -349,6 +352,7 @@ export const MobileQuickActionButton = ({
   return (
     <Link
       href={href}
+      prefetch={false}
       className={cn(
         "flex min-h-14 items-center gap-3 rounded-xl border px-3 py-3 text-left no-underline shadow-sm transition hover:no-underline",
         variant === "primary" &&
@@ -436,7 +440,7 @@ export const MobileTaskCard = ({
 
   if (href) {
     return (
-      <Link href={href} className={classNames}>
+      <Link href={href} prefetch={false} className={classNames}>
         {content}
       </Link>
     );

@@ -402,7 +402,7 @@ const ProductMovementsPage = () => {
         aria-label={tCommon("view")}
         className={layout === "mobile" ? "w-full justify-center" : undefined}
       >
-        <Link href={withJournalReturn(movement.detailUrl)}>
+        <Link href={withJournalReturn(movement.detailUrl)} prefetch={false}>
           <ViewIcon className="h-4 w-4" aria-hidden />
           {layout === "mobile" ? tCommon("view") : null}
         </Link>
@@ -425,7 +425,7 @@ const ProductMovementsPage = () => {
         data-testid="movement-edit-button"
         className={layout === "mobile" ? "w-full justify-center" : undefined}
       >
-        <Link href={editTarget.href}>
+        <Link href={editTarget.href} prefetch={false}>
           <EditIcon className="h-4 w-4" aria-hidden />
           {layout === "mobile" ? tCommon("edit") : null}
         </Link>
@@ -458,6 +458,7 @@ const ProductMovementsPage = () => {
             href={`/inventory/movements/${encodeURIComponent(movement.id)}/print?${new URLSearchParams(
               { auto: "1", returnTo: safeCurrentJournalHref },
             ).toString()}`}
+            prefetch={false}
             target="_blank"
             rel="noreferrer"
           >
@@ -518,6 +519,7 @@ const ProductMovementsPage = () => {
             <Link
               className="truncate font-medium text-foreground underline-offset-2 hover:text-primary hover:underline"
               href={withJournalReturn(movement.detailUrl)}
+              prefetch={false}
             >
               #{documentNumber}
             </Link>
@@ -823,7 +825,7 @@ const ProductMovementsPage = () => {
         </Button>
         {sortMenu}
         <Button type="button" variant="secondary" asChild>
-          <Link href="/reports/exports">
+          <Link href="/reports/exports" prefetch={false}>
             <DownloadIcon className="h-4 w-4" aria-hidden />
             {t("export")}
           </Link>
@@ -953,19 +955,19 @@ const ProductMovementsPage = () => {
             <DropdownMenuContent align="end" className="min-w-[240px]">
               <DropdownMenuLabel>{t("createDocument")}</DropdownMenuLabel>
               <DropdownMenuItem asChild>
-                <Link href="/inventory/write-offs">
+                <Link href="/inventory/write-offs" prefetch={false}>
                   <ArchiveIcon className="h-4 w-4" aria-hidden />
                   {t("createWriteOff")}
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
-                <Link href="/inventory/receiving">
+                <Link href="/inventory/receiving" prefetch={false}>
                   <ReceiveIcon className="h-4 w-4" aria-hidden />
                   {t("createReceiving")}
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
-                <Link href="/inventory/transfers">
+                <Link href="/inventory/transfers" prefetch={false}>
                   <TransferIcon className="h-4 w-4" aria-hidden />
                   {t("createTransfer")}
                 </Link>

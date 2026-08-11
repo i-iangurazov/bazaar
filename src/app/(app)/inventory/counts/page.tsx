@@ -305,7 +305,7 @@ const StockCountsPage = () => {
                               asChild
                               aria-label={tCommon("view")}
                             >
-                              <Link href={`/inventory/counts/${count.id}`}>
+                              <Link href={`/inventory/counts/${count.id}`} prefetch={false}>
                                 <ViewIcon className="h-4 w-4" aria-hidden />
                               </Link>
                             </Button>
