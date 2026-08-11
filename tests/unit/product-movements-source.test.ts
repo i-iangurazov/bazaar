@@ -118,7 +118,9 @@ describe("product movement journal source", () => {
     );
 
     expect(pageSource).toContain("getProductMovementEditTarget");
-    expect(pageSource).toContain("<Link href={editTarget.href}>");
+    expect(pageSource).toContain(
+      "<Link href={editTarget.href} prefetch={false}>",
+    );
     expect(pageSource).toContain("returnTo: safeCurrentJournalHref");
     expect(pageSource).toContain("movement-edit-button-disabled");
     expect(pageSource).not.toContain("onClick={() => openEditModal(movement)}");
