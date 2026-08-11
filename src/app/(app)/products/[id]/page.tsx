@@ -475,7 +475,12 @@ const ProductDetailPage = () => {
     },
   });
   const archiveMutation = trpc.products.archive.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
+      await Promise.all([
+        trpcUtils.products.bootstrap.invalidate(),
+        trpcUtils.products.list.invalidate(),
+        trpcUtils.inventory.searchProducts.invalidate(),
+      ]);
       toast({ variant: "success", description: t("archiveSuccess") });
       router.push("/products");
     },

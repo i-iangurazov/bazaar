@@ -17,7 +17,7 @@ export const Modal = ({
   className,
   headerClassName,
   bodyClassName,
-  usePortal = false,
+  usePortal = true,
   mobileSheet = false,
   animated = false,
 }: {

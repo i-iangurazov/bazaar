@@ -68,6 +68,7 @@ export const ProductDuplicateDialog = ({
   const [name, setName] = useState("");
   const [status, setStatus] = useState<"ACTIVE" | "ARCHIVED">("ACTIVE");
   const [options, setOptions] = useState<DuplicateOptions>(defaultOptions);
+  const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
   const duplicateOperationRef = useRef<{ signature: string; key: string } | null>(null);
 
   useEffect(() => {
@@ -77,8 +78,23 @@ export const ProductDuplicateDialog = ({
     setName(t("duplicateNameTemplate", { name: productName }));
     setStatus("ACTIVE");
     setOptions(defaultOptions);
+    setPendingNavigation(null);
     duplicateOperationRef.current = null;
   }, [open, productId, productName, t]);
+
+  useEffect(() => {
+    if (open || !pendingNavigation) {
+      return;
+    }
+
+    // Let Radix remove its focus/pointer lock before the destination route mounts.
+    // Navigating in the same success callback can leave the new page inert in a SPA transition.
+    const frame = window.requestAnimationFrame(() => {
+      router.push(pendingNavigation);
+      setPendingNavigation(null);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [open, pendingNavigation, router]);
 
   const duplicateMutation = trpc.products.duplicate.useMutation({
     onSuccess: async (result) => {
@@ -94,8 +110,10 @@ export const ProductDuplicateDialog = ({
         description:
           result.omittedBarcodesCount > 0 ? t("duplicateSuccessNoBarcodes") : t("duplicateSuccess"),
       });
+      setPendingNavigation(
+        result.status === "ARCHIVED" ? "/products" : `/products/${result.productId}`,
+      );
       onOpenChange(false);
-      router.push(result.status === "ARCHIVED" ? "/products" : `/products/${result.productId}`);
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });

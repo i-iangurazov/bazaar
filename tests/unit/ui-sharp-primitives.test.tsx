@@ -199,6 +199,44 @@ describe("soft-rounded UI primitives", () => {
     await waitFor(() => expect(document.activeElement).toBe(trigger));
   });
 
+  it("portals modals by default and releases interaction when a route-like parent unmounts", async () => {
+    const user = userEvent.setup();
+    const destinationClick = vi.fn();
+    const Harness = () => {
+      const [route, setRoute] = useState<"list" | "detail">("list");
+      const [open, setOpen] = useState(false);
+      if (route === "detail") {
+        return <button onClick={destinationClick}>Edit duplicate</button>;
+      }
+      return (
+        <section data-testid="route-content">
+          <button onClick={() => setOpen(true)}>Duplicate</button>
+          <Modal open={open} onOpenChange={setOpen} title="Duplicate product">
+            <Button
+              onClick={() => {
+                setOpen(false);
+                setRoute("detail");
+              }}
+            >
+              Create copy
+            </Button>
+          </Modal>
+        </section>
+      );
+    };
+
+    render(<Harness />);
+    await user.click(screen.getByRole("button", { name: "Duplicate" }));
+    const dialog = screen.getByRole("dialog", { name: "Duplicate product" });
+    expect(dialog.closest("[data-testid='route-content']")).toBeNull();
+
+    await user.click(within(dialog).getByRole("button", { name: "Create copy" }));
+    const destination = await screen.findByRole("button", { name: "Edit duplicate" });
+    await waitFor(() => expect(document.body.style.pointerEvents).not.toBe("none"));
+    await user.click(destination);
+    expect(destinationClick).toHaveBeenCalledOnce();
+  });
+
   it("renders shadcn-style dialog and sheet surfaces with reachable footers", () => {
     const dialog = render(
       <Dialog open>

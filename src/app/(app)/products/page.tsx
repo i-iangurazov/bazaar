@@ -833,22 +833,85 @@ const ProductsPage = () => {
     },
     { enabled: false },
   );
+  const patchProductArchiveState = useCallback(
+    (productId: string, isDeleted: boolean) => {
+      trpcUtils.products.bootstrap.setData(productsBootstrapInput, (current) => {
+        if (!current) {
+          return current;
+        }
+        const currentProduct = current.list.items.find((item) => item.id === productId);
+        if (!currentProduct) {
+          return current;
+        }
+        if (isDeleted && !showArchived) {
+          return {
+            ...current,
+            list: {
+              ...current.list,
+              items: current.list.items.filter((item) => item.id !== productId),
+              total: Math.max(0, current.list.total - 1),
+            },
+          };
+        }
+        return {
+          ...current,
+          list: {
+            ...current.list,
+            items: current.list.items.map((item) =>
+              item.id === productId ? { ...item, isDeleted } : item,
+            ),
+          },
+        };
+      });
+    },
+    [productsBootstrapInput, showArchived, trpcUtils.products.bootstrap],
+  );
   const archiveMutation = trpc.products.archive.useMutation({
+    onMutate: async ({ productId }) => {
+      await trpcUtils.products.bootstrap.cancel(productsBootstrapInput);
+      const previous = trpcUtils.products.bootstrap.getData(productsBootstrapInput);
+      patchProductArchiveState(productId, true);
+      return { previous };
+    },
     onSuccess: () => {
-      productsBootstrapQuery.refetch();
       toast({ variant: "success", description: t("archiveSuccess") });
     },
-    onError: (error) => {
+    onError: (error, _variables, context) => {
+      if (context?.previous) {
+        trpcUtils.products.bootstrap.setData(productsBootstrapInput, context.previous);
+      }
       toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+    onSettled: () => {
+      void Promise.all([
+        trpcUtils.products.bootstrap.invalidate(productsBootstrapInput),
+        trpcUtils.products.list.invalidate(),
+        trpcUtils.inventory.searchProducts.invalidate(),
+      ]);
     },
   });
   const restoreMutation = trpc.products.restore.useMutation({
+    onMutate: async ({ productId }) => {
+      await trpcUtils.products.bootstrap.cancel(productsBootstrapInput);
+      const previous = trpcUtils.products.bootstrap.getData(productsBootstrapInput);
+      patchProductArchiveState(productId, false);
+      return { previous };
+    },
     onSuccess: () => {
-      productsBootstrapQuery.refetch();
       toast({ variant: "success", description: t("restoreSuccess") });
     },
-    onError: (error) => {
+    onError: (error, _variables, context) => {
+      if (context?.previous) {
+        trpcUtils.products.bootstrap.setData(productsBootstrapInput, context.previous);
+      }
       toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+    onSettled: () => {
+      void Promise.all([
+        trpcUtils.products.bootstrap.invalidate(productsBootstrapInput),
+        trpcUtils.products.list.invalidate(),
+        trpcUtils.inventory.searchProducts.invalidate(),
+      ]);
     },
   });
   const bulkArchiveMutation = trpc.products.archive.useMutation();
@@ -2822,7 +2885,12 @@ const ProductsPage = () => {
       await Promise.all(
         targets.map((product) => bulkArchiveMutation.mutateAsync({ productId: product.id })),
       );
-      productsBootstrapQuery.refetch();
+      targets.forEach((product) => patchProductArchiveState(product.id, true));
+      void Promise.all([
+        trpcUtils.products.bootstrap.invalidate(productsBootstrapInput),
+        trpcUtils.products.list.invalidate(),
+        trpcUtils.inventory.searchProducts.invalidate(),
+      ]);
       toast({
         variant: "success",
         description: t("bulkArchiveSuccess", { count: targets.length }),
@@ -2848,7 +2916,12 @@ const ProductsPage = () => {
       await Promise.all(
         targets.map((product) => bulkRestoreMutation.mutateAsync({ productId: product.id })),
       );
-      productsBootstrapQuery.refetch();
+      targets.forEach((product) => patchProductArchiveState(product.id, false));
+      void Promise.all([
+        trpcUtils.products.bootstrap.invalidate(productsBootstrapInput),
+        trpcUtils.products.list.invalidate(),
+        trpcUtils.inventory.searchProducts.invalidate(),
+      ]);
       toast({
         variant: "success",
         description: t("bulkRestoreSuccess", { count: targets.length }),

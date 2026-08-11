@@ -188,7 +188,9 @@ describe("index page source layout", () => {
     expect(duplicateDialogSource).toContain("copyInventory");
     expect(duplicateDialogSource).toContain("copyVariants: true");
     expect(duplicateDialogSource).toContain("copyInventory: false");
-    expect(duplicateDialogSource).toContain('router.push(result.status === "ARCHIVED"');
+    expect(duplicateDialogSource).toContain("setPendingNavigation(");
+    expect(duplicateDialogSource).toContain("if (open || !pendingNavigation)");
+    expect(duplicateDialogSource).toContain("window.requestAnimationFrame");
     expect(listSource).toContain('buildProductListLaunchedHref("/products/new"');
     expect(listSource).toContain('params.set("returnTo", productsListReturnPath)');
     expect(formSource).toContain("enableSimilarProductCheck &&");
@@ -209,6 +211,21 @@ describe("index page source layout", () => {
     expect(productReadSource).toContain("minStock: minStockByStore.get(store.id) ?? 0");
     expect(productSchemasSource).toContain("minStock: z.number().int().min(0).optional()");
     expect(productMutationsSource).toContain("minStock: input.minStock");
+  });
+
+  it("updates archive state immediately and reconciles all product readers", async () => {
+    const source = await readSource("src/app/(app)/products/page.tsx");
+    const detailSource = await readSource("src/app/(app)/products/[id]/page.tsx");
+
+    expect(source).toContain("const patchProductArchiveState = useCallback");
+    expect(source).toContain("items: current.list.items.filter((item) => item.id !== productId)");
+    expect(source).toContain("onMutate: async ({ productId }) =>");
+    expect(source).toContain("trpcUtils.products.bootstrap.cancel(productsBootstrapInput)");
+    expect(source).toContain("trpcUtils.products.bootstrap.invalidate(productsBootstrapInput)");
+    expect(source).toContain("trpcUtils.inventory.searchProducts.invalidate()");
+    expect(detailSource).toContain("onSuccess: async () =>");
+    expect(detailSource).toContain("trpcUtils.products.bootstrap.invalidate()");
+    expect(detailSource).toContain('router.push("/products")');
   });
 
   it("exposes store-scoped product behavior settings on the profile page", async () => {
