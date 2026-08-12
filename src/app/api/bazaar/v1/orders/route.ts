@@ -33,7 +33,7 @@ const orderSchema = z.object({
     .refine(isValidOptionalCustomerAddress)
     .optional()
     .nullable(),
-  comment: z.string().trim().max(2_000).optional().nullable(),
+  comment: z.string().trim().max(2_000).nullish().default(null),
   lines: z
     .array(
       z.object({

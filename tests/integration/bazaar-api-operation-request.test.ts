@@ -184,6 +184,28 @@ describeDb("Bazaar API order OperationRequest consumer", () => {
     expect(sideEffects.sendOrderConfirmationEmail).toHaveBeenCalledTimes(1);
   });
 
+  it("creates an order when comment is omitted and normalizes it to no notes", async () => {
+    const { product, token } = await setup();
+    const body = orderBody(product.id, { comment: undefined });
+
+    const response = await postBazaarApiOrder(
+      orderRequest({
+        token,
+        body,
+        idempotencyKey: "api-order-optional-comment-0001",
+      }),
+    );
+    const payload = (await response.json()) as { order: { id: string } };
+
+    expect(response.status).toBe(201);
+    await expect(
+      prisma.customerOrder.findUniqueOrThrow({
+        where: { id: payload.order.id },
+        select: { notes: true },
+      }),
+    ).resolves.toEqual({ notes: null });
+  });
+
   it("uses exact external identity as the stable key and requires a key when it is absent", async () => {
     const { product, token } = await setup();
     const body = orderBody(product.id, { externalId: "EXTERNAL-STABLE-1" });
