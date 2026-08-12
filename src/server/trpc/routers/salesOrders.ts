@@ -1,6 +1,11 @@
 import { CustomerOrderEmailType, CustomerOrderStatus, type PrismaClient } from "@prisma/client";
 import { z } from "zod";
 
+import {
+  isValidOptionalCustomerAddress,
+  isValidOptionalCustomerPhone,
+} from "@/lib/customerContact";
+
 import { managerProcedure, protectedProcedure, rateLimit, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
 import { AppError } from "@/server/services/errors";
@@ -190,8 +195,18 @@ export const salesOrdersRouter = router({
         idempotencyKey: z.string().min(8),
         customerName: z.string().max(160).optional().nullable(),
         customerEmail: optionalEmailSchema,
-        customerPhone: z.string().max(64).optional().nullable(),
-        customerAddress: z.string().max(512).optional().nullable(),
+        customerPhone: z
+          .string()
+          .max(64)
+          .refine(isValidOptionalCustomerPhone)
+          .optional()
+          .nullable(),
+        customerAddress: z
+          .string()
+          .max(512)
+          .refine(isValidOptionalCustomerAddress)
+          .optional()
+          .nullable(),
         notes: z.string().max(2_000).optional().nullable(),
         lines: z
           .array(

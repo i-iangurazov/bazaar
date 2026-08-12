@@ -25,6 +25,12 @@ import { getEffectiveProductPrice } from "@/server/services/effectiveProductPric
 import { assertUserCanAccessStore } from "@/server/services/storeAccess";
 import { classifyDatabaseOperationFailure } from "@/server/services/databaseOperationFailure";
 import {
+  normalizeOptionalCustomerAddress,
+  normalizeOptionalCustomerPhone,
+  normalizeUpdatedCustomerAddress,
+  normalizeUpdatedCustomerPhone,
+} from "@/server/services/customerContact";
+import {
   OPERATION_FAILURE_SAFE_BEFORE_EFFECTS,
   runOperationRequest,
   type OperationFailureDecision,
@@ -675,6 +681,8 @@ const createCustomerOrderDraftTx = async (
   tx: Prisma.TransactionClient,
   input: CreateCustomerOrderDraftInput,
 ) => {
+  const customerPhone = normalizeOptionalCustomerPhone(input.customerPhone);
+  const customerAddress = normalizeOptionalCustomerAddress(input.customerAddress);
   const actor = await tx.user.findFirst({
     where: {
       id: input.actorId,
@@ -715,8 +723,8 @@ const createCustomerOrderDraftTx = async (
       source: CustomerOrderSource.MANUAL,
       customerName: input.customerName ?? null,
       customerEmail: input.customerEmail ?? null,
-      customerPhone: input.customerPhone ?? null,
-      customerAddress: input.customerAddress ?? null,
+      customerPhone,
+      customerAddress,
       notes: input.notes ?? null,
       ...resolveCurrencySnapshot(store),
       createdById: input.actorId,
@@ -729,8 +737,8 @@ const createCustomerOrderDraftTx = async (
     storeId: input.storeId,
     customerName: input.customerName,
     customerEmail: input.customerEmail,
-    customerPhone: input.customerPhone,
-    customerAddress: input.customerAddress,
+    customerPhone,
+    customerAddress,
   });
 
   if (input.lines?.length) {
@@ -917,13 +925,19 @@ export const setCustomerOrderCustomer = async (input: {
 
     assertEditable(order.status);
 
+    const customerPhone = normalizeUpdatedCustomerPhone(input.customerPhone, order.customerPhone);
+    const customerAddress = normalizeUpdatedCustomerAddress(
+      input.customerAddress,
+      order.customerAddress,
+    );
+
     const updated = await tx.customerOrder.update({
       where: { id: order.id },
       data: {
         customerName: input.customerName ?? null,
         customerEmail: input.customerEmail ?? null,
-        customerPhone: input.customerPhone ?? null,
-        customerAddress: input.customerAddress ?? null,
+        customerPhone,
+        customerAddress,
         notes: input.notes ?? null,
         updatedById: input.actorId,
       },
@@ -938,6 +952,7 @@ export const setCustomerOrderCustomer = async (input: {
       customerAddress: updated.customerAddress,
       orderedAt: updated.updatedAt,
       countOrder: false,
+      allowLegacyContact: true,
     });
 
     await writeAuditLog(tx, {

@@ -35,6 +35,12 @@ import { withIdempotency } from "@/server/services/idempotency";
 import { toJson } from "@/server/services/json";
 import { sanitizeListImageUrl } from "@/server/services/products/serializers";
 import { upsertCustomerFromOrderTx } from "@/server/services/customers";
+import {
+  normalizeOptionalCustomerAddress,
+  normalizeOptionalCustomerPhone,
+  normalizeUpdatedCustomerAddress,
+  normalizeUpdatedCustomerPhone,
+} from "@/server/services/customerContact";
 import { getEffectiveProductPrice } from "@/server/services/effectiveProductPrice";
 import {
   calculateCashDiscrepancyKgs,
@@ -423,8 +429,8 @@ const resolvePosCustomerSelectionTx = async (
   return {
     customerName: input.customerName?.trim() || null,
     customerEmail: input.customerEmail?.trim().toLowerCase() || null,
-    customerPhone: input.customerPhone?.trim() || null,
-    customerAddress: input.customerAddress?.trim() || null,
+    customerPhone: normalizeOptionalCustomerPhone(input.customerPhone),
+    customerAddress: normalizeOptionalCustomerAddress(input.customerAddress),
   };
 };
 
@@ -2220,6 +2226,7 @@ export const createPosSaleDraft = async (input: {
         customerEmail: selectedCustomer?.customerEmail,
         customerPhone: selectedCustomer?.customerPhone,
         countOrder: false,
+        allowLegacyContact: true,
       });
 
       if (input.lines?.length) {
@@ -3492,7 +3499,6 @@ export const editCompletedPosSale = async (input: {
   if (!input.lines.length) {
     throw new AppError("salesOrderEmpty", "BAD_REQUEST", 400);
   }
-
   const result = await prisma.$transaction(async (tx) => {
     const { result: editResult, replayed } = await withIdempotency(
       tx,
@@ -3551,6 +3557,14 @@ export const editCompletedPosSale = async (input: {
         if (!sale.shiftId || !sale.registerId) {
           throw new AppError("posSaleMissingShift", "CONFLICT", 409);
         }
+        const customerPhone = normalizeUpdatedCustomerPhone(
+          input.customerPhone,
+          sale.customerPhone,
+        );
+        const customerAddress = normalizeUpdatedCustomerAddress(
+          input.customerAddress,
+          sale.customerAddress,
+        );
 
         const existingLineIds = new Set(sale.lines.map((line) => line.id));
         const requestedLineIds = new Set<string>();
@@ -3774,8 +3788,8 @@ export const editCompletedPosSale = async (input: {
           data: {
             customerName: input.customerName?.trim() || null,
             customerEmail: input.customerEmail?.trim().toLowerCase() || null,
-            customerPhone: input.customerPhone?.trim() || null,
-            customerAddress: input.customerAddress?.trim() || null,
+            customerPhone,
+            customerAddress,
             notes: input.notes?.trim() || null,
             updatedById: input.actorId,
           },
@@ -4738,6 +4752,7 @@ export const completePosSale = async (input: {
             customerPhone: updated.customerPhone,
             orderedAt: updated.completedAt,
             countOrder: true,
+            allowLegacyContact: true,
           });
 
           await writeAuditLog(tx, {

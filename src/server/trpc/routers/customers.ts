@@ -26,7 +26,7 @@ const importRowSchema = z.object({
   name: z.string().max(180).optional().nullable(),
   email: z.string().max(254).optional().nullable(),
   phone: z.string().max(80).optional().nullable(),
-  address: z.string().max(500).optional().nullable(),
+  address: z.string().max(512).optional().nullable(),
   address1: z.string().max(500).optional().nullable(),
   address2: z.string().max(500).optional().nullable(),
   city: z.string().max(120).optional().nullable(),

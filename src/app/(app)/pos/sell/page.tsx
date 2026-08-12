@@ -72,6 +72,10 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import {
+  isValidOptionalCustomerAddress,
+  isValidOptionalCustomerPhone,
+} from "@/lib/customerContact";
+import {
   currencySourceWithFallback,
   displayMoneyFromKgs,
   displayMoneyToKgs,
@@ -2517,6 +2521,14 @@ const PosSellPage = () => {
       toast({ variant: "error", description: t("sell.customerContactRequired") });
       return;
     }
+    if (!isValidOptionalCustomerPhone(phone)) {
+      toast({ variant: "error", description: tErrors("customerPhoneInvalid") });
+      return;
+    }
+    if (!isValidOptionalCustomerAddress(address)) {
+      toast({ variant: "error", description: tErrors("customerAddressInvalid") });
+      return;
+    }
 
     try {
       const result = await createCustomerMutation.mutateAsync({
@@ -2572,6 +2584,17 @@ const PosSellPage = () => {
     }
     if (!email && !phoneDigits) {
       toast({ variant: "error", description: t("sell.customerContactRequired") });
+      return;
+    }
+    if (!isValidOptionalCustomerPhone(phone) && phone !== (selectedCustomer.phone?.trim() ?? "")) {
+      toast({ variant: "error", description: tErrors("customerPhoneInvalid") });
+      return;
+    }
+    if (
+      !isValidOptionalCustomerAddress(address) &&
+      address !== (selectedCustomer.address?.trim() ?? "")
+    ) {
+      toast({ variant: "error", description: tErrors("customerAddressInvalid") });
       return;
     }
 
@@ -3242,6 +3265,20 @@ const PosSellPage = () => {
     }
     if (!journalEditLines.length) {
       toast({ variant: "error", description: t("sell.editReceiptLinesRequired") });
+      return;
+    }
+    if (
+      !isValidOptionalCustomerPhone(journalEditCustomerPhone) &&
+      journalEditCustomerPhone.trim() !== (journalSelectedSale.customerPhone?.trim() ?? "")
+    ) {
+      toast({ variant: "error", description: tErrors("customerPhoneInvalid") });
+      return;
+    }
+    if (
+      !isValidOptionalCustomerAddress(journalEditCustomerAddress) &&
+      journalEditCustomerAddress.trim() !== (journalSelectedSale.customerAddress?.trim() ?? "")
+    ) {
+      toast({ variant: "error", description: tErrors("customerAddressInvalid") });
       return;
     }
     const normalized = journalEditLines.map((line) => ({

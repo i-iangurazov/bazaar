@@ -4871,6 +4871,8 @@
     "customerNameRequired": "Имя клиента обязательно.",
     "customerContactRequired": "Укажите email или телефон клиента.",
     "customerPhoneDigitsRequired": "Введите телефон цифрами.",
+    "customerPhoneInvalid": "Введите полный международный номер телефона с кодом страны и знаком +.",
+    "customerAddressInvalid": "Введите корректный адрес клиента с улицей, населённым пунктом или номером.",
     "customerEmailInvalid": "Некорректный email клиента.",
     "customerDuplicate": "Клиент с таким email или телефоном уже есть в этом магазине.",
     "customerNotFound": "Клиент не найден.",

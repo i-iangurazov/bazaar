@@ -56,6 +56,87 @@ describeDb("sales orders", () => {
     expect(dbOrder?.lines[0]?.qty).toBe(2);
   });
 
+  it("normalizes new order contacts, rejects invalid writes, and permits unchanged legacy snapshots", async () => {
+    const { org, store, product, adminUser } = await seedBase({ plan: "BUSINESS" });
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+      isOrgOwner: true,
+    });
+
+    const valid = await caller.salesOrders.createDraft({
+      idempotencyKey: "sales-contact-valid-1",
+      storeId: store.id,
+      customerName: "Order Contact",
+      customerEmail: "order-contact@example.test",
+      customerPhone: "+996 (555) 123-456",
+      customerAddress: "  Bishkek,  Chui  1 ",
+      lines: [{ productId: product.id, qty: 1 }],
+    });
+    await expect(
+      prisma.customerOrder.findUniqueOrThrow({ where: { id: valid.id } }),
+    ).resolves.toMatchObject({
+      customerPhone: "+996555123456",
+      customerAddress: "Bishkek, Chui 1",
+    });
+
+    await expect(
+      caller.salesOrders.createDraft({
+        idempotencyKey: "sales-contact-invalid-1",
+        storeId: store.id,
+        customerName: "Invalid Order Contact",
+        customerEmail: "invalid-order@example.test",
+        customerPhone: "+996 555",
+        customerAddress: "Bishkek 2",
+        lines: [{ productId: product.id, qty: 1 }],
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(
+      prisma.customerOrder.count({
+        where: { organizationId: org.id, customerEmail: "invalid-order@example.test" },
+      }),
+    ).resolves.toBe(0);
+
+    const legacy = await prisma.customerOrder.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        number: "SO-LEGACY-CONTACT",
+        source: "MANUAL",
+        customerName: "Legacy Order",
+        customerEmail: "legacy-order@example.test",
+        customerPhone: "555-local",
+        customerAddress: "---",
+        createdById: adminUser.id,
+        updatedById: adminUser.id,
+      },
+    });
+    await expect(
+      caller.salesOrders.setCustomer({
+        customerOrderId: legacy.id,
+        customerName: "Legacy Order Renamed",
+        customerEmail: legacy.customerEmail,
+        customerPhone: legacy.customerPhone,
+        customerAddress: legacy.customerAddress,
+      }),
+    ).resolves.toMatchObject({
+      customerName: "Legacy Order Renamed",
+      customerPhone: "555-local",
+      customerAddress: "---",
+    });
+    await expect(
+      caller.salesOrders.setCustomer({
+        customerOrderId: legacy.id,
+        customerName: "Legacy Order Renamed",
+        customerEmail: legacy.customerEmail,
+        customerPhone: "123 local",
+        customerAddress: legacy.customerAddress,
+      }),
+    ).rejects.toMatchObject({ message: "customerPhoneInvalid" });
+  });
+
   it("sends and logs manual order confirmation emails", async () => {
     const { org, store, product, adminUser } = await seedBase();
 

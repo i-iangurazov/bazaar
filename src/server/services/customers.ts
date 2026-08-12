@@ -7,6 +7,12 @@ import { AppError } from "@/server/services/errors";
 import { toJson } from "@/server/services/json";
 import { assertFeatureEnabled } from "@/server/services/planLimits";
 import {
+  normalizeOptionalCustomerAddress,
+  normalizeOptionalCustomerPhone,
+  normalizeUpdatedCustomerAddress,
+  normalizeUpdatedCustomerPhone,
+} from "@/server/services/customerContact";
+import {
   assertUserCanAccessStore,
   resolveAccessibleStoreIds,
   type StoreAccessUser,
@@ -133,23 +139,26 @@ const ensureCustomerContact = (input: { email?: string | null; phone?: string | 
   }
 };
 
-const normalizeManualCustomerInput = (input: {
-  name?: string | null;
-  email?: string | null;
-  phone?: string | null;
-  address?: string | null;
-}) => {
+const normalizeManualCustomerInput = (
+  input: {
+    name?: string | null;
+    email?: string | null;
+    phone?: string | null;
+    address?: string | null;
+  },
+  existing?: { phone?: string | null; address?: string | null },
+) => {
   const name = normalizeOptionalText(input.name);
   const email = normalizeCustomerEmail(input.email);
-  const rawPhone = normalizeOptionalText(input.phone);
-  const phone = normalizeCustomerPhone(input.phone);
-  const address = normalizeOptionalText(input.address);
+  const phone = existing
+    ? normalizeUpdatedCustomerPhone(input.phone, existing.phone)
+    : normalizeOptionalCustomerPhone(input.phone);
+  const address = existing
+    ? normalizeUpdatedCustomerAddress(input.address, existing.address)
+    : normalizeOptionalCustomerAddress(input.address);
 
   if (!name) {
     throw new AppError("customerNameRequired", "BAD_REQUEST", 400);
-  }
-  if (rawPhone && !phone) {
-    throw new AppError("customerPhoneDigitsRequired", "BAD_REQUEST", 400);
   }
   ensureCustomerContact({ email, phone });
   if (email && !emailPattern.test(email)) {
@@ -166,10 +175,21 @@ const validateImportRow = (
   const errors: string[] = [];
   const warnings: string[] = [];
   const email = normalizeCustomerEmail(row.email);
-  const phone = normalizeCustomerPhone(row.phone);
+  let phone: string | null = null;
+  try {
+    phone = normalizeOptionalCustomerPhone(row.phone);
+  } catch {
+    errors.push("customerPhoneInvalid");
+  }
   const name =
     normalizeOptionalText(row.name) ?? (email ? email.split("@")[0] : null) ?? phone ?? "Без имени";
-  const address = normalizeCustomerImportAddress(row);
+  const importedAddress = normalizeCustomerImportAddress(row);
+  let address: string | null = null;
+  try {
+    address = normalizeOptionalCustomerAddress(importedAddress);
+  } catch {
+    errors.push("customerAddressInvalid");
+  }
   const createdAt = parseCustomerImportDate(row.createdAt);
 
   if (!normalizeOptionalText(row.name) && !email && !phone) {
@@ -696,7 +716,7 @@ export const updateCustomer = async (input: {
     throw new AppError("customerNotFound", "NOT_FOUND", 404);
   }
   await assertUserCanAccessStore(prisma, input.user, existing.storeId);
-  const normalized = normalizeManualCustomerInput(input);
+  const normalized = normalizeManualCustomerInput(input, existing);
 
   const duplicate = await findMatchingCustomer(prisma, {
     organizationId: input.user.organizationId,
@@ -1132,15 +1152,30 @@ export const upsertCustomerFromOrderTx = async (
     customerAddress?: string | null;
     orderedAt?: Date | null;
     countOrder?: boolean;
+    allowLegacyContact?: boolean;
   },
 ) => {
   const email = normalizeCustomerEmail(input.customerEmail);
-  const phone = normalizeCustomerPhone(input.customerPhone);
+  let phone: string | null = null;
+  let address: string | null = null;
+  try {
+    phone = normalizeOptionalCustomerPhone(input.customerPhone);
+  } catch (error) {
+    if (!input.allowLegacyContact) {
+      throw error;
+    }
+  }
+  try {
+    address = normalizeOptionalCustomerAddress(input.customerAddress);
+  } catch (error) {
+    if (!input.allowLegacyContact) {
+      throw error;
+    }
+  }
   if (!email && !phone) {
     return null;
   }
   const name = normalizeOptionalText(input.customerName) ?? email ?? phone ?? "Customer";
-  const address = normalizeOptionalText(input.customerAddress);
   const orderedAt = input.orderedAt ?? new Date();
   const countOrder = input.countOrder ?? true;
 

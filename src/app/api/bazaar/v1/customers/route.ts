@@ -1,5 +1,10 @@
 import { z } from "zod";
 
+import {
+  isValidOptionalCustomerAddress,
+  isValidOptionalCustomerPhone,
+} from "@/lib/customerContact";
+
 import { authenticateBazaarApiRequest, createBazaarApiCustomer } from "@/server/services/bazaarApi";
 import { mapBazaarApiError } from "@/app/api/bazaar/v1/error-response";
 
@@ -9,8 +14,8 @@ export const dynamic = "force-dynamic";
 const customerSchema = z.object({
   name: z.string().trim().min(1).max(160),
   email: z.string().trim().email().max(254),
-  phone: z.string().trim().min(1).max(64),
-  address: z.string().trim().max(512).optional().nullable(),
+  phone: z.string().trim().min(1).max(64).refine(isValidOptionalCustomerPhone),
+  address: z.string().trim().max(512).refine(isValidOptionalCustomerAddress).optional().nullable(),
 });
 
 export const POST = async (request: Request) => {

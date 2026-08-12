@@ -12,6 +12,7 @@ import {
 import { prisma } from "@/server/db/prisma";
 import { getLogger } from "@/server/logging";
 import { AppError } from "@/server/services/errors";
+import { normalizeOptionalCustomerPhone } from "@/server/services/customerContact";
 import { writeAuditLog } from "@/server/services/audit";
 import { upsertCustomerFromOrderTx } from "@/server/services/customers";
 import { toJson } from "@/server/services/json";
@@ -1168,7 +1169,7 @@ const createCatalogCheckoutOrderTx = async (
 
   const customerName = input.customerName.trim();
   const customerEmail = input.customerEmail.trim();
-  const customerPhone = input.customerPhone.trim();
+  const customerPhone = normalizeOptionalCustomerPhone(input.customerPhone);
   if (!customerName || !customerEmail || !customerPhone) {
     throw new AppError("invalidInput", "BAD_REQUEST", 400);
   }

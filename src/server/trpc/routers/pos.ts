@@ -8,6 +8,11 @@ import {
 import { z } from "zod";
 
 import {
+  isValidOptionalCustomerAddress,
+  isValidOptionalCustomerPhone,
+} from "@/lib/customerContact";
+
+import {
   adminProcedure as baseAdminProcedure,
   cashierProcedure as baseCashierProcedure,
   managerProcedure as baseManagerProcedure,
@@ -393,8 +398,20 @@ export const posRouter = router({
           storeId: z.string().min(1),
           name: z.string().trim().min(1).max(180),
           email: z.string().trim().max(254).optional().nullable(),
-          phone: z.string().trim().max(80).optional().nullable(),
-          address: z.string().trim().max(500).optional().nullable(),
+          phone: z
+            .string()
+            .trim()
+            .max(80)
+            .refine(isValidOptionalCustomerPhone)
+            .optional()
+            .nullable(),
+          address: z
+            .string()
+            .trim()
+            .max(500)
+            .refine(isValidOptionalCustomerAddress)
+            .optional()
+            .nullable(),
         }),
       )
       .mutation(async ({ ctx, input }) => {
@@ -617,8 +634,18 @@ export const posRouter = router({
           customerId: z.string().min(1).optional().nullable(),
           customerName: z.string().max(160).optional().nullable(),
           customerEmail: z.string().max(254).optional().nullable(),
-          customerPhone: z.string().max(64).optional().nullable(),
-          customerAddress: z.string().max(512).optional().nullable(),
+          customerPhone: z
+            .string()
+            .max(64)
+            .refine(isValidOptionalCustomerPhone)
+            .optional()
+            .nullable(),
+          customerAddress: z
+            .string()
+            .max(512)
+            .refine(isValidOptionalCustomerAddress)
+            .optional()
+            .nullable(),
           notes: z.string().max(2_000).optional().nullable(),
           lines: z
             .array(

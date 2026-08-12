@@ -31,6 +31,10 @@ import {
   upsertCustomerFromOrderTx,
 } from "@/server/services/customers";
 import { AppError } from "@/server/services/errors";
+import {
+  normalizeOptionalCustomerAddress,
+  normalizeOptionalCustomerPhone,
+} from "@/server/services/customerContact";
 import { applyStockMovement } from "@/server/services/inventory";
 import { toJson } from "@/server/services/json";
 import {
@@ -1203,8 +1207,8 @@ const normalizeBazaarApiCustomerInput = (input: {
 }) => {
   const name = normalizeOptionalText(input.name);
   const email = normalizeCustomerEmail(input.email);
-  const phone = normalizeCustomerPhone(input.phone);
-  const address = normalizeOptionalText(input.address);
+  const phone = normalizeOptionalCustomerPhone(input.phone);
+  const address = normalizeOptionalCustomerAddress(input.address);
 
   if (!name || !email || !phone || !customerEmailPattern.test(email)) {
     throw new AppError("invalidInput", "BAD_REQUEST", 400);
@@ -1350,6 +1354,8 @@ const createBazaarApiOrderTx = async (
   tx: Prisma.TransactionClient,
   input: CreateBazaarApiOrderInput,
 ) => {
+  const customerPhone = normalizeOptionalCustomerPhone(input.customerPhone);
+  const customerAddress = normalizeOptionalCustomerAddress(input.customerAddress);
   const externalId = normalizeBazaarExternalOrderId(input.externalId);
   const externalIdNote =
     externalId && shouldWriteLegacyBazaarApiExternalIdMarker()
@@ -1560,8 +1566,8 @@ const createBazaarApiOrderTx = async (
       confirmedAt: new Date(),
       customerName: normalizeOptionalText(input.customerName),
       customerEmail: normalizeOptionalText(input.customerEmail),
-      customerPhone: normalizeOptionalText(input.customerPhone),
-      customerAddress: normalizeOptionalText(input.customerAddress),
+      customerPhone,
+      customerAddress,
       notes: notes || null,
       externalOrderId: externalId,
       subtotalKgs: subtotal,
@@ -1595,8 +1601,8 @@ const createBazaarApiOrderTx = async (
     storeId: input.storeId,
     customerName: input.customerName,
     customerEmail: input.customerEmail,
-    customerPhone: input.customerPhone,
-    customerAddress: input.customerAddress,
+    customerPhone,
+    customerAddress,
   });
   await queueOrderConfirmationEmailTx(tx, {
     organizationId: input.organizationId,

@@ -4871,6 +4871,8 @@
     "customerNameRequired": "Customer name is required.",
     "customerContactRequired": "Enter at least a customer email or phone.",
     "customerPhoneDigitsRequired": "Enter the phone number using digits.",
+    "customerPhoneInvalid": "Enter a complete international phone number, including the + country code.",
+    "customerAddressInvalid": "Enter a valid customer address with a street, locality, or number.",
     "customerEmailInvalid": "Customer email is invalid.",
     "customerDuplicate": "A customer with this email or phone already exists in this store.",
     "customerNotFound": "Customer not found.",

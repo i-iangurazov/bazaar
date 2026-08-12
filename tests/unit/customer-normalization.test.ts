@@ -4,6 +4,12 @@ import {
   normalizeCustomerImportAddress,
   normalizeCustomerPhone,
 } from "@/server/services/customers";
+import {
+  isValidOptionalCustomerAddress,
+  isValidOptionalCustomerPhone,
+  normalizeCustomerContactAddress,
+  normalizeCustomerContactPhone,
+} from "@/lib/customerContact";
 
 describe("customer normalization", () => {
   it("removes spreadsheet text markers from phone numbers", () => {
@@ -26,5 +32,20 @@ describe("customer normalization", () => {
     ).toBe(
       "Default Address Address1, Default Address Address2, Address, Bishkek, Chuy, KG, 720000",
     );
+  });
+
+  it("normalizes valid international phones and rejects incomplete values", () => {
+    expect(normalizeCustomerContactPhone("'+996 (555) 123-456")).toBe("+996555123456");
+    expect(normalizeCustomerContactPhone("+33 1 42 68 53 00")).toBe("+33142685300");
+    expect(isValidOptionalCustomerPhone(null)).toBe(true);
+    expect(isValidOptionalCustomerPhone("+996 555")).toBe(false);
+    expect(isValidOptionalCustomerPhone("555 123 456")).toBe(false);
+  });
+
+  it("normalizes valid addresses and rejects punctuation-only/control values", () => {
+    expect(normalizeCustomerContactAddress("  Bishkek,  Chui  1  ")).toBe("Bishkek, Chui 1");
+    expect(isValidOptionalCustomerAddress("")).toBe(true);
+    expect(isValidOptionalCustomerAddress("---")).toBe(false);
+    expect(isValidOptionalCustomerAddress("Bishkek\u0000Chui 1")).toBe(false);
   });
 });

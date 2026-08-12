@@ -1,6 +1,11 @@
 import { z } from "zod";
 
 import {
+  isValidOptionalCustomerAddress,
+  isValidOptionalCustomerPhone,
+} from "@/lib/customerContact";
+
+import {
   authenticateBazaarApiRequest,
   createBazaarApiOrderOperation,
   listBazaarApiOrders,
@@ -14,8 +19,20 @@ const orderSchema = z.object({
   externalId: z.string().trim().min(1).max(160).optional().nullable(),
   customerName: z.string().trim().max(160).optional().nullable(),
   customerEmail: z.string().trim().email().max(254).optional().nullable(),
-  customerPhone: z.string().trim().max(64).optional().nullable(),
-  customerAddress: z.string().trim().max(512).optional().nullable(),
+  customerPhone: z
+    .string()
+    .trim()
+    .max(64)
+    .refine(isValidOptionalCustomerPhone)
+    .optional()
+    .nullable(),
+  customerAddress: z
+    .string()
+    .trim()
+    .max(512)
+    .refine(isValidOptionalCustomerAddress)
+    .optional()
+    .nullable(),
   comment: z.string().trim().max(2_000).optional().nullable(),
   lines: z
     .array(

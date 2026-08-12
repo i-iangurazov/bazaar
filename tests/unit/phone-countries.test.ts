@@ -32,7 +32,9 @@ describe("phone country formatting", () => {
 
   it("validates complete international values", () => {
     expect(isCompleteInternationalPhone("+996 555 123 456")).toBe(true);
+    expect(isCompleteInternationalPhone("+33 1 42 68 53 00")).toBe(true);
     expect(isCompleteInternationalPhone("+996 555")).toBe(false);
     expect(isCompleteInternationalPhone("555 123 456")).toBe(false);
+    expect(isCompleteInternationalPhone("+996 555 CALLME")).toBe(false);
   });
 });

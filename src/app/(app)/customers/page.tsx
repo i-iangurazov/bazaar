@@ -39,6 +39,10 @@ import {
   type CustomerExportColumnKey,
 } from "@/lib/customerExport";
 import { formatStoreMoney } from "@/lib/currencyDisplay";
+import {
+  isValidOptionalCustomerAddress,
+  isValidOptionalCustomerPhone,
+} from "@/lib/customerContact";
 import type { DownloadFormat } from "@/lib/fileExport";
 import { formatDateTime } from "@/lib/i18nFormat";
 import { trpc } from "@/lib/trpc";
@@ -209,7 +213,7 @@ const CustomerDatabasePage = () => {
   });
 
   const selectedStore = stores.find((store) => store.id === storeId);
-  const customers = customersQuery.data?.items ?? [];
+  const customers = useMemo(() => customersQuery.data?.items ?? [], [customersQuery.data?.items]);
   const customerDetail = customerDetailQuery.data ?? null;
   const exportColumns = useMemo(
     () =>
@@ -225,14 +229,30 @@ const CustomerDatabasePage = () => {
   );
   const formErrors = useMemo(() => {
     const errors: string[] = [];
+    const persistedCustomer = form.id
+      ? (customers.find((customer) => customer.id === form.id) ??
+        (customerDetail?.customer.id === form.id ? customerDetail.customer : null))
+      : null;
     if (!form.name.trim()) {
       errors.push(t("validation.nameRequired"));
     }
     if (!form.email.trim() && !form.phone.trim()) {
       errors.push(t("validation.contactRequired"));
     }
+    if (
+      !isValidOptionalCustomerPhone(form.phone) &&
+      form.phone.trim() !== (persistedCustomer?.phone?.trim() ?? "")
+    ) {
+      errors.push(tErrors("customerPhoneInvalid"));
+    }
+    if (
+      !isValidOptionalCustomerAddress(form.address) &&
+      form.address.trim() !== (persistedCustomer?.address?.trim() ?? "")
+    ) {
+      errors.push(tErrors("customerAddressInvalid"));
+    }
     return errors;
-  }, [form.email, form.name, form.phone, t]);
+  }, [customerDetail, customers, form, t, tErrors]);
 
   const openAdd = () => {
     setForm(emptyForm);
@@ -997,6 +1017,9 @@ const CustomerDatabasePage = () => {
               <Label htmlFor="customer-phone">{t("fields.phone")}</Label>
               <Input
                 id="customer-phone"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
                 value={form.phone}
                 onChange={(event) =>
                   setForm((current) => ({ ...current, phone: event.target.value }))

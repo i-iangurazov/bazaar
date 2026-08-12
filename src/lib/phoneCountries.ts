@@ -93,6 +93,18 @@ export const stripPhoneDigits = (value: string) => value.replace(/\D/g, "");
 export const getPhoneCountry = (code: PhoneCountryCode) =>
   countriesByCode.get(code) ?? countriesByCode.get(defaultPhoneCountryCode)!;
 
+export const findPhoneCountryByInternationalValue = (value?: string | null) => {
+  const normalized = value?.trim();
+  if (!normalized?.startsWith("+")) {
+    return null;
+  }
+  const digits = stripPhoneDigits(normalized);
+  return (
+    countriesByDialCode.find((country) => digits.startsWith(stripPhoneDigits(country.dialCode))) ??
+    null
+  );
+};
+
 export const detectPhoneCountryCode = (
   value?: string | null,
   fallback: PhoneCountryCode = defaultPhoneCountryCode,
@@ -113,10 +125,7 @@ export const detectPhoneCountryCode = (
   return match?.code ?? fallback;
 };
 
-export const extractNationalPhoneDigits = (
-  value: string,
-  countryCode: PhoneCountryCode,
-) => {
+export const extractNationalPhoneDigits = (value: string, countryCode: PhoneCountryCode) => {
   const country = getPhoneCountry(countryCode);
   const digits = stripPhoneDigits(value);
   const dialDigits = stripPhoneDigits(country.dialCode);
@@ -145,10 +154,7 @@ export const formatNationalPhone = (value: string, countryCode: PhoneCountryCode
   return parts.filter(Boolean).join(" ");
 };
 
-export const formatInternationalPhone = (
-  countryCode: PhoneCountryCode,
-  nationalValue: string,
-) => {
+export const formatInternationalPhone = (countryCode: PhoneCountryCode, nationalValue: string) => {
   const country = getPhoneCountry(countryCode);
   const national = formatNationalPhone(nationalValue, countryCode);
   return national ? `${country.dialCode} ${national}` : "";
@@ -156,15 +162,20 @@ export const formatInternationalPhone = (
 
 export const isCompleteInternationalPhone = (value?: string | null) => {
   const normalized = value?.trim();
-  if (!normalized) {
+  if (!normalized || !/^\+[\d\s().-]+$/.test(normalized)) {
     return false;
   }
-  const countryCode = detectPhoneCountryCode(normalized);
-  const country = getPhoneCountry(countryCode);
   const digits = stripPhoneDigits(normalized);
+  if (!/^[1-9]\d{7,14}$/.test(digits)) {
+    return false;
+  }
+  const country = findPhoneCountryByInternationalValue(normalized);
+  if (!country) {
+    return true;
+  }
   const dialDigits = stripPhoneDigits(country.dialCode);
   return (
     digits.startsWith(dialDigits) &&
-    extractNationalPhoneDigits(normalized, countryCode).length === country.nationalDigits
+    digits.slice(dialDigits.length).length === country.nationalDigits
   );
 };

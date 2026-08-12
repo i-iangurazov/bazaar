@@ -49,6 +49,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
 import { currencySourceWithFallback, formatKgsMoney } from "@/lib/currencyDisplay";
+import {
+  isValidOptionalCustomerAddress,
+  isValidOptionalCustomerPhone,
+} from "@/lib/customerContact";
 import { formatDate } from "@/lib/i18nFormat";
 import { getCustomerOrderStatusLabel } from "@/lib/i18n/status";
 import { trpc } from "@/lib/trpc";
@@ -385,6 +389,20 @@ const SalesOrderDetailPage = () => {
     if (!order) {
       return;
     }
+    if (
+      !isValidOptionalCustomerPhone(customerPhone) &&
+      customerPhone.trim() !== (order.customerPhone?.trim() ?? "")
+    ) {
+      toast({ variant: "error", description: tErrors("customerPhoneInvalid") });
+      return;
+    }
+    if (
+      !isValidOptionalCustomerAddress(customerAddress) &&
+      customerAddress.trim() !== (order.customerAddress?.trim() ?? "")
+    ) {
+      toast({ variant: "error", description: tErrors("customerAddressInvalid") });
+      return;
+    }
     await setCustomerMutation.mutateAsync({
       customerOrderId: order.id,
       customerName: customerName.trim() || null,
@@ -427,6 +445,20 @@ const SalesOrderDetailPage = () => {
 
   const handleSendTrackingEmail = async () => {
     if (!order) {
+      return;
+    }
+    if (
+      !isValidOptionalCustomerPhone(customerPhone) &&
+      customerPhone.trim() !== (order.customerPhone?.trim() ?? "")
+    ) {
+      toast({ variant: "error", description: tErrors("customerPhoneInvalid") });
+      return;
+    }
+    if (
+      !isValidOptionalCustomerAddress(customerAddress) &&
+      customerAddress.trim() !== (order.customerAddress?.trim() ?? "")
+    ) {
+      toast({ variant: "error", description: tErrors("customerAddressInvalid") });
       return;
     }
     const customerInput = {

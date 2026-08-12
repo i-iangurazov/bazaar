@@ -4870,6 +4870,8 @@
     "customerNameRequired": "Кардардын аты милдеттүү.",
     "customerContactRequired": "Кардардын email же телефонун киргизиңиз.",
     "customerPhoneDigitsRequired": "Телефон номерин цифра менен киргизиңиз.",
+    "customerPhoneInvalid": "Өлкө коду жана + белгиси менен толук эл аралык телефон номерин киргизиңиз.",
+    "customerAddressInvalid": "Көчө, калктуу конуш же номер көрсөтүлгөн туура даректи киргизиңиз.",
     "customerEmailInvalid": "Кардардын email туура эмес.",
     "customerDuplicate": "Бул дүкөндө ушундай email же телефон менен кардар бар.",
     "customerNotFound": "Кардар табылган жок.",

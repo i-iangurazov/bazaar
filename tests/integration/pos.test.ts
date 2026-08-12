@@ -144,6 +144,81 @@ describeDb("pos", () => {
     expect(draftCount).toBe(1);
   });
 
+  it("normalizes new POS customer contacts, rejects invalid writes, and accepts selected legacy records", async () => {
+    const { org, store, cashierUser } = await seedBase({ plan: "BUSINESS" });
+    const register = await prisma.posRegister.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Contact Register",
+        code: "CONTACT",
+      },
+    });
+    const caller = createTestCaller({
+      id: cashierUser.id,
+      email: cashierUser.email,
+      role: cashierUser.role,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+    await caller.pos.shifts.open({
+      registerId: register.id,
+      openingCashKgs: 0,
+      idempotencyKey: "pos-contact-open-1",
+    });
+
+    const valid = await caller.pos.sales.createDraft({
+      registerId: register.id,
+      customerName: "POS Contact",
+      customerEmail: "pos-contact@example.test",
+      customerPhone: "+996 (555) 123-456",
+      customerAddress: "  Bishkek,  Chui  1 ",
+    });
+    await expect(
+      prisma.customerOrder.findUniqueOrThrow({ where: { id: valid.id } }),
+    ).resolves.toMatchObject({
+      customerPhone: "+996555123456",
+      customerAddress: "Bishkek, Chui 1",
+    });
+    await caller.pos.sales.cancelDraft({ saleId: valid.id });
+
+    await expect(
+      caller.pos.sales.createDraft({
+        registerId: register.id,
+        customerName: "Invalid POS Contact",
+        customerEmail: "invalid-pos@example.test",
+        customerPhone: "+996 555",
+        customerAddress: "Bishkek 2",
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(
+      prisma.customerOrder.count({
+        where: { organizationId: org.id, customerEmail: "invalid-pos@example.test" },
+      }),
+    ).resolves.toBe(0);
+
+    const legacy = await prisma.customer.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Legacy POS Contact",
+        email: "legacy-pos@example.test",
+        phone: "555-local",
+        address: "---",
+      },
+    });
+    const legacyDraft = await caller.pos.sales.createDraft({
+      registerId: register.id,
+      customerId: legacy.id,
+    });
+    await expect(
+      prisma.customerOrder.findUniqueOrThrow({ where: { id: legacyDraft.id } }),
+    ).resolves.toMatchObject({
+      customerPhone: "555-local",
+      customerAddress: "---",
+    });
+  });
+
   it("handles concurrent draft creation without 500", async () => {
     const { org, store, cashierUser } = await seedBase({ plan: "BUSINESS" });
 

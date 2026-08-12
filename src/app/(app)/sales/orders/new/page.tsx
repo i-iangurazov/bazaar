@@ -25,6 +25,10 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/toast";
 import { formatKgsMoney } from "@/lib/currencyDisplay";
+import {
+  isValidOptionalCustomerAddress,
+  isValidOptionalCustomerPhone,
+} from "@/lib/customerContact";
 import { translateError } from "@/lib/translateError";
 import { trpc } from "@/lib/trpc";
 import type { ScanResolvedResult } from "@/lib/scanning/scanRouter";
@@ -220,6 +224,14 @@ const NewSalesOrderPage = () => {
 
     if (draftLines.some((line) => line.unitPriceKgs === null)) {
       toast({ variant: "error", description: t("priceNotSetBlocking") });
+      return;
+    }
+    if (!isValidOptionalCustomerPhone(customerPhone)) {
+      toast({ variant: "error", description: tErrors("customerPhoneInvalid") });
+      return;
+    }
+    if (!isValidOptionalCustomerAddress(customerAddress)) {
+      toast({ variant: "error", description: tErrors("customerAddressInvalid") });
       return;
     }
 

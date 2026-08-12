@@ -12,10 +12,7 @@ import { prisma } from "@/server/db/prisma";
 import { runJob } from "@/server/jobs";
 import { EMAIL_CAMPAIGN_SEND_JOB_NAME } from "@/server/jobs/emailMarketing";
 import { MARKETING_EMAIL_FROM } from "@/server/services/email";
-import {
-  countEmailReachableCustomers,
-  runCustomerImport,
-} from "@/server/services/customers";
+import { countEmailReachableCustomers, runCustomerImport } from "@/server/services/customers";
 import {
   buildEmailUnsubscribeUrl,
   deliverPendingEmailCampaigns,
@@ -54,6 +51,105 @@ const asCallerUser = (user: {
 describeDb("customer database", () => {
   beforeEach(async () => {
     await resetDatabase();
+  });
+
+  it("normalizes new contact writes, rejects invalid/cross-org values, and preserves unchanged legacy contacts", async () => {
+    const { org, store, adminUser } = await seedBase({ plan: "BUSINESS" });
+    const caller = createTestCaller(asCallerUser(adminUser));
+
+    const valid = await caller.customers.create({
+      storeId: store.id,
+      name: "Normalized Customer",
+      email: "normalized@example.test",
+      phone: "+996 (555) 123-456",
+      address: "  Bishkek,   Chui  1  ",
+    });
+    expect(valid.customer).toMatchObject({
+      phone: "+996555123456",
+      address: "Bishkek, Chui 1",
+    });
+
+    await expect(
+      caller.customers.create({
+        storeId: store.id,
+        name: "Incomplete Phone",
+        email: "invalid-phone@example.test",
+        phone: "+996 555",
+        address: "Bishkek 2",
+      }),
+    ).rejects.toMatchObject({ message: "customerPhoneInvalid" });
+    await expect(
+      caller.customers.create({
+        storeId: store.id,
+        name: "Invalid Address",
+        email: "invalid-address@example.test",
+        phone: null,
+        address: "---",
+      }),
+    ).rejects.toMatchObject({ message: "customerAddressInvalid" });
+
+    const otherOrg = await prisma.organization.create({
+      data: { name: "Other Contact Org", plan: "BUSINESS" },
+    });
+    const otherStore = await prisma.store.create({
+      data: { organizationId: otherOrg.id, name: "Other Contact Store", code: "OCS" },
+    });
+    await expect(
+      caller.customers.create({
+        storeId: otherStore.id,
+        name: "Cross Org",
+        email: "cross-org@example.test",
+        phone: "+996555111222",
+        address: "Other address 1",
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+    const legacy = await prisma.customer.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Legacy Customer",
+        email: "legacy@example.test",
+        phone: "555-legacy",
+        address: "---",
+      },
+    });
+    await expect(
+      caller.customers.update({
+        customerId: legacy.id,
+        name: "Legacy Customer Renamed",
+        email: legacy.email,
+        phone: legacy.phone,
+        address: legacy.address,
+      }),
+    ).resolves.toMatchObject({
+      name: "Legacy Customer Renamed",
+      phone: "555-legacy",
+      address: "---",
+    });
+    await expect(
+      caller.customers.update({
+        customerId: legacy.id,
+        name: "Legacy Customer Renamed",
+        email: legacy.email,
+        phone: "123 local",
+        address: legacy.address,
+      }),
+    ).rejects.toMatchObject({ message: "customerPhoneInvalid" });
+
+    await expect(
+      prisma.customer.count({
+        where: {
+          organizationId: org.id,
+          email: { in: ["invalid-phone@example.test", "invalid-address@example.test"] },
+        },
+      }),
+    ).resolves.toBe(0);
+    await expect(
+      prisma.customer.count({
+        where: { organizationId: otherOrg.id, email: "cross-org@example.test" },
+      }),
+    ).resolves.toBe(0);
   });
 
   it("enforces role and store scope for customer CRUD", async () => {
@@ -165,7 +261,12 @@ describeDb("customer database", () => {
       requestId: "customer-import-1",
       source: "csv",
       rows: [
-        { rowNumber: 2, name: "Existing Updated", email: "existing@example.com", phone: "+996 700 000 001" },
+        {
+          rowNumber: 2,
+          name: "Existing Updated",
+          email: "existing@example.com",
+          phone: "+996 700 000 001",
+        },
         { rowNumber: 3, name: "New Customer", email: "new@example.com", phone: "" },
         { rowNumber: 4, name: "Other Store Copy", email: "other@example.com", phone: "" },
         { rowNumber: 5, name: "", email: "bad@example.com", phone: "" },
@@ -201,18 +302,20 @@ describeDb("customer database", () => {
       "new@example.com",
       "other@example.com",
     ]);
-    expect(storeCustomers.find((customer) => customer.email === "existing@example.com")?.phone).toBe(
-      "+996700000001",
-    );
+    expect(
+      storeCustomers.find((customer) => customer.email === "existing@example.com")?.phone,
+    ).toBe("+996700000001");
     expect(otherStoreCustomers).toHaveLength(1);
     expect(otherStoreCustomers[0]).toMatchObject({
       email: "other@example.com",
       name: "Other Store Existing",
     });
-    expect(storeCustomers.find((customer) => customer.email === "other@example.com")).toMatchObject({
-      storeId: store.id,
-      name: "Other Store Copy",
-    });
+    expect(storeCustomers.find((customer) => customer.email === "other@example.com")).toMatchObject(
+      {
+        storeId: store.id,
+        name: "Other Store Copy",
+      },
+    );
   });
 
   it("auto-creates store-local customers from manual and bazaar API orders", async () => {
@@ -278,9 +381,9 @@ describeDb("customer database", () => {
       "customer@example.com",
     ]);
     expect(storeCustomers.some((customer) => customer.phone === "+996555123123")).toBe(true);
-    expect(storeCustomers.find((customer) => customer.email === "customer@example.com")?.address).toBe(
-      "Bishkek, Chui 1",
-    );
+    expect(
+      storeCustomers.find((customer) => customer.email === "customer@example.com")?.address,
+    ).toBe("Bishkek, Chui 1");
     expect(storeCustomers.find((customer) => customer.email === "api@example.com")?.address).toBe(
       "Osh, Lenin 2",
     );
@@ -621,7 +724,9 @@ describeDb("customer database", () => {
       });
       expect(queued.campaign.status).toBe(EmailCampaignStatus.QUEUED);
 
-      await expect(runJob(EMAIL_CAMPAIGN_SEND_JOB_NAME, { organizationId: org.id })).resolves.toMatchObject({
+      await expect(
+        runJob(EMAIL_CAMPAIGN_SEND_JOB_NAME, { organizationId: org.id }),
+      ).resolves.toMatchObject({
         status: "ok",
       });
 
