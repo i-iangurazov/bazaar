@@ -44,7 +44,7 @@ describe("mobile sales and receipts source", () => {
     );
     expect(source).toContain("setMobileFiltersOpen(true)");
     expect(source).toContain("renderMobile={(order) => (");
-    expect(source).toContain('<Table className="min-w-[980px]" data-tour="sales-orders-table">');
+    expect(source).toContain('<Table className="min-w-[1080px]" data-tour="sales-orders-table">');
     expect(source).toContain('<TableHead>{t("customerAddress")}</TableHead>');
   });
 });

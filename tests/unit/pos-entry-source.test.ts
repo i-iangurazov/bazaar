@@ -270,9 +270,9 @@ describe("pos entry navigation", () => {
     expect(pageSource).toContain("const handleStartJournalReturn = async () => {");
     expect(posRouterSource).toContain("update: cashierProcedure");
     expect(posRouterSource).toContain("cashiers: router({");
-    expect(customerServiceSource).toContain("const rawPhone = normalizeOptionalText(input.phone)");
+    expect(customerServiceSource).toContain("normalizeOptionalCustomerPhone(input.phone)");
     expect(customerServiceSource).toContain("ensureCustomerContact({ email, phone });");
-    expect(customerServiceSource).toContain('throw new AppError("customerPhoneDigitsRequired"');
+    expect(customerServiceSource).toContain("normalizeUpdatedCustomerPhone(input.phone, existing.phone)");
   });
 
   it("keeps receipt journal returns tied to loaded receipt lines and blocks zero-quantity completion", async () => {
