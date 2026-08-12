@@ -3274,13 +3274,6 @@ const PosSellPage = () => {
       toast({ variant: "error", description: tErrors("customerPhoneInvalid") });
       return;
     }
-    if (
-      !isValidOptionalCustomerAddress(journalEditCustomerAddress) &&
-      journalEditCustomerAddress.trim() !== (journalSelectedSale.customerAddress?.trim() ?? "")
-    ) {
-      toast({ variant: "error", description: tErrors("customerAddressInvalid") });
-      return;
-    }
     const normalized = journalEditLines.map((line) => ({
       line,
       qty: parseJournalEditNumber(line.quantityInput),
