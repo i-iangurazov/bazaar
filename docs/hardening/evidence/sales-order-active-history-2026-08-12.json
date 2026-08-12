@@ -1,0 +1,60 @@
+{
+  "baseCommit": "b234dc48b03d4e34b81fbe7806cd70b90d28f94e",
+  "scope": [
+    "/sales/orders",
+    "/sales/orders/[id]",
+    "salesOrders.list",
+    "salesOrders.updateTracking",
+    "salesOrders.cancel"
+  ],
+  "lifecycleContract": {
+    "active": "status is not CANCELED and trackingAddedAt is null",
+    "history": "status is CANCELED or trackingAddedAt is not null",
+    "preservation": "clearing current tracking fields does not clear the first tracking timestamp"
+  },
+  "automated": {
+    "unit": {
+      "command": "vitest run tests/unit/sales-order-lifecycle.test.ts",
+      "result": "PASS",
+      "tests": 9
+    },
+    "database": {
+      "database": "bazaar_hardening_agent3_commerce",
+      "redisDatabase": 13,
+      "command": "vitest run tests/integration/sales-orders.test.ts",
+      "result": "PASS",
+      "tests": 13,
+      "lifecycleAssertions": [
+        "active/history/all partitions",
+        "status and lifecycle filters compose",
+        "tracking-clear preserves history",
+        "concurrent tracking set/clear preserves history",
+        "orders and lines remain persisted",
+        "no stock movement for draft lifecycle actions"
+      ]
+    },
+    "focusedLint": "PASS",
+    "i18nCheck": "PASS",
+    "diffCheck": "PASS"
+  },
+  "browser": {
+    "result": "PASS",
+    "desktop": {
+      "viewport": "1440x1000",
+      "theme": "light",
+      "trackingMutationMovesOrderFromActiveToHistoryWithoutReload": true,
+      "screenshot": "sales-lifecycle-1440-light.png"
+    },
+    "mobile": {
+      "viewport": "390x844",
+      "theme": "dark",
+      "cancelMutationMovesOrderFromActiveToHistoryWithoutReload": true,
+      "horizontalOverflowPx": 0,
+      "screenshot": "sales-lifecycle-390-dark.png"
+    },
+    "returnUrlPreserved": true,
+    "historyRecordsPreserved": 3,
+    "consoleErrors": [],
+    "failedRequests": []
+  }
+}

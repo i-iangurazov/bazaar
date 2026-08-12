@@ -4,6 +4,7 @@ import { z } from "zod";
 import { managerProcedure, protectedProcedure, rateLimit, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
 import { AppError } from "@/server/services/errors";
+import { salesOrderLifecycleViews } from "@/lib/salesOrderLifecycle";
 import { assertFeatureEnabled } from "@/server/services/planLimits";
 import {
   assertUserCanAccessStore,
@@ -143,6 +144,7 @@ export const salesOrdersRouter = router({
           pageSize: z.number().int().min(1).max(200).optional(),
           sortBy: z.enum(["createdAt", "number", "totalKgs", "customerName"]).optional(),
           sortDirection: z.enum(["asc", "desc"]).optional(),
+          lifecycleView: z.enum(salesOrderLifecycleViews).optional(),
         })
         .optional(),
     )
@@ -160,6 +162,7 @@ export const salesOrdersRouter = router({
           pageSize: input?.pageSize ?? 25,
           sortBy: input?.sortBy,
           sortDirection: input?.sortDirection,
+          lifecycleView: input?.lifecycleView,
         });
       } catch (error) {
         throw toTRPCError(error);

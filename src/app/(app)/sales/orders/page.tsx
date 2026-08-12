@@ -61,6 +61,7 @@ const SalesOrdersPage = () => {
   const pathname = usePathname() ?? "/sales/orders";
   const searchParams = useSearchParams();
   const currentQueryString = searchParams.toString();
+  const lifecycleView = searchParams.get("view") === "history" ? "HISTORY" : "ACTIVE";
   const page = parsePositiveInteger(searchParams.get("page"), 1, 10_000);
   const pageSize = parsePositiveInteger(searchParams.get("pageSize"), 25, 200);
   const search = searchParams.get("search") ?? "";
@@ -77,6 +78,7 @@ const SalesOrdersPage = () => {
     "desc",
   );
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const utils = trpc.useUtils();
 
   const updateListParams = useCallback(
     (updates: Record<string, string | number | null>) => {
@@ -100,6 +102,9 @@ const SalesOrdersPage = () => {
     updateListParams({ [key]: value, page: null });
 
   const canFinalize = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
+  const listReturnUrl = currentQueryString ? `${pathname}?${currentQueryString}` : pathname;
+  const orderHref = (customerOrderId: string) =>
+    `/sales/orders/${customerOrderId}?returnTo=${encodeURIComponent(listReturnUrl)}`;
 
   const storesQuery = trpc.stores.list.useQuery();
   const stores = useMemo(() => storesQuery.data ?? [], [storesQuery.data]);
@@ -114,13 +119,21 @@ const SalesOrdersPage = () => {
       status: statusFilter === "all" ? undefined : statusFilter,
       sortBy,
       sortDirection,
+      lifecycleView,
     },
     { keepPreviousData: true },
   );
 
   const completeMutation = trpc.salesOrders.complete.useMutation({
-    onSuccess: async () => {
-      await listQuery.refetch();
+    onSuccess: async (order, variables) => {
+      utils.salesOrders.getById.setData(
+        { customerOrderId: variables.customerOrderId },
+        (current) => (current ? { ...current, ...order } : current),
+      );
+      await Promise.all([
+        utils.salesOrders.list.invalidate(),
+        utils.salesOrders.getById.invalidate({ customerOrderId: variables.customerOrderId }),
+      ]);
       toast({ variant: "success", description: t("completeSuccess") });
     },
     onError: (error) => {
@@ -129,8 +142,15 @@ const SalesOrdersPage = () => {
   });
 
   const cancelMutation = trpc.salesOrders.cancel.useMutation({
-    onSuccess: async (result) => {
-      await listQuery.refetch();
+    onSuccess: async (result, variables) => {
+      utils.salesOrders.getById.setData(
+        { customerOrderId: variables.customerOrderId },
+        (current) => (current ? { ...current, ...result.order } : current),
+      );
+      await Promise.all([
+        utils.salesOrders.list.invalidate(),
+        utils.salesOrders.getById.invalidate({ customerOrderId: variables.customerOrderId }),
+      ]);
       if (result.cancellationEmail?.status === "sent") {
         toast({ variant: "success", description: t("cancelSuccessEmailSent") });
         return;
@@ -219,6 +239,37 @@ const SalesOrdersPage = () => {
           <CardTitle>{t("title")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div
+            className="grid grid-cols-2 gap-2 rounded-md border border-border bg-muted/35 p-1"
+            role="tablist"
+            aria-label={t("lifecycleViewLabel")}
+          >
+            <Button
+              type="button"
+              role="tab"
+              aria-selected={lifecycleView === "ACTIVE"}
+              data-testid="sales-orders-active-tab"
+              variant={lifecycleView === "ACTIVE" ? "default" : "ghost"}
+              className="min-h-11"
+              onClick={() => updateListParams({ view: null, page: null })}
+            >
+              {t("activeView")}
+            </Button>
+            <Button
+              type="button"
+              role="tab"
+              aria-selected={lifecycleView === "HISTORY"}
+              data-testid="sales-orders-history-tab"
+              variant={lifecycleView === "HISTORY" ? "default" : "ghost"}
+              className="min-h-11"
+              onClick={() => updateListParams({ view: "history", page: null })}
+            >
+              {t("historyView")}
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {lifecycleView === "ACTIVE" ? t("activeViewHint") : t("historyViewHint")}
+          </p>
           <div className="bazaar-admin-toolbar space-y-3 md:hidden">
             <Input
               value={search}
@@ -360,7 +411,7 @@ const SalesOrdersPage = () => {
             renderDesktop={(visibleItems) => (
               <div className="bazaar-admin-table-shell">
                 <div className="bazaar-admin-table-scroll">
-                  <Table className="min-w-[980px]" data-tour="sales-orders-table">
+                  <Table className="min-w-[1080px]" data-tour="sales-orders-table">
                     <TableHeader>
                       <TableRow>
                         <TableHead>{t("number")}</TableHead>
@@ -368,6 +419,7 @@ const SalesOrdersPage = () => {
                         <TableHead>{t("customerAddress")}</TableHead>
                         <TableHead>{t("store")}</TableHead>
                         <TableHead>{t("statusLabel")}</TableHead>
+                        <TableHead>{t("trackingNumber")}</TableHead>
                         <TableHead>{t("sourceLabel")}</TableHead>
                         <TableHead>{t("total")}</TableHead>
                         <TableHead>{t("created")}</TableHead>
@@ -380,7 +432,7 @@ const SalesOrdersPage = () => {
                           <TableCell>
                             <Link
                               className="font-medium text-foreground"
-                              href={`/sales/orders/${order.id}`}
+                              href={orderHref(order.id)}
                             >
                               {order.number}
                             </Link>
@@ -395,6 +447,7 @@ const SalesOrdersPage = () => {
                               {getCustomerOrderStatusLabel(t, order.status)}
                             </Badge>
                           </TableCell>
+                          <TableCell>{order.trackingNumber || tCommon("notAvailable")}</TableCell>
                           <TableCell>
                             <Badge
                               variant={
@@ -425,7 +478,7 @@ const SalesOrdersPage = () => {
                                     key: "view",
                                     label: tCommon("view"),
                                     icon: ViewIcon,
-                                    href: `/sales/orders/${order.id}`,
+                                    href: orderHref(order.id),
                                   },
                                   ...(canFinalize && order.status === CustomerOrderStatus.READY
                                     ? [
@@ -488,7 +541,7 @@ const SalesOrdersPage = () => {
                   <div className="flex items-start justify-between gap-2">
                     <Link
                       className="text-sm font-semibold text-foreground"
-                      href={`/sales/orders/${order.id}`}
+                      href={orderHref(order.id)}
                     >
                       {order.number}
                     </Link>
@@ -518,6 +571,12 @@ const SalesOrdersPage = () => {
                       <p className="font-medium text-foreground">{sourceLabel(order.source)}</p>
                     </div>
                     <div>
+                      <p>{t("trackingNumber")}</p>
+                      <p className="font-medium text-foreground">
+                        {order.trackingNumber || tCommon("notAvailable")}
+                      </p>
+                    </div>
+                    <div>
                       <p>{t("total")}</p>
                       <p className="font-medium text-foreground">
                         {formatKgsMoney(
@@ -542,7 +601,7 @@ const SalesOrdersPage = () => {
                           key: "view",
                           label: tCommon("view"),
                           icon: ViewIcon,
-                          href: `/sales/orders/${order.id}`,
+                          href: orderHref(order.id),
                         },
                         ...(canFinalize && order.status === CustomerOrderStatus.READY
                           ? [
@@ -601,7 +660,7 @@ const SalesOrdersPage = () => {
             <div className="bazaar-admin-empty mt-4">
               <div className="flex items-center gap-2">
                 <EmptyIcon className="h-4 w-4" aria-hidden />
-                {t("noOrders")}
+                {lifecycleView === "ACTIVE" ? t("noActiveOrders") : t("noHistoryOrders")}
               </div>
             </div>
           ) : null}

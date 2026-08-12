@@ -248,6 +248,123 @@ describeDb("sales orders", () => {
     ).rejects.toMatchObject({ message: "trackingNumberMissing" });
   });
 
+  it("partitions action-required and history orders without deleting lifecycle records", async () => {
+    const { org, store, product, adminUser } = await seedBase();
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+      isOrgOwner: true,
+    });
+
+    const activeOrder = await caller.salesOrders.createDraft({
+      idempotencyKey: "sales-lifecycle-active",
+      storeId: store.id,
+      customerName: "Needs tracking",
+      lines: [{ productId: product.id, qty: 1 }],
+    });
+    const trackedOrder = await caller.salesOrders.createDraft({
+      idempotencyKey: "sales-lifecycle-tracked",
+      storeId: store.id,
+      customerName: "Already tracked",
+      lines: [{ productId: product.id, qty: 1 }],
+    });
+    const canceledOrder = await caller.salesOrders.createDraft({
+      idempotencyKey: "sales-lifecycle-canceled",
+      storeId: store.id,
+      customerName: "Canceled record",
+      lines: [{ productId: product.id, qty: 1 }],
+    });
+
+    await caller.salesOrders.updateTracking({
+      customerOrderId: trackedOrder.id,
+      trackingNumber: "LIFECYCLE-TRACKING",
+    });
+    await caller.salesOrders.cancel({ customerOrderId: canceledOrder.id });
+
+    const [active, history, all, impossibleActiveCanceled] = await Promise.all([
+      caller.salesOrders.list({ page: 1, pageSize: 25, lifecycleView: "ACTIVE" }),
+      caller.salesOrders.list({ page: 1, pageSize: 25, lifecycleView: "HISTORY" }),
+      caller.salesOrders.list({ page: 1, pageSize: 25, lifecycleView: "ALL" }),
+      caller.salesOrders.list({
+        page: 1,
+        pageSize: 25,
+        lifecycleView: "ACTIVE",
+        status: CustomerOrderStatus.CANCELED,
+      }),
+    ]);
+
+    expect(active.items.map((order) => order.id)).toEqual([activeOrder.id]);
+    expect(history.items.map((order) => order.id).sort()).toEqual(
+      [trackedOrder.id, canceledOrder.id].sort(),
+    );
+    expect(all.items.map((order) => order.id).sort()).toEqual(
+      [activeOrder.id, trackedOrder.id, canceledOrder.id].sort(),
+    );
+    expect(impossibleActiveCanceled).toMatchObject({ total: 0, items: [] });
+
+    const firstTrackingAddedAt = await prisma.customerOrder
+      .findUniqueOrThrow({ where: { id: trackedOrder.id }, select: { trackingAddedAt: true } })
+      .then((order) => order.trackingAddedAt);
+    expect(firstTrackingAddedAt).toBeInstanceOf(Date);
+
+    await caller.salesOrders.updateTracking({
+      customerOrderId: trackedOrder.id,
+      trackingNumber: null,
+    });
+
+    const [activeAfterClear, historyAfterClear, persisted] = await Promise.all([
+      caller.salesOrders.list({ page: 1, pageSize: 25, lifecycleView: "ACTIVE" }),
+      caller.salesOrders.list({ page: 1, pageSize: 25, lifecycleView: "HISTORY" }),
+      prisma.customerOrder.findMany({
+        where: { id: { in: [activeOrder.id, trackedOrder.id, canceledOrder.id] } },
+        include: { lines: true },
+      }),
+    ]);
+
+    expect(activeAfterClear.items.map((order) => order.id)).toEqual([activeOrder.id]);
+    expect(historyAfterClear.items.map((order) => order.id).sort()).toEqual(
+      [trackedOrder.id, canceledOrder.id].sort(),
+    );
+    expect(persisted).toHaveLength(3);
+    expect(persisted.every((order) => order.lines.length === 1)).toBe(true);
+    expect(persisted.find((order) => order.id === trackedOrder.id)).toMatchObject({
+      trackingNumber: null,
+      trackingAddedAt: firstTrackingAddedAt,
+    });
+    expect(
+      await prisma.stockMovement.count({
+        where: {
+          referenceType: "CustomerOrder",
+          referenceId: { in: persisted.map(({ id }) => id) },
+        },
+      }),
+    ).toBe(0);
+
+    const concurrentOrder = await caller.salesOrders.createDraft({
+      idempotencyKey: "sales-lifecycle-concurrent-tracking",
+      storeId: store.id,
+      lines: [{ productId: product.id, qty: 1 }],
+    });
+    await Promise.all([
+      caller.salesOrders.updateTracking({
+        customerOrderId: concurrentOrder.id,
+        trackingNumber: "CONCURRENT-TRACKING",
+      }),
+      caller.salesOrders.updateTracking({
+        customerOrderId: concurrentOrder.id,
+        trackingNumber: null,
+      }),
+    ]);
+    expect(
+      await prisma.customerOrder.findUniqueOrThrow({
+        where: { id: concurrentOrder.id },
+        select: { trackingAddedAt: true },
+      }),
+    ).toMatchObject({ trackingAddedAt: expect.any(Date) });
+  });
+
   it("sends and logs cancellation email once", async () => {
     const { org, store, product, adminUser } = await seedBase();
 

@@ -18,6 +18,7 @@ import { toJson } from "@/server/services/json";
 import { eventBus } from "@/server/events/eventBus";
 import { getLogger } from "@/server/logging";
 import { resolveCurrencySnapshot } from "@/lib/currencyDisplay";
+import type { SalesOrderLifecycleView } from "@/lib/salesOrderLifecycle";
 import { upsertCustomerFromOrderTx } from "@/server/services/customers";
 import { processEmailAutomationTrigger } from "@/server/services/emailMarketing";
 import { getEffectiveProductPrice } from "@/server/services/effectiveProductPrice";
@@ -350,7 +351,19 @@ export const listCustomerOrders = async (input: {
   pageSize: number;
   sortBy?: "createdAt" | "number" | "totalKgs" | "customerName";
   sortDirection?: "asc" | "desc";
+  lifecycleView?: SalesOrderLifecycleView;
 }) => {
+  const lifecycleWhere: Prisma.CustomerOrderWhereInput =
+    input.lifecycleView === "ACTIVE"
+      ? {
+          status: { not: CustomerOrderStatus.CANCELED },
+          trackingAddedAt: null,
+        }
+      : input.lifecycleView === "HISTORY"
+        ? {
+            OR: [{ status: CustomerOrderStatus.CANCELED }, { trackingAddedAt: { not: null } }],
+          }
+        : {};
   const where: Prisma.CustomerOrderWhereInput = {
     organizationId: input.organizationId,
     isPosSale: false,
@@ -360,6 +373,7 @@ export const listCustomerOrders = async (input: {
         ? { storeId: { in: input.storeIds.length ? input.storeIds : ["__no_accessible_store__"] } }
         : {}),
     ...(input.status ? { status: input.status } : {}),
+    ...(input.lifecycleView && input.lifecycleView !== "ALL" ? { AND: [lifecycleWhere] } : {}),
     ...(input.search
       ? {
           OR: [
@@ -974,7 +988,9 @@ export const updateCustomerOrderTracking = async (input: {
         trackingCarrier: nextTrackingCarrier,
         trackingUrl: nextTrackingUrl,
         trackingStatus: nextTrackingStatus,
-        trackingAddedAt: nextTrackingNumber ? (before.trackingAddedAt ?? new Date()) : null,
+        // The first tracking timestamp is lifecycle history. Clearing or correcting
+        // current tracking fields must not make an already handled order active again.
+        ...(nextTrackingNumber ? { trackingAddedAt: before.trackingAddedAt ?? new Date() } : {}),
         updatedById: input.actorId,
       },
     });

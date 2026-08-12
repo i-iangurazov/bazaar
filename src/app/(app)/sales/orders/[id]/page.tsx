@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CustomerOrderEmailType, CustomerOrderStatus } from "@prisma/client";
-import { useParams } from "next/navigation";
+import Link from "next/link";
+import { useParams, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 import Image from "next/image";
@@ -113,7 +114,13 @@ const ProductImageThumb = ({ imageUrl, name }: { imageUrl?: string | null; name:
 
 const SalesOrderDetailPage = () => {
   const params = useParams();
+  const searchParams = useSearchParams();
   const customerOrderId = String(params?.id ?? "");
+  const requestedReturnTo = searchParams.get("returnTo");
+  const returnTo =
+    requestedReturnTo === "/sales/orders" || requestedReturnTo?.startsWith("/sales/orders?")
+      ? requestedReturnTo
+      : "/sales/orders";
 
   const t = useTranslations("salesOrders");
   const tCommon = useTranslations("common");
@@ -191,13 +198,21 @@ const SalesOrderDetailPage = () => {
     setTrackingStatus(order.trackingStatus ?? "");
   }, [order]);
 
-  const refetchAll = async () => {
-    await Promise.all([orderQuery.refetch(), utils.salesOrders.list.invalidate()]);
+  const refetchAll = async (updatedOrder?: { id: string }) => {
+    if (updatedOrder) {
+      utils.salesOrders.getById.setData({ customerOrderId: updatedOrder.id }, (current) =>
+        current ? { ...current, ...updatedOrder } : current,
+      );
+    }
+    await Promise.all([
+      utils.salesOrders.list.invalidate(),
+      utils.salesOrders.getById.invalidate({ customerOrderId }),
+    ]);
   };
 
   const setCustomerMutation = trpc.salesOrders.setCustomer.useMutation({
-    onSuccess: async () => {
-      await refetchAll();
+    onSuccess: async (updatedOrder) => {
+      await refetchAll(updatedOrder);
       toast({ variant: "success", description: t("customerUpdated") });
     },
     onError: (error) => {
@@ -206,8 +221,8 @@ const SalesOrderDetailPage = () => {
   });
 
   const saveTrackingMutation = trpc.salesOrders.updateTracking.useMutation({
-    onSuccess: async () => {
-      await refetchAll();
+    onSuccess: async (result) => {
+      await refetchAll(result.order);
       toast({ variant: "success", description: t("trackingUpdated") });
     },
     onError: (error) => {
@@ -216,6 +231,10 @@ const SalesOrderDetailPage = () => {
   });
 
   const saveTrackingBeforeSendMutation = trpc.salesOrders.updateTracking.useMutation({
+    onSuccess: async (result) => {
+      // Keep every list view coherent even if the subsequent provider send fails.
+      await refetchAll(result.order);
+    },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
@@ -270,8 +289,8 @@ const SalesOrderDetailPage = () => {
   });
 
   const confirmMutation = trpc.salesOrders.confirm.useMutation({
-    onSuccess: async () => {
-      await refetchAll();
+    onSuccess: async (updatedOrder) => {
+      await refetchAll(updatedOrder);
       toast({ variant: "success", description: t("confirmSuccess") });
     },
     onError: (error) => {
@@ -280,8 +299,8 @@ const SalesOrderDetailPage = () => {
   });
 
   const markReadyMutation = trpc.salesOrders.markReady.useMutation({
-    onSuccess: async () => {
-      await refetchAll();
+    onSuccess: async (updatedOrder) => {
+      await refetchAll(updatedOrder);
       toast({ variant: "success", description: t("readySuccess") });
     },
     onError: (error) => {
@@ -290,8 +309,8 @@ const SalesOrderDetailPage = () => {
   });
 
   const completeMutation = trpc.salesOrders.complete.useMutation({
-    onSuccess: async () => {
-      await refetchAll();
+    onSuccess: async (updatedOrder) => {
+      await refetchAll(updatedOrder);
       toast({ variant: "success", description: t("completeSuccess") });
     },
     onError: (error) => {
@@ -301,7 +320,7 @@ const SalesOrderDetailPage = () => {
 
   const cancelMutation = trpc.salesOrders.cancel.useMutation({
     onSuccess: async (result) => {
-      await refetchAll();
+      await refetchAll(result.order);
       if (result.cancellationEmail?.status === "sent") {
         toast({ variant: "success", description: t("cancelSuccessEmailSent") });
         return;
@@ -588,6 +607,9 @@ const SalesOrderDetailPage = () => {
 
   const headerActions = (
     <div className="flex flex-wrap items-center gap-2">
+      <Button variant="secondary" asChild>
+        <Link href={returnTo}>{tCommon("back")}</Link>
+      </Button>
       {order?.status === CustomerOrderStatus.DRAFT ? (
         <Button
           variant="secondary"
