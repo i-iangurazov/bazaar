@@ -480,6 +480,7 @@ enum EmailAutomationDeliveryStatus {
 
 enum CustomerOrderEmailType {
   CONFIRMATION
+  OWNER_NOTIFICATION
   TRACKING
   FOLLOW_UP
   CANCELLATION

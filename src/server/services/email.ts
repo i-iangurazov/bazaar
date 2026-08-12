@@ -128,6 +128,7 @@ const safeMessageCategories = new Set([
   "password_reset",
   "organization_invite",
   "order_confirmation",
+  "owner_new_order",
   "order_cancellation",
   "order_tracking",
   "order_follow_up",

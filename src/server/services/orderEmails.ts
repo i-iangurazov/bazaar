@@ -421,6 +421,9 @@ const alreadySentAt = (order: OrderEmailRecord, type: CustomerOrderEmailType) =>
   if (type === CustomerOrderEmailType.CANCELLATION) {
     return null;
   }
+  if (type === CustomerOrderEmailType.OWNER_NOTIFICATION) {
+    return null;
+  }
   return order.followUpEmailSentAt;
 };
 
@@ -523,6 +526,56 @@ const buildConfirmationPayload = (order: OrderEmailRecord, recipientEmail: strin
       { name: "order_id", value: order.id },
     ],
     idempotencyKey: `customer-order-confirmation-${order.id}`,
+  };
+};
+
+const buildOwnerNotificationPayload = (order: OrderEmailRecord, recipientEmail: string) => {
+  const baseUrl = (process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "")
+    .trim()
+    .replace(/\/+$/, "");
+  const orderUrl = baseUrl ? `${baseUrl}/sales/orders/${encodeURIComponent(order.id)}` : null;
+  const source = formatOptional(order.source);
+  const subject = `Новый заказ ${order.number}`;
+  const text = [
+    "В Bazaar поступил новый заказ.",
+    `Номер: ${order.number}`,
+    `Магазин: ${order.store.name}`,
+    `Источник: ${source}`,
+    `Дата: ${formatOrderEmailDate(order.createdAt, "ru")}`,
+    orderUrl ? `Открыть заказ: ${orderUrl}` : null,
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join("\n");
+  const html = emailFrame({
+    storeName: order.store.name,
+    title: subject,
+    intro: "В Bazaar поступил новый заказ.",
+    body: `
+      <dl style="margin:0;color:#111827;">
+        <dt style="color:#6b7280;font-size:12px;">Номер</dt>
+        <dd style="margin:0 0 10px;font-weight:700;">${escapeHtml(order.number)}</dd>
+        <dt style="color:#6b7280;font-size:12px;">Источник</dt>
+        <dd style="margin:0 0 10px;">${escapeHtml(source)}</dd>
+        <dt style="color:#6b7280;font-size:12px;">Дата</dt>
+        <dd style="margin:0 0 10px;">${escapeHtml(formatOrderEmailDate(order.createdAt, "ru"))}</dd>
+      </dl>
+      ${
+        orderUrl
+          ? `<p style="margin:16px 0 0;"><a href="${escapeHtml(orderUrl)}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:10px 14px;border-radius:8px;font-weight:600;">Открыть заказ в Bazaar</a></p>`
+          : ""
+      }
+    `,
+  });
+  return {
+    to: recipientEmail,
+    subject,
+    text,
+    html,
+    tags: [
+      { name: "kind", value: "owner_new_order" },
+      { name: "order_id", value: order.id },
+    ],
+    idempotencyKey: `owner-new-order-${order.id}-${recipientEmail}`,
   };
 };
 
@@ -679,6 +732,9 @@ const buildEmailPayload = (
   if (type === CustomerOrderEmailType.CONFIRMATION) {
     return buildConfirmationPayload(order, recipientEmail);
   }
+  if (type === CustomerOrderEmailType.OWNER_NOTIFICATION) {
+    return buildOwnerNotificationPayload(order, recipientEmail);
+  }
   if (type === CustomerOrderEmailType.TRACKING) {
     return buildTrackingPayload(order, recipientEmail);
   }
@@ -693,7 +749,10 @@ const hasSentEmail = async (order: OrderEmailRecord, type: CustomerOrderEmailTyp
   if (sentAt) {
     return true;
   }
-  if (type !== CustomerOrderEmailType.CANCELLATION) {
+  if (
+    type !== CustomerOrderEmailType.CANCELLATION &&
+    type !== CustomerOrderEmailType.OWNER_NOTIFICATION
+  ) {
     return false;
   }
   const sentLog = await prisma.customerOrderEmailLog.findFirst({
@@ -754,7 +813,10 @@ const sendOrderEmail = async (input: {
     };
   }
 
-  const recipientEmail = normalizeRecipientEmail(order.customerEmail);
+  const recipientEmail =
+    input.type === CustomerOrderEmailType.OWNER_NOTIFICATION
+      ? normalizeRecipientEmail(delivery.claimed?.recipientEmail ?? delivery.existing?.recipientEmail)
+      : normalizeRecipientEmail(order.customerEmail);
   if (!recipientEmail) {
     if (delivery.claimed) {
       const owned = await persistClaimedTerminalLog({
@@ -911,6 +973,36 @@ export const sendOrderConfirmationEmail = (input: {
     type: CustomerOrderEmailType.CONFIRMATION,
   });
 
+export const sendOwnerOrderNotification = async (input: {
+  organizationId: string;
+  customerOrderId: string;
+  deliveryLogId?: string;
+  deliveryOperationKey?: string;
+}) => {
+  const deliveryLogId =
+    input.deliveryLogId ??
+    (
+      await prisma.customerOrderEmailLog.findFirst({
+        where: {
+          organizationId: input.organizationId,
+          customerOrderId: input.customerOrderId,
+          type: CustomerOrderEmailType.OWNER_NOTIFICATION,
+        },
+        orderBy: { createdAt: "asc" },
+        select: { id: true },
+      })
+    )?.id;
+  if (!deliveryLogId && !input.deliveryOperationKey) {
+    return { status: "skipped", reason: "missingEmail", recipientEmail: null } as const;
+  }
+  return sendOrderEmail({
+    ...input,
+    deliveryLogId,
+    type: CustomerOrderEmailType.OWNER_NOTIFICATION,
+    throwOnMissingEmail: false,
+  });
+};
+
 export const processQueuedOrderConfirmationEmails = async (input?: {
   now?: Date;
   limit?: number;
@@ -920,16 +1012,19 @@ export const processQueuedOrderConfirmationEmails = async (input?: {
   const limit = Math.min(Math.max(input?.limit ?? 100, 1), 500);
   await prisma.customerOrderEmailLog.updateMany({
     where: {
-      type: CustomerOrderEmailType.CONFIRMATION,
-      operationKey: { startsWith: "customer-order-confirmation:" },
-      status: CustomerOrderEmailStatus.PROCESSING,
+      type: { in: [CustomerOrderEmailType.CONFIRMATION, CustomerOrderEmailType.OWNER_NOTIFICATION] },
       OR: [
+        { operationKey: { startsWith: "customer-order-confirmation:" } },
+        { operationKey: { startsWith: "owner-new-order:" } },
+      ],
+      status: CustomerOrderEmailStatus.PROCESSING,
+      AND: [{ OR: [
         { leaseExpiresAt: { lte: now } },
         {
           leaseExpiresAt: null,
           updatedAt: { lt: new Date(now.getTime() - ORDER_CONFIRMATION_PROCESSING_TIMEOUT_MS) },
         },
-      ],
+      ] }],
     },
     data: {
       status: CustomerOrderEmailStatus.FAILED,
@@ -943,16 +1038,21 @@ export const processQueuedOrderConfirmationEmails = async (input?: {
   const queued = await prisma.customerOrderEmailLog.findMany({
     where: {
       ...(input?.logId ? { id: input.logId } : {}),
-      type: CustomerOrderEmailType.CONFIRMATION,
-      operationKey: { startsWith: "customer-order-confirmation:" },
+      type: { in: [CustomerOrderEmailType.CONFIRMATION, CustomerOrderEmailType.OWNER_NOTIFICATION] },
+      OR: [
+        { operationKey: { startsWith: "customer-order-confirmation:" } },
+        { operationKey: { startsWith: "owner-new-order:" } },
+      ],
       status: { in: [CustomerOrderEmailStatus.QUEUED, CustomerOrderEmailStatus.FAILED] },
       attemptCount: { lt: ORDER_CONFIRMATION_MAX_ATTEMPTS },
-      OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }],
+      AND: [{ OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }] }],
     },
     select: {
       id: true,
       organizationId: true,
       customerOrderId: true,
+      type: true,
+      operationKey: true,
     },
     orderBy: [{ nextAttemptAt: "asc" }, { createdAt: "asc" }],
     take: limit,
@@ -963,12 +1063,19 @@ export const processQueuedOrderConfirmationEmails = async (input?: {
   let failed = 0;
   for (const emailLog of queued) {
     try {
-      const result = await sendOrderConfirmationEmail({
-        organizationId: emailLog.organizationId,
-        customerOrderId: emailLog.customerOrderId,
-        deliveryLogId: emailLog.id,
-        throwOnMissingEmail: false,
-      });
+      const result =
+        emailLog.type === CustomerOrderEmailType.OWNER_NOTIFICATION
+          ? await sendOwnerOrderNotification({
+              organizationId: emailLog.organizationId,
+              customerOrderId: emailLog.customerOrderId,
+              deliveryLogId: emailLog.id,
+            })
+          : await sendOrderConfirmationEmail({
+              organizationId: emailLog.organizationId,
+              customerOrderId: emailLog.customerOrderId,
+              deliveryLogId: emailLog.id,
+              throwOnMissingEmail: false,
+            });
       if (result.status === "sent") {
         sent += 1;
       } else {

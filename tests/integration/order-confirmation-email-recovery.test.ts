@@ -119,7 +119,9 @@ describeDb("API order confirmation email recovery", () => {
     const replay = await createBazaarApiOrderOperation(input);
     expect(replay.replayed).toBe(true);
     await expect(
-      prisma.customerOrderEmailLog.count({ where: { customerOrderId: orderId } }),
+      prisma.customerOrderEmailLog.count({
+        where: { customerOrderId: orderId, type: CustomerOrderEmailType.CONFIRMATION },
+      }),
     ).resolves.toBe(1);
     await expect(
       prisma.customerOrder.count({

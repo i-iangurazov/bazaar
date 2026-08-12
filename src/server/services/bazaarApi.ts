@@ -45,6 +45,7 @@ import {
   type OperationFailureDecision,
 } from "@/server/services/operationRequests";
 import {
+  queueOwnerOrderNotificationTx,
   orderConfirmationEmailOperationKey,
   queueOrderConfirmationEmailTx,
 } from "@/server/services/orderEmailOutbox";
@@ -1609,6 +1610,11 @@ const createBazaarApiOrderTx = async (
     storeId: input.storeId,
     customerOrderId: order.id,
     recipientEmail: input.customerEmail,
+  });
+  await queueOwnerOrderNotificationTx(tx, {
+    organizationId: input.organizationId,
+    storeId: input.storeId,
+    customerOrderId: order.id,
   });
   return { order, replayed: false };
 };

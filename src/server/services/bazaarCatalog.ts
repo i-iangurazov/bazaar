@@ -25,6 +25,7 @@ import {
 import {
   orderConfirmationEmailOperationKey,
   queueOrderConfirmationEmailTx,
+  queueOwnerOrderNotificationTx,
 } from "@/server/services/orderEmailOutbox";
 import { sendOrderConfirmationEmail } from "@/server/services/orderEmails";
 import { getRedisPublisher } from "@/server/redis";
@@ -1392,6 +1393,11 @@ const createCatalogCheckoutOrderTx = async (
     storeId: catalog.storeId,
     customerOrderId: order.id,
     recipientEmail: customerEmail,
+  });
+  await queueOwnerOrderNotificationTx(tx, {
+    organizationId: catalog.organizationId,
+    storeId: catalog.storeId,
+    customerOrderId: order.id,
   });
 
   return order;
