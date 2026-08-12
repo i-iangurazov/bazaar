@@ -42,9 +42,11 @@ describe("customer normalization", () => {
     expect(isValidOptionalCustomerPhone("555 123 456")).toBe(false);
   });
 
-  it("normalizes valid addresses and rejects punctuation-only/control values", () => {
+  it("normalizes valid addresses and rejects one-character, punctuation-only, or control values", () => {
     expect(normalizeCustomerContactAddress("  Bishkek,  Chui  1  ")).toBe("Bishkek, Chui 1");
     expect(isValidOptionalCustomerAddress("")).toBe(true);
+    expect(normalizeCustomerContactAddress("я")).toBeNull();
+    expect(isValidOptionalCustomerAddress("я")).toBe(false);
     expect(isValidOptionalCustomerAddress("---")).toBe(false);
     expect(isValidOptionalCustomerAddress("Bishkek\u0000Chui 1")).toBe(false);
   });

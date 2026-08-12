@@ -1,6 +1,7 @@
 import { isCompleteInternationalPhone } from "@/lib/phoneCountries";
 
 export const CUSTOMER_PHONE_MAX_LENGTH = 64;
+export const CUSTOMER_ADDRESS_MIN_LENGTH = 2;
 export const CUSTOMER_ADDRESS_MAX_LENGTH = 512;
 
 const trimToNull = (value?: string | null) => {
@@ -33,6 +34,7 @@ export const isValidOptionalCustomerPhone = (value?: string | null) => {
 export const normalizeCustomerContactAddress = (value?: string | null) => {
   const normalized = trimToNull(value)?.replace(/\s+/g, " ") ?? null;
   return normalized &&
+    normalized.length >= CUSTOMER_ADDRESS_MIN_LENGTH &&
     normalized.length <= CUSTOMER_ADDRESS_MAX_LENGTH &&
     /[\p{L}\p{N}]/u.test(normalized) &&
     !/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(normalized)
