@@ -1,6 +1,6 @@
 "use client";
 
-import type { ComponentType } from "react";
+import React, { useRef, useState, type ComponentType } from "react";
 import Link from "next/link";
 
 import { MoreIcon } from "@/components/icons";
@@ -32,6 +32,22 @@ type RowActionsProps = {
 };
 
 export const RowActions = ({ actions, maxInline = 2, moreLabel, className }: RowActionsProps) => {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const pendingActionRef = useRef<(() => void) | null>(null);
+
+  const runAfterMenuClose = (action?: () => void) => {
+    if (!action) return;
+    pendingActionRef.current = action;
+  };
+
+  const handleMenuOpenChange = (open: boolean) => {
+    setMenuOpen(open);
+    if (open || !pendingActionRef.current) return;
+    const action = pendingActionRef.current;
+    pendingActionRef.current = null;
+    queueMicrotask(action);
+  };
+
   const resolveVariant = (variant?: string): "primary" | "secondary" | "ghost" | "danger" => {
     if (
       variant === "primary" ||
@@ -94,9 +110,7 @@ export const RowActions = ({ actions, maxInline = 2, moreLabel, className }: Row
     return (
       <DropdownMenuItem
         key={action.key}
-        onSelect={() => {
-          action.onSelect?.();
-        }}
+        onSelect={() => runAfterMenuClose(action.onSelect)}
         disabled={action.disabled}
       >
         {item}
@@ -119,7 +133,7 @@ export const RowActions = ({ actions, maxInline = 2, moreLabel, className }: Row
         />
       ))}
       {menuActions.length ? (
-        <DropdownMenu>
+        <DropdownMenu open={menuOpen} onOpenChange={handleMenuOpenChange}>
           <DropdownMenuTrigger asChild>
             <span>
               <IconButton icon={MoreIcon} label={moreLabel} variant="ghost" />

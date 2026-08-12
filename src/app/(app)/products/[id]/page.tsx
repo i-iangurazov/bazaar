@@ -223,6 +223,15 @@ const ProductDetailPage = () => {
   const [labelSetupOpen, setLabelSetupOpen] = useState(false);
   const [labelAction, setLabelAction] = useState<"print" | "download" | null>(null);
   const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
+  const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
+  const duplicateAfterMenuCloseRef = useRef(false);
+
+  const handleActionsMenuOpenChange = (open: boolean) => {
+    setActionsMenuOpen(open);
+    if (open || !duplicateAfterMenuCloseRef.current) return;
+    duplicateAfterMenuCloseRef.current = false;
+    queueMicrotask(() => setDuplicateDialogOpen(true));
+  };
   const basePriceAutofillRef = useRef<string | null>(null);
 
   const productQuery = trpc.products.getById.useQuery(
@@ -1179,7 +1188,7 @@ const ProductDetailPage = () => {
           {t("printLabels")}
         </Button>
       ) : null}
-      <DropdownMenu>
+      <DropdownMenu open={actionsMenuOpen} onOpenChange={handleActionsMenuOpenChange}>
         <DropdownMenuTrigger asChild>
           <Button type="button" variant="secondary" size="sm" className="w-full sm:w-auto">
             <MoreIcon className="h-4 w-4" aria-hidden />
@@ -1213,7 +1222,11 @@ const ProductDetailPage = () => {
             <ViewIcon className="h-4 w-4" aria-hidden />
             {tInventory("viewMovements")}
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setDuplicateDialogOpen(true)}>
+          <DropdownMenuItem
+            onSelect={() => {
+              duplicateAfterMenuCloseRef.current = true;
+            }}
+          >
             <CopyIcon className="h-4 w-4" aria-hidden />
             {t("duplicate")}
           </DropdownMenuItem>

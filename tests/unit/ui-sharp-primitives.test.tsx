@@ -26,6 +26,8 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { FormItem, FormLabel } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Modal, ModalFooter } from "@/components/ui/modal";
+import { RowActions } from "@/components/row-actions";
+import { CopyIcon, ViewIcon } from "@/components/icons";
 import { Pagination, PaginationContent, PaginationItem } from "@/components/ui/pagination";
 import { PopoverSurface } from "@/components/ui/popover";
 import { Select, SelectTrigger } from "@/components/ui/select";
@@ -62,6 +64,7 @@ import {
 } from "@/components/ui/table";
 import { TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
@@ -232,6 +235,56 @@ describe("soft-rounded UI primitives", () => {
 
     await user.click(within(dialog).getByRole("button", { name: "Create copy" }));
     const destination = await screen.findByRole("button", { name: "Edit duplicate" });
+    await waitFor(() => expect(document.body.style.pointerEvents).not.toBe("none"));
+    await user.click(destination);
+    expect(destinationClick).toHaveBeenCalledOnce();
+  });
+
+  it("finishes a row dropdown lifecycle before opening a modal action", async () => {
+    const user = userEvent.setup();
+    const destinationClick = vi.fn();
+    const Harness = () => {
+      const [open, setOpen] = useState(false);
+      const [route, setRoute] = useState<"list" | "detail">("list");
+      if (route === "detail") {
+        return <Button onClick={destinationClick}>Edit duplicated product</Button>;
+      }
+      return (
+        <div>
+          <RowActions
+            maxInline={1}
+            moreLabel="More actions"
+            actions={[
+              { key: "view", label: "View", icon: ViewIcon },
+              { key: "duplicate", label: "Duplicate", icon: CopyIcon, onSelect: () => setOpen(true) },
+            ]}
+          />
+          <Modal open={open} onOpenChange={setOpen} title="Duplicate product">
+            <Input aria-label="Duplicate title" />
+            <Button
+              onClick={() => {
+                setOpen(false);
+                setRoute("detail");
+              }}
+            >
+              Create copy
+            </Button>
+          </Modal>
+        </div>
+      );
+    };
+
+    render(<TooltipProvider><Harness /></TooltipProvider>);
+    await user.click(screen.getByRole("button", { name: "More actions" }));
+    await user.click(screen.getByRole("menuitem", { name: "Duplicate" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Duplicate product" });
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    await user.click(within(dialog).getByRole("textbox", { name: "Duplicate title" }));
+    expect(document.activeElement).toBe(within(dialog).getByRole("textbox"));
+    await user.click(within(dialog).getByRole("button", { name: "Create copy" }));
+    const destination = await screen.findByRole("button", { name: "Edit duplicated product" });
     await waitFor(() => expect(document.body.style.pointerEvents).not.toBe("none"));
     await user.click(destination);
     expect(destinationClick).toHaveBeenCalledOnce();

@@ -1,4 +1,4 @@
-import type { ComponentProps, ComponentType } from "react";
+import React, { type ComponentProps, type ComponentType } from "react";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
