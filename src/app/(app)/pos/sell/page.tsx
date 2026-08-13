@@ -5587,7 +5587,10 @@ const PosSellPage = () => {
                                 </div>
                                 <div className="mt-1.5 grid grid-cols-[1fr_auto] items-center gap-2">
                                   <div className="flex min-w-0 flex-wrap items-center gap-2">
-                                    <div className="flex min-w-0 items-center gap-1.5">
+                                    <div
+                                      className="order-2 flex min-w-0 items-center gap-1.5 lg:order-1"
+                                      data-pos-control="price"
+                                    >
                                       <Input
                                         data-testid="pos-line-price"
                                         value={
@@ -5630,7 +5633,10 @@ const PosSellPage = () => {
                                         </span>
                                       ) : null}
                                     </div>
-                                    <div className="inline-flex items-center overflow-hidden rounded-md border border-border bg-background">
+                                    <div
+                                      className="order-1 inline-flex min-w-[108px] items-center overflow-hidden rounded-md border border-border bg-background lg:order-2"
+                                      data-pos-control="quantity"
+                                    >
                                       <Button
                                         type="button"
                                         variant="ghost"
@@ -7487,55 +7493,73 @@ const PosSellPage = () => {
                 </p>
               </div>
 
-              <div className="mt-3 space-y-2.5">
+              <div
+                className="mt-3 grid grid-cols-[minmax(132px,0.95fr)_minmax(0,1.05fr)] gap-2.5"
+                data-testid="pos-mobile-line-controls"
+              >
+                <div
+                  className={cn(
+                    "inline-flex min-w-[132px] items-stretch overflow-hidden rounded-[11px] border bg-background",
+                    mobileLineInputMode === "qty" ? "border-primary" : "border-border",
+                  )}
+                  data-pos-control="quantity"
+                >
+                  <button
+                    type="button"
+                    className="grid min-h-[50px] w-11 shrink-0 place-items-center text-lg font-semibold disabled:opacity-40"
+                    onClick={() =>
+                      handleUpdateQty(activeLine.id, String(Math.max(1, activeLine.qty - 1)))
+                    }
+                    disabled={
+                      activeLine.qty <= 1 ||
+                      cancelDraftMutation.isLoading ||
+                      completeMutation.isLoading
+                    }
+                    aria-label={t("sell.decreaseQty")}
+                  >
+                    -
+                  </button>
+                  <button
+                    type="button"
+                    className="min-h-[50px] min-w-0 flex-1 border-x border-border px-1 text-[19px] font-semibold"
+                    onClick={() => {
+                      setMobileLineInputMode("qty");
+                      setMobileKeypadReplaceNext(true);
+                    }}
+                    aria-label={t("sell.mobile.quantity")}
+                  >
+                    <span className="block truncate" data-testid="pos-line-qty">
+                      {lineInputDrafts[activeLine.id]?.qty ?? String(activeLine.qty)}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="grid min-h-[50px] w-11 shrink-0 place-items-center text-lg font-semibold disabled:opacity-40"
+                    onClick={() => handleUpdateQty(activeLine.id, String(activeLine.qty + 1))}
+                    disabled={cancelDraftMutation.isLoading || completeMutation.isLoading}
+                    aria-label={t("sell.increaseQty")}
+                  >
+                    +
+                  </button>
+                </div>
                 <button
                   type="button"
                   className={cn(
-                    "flex min-h-[50px] w-full items-center justify-between rounded-[11px] border px-3 text-left",
+                    "flex min-h-[50px] min-w-0 items-center justify-between gap-2 rounded-[11px] border px-3 text-left",
                     mobileLineInputMode === "price" ? "border-primary" : "border-border",
                   )}
+                  data-pos-control="price"
                   onClick={() => {
                     setMobileLineInputMode("price");
                     setMobileKeypadReplaceNext(true);
                   }}
                 >
-                  <span className="text-[15px] font-semibold text-secondary-foreground">
+                  <span className="min-w-0 truncate text-[13px] font-semibold text-secondary-foreground">
                     {t("sell.mobile.salePrice")}
                   </span>
-                  <span className="text-[19px] font-semibold" data-testid="pos-line-price">
+                  <span className="shrink-0 text-[17px] font-semibold" data-testid="pos-line-price">
                     {lineInputDrafts[activeLine.id]?.price ??
                       formatSaleMoneyDraft(activeLine.unitPriceKgs)}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  className={cn(
-                    "flex min-h-[50px] w-full items-center justify-between rounded-[11px] border px-3 text-left",
-                    mobileLineInputMode === "qty" ? "border-primary" : "border-border",
-                  )}
-                  onClick={() => {
-                    setMobileLineInputMode("qty");
-                    setMobileKeypadReplaceNext(true);
-                  }}
-                >
-                  <span className="text-[15px] font-semibold text-secondary-foreground">
-                    {t("sell.mobile.quantity")}
-                  </span>
-                  <span className="flex items-center gap-2.5">
-                    <span className="text-[19px] font-semibold" data-testid="pos-line-qty">
-                      {lineInputDrafts[activeLine.id]?.qty ?? String(activeLine.qty)}
-                    </span>
-                    <span
-                      role="button"
-                      tabIndex={-1}
-                      className="grid h-7 w-9 place-items-center rounded-[7px] bg-muted-foreground text-background"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        handleMobileKeypadPress("clear");
-                      }}
-                    >
-                      <CloseIcon className="h-4 w-4" aria-hidden />
-                    </span>
                   </span>
                 </button>
               </div>
@@ -8140,7 +8164,7 @@ const PosSellPage = () => {
                                     </Button>
                                   </div>
 
-                                  <div className="mt-3 grid grid-cols-[minmax(0,1fr)_132px] gap-2">
+                                  <div className="mt-3 grid grid-cols-[132px_minmax(0,1fr)] gap-2">
                                     <Input
                                       data-testid="pos-line-price"
                                       value={
@@ -8149,7 +8173,8 @@ const PosSellPage = () => {
                                       }
                                       aria-label={t("sell.unitPrice")}
                                       inputMode="decimal"
-                                      className="h-11 text-right"
+                                      className="order-2 h-11 min-w-0 text-right"
+                                      data-pos-control="price"
                                       onFocus={(event) => event.currentTarget.select()}
                                       onChange={(event) =>
                                         handleUpdateLinePrice(line.id, event.currentTarget.value)
@@ -8175,7 +8200,10 @@ const PosSellPage = () => {
                                         cancelDraftMutation.isLoading || completeMutation.isLoading
                                       }
                                     />
-                                    <div className="inline-flex h-11 w-[132px] items-center overflow-hidden border border-border bg-background">
+                                    <div
+                                      className="order-1 inline-flex h-11 w-[132px] items-center overflow-hidden border border-border bg-background"
+                                      data-pos-control="quantity"
+                                    >
                                       <Button
                                         type="button"
                                         variant="ghost"
