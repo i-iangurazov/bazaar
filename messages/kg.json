@@ -3376,6 +3376,7 @@
       "printResponsible": "Жооптуу",
       "printSignatureDate": "Дата",
       "documentNotFound": "Кыймыл документи табылган жок.",
+      "sourceDocumentNotFound": "Баштапкы документ табылган жок. Сакталган кыймыл таржымалы төмөндө көрсөтүлдү.",
       "documentSummary": "Документ жыйынтыгы",
       "documentLines": "Кыймыл саптары",
       "documentMovementType": "Кыймыл",

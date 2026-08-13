@@ -95,9 +95,7 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
   const [status, setStatus] = useState<"ALL" | CustomerOrderStatus>(
     readPosEnumParam(searchParams, "status", receiptStatusValues, "ALL"),
   );
-  const [fromDate, setFromDate] = useState(
-    readPosDateParam(searchParams, "from", defaultFromDate),
-  );
+  const [fromDate, setFromDate] = useState(readPosDateParam(searchParams, "from", defaultFromDate));
   const [toDate, setToDate] = useState(readPosDateParam(searchParams, "to", today));
   const [page, setPage] = useState(readPosPageParam(searchParams, "page"));
   const requestedPageSize = readPosPageParam(searchParams, "pageSize", 25);
@@ -114,7 +112,29 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
     saleId: string;
     mode: "download" | "print" | "share";
   } | null>(null);
-  const [previewSaleId, setPreviewSaleId] = useState<string | null>(null);
+  const requestedReceiptId = searchParams.get("receiptId")?.trim() || null;
+  const [previewSaleId, setPreviewSaleId] = useState<string | null>(requestedReceiptId);
+
+  useEffect(() => {
+    if (requestedReceiptId) {
+      setPreviewSaleId(requestedReceiptId);
+    }
+  }, [requestedReceiptId]);
+
+  const closeReceiptPreview = () => {
+    setPreviewSaleId(null);
+    if (!requestedReceiptId) {
+      return;
+    }
+    // Let Radix commit the closed portal and release its body pointer/focus lock before updating
+    // the deep-link URL. This keeps mobile navigation from racing dialog cleanup.
+    requestAnimationFrame(() => {
+      const params = new URLSearchParams(searchParamsString);
+      params.delete("receiptId");
+      const query = params.toString();
+      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    });
+  };
 
   useEffect(() => {
     if (previousFilterSignatureRef.current === filterSignature) {
@@ -775,7 +795,7 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
             open={Boolean(previewSaleId)}
             onOpenChange={(nextOpen) => {
               if (!nextOpen) {
-                setPreviewSaleId(null);
+                closeReceiptPreview();
               }
             }}
           />

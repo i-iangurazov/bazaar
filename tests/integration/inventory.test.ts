@@ -147,6 +147,49 @@ describeDb("inventory service", () => {
     expect(movement).not.toBeNull();
   });
 
+  it("preserves a historical sale movement when its source document is missing", async () => {
+    const { org, store, product, adminUser } = await seedBase();
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+      isOrgOwner: true,
+    });
+    const missingSaleId = "deleted-pos-sale";
+
+    await prisma.stockMovement.create({
+      data: {
+        storeId: store.id,
+        productId: product.id,
+        type: StockMovementType.SALE,
+        qtyDelta: -1,
+        referenceType: "CustomerOrder",
+        referenceId: missingSaleId,
+        note: "Preserved historical sale",
+        createdById: adminUser.id,
+      },
+    });
+
+    const journal = await caller.inventory.productMovements({
+      type: "SALE",
+      search: missingSaleId,
+      page: 1,
+      pageSize: 25,
+    });
+    const documentKey = `SALE:CustomerOrder:${missingSaleId}`;
+
+    expect(journal.items).toHaveLength(1);
+    expect(journal.items[0]?.detailUrl).toBe(
+      `/inventory/movements/${encodeURIComponent(documentKey)}?source=missing`,
+    );
+    await expect(caller.inventory.productMovementDocument({ documentKey })).resolves.toMatchObject({
+      id: documentKey,
+      totalQuantity: 1,
+      comment: "Preserved historical sale",
+    });
+  });
+
   it("treats receive idempotency keys as replay safe", async () => {
     const { org, store, product, adminUser } = await seedBase();
 

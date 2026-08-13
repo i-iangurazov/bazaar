@@ -53,7 +53,10 @@ const ProductMovementDocumentPage = () => {
 
   const documentTypeLabel = (value: string) => t(`type.${value}`);
   const shortDocumentReference = (documentId: string) =>
-    documentId.replace(/[^a-z0-9]/gi, "").slice(0, 8).toUpperCase() || documentId.slice(0, 8);
+    documentId
+      .replace(/[^a-z0-9]/gi, "")
+      .slice(0, 8)
+      .toUpperCase() || documentId.slice(0, 8);
   const documentNumber = document
     ? document.documentNumber || shortDocumentReference(document.documentId)
     : "";
@@ -72,6 +75,7 @@ const ProductMovementDocumentPage = () => {
     typeof value === "number" ? formatCurrencyKGS(value, locale) : tCommon("notAvailable");
   const returnTo = resolveSafeReturnTo(searchParams.get("returnTo"));
   const detailReturnParams = new URLSearchParams({ from: "movements", returnTo });
+  const sourceDocumentMissing = searchParams.get("source") === "missing";
   const bareCurrentDetailUrl = document
     ? `/inventory/movements/${encodeURIComponent(document.id)}`
     : "";
@@ -147,6 +151,12 @@ const ProductMovementDocumentPage = () => {
       {documentQuery.error ? (
         <div className="mb-4 rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
           {translateError(tErrors, documentQuery.error)}
+        </div>
+      ) : null}
+
+      {sourceDocumentMissing ? (
+        <div className="mb-4 rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-foreground">
+          {t("sourceDocumentNotFound")}
         </div>
       ) : null}
 

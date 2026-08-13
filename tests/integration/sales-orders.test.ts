@@ -654,11 +654,21 @@ describeDb("sales orders", () => {
         },
       },
     });
+    const movementJournal = await caller.inventory.productMovements({
+      type: "SALE",
+      search: order.number,
+      page: 1,
+      pageSize: 25,
+    });
 
     expect(dbOrder?.status).toBe(CustomerOrderStatus.COMPLETED);
     expect(saleMovements).toHaveLength(1);
     expect(saleMovements[0]?.qtyDelta).toBe(-2);
     expect(snapshot?.onHand).toBe(8);
+    expect(movementJournal.items[0]?.isPosSale).toBe(false);
+    expect(movementJournal.items[0]?.detailUrl).toBe(
+      `/sales/orders/${encodeURIComponent(order.id)}`,
+    );
   });
 
   it("keeps complete idempotent", async () => {

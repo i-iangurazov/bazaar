@@ -3377,6 +3377,7 @@
       "printResponsible": "Responsible",
       "printSignatureDate": "Date",
       "documentNotFound": "Movement document was not found.",
+      "sourceDocumentNotFound": "The source document was not found. The preserved movement history is shown below.",
       "documentSummary": "Document summary",
       "documentLines": "Movement lines",
       "documentMovementType": "Movement",

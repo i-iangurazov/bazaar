@@ -3377,6 +3377,7 @@
       "printResponsible": "Ответственный",
       "printSignatureDate": "Дата",
       "documentNotFound": "Документ движения не найден.",
+      "sourceDocumentNotFound": "Исходный документ не найден. Сохранённая история движения показана ниже.",
       "documentSummary": "Сводка документа",
       "documentLines": "Строки движения",
       "documentMovementType": "Движение",

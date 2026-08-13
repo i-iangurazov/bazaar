@@ -1527,6 +1527,10 @@ describeDb("pos", () => {
     expect(movementJournal.items[0]?.positionsCount).toBe(2);
     expect(movementJournal.items[0]?.totalAmount).toBe(810);
     expect(movementJournal.items[0]?.paidAmount).toBe(810);
+    expect(movementJournal.items[0]?.isPosSale).toBe(true);
+    expect(movementJournal.items[0]?.detailUrl).toBe(
+      `/pos/receipts?receiptId=${encodeURIComponent(sale.id)}`,
+    );
   });
 
   it("edits a completed return with inventory, refund, audit, and movement deltas", async () => {

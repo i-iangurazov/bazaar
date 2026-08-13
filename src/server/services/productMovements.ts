@@ -1,6 +1,7 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
 
 import { parseWriteOffMovementNote } from "@/lib/inventory/writeOff";
+import { resolveProductMovementDocumentViewTarget } from "@/lib/productMovementDocumentTarget";
 import {
   resolveAccessibleStoreIds,
   userHasAllStoreAccess,
@@ -142,6 +143,8 @@ type ProductMovementJournalSqlRow = {
   documentNumber: string | null;
   isPosSale: boolean | null;
   linkedCustomerOrderId: string | null;
+  linkedCustomerOrderIsPosSale: boolean | null;
+  sourceExists: boolean;
   organizationName: string | null;
   createdAt: Date;
   postedAt: Date | null;
@@ -280,23 +283,14 @@ export const decodeProductMovementDocumentKey = (key: string) => {
 
 export const getProductMovementDetailUrl = (input: {
   id: string;
+  documentType: ProductMovementDocumentType | string;
   documentReferenceType: string;
   documentReferenceId: string;
+  isPosSale?: boolean | null;
+  sourceExists?: boolean;
   linkedCustomerOrderId?: string | null;
-}) => {
-  switch (input.documentReferenceType) {
-    case "CustomerOrder":
-      return `/sales/orders/${input.documentReferenceId}`;
-    case "SaleReturn":
-      return input.linkedCustomerOrderId ? `/sales/orders/${input.linkedCustomerOrderId}` : null;
-    case "PURCHASE_ORDER":
-      return `/purchase-orders/${input.documentReferenceId}`;
-    case "STOCK_COUNT":
-      return `/inventory/counts/${input.documentReferenceId}`;
-    default:
-      return `/inventory/movements/${encodeURIComponent(input.id)}`;
-  }
-};
+  linkedCustomerOrderIsPosSale?: boolean | null;
+}) => resolveProductMovementDocumentViewTarget(input).href;
 
 const buildProductMovementDocumentLabel = (input: {
   documentType: ProductMovementDocumentType;
@@ -630,6 +624,14 @@ const buildProductMovementJournalCte = (input: {
       COALESCE(co."number", sr."number", sc."code", g."documentReferenceId") AS "documentNumber",
       co."isPosSale" AS "isPosSale",
       co_original."id" AS "linkedCustomerOrderId",
+      co_original."isPosSale" AS "linkedCustomerOrderIsPosSale",
+      CASE
+        WHEN g."documentReferenceType" = 'CustomerOrder' THEN co."id" IS NOT NULL
+        WHEN g."documentReferenceType" = 'SaleReturn' THEN sr."id" IS NOT NULL
+        WHEN g."documentReferenceType" = 'PURCHASE_ORDER' THEN po."id" IS NOT NULL
+        WHEN g."documentReferenceType" = 'STOCK_COUNT' THEN sc."id" IS NOT NULL
+        ELSE TRUE
+      END AS "sourceExists",
       g."organizationName" AS "organizationName",
       g."documentDate" AS "createdAt",
       COALESCE(co."completedAt", sr."completedAt", po."receivedAt", sc."appliedAt", g."documentDate") AS "postedAt",
@@ -813,9 +815,13 @@ const normalizeProductMovementJournalRow = (
     description,
     detailUrl: getProductMovementDetailUrl({
       id,
+      documentType: row.documentType,
       documentReferenceType: row.documentReferenceType,
       documentReferenceId: row.documentReferenceId,
+      isPosSale: row.isPosSale,
+      sourceExists: row.sourceExists,
       linkedCustomerOrderId: row.linkedCustomerOrderId,
+      linkedCustomerOrderIsPosSale: row.linkedCustomerOrderIsPosSale,
     }),
   };
 };

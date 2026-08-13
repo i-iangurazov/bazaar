@@ -40,6 +40,9 @@ describe("product movement journal source", () => {
     expect(serviceSource).toContain('o."name" AS "organizationName"');
     expect(serviceSource).toContain("encodeProductMovementDocumentKey");
     expect(serviceSource).toContain("getProductMovementDetailUrl");
+    expect(serviceSource).toContain("resolveProductMovementDocumentViewTarget");
+    expect(serviceSource).toContain('co_original."isPosSale" AS "linkedCustomerOrderIsPosSale"');
+    expect(serviceSource).toContain('END AS "sourceExists"');
     expect(serviceSource).toContain('m."storeId"');
     expect(serviceSource).toContain("encodeURIComponent(line.storeId)");
     expect(serviceSource).toContain("documentLabel: buildProductMovementDocumentLabel");
@@ -118,9 +121,7 @@ describe("product movement journal source", () => {
     );
 
     expect(pageSource).toContain("getProductMovementEditTarget");
-    expect(pageSource).toContain(
-      "<Link href={editTarget.href} prefetch={false}>",
-    );
+    expect(pageSource).toContain("<Link href={editTarget.href} prefetch={false}>");
     expect(pageSource).toContain("returnTo: safeCurrentJournalHref");
     expect(pageSource).toContain("movement-edit-button-disabled");
     expect(pageSource).not.toContain("onClick={() => openEditModal(movement)}");
