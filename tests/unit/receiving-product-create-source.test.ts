@@ -80,7 +80,8 @@ describe("receiving product creation handoff source", () => {
     expect(source).toContain("duplicateCreateSubtitle");
     expect(source).toContain("barcodes: []");
     expect(source).toContain("trpcUtils.inventory.searchProducts.invalidate()");
-    expect(source).toContain("router.push(`/products/${product.id}`)");
+    expect(source).toContain('router.push("/products")');
+    expect(source).not.toContain("router.push(`/products/${product.id}`)");
   });
 
   it("adds a duplicate product action to receiving search results without clearing search", async () => {
