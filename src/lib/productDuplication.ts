@@ -1,7 +1,6 @@
 export const QUICK_PRODUCT_DUPLICATION_PRESET = {
   status: "ACTIVE",
   copyImages: true,
-  copyInventory: false,
   copyDescription: true,
   copyCategory: true,
   copyOtherDetails: true,

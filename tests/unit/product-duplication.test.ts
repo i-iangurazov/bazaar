@@ -17,7 +17,6 @@ describe("quick product duplication", () => {
       idempotencyKey: "duplicate-product-1",
       status: "ACTIVE",
       copyImages: true,
-      copyInventory: false,
       copyDescription: true,
       copyCategory: true,
       copyOtherDetails: true,
@@ -28,6 +27,9 @@ describe("quick product duplication", () => {
       copySku: true,
     });
     expect(input).not.toHaveProperty("name");
-    expect(QUICK_PRODUCT_DUPLICATION_PRESET.copyInventory).toBe(false);
+    // Omitting copyInventory is the backend's safe catalog-copy default:
+    // preserve reorder configuration while physical on-hand remains zero.
+    expect(input).not.toHaveProperty("copyInventory");
+    expect(QUICK_PRODUCT_DUPLICATION_PRESET).not.toHaveProperty("copyInventory");
   });
 });
