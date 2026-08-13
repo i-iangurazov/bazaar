@@ -213,6 +213,46 @@ describe("index page source layout", () => {
     expect(productMutationsSource).toContain("minStock: input.minStock");
   });
 
+  it("separates quick and selective duplication and returns saved products to the list", async () => {
+    const listSource = await readSource("src/app/(app)/products/page.tsx");
+    const detailSource = await readSource("src/app/(app)/products/[id]/page.tsx");
+    const createSource = await readSource("src/app/(app)/products/new/page.tsx");
+    const dialogSource = await readSource(
+      "src/components/products/product-duplicate-dialog.tsx",
+    );
+    const serviceSource = await readSource("src/server/services/products.ts");
+
+    const listQuickAction = listSource.indexOf('key: "duplicate"');
+    const listSelectiveAction = listSource.indexOf('key: "selective-duplicate"');
+    const detailQuickAction = detailSource.indexOf('{t("duplicate")}');
+    const detailSelectiveAction = detailSource.indexOf('{t("selectiveDuplicate")}');
+
+    expect(listQuickAction).toBeGreaterThan(-1);
+    expect(listSelectiveAction).toBeGreaterThan(listQuickAction);
+    expect(listSource.slice(listQuickAction, listSelectiveAction)).toContain(
+      "quickDuplicate.duplicateProduct(product.id)",
+    );
+    expect(listSource.slice(listSelectiveAction, listSelectiveAction + 400)).toContain(
+      "setDuplicateTarget",
+    );
+    expect(detailQuickAction).toBeGreaterThan(-1);
+    expect(detailSelectiveAction).toBeGreaterThan(detailQuickAction);
+    expect(detailSource).toContain(
+      "actionAfterMenuCloseRef.current = () => quickDuplicate.duplicateProduct(productId)",
+    );
+    expect(detailSource).toContain(
+      "actionAfterMenuCloseRef.current = () => setDuplicateDialogOpen(true)",
+    );
+    expect(dialogSource).toContain("setName(productName)");
+    expect(dialogSource).not.toContain('setName(t("duplicateNameTemplate"');
+    expect(serviceSource).toContain(
+      "const duplicateName = input.name?.trim() || source.name;",
+    );
+    expect(serviceSource).not.toContain('`${source.name} (Copy)`');
+    expect(createSource).toContain('router.push("/products");');
+    expect(detailSource).toContain("router.push(productEditReturnPath);");
+  });
+
   it("updates archive state immediately and reconciles all product readers", async () => {
     const source = await readSource("src/app/(app)/products/page.tsx");
     const detailSource = await readSource("src/app/(app)/products/[id]/page.tsx");

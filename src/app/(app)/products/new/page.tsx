@@ -146,7 +146,7 @@ const NewProductPage = () => {
         );
         return;
       }
-      router.push(`/products/${product.id}`);
+      router.push("/products");
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });

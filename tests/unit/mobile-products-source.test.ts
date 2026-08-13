@@ -29,6 +29,21 @@ describe("mobile products source", () => {
     expect(duplicateDialogSource).toContain("mobileSheet");
   });
 
+  it("closes product action layers before quick or selective duplication navigates", async () => {
+    const rowActionsSource = await readSource("src/components/row-actions.tsx");
+    const detailSource = await readSource("src/app/(app)/products/[id]/page.tsx");
+    const duplicateDialogSource = await readSource(
+      "src/components/products/product-duplicate-dialog.tsx",
+    );
+
+    expect(rowActionsSource).toContain("pendingActionRef.current = action");
+    expect(rowActionsSource).toContain("queueMicrotask(action)");
+    expect(detailSource).toContain("actionAfterMenuCloseRef");
+    expect(detailSource).toContain("queueMicrotask(action)");
+    expect(duplicateDialogSource).toContain("if (open || !pendingNavigation)");
+    expect(duplicateDialogSource).toContain("window.requestAnimationFrame");
+  });
+
   it("offers the same image and stock readiness filters on desktop", async () => {
     const source = await readSource("src/app/(app)/products/page.tsx");
     const desktopFiltersStart = source.indexOf('filtersClassName="hidden border-0 bg-transparent p-0 md:block"');

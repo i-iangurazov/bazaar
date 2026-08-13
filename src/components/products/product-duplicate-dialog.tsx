@@ -75,7 +75,7 @@ export const ProductDuplicateDialog = ({
     if (!open) {
       return;
     }
-    setName(t("duplicateNameTemplate", { name: productName }));
+    setName(productName);
     setStatus("ACTIVE");
     setOptions(defaultOptions);
     setPendingNavigation(null);

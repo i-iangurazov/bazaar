@@ -19,6 +19,7 @@ import {
 } from "@/components/product-editor-layout";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { ProductDuplicateDialog } from "@/components/products/product-duplicate-dialog";
+import { useQuickProductDuplicate } from "@/components/products/use-quick-product-duplicate";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -224,13 +225,15 @@ const ProductDetailPage = () => {
   const [labelAction, setLabelAction] = useState<"print" | "download" | null>(null);
   const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
-  const duplicateAfterMenuCloseRef = useRef(false);
+  const actionAfterMenuCloseRef = useRef<(() => void) | null>(null);
+  const quickDuplicate = useQuickProductDuplicate();
 
   const handleActionsMenuOpenChange = (open: boolean) => {
     setActionsMenuOpen(open);
-    if (open || !duplicateAfterMenuCloseRef.current) return;
-    duplicateAfterMenuCloseRef.current = false;
-    queueMicrotask(() => setDuplicateDialogOpen(true));
+    if (open || !actionAfterMenuCloseRef.current) return;
+    const action = actionAfterMenuCloseRef.current;
+    actionAfterMenuCloseRef.current = null;
+    queueMicrotask(action);
   };
   const basePriceAutofillRef = useRef<string | null>(null);
 
@@ -400,9 +403,7 @@ const ProductDetailPage = () => {
       setProductFormSavedRevision((revision) => revision + 1);
       setProductFormDirty(false);
       toast({ variant: "success", description: t("saveSuccess") });
-      if (returnTo) {
-        router.push(productEditReturnPath);
-      }
+      router.push(productEditReturnPath);
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
@@ -1224,11 +1225,20 @@ const ProductDetailPage = () => {
           </DropdownMenuItem>
           <DropdownMenuItem
             onSelect={() => {
-              duplicateAfterMenuCloseRef.current = true;
+              actionAfterMenuCloseRef.current = () => quickDuplicate.duplicateProduct(productId);
             }}
+            disabled={quickDuplicate.isLoading}
           >
             <CopyIcon className="h-4 w-4" aria-hidden />
             {t("duplicate")}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() => {
+              actionAfterMenuCloseRef.current = () => setDuplicateDialogOpen(true);
+            }}
+          >
+            <CopyIcon className="h-4 w-4" aria-hidden />
+            {t("selectiveDuplicate")}
           </DropdownMenuItem>
           <DropdownMenuItem
             className="text-danger focus:text-danger"

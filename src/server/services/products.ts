@@ -2699,7 +2699,7 @@ export const duplicateProduct = async (input: {
             requestedSku: input.sku,
           })
         : await resolveCreateSku(tx, { organizationId: input.organizationId });
-    const duplicateName = input.name?.trim() || `${source.name} (Copy)`;
+    const duplicateName = input.name?.trim() || source.name;
 
     const duplicate = await tx.product.create({
       data: {

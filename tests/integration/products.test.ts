@@ -361,6 +361,7 @@ describeDb("products", () => {
     });
 
     expect(noPhotoProduct.sku).not.toBe(source.sku);
+    expect(noPhotoProduct.name).toBe(source.name);
     expect(noPhotoProduct.unit).toBe("pcs");
     expect(noPhotoProduct.baseUnitId).toBe(pcsUnit.id);
     expect(noPhotoProduct.photoUrl).toBeNull();
@@ -379,6 +380,7 @@ describeDb("products", () => {
     expect(noPhotoProduct.storeProducts.find((row) => row.storeId === store.id)?.isActive).toBe(
       true,
     );
+    expect(withoutPhotos.copiedInventoryRows).toBe(0);
     expect(photoProduct.images).toHaveLength(2);
   });
 

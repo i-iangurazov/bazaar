@@ -21,6 +21,7 @@ import {
   ProductDescriptionGenerationProgress,
 } from "@/components/product-description-generation-progress";
 import { ProductDuplicateDialog } from "@/components/products/product-duplicate-dialog";
+import { useQuickProductDuplicate } from "@/components/products/use-quick-product-duplicate";
 import { CatalogDiscountDialog } from "@/components/products/catalog-discount-dialog";
 import { SavedTableViews } from "@/components/saved-table-views";
 import { Badge } from "@/components/ui/badge";
@@ -379,6 +380,7 @@ const ProductsPage = () => {
     id: string;
     name: string;
   } | null>(null);
+  const quickDuplicate = useQuickProductDuplicate();
   const inlineEditingEnabled = true;
 
   const defaultProductsTableState = useMemo<ProductsTableState>(
@@ -2283,6 +2285,13 @@ const ProductsPage = () => {
             key: "duplicate",
             label: t("duplicate"),
             icon: CopyIcon,
+            disabled: quickDuplicate.isLoading,
+            onSelect: () => quickDuplicate.duplicateProduct(product.id),
+          },
+          {
+            key: "selective-duplicate",
+            label: t("selectiveDuplicate"),
+            icon: CopyIcon,
             onSelect: () => {
               setDuplicateTarget({ id: product.id, name: product.name });
             },
@@ -2312,6 +2321,7 @@ const ProductsPage = () => {
     enableBarcode,
     openPrintForProducts,
     persistProductsReturnState,
+    quickDuplicate,
     restoreMutation,
     t,
     tCommon,
