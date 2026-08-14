@@ -48,18 +48,20 @@ describe("POS cart quantity and price control order", () => {
     expect(lineEditor).toContain("inline-flex min-w-[132px]");
   });
 
-  it("places quantity first in compact checkout while preserving desktop order", () => {
+  it("places quantity before price throughout compact and desktop checkout", () => {
     const desktopCheckout = sourceBetween(
       "const DesktopPosSaleView = () =>",
       "const MobileCustomerSheet = () =>",
     );
 
     expect(desktopCheckout).toContain(
-      'className="order-1 inline-flex min-w-[108px] items-center overflow-hidden rounded-md border border-border bg-background lg:order-2"',
+      'className="order-1 inline-flex min-w-[108px] items-center overflow-hidden rounded-md border border-border bg-background"',
     );
     expect(desktopCheckout).toContain(
-      'className="order-2 flex min-w-0 items-center gap-1.5 lg:order-1"',
+      'className="order-2 flex min-w-0 items-center gap-1.5"',
     );
+    expect(desktopCheckout).not.toContain("lg:order-1");
+    expect(desktopCheckout).not.toContain("lg:order-2");
   });
 
   it("keeps the mobile fallback row quantity-first without changing handlers", () => {

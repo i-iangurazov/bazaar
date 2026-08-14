@@ -5588,7 +5588,7 @@ const PosSellPage = () => {
                                 <div className="mt-1.5 grid grid-cols-[1fr_auto] items-center gap-2">
                                   <div className="flex min-w-0 flex-wrap items-center gap-2">
                                     <div
-                                      className="order-2 flex min-w-0 items-center gap-1.5 lg:order-1"
+                                      className="order-2 flex min-w-0 items-center gap-1.5"
                                       data-pos-control="price"
                                     >
                                       <Input
@@ -5634,7 +5634,7 @@ const PosSellPage = () => {
                                       ) : null}
                                     </div>
                                     <div
-                                      className="order-1 inline-flex min-w-[108px] items-center overflow-hidden rounded-md border border-border bg-background lg:order-2"
+                                      className="order-1 inline-flex min-w-[108px] items-center overflow-hidden rounded-md border border-border bg-background"
                                       data-pos-control="quantity"
                                     >
                                       <Button
