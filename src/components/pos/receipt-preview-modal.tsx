@@ -58,7 +58,8 @@ export const ReceiptPreviewModal = ({ saleId, open, onOpenChange }: ReceiptPrevi
           .reduce((sum, payment) => sum + Number(payment.amountKgs ?? 0), 0) ?? 0,
     }))
     .filter((payment) => payment.amount > 0);
-  const completedReturns = sale?.saleReturns.filter((saleReturn) => saleReturn.status === "COMPLETED") ?? [];
+  const completedReturns =
+    sale?.saleReturns.filter((saleReturn) => saleReturn.status === "COMPLETED") ?? [];
   const returnedTotalKgs = completedReturns.reduce(
     (sum, saleReturn) => sum + Number(saleReturn.totalKgs ?? 0),
     0,
@@ -94,7 +95,7 @@ export const ReceiptPreviewModal = ({ saleId, open, onOpenChange }: ReceiptPrevi
       onOpenChange={onOpenChange}
       title={sale ? t("titleWithNumber", { number: sale.number }) : t("title")}
       subtitle={sale?.completedAt ? formatDateTime(sale.completedAt, locale) : undefined}
-      className="max-w-5xl"
+      className="sm:max-w-[calc(100vw-3rem)] xl:max-w-7xl"
       bodyClassName="p-0"
       mobileSheet
       usePortal
@@ -211,29 +212,44 @@ export const ReceiptPreviewModal = ({ saleId, open, onOpenChange }: ReceiptPrevi
                 {t("lineCount", { count: sale.lines.length })}
               </span>
             </div>
-            <div className="overflow-x-auto">
-              <Table className="min-w-[760px]" sortable={false}>
+            <div className="hidden md:block">
+              <Table className="table-fixed" sortable={false}>
+                <colgroup>
+                  <col className="w-[32%]" />
+                  <col className="w-[20%]" />
+                  <col className="w-[12%]" />
+                  <col className="w-[18%]" />
+                  <col className="w-[18%]" />
+                </colgroup>
                 <TableHeader className="bg-muted/40">
                   <TableRow>
                     <TableHead className="px-4 py-3 lg:px-6">{t("columns.product")}</TableHead>
                     <TableHead className="px-4 py-3">{t("columns.sku")}</TableHead>
                     <TableHead className="px-4 py-3 text-right">{t("columns.quantity")}</TableHead>
                     <TableHead className="px-4 py-3 text-right">{t("columns.price")}</TableHead>
-                    <TableHead className="px-4 py-3 text-right lg:px-6">{t("columns.total")}</TableHead>
+                    <TableHead className="px-4 py-3 text-right lg:px-6">
+                      {t("columns.total")}
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {sale.lines.map((line) => (
                     <TableRow key={line.id}>
-                      <TableCell className="px-4 py-3 lg:px-6">
-                        <div className="font-medium text-foreground">{line.product.name}</div>
+                      <TableCell className="min-w-0 px-4 py-3 lg:px-6">
+                        <div className="break-words font-medium text-foreground">
+                          {line.product.name}
+                        </div>
                         {line.variant?.name ? (
-                          <div className="text-xs text-muted-foreground">{line.variant.name}</div>
+                          <div className="break-words text-xs text-muted-foreground">
+                            {line.variant.name}
+                          </div>
                         ) : null}
                       </TableCell>
-                      <TableCell className="px-4 py-3 text-xs text-muted-foreground">
-                        <div>{line.product.sku}</div>
-                        {line.product.primaryBarcode ? <div>{line.product.primaryBarcode}</div> : null}
+                      <TableCell className="min-w-0 px-4 py-3 text-xs text-muted-foreground">
+                        <div className="break-all">{line.product.sku}</div>
+                        {line.product.primaryBarcode ? (
+                          <div className="break-all">{line.product.primaryBarcode}</div>
+                        ) : null}
                       </TableCell>
                       <TableCell className="px-4 py-3 text-right">
                         {formatNumber(line.qty, locale)}
@@ -248,6 +264,45 @@ export const ReceiptPreviewModal = ({ saleId, open, onOpenChange }: ReceiptPrevi
                   ))}
                 </TableBody>
               </Table>
+            </div>
+            <div className="divide-y divide-border border-t border-border md:hidden">
+              {sale.lines.map((line) => (
+                <div key={line.id} className="space-y-3 px-4 py-4">
+                  <div className="min-w-0">
+                    <p className="break-words text-sm font-semibold text-foreground">
+                      {line.product.name}
+                    </p>
+                    {line.variant?.name ? (
+                      <p className="break-words text-xs text-muted-foreground">
+                        {line.variant.name}
+                      </p>
+                    ) : null}
+                    <p className="mt-1 break-all text-xs text-muted-foreground">
+                      {[line.product.sku, line.product.primaryBarcode].filter(Boolean).join(" · ")}
+                    </p>
+                  </div>
+                  <dl className="grid grid-cols-3 gap-2">
+                    <div className="min-w-0">
+                      <dt className="text-[11px] text-muted-foreground">{t("columns.quantity")}</dt>
+                      <dd className="mt-0.5 text-sm font-medium text-foreground">
+                        {formatNumber(line.qty, locale)}
+                      </dd>
+                    </div>
+                    <div className="min-w-0 text-right">
+                      <dt className="text-[11px] text-muted-foreground">{t("columns.price")}</dt>
+                      <dd className="mt-0.5 break-words text-sm font-medium text-foreground">
+                        {formatKgsMoney(line.unitPriceKgs, locale, currencySource)}
+                      </dd>
+                    </div>
+                    <div className="min-w-0 text-right">
+                      <dt className="text-[11px] text-muted-foreground">{t("columns.total")}</dt>
+                      <dd className="mt-0.5 break-words text-sm font-semibold text-foreground">
+                        {formatKgsMoney(line.lineTotalKgs, locale, currencySource)}
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+              ))}
             </div>
           </div>
 
