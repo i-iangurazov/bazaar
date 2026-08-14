@@ -48,6 +48,7 @@ const mocks = vi.hoisted(() => {
       let key = "";
       let values: Record<string, string> = {};
       let ttlMs = 0;
+      let expiresAt: number | null = null;
       let expiration: { member: string; score: number } | null = null;
       const chain = {
         hset(redisKey: string, ...fields: string[]) {
@@ -64,13 +65,17 @@ const mocks = vi.hoisted(() => {
           ttlMs = nextTtlMs;
           return chain;
         },
+        pexpireat(_redisKey: string, nextExpiresAt: number) {
+          expiresAt = nextExpiresAt;
+          return chain;
+        },
         zadd(_key: string, score: number, member: string) {
           expiration = { member, score };
           return chain;
         },
         async exec() {
           metadata.set(key, values);
-          metadataExpirations.set(key, Date.now() + ttlMs);
+          metadataExpirations.set(key, expiresAt ?? Date.now() + ttlMs);
           if (expiration) expirations.set(expiration.member, expiration.score);
           return [[null, 1]];
         },

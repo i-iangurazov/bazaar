@@ -290,7 +290,7 @@ const consumeR2Zip = async (
         "expiresAt",
         String(expiresAt),
       )
-      .pexpire(redisKey(token), restoreTtl)
+      .pexpireat(redisKey(token), expiresAt)
       .zadd(redisExpirationKey, expiresAt, expirationMember(token, claimed[1]))
       .exec();
   };
