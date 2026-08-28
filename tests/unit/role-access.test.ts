@@ -24,6 +24,7 @@ const permissions: AppPermission[] = [
   "manageCustomers",
   "manageIntegrations",
   "manageImports",
+  "managePrinting",
   "manageSettings",
   "manageUsers",
   "manageBilling",
@@ -64,6 +65,7 @@ describe("role access model", () => {
         "manageCustomers",
         "manageIntegrations",
         "manageImports",
+        "managePrinting",
         "viewHelp",
         "viewProfile",
       ]),
@@ -85,6 +87,7 @@ describe("role access model", () => {
       "viewSales",
       "viewCash",
       "viewProducts",
+      "managePrinting",
       "viewHelp",
       "viewProfile",
     ]);
@@ -112,7 +115,12 @@ describe("role access model", () => {
     expect(canAccessAppRoute("/settings/units", { role: "MANAGER" })).toBe(true);
     expect(canAccessAppRoute("/settings/users", { role: "MANAGER" })).toBe(false);
     expect(canAccessAppRoute("/settings/import", { role: "MANAGER" })).toBe(true);
-    expect(canAccessAppRoute("/settings/printing", { role: "MANAGER" })).toBe(false);
+    expect(canAccessAppRoute("/settings/printing", { role: "ADMIN" })).toBe(true);
+    expect(canAccessAppRoute("/settings/printing", { role: "MANAGER" })).toBe(true);
+    expect(canAccessAppRoute("/settings/printing", { role: "CASHIER" })).toBe(true);
+    expect(canAccessAppRoute("/settings/printing", { role: "STAFF" })).toBe(false);
+    expect(canAccessAppRoute("/settings/users", { role: "CASHIER" })).toBe(false);
+    expect(canAccessAppRoute("/operations/integrations", { role: "CASHIER" })).toBe(false);
     expect(canAccessAppRoute("/platform", { role: "ADMIN" })).toBe(false);
     expect(canAccessAppRoute("/platform", { role: "ADMIN", isPlatformOwner: true })).toBe(true);
     expect(getRoleHomePath({ role: "CASHIER" })).toBe("/pos");

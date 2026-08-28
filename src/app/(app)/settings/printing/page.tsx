@@ -418,7 +418,7 @@ const PrintingSettingsPage = () => {
   const { toast } = useToast();
   const { data: session } = useSession();
   const role = session?.user?.role;
-  const canEdit = role === "ADMIN" || role === "MANAGER";
+  const canEdit = role === "ADMIN" || role === "MANAGER" || role === "CASHIER";
   const trpcUtils = trpc.useUtils();
   const storesQuery = trpc.stores.list.useQuery();
   const [storeId, setStoreId] = useState("");

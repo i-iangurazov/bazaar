@@ -372,8 +372,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
             key: "printing",
             href: "/settings/printing",
             icon: PrintIcon,
-            adminOnly: true,
-            requiredPermission: "manageSettings",
+            requiredPermission: "managePrinting",
           },
           {
             key: "storeGroups",
@@ -941,8 +940,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
       label: tNav("printing"),
       href: "/settings/printing",
       icon: PrintIcon,
-      adminOnly: true,
-      requiredPermission: "manageSettings",
+      requiredPermission: "managePrinting",
     },
     {
       key: "mobile-stores",
@@ -1128,7 +1126,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
             <main className="min-w-0 flex-1 px-4 py-5 sm:px-6 lg:px-10 lg:py-7">
               <MobilePageContainer>
                 <div className="mx-auto max-w-[1500px]">
-                  <div className="mb-6 hidden flex-col gap-3 rounded-xl border border-border/65 bg-card/95 p-3 shadow-[0_14px_34px_rgba(15,23,42,0.055)] ring-1 ring-foreground/[0.015] backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between md:flex dark:shadow-none">
+                  <div className="mb-6 hidden flex-col gap-3 rounded-xl border border-border/65 bg-card/95 p-3 shadow-[0_14px_34px_rgba(15,23,42,0.055)] ring-1 ring-foreground/[0.015] backdrop-blur-xl dark:shadow-none sm:flex-row sm:items-center sm:justify-between md:flex">
                     <div className="flex w-full min-w-0 items-center gap-2 sm:max-w-md">
                       <SidebarTrigger className="h-10 w-10 shrink-0 border border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground" />
                       <div className="relative min-w-0 flex-1">

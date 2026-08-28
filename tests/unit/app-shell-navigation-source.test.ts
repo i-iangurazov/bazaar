@@ -85,6 +85,20 @@ describe("conservative app shell navigation source", () => {
     expect(unitsSource).not.toContain("adminOnly: true");
   });
 
+  it("exposes only print settings from the settings group to cashiers", () => {
+    const printingStart = source.indexOf('key: "printing"');
+    const printingSource = source.slice(printingStart, printingStart + 240);
+    const mobilePrintingStart = source.indexOf('key: "mobile-printing"');
+    const mobilePrintingSource = source.slice(mobilePrintingStart, mobilePrintingStart + 260);
+
+    expect(printingSource).toContain('requiredPermission: "managePrinting"');
+    expect(printingSource).not.toContain("adminOnly: true");
+    expect(mobilePrintingSource).toContain('requiredPermission: "managePrinting"');
+    expect(mobilePrintingSource).not.toContain("adminOnly: true");
+    expect(source).toContain('requiredPermission: "manageUsers"');
+    expect(source).toContain('requiredPermission: "manageIntegrations"');
+  });
+
   it("uses distinct sidebar icons for neighboring inventory pages", () => {
     const inventoryStart = source.indexOf('key: "inventory"');
     const inventorySource = source.slice(inventoryStart, inventoryStart + 1500);
@@ -112,7 +126,10 @@ describe("conservative app shell navigation source", () => {
 
   it("keeps POS sell as a standalone cashier workspace outside the admin shell", () => {
     const posStandaloneStart = source.indexOf('if (normalizedPath === "/pos/sell")');
-    const adminShellReturnStart = source.indexOf("  return (\n    <GuidanceProvider", posStandaloneStart);
+    const adminShellReturnStart = source.indexOf(
+      "  return (\n    <GuidanceProvider",
+      posStandaloneStart,
+    );
 
     expect(posStandaloneStart).toBeGreaterThanOrEqual(0);
     expect(adminShellReturnStart).toBeGreaterThan(posStandaloneStart);

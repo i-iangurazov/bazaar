@@ -244,6 +244,9 @@ export const adminProcedure = baseProcedure.use(hasRole([Role.ADMIN])).use(ensur
 export const cashierProcedure = baseProcedure
   .use(hasRole([Role.ADMIN, Role.MANAGER, Role.STAFF, Role.CASHIER]))
   .use(ensureActivePlan);
+export const printingProcedure = baseProcedure
+  .use(hasRole([Role.ADMIN, Role.MANAGER, Role.CASHIER]))
+  .use(ensureActivePlan);
 
 const isPlatformOwner = t.middleware(({ ctx, next }) => {
   if (!ctx.user || !ctx.user.isPlatformOwner) {

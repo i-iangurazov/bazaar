@@ -124,4 +124,48 @@ describeDb("stores", () => {
     expect(stored?.labelTemplate).toBe("2x5");
     expect(stored?.labelDefaultCopies).toBe(3);
   });
+
+  it("lets cashiers configure printing but keeps staff and store administration denied", async () => {
+    const { org, store, cashierUser, staffUser } = await seedBase({ plan: "BUSINESS" });
+    const cashierCaller = createTestCaller({
+      id: cashierUser.id,
+      email: cashierUser.email,
+      role: cashierUser.role,
+      organizationId: org.id,
+    });
+    const staffCaller = createTestCaller({
+      id: staffUser.id,
+      email: staffUser.email,
+      role: staffUser.role,
+      organizationId: org.id,
+    });
+
+    const updated = await cashierCaller.stores.updateHardware({
+      storeId: store.id,
+      receiptPrintMode: PrinterPrintMode.PDF,
+      labelPrintMode: PrinterPrintMode.PDF,
+      receiptPrintProvider: "MANUAL_BROWSER_PRINT",
+      receiptPaperSize: "80MM",
+    });
+
+    expect(updated).toMatchObject({
+      storeId: store.id,
+      receiptPrintProvider: "MANUAL_BROWSER_PRINT",
+      receiptPaperSize: "80MM",
+    });
+    await expect(
+      staffCaller.stores.updateHardware({
+        storeId: store.id,
+        receiptPrintMode: PrinterPrintMode.PDF,
+        labelPrintMode: PrinterPrintMode.PDF,
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(
+      cashierCaller.stores.updateLegalDetails({
+        storeId: store.id,
+        legalEntityType: LegalEntityType.OSOO,
+        legalName: "Forbidden cashier update",
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
 });

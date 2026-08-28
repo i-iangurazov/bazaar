@@ -1391,9 +1391,12 @@ describeDb("pos", () => {
     const edited = await caller.pos.sales.editCompleted({
       saleId: sale.id,
       customerName: "Edited Customer",
+      customerEmail: "edited@example.com",
       customerPhone: "+996555000111",
+      customerAddress: "Bishkek, 1",
       notes: "Edited receipt",
       reason: "test edit",
+      discountKgs: 30,
       lines: [
         {
           lineId: line.id,
@@ -1410,14 +1413,17 @@ describeDb("pos", () => {
       idempotencyKey: "pos-edit-completed-1",
     });
 
-    expect(edited.totalKgs).toBe(810);
+    expect(edited.totalKgs).toBe(780);
 
     const replayedEdit = await caller.pos.sales.editCompleted({
       saleId: sale.id,
       customerName: "Edited Customer",
+      customerEmail: "edited@example.com",
       customerPhone: "+996555000111",
+      customerAddress: "Bishkek, 1",
       notes: "Edited receipt",
       reason: "test edit duplicate replay",
+      discountKgs: 30,
       lines: [
         {
           lineId: line.id,
@@ -1434,10 +1440,12 @@ describeDb("pos", () => {
       idempotencyKey: "pos-edit-completed-1",
     });
 
-    expect(replayedEdit.totalKgs).toBe(810);
+    expect(replayedEdit.totalKgs).toBe(780);
 
     const detail = await caller.pos.sales.get({ saleId: sale.id });
     expect(detail?.customerName).toBe("Edited Customer");
+    expect(detail?.customerEmail).toBe("edited@example.com");
+    expect(detail?.customerAddress).toBe("Bishkek, 1");
     expect(detail?.lines).toHaveLength(2);
     expect(detail?.lines.map((line) => line.product.id).sort()).toEqual(
       [addedProduct.id, replacementProduct.id].sort(),
@@ -1448,7 +1456,8 @@ describeDb("pos", () => {
     expect(replacementLine?.unitPriceKgs).toBe(90);
     expect(addedLine?.qty).toBe(3);
     expect(addedLine?.unitPriceKgs).toBe(30);
-    expect(detail?.totalKgs).toBe(810);
+    expect(detail?.discountKgs).toBe(30);
+    expect(detail?.totalKgs).toBe(780);
 
     const originalSnapshot = await prisma.inventorySnapshot.findUnique({
       where: {
@@ -1510,7 +1519,7 @@ describeDb("pos", () => {
     expect(payments).toHaveLength(2);
     expect(Number(payments[0]?.amountKgs ?? 0)).toBe(1080);
     expect(payments[1]?.isRefund).toBe(true);
-    expect(Number(payments[1]?.amountKgs ?? 0)).toBe(270);
+    expect(Number(payments[1]?.amountKgs ?? 0)).toBe(300);
 
     const auditCount = await prisma.auditLog.count({
       where: { action: "POS_SALE_EDIT", entity: "CustomerOrder", entityId: sale.id },
@@ -1525,8 +1534,8 @@ describeDb("pos", () => {
     });
     expect(movementJournal.items[0]?.totalQuantity).toBe(11);
     expect(movementJournal.items[0]?.positionsCount).toBe(2);
-    expect(movementJournal.items[0]?.totalAmount).toBe(810);
-    expect(movementJournal.items[0]?.paidAmount).toBe(810);
+    expect(movementJournal.items[0]?.totalAmount).toBe(780);
+    expect(movementJournal.items[0]?.paidAmount).toBe(780);
     expect(movementJournal.items[0]?.isPosSale).toBe(true);
     expect(movementJournal.items[0]?.detailUrl).toBe(
       `/pos/receipts?receiptId=${encodeURIComponent(sale.id)}`,

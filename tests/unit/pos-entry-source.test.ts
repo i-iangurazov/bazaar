@@ -157,7 +157,7 @@ describe("pos entry navigation", () => {
     expect(pageSource).toContain("serverLineId?: string;");
     expect(pageSource).toContain("serverLineId: updatedLine.id");
     expect(pageSource).toContain("const resolveRemoteLineId = useCallback");
-    expect(pageSource).toContain("{ enabled: Boolean(saleId && !hasLocalCartLines)");
+    expect(pageSource).toContain("saleId && !hasLocalCartLines && !journalEditSaleId");
     expect(pageSource).toContain("const PosProductButton = memo(function PosProductButton");
     expect(pageSource).toContain("const handleProductClick = useCallback");
     expect(pageSource).toContain("removedOptimisticLineIdsRef.current.add(lineId);");
@@ -293,6 +293,35 @@ describe("pos entry navigation", () => {
     expect(ruMessages).toContain('"returnNotAvailable"');
   });
 
+  it("opens completed receipt corrections in the normal POS cart without draft mutations", async () => {
+    const pageSource = await readSource("src/app/(app)/pos/sell/page.tsx");
+    const routerSource = await readSource("src/server/trpc/routers/pos.ts");
+    const serviceSource = await readSource("src/server/services/pos.ts");
+
+    expect(pageSource).toContain("completedSaleEditHydratedRef");
+    expect(pageSource).toContain("journalSaleDetailQuery.isFetching");
+    expect(pageSource).toContain(
+      "void trpcUtils.pos.sales.get.invalidate({ saleId: saleItem.id });",
+    );
+    expect(pageSource).toContain("setOptimisticSaleLines(");
+    expect(pageSource).toContain("serverLineId: line.id");
+    expect(pageSource).toContain("setSelectedCustomer(");
+    expect(pageSource).toContain("journalSelectedSale.discountKgs");
+    expect(pageSource).toContain('t("sell.editingReceipt"');
+    expect(pageSource).toContain("if (completedSaleEditIdRef.current)");
+    expect(pageSource).toContain("completedSaleEditIdRef.current === targetSaleId");
+    expect(pageSource).toContain("editCompletedSaleMutation.mutateAsync({");
+    expect(pageSource).toContain("completedSaleEditIdempotencyKeyRef.current");
+    expect(pageSource).toContain("clearCompletedSaleEditUi();");
+    expect(pageSource).toContain('t("sell.saveReceiptCorrection")');
+    expect(pageSource).not.toContain("const JournalEditReceiptModal");
+    expect(pageSource).not.toContain('data-testid="pos-receipt-edit-modal"');
+    expect(routerSource).toContain("discountKgs: z.number().min(0).optional()");
+    expect(serviceSource).toContain("requestedDiscountKgs");
+    expect(serviceSource).toContain("const stockDelta = oldQty - desiredQty;");
+    expect(serviceSource).toContain('route: "pos.sales.editCompleted"');
+  });
+
   it("keeps mobile quick-sale on theme tokens with images, customer selection, editable price, discount, and receipt actions", async () => {
     const pageSource = await readSource("src/app/(app)/pos/sell/page.tsx");
 
@@ -336,7 +365,7 @@ describe("pos entry navigation", () => {
     expect(pageSource).toContain(
       "void trackCartSyncPromise(handleAddLine(product.id, product, { refocusSearch: true }));",
     );
-    expect(pageSource).toContain("{ enabled: Boolean(saleId && !hasLocalCartLines)");
+    expect(pageSource).toContain("saleId && !hasLocalCartLines && !journalEditSaleId");
   });
 
   it("keeps mobile POS catalog search and add selection stable by product id", async () => {
@@ -435,7 +464,7 @@ describe("pos entry navigation", () => {
     expect(pageSource).toContain("visibleCartLineCount: currentLines.length");
     expect(pageSource).toContain("visibleCartTotalKgs: currentCartTotalKgs");
     expect(pageSource).toContain("paymentsRef.current");
-    expect(pageSource).toContain("readOnly={payments.length === 1}");
+    expect(pageSource).toContain("readOnly={isCompletedSaleEdit || payments.length === 1}");
     expect(pageSource).toContain("await flushAllPendingCartSync();");
     expect(pageSource).toContain("clearActiveDraftCache();");
     expect(pageSource).toContain("releaseUnresolvableLineSync");

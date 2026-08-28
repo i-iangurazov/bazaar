@@ -21,6 +21,7 @@ export type AppPermission =
   | "manageCustomers"
   | "manageIntegrations"
   | "manageImports"
+  | "managePrinting"
   | "manageSettings"
   | "manageUsers"
   | "manageBilling"
@@ -52,6 +53,7 @@ const rolePermissions: Record<AppRole, AppPermission[]> = {
     "manageCustomers",
     "manageIntegrations",
     "manageImports",
+    "managePrinting",
     "manageSettings",
     "manageUsers",
     "manageBilling",
@@ -75,11 +77,20 @@ const rolePermissions: Record<AppRole, AppPermission[]> = {
     "manageCustomers",
     "manageIntegrations",
     "manageImports",
+    "managePrinting",
     "viewHelp",
     "viewProfile",
   ],
   STAFF: ["usePos", "viewSales", "viewCash", "viewHelp", "viewProfile"],
-  CASHIER: ["usePos", "viewSales", "viewCash", "viewProducts", "viewHelp", "viewProfile"],
+  CASHIER: [
+    "usePos",
+    "viewSales",
+    "viewCash",
+    "viewProducts",
+    "managePrinting",
+    "viewHelp",
+    "viewProfile",
+  ],
 };
 
 export const hasPermission = (access: RoleAccess, permission?: AppPermission) => {
@@ -115,7 +126,7 @@ const routeAccessRules: Array<{ prefix: string; permission: AppPermission }> = [
   { prefix: "/settings/categories", permission: "manageProducts" },
   { prefix: "/settings/units", permission: "manageProducts" },
   { prefix: "/settings/store-groups", permission: "manageSettings" },
-  { prefix: "/settings/printing", permission: "manageSettings" },
+  { prefix: "/settings/printing", permission: "managePrinting" },
   { prefix: "/settings/whats-new", permission: "manageSettings" },
   { prefix: "/settings/diagnostics", permission: "viewDiagnostics" },
   { prefix: "/operations/integrations", permission: "manageIntegrations" },

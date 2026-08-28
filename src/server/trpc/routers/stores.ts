@@ -6,6 +6,7 @@ import {
   adminOrOrgOwnerProcedure,
   adminProcedure,
   managerProcedure,
+  printingProcedure,
   protectedProcedure,
   router,
 } from "@/server/trpc/trpc";
@@ -337,7 +338,7 @@ export const storesRouter = router({
       }
     }),
 
-  updateHardware: managerProcedure
+  updateHardware: printingProcedure
     .input(
       z.object({
         storeId: z.string().min(1),

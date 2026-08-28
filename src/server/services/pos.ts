@@ -3491,6 +3491,7 @@ export const editCompletedPosSale = async (input: {
   customerAddress?: string | null;
   notes?: string | null;
   reason?: string | null;
+  discountKgs?: number;
   actorId: string;
   user?: StoreAccessUser;
   requestId: string;
@@ -3498,6 +3499,14 @@ export const editCompletedPosSale = async (input: {
 }) => {
   if (!input.lines.length) {
     throw new AppError("salesOrderEmpty", "BAD_REQUEST", 400);
+  }
+  const requestedDiscountKgs =
+    input.discountKgs === undefined ? undefined : roundMoney(input.discountKgs);
+  if (
+    requestedDiscountKgs !== undefined &&
+    (!Number.isFinite(requestedDiscountKgs) || requestedDiscountKgs < 0)
+  ) {
+    throw new AppError("invalidInput", "BAD_REQUEST", 400);
   }
   const result = await prisma.$transaction(async (tx) => {
     const { result: editResult, replayed } = await withIdempotency(
@@ -3651,6 +3660,12 @@ export const editCompletedPosSale = async (input: {
         if (lineIdsToDelete.some((lineId) => protectedLineIds.has(lineId))) {
           throw new AppError("posSaleLineEditRestricted", "CONFLICT", 409);
         }
+        const normalizedSubtotalKgs = roundMoney(
+          normalizedLines.reduce((sum, line) => sum + line.lineTotalKgs, 0),
+        );
+        if (requestedDiscountKgs !== undefined && requestedDiscountKgs > normalizedSubtotalKgs) {
+          throw new AppError("posDiscountExceedsSubtotal", "BAD_REQUEST", 400);
+        }
 
         const before = {
           sale: {
@@ -3791,6 +3806,7 @@ export const editCompletedPosSale = async (input: {
             customerPhone,
             customerAddress,
             notes: input.notes?.trim() || null,
+            discountKgs: requestedDiscountKgs,
             updatedById: input.actorId,
           },
         });

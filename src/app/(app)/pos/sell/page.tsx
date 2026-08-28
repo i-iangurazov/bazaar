@@ -579,24 +579,6 @@ const PosSellPage = () => {
   const [journalDetailSaleId, setJournalDetailSaleId] = useState<string | null>(null);
   const [journalReturnSaleId, setJournalReturnSaleId] = useState<string | null>(null);
   const [journalEditSaleId, setJournalEditSaleId] = useState<string | null>(null);
-  const [journalEditLines, setJournalEditLines] = useState<
-    Array<{
-      key: string;
-      lineId: string | null;
-      productId: string;
-      variantId: string | null;
-      productName: string;
-      variantName: string | null;
-      quantityInput: string;
-      unitPriceInput: string;
-    }>
-  >([]);
-  const [journalEditSearch, setJournalEditSearch] = useState("");
-  const [journalEditReplaceLineKey, setJournalEditReplaceLineKey] = useState<string | null>(null);
-  const [journalEditCustomerName, setJournalEditCustomerName] = useState("");
-  const [journalEditCustomerPhone, setJournalEditCustomerPhone] = useState("");
-  const [journalEditNotes, setJournalEditNotes] = useState("");
-  const [journalEditReason, setJournalEditReason] = useState("");
   const [journalReturnQtyByLine, setJournalReturnQtyByLine] = useState<Record<string, string>>({});
   const [journalRefundMethod, setJournalRefundMethod] = useState<PosPaymentMethod>(
     PosPaymentMethod.CASH,
@@ -671,8 +653,13 @@ const PosSellPage = () => {
   const mobileCommentHydratedSaleIdRef = useRef<string | null>(null);
   const receiptEditDeepLinkRef = useRef<string | null>(null);
   const heldReceiptResumeDeepLinkRef = useRef<string | null>(null);
+  const completedSaleEditIdRef = useRef<string | null>(null);
+  const completedSaleEditHydratedRef = useRef<string | null>(null);
+  const completedSaleEditIdempotencyKeyRef = useRef<string | null>(null);
   const isFromMovements = searchParams.get("from") === "movements";
   const movementReturnHref = searchParams.get("returnTo") ?? "/inventory/movements";
+
+  completedSaleEditIdRef.current = journalEditSaleId;
 
   const setPayments = useCallback((updater: SetStateAction<PosPaymentDraft[]>) => {
     const next =
@@ -722,9 +709,9 @@ const PosSellPage = () => {
       return;
     }
     receiptEditDeepLinkRef.current = deepLinkKey;
-    setReceiptJournalOpen(true);
-    setJournalSearch("");
-    setJournalPage(1);
+    completedSaleEditHydratedRef.current = null;
+    completedSaleEditIdempotencyKeyRef.current = createIdempotencyKey();
+    setReceiptJournalOpen(false);
     setJournalDetailSaleId(null);
     setJournalReturnSaleId(null);
     setJournalEditSaleId(receiptId);
@@ -755,7 +742,10 @@ const PosSellPage = () => {
   const hasLocalCartLines = Boolean(optimisticSaleLines?.length);
   const saleQuery = trpc.pos.sales.get.useQuery(
     { saleId: saleId ?? "" },
-    { enabled: Boolean(saleId && !hasLocalCartLines), refetchOnWindowFocus: true },
+    {
+      enabled: Boolean(saleId && !hasLocalCartLines && !journalEditSaleId),
+      refetchOnWindowFocus: true,
+    },
   );
   const activeDraftQuery = trpc.pos.sales.activeDraft.useQuery(
     { registerId },
@@ -881,20 +871,6 @@ const PosSellPage = () => {
       refetchOnWindowFocus: false,
     },
   );
-  const journalEditProductSearchQuery = trpc.inventory.searchProducts.useQuery(
-    {
-      storeId: journalSaleDetailQuery.data?.store.id ?? "",
-      search: journalEditSearch.trim() || undefined,
-      limit: 30,
-    },
-    {
-      enabled: Boolean(
-        journalEditSaleId && journalSaleDetailQuery.data?.store.id && journalEditSearch.trim(),
-      ),
-      keepPreviousData: true,
-    },
-  );
-
   const clearActiveDraftCache = useCallback(
     (targetRegisterId = registerId) => {
       if (!targetRegisterId) {
@@ -1182,8 +1158,6 @@ const PosSellPage = () => {
   const editCompletedSaleMutation = trpc.pos.sales.editCompleted.useMutation({
     onSuccess: async (result) => {
       toast({ variant: "success", description: t("sell.editReceiptSaved") });
-      setJournalEditSaleId(null);
-      setJournalEditReplaceLineKey(null);
       await Promise.all([
         journalSalesQuery.refetch(),
         journalSaleDetailQuery.refetch(),
@@ -1268,6 +1242,43 @@ const PosSellPage = () => {
     paymentAutoFillRef.current = { saleId: null, totalKgs: null };
   };
 
+  const clearCompletedSaleEditUi = useCallback(() => {
+    setJournalEditSaleId(null);
+    completedSaleEditHydratedRef.current = null;
+    completedSaleEditIdempotencyKeyRef.current = null;
+    setSaleId(null);
+    setLineSearch("");
+    setPayments([createDefaultPosPaymentDraft()]);
+    setDiscountDraft("");
+    setDiscountEditorOpen(false);
+    setSellInDebt(false);
+    setDebtFullName("");
+    setSelectedCustomer(null);
+    setCustomerSelectorOpen(false);
+    setCustomerSearch("");
+    setCustomerCreateOpen(false);
+    setCustomerEditOpen(false);
+    setMobileCheckoutOpen(false);
+    setMobileScreen("sale");
+    setMobileSaleTab("document");
+    setMobileActiveLineId(null);
+    setMobilePendingProductId(null);
+    setMobilePendingLineInputMode("qty");
+    setMobileComment("");
+    mobileCommentHydratedSaleIdRef.current = null;
+    setOptimisticSaleLines(null);
+    clearCartRuntimeSyncState();
+    setLineInputDrafts({});
+    paymentAutoFillRef.current = { saleId: null, totalKgs: null };
+
+    if (searchParams.get("mode") === "edit") {
+      const nextParams = new URLSearchParams(searchParams.toString());
+      nextParams.delete("mode");
+      nextParams.delete("receiptId");
+      router.replace(`/pos/sell${nextParams.size ? `?${nextParams.toString()}` : ""}`);
+    }
+  }, [clearCartRuntimeSyncState, router, searchParams, setOptimisticSaleLines, setPayments]);
+
   const completeMutation = trpc.pos.sales.complete.useMutation({
     onSuccess: (result) => {
       resetCompletedSaleUi(result);
@@ -1283,7 +1294,7 @@ const PosSellPage = () => {
   const sale = saleQuery.data;
   const activeDraft = activeDraftQuery.data;
   const currencySource = currencySourceWithFallback(
-    sale,
+    journalEditSaleId ? journalSaleDetailQuery.data : sale,
     currencySourceWithFallback(
       shiftQuery.data,
       shiftQuery.data?.store ?? selectedRegister?.store ?? null,
@@ -1571,6 +1582,9 @@ const PosSellPage = () => {
     setJournalReturnSaleId(null);
     setJournalReturnQtyByLine({});
     setJournalReturnNotes("");
+    setJournalEditSaleId(null);
+    completedSaleEditHydratedRef.current = null;
+    completedSaleEditIdempotencyKeyRef.current = null;
     setOptimisticSaleLines(null);
     clearCartRuntimeSyncState();
     setLineInputDrafts({});
@@ -1917,6 +1931,9 @@ const PosSellPage = () => {
 
   const scheduleLineSync = useCallback(
     (lineId: string, patch: PendingLinePatch) => {
+      if (completedSaleEditIdRef.current) {
+        return;
+      }
       lineSyncDraftsRef.current[lineId] = {
         ...lineSyncDraftsRef.current[lineId],
         ...patch,
@@ -2003,6 +2020,10 @@ const PosSellPage = () => {
         if (options.refocusSearch) {
           focusLineSearchInput();
         }
+      }
+
+      if (completedSaleEditIdRef.current) {
+        return Boolean(productForCart);
       }
 
       if (existingLineBeforeAdd) {
@@ -2373,6 +2394,10 @@ const PosSellPage = () => {
       return next;
     });
 
+    if (completedSaleEditIdRef.current) {
+      return;
+    }
+
     const remoteLineId = resolveRemoteLineId(lineId);
     if (!remoteLineId) {
       removedOptimisticLineIdsRef.current.add(lineId);
@@ -2415,6 +2440,10 @@ const PosSellPage = () => {
       return false;
     }
     if (Math.abs(discountKgs - (sale?.discountKgs ?? 0)) < 0.009) {
+      return true;
+    }
+    if (completedSaleEditIdRef.current) {
+      setDiscountDraft(String(displayMoneyFromKgs(discountKgs, currencySource)));
       return true;
     }
     try {
@@ -2467,7 +2496,7 @@ const PosSellPage = () => {
     setCustomerCreateOpen(false);
 
     const targetSaleId = saleId ?? activeDraft?.id ?? null;
-    if (!targetSaleId) {
+    if (!targetSaleId || completedSaleEditIdRef.current) {
       return;
     }
 
@@ -2490,7 +2519,7 @@ const PosSellPage = () => {
     setCustomerEditOpen(false);
 
     const targetSaleId = saleId ?? activeDraft?.id ?? null;
-    if (!targetSaleId) {
+    if (!targetSaleId || completedSaleEditIdRef.current) {
       return;
     }
 
@@ -2617,7 +2646,7 @@ const PosSellPage = () => {
       setSelectedCustomer(nextCustomer);
 
       const targetSaleId = saleId ?? activeDraft?.id ?? null;
-      if (targetSaleId) {
+      if (targetSaleId && !completedSaleEditIdRef.current) {
         await updateCustomerMutation.mutateAsync({
           saleId: targetSaleId,
           customerId: customer.id,
@@ -2699,6 +2728,9 @@ const PosSellPage = () => {
     if (isPhoneScreen !== true) {
       return;
     }
+    if (completedSaleEditIdRef.current === targetSaleId) {
+      return;
+    }
     const notes = mobileComment.trim() || null;
     const persistedNotes = sale?.id === targetSaleId ? sale.notes?.trim() || null : null;
     if (notes === persistedNotes) {
@@ -2769,6 +2801,7 @@ const PosSellPage = () => {
       !targetSaleId ||
       completeSubmitInFlightRef.current ||
       completeMutation.isLoading ||
+      editCompletedSaleMutation.isLoading ||
       isLineBusy
     ) {
       return;
@@ -2782,6 +2815,63 @@ const PosSellPage = () => {
 
     completeSubmitInFlightRef.current = true;
     try {
+      if (completedSaleEditIdRef.current === targetSaleId) {
+        if (!journalSelectedSale || journalSelectedSale.id !== targetSaleId) {
+          return;
+        }
+        const currentLines = getCurrentCartLines();
+        if (!currentLines.length) {
+          rejectEmptyCartSubmit();
+          return;
+        }
+        if (
+          currentLines.some(
+            (line) =>
+              !Number.isInteger(line.qty) ||
+              line.qty <= 0 ||
+              !Number.isFinite(line.unitPriceKgs) ||
+              line.unitPriceKgs < 0,
+          )
+        ) {
+          toast({ variant: "error", description: t("sell.editReceiptInvalidLine") });
+          return;
+        }
+        const currentSubtotalKgs = calculateCartSubtotalKgs(currentLines);
+        const currentDiscountKgs = Math.min(
+          currentSubtotalKgs,
+          Math.max(0, draftDiscountKgs ?? journalSelectedSale.discountKgs),
+        );
+        const idempotencyKey = completedSaleEditIdempotencyKeyRef.current ?? createIdempotencyKey();
+        completedSaleEditIdempotencyKeyRef.current = idempotencyKey;
+        const result = await editCompletedSaleMutation.mutateAsync({
+          saleId: targetSaleId,
+          customerName: selectedCustomer?.name ?? null,
+          customerEmail: selectedCustomer?.email ?? null,
+          customerPhone: selectedCustomer?.phone ?? null,
+          customerAddress: selectedCustomer?.address ?? null,
+          notes: mobileComment.trim() || journalSelectedSale.notes || null,
+          discountKgs: currentDiscountKgs,
+          lines: currentLines.map((line) => ({
+            lineId: line.serverLineId ?? null,
+            productId: getCartLineProductId(line),
+            variantId: line.variantId ?? null,
+            qty: line.qty,
+            unitPriceKgs: line.unitPriceKgs,
+          })),
+          idempotencyKey,
+        });
+
+        clearCompletedSaleEditUi();
+        setJournalDetailSaleId(result.id);
+        setReceiptJournalOpen(true);
+        await Promise.all([
+          activeDraftQuery.refetch(),
+          journalSalesQuery.refetch(),
+          trpcUtils.products.list.invalidate(),
+        ]);
+        return;
+      }
+
       try {
         await flushAllPendingCartSync();
       } catch {
@@ -2919,7 +3009,7 @@ const PosSellPage = () => {
   };
 
   const handleHoldReceipt = async () => {
-    if (!saleId || !hasCartLines || holdDraftMutation.isLoading) {
+    if (!saleId || completedSaleEditIdRef.current || !hasCartLines || holdDraftMutation.isLoading) {
       return;
     }
 
@@ -3153,161 +3243,111 @@ const PosSellPage = () => {
   useEffect(() => {
     if (
       !journalEditSaleId ||
+      journalSaleDetailQuery.isLoading ||
+      journalSaleDetailQuery.isFetching ||
       !journalSelectedSale ||
-      journalSelectedSale.id !== journalEditSaleId
+      journalSelectedSale.id !== journalEditSaleId ||
+      completedSaleEditHydratedRef.current === journalEditSaleId
     ) {
       return;
     }
-    setJournalEditCustomerName(journalSelectedSale.customerName ?? "");
-    setJournalEditCustomerPhone(journalSelectedSale.customerPhone ?? "");
-    setJournalEditNotes(journalSelectedSale.notes ?? "");
-    setJournalEditReason("");
-    setJournalEditSearch("");
-    setJournalEditReplaceLineKey(null);
-    setJournalEditLines(
+    if (journalSelectedSale.status !== CustomerOrderStatus.COMPLETED) {
+      toast({ variant: "error", description: tErrors("posSaleNotEditable") });
+      clearCompletedSaleEditUi();
+      return;
+    }
+
+    completedSaleEditHydratedRef.current = journalEditSaleId;
+    completedSaleEditIdempotencyKeyRef.current ??= createIdempotencyKey();
+    clearActiveDraftCache();
+    setLastCompletedSale(null);
+    setAutoReceiptStatus("idle");
+    setMobileCheckoutOpen(true);
+    setMobileScreen("sale");
+    setMobileSaleTab("document");
+    setDiscountEditorOpen(false);
+    setSellInDebt(false);
+    setDebtFullName("");
+    setCustomerSelectorOpen(false);
+    setCustomerSearch("");
+    setCustomerCreateOpen(false);
+    setSelectedCustomer(
+      journalSelectedSale.customerName ||
+        journalSelectedSale.customerEmail ||
+        journalSelectedSale.customerPhone
+        ? {
+            id: "",
+            name:
+              journalSelectedSale.customerName ??
+              journalSelectedSale.customerEmail ??
+              journalSelectedSale.customerPhone ??
+              "",
+            email: journalSelectedSale.customerEmail,
+            phone: journalSelectedSale.customerPhone,
+            address: journalSelectedSale.customerAddress,
+          }
+        : null,
+    );
+    setOptimisticSaleLines(
       journalSelectedSale.lines.map((line) => ({
-        key: line.id,
-        lineId: line.id,
+        id: line.id,
+        serverLineId: line.id,
         productId: line.productId,
         variantId: line.variantId ?? null,
-        productName: line.product.name,
-        variantName: line.variant?.name ?? null,
-        quantityInput: String(line.qty),
-        unitPriceInput: String(line.unitPriceKgs),
+        variantKey: line.variantKey,
+        qty: line.qty,
+        unitPriceKgs: line.unitPriceKgs,
+        lineTotalKgs: line.lineTotalKgs,
+        unitCostKgs: line.unitCostKgs,
+        lineCostTotalKgs: line.lineCostTotalKgs,
+        markingCodes: line.markingCodes,
+        product: {
+          id: line.product.id,
+          sku: line.product.sku,
+          name: line.variant?.name
+            ? `${line.product.name} · ${line.variant.name}`
+            : line.product.name,
+          primaryImage: line.product.primaryImage,
+          isBundle: line.product.isBundle,
+          complianceFlags: line.product.complianceFlags,
+        },
       })),
     );
-  }, [journalEditSaleId, journalSelectedSale]);
-
-  const parseJournalEditNumber = (value: string) => {
-    const normalized = value.trim().replace(",", ".");
-    if (!normalized) {
-      return null;
-    }
-    const parsed = Number(normalized);
-    return Number.isFinite(parsed) ? parsed : null;
-  };
-
-  const updateJournalEditLine = (
-    key: string,
-    patch: Partial<(typeof journalEditLines)[number]>,
-  ) => {
-    setJournalEditLines((current) =>
-      current.map((line) => (line.key === key ? { ...line, ...patch } : line)),
+    clearCartRuntimeSyncState();
+    setLineInputDrafts({});
+    setDiscountDraft(
+      String(
+        displayMoneyFromKgs(journalSelectedSale.discountKgs, journalSelectedSaleCurrencySource),
+      ),
     );
-  };
-
-  const removeJournalEditLine = (key: string) => {
-    setJournalEditLines((current) => current.filter((line) => line.key !== key));
-  };
-
-  const applyProductToJournalEditLine = (
-    lineKey: string,
-    result: NonNullable<typeof journalEditProductSearchQuery.data>[number],
-  ) => {
-    if (
-      journalEditLines.some(
-        (line) =>
-          line.key !== lineKey &&
-          line.productId === result.product.id &&
-          (line.variantId ?? null) === (result.snapshot.variantId ?? null),
-      )
-    ) {
-      toast({ variant: "error", description: t("sell.editReceiptDuplicateLine") });
-      return;
-    }
-    updateJournalEditLine(lineKey, {
-      productId: result.product.id,
-      variantId: result.snapshot.variantId ?? null,
-      productName: result.product.name,
-      variantName: result.variant?.name ?? null,
-      unitPriceInput: String(result.priceKgs ?? 0),
-    });
-    setJournalEditSearch("");
-    setJournalEditReplaceLineKey(null);
-  };
-
-  const addProductToJournalEdit = (
-    result: NonNullable<typeof journalEditProductSearchQuery.data>[number],
-  ) => {
-    if (journalEditReplaceLineKey) {
-      applyProductToJournalEditLine(journalEditReplaceLineKey, result);
-      return;
-    }
-    if (
-      journalEditLines.some(
-        (line) =>
-          line.productId === result.product.id &&
-          (line.variantId ?? null) === (result.snapshot.variantId ?? null),
-      )
-    ) {
-      toast({ variant: "error", description: t("sell.editReceiptDuplicateLine") });
-      return;
-    }
-    setJournalEditLines((current) => [
-      ...current,
-      {
-        key: createIdempotencyKey(),
-        lineId: null,
-        productId: result.product.id,
-        variantId: result.snapshot.variantId ?? null,
-        productName: result.product.name,
-        variantName: result.variant?.name ?? null,
-        quantityInput: "1",
-        unitPriceInput: String(result.priceKgs ?? 0),
-      },
-    ]);
-    setJournalEditSearch("");
-  };
-
-  const submitJournalEdit = async () => {
-    if (!journalSelectedSale || !journalEditSaleId) {
-      return;
-    }
-    if (!journalEditLines.length) {
-      toast({ variant: "error", description: t("sell.editReceiptLinesRequired") });
-      return;
-    }
-    if (
-      !isValidOptionalCustomerPhone(journalEditCustomerPhone) &&
-      journalEditCustomerPhone.trim() !== (journalSelectedSale.customerPhone?.trim() ?? "")
-    ) {
-      toast({ variant: "error", description: tErrors("customerPhoneInvalid") });
-      return;
-    }
-    const normalized = journalEditLines.map((line) => ({
-      line,
-      qty: parseJournalEditNumber(line.quantityInput),
-      unitPriceKgs: parseJournalEditNumber(line.unitPriceInput),
-    }));
-    if (
-      normalized.some(
-        ({ qty, unitPriceKgs }) =>
-          qty === null ||
-          !Number.isInteger(qty) ||
-          qty <= 0 ||
-          unitPriceKgs === null ||
-          unitPriceKgs < 0,
-      )
-    ) {
-      toast({ variant: "error", description: t("sell.editReceiptInvalidLine") });
-      return;
-    }
-    await editCompletedSaleMutation.mutateAsync({
-      saleId: journalSelectedSale.id,
-      customerName: journalEditCustomerName,
-      customerPhone: journalEditCustomerPhone,
-      notes: journalEditNotes,
-      reason: journalEditReason,
-      lines: normalized.map(({ line, qty, unitPriceKgs }) => ({
-        lineId: line.lineId,
-        productId: line.productId,
-        variantId: line.variantId,
-        qty: qty ?? 0,
-        unitPriceKgs: unitPriceKgs ?? 0,
-      })),
-      idempotencyKey: createIdempotencyKey(),
-    });
-  };
+    const editPaymentDrafts = journalSelectedSale.payments
+      .filter((payment) => !payment.isRefund && payment.amountKgs > 0)
+      .map((payment) => ({
+        method: payment.method,
+        amount: String(displayMoneyFromKgs(payment.amountKgs, journalSelectedSaleCurrencySource)),
+        providerRef: payment.providerRef ?? "",
+      }))
+      .slice(0, 4);
+    setPayments(editPaymentDrafts.length ? editPaymentDrafts : [createDefaultPosPaymentDraft()]);
+    paymentAutoFillRef.current = { saleId: null, totalKgs: null };
+    setMobileComment(journalSelectedSale.notes ?? "");
+    mobileCommentHydratedSaleIdRef.current = journalSelectedSale.id;
+    setSaleId(journalSelectedSale.id);
+    setReceiptJournalOpen(false);
+  }, [
+    clearActiveDraftCache,
+    clearCartRuntimeSyncState,
+    clearCompletedSaleEditUi,
+    journalEditSaleId,
+    journalSaleDetailQuery.isFetching,
+    journalSaleDetailQuery.isLoading,
+    journalSelectedSale,
+    journalSelectedSaleCurrencySource,
+    setOptimisticSaleLines,
+    setPayments,
+    tErrors,
+    toast,
+  ]);
 
   useEffect(() => {
     setJournalPage(1);
@@ -3446,6 +3486,10 @@ const PosSellPage = () => {
 
   const handleDiscardSale = async () => {
     if (!saleId) {
+      return;
+    }
+    if (completedSaleEditIdRef.current === saleId) {
+      clearCompletedSaleEditUi();
       return;
     }
     try {
@@ -3593,6 +3637,15 @@ const PosSellPage = () => {
         downloadPdfBlob(blob, `pos-receipt-${lastCompletedSale.number}-${kind}.pdf`);
       }
     } catch (error) {
+      if (error instanceof Error && error.message === "receiptAutoPrintSetupRequired") {
+        toast({
+          variant: "info",
+          description: t("sell.receiptAutoSetupRequired"),
+          actionLabel: t("sell.configurePrinting"),
+          actionHref: "/settings/printing",
+        });
+        return;
+      }
       const key = qzTrayErrorMessageKey(error);
       toast({
         variant: "error",
@@ -3637,7 +3690,12 @@ const PosSellPage = () => {
           const message = error instanceof Error ? error.message : "";
           if (message === "receiptAutoPrintSetupRequired") {
             setAutoReceiptStatus("blocked");
-            toast({ variant: "info", description: t("sell.receiptAutoSetupRequired") });
+            toast({
+              variant: "info",
+              description: t("sell.receiptAutoSetupRequired"),
+              actionLabel: t("sell.configurePrinting"),
+              actionHref: "/settings/printing",
+            });
             return;
           }
           setAutoReceiptStatus("failed");
@@ -3714,11 +3772,16 @@ const PosSellPage = () => {
     cartQtyByProductId.set(productId, (cartQtyByProductId.get(productId) ?? 0) + line.qty);
   });
   const showCompletedSale = Boolean(lastCompletedSale && !saleId);
+  const isCompletedSaleEdit = Boolean(journalEditSaleId && saleId === journalEditSaleId);
   const checkoutPanelTitle = showCompletedSale
     ? t("sell.saleCompletedTitle")
-    : sale?.number
-      ? `${t("sell.saleTitle")} · ${sale.number}`
-      : t("sell.saleTitle");
+    : isCompletedSaleEdit
+      ? t("sell.editingReceipt", {
+          number: journalSelectedSale?.number ?? journalEditSaleId ?? "",
+        })
+      : sale?.number
+        ? `${t("sell.saleTitle")} · ${sale.number}`
+        : t("sell.saleTitle");
   const receiptStatusLabel =
     autoReceiptStatus === "printing"
       ? t("sell.receiptAutoPrinting")
@@ -3737,7 +3800,12 @@ const PosSellPage = () => {
           total: formatSaleMoney(cartTotalKgs),
         })
       : t("sell.emptyCartTitle");
-  const completeDisabled = !saleId || completeMutation.isLoading || isLineBusy || !hasCartLines;
+  const completeDisabled =
+    !saleId ||
+    completeMutation.isLoading ||
+    editCompletedSaleMutation.isLoading ||
+    isLineBusy ||
+    !hasCartLines;
   const isDemoCategory = (category: string) =>
     ["test", "tests", "demo", "sample", "samples"].includes(category.trim().toLowerCase());
   const categoryLabel = (category: string) => {
@@ -3891,6 +3959,7 @@ const PosSellPage = () => {
       const actionBusy = journalReceiptAction?.saleId === saleItem.id;
       const isHeldReceipt = Boolean(saleItem.isHeld);
       const isDraftReceipt = saleItem.status === CustomerOrderStatus.DRAFT;
+      const isCompletedReceipt = saleItem.status === CustomerOrderStatus.COMPLETED;
       return (
         <div className="flex flex-wrap items-center justify-end gap-1.5">
           <Button
@@ -3935,14 +4004,33 @@ const PosSellPage = () => {
               className="h-8 px-2"
               data-testid="pos-receipt-journal-edit-button"
               onClick={() => {
-                if (!isDraftReceipt) {
+                if (saleId && saleId !== saleItem.id && hasCartLines) {
+                  toast({ variant: "error", description: tErrors("posActiveDraftExists") });
+                  return;
+                }
+                if (isCompletedReceipt) {
+                  void trpcUtils.pos.sales.get.invalidate({ saleId: saleItem.id });
+                  clearActiveDraftCache();
+                  setLastCompletedSale(null);
+                  setAutoReceiptStatus("idle");
+                  setOptimisticSaleLines(null);
+                  clearCartRuntimeSyncState();
+                  setLineInputDrafts({});
+                  setPayments([createDefaultPosPaymentDraft()]);
+                  setDiscountDraft("");
+                  setSelectedCustomer(null);
+                  setMobileComment("");
+                  paymentAutoFillRef.current = { saleId: null, totalKgs: null };
+                  completedSaleEditHydratedRef.current = null;
+                  completedSaleEditIdempotencyKeyRef.current = createIdempotencyKey();
                   setJournalDetailSaleId(null);
                   setJournalReturnSaleId(null);
                   setJournalEditSaleId(saleItem.id);
+                  setSaleId(saleItem.id);
+                  setReceiptJournalOpen(false);
                   return;
                 }
-                if (saleId && saleId !== saleItem.id && hasCartLines) {
-                  toast({ variant: "error", description: tErrors("posActiveDraftExists") });
+                if (!isDraftReceipt) {
                   return;
                 }
                 clearActiveDraftCache();
@@ -3965,6 +4053,7 @@ const PosSellPage = () => {
                 setSaleId(saleItem.id);
                 setReceiptJournalOpen(false);
               }}
+              disabled={!isDraftReceipt && !isCompletedReceipt}
             >
               <EditIcon className="h-3.5 w-3.5" aria-hidden />
               {t("sell.editReceipt")}
@@ -4021,8 +4110,6 @@ const PosSellPage = () => {
           if (!open) {
             setJournalDetailSaleId(null);
             setJournalReturnSaleId(null);
-            setJournalEditSaleId(null);
-            setJournalEditReplaceLineKey(null);
           }
         }}
         title={t("sell.receiptJournal")}
@@ -4527,296 +4614,6 @@ const PosSellPage = () => {
               }
             >
               {t("history.return")}
-            </Button>
-          </ModalFooter>
-        </div>
-      ) : null}
-    </Modal>
-  );
-
-  const JournalEditReceiptModal = () => (
-    <Modal
-      open={Boolean(journalEditSaleId)}
-      onOpenChange={(open) => {
-        if (!open) {
-          setJournalEditSaleId(null);
-          setJournalEditReplaceLineKey(null);
-        }
-      }}
-      title={t("sell.editReceipt")}
-      subtitle={journalSelectedSale?.number ?? ""}
-      className="max-w-5xl"
-      bodyClassName="space-y-5"
-      mobileSheet
-    >
-      {journalSaleDetailQuery.isLoading || journalSelectedSale?.id !== journalEditSaleId ? (
-        <div className="flex min-h-32 items-center justify-center gap-2 text-sm text-muted-foreground">
-          <Spinner className="h-4 w-4" />
-          {tCommon("loading")}
-        </div>
-      ) : journalSaleDetailQuery.error ? (
-        <div className="bazaar-admin-error">
-          {translateError(tErrors, journalSaleDetailQuery.error)}
-        </div>
-      ) : journalSelectedSale ? (
-        <div data-testid="pos-receipt-edit-modal" className="space-y-5">
-          <div className="bazaar-admin-modal-card grid gap-3 md:grid-cols-2">
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-foreground" htmlFor="journal-edit-name">
-                {t("history.customer")}
-              </label>
-              <Input
-                id="journal-edit-name"
-                value={journalEditCustomerName}
-                onChange={(event) => setJournalEditCustomerName(event.target.value)}
-                data-testid="pos-receipt-edit-customer"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-foreground" htmlFor="journal-edit-phone">
-                {t("sell.customerPhonePlaceholder")}
-              </label>
-              <Input
-                id="journal-edit-phone"
-                value={journalEditCustomerPhone}
-                onChange={(event) => setJournalEditCustomerPhone(event.target.value)}
-                data-testid="pos-receipt-edit-customer-phone"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <div className="flex flex-col gap-2 md:flex-row md:items-end">
-              <div className="min-w-0 flex-1 space-y-1">
-                <label
-                  className="text-sm font-medium text-foreground"
-                  htmlFor="journal-edit-product-search"
-                >
-                  {journalEditReplaceLineKey
-                    ? t("sell.editReceiptReplaceProduct")
-                    : t("sell.editReceiptAddProduct")}
-                </label>
-                <Input
-                  id="journal-edit-product-search"
-                  value={journalEditSearch}
-                  onChange={(event) => setJournalEditSearch(event.target.value)}
-                  placeholder={t("sell.editReceiptProductSearchPlaceholder")}
-                  data-testid="pos-receipt-edit-product-search"
-                />
-              </div>
-              {journalEditReplaceLineKey ? (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => setJournalEditReplaceLineKey(null)}
-                >
-                  {t("sell.editReceiptCancelReplace")}
-                </Button>
-              ) : null}
-            </div>
-            {journalEditSearch.trim() ? (
-              <div className="bazaar-doc-search-list max-h-48">
-                {journalEditProductSearchQuery.isLoading ? (
-                  <p className="px-3 py-2 text-sm text-muted-foreground">{tCommon("loading")}</p>
-                ) : journalEditProductSearchQuery.data?.length ? (
-                  journalEditProductSearchQuery.data.map((result) => (
-                    <button
-                      key={`${result.product.id}:${result.snapshot.variantId ?? "BASE"}`}
-                      type="button"
-                      data-testid="pos-receipt-edit-product-result"
-                      className="flex w-full items-center justify-between gap-3 border-b border-border px-3 py-2 text-left text-sm last:border-b-0 hover:bg-muted/50"
-                      onClick={() => addProductToJournalEdit(result)}
-                    >
-                      <span className="min-w-0">
-                        <span className="block truncate font-medium text-foreground">
-                          {result.product.name}
-                          {result.variant?.name ? ` · ${result.variant.name}` : ""}
-                        </span>
-                        <span className="block truncate text-xs text-muted-foreground">
-                          {result.product.sku || result.primaryBarcode || tCommon("notAvailable")}
-                        </span>
-                      </span>
-                      <span className="shrink-0 text-xs text-muted-foreground">
-                        {journalEditReplaceLineKey
-                          ? t("sell.editReceiptReplace")
-                          : t("sell.editReceiptAdd")}
-                      </span>
-                    </button>
-                  ))
-                ) : (
-                  <p className="px-3 py-2 text-sm text-muted-foreground">
-                    {tCommon("nothingFound")}
-                  </p>
-                )}
-              </div>
-            ) : null}
-          </div>
-
-          <div className="bazaar-admin-table-shell bazaar-admin-table-scroll">
-            <Table className="min-w-[780px]">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{tCommon("product")}</TableHead>
-                  <TableHead className="w-28 text-right">{t("sell.cartQty")}</TableHead>
-                  <TableHead className="w-36 text-right">{t("sell.unitPrice")}</TableHead>
-                  <TableHead className="w-36 text-right">{t("sell.lineTotal")}</TableHead>
-                  <TableHead className="w-40 text-right">{tCommon("actions")}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {journalEditLines.map((line) => {
-                  const quantity = parseJournalEditNumber(line.quantityInput) ?? 0;
-                  const unitPrice = parseJournalEditNumber(line.unitPriceInput) ?? 0;
-                  return (
-                    <TableRow key={line.key} data-testid="pos-receipt-edit-line">
-                      <TableCell>
-                        <p className="truncate font-medium">
-                          {line.productName}
-                          {line.variantName ? ` · ${line.variantName}` : ""}
-                        </p>
-                        {journalEditReplaceLineKey === line.key ? (
-                          <p className="text-xs text-primary">
-                            {t("sell.editReceiptReplaceActive")}
-                          </p>
-                        ) : null}
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          value={line.quantityInput}
-                          inputMode="numeric"
-                          className="text-right"
-                          data-testid="pos-receipt-edit-line-qty"
-                          onChange={(event) =>
-                            updateJournalEditLine(line.key, {
-                              quantityInput: event.target.value,
-                            })
-                          }
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          value={line.unitPriceInput}
-                          inputMode="decimal"
-                          className="text-right"
-                          data-testid="pos-receipt-edit-line-price"
-                          onChange={(event) =>
-                            updateJournalEditLine(line.key, {
-                              unitPriceInput: event.target.value,
-                            })
-                          }
-                        />
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {formatKgsMoney(
-                          quantity * unitPrice,
-                          locale,
-                          journalSelectedSaleCurrencySource,
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex justify-end gap-1">
-                          <Button
-                            type="button"
-                            variant={
-                              journalEditReplaceLineKey === line.key ? "default" : "secondary"
-                            }
-                            size="sm"
-                            data-testid="pos-receipt-edit-line-replace"
-                            onClick={() => {
-                              setJournalEditReplaceLineKey(line.key);
-                              setJournalEditSearch("");
-                            }}
-                          >
-                            <EditIcon className="h-4 w-4" aria-hidden />
-                            {t("sell.editReceiptReplace")}
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            data-testid="pos-receipt-edit-line-remove"
-                            onClick={() => removeJournalEditLine(line.key)}
-                            aria-label={t("sell.editReceiptRemoveLine")}
-                            title={t("sell.editReceiptRemoveLine")}
-                          >
-                            <DeleteIcon className="h-4 w-4" aria-hidden />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-2">
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-foreground" htmlFor="journal-edit-notes">
-                {t("sell.returnReason")}
-              </label>
-              <Textarea
-                id="journal-edit-notes"
-                value={journalEditNotes}
-                rows={3}
-                data-testid="pos-receipt-edit-notes"
-                onChange={(event) => setJournalEditNotes(event.target.value)}
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-foreground" htmlFor="journal-edit-reason">
-                {t("sell.returnReason")}
-              </label>
-              <Textarea
-                id="journal-edit-reason"
-                value={journalEditReason}
-                rows={3}
-                placeholder={t("sell.editReceiptReasonPlaceholder")}
-                data-testid="pos-receipt-edit-reason"
-                onChange={(event) => setJournalEditReason(event.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="bazaar-admin-status-tile flex items-center justify-between px-3 py-2 text-sm">
-            <span className="text-muted-foreground">{t("sell.cartTotal")}</span>
-            <span className="font-semibold text-foreground" data-testid="pos-receipt-edit-total">
-              {formatKgsMoney(
-                journalEditLines.reduce((sum, line) => {
-                  const quantity = parseJournalEditNumber(line.quantityInput) ?? 0;
-                  const unitPrice = parseJournalEditNumber(line.unitPriceInput) ?? 0;
-                  return sum + quantity * unitPrice;
-                }, 0),
-                locale,
-                journalSelectedSaleCurrencySource,
-              )}
-            </span>
-          </div>
-
-          <ModalFooter>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                setJournalEditSaleId(null);
-                setJournalEditReplaceLineKey(null);
-              }}
-              disabled={editCompletedSaleMutation.isLoading}
-            >
-              {tCommon("cancel")}
-            </Button>
-            <Button
-              type="button"
-              onClick={submitJournalEdit}
-              disabled={editCompletedSaleMutation.isLoading}
-              data-testid="pos-receipt-edit-save"
-            >
-              {editCompletedSaleMutation.isLoading ? (
-                <Spinner className="h-4 w-4" />
-              ) : (
-                <EditIcon className="h-4 w-4" aria-hidden />
-              )}
-              {editCompletedSaleMutation.isLoading ? tCommon("saving") : tCommon("save")}
             </Button>
           </ModalFooter>
         </div>
@@ -5495,8 +5292,10 @@ const PosSellPage = () => {
                       onClick={handleDiscardSale}
                       disabled={isLineBusy || completeMutation.isLoading}
                     >
-                      {cancelDraftMutation.isLoading ? <Spinner className="h-3.5 w-3.5" /> : null}
-                      {t("sell.discardSale")}
+                      {cancelDraftMutation.isLoading || editCompletedSaleMutation.isLoading ? (
+                        <Spinner className="h-3.5 w-3.5" />
+                      ) : null}
+                      {isCompletedSaleEdit ? tCommon("cancel") : t("sell.discardSale")}
                     </Button>
                   ) : null}
                 </div>
@@ -5847,7 +5646,11 @@ const PosSellPage = () => {
                             <span className="text-xs leading-none text-muted-foreground">
                               {t("sell.sellInDebt")}
                             </span>
-                            <Switch checked={sellInDebt} onCheckedChange={handleSellInDebtChange} />
+                            <Switch
+                              checked={sellInDebt}
+                              onCheckedChange={handleSellInDebtChange}
+                              disabled={isCompletedSaleEdit}
+                            />
                           </div>
                         </div>
 
@@ -5878,6 +5681,7 @@ const PosSellPage = () => {
                               >
                                 <Select
                                   value={payment.method}
+                                  disabled={isCompletedSaleEdit}
                                   onValueChange={(value) =>
                                     setPayments((current) =>
                                       current.map((item, itemIndex) =>
@@ -5928,7 +5732,7 @@ const PosSellPage = () => {
                                   }}
                                   placeholder={t("sell.paymentAmount")}
                                   inputMode="decimal"
-                                  readOnly={payments.length === 1}
+                                  readOnly={isCompletedSaleEdit || payments.length === 1}
                                   className="h-8 px-2 text-sm"
                                 />
                                 <Button
@@ -5938,7 +5742,10 @@ const PosSellPage = () => {
                                   className="h-8 w-8"
                                   onClick={() => removePaymentRow(index)}
                                   disabled={
-                                    payments.length <= 1 || isLineBusy || completeMutation.isLoading
+                                    isCompletedSaleEdit ||
+                                    payments.length <= 1 ||
+                                    isLineBusy ||
+                                    completeMutation.isLoading
                                   }
                                   aria-label={tCommon("delete")}
                                 >
@@ -5952,7 +5759,9 @@ const PosSellPage = () => {
                                 size="sm"
                                 className="h-8 px-3 text-xs"
                                 onClick={addPaymentRow}
-                                disabled={isLineBusy || completeMutation.isLoading}
+                                disabled={
+                                  isCompletedSaleEdit || isLineBusy || completeMutation.isLoading
+                                }
                               >
                                 {t("sell.addPayment")}
                               </Button>
@@ -5966,18 +5775,20 @@ const PosSellPage = () => {
                         ) : null}
                       </div>
 
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        className="h-9 w-full rounded-md px-4 text-sm font-semibold"
-                        onClick={() => void handleHoldReceipt()}
-                        disabled={
-                          !saleId || !hasCartLines || isLineBusy || completeMutation.isLoading
-                        }
-                      >
-                        {holdDraftMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
-                        {t("sell.holdReceipt")}
-                      </Button>
+                      {!isCompletedSaleEdit ? (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="h-9 w-full rounded-md px-4 text-sm font-semibold"
+                          onClick={() => void handleHoldReceipt()}
+                          disabled={
+                            !saleId || !hasCartLines || isLineBusy || completeMutation.isLoading
+                          }
+                        >
+                          {holdDraftMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
+                          {t("sell.holdReceipt")}
+                        </Button>
+                      ) : null}
 
                       <Button
                         className="h-9 w-full rounded-md bg-success px-4 text-sm font-semibold text-success-foreground hover:bg-success/90 disabled:bg-success/40 disabled:text-success-foreground/70"
@@ -5985,8 +5796,14 @@ const PosSellPage = () => {
                         disabled={completeDisabled}
                       >
                         <span className="flex items-center justify-center gap-2">
-                          {completeMutation.isLoading ? <Spinner className="h-5 w-5" /> : null}
-                          {sellInDebt ? t("sell.completeDebtSale") : t("sell.completeSale")}
+                          {completeMutation.isLoading || editCompletedSaleMutation.isLoading ? (
+                            <Spinner className="h-5 w-5" />
+                          ) : null}
+                          {isCompletedSaleEdit
+                            ? t("sell.saveReceiptCorrection")
+                            : sellInDebt
+                              ? t("sell.completeDebtSale")
+                              : t("sell.completeSale")}
                         </span>
                       </Button>
                     </div>
@@ -6000,7 +5817,6 @@ const PosSellPage = () => {
       {CustomerEditModal()}
       {ReceiptJournalModal()}
       {JournalSaleDetailModal()}
-      {JournalEditReceiptModal()}
       {JournalReturnModal()}
     </div>
   );
@@ -6168,15 +5984,18 @@ const PosSellPage = () => {
           }) ??
           null)
         : null;
-      const documentDate = new Date(sale?.createdAt ?? Date.now());
+      const documentDate = new Date(
+        (isCompletedSaleEdit ? journalSelectedSale?.createdAt : sale?.createdAt) ?? Date.now(),
+      );
       const documentDateLabel = new Intl.DateTimeFormat(locale, {
         day: "numeric",
         month: "long",
         year: "numeric",
       }).format(documentDate);
       const mobileStoreName = shiftQuery.data?.store.name ?? selectedRegister?.store.name ?? "";
-      const orderStatusLabel =
-        sale?.status && sale.status !== CustomerOrderStatus.DRAFT
+      const orderStatusLabel = isCompletedSaleEdit
+        ? checkoutPanelTitle
+        : sale?.status && sale.status !== CustomerOrderStatus.DRAFT
           ? saleStatusLabel(sale.status)
           : t("sell.mobile.newStatus");
       const paymentMethods = [
@@ -6283,7 +6102,16 @@ const PosSellPage = () => {
 
       const closeMobileDiscountEditor = () => {
         setDiscountEditorOpen(false);
-        setDiscountDraft(String(displayMoneyFromKgs(sale?.discountKgs ?? 0, currencySource)));
+        setDiscountDraft(
+          String(
+            displayMoneyFromKgs(
+              journalEditSaleId
+                ? (journalSelectedSale?.discountKgs ?? 0)
+                : (sale?.discountKgs ?? 0),
+              currencySource,
+            ),
+          ),
+        );
       };
 
       const handleMobileApplyDiscount = async () => {
@@ -6295,6 +6123,11 @@ const PosSellPage = () => {
 
       const handleMobileRemoveDiscount = async () => {
         if (!saleId) {
+          return;
+        }
+        if (completedSaleEditIdRef.current === saleId) {
+          setDiscountDraft("0");
+          setDiscountEditorOpen(false);
           return;
         }
         try {
@@ -6584,7 +6417,7 @@ const PosSellPage = () => {
           <section className="border-y border-border bg-card/95 px-3 py-3">
             <div className="mb-2">
               <h2 className="text-[15px] font-semibold leading-none text-primary">
-                {t("sell.mobile.order")}
+                {isCompletedSaleEdit ? checkoutPanelTitle : t("sell.mobile.order")}
               </h2>
               <p className="mt-1.5 text-[13px] leading-none text-muted-foreground">
                 {orderStatusLabel}
@@ -6625,7 +6458,11 @@ const PosSellPage = () => {
                   onClick={() => void handleDiscardSale()}
                   disabled={cancelDraftMutation.isLoading || completeMutation.isLoading}
                 >
-                  {cancelDraftMutation.isLoading ? tCommon("loading") : tCommon("delete")}
+                  {cancelDraftMutation.isLoading || editCompletedSaleMutation.isLoading
+                    ? tCommon("loading")
+                    : isCompletedSaleEdit
+                      ? tCommon("cancel")
+                      : tCommon("delete")}
                 </button>
               </div>
             ) : null}
@@ -6654,8 +6491,10 @@ const PosSellPage = () => {
               {renderMobileRow({
                 icon: <Hash className="h-5 w-5" aria-hidden />,
                 label: t("sell.mobile.documentNumber"),
-                muted: !sale?.number,
-                value: sale?.number ?? "",
+                muted: !(isCompletedSaleEdit ? journalSelectedSale?.number : sale?.number),
+                value: isCompletedSaleEdit
+                  ? (journalSelectedSale?.number ?? "")
+                  : (sale?.number ?? ""),
                 chevron: false,
               })}
               {renderMobileRow({
@@ -6942,7 +6781,11 @@ const PosSellPage = () => {
                   </h2>
                   <label className="flex items-center gap-2 text-sm text-muted-foreground">
                     <span>{t("sell.sellInDebt")}</span>
-                    <Switch checked={sellInDebt} onCheckedChange={handleSellInDebtChange} />
+                    <Switch
+                      checked={sellInDebt}
+                      onCheckedChange={handleSellInDebtChange}
+                      disabled={isCompletedSaleEdit}
+                    />
                   </label>
                 </div>
 
@@ -6989,6 +6832,7 @@ const PosSellPage = () => {
                         >
                           <Select
                             value={payment.method}
+                            disabled={isCompletedSaleEdit}
                             onValueChange={(value) =>
                               setPayments((current) =>
                                 current.map((item, itemIndex) =>
@@ -7034,7 +6878,7 @@ const PosSellPage = () => {
                             }}
                             placeholder={t("sell.paymentAmount")}
                             inputMode="decimal"
-                            readOnly={payments.length === 1}
+                            readOnly={isCompletedSaleEdit || payments.length === 1}
                             className="h-11 border-border bg-card text-foreground"
                           />
                           <Button
@@ -7044,7 +6888,10 @@ const PosSellPage = () => {
                             className="h-11 w-11"
                             onClick={() => removePaymentRow(index)}
                             disabled={
-                              payments.length <= 1 || isLineBusy || completeMutation.isLoading
+                              isCompletedSaleEdit ||
+                              payments.length <= 1 ||
+                              isLineBusy ||
+                              completeMutation.isLoading
                             }
                             aria-label={tCommon("delete")}
                           >
@@ -7058,6 +6905,7 @@ const PosSellPage = () => {
                           variant="secondary"
                           className="h-11"
                           onClick={addPaymentRow}
+                          disabled={isCompletedSaleEdit}
                         >
                           {t("sell.addPayment")}
                         </Button>
@@ -7073,25 +6921,29 @@ const PosSellPage = () => {
               </section>
 
               <div className="fixed inset-x-0 bottom-0 z-30 space-y-2 border-t border-border bg-background px-4 pb-[calc(1.25rem_+_env(safe-area-inset-bottom))] pt-3 md:hidden">
-                <button
-                  type="button"
-                  className="min-h-11 w-full rounded-[11px] bg-secondary text-[14px] font-semibold text-secondary-foreground disabled:opacity-50"
-                  onClick={() => void handleHoldReceipt()}
-                  disabled={!saleId || !hasCartLines || isLineBusy || completeMutation.isLoading}
-                >
-                  {holdDraftMutation.isLoading ? tCommon("loading") : t("sell.holdReceipt")}
-                </button>
+                {!isCompletedSaleEdit ? (
+                  <button
+                    type="button"
+                    className="min-h-11 w-full rounded-[11px] bg-secondary text-[14px] font-semibold text-secondary-foreground disabled:opacity-50"
+                    onClick={() => void handleHoldReceipt()}
+                    disabled={!saleId || !hasCartLines || isLineBusy || completeMutation.isLoading}
+                  >
+                    {holdDraftMutation.isLoading ? tCommon("loading") : t("sell.holdReceipt")}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className="min-h-[50px] w-full rounded-[12px] bg-primary text-[15px] font-semibold text-primary-foreground disabled:opacity-50"
                   onClick={handleComplete}
                   disabled={completeDisabled}
                 >
-                  {completeMutation.isLoading
+                  {completeMutation.isLoading || editCompletedSaleMutation.isLoading
                     ? tCommon("loading")
-                    : sellInDebt
-                      ? t("sell.completeDebtSale")
-                      : t("sell.completeSale")}
+                    : isCompletedSaleEdit
+                      ? t("sell.saveReceiptCorrection")
+                      : sellInDebt
+                        ? t("sell.completeDebtSale")
+                        : t("sell.completeSale")}
                 </button>
               </div>
             </div>
@@ -7633,7 +7485,6 @@ const PosSellPage = () => {
           {CustomerEditModal()}
           {ReceiptJournalModal()}
           {JournalSaleDetailModal()}
-          {JournalEditReceiptModal()}
           {JournalReturnModal()}
         </>
       );
@@ -8389,6 +8240,7 @@ const PosSellPage = () => {
                               <Switch
                                 checked={sellInDebt}
                                 onCheckedChange={handleSellInDebtChange}
+                                disabled={isCompletedSaleEdit}
                               />
                             </div>
                           </div>
@@ -8417,6 +8269,7 @@ const PosSellPage = () => {
                                 >
                                   <Select
                                     value={payment.method}
+                                    disabled={isCompletedSaleEdit}
                                     onValueChange={(value) =>
                                       setPayments((current) =>
                                         current.map((item, itemIndex) =>
@@ -8467,7 +8320,7 @@ const PosSellPage = () => {
                                     }}
                                     placeholder={t("sell.paymentAmount")}
                                     inputMode="decimal"
-                                    readOnly={payments.length === 1}
+                                    readOnly={isCompletedSaleEdit || payments.length === 1}
                                     className="h-11"
                                   />
                                   <Button
@@ -8477,6 +8330,7 @@ const PosSellPage = () => {
                                     className="h-11 w-11"
                                     onClick={() => removePaymentRow(index)}
                                     disabled={
+                                      isCompletedSaleEdit ||
                                       payments.length <= 1 ||
                                       isLineBusy ||
                                       completeMutation.isLoading
@@ -8493,7 +8347,9 @@ const PosSellPage = () => {
                                   variant="secondary"
                                   className="h-10"
                                   onClick={addPaymentRow}
-                                  disabled={isLineBusy || completeMutation.isLoading}
+                                  disabled={
+                                    isCompletedSaleEdit || isLineBusy || completeMutation.isLoading
+                                  }
                                 >
                                   {t("sell.addPayment")}
                                 </Button>
@@ -8512,25 +8368,33 @@ const PosSellPage = () => {
 
                   {hasCartLines ? (
                     <div className="space-y-2 border-t border-border bg-background p-4">
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        className="h-11 w-full text-base font-semibold"
-                        onClick={() => void handleHoldReceipt()}
-                        disabled={
-                          !saleId || !hasCartLines || isLineBusy || completeMutation.isLoading
-                        }
-                      >
-                        {holdDraftMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
-                        {t("sell.holdReceipt")}
-                      </Button>
+                      {!isCompletedSaleEdit ? (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="h-11 w-full text-base font-semibold"
+                          onClick={() => void handleHoldReceipt()}
+                          disabled={
+                            !saleId || !hasCartLines || isLineBusy || completeMutation.isLoading
+                          }
+                        >
+                          {holdDraftMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
+                          {t("sell.holdReceipt")}
+                        </Button>
+                      ) : null}
                       <Button
                         className="h-12 w-full bg-success text-base font-semibold text-success-foreground hover:bg-success/90 disabled:bg-success/40 disabled:text-success-foreground/70"
                         onClick={handleComplete}
                         disabled={completeDisabled}
                       >
-                        {completeMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
-                        {sellInDebt ? t("sell.completeDebtSale") : t("sell.completeSale")}
+                        {completeMutation.isLoading || editCompletedSaleMutation.isLoading ? (
+                          <Spinner className="h-4 w-4" />
+                        ) : null}
+                        {isCompletedSaleEdit
+                          ? t("sell.saveReceiptCorrection")
+                          : sellInDebt
+                            ? t("sell.completeDebtSale")
+                            : t("sell.completeSale")}
                       </Button>
                     </div>
                   ) : null}
@@ -8544,7 +8408,6 @@ const PosSellPage = () => {
         {CustomerEditModal()}
         {ReceiptJournalModal()}
         {JournalSaleDetailModal()}
-        {JournalEditReceiptModal()}
         {JournalReturnModal()}
       </div>
     );
