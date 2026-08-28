@@ -299,6 +299,9 @@ describe("pos entry navigation", () => {
     const serviceSource = await readSource("src/server/services/pos.ts");
 
     expect(pageSource).toContain("completedSaleEditHydratedRef");
+    expect(pageSource).toContain("receiptEditDeepLinkRef.current = null;");
+    expect(pageSource).toContain("const deepLinkedEditSaleId = receiptEditDeepLinkRef.current?.startsWith");
+    expect(pageSource).toContain("setJournalEditSaleId(deepLinkedEditSaleId);");
     expect(pageSource).toContain("journalSaleDetailQuery.isFetching");
     expect(pageSource).toContain(
       "void trpcUtils.pos.sales.get.invalidate({ saleId: saleItem.id });",

@@ -702,6 +702,7 @@ const PosSellPage = () => {
     const receiptId = searchParams.get("receiptId");
     const mode = searchParams.get("mode");
     if (mode !== "edit" || !receiptId) {
+      receiptEditDeepLinkRef.current = null;
       return;
     }
     const deepLinkKey = `${mode}:${receiptId}`;
@@ -1582,7 +1583,10 @@ const PosSellPage = () => {
     setJournalReturnSaleId(null);
     setJournalReturnQtyByLine({});
     setJournalReturnNotes("");
-    setJournalEditSaleId(null);
+    const deepLinkedEditSaleId = receiptEditDeepLinkRef.current?.startsWith("edit:")
+      ? receiptEditDeepLinkRef.current.slice("edit:".length)
+      : null;
+    setJournalEditSaleId(deepLinkedEditSaleId);
     completedSaleEditHydratedRef.current = null;
     completedSaleEditIdempotencyKeyRef.current = null;
     setOptimisticSaleLines(null);
