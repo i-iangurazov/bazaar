@@ -39,11 +39,7 @@ import {
 } from "@/lib/posUrlFilters";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
-import {
-  businessDateKey,
-  businessDateOnlyEndUtc,
-  businessDateOnlyToUtc,
-} from "@/lib/timezone";
+import { businessDateKey, businessDateOnlyEndUtc, businessDateOnlyToUtc } from "@/lib/timezone";
 import { usePosRegisterSelection } from "@/lib/usePosRegisterSelection";
 
 const createIdempotencyKey = () => {
@@ -73,12 +69,7 @@ const PosHistoryPage = () => {
   const [dateFrom, setDateFrom] = useState(readPosDateParam(searchParams, "from", ""));
   const [dateTo, setDateTo] = useState(readPosDateParam(searchParams, "to", ""));
   const [statusFilter, setStatusFilter] = useState<CustomerOrderStatus | "ALL">(
-    readPosEnumParam(
-      searchParams,
-      "status",
-      historyStatusValues,
-      CustomerOrderStatus.COMPLETED,
-    ),
+    readPosEnumParam(searchParams, "status", historyStatusValues, CustomerOrderStatus.COMPLETED),
   );
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<PosPaymentMethod | "ALL">(
     readPosEnumParam(searchParams, "payment", historyPaymentValues, "ALL"),
@@ -216,8 +207,7 @@ const PosHistoryPage = () => {
       q: search.trim() || null,
       from: dateFrom || null,
       to: dateTo || null,
-      status:
-        statusFilter === CustomerOrderStatus.COMPLETED ? null : String(statusFilter),
+      status: statusFilter === CustomerOrderStatus.COMPLETED ? null : String(statusFilter),
       payment: paymentMethodFilter === "ALL" ? null : String(paymentMethodFilter),
       page: salesPage === 1 ? null : salesPage,
       returnsPage: returnsPage === 1 ? null : returnsPage,
@@ -362,9 +352,7 @@ const PosHistoryPage = () => {
 
   const mobileHistorySales = useMemo(
     () =>
-      isPhoneScreen === true &&
-      salesPage === 1 &&
-      statusFilter === CustomerOrderStatus.COMPLETED
+      isPhoneScreen === true && salesPage === 1 && statusFilter === CustomerOrderStatus.COMPLETED
         ? mergeMobilePosReceiptHistory(
             salesQuery.data?.items ?? [],
             heldSalesQuery.data?.items ?? [],
@@ -638,6 +626,12 @@ const PosHistoryPage = () => {
     }
   };
 
+  const openReceiptEditor = (saleId: string) => {
+    router.push(
+      `/pos/sell?registerId=${encodeURIComponent(registerId)}&receiptId=${encodeURIComponent(saleId)}&mode=edit`,
+    );
+  };
+
   const handleShareReceiptPdf = async (
     saleId: string,
     number: string,
@@ -897,7 +891,16 @@ const PosHistoryPage = () => {
                         <Button
                           type="button"
                           variant="secondary"
-                          className="col-span-2 h-10"
+                          className="h-10"
+                          onClick={() => openReceiptEditor(sale.id)}
+                          disabled={sale.status !== CustomerOrderStatus.COMPLETED}
+                        >
+                          {t("sell.editReceipt")}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="h-10"
                           onClick={() => setReturnSaleId(sale.id)}
                           disabled={!canOperateRegister || !canReturn}
                         >
@@ -1013,6 +1016,13 @@ const PosHistoryPage = () => {
                       currencySourceWithFallback(sale, sale.store),
                     )}
                   </p>
+                  <Button
+                    variant="secondary"
+                    onClick={() => openReceiptEditor(sale.id)}
+                    disabled={sale.status !== CustomerOrderStatus.COMPLETED}
+                  >
+                    {t("sell.editReceipt")}
+                  </Button>
                   <Button
                     variant="secondary"
                     onClick={() => setReturnSaleId(sale.id)}

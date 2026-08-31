@@ -2845,6 +2845,43 @@ const PosSellPage = () => {
           currentSubtotalKgs,
           Math.max(0, draftDiscountKgs ?? journalSelectedSale.discountKgs),
         );
+        const currentCartTotalKgs = roundMoney(
+          Math.max(0, currentSubtotalKgs - currentDiscountKgs),
+        );
+        const currentDisplayTotal = roundMoney(
+          displayMoneyFromKgs(currentCartTotalKgs, currencySource),
+        );
+        const currentDisplayTotalDraft = Number.isFinite(currentDisplayTotal)
+          ? String(currentDisplayTotal)
+          : "";
+        const currentPaymentDrafts = paymentsRef.current.length
+          ? paymentsRef.current
+          : [createDefaultPosPaymentDraft()];
+        const reconciledPayments = reconcilePosPaymentDraftsForSaleTotal({
+          currentPayments: currentPaymentDrafts,
+          saleId: targetSaleId,
+          totalKgs: currentCartTotalKgs,
+          displayTotal: currentDisplayTotal,
+          previousAutoFill: paymentAutoFillRef.current,
+        });
+        const paymentPayload = buildPosPaymentSubmitPayload({
+          payments: reconciledPayments.payments,
+          cartTotalKgs: currentCartTotalKgs,
+          currencySource,
+          singlePaymentDisplayAmount: currentDisplayTotalDraft,
+        });
+        paymentAutoFillRef.current = reconciledPayments.autoFill;
+        setPayments(paymentPayload.displayPayments);
+        if (paymentPayload.status === "paymentRequired") {
+          toast({ variant: "error", description: t("sell.paymentRequired") });
+          focusPaymentsInput();
+          return;
+        }
+        if (paymentPayload.status === "paymentMismatch") {
+          toast({ variant: "error", description: t("sell.paymentMismatch") });
+          focusPaymentsInput();
+          return;
+        }
         const idempotencyKey = completedSaleEditIdempotencyKeyRef.current ?? createIdempotencyKey();
         completedSaleEditIdempotencyKeyRef.current = idempotencyKey;
         const result = await editCompletedSaleMutation.mutateAsync({
@@ -2854,7 +2891,9 @@ const PosSellPage = () => {
           customerPhone: selectedCustomer?.phone ?? null,
           customerAddress: selectedCustomer?.address ?? null,
           notes: mobileComment.trim() || journalSelectedSale.notes || null,
+          reason: t("sell.editReceipt"),
           discountKgs: currentDiscountKgs,
+          payments: paymentPayload.payments,
           lines: currentLines.map((line) => ({
             lineId: line.serverLineId ?? null,
             productId: getCartLineProductId(line),
@@ -5685,7 +5724,6 @@ const PosSellPage = () => {
                               >
                                 <Select
                                   value={payment.method}
-                                  disabled={isCompletedSaleEdit}
                                   onValueChange={(value) =>
                                     setPayments((current) =>
                                       current.map((item, itemIndex) =>
@@ -5736,7 +5774,7 @@ const PosSellPage = () => {
                                   }}
                                   placeholder={t("sell.paymentAmount")}
                                   inputMode="decimal"
-                                  readOnly={isCompletedSaleEdit || payments.length === 1}
+                                  readOnly={payments.length === 1}
                                   className="h-8 px-2 text-sm"
                                 />
                                 <Button
@@ -5746,10 +5784,7 @@ const PosSellPage = () => {
                                   className="h-8 w-8"
                                   onClick={() => removePaymentRow(index)}
                                   disabled={
-                                    isCompletedSaleEdit ||
-                                    payments.length <= 1 ||
-                                    isLineBusy ||
-                                    completeMutation.isLoading
+                                    payments.length <= 1 || isLineBusy || completeMutation.isLoading
                                   }
                                   aria-label={tCommon("delete")}
                                 >
@@ -5763,9 +5798,7 @@ const PosSellPage = () => {
                                 size="sm"
                                 className="h-8 px-3 text-xs"
                                 onClick={addPaymentRow}
-                                disabled={
-                                  isCompletedSaleEdit || isLineBusy || completeMutation.isLoading
-                                }
+                                disabled={isLineBusy || completeMutation.isLoading}
                               >
                                 {t("sell.addPayment")}
                               </Button>
@@ -6836,7 +6869,6 @@ const PosSellPage = () => {
                         >
                           <Select
                             value={payment.method}
-                            disabled={isCompletedSaleEdit}
                             onValueChange={(value) =>
                               setPayments((current) =>
                                 current.map((item, itemIndex) =>
@@ -6882,7 +6914,7 @@ const PosSellPage = () => {
                             }}
                             placeholder={t("sell.paymentAmount")}
                             inputMode="decimal"
-                            readOnly={isCompletedSaleEdit || payments.length === 1}
+                            readOnly={payments.length === 1}
                             className="h-11 border-border bg-card text-foreground"
                           />
                           <Button
@@ -6892,10 +6924,7 @@ const PosSellPage = () => {
                             className="h-11 w-11"
                             onClick={() => removePaymentRow(index)}
                             disabled={
-                              isCompletedSaleEdit ||
-                              payments.length <= 1 ||
-                              isLineBusy ||
-                              completeMutation.isLoading
+                              payments.length <= 1 || isLineBusy || completeMutation.isLoading
                             }
                             aria-label={tCommon("delete")}
                           >
@@ -6909,7 +6938,7 @@ const PosSellPage = () => {
                           variant="secondary"
                           className="h-11"
                           onClick={addPaymentRow}
-                          disabled={isCompletedSaleEdit}
+                          disabled={isLineBusy || completeMutation.isLoading}
                         >
                           {t("sell.addPayment")}
                         </Button>
@@ -8273,7 +8302,6 @@ const PosSellPage = () => {
                                 >
                                   <Select
                                     value={payment.method}
-                                    disabled={isCompletedSaleEdit}
                                     onValueChange={(value) =>
                                       setPayments((current) =>
                                         current.map((item, itemIndex) =>
@@ -8324,7 +8352,7 @@ const PosSellPage = () => {
                                     }}
                                     placeholder={t("sell.paymentAmount")}
                                     inputMode="decimal"
-                                    readOnly={isCompletedSaleEdit || payments.length === 1}
+                                    readOnly={payments.length === 1}
                                     className="h-11"
                                   />
                                   <Button
@@ -8334,7 +8362,6 @@ const PosSellPage = () => {
                                     className="h-11 w-11"
                                     onClick={() => removePaymentRow(index)}
                                     disabled={
-                                      isCompletedSaleEdit ||
                                       payments.length <= 1 ||
                                       isLineBusy ||
                                       completeMutation.isLoading
@@ -8351,9 +8378,7 @@ const PosSellPage = () => {
                                   variant="secondary"
                                   className="h-10"
                                   onClick={addPaymentRow}
-                                  disabled={
-                                    isCompletedSaleEdit || isLineBusy || completeMutation.isLoading
-                                  }
+                                  disabled={isLineBusy || completeMutation.isLoading}
                                 >
                                   {t("sell.addPayment")}
                                 </Button>

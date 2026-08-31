@@ -67,6 +67,8 @@ const PosShiftsPage = () => {
   const [cashOutReason, setCashOutReason] = useState("collection");
   const [cashType, setCashType] = useState<CashDrawerMovementType>(CashDrawerMovementType.PAY_IN);
   const [historyPage, setHistoryPage] = useState(1);
+  const [optimisticallyResolvedActiveReceiptIds, setOptimisticallyResolvedActiveReceiptIds] =
+    useState<ReadonlySet<string>>(() => new Set());
 
   useEffect(() => {
     const selectedType = parsePosCashMovementType(requestedCashType);
@@ -121,6 +123,7 @@ const PosShiftsPage = () => {
 
   useEffect(() => {
     setHistoryPage(1);
+    setOptimisticallyResolvedActiveReceiptIds(new Set());
   }, [registerId]);
 
   const closeShiftMutation = trpc.pos.shifts.close.useMutation({
@@ -149,6 +152,40 @@ const PosShiftsPage = () => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
   });
+
+  const cancelDraftMutation = trpc.pos.sales.cancelDraft.useMutation({
+    onSuccess: () => {
+      toast({ variant: "success", description: t("sell.saleDiscarded") });
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+
+  const handleCancelActiveReceipt = async (saleId: string) => {
+    setOptimisticallyResolvedActiveReceiptIds((current) => {
+      const next = new Set(current);
+      next.add(saleId);
+      return next;
+    });
+
+    try {
+      await cancelDraftMutation.mutateAsync({ saleId });
+    } catch {
+      setOptimisticallyResolvedActiveReceiptIds((current) => {
+        const next = new Set(current);
+        next.delete(saleId);
+        return next;
+      });
+      return;
+    }
+
+    try {
+      await currentShiftQuery.refetch();
+    } catch {
+      // Cancellation is authoritative; keep the receipt hidden locally.
+    }
+  };
 
   const cancelReturnMutation = trpc.pos.returns.cancel.useMutation({
     onSuccess: async () => {
@@ -201,8 +238,15 @@ const PosShiftsPage = () => {
   const report = reportQuery.data;
   const heldReceipts = currentShift?.heldReceipts ?? [];
   const heldReceiptCount = currentShift?.heldReceiptCount ?? heldReceipts.length;
-  const activeReceipts = currentShift?.activeReceipts ?? [];
-  const activeReceiptCount = currentShift?.activeReceiptCount ?? activeReceipts.length;
+  const serverActiveReceipts = currentShift?.activeReceipts ?? [];
+  const activeReceipts = serverActiveReceipts.filter(
+    (receipt) => !optimisticallyResolvedActiveReceiptIds.has(receipt.id),
+  );
+  const optimisticallyResolvedCount = serverActiveReceipts.length - activeReceipts.length;
+  const activeReceiptCount = Math.max(
+    0,
+    (currentShift?.activeReceiptCount ?? serverActiveReceipts.length) - optimisticallyResolvedCount,
+  );
   const returnDrafts = currentShift?.returnDrafts ?? [];
   const returnDraftCount = currentShift?.returnDraftCount ?? returnDrafts.length;
   const unresolvedDraftCount = heldReceiptCount + activeReceiptCount + returnDraftCount;
@@ -791,13 +835,27 @@ const PosShiftsPage = () => {
                               </p>
                             </div>
                             {receipt.ownedByCurrentUser ? (
-                              <Button size="sm" variant="secondary" asChild>
-                                <Link
-                                  href={`/pos/sell?registerId=${encodeURIComponent(registerId)}`}
+                              <div className="flex flex-wrap gap-2">
+                                <Button size="sm" variant="secondary" asChild>
+                                  <Link
+                                    href={`/pos/sell?registerId=${encodeURIComponent(registerId)}`}
+                                  >
+                                    {t("shifts.resolveReceipt")}
+                                  </Link>
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="danger"
+                                  disabled={cancelDraftMutation.isLoading}
+                                  onClick={() => void handleCancelActiveReceipt(receipt.id)}
                                 >
-                                  {t("shifts.resolveReceipt")}
-                                </Link>
-                              </Button>
+                                  {cancelDraftMutation.isLoading ? (
+                                    <Spinner className="h-4 w-4" />
+                                  ) : null}
+                                  {t("sell.discardSale")}
+                                </Button>
+                              </div>
                             ) : (
                               <Button
                                 size="sm"
@@ -897,6 +955,7 @@ const PosShiftsPage = () => {
                     onClick={handleCloseShift}
                     disabled={
                       closeShiftMutation.isLoading ||
+                      cancelDraftMutation.isLoading ||
                       !countedCashValid ||
                       Boolean(closeBlockingMessage) ||
                       !closeConfirmed ||

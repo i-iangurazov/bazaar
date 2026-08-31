@@ -308,6 +308,54 @@ describeDb("pos", () => {
     expect(drafts.map((draft) => draft.status)).toEqual(["CANCELED", "DRAFT"]);
   });
 
+  it("allows shift close immediately after its active receipt is cancelled", async () => {
+    const { org, store, cashierUser } = await seedBase({ plan: "BUSINESS" });
+    const register = await prisma.posRegister.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Close After Cancel",
+        code: "CANCEL-CLOSE",
+      },
+    });
+    const caller = createTestCaller({
+      id: cashierUser.id,
+      email: cashierUser.email,
+      role: cashierUser.role,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+    const shift = await caller.pos.shifts.open({
+      registerId: register.id,
+      openingCashKgs: 0,
+      idempotencyKey: "pos-open-cancel-close-1",
+    });
+    const draft = await caller.pos.sales.createDraft({ registerId: register.id });
+
+    const beforeCancel = await caller.pos.shifts.current({ registerId: register.id });
+    expect(beforeCancel?.activeReceiptCount).toBe(1);
+    expect(beforeCancel?.activeReceipts.map((receipt) => receipt.id)).toEqual([draft.id]);
+    await expect(
+      caller.pos.shifts.close({
+        shiftId: shift.id,
+        closingCashCountedKgs: 0,
+        idempotencyKey: "pos-close-before-cancel-1",
+      }),
+    ).rejects.toMatchObject({ code: "CONFLICT", message: "posShiftDraftsOpen" });
+
+    await caller.pos.sales.cancelDraft({ saleId: draft.id });
+
+    const afterCancel = await caller.pos.shifts.current({ registerId: register.id });
+    expect(afterCancel?.activeReceiptCount).toBe(0);
+    expect(afterCancel?.activeReceipts).toEqual([]);
+    const closed = await caller.pos.shifts.close({
+      shiftId: shift.id,
+      closingCashCountedKgs: 0,
+      idempotencyKey: "pos-close-after-cancel-1",
+    });
+    expect(closed.status).toBe("CLOSED");
+  });
+
   it("filters sales list by statuses", async () => {
     const { org, store, cashierUser } = await seedBase({ plan: "BUSINESS" });
 
@@ -1540,6 +1588,152 @@ describeDb("pos", () => {
     expect(movementJournal.items[0]?.detailUrl).toBe(
       `/pos/receipts?receiptId=${encodeURIComponent(sale.id)}`,
     );
+  });
+
+  it("edits completed receipt payments exactly once without changing stock or COGS", async () => {
+    const { org, store, product, cashierUser, adminUser } = await seedBase({ plan: "BUSINESS" });
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { basePriceKgs: 4_100 },
+    });
+    await adjustStock({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 5,
+      reason: "seed POS payment edit",
+      idempotencyKey: "pos-payment-edit-stock",
+      requestId: "pos-payment-edit-stock",
+    });
+    await prisma.productCost.create({
+      data: {
+        organizationId: org.id,
+        productId: product.id,
+        variantKey: "BASE",
+        avgCostKgs: 800,
+        costBasisQty: 5,
+      },
+    });
+    const register = await prisma.posRegister.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Payment edit register",
+        code: "PAY-EDIT",
+      },
+    });
+    const caller = createTestCaller({
+      id: cashierUser.id,
+      email: cashierUser.email,
+      role: cashierUser.role,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+    const shift = await caller.pos.shifts.open({
+      registerId: register.id,
+      openingCashKgs: 1_000,
+      idempotencyKey: "pos-payment-edit-open",
+    });
+    const sale = await caller.pos.sales.createDraft({ registerId: register.id });
+    const line = await caller.pos.sales.addLine({
+      saleId: sale.id,
+      productId: product.id,
+      qty: 1,
+    });
+    await caller.pos.sales.complete({
+      saleId: sale.id,
+      payments: [{ method: PosPaymentMethod.CASH, amountKgs: 4_100 }],
+      idempotencyKey: "pos-payment-edit-complete",
+    });
+    await caller.pos.shifts.close({
+      shiftId: shift.id,
+      closingCashCountedKgs: 5_100,
+      idempotencyKey: "pos-payment-edit-close",
+    });
+
+    const before = await prisma.customerOrder.findUniqueOrThrow({
+      where: { id: sale.id },
+      include: { lines: true },
+    });
+    const snapshotBefore = await prisma.inventorySnapshot.findUniqueOrThrow({
+      where: {
+        storeId_productId_variantKey: {
+          storeId: store.id,
+          productId: product.id,
+          variantKey: "BASE",
+        },
+      },
+    });
+    const movementCountBefore = await prisma.stockMovement.count({
+      where: { referenceType: "CustomerOrder", referenceId: sale.id },
+    });
+
+    const paymentEdit = {
+      saleId: sale.id,
+      reason: "Cashier selected cash instead of transfer",
+      discountKgs: 0,
+      payments: [{ method: PosPaymentMethod.TRANSFER, amountKgs: 4_100 }],
+      lines: [
+        {
+          lineId: line.id,
+          productId: product.id,
+          qty: 1,
+          unitPriceKgs: 4_100,
+        },
+      ],
+      idempotencyKey: "pos-payment-edit-cash-transfer",
+    };
+    const [firstResult, replayedResult] = await Promise.all([
+      caller.pos.sales.editCompleted(paymentEdit),
+      caller.pos.sales.editCompleted(paymentEdit),
+    ]);
+    expect(firstResult.id).toBe(sale.id);
+    expect(replayedResult.id).toBe(sale.id);
+    expect(firstResult.cashDeltaKgs).toBe(-4_100);
+
+    const [after, snapshotAfter, payments, shiftAfter, reportAfter] = await Promise.all([
+      prisma.customerOrder.findUniqueOrThrow({
+        where: { id: sale.id },
+        include: { lines: true },
+      }),
+      prisma.inventorySnapshot.findUniqueOrThrow({
+        where: {
+          storeId_productId_variantKey: {
+            storeId: store.id,
+            productId: product.id,
+            variantKey: "BASE",
+          },
+        },
+      }),
+      prisma.salePayment.findMany({
+        where: { customerOrderId: sale.id, saleReturnId: null },
+      }),
+      prisma.registerShift.findUniqueOrThrow({ where: { id: shift.id } }),
+      caller.pos.shifts.xReport({ shiftId: shift.id }),
+    ]);
+    expect(payments).toHaveLength(1);
+    expect(payments[0]?.method).toBe(PosPaymentMethod.TRANSFER);
+    expect(Number(payments[0]?.amountKgs)).toBe(4_100);
+    expect(snapshotAfter.onHand).toBe(snapshotBefore.onHand);
+    expect(after.lines[0]?.unitCostKgs).toEqual(before.lines[0]?.unitCostKgs);
+    expect(after.lines[0]?.lineCostTotalKgs).toEqual(before.lines[0]?.lineCostTotalKgs);
+    expect(after.completedAt).toEqual(before.completedAt);
+    expect(
+      await prisma.stockMovement.count({
+        where: { referenceType: "CustomerOrder", referenceId: sale.id },
+      }),
+    ).toBe(movementCountBefore);
+    expect(Number(shiftAfter.expectedCashKgs)).toBe(1_000);
+    expect(reportAfter.summary.expectedCashKgs).toBe(1_000);
+    expect(reportAfter.paymentsByMethod.CASH.salesKgs).toBe(0);
+    expect(reportAfter.paymentsByMethod.TRANSFER.salesKgs).toBe(4_100);
+    expect(
+      await prisma.auditLog.count({
+        where: { action: "POS_SALE_EDIT", entity: "CustomerOrder", entityId: sale.id },
+      }),
+    ).toBe(1);
+    expect(await prisma.cashDrawerMovement.count({ where: { shiftId: shift.id } })).toBe(0);
   });
 
   it("edits a completed return with inventory, refund, audit, and movement deltas", async () => {

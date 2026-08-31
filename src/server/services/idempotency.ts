@@ -11,7 +11,9 @@ export type IdempotencyContext = {
 };
 
 const hashJson = (value: Prisma.InputJsonValue) =>
-  createHash("sha256").update(JSON.stringify(value ?? null)).digest("hex");
+  createHash("sha256")
+    .update(JSON.stringify(value ?? null))
+    .digest("hex");
 
 export const withIdempotency = async <T>(
   tx: Prisma.TransactionClient,
@@ -41,23 +43,17 @@ export const withIdempotency = async <T>(
     throw new AppError("requestInProgress", "CONFLICT", 409);
   }
 
-  try {
-    await tx.idempotencyKey.create({
-      data: {
-        key: context.key,
-        route: context.route,
-        userId: context.userId,
-      },
-    });
-  } catch (error) {
-    const isUniqueViolation =
-      typeof error === "object" &&
-      error !== null &&
-      "code" in error &&
-      (error as { code?: string }).code === "P2002";
-    if (!isUniqueViolation) {
-      throw error;
-    }
+  const claim = await tx.idempotencyKey.createMany({
+    data: {
+      key: context.key,
+      route: context.route,
+      userId: context.userId,
+      responseHash: requestHash,
+    },
+    skipDuplicates: true,
+  });
+
+  if (claim.count === 0) {
     const retry = await tx.idempotencyKey.findUnique({
       where: {
         key_route_userId: {
@@ -73,7 +69,7 @@ export const withIdempotency = async <T>(
     if (retry?.response) {
       return { result: retry.response as T, replayed: true };
     }
-    throw error instanceof AppError ? error : new AppError("requestInProgress", "CONFLICT", 409);
+    throw new AppError("requestInProgress", "CONFLICT", 409);
   }
 
   const result = await handler();

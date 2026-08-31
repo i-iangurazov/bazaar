@@ -87,6 +87,9 @@ describe("pos entry navigation", () => {
     expect(serviceSource).toContain('action: "POS_RETURN_CANCEL"');
     expect(pageSource).toContain("unresolvedDraftCount");
     expect(pageSource).toContain("transferDraftMutation");
+    expect(pageSource).toContain("handleCancelActiveReceipt");
+    expect(pageSource).toContain("optimisticallyResolvedActiveReceiptIds");
+    expect(pageSource).toContain("cancelDraftMutation.isLoading ||");
     expect(pageSource).toContain("cancelReturnMutation");
     expect(pageSource).toContain("parseMoneyInput(countedCash)");
   });
@@ -272,7 +275,9 @@ describe("pos entry navigation", () => {
     expect(posRouterSource).toContain("cashiers: router({");
     expect(customerServiceSource).toContain("normalizeOptionalCustomerPhone(input.phone)");
     expect(customerServiceSource).toContain("ensureCustomerContact({ email, phone });");
-    expect(customerServiceSource).toContain("normalizeUpdatedCustomerPhone(input.phone, existing.phone)");
+    expect(customerServiceSource).toContain(
+      "normalizeUpdatedCustomerPhone(input.phone, existing.phone)",
+    );
   });
 
   it("keeps receipt journal returns tied to loaded receipt lines and blocks zero-quantity completion", async () => {
@@ -295,12 +300,15 @@ describe("pos entry navigation", () => {
 
   it("opens completed receipt corrections in the normal POS cart without draft mutations", async () => {
     const pageSource = await readSource("src/app/(app)/pos/sell/page.tsx");
+    const historySource = await readSource("src/app/(app)/pos/history/page.tsx");
     const routerSource = await readSource("src/server/trpc/routers/pos.ts");
     const serviceSource = await readSource("src/server/services/pos.ts");
 
     expect(pageSource).toContain("completedSaleEditHydratedRef");
     expect(pageSource).toContain("receiptEditDeepLinkRef.current = null;");
-    expect(pageSource).toContain("const deepLinkedEditSaleId = receiptEditDeepLinkRef.current?.startsWith");
+    expect(pageSource).toContain(
+      "const deepLinkedEditSaleId = receiptEditDeepLinkRef.current?.startsWith",
+    );
     expect(pageSource).toContain("setJournalEditSaleId(deepLinkedEditSaleId);");
     expect(pageSource).toContain("journalSaleDetailQuery.isFetching");
     expect(pageSource).toContain(
@@ -314,15 +322,21 @@ describe("pos entry navigation", () => {
     expect(pageSource).toContain("if (completedSaleEditIdRef.current)");
     expect(pageSource).toContain("completedSaleEditIdRef.current === targetSaleId");
     expect(pageSource).toContain("editCompletedSaleMutation.mutateAsync({");
+    expect(pageSource).toContain("payments: paymentPayload.payments");
+    expect(pageSource).toContain("readOnly={payments.length === 1}");
+    expect(historySource).toContain("const openReceiptEditor = (saleId: string) =>");
+    expect(historySource).toContain("&receiptId=${encodeURIComponent(saleId)}&mode=edit");
     expect(pageSource).toContain("completedSaleEditIdempotencyKeyRef.current");
     expect(pageSource).toContain("clearCompletedSaleEditUi();");
     expect(pageSource).toContain('t("sell.saveReceiptCorrection")');
     expect(pageSource).not.toContain("const JournalEditReceiptModal");
     expect(pageSource).not.toContain('data-testid="pos-receipt-edit-modal"');
     expect(routerSource).toContain("discountKgs: z.number().min(0).optional()");
+    expect(routerSource).toContain("payments: z.array(paymentSchema).max(4).optional()");
     expect(serviceSource).toContain("requestedDiscountKgs");
     expect(serviceSource).toContain("const stockDelta = oldQty - desiredQty;");
     expect(serviceSource).toContain('route: "pos.sales.editCompleted"');
+    expect(serviceSource).toContain("cashDeltaKgs");
   });
 
   it("keeps mobile quick-sale on theme tokens with images, customer selection, editable price, discount, and receipt actions", async () => {
@@ -467,7 +481,8 @@ describe("pos entry navigation", () => {
     expect(pageSource).toContain("visibleCartLineCount: currentLines.length");
     expect(pageSource).toContain("visibleCartTotalKgs: currentCartTotalKgs");
     expect(pageSource).toContain("paymentsRef.current");
-    expect(pageSource).toContain("readOnly={isCompletedSaleEdit || payments.length === 1}");
+    expect(pageSource).toContain("readOnly={payments.length === 1}");
+    expect(pageSource).not.toContain("readOnly={isCompletedSaleEdit || payments.length === 1}");
     expect(pageSource).toContain("await flushAllPendingCartSync();");
     expect(pageSource).toContain("clearActiveDraftCache();");
     expect(pageSource).toContain("releaseUnresolvableLineSync");

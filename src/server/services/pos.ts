@@ -3492,6 +3492,11 @@ export const editCompletedPosSale = async (input: {
   notes?: string | null;
   reason?: string | null;
   discountKgs?: number;
+  payments?: Array<{
+    method: PosPaymentMethod;
+    amountKgs: number;
+    providerRef?: string | null;
+  }>;
   actorId: string;
   user?: StoreAccessUser;
   requestId: string;
@@ -3508,6 +3513,10 @@ export const editCompletedPosSale = async (input: {
   ) {
     throw new AppError("invalidInput", "BAD_REQUEST", 400);
   }
+  const requestedPayments =
+    input.payments === undefined
+      ? undefined
+      : normalizePayments(input.payments, { requirePayment: false });
   const result = await prisma.$transaction(async (tx) => {
     const { result: editResult, replayed } = await withIdempotency(
       tx,
@@ -3691,6 +3700,15 @@ export const editCompletedPosSale = async (input: {
             unitCostKgs: line.unitCostKgs ? toMoney(line.unitCostKgs) : null,
             lineCostTotalKgs: line.lineCostTotalKgs ? toMoney(line.lineCostTotalKgs) : null,
           })),
+          payments: sale.payments
+            .filter((payment) => payment.saleReturnId === null)
+            .map((payment) => ({
+              id: payment.id,
+              method: payment.method,
+              amountKgs: toMoney(payment.amountKgs),
+              providerRef: payment.providerRef,
+              isRefund: payment.isRefund,
+            })),
         };
 
         const oldAggregates = new Map<
@@ -3821,12 +3839,85 @@ export const editCompletedPosSale = async (input: {
             currencySourceWithFallback(sale.shift, sale.store),
           ),
         );
+        const tenderPayments = sale.payments.filter((payment) => payment.saleReturnId === null);
         const preferredPaymentMethod =
-          sale.payments.find((payment) => !payment.isRefund)?.method ??
-          sale.payments[0]?.method ??
+          tenderPayments.find((payment) => !payment.isRefund)?.method ??
+          tenderPayments[0]?.method ??
           PosPaymentMethod.CASH;
+        let persistedTenderPayments = tenderPayments;
+        let cashDeltaKgs = 0;
 
-        if (paymentDeltaKgs !== 0 && (!sale.isDebt || sale.debtSettledAt)) {
+        if (requestedPayments !== undefined) {
+          const newTotalMinorUnits = moneyToMinorUnits(newTotalKgs);
+          if (newTotalMinorUnits === null) {
+            throw new AppError("invalidInput", "BAD_REQUEST", 400);
+          }
+          if (newTotalMinorUnits > 0 && requestedPayments.length === 0) {
+            throw new AppError("posPaymentMissing", "BAD_REQUEST", 400);
+          }
+          if (sumPaymentMinorUnits(requestedPayments) !== newTotalMinorUnits) {
+            throw new AppError("posPaymentTotalMismatch", "BAD_REQUEST", 400);
+          }
+
+          const oldCashKgs = roundMoney(
+            tenderPayments
+              .filter((payment) => payment.method === PosPaymentMethod.CASH)
+              .reduce(
+                (sum, payment) =>
+                  sum +
+                  (payment.isRefund ? -toMoney(payment.amountKgs) : toMoney(payment.amountKgs)),
+                0,
+              ),
+          );
+          const newCashKgs = roundMoney(
+            requestedPayments
+              .filter((payment) => payment.method === PosPaymentMethod.CASH)
+              .reduce((sum, payment) => sum + payment.amountKgs, 0),
+          );
+          cashDeltaKgs = roundMoney(newCashKgs - oldCashKgs);
+
+          await tx.salePayment.deleteMany({
+            where: { customerOrderId: sale.id, saleReturnId: null },
+          });
+          if (requestedPayments.length) {
+            await tx.salePayment.createMany({
+              data: requestedPayments.map((payment) => ({
+                organizationId: input.organizationId,
+                storeId: sale.storeId,
+                shiftId: sale.shiftId!,
+                customerOrderId: sale.id,
+                method: payment.method,
+                amountKgs: payment.amountKgs,
+                ...transactionCurrency,
+                providerRef: payment.providerRef,
+                isRefund: false,
+                createdById: input.actorId,
+              })),
+            });
+          }
+          persistedTenderPayments = await tx.salePayment.findMany({
+            where: { customerOrderId: sale.id, saleReturnId: null },
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          });
+
+          if (cashDeltaKgs !== 0) {
+            await tx.$queryRaw`
+              SELECT id FROM "RegisterShift" WHERE id = ${sale.shiftId} FOR UPDATE
+            `;
+            const lockedShift = await tx.registerShift.findUnique({ where: { id: sale.shiftId } });
+            if (
+              lockedShift?.expectedCashKgs !== null &&
+              lockedShift?.expectedCashKgs !== undefined
+            ) {
+              await tx.registerShift.update({
+                where: { id: lockedShift.id },
+                data: {
+                  expectedCashKgs: roundMoney(toMoney(lockedShift.expectedCashKgs) + cashDeltaKgs),
+                },
+              });
+            }
+          }
+        } else if (paymentDeltaKgs !== 0 && (!sale.isDebt || sale.debtSettledAt)) {
           await tx.salePayment.create({
             data: {
               organizationId: input.organizationId,
@@ -3840,6 +3931,10 @@ export const editCompletedPosSale = async (input: {
               isRefund: paymentDeltaKgs < 0,
               createdById: input.actorId,
             },
+          });
+          persistedTenderPayments = await tx.salePayment.findMany({
+            where: { customerOrderId: sale.id, saleReturnId: null },
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
           });
         }
 
@@ -3871,7 +3966,16 @@ export const editCompletedPosSale = async (input: {
             unitCostKgs: line.unitCostKgs ? toMoney(line.unitCostKgs) : null,
             lineCostTotalKgs: line.lineCostTotalKgs ? toMoney(line.lineCostTotalKgs) : null,
           })),
+          payments: persistedTenderPayments.map((payment) => ({
+            id: payment.id,
+            method: payment.method,
+            amountKgs: toMoney(payment.amountKgs),
+            providerRef: payment.providerRef,
+            isRefund: payment.isRefund,
+          })),
           paymentDeltaKgs,
+          cashDeltaKgs,
+          reason: input.reason?.trim() || `Редактирование чека ${sale.number}`,
         };
 
         await writeAuditLog(tx, {
@@ -3896,6 +4000,7 @@ export const editCompletedPosSale = async (input: {
           discountKgs: toMoney(updatedSale.discountKgs),
           totalKgs: newTotalKgs,
           paymentDeltaKgs,
+          cashDeltaKgs,
           changedItems: Array.from(changedProducts.values()),
         };
       },
