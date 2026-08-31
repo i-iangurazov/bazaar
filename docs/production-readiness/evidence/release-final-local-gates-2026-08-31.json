@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "artifactKind": "FINAL_LOCAL_RELEASE_GATE_RECONCILIATION",
-  "generatedAt": "2026-08-31T15:44:23Z",
+  "generatedAt": "2026-08-31T16:18:05Z",
   "releaseBranch": "codex/bazaar-readiness-release-20260831",
-  "finalHead": "323579dac57847b6f390c9c9b108851e4fd95671",
-  "finalCommittedTree": "cc397fc5e7a316fec6c7a7d88cd70aaa5d9ca02b",
-  "finalProductionRuntimeCheckpoint": "1a2f795e40ca3a1aafe4b22662eb6f63b7bd01d0",
-  "finalHeadDeltaFromRuntime": "Test-only consistent-type-import correction; no application runtime source changed after the green production build and browser shard.",
+  "finalHead": "78ff3a6204750996604bac9cc34e77aeba11aaba",
+  "finalCommittedTree": "2b6b936ed25780748baf2c17c38d2ff4a1c91f49",
+  "finalProductionRuntimeCheckpoint": "fe3cc8bfd2a11a2a6df921148d24c9397d440ccc",
+  "finalHeadDeltaFromRuntime": "Tracked 116-route CI fixture and its unit-test path only; no application runtime source changed after the green production build.",
   "rescueCommit": "e04df7c322c0da46665aa764e113423223222390",
   "productionRollbackPoint": "7db455397eb38e9bcaa09bda5acc951964df5ab2",
   "productionDataUsed": false,
@@ -59,11 +59,25 @@
     },
     "deterministic": {
       "retainedFull": {
-        "passed": 1688,
+        "command": "pnpm exec vitest run --reporter=default --reporter=json --reporter=junit",
+        "testFilesPassed": 316,
+        "passed": 1704,
         "failed": 0,
         "skipped": 0,
-        "artifact": "test-results/release-deterministic-full-final.xml",
-        "sha256": "534815935b538376a98fb3768e93efe0b3bd7490c036f421599705b8a7849220"
+        "artifact": "test-results/release-final-deterministic-current-source.json",
+        "sha256": "e2a9bc4c343bcabad8f85099c79ec98b2fd4da212ab899dd6e4b269048c70922",
+        "junitArtifact": "test-results/release-final-deterministic-current-source-junit.xml",
+        "junitSha256": "5e47693787a61f0f0e1af4fd10731548a7234871ba8f91ebc8cb61f6ac9db555"
+      },
+      "ciFailureReproduction": {
+        "testFilesPassed": 12,
+        "passed": 54,
+        "failed": 0,
+        "skipped": 0,
+        "artifact": "test-results/release-ci-cost-route-targeted-final.json",
+        "sha256": "75735db8c1b8c33205271a51d7cb9a4a8924320eceebf0fab9697a43b1e257ef",
+        "junitArtifact": "test-results/release-ci-cost-route-targeted-final-junit.xml",
+        "junitSha256": "92784afd164ebabfe42bb130fcf94b2c6813386bf50f3319a04f9110cf269dee"
       },
       "changedMMarketIntegration": {
         "command": "pnpm exec vitest run tests/integration/m-market.test.ts",
@@ -117,7 +131,7 @@
       "command": "pnpm build",
       "result": "PASS",
       "staticPagesGenerated": 120,
-      "runtimeCheckpoint": "1a2f795e40ca3a1aafe4b22662eb6f63b7bd01d0"
+      "runtimeCheckpoint": "fe3cc8bfd2a11a2a6df921148d24c9397d440ccc"
     },
     "publicBrowserMatrix": {
       "result": "PASS",
