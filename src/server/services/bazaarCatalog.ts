@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { randomInt } from "node:crypto";
 import {
   Prisma,
   BazaarCatalogFontFamily,
@@ -93,10 +93,9 @@ const resolveProductListImageUrl = (product: {
 };
 
 const createSlugCandidate = () => {
-  const bytes = randomBytes(SLUG_LENGTH);
   let result = "";
   for (let index = 0; index < SLUG_LENGTH; index += 1) {
-    result += slugAlphabet[bytes[index] % slugAlphabet.length];
+    result += slugAlphabet[randomInt(slugAlphabet.length)];
   }
   return result;
 };

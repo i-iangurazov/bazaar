@@ -100,6 +100,7 @@ import {
   insertBuilderBlock,
   moveBuilderBlock,
   reorderBuilderBlocks,
+  resolveBuilderPreviewImageSrc,
   updateBuilderBlock,
 } from "./builder-utils";
 
@@ -2848,25 +2849,26 @@ const PreviewImageFrame = ({
   imageClassName: string;
 }) => {
   const [failed, setFailed] = useState(false);
+  const safeSrc = useMemo(() => resolveBuilderPreviewImageSrc(src), [src]);
   const canPreview = useMemo(() => {
-    if (!src) return false;
+    if (!safeSrc) return false;
     if (typeof window === "undefined") return true;
     try {
-      const imageUrl = new URL(src, window.location.href);
+      const imageUrl = new URL(safeSrc, window.location.href);
       const isLocalHost = imageUrl.hostname === "localhost" || imageUrl.hostname === "127.0.0.1";
       return !(isLocalHost && imageUrl.origin !== window.location.origin);
     } catch {
       return false;
     }
-  }, [src]);
-  useEffect(() => setFailed(false), [src]);
+  }, [safeSrc]);
+  useEffect(() => setFailed(false), [safeSrc]);
 
   return (
     <div className={frameClassName}>
       {canPreview && !failed ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={src ?? undefined}
+          src={safeSrc ?? undefined}
           alt={alt}
           className={imageClassName}
           onError={() => setFailed(true)}

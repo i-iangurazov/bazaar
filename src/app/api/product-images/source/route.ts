@@ -1,5 +1,8 @@
 import { getServerAuthToken } from "@/server/auth/token";
-import { isManagedProductImageUrl } from "@/server/services/productImageStorage";
+import {
+  downloadRemoteImage,
+  readManagedLocalProductImage,
+} from "@/server/services/productImageStorage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -111,33 +114,77 @@ const inferImageMimeTypeFromBytes = (bytes: Uint8Array) => {
   return "";
 };
 
-const resolveManagedSourceUrl = (rawSourceUrl: string, requestUrl: URL) => {
+const normalizeOrgPath = (organizationId: string) =>
+  organizationId.replace(/[^a-zA-Z0-9_-]/g, "").trim() || "default";
+
+type ManagedSource = { kind: "local" | "remote"; url: string };
+
+const resolveManagedSource = (
+  rawSourceUrl: string,
+  requestUrl: URL,
+  organizationId: string,
+): ManagedSource | null => {
   const sourceUrl = rawSourceUrl.trim();
   if (!sourceUrl) {
     return null;
   }
 
+  const r2Base = process.env.R2_PUBLIC_BASE_URL?.trim();
   let parsed: URL;
   try {
-    parsed = new URL(sourceUrl, requestUrl.origin);
+    parsed =
+      r2Base && (sourceUrl.startsWith("retails/") || sourceUrl.startsWith("/retails/"))
+        ? new URL(sourceUrl.replace(/^\/+/, ""), `${r2Base.replace(/\/+$/, "")}/`)
+        : new URL(sourceUrl, requestUrl.origin);
   } catch {
     return null;
   }
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+  if (
+    (parsed.protocol !== "http:" && parsed.protocol !== "https:") ||
+    parsed.username ||
+    parsed.password
+  ) {
     return null;
   }
 
-  const managedCandidatePath = `${parsed.pathname}${parsed.search}`;
-  const isManaged =
-    isManagedProductImageUrl(sourceUrl) ||
-    isManagedProductImageUrl(parsed.toString()) ||
-    isManagedProductImageUrl(managedCandidatePath) ||
-    isManagedProductImageUrl(parsed.pathname);
-  if (!isManaged) {
-    return null;
+  const normalizedOrganizationId = normalizeOrgPath(organizationId);
+  const localPrefixes = [
+    `/uploads/imported-products/${normalizedOrganizationId}/`,
+    `/uploads/product-images/${normalizedOrganizationId}/`,
+  ];
+  if (localPrefixes.some((prefix) => parsed.pathname.startsWith(prefix))) {
+    const configuredAppOrigins = [process.env.NEXT_PUBLIC_APP_URL, process.env.NEXTAUTH_URL]
+      .map((value) => value?.trim())
+      .filter((value): value is string => Boolean(value))
+      .flatMap((value) => {
+        try {
+          return [new URL(value).origin];
+        } catch {
+          return [];
+        }
+      });
+    if (
+      sourceUrl.startsWith("/") ||
+      parsed.origin === requestUrl.origin ||
+      configuredAppOrigins.includes(parsed.origin)
+    ) {
+      return { kind: "local", url: parsed.toString() };
+    }
   }
 
-  return parsed.toString();
+  if (r2Base) {
+    try {
+      const configuredR2Base = new URL(`${r2Base.replace(/\/+$/, "")}/`);
+      const r2OrgPrefix = `${configuredR2Base.pathname.replace(/\/?$/, "/")}retails/${normalizedOrganizationId}/`;
+      if (parsed.origin === configuredR2Base.origin && parsed.pathname.startsWith(r2OrgPrefix)) {
+        return { kind: "remote", url: parsed.toString() };
+      }
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
 };
 
 export const GET = async (request: Request) => {
@@ -155,25 +202,30 @@ export const GET = async (request: Request) => {
     return Response.json({ message: "invalidInput" }, { status: 400 });
   }
 
-  const managedSourceUrl = resolveManagedSourceUrl(rawSourceUrl, requestUrl);
-  if (!managedSourceUrl) {
+  const managedSource = resolveManagedSource(rawSourceUrl, requestUrl, token.organizationId);
+  if (!managedSource) {
     return Response.json({ message: "forbidden" }, { status: 403 });
   }
 
   try {
-    const sourceResponse = await fetch(managedSourceUrl, { cache: "no-store" });
-    if (!sourceResponse.ok) {
+    const source =
+      managedSource.kind === "local"
+        ? await readManagedLocalProductImage({
+            url: managedSource.url,
+            organizationId: token.organizationId,
+          })
+        : await downloadRemoteImage(managedSource.url);
+    if (!source) {
       return Response.json({ message: "imageReadFailed" }, { status: 502 });
     }
 
-    const body = await sourceResponse.arrayBuffer();
-    if (!body.byteLength) {
+    if (!source.buffer.byteLength) {
       return Response.json({ message: "imageReadFailed" }, { status: 400 });
     }
 
-    const byHeader = normalizeImageMimeType(sourceResponse.headers.get("content-type") ?? "");
-    const byUrl = normalizeImageMimeType(resolveMimeTypeFromUrl(managedSourceUrl));
-    const byBytes = inferImageMimeTypeFromBytes(new Uint8Array(body.slice(0, 16)));
+    const byHeader = normalizeImageMimeType(source.contentType);
+    const byUrl = normalizeImageMimeType(resolveMimeTypeFromUrl(managedSource.url));
+    const byBytes = inferImageMimeTypeFromBytes(new Uint8Array(source.buffer.subarray(0, 16)));
     const contentType = byHeader.startsWith("image/")
       ? byHeader
       : byUrl.startsWith("image/")
@@ -185,7 +237,7 @@ export const GET = async (request: Request) => {
       return Response.json({ message: "imageInvalidType" }, { status: 400 });
     }
 
-    return new Response(body, {
+    return new Response(new Uint8Array(source.buffer), {
       status: 200,
       headers: {
         "Content-Type": contentType,

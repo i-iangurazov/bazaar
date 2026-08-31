@@ -6,11 +6,18 @@ import {
   insertBuilderBlock,
   moveBuilderBlock,
   reorderBuilderBlocks,
+  resolveBuilderPreviewImageSrc,
   updateBuilderBlock,
 } from "@/app/(app)/operations/integrations/email-marketing/builder-utils";
 
 type TestBlock =
-  | { id: string; type: "text"; heading?: string; body?: string; alignment?: "left" | "center" | "right" }
+  | {
+      id: string;
+      type: "text";
+      heading?: string;
+      body?: string;
+      alignment?: "left" | "center" | "right";
+    }
   | { id: string; type: "products"; productIds?: string[]; alignment?: "left" | "center" | "right" }
   | { id: string; type: "footer"; text?: string; alignment?: "left" | "center" | "right" };
 
@@ -34,7 +41,11 @@ describe("email marketing builder block operations", () => {
       alignment: "center",
     });
 
-    expect(next[0]).toMatchObject({ id: "header", heading: "Updated heading", alignment: "center" });
+    expect(next[0]).toMatchObject({
+      id: "header",
+      heading: "Updated heading",
+      alignment: "center",
+    });
     expect(next[1]).toBe(current[1]);
   });
 
@@ -75,5 +86,31 @@ describe("email marketing builder block operations", () => {
     const next = reorderBuilderBlocks(blocks(), "footer", "header");
 
     expect(next.map((block) => block.id)).toEqual(["footer", "header", "products"]);
+  });
+
+  it("allows only explicit HTTP(S) and same-origin image paths in the builder preview", () => {
+    expect(resolveBuilderPreviewImageSrc(" https://cdn.example.com/banner.png ")).toBe(
+      "https://cdn.example.com/banner.png",
+    );
+    expect(resolveBuilderPreviewImageSrc("http://cdn.example.com/banner.png")).toBe(
+      "http://cdn.example.com/banner.png",
+    );
+    expect(resolveBuilderPreviewImageSrc("/uploads/product-images/banner.png")).toBe(
+      "/uploads/product-images/banner.png",
+    );
+
+    for (const unsafe of [
+      "javascript:alert(1)",
+      "data:image/svg+xml,<svg onload=alert(1)>",
+      "blob:https://example.com/id",
+      "file:///etc/passwd",
+      "vbscript:msgbox(1)",
+      "//evil.example/banner.svg",
+      "https://user:secret@example.com/banner.png",
+      "https://example.com/banner.png\njavascript:alert(1)",
+      "not a URL",
+    ]) {
+      expect(resolveBuilderPreviewImageSrc(unsafe), unsafe).toBeNull();
+    }
   });
 });

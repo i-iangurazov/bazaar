@@ -10,8 +10,7 @@ export const insertBuilderBlock = <T extends BuilderBlockBase>(
   index?: number,
 ) => {
   const next = [...blocks];
-  const safeIndex =
-    index === undefined ? next.length : Math.max(0, Math.min(index, next.length));
+  const safeIndex = index === undefined ? next.length : Math.max(0, Math.min(index, next.length));
   next.splice(safeIndex, 0, block);
   return next;
 };
@@ -73,6 +72,29 @@ export const reorderBuilderBlocks = <T extends BuilderBlockBase>(
   const [moved] = next.splice(oldIndex, 1);
   next.splice(newIndex, 0, moved);
   return next;
+};
+
+export const resolveBuilderPreviewImageSrc = (value?: string | null) => {
+  const normalized = value?.trim();
+  if (!normalized || /[\u0000-\u001f\u007f]/.test(normalized)) {
+    return null;
+  }
+  if (/^\/(?!\/)/.test(normalized)) {
+    return normalized;
+  }
+  try {
+    const parsed = new URL(normalized);
+    if (
+      (parsed.protocol !== "http:" && parsed.protocol !== "https:") ||
+      parsed.username ||
+      parsed.password
+    ) {
+      return null;
+    }
+    return parsed.toString();
+  } catch {
+    return null;
+  }
 };
 
 const hasText = (value: unknown) => typeof value === "string" && value.trim().length > 0;

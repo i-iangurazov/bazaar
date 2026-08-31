@@ -799,6 +799,14 @@ describeDb("bazaar api integration", () => {
         headers: { authorization: `Bearer ${token}` },
       });
 
+    const storedVerifier = await prisma.bazaarApiKey.findUniqueOrThrow({
+      where: { id: apiKey.id },
+      select: { tokenHash: true },
+    });
+    expect(token).toMatch(/^bz_live_[A-Za-z0-9_-]{43}$/);
+    expect(storedVerifier.tokenHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(storedVerifier.tokenHash).not.toContain(token);
+
     await authenticateBazaarApiRequest(request());
     const first = await prisma.bazaarApiKey.findUniqueOrThrow({
       where: { id: apiKey.id },

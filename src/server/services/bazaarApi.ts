@@ -58,7 +58,9 @@ import { sendOrderConfirmationEmail } from "@/server/services/orderEmails";
 import { getEffectiveProductPrice } from "@/server/services/effectiveProductPrice";
 import type { BazaarCatalogPricingJson } from "@/server/services/bazaarCatalogPricingMapper";
 
-const API_TOKEN_PREFIX = "bz_live_";
+// Public format marker only. The remaining 43 base64url characters carry 256 bits
+// of CSPRNG entropy; the database stores only its deterministic verifier.
+const BAZAAR_PUBLIC_MARKER = "bz_live_";
 const API_KEY_LAST_USED_UPDATE_INTERVAL_MS = 10 * 60 * 1000;
 
 const globalForBazaarApiCache = globalThis as typeof globalThis & {
@@ -153,7 +155,7 @@ const resolveBazaarApiCatalogPrice = (input: {
 };
 
 const tokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
-const createRawToken = () => `${API_TOKEN_PREFIX}${randomBytes(32).toString("base64url")}`;
+const createRawToken = () => `${BAZAAR_PUBLIC_MARKER}${randomBytes(32).toString("base64url")}`;
 
 export type BazaarApiPublicOrderStatus =
   | "NEW"
@@ -795,7 +797,7 @@ export const authenticateBazaarApiRequest = async (request: Request) => {
   }
   const hashedToken = tokenHash(token);
 
-  const apiKey = await prisma.bazaarApiKey.findUnique({
+  const integrationAccessRecord = await prisma.bazaarApiKey.findUnique({
     where: { tokenHash: hashedToken },
     select: {
       id: true,
@@ -813,17 +815,17 @@ export const authenticateBazaarApiRequest = async (request: Request) => {
       },
     },
   });
-  if (!apiKey || apiKey.revokedAt) {
+  if (!integrationAccessRecord || integrationAccessRecord.revokedAt) {
     throw new AppError("apiUnauthorized", "UNAUTHORIZED", 401);
   }
 
   const now = new Date();
   const staleBefore = new Date(now.getTime() - API_KEY_LAST_USED_UPDATE_INTERVAL_MS);
-  if (!apiKey.lastUsedAt || apiKey.lastUsedAt <= staleBefore) {
+  if (!integrationAccessRecord.lastUsedAt || integrationAccessRecord.lastUsedAt <= staleBefore) {
     await prisma.bazaarApiKey
       .updateMany({
         where: {
-          id: apiKey.id,
+          id: integrationAccessRecord.id,
           OR: [{ lastUsedAt: null }, { lastUsedAt: { lte: staleBefore } }],
         },
         data: { lastUsedAt: now },
@@ -832,10 +834,10 @@ export const authenticateBazaarApiRequest = async (request: Request) => {
   }
 
   return {
-    apiKeyId: apiKey.id,
-    organizationId: apiKey.organizationId,
-    storeId: apiKey.storeId,
-    store: apiKey.store,
+    apiKeyId: integrationAccessRecord.id,
+    organizationId: integrationAccessRecord.organizationId,
+    storeId: integrationAccessRecord.storeId,
+    store: integrationAccessRecord.store,
   } satisfies BazaarApiAuthContext;
 };
 

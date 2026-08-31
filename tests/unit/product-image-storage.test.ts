@@ -5,17 +5,31 @@ const heifContainerBytes = Buffer.from([
   0x68, 0x65, 0x69, 0x63, 0x00, 0x00, 0x00, 0x00,
 ]);
 
-const { mockMkdir, mockWriteFile, mockSharpFactory, mockSharpToBuffer, mockHeicConvert } =
-  vi.hoisted(() => ({
-    mockMkdir: vi.fn(),
-    mockWriteFile: vi.fn(),
-    mockSharpFactory: vi.fn(),
-    mockSharpToBuffer: vi.fn(),
-    mockHeicConvert: vi.fn(),
-  }));
+const {
+  mockMkdir,
+  mockReadFile,
+  mockRealpath,
+  mockStat,
+  mockWriteFile,
+  mockSharpFactory,
+  mockSharpToBuffer,
+  mockHeicConvert,
+} = vi.hoisted(() => ({
+  mockMkdir: vi.fn(),
+  mockReadFile: vi.fn(),
+  mockRealpath: vi.fn(),
+  mockStat: vi.fn(),
+  mockWriteFile: vi.fn(),
+  mockSharpFactory: vi.fn(),
+  mockSharpToBuffer: vi.fn(),
+  mockHeicConvert: vi.fn(),
+}));
 
 vi.mock("node:fs/promises", () => ({
   mkdir: (...args: unknown[]) => mockMkdir(...args),
+  readFile: (...args: unknown[]) => mockReadFile(...args),
+  realpath: (...args: unknown[]) => mockRealpath(...args),
+  stat: (...args: unknown[]) => mockStat(...args),
   writeFile: (...args: unknown[]) => mockWriteFile(...args),
 }));
 
@@ -40,6 +54,9 @@ describe("product image storage", () => {
     process.env.R2_PUBLIC_BASE_URL = "";
     process.env.R2_ENDPOINT = "";
     mockMkdir.mockResolvedValue(undefined);
+    mockReadFile.mockResolvedValue(Buffer.from([0xff, 0xd8, 0xff]));
+    mockRealpath.mockImplementation(async (path: unknown) => String(path));
+    mockStat.mockResolvedValue({ isFile: () => true, size: 3 });
     mockWriteFile.mockResolvedValue(undefined);
     mockHeicConvert.mockReset();
   });
@@ -167,8 +184,7 @@ describe("product image storage", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const { downloadRemoteImage } =
-      await import("../../src/server/services/productImageStorage");
+    const { downloadRemoteImage } = await import("../../src/server/services/productImageStorage");
 
     await expect(downloadRemoteImage("http://93.184.216.34/image.jpg")).resolves.toBeNull();
 
@@ -193,6 +209,41 @@ describe("product image storage", () => {
     });
 
     expect(mockWriteFile).not.toHaveBeenCalled();
+  });
+
+  it("reads tenant-scoped extensionless managed images for byte-based MIME detection", async () => {
+    const { readManagedLocalProductImage } =
+      await import("../../src/server/services/productImageStorage");
+
+    await expect(
+      readManagedLocalProductImage({
+        url: "/uploads/imported-products/org-1/products/unassigned/image-without-extension",
+        organizationId: "org-1",
+      }),
+    ).resolves.toEqual({
+      buffer: Buffer.from([0xff, 0xd8, 0xff]),
+      contentType: "application/octet-stream",
+    });
+  });
+
+  it("rejects cross-tenant and traversal-like managed paths before file access", async () => {
+    const { readManagedLocalProductImage } =
+      await import("../../src/server/services/productImageStorage");
+
+    await expect(
+      readManagedLocalProductImage({
+        url: "/uploads/imported-products/other-org/products/p-1/photo.jpg",
+        organizationId: "org-1",
+      }),
+    ).resolves.toBeNull();
+    await expect(
+      readManagedLocalProductImage({
+        url: "/uploads/imported-products/org-1/../../../../.env",
+        organizationId: "org-1",
+      }),
+    ).resolves.toBeNull();
+
+    expect(mockReadFile).not.toHaveBeenCalled();
   });
 
   it("falls back to heic-convert when sharp cannot decode HEIF", async () => {

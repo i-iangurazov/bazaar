@@ -1,8 +1,8 @@
 import { createHash, randomUUID } from "node:crypto";
 import { lookup } from "node:dns/promises";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import { isIP } from "node:net";
-import { extname, join } from "node:path";
+import { extname, join, resolve, sep } from "node:path";
 import { Readable } from "node:stream";
 import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 
@@ -857,6 +857,66 @@ export const downloadRemoteImage = async (url: string) => {
     return null;
   } finally {
     clearTimeout(timeout);
+  }
+};
+
+const localImageMimeTypes = new Map([
+  [".jpg", "image/jpeg"],
+  [".jpeg", "image/jpeg"],
+  [".png", "image/png"],
+  [".gif", "image/gif"],
+  [".webp", "image/webp"],
+  [".avif", "image/avif"],
+  [".heic", "image/heic"],
+  [".heif", "image/heif"],
+]);
+
+export const readManagedLocalProductImage = async (input: {
+  url: string;
+  organizationId: string;
+}) => {
+  let pathname: string;
+  try {
+    pathname = decodeURIComponent(new URL(input.url, "http://local.invalid").pathname);
+  } catch {
+    return null;
+  }
+
+  const normalizedOrganizationId = normalizeOrgPath(input.organizationId);
+  const allowedPrefixes = [
+    `/uploads/imported-products/${normalizedOrganizationId}/`,
+    `/uploads/product-images/${normalizedOrganizationId}/`,
+  ];
+  if (!allowedPrefixes.some((prefix) => pathname.startsWith(prefix))) {
+    return null;
+  }
+
+  const uploadsRoot = resolve(process.cwd(), "public", "uploads");
+  const candidatePath = resolve(process.cwd(), "public", `.${pathname}`);
+  if (!candidatePath.startsWith(`${uploadsRoot}${sep}`)) {
+    return null;
+  }
+
+  try {
+    const [realUploadsRoot, realCandidatePath] = await Promise.all([
+      realpath(uploadsRoot),
+      realpath(candidatePath),
+    ]);
+    if (!realCandidatePath.startsWith(`${realUploadsRoot}${sep}`)) {
+      return null;
+    }
+    const file = await stat(realCandidatePath);
+    if (!file.isFile() || file.size < 1 || file.size > maxImageBytes) {
+      return null;
+    }
+    const extension = extname(realCandidatePath).toLowerCase();
+    const contentType = extension ? localImageMimeTypes.get(extension) : "application/octet-stream";
+    if (!contentType) {
+      return null;
+    }
+    return { buffer: await readFile(realCandidatePath), contentType };
+  } catch {
+    return null;
   }
 };
 

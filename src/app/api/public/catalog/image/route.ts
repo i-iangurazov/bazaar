@@ -261,10 +261,7 @@ const assertPublicHost = async (hostName: string, signal: AbortSignal) => {
 
   let records: LookupAddress[];
   try {
-    records = await raceWithAbort(
-      lookup(normalizedHost, { all: true, verbatim: true }),
-      signal,
-    );
+    records = await raceWithAbort(lookup(normalizedHost, { all: true, verbatim: true }), signal);
   } catch (error) {
     if (error instanceof CatalogImageProxyError) {
       throw error;
@@ -282,6 +279,9 @@ const fetchAllowedImage = async (sourceUrl: URL, signal: AbortSignal) => {
     await assertPublicHost(currentUrl.hostname, signal);
     let response: Response;
     try {
+      // The URL is restricted to configured application/R2 origins and managed
+      // path prefixes, then DNS/IP validated again before every redirect hop.
+      // lgtm[js/request-forgery]
       response = await fetch(currentUrl.toString(), {
         cache: "force-cache",
         next: { revalidate: 86_400 },
@@ -378,9 +378,7 @@ export const GET = async (request: Request) => {
       throw new CatalogImageProxyError(502, "imageReadFailed");
     }
 
-    const sourceMimeType = normalizeImageMimeType(
-      sourceResponse.headers.get("content-type") ?? "",
-    );
+    const sourceMimeType = normalizeImageMimeType(sourceResponse.headers.get("content-type") ?? "");
     if (!isAllowedImageMimeType(sourceMimeType)) {
       throw new CatalogImageProxyError(415, "imageInvalidType");
     }

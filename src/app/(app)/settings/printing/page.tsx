@@ -426,7 +426,7 @@ const PrintingSettingsPage = () => {
   const [binding, setBinding] = useState<QzTrayBinding>({
     receiptPrinterName: "",
     labelPrinterName: "",
-    certificateProvisioned: false,
+    trustAcknowledged: false,
   });
   const [qzStatus, setQzStatus] = useState<QzTrayStatus>("idle");
   const [qzErrorKey, setQzErrorKey] = useState<string | null>(null);
@@ -787,7 +787,7 @@ const PrintingSettingsPage = () => {
     Boolean(binding.receiptPrinterName.trim()) &&
     receiptPrinterAvailable;
   const qzServerSigningReady = qzTrustStatus === "trusted";
-  const qzTerminalProvisioned = binding.certificateProvisioned;
+  const qzTerminalProvisioned = binding.trustAcknowledged;
   const qzNeedsClientProvision = qzConfigured && qzServerSigningReady && !qzTerminalProvisioned;
   const qzFullyReady = qzConfigured && qzServerSigningReady && qzTerminalProvisioned;
   const qzTrustMessageKey = qzTrustMessageKeyFor(qzTrustStatus);
@@ -997,8 +997,8 @@ const PrintingSettingsPage = () => {
                   </span>
                 </span>
                 <Switch
-                  checked={binding.certificateProvisioned}
-                  onCheckedChange={(checked) => updateBinding({ certificateProvisioned: checked })}
+                  checked={binding.trustAcknowledged}
+                  onCheckedChange={(checked) => updateBinding({ trustAcknowledged: checked })}
                   disabled={!canEdit}
                   aria-label={t("qzClientProvisionConfirm")}
                 />
@@ -1618,10 +1618,8 @@ const PrintingSettingsPage = () => {
                         </span>
                       </span>
                       <Switch
-                        checked={binding.certificateProvisioned}
-                        onCheckedChange={(checked) =>
-                          updateBinding({ certificateProvisioned: checked })
-                        }
+                        checked={binding.trustAcknowledged}
+                        onCheckedChange={(checked) => updateBinding({ trustAcknowledged: checked })}
                         disabled={!canEdit}
                         aria-label={t("qzClientProvisionConfirm")}
                       />

@@ -186,6 +186,8 @@ export const fingerprintOperationRequest = (input: {
   storeId: string | null;
   payload: OperationPayload;
 }) =>
+  // Collision-resistant request identity for idempotent replay. This is not a
+  // password verifier and never replaces encryption/redaction of secret fields.
   createHash("sha256")
     .update(
       canonicalizeJsonValue(
