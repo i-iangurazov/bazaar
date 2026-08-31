@@ -35,6 +35,26 @@ describe("pos entry navigation", () => {
     expect(source).toContain("{!openShift ? (");
   });
 
+  it("keeps shift and receipt blocker state fresh across POS navigation", async () => {
+    const entrySource = await readSource("src/app/(app)/pos/page.tsx");
+    const sellSource = await readSource("src/app/(app)/pos/sell/page.tsx");
+    const shiftsSource = await readSource("src/app/(app)/pos/shifts/page.tsx");
+
+    expect(entrySource).toContain('refetchOnMount: "always"');
+    expect(entrySource).toContain("staleTime: 0");
+    expect(entrySource).toContain(
+      "trpcUtils.pos.shifts.current.fetch({ registerId: shift.registerId })",
+    );
+    expect(sellSource).toContain("trpcUtils.pos.shifts.current.setData");
+    expect(sellSource).toContain(".invalidate({ registerId: variables.registerId })");
+    expect(sellSource).toContain("const shiftStatePending =");
+    expect(sellSource).toContain("const shiftStateError =");
+    expect(shiftsSource).toContain('refetchOnMount: "always"');
+    expect(shiftsSource).toContain("const freshShiftResult = await currentShiftQuery.refetch();");
+    expect(shiftsSource).toContain("const freshUnresolvedDraftCount =");
+    expect(shiftsSource).toContain("currentShiftQuery.isFetching ||");
+  });
+
   it("requires a closing note in the shift UI when counted cash does not match expected cash", async () => {
     const source = await readSource("src/app/(app)/pos/shifts/page.tsx");
 

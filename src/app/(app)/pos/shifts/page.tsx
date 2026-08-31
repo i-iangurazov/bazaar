@@ -54,6 +54,7 @@ const PosShiftsPage = () => {
   const locale = useLocale();
   const { toast } = useToast();
   const router = useRouter();
+  const trpcUtils = trpc.useUtils();
   const searchParams = useSearchParams();
   const requestedCashType = searchParams.get(POS_CASH_MOVEMENT_QUERY_PARAM);
   const cashMovementAnchorRequested = useRef(false);
@@ -108,7 +109,12 @@ const PosShiftsPage = () => {
 
   const currentShiftQuery = trpc.pos.shifts.current.useQuery(
     { registerId },
-    { enabled: canLoadRegisterScopedData, refetchOnWindowFocus: true },
+    {
+      enabled: canLoadRegisterScopedData,
+      refetchOnMount: "always",
+      refetchOnWindowFocus: true,
+      staleTime: 0,
+    },
   );
 
   const reportQuery = trpc.pos.shifts.xReport.useQuery(
@@ -136,10 +142,12 @@ const PosShiftsPage = () => {
         currentShiftQuery.refetch(),
         historyQuery.refetch(),
         reportQuery.refetch(),
+        trpcUtils.pos.entry.invalidate({ registerId }),
       ]);
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
+      void currentShiftQuery.refetch();
     },
   });
 
@@ -322,7 +330,17 @@ const PosShiftsPage = () => {
     if (!currentShift) {
       return;
     }
-    if (unresolvedDraftCount > 0) {
+
+    const freshShiftResult = await currentShiftQuery.refetch();
+    const freshShift = freshShiftResult.data;
+    if (freshShiftResult.error || !freshShift) {
+      return;
+    }
+    const freshUnresolvedDraftCount =
+      (freshShift.heldReceiptCount ?? freshShift.heldReceipts.length) +
+      (freshShift.activeReceiptCount ?? freshShift.activeReceipts.length) +
+      (freshShift.returnDraftCount ?? freshShift.returnDrafts.length);
+    if (freshUnresolvedDraftCount > 0) {
       toast({ variant: "error", description: t("shifts.unresolvedDraftsBlockClose") });
       return;
     }
@@ -355,7 +373,7 @@ const PosShiftsPage = () => {
 
     try {
       await closeShiftMutation.mutateAsync({
-        shiftId: currentShift.id,
+        shiftId: freshShift.id,
         closingCashCountedKgs: amountKgs,
         notes: closeNote.trim() || null,
         idempotencyKey: createIdempotencyKey(),
@@ -956,6 +974,7 @@ const PosShiftsPage = () => {
                     disabled={
                       closeShiftMutation.isLoading ||
                       cancelDraftMutation.isLoading ||
+                      currentShiftQuery.isFetching ||
                       !countedCashValid ||
                       Boolean(closeBlockingMessage) ||
                       !closeConfirmed ||

@@ -49,6 +49,7 @@ const PosEntryPage = () => {
   const router = useRouter();
   const { data: session } = useSession();
   const { toast } = useToast();
+  const trpcUtils = trpc.useUtils();
 
   const [openShiftDialogOpen, setOpenShiftDialogOpen] = useState(false);
   const [openingCash, setOpeningCash] = useState("");
@@ -66,16 +67,39 @@ const PosEntryPage = () => {
   });
   const entryQuery = trpc.pos.entry.useQuery(
     { registerId: registerId || undefined },
-    { enabled: registerSelectionReady && Boolean(registerId), refetchOnWindowFocus: true },
+    {
+      enabled: registerSelectionReady && Boolean(registerId),
+      refetchOnMount: "always",
+      refetchOnWindowFocus: true,
+      staleTime: 0,
+    },
   );
 
   const openShiftMutation = trpc.pos.shifts.open.useMutation({
-    onSuccess: (shift) => {
+    onSuccess: async (shift) => {
+      try {
+        await Promise.all([
+          trpcUtils.pos.entry.invalidate({ registerId: shift.registerId }),
+          trpcUtils.pos.shifts.current.invalidate({ registerId: shift.registerId }),
+        ]);
+        await Promise.all([
+          trpcUtils.pos.entry.fetch({ registerId: shift.registerId }),
+          trpcUtils.pos.shifts.current.fetch({ registerId: shift.registerId }),
+        ]);
+      } catch {
+        // Opening the shift is authoritative. Keep both views stale so their
+        // always-on-mount fetch retries instead of rendering a cached closed state.
+        void trpcUtils.pos.entry
+          .invalidate({ registerId: shift.registerId })
+          .catch(() => undefined);
+        void trpcUtils.pos.shifts.current
+          .invalidate({ registerId: shift.registerId })
+          .catch(() => undefined);
+      }
       setOpenShiftDialogOpen(false);
       setOpeningCash("");
       setOpeningNote("");
       toast({ variant: "success", description: t("openShiftSuccess") });
-      void entryQuery.refetch();
       router.push(`/pos/sell?registerId=${shift.registerId}`);
     },
     onError: (error) => {

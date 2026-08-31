@@ -737,7 +737,12 @@ const PosSellPage = () => {
 
   const shiftQuery = trpc.pos.shifts.current.useQuery(
     { registerId },
-    { enabled: Boolean(registerSelectionReady && registerId), refetchOnWindowFocus: true },
+    {
+      enabled: Boolean(registerSelectionReady && registerId),
+      refetchOnMount: "always",
+      refetchOnWindowFocus: true,
+      staleTime: 0,
+    },
   );
 
   const hasLocalCartLines = Boolean(optimisticSaleLines?.length);
@@ -902,6 +907,32 @@ const PosSellPage = () => {
   }, []);
 
   const createDraftMutation = trpc.pos.sales.createDraft.useMutation({
+    onSuccess: async (draft, variables) => {
+      trpcUtils.pos.shifts.current.setData({ registerId: variables.registerId }, (current) => {
+        if (!current || current.activeReceipts.some((receipt) => receipt.id === draft.id)) {
+          return current;
+        }
+        const activeReceipts = [
+          ...current.activeReceipts,
+          {
+            id: draft.id,
+            number: draft.number,
+            createdAt: new Date(),
+            totalKgs: 0,
+            createdByName: session?.user?.name || session?.user?.email || "—",
+            ownedByCurrentUser: true,
+          },
+        ];
+        return {
+          ...current,
+          activeReceipts,
+          activeReceiptCount: Math.max(current.activeReceiptCount, activeReceipts.length),
+        };
+      });
+      await trpcUtils.pos.shifts.current
+        .invalidate({ registerId: variables.registerId })
+        .catch(() => undefined);
+    },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
@@ -972,9 +1003,11 @@ const PosSellPage = () => {
       clearCartRuntimeSyncState();
       setLineInputDrafts({});
       paymentAutoFillRef.current = { saleId: null, totalKgs: null };
-      void Promise.all([activeDraftQuery.refetch(), trpcUtils.pos.sales.list.invalidate()]).catch(
-        () => undefined,
-      );
+      await Promise.all([
+        activeDraftQuery.refetch(),
+        trpcUtils.pos.sales.list.invalidate(),
+        shiftQuery.refetch(),
+      ]).catch(() => undefined);
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
@@ -1699,6 +1732,8 @@ const PosSellPage = () => {
   }, [sale?.id, sale?.lines]);
 
   const hasOpenShift = Boolean(shiftQuery.data?.id);
+  const shiftStatePending = shiftQuery.isLoading || (shiftQuery.isFetching && !shiftQuery.data);
+  const shiftStateError = shiftQuery.isError && !shiftQuery.data;
   const isLineBusy =
     removeLineMutation.isLoading ||
     updateDiscountMutation.isLoading ||
@@ -4858,7 +4893,13 @@ const PosSellPage = () => {
               variant={hasOpenShift ? "success" : "warning"}
               className="h-8 shrink-0 px-3 text-xs font-semibold"
             >
-              {hasOpenShift ? t("entry.shiftOpen") : t("entry.shiftClosed")}
+              {shiftStatePending
+                ? tCommon("loading")
+                : shiftStateError
+                  ? tCommon("notAvailable")
+                  : hasOpenShift
+                    ? t("entry.shiftOpen")
+                    : t("entry.shiftClosed")}
             </Badge>
             <Select value={registerId} onValueChange={handleRegisterChange}>
               <SelectTrigger
@@ -5050,7 +5091,23 @@ const PosSellPage = () => {
         </div>
       </header>
 
-      {!hasOpenShift ? (
+      {shiftStatePending ? (
+        <main className="grid min-h-[calc(100vh-4rem)] place-items-center p-4">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
+            <Spinner className="h-4 w-4" />
+            {tCommon("loading")}
+          </div>
+        </main>
+      ) : shiftStateError ? (
+        <main className="grid min-h-[calc(100vh-4rem)] place-items-center p-4">
+          <section className="bazaar-admin-error w-full max-w-xl">
+            <p>{translateError(tErrors, shiftQuery.error)}</p>
+            <Button className="mt-3" variant="secondary" onClick={() => void shiftQuery.refetch()}>
+              {tCommon("tryAgain")}
+            </Button>
+          </section>
+        </main>
+      ) : !hasOpenShift ? (
         <main className="grid min-h-[calc(100vh-4rem)] place-items-center p-4">
           <section className="bazaar-admin-surface w-full max-w-xl p-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -7524,7 +7581,11 @@ const PosSellPage = () => {
     }
 
     const cartSheetOpen = mobileCheckoutOpen || showCompletedSale;
-    const showMobileRegisterPanel = !hasOpenShift || (registersQuery.data?.length ?? 0) > 1;
+    const showMobileRegisterPanel =
+      shiftStatePending ||
+      shiftStateError ||
+      !hasOpenShift ||
+      (registersQuery.data?.length ?? 0) > 1;
 
     return (
       <div className="min-h-screen overflow-x-hidden bg-background text-foreground">
@@ -7539,7 +7600,13 @@ const PosSellPage = () => {
                   {t("sell.title")}
                 </h1>
                 <Badge variant={hasOpenShift ? "success" : "warning"} className="shrink-0">
-                  {hasOpenShift ? t("entry.shiftOpen") : t("entry.shiftClosed")}
+                  {shiftStatePending
+                    ? tCommon("loading")
+                    : shiftStateError
+                      ? tCommon("notAvailable")
+                      : hasOpenShift
+                        ? t("entry.shiftOpen")
+                        : t("entry.shiftClosed")}
                 </Badge>
               </div>
             </div>
@@ -7626,8 +7693,26 @@ const PosSellPage = () => {
                 ) : null}
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                {shiftStatePending ? (
+                  <span className="flex items-center gap-2" role="status">
+                    <Spinner className="h-4 w-4" />
+                    {tCommon("loading")}
+                  </span>
+                ) : null}
+                {shiftStateError ? (
+                  <div className="bazaar-admin-error w-full">
+                    <p>{translateError(tErrors, shiftQuery.error)}</p>
+                    <Button
+                      className="mt-2 h-10 w-full"
+                      variant="secondary"
+                      onClick={() => void shiftQuery.refetch()}
+                    >
+                      {tCommon("tryAgain")}
+                    </Button>
+                  </div>
+                ) : null}
                 {shiftOpenedLabel ? <span>{shiftOpenedLabel}</span> : null}
-                {!hasOpenShift && registerId ? (
+                {!shiftStatePending && !shiftStateError && !hasOpenShift && registerId ? (
                   <Button asChild variant="secondary" className="h-10 w-full">
                     <Link href={`/pos?registerId=${registerId}`}>{t("sell.openShiftFirst")}</Link>
                   </Button>
