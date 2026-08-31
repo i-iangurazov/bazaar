@@ -1,4 +1,6 @@
 import { helpText as t } from "./ui";
+import { ordersAndCustomersGuides } from "./orders-customers";
+import { applyConsequentialGuidance } from "./consequential-guidance";
 import type {
   HelpAnnotation,
   HelpCategory,
@@ -130,13 +132,23 @@ export const helpCategories: HelpCategory[] = [
   },
   {
     slug: "orders",
-    title: t("Заказы и клиенты", "Буйрутмалар жана кардарлар", "Orders & customers"),
+    title: t("Заказы клиентов", "Кардарлардын буйрутмалары", "Customer orders"),
     description: t(
-      "Статусы, отмены и история клиента.",
-      "Статустар, жокко чыгаруу жана кардардын тарыхы.",
-      "Statuses, cancellations, and customer history.",
+      "Создание, статусы, выдача и отмена заказа.",
+      "Буйрутманы түзүү, статустар, берүү жана жокко чыгаруу.",
+      "Creating, progressing, fulfilling, and canceling orders.",
     ),
     icon: "orders",
+  },
+  {
+    slug: "customers",
+    title: t("Клиенты", "Кардарлар", "Customers"),
+    description: t(
+      "Контакты, источники и история покупок по магазину.",
+      "Дүкөн боюнча байланыштар, булактар жана сатып алуу тарыхы.",
+      "Contacts, sources, and store-scoped purchase history.",
+    ),
+    icon: "users",
   },
   {
     slug: "reports",
@@ -170,7 +182,7 @@ export const helpCategories: HelpCategory[] = [
   },
 ];
 
-export const helpGuides: HelpGuide[] = [
+const baseHelpGuides: HelpGuide[] = [
   guide({
     slug: "add-product",
     category: "products",
@@ -190,7 +202,7 @@ export const helpGuides: HelpGuide[] = [
       "жаңы товар ачуу позиция кошуу",
       "new item add item create stock item",
     ),
-    roles: ["owner", "manager", "stockkeeper"],
+    roles: ["owner", "manager"],
     estimatedMinutes: 3,
     appRoute: "/products/new",
     steps: [
@@ -1349,6 +1361,7 @@ export const helpGuides: HelpGuide[] = [
     ),
     relatedGuides: ["pos/open-shift", "pos/make-sale", "reports/export-reports"],
   }),
+  ...ordersAndCustomersGuides,
   guide({
     slug: "add-employee",
     category: "settings",
@@ -1784,12 +1797,34 @@ export const helpGuides: HelpGuide[] = [
   }),
 ];
 
+export const helpGuides: HelpGuide[] = baseHelpGuides.map(applyConsequentialGuidance);
+
 export const helpTasks: HelpTask[] = [
   {
     title: t("Продать товар", "Товар сатуу", "Sell a product"),
     description: t("Оформить чек на кассе", "Кассада чек чыгаруу", "Complete a POS sale"),
     guideId: "pos/make-sale",
     icon: "register",
+  },
+  {
+    title: t("Создать заказ", "Буйрутма түзүү", "Create an order"),
+    description: t(
+      "Клиент, товары и черновик",
+      "Кардар, товарлар жана черновик",
+      "Customer, products, and draft",
+    ),
+    guideId: "orders/create-order",
+    icon: "orders",
+  },
+  {
+    title: t("Добавить клиента", "Кардар кошуу", "Add a customer"),
+    description: t(
+      "Контакты для выбранного магазина",
+      "Тандалган дүкөн үчүн байланыштар",
+      "Contacts for the selected store",
+    ),
+    guideId: "customers/add-customer",
+    icon: "users",
   },
   {
     title: t("Добавить товар", "Товар кошуу", "Add a product"),
@@ -1936,6 +1971,8 @@ export const helpRoleTracks: HelpRoleTrack[] = [
       "Business, team, and sales-channel control.",
     ),
     guideIds: [
+      "orders/process-order",
+      "customers/review-history",
       "reports/analytics-basics",
       "reports/export-reports",
       "settings/add-employee",
@@ -1952,13 +1989,17 @@ export const helpRoleTracks: HelpRoleTrack[] = [
       "Catalog, inventory, orders, and customers.",
     ),
     guideIds: [
+      "orders/create-order",
+      "orders/process-order",
+      "customers/add-customer",
+      "customers/review-history",
       "products/add-product",
-      "products/import-products",
       "inventory/receiving",
       "inventory/transfer",
       "inventory/write-off",
       "inventory/inventory-count",
       "reports/analytics-basics",
+      "reports/export-reports",
     ],
   },
   {
@@ -1982,18 +2023,21 @@ export const helpRoleTracks: HelpRoleTrack[] = [
   },
   {
     role: "stockkeeper",
-    title: t("Кладовщик", "Кампа кызматкери", "Stockkeeper"),
+    title: t("Сотрудник", "Кызматкер", "Staff"),
     description: t(
-      "Приёмка, перемещение, списание и пересчёт.",
-      "Кабыл алуу, которуу, эсептен чыгаруу жана саноо.",
-      "Receiving, transfers, write-offs, and counts.",
+      "Учётная запись «Сотрудник» работает с кассой; складские документы проводит владелец или менеджер.",
+      "«Кызматкер» аккаунту касса менен иштейт; кампа документтерин ээси же менеджер өткөрөт.",
+      "A Staff account works with POS; an owner or manager posts inventory documents.",
     ),
     guideIds: [
-      "inventory/receiving",
-      "inventory/transfer",
-      "inventory/write-off",
-      "inventory/inventory-count",
-      "reports/export-reports",
+      "pos/open-shift",
+      "pos/make-sale",
+      "pos/apply-discount",
+      "pos/split-payment",
+      "pos/hold-receipt",
+      "pos/resume-receipt",
+      "pos/return-sale",
+      "pos/close-shift",
     ],
   },
 ];

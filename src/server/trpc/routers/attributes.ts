@@ -8,12 +8,12 @@ import { toJson } from "@/server/services/json";
 import { AppError } from "@/server/services/errors";
 
 const definitionBaseSchema = z.object({
-  key: z.string().min(1),
-  labelRu: z.string().min(1),
-  labelKg: z.string().min(1),
+  key: z.string().trim().min(1),
+  labelRu: z.string().trim().min(1),
+  labelKg: z.string().trim().min(1),
   type: z.enum(["TEXT", "NUMBER", "SELECT", "MULTI_SELECT"]),
-  optionsRu: z.array(z.string()).optional(),
-  optionsKg: z.array(z.string()).optional(),
+  optionsRu: z.array(z.string().trim().min(1)).optional(),
+  optionsKg: z.array(z.string().trim().min(1)).optional(),
   required: z.boolean().optional(),
 });
 
@@ -40,7 +40,7 @@ const addOptionsRequirement = (
 
 const definitionSchema = definitionBaseSchema.superRefine(addOptionsRequirement);
 const definitionUpdateSchema = definitionBaseSchema
-  .extend({ id: z.string() })
+  .extend({ id: z.string().trim().min(1) })
   .superRefine(addOptionsRequirement);
 
 const normalizeOptionSet = (values?: string[]) =>
@@ -64,71 +64,69 @@ export const attributesRouter = router({
     });
   }),
 
-  create: managerProcedure
-    .input(definitionSchema)
-    .mutation(async ({ ctx, input }) => {
-      try {
-        const key = input.key.trim().toLowerCase();
-        const existing = await ctx.prisma.attributeDefinition.findUnique({
-          where: {
-            organizationId_key: {
+  create: managerProcedure.input(definitionSchema).mutation(async ({ ctx, input }) => {
+    try {
+      const key = input.key.toLowerCase();
+      const existing = await ctx.prisma.attributeDefinition.findUnique({
+        where: {
+          organizationId_key: {
+            organizationId: ctx.user.organizationId,
+            key,
+          },
+        },
+      });
+      if (existing?.isActive) {
+        throw new AppError("attributeExists", "CONFLICT", 409);
+      }
+
+      const definition = existing
+        ? await ctx.prisma.attributeDefinition.update({
+            where: { id: existing.id },
+            data: {
+              key,
+              labelRu: input.labelRu,
+              labelKg: input.labelKg,
+              type: input.type,
+              optionsRu: input.optionsRu ?? undefined,
+              optionsKg: input.optionsKg ?? undefined,
+              required: input.required ?? false,
+              isActive: true,
+            },
+          })
+        : await ctx.prisma.attributeDefinition.create({
+            data: {
               organizationId: ctx.user.organizationId,
               key,
+              labelRu: input.labelRu,
+              labelKg: input.labelKg,
+              type: input.type,
+              optionsRu: input.optionsRu ?? undefined,
+              optionsKg: input.optionsKg ?? undefined,
+              required: input.required ?? false,
+              isActive: true,
             },
-          },
-        });
-        if (existing?.isActive) {
-          throw new AppError("attributeExists", "CONFLICT", 409);
-        }
+          });
 
-        const definition = existing
-          ? await ctx.prisma.attributeDefinition.update({
-              where: { id: existing.id },
-              data: {
-                key,
-                labelRu: input.labelRu.trim(),
-                labelKg: input.labelKg.trim(),
-                type: input.type,
-                optionsRu: input.optionsRu ?? undefined,
-                optionsKg: input.optionsKg ?? undefined,
-                required: input.required ?? false,
-                isActive: true,
-              },
-            })
-          : await ctx.prisma.attributeDefinition.create({
-              data: {
-                organizationId: ctx.user.organizationId,
-                key,
-                labelRu: input.labelRu.trim(),
-                labelKg: input.labelKg.trim(),
-                type: input.type,
-                optionsRu: input.optionsRu ?? undefined,
-                optionsKg: input.optionsKg ?? undefined,
-                required: input.required ?? false,
-                isActive: true,
-              },
-            });
+      await writeAuditLog(ctx.prisma, {
+        organizationId: ctx.user.organizationId,
+        actorId: ctx.user.id,
+        action: "ATTRIBUTE_CREATE",
+        entity: "AttributeDefinition",
+        entityId: definition.id,
+        before: existing ? toJson(existing) : null,
+        after: toJson(definition),
+        requestId: ctx.requestId,
+      });
 
-        await writeAuditLog(ctx.prisma, {
-          organizationId: ctx.user.organizationId,
-          actorId: ctx.user.id,
-          action: "ATTRIBUTE_CREATE",
-          entity: "AttributeDefinition",
-          entityId: definition.id,
-          before: existing ? toJson(existing) : null,
-          after: toJson(definition),
-          requestId: ctx.requestId,
-        });
-
-        return definition;
-      } catch (error) {
-        throw toTRPCError(error);
-      }
-    }),
+      return definition;
+    } catch (error) {
+      throw toTRPCError(error);
+    }
+  }),
 
   update: managerProcedure.input(definitionUpdateSchema).mutation(async ({ ctx, input }) => {
     try {
-      const key = input.key.trim().toLowerCase();
+      const key = input.key.toLowerCase();
       return await ctx.prisma.$transaction(async (tx) => {
         const locked = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
             SELECT "id"
@@ -232,8 +230,8 @@ export const attributesRouter = router({
           where: { id: input.id },
           data: {
             key,
-            labelRu: input.labelRu.trim(),
-            labelKg: input.labelKg.trim(),
+            labelRu: input.labelRu,
+            labelKg: input.labelKg,
             type: input.type,
             optionsRu: input.optionsRu ?? undefined,
             optionsKg: input.optionsKg ?? undefined,
@@ -260,33 +258,60 @@ export const attributesRouter = router({
   }),
 
   remove: managerProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: z.string().trim().min(1) }))
     .mutation(async ({ ctx, input }) => {
       try {
-        const existing = await ctx.prisma.attributeDefinition.findUnique({ where: { id: input.id } });
-        if (!existing || existing.organizationId !== ctx.user.organizationId) {
-          throw new AppError("attributeNotFound", "NOT_FOUND", 404);
-        }
-        const usage = await ctx.prisma.variantAttributeValue.count({
-          where: { organizationId: ctx.user.organizationId, key: existing.key },
-        });
-        if (usage > 0) {
-          throw new AppError("attributeInUse", "CONFLICT", 409);
-        }
-        const removed = await ctx.prisma.attributeDefinition.delete({ where: { id: input.id } });
+        return await ctx.prisma.$transaction(async (tx) => {
+          const locked = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+            SELECT "id"
+            FROM "AttributeDefinition"
+            WHERE "id" = ${input.id}
+              AND "organizationId" = ${ctx.user.organizationId}
+            FOR UPDATE
+          `);
+          if (!locked.length) {
+            throw new AppError("attributeNotFound", "NOT_FOUND", 404);
+          }
 
-        await writeAuditLog(ctx.prisma, {
-          organizationId: ctx.user.organizationId,
-          actorId: ctx.user.id,
-          action: "ATTRIBUTE_DELETE",
-          entity: "AttributeDefinition",
-          entityId: removed.id,
-          before: toJson(existing),
-          after: null,
-          requestId: ctx.requestId,
-        });
+          const existing = await tx.attributeDefinition.findUniqueOrThrow({
+            where: { id: input.id },
+          });
+          const [normalizedUsage, templateUsage, legacyUsage] = await Promise.all([
+            tx.variantAttributeValue.count({
+              where: { organizationId: ctx.user.organizationId, key: existing.key },
+            }),
+            tx.categoryAttributeTemplate.count({
+              where: { organizationId: ctx.user.organizationId, attributeKey: existing.key },
+            }),
+            tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+              SELECT variant."id"
+              FROM "ProductVariant" AS variant
+              INNER JOIN "Product" AS product ON product."id" = variant."productId"
+              WHERE product."organizationId" = ${ctx.user.organizationId}
+                AND jsonb_typeof(variant."attributes") = 'object'
+                AND variant."attributes" ? ${existing.key}
+              LIMIT 1
+            `),
+          ]);
+          if (normalizedUsage > 0 || templateUsage > 0 || legacyUsage.length > 0) {
+            throw new AppError("attributeInUse", "CONFLICT", 409);
+          }
 
-        return removed;
+          const removed = await tx.attributeDefinition.delete({ where: { id: input.id } });
+
+          await writeAuditLog(tx, {
+            organizationId: ctx.user.organizationId,
+            actorId: ctx.user.id,
+            action: "ATTRIBUTE_DELETE",
+            entity: "AttributeDefinition",
+            entityId: removed.id,
+            before: toJson(existing),
+            after: null,
+            requestId: ctx.requestId,
+          });
+
+          return removed;
+        });
       } catch (error) {
         throw toTRPCError(error);
       }

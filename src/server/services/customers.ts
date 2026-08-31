@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { CustomerOrderStatus, CustomerSource, type Customer, type Prisma } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
+import { normalizeCustomerContactEmail } from "@/lib/customerContact";
 import { writeAuditLog } from "@/server/services/audit";
 import { AppError } from "@/server/services/errors";
 import { toJson } from "@/server/services/json";
@@ -58,11 +59,12 @@ export type CustomerImportRowResult = {
 const MAX_CUSTOMER_IMPORT_ROWS = 5_000;
 const CUSTOMER_IMPORT_CHUNK_SIZE = 100;
 const CUSTOMER_IMPORT_CHUNK_TRANSACTION_TIMEOUT_MS = 30_000;
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
 export const normalizeCustomerEmail = (value?: string | null) => {
-  const normalized = value?.trim().toLowerCase();
-  return normalized ? normalized : null;
+  const normalized = value?.trim();
+  if (!normalized) {
+    return null;
+  }
+  return normalizeCustomerContactEmail(normalized) ?? normalized.toLowerCase();
 };
 
 export const normalizeCustomerPhone = (value?: string | null) => {
@@ -161,7 +163,7 @@ const normalizeManualCustomerInput = (
     throw new AppError("customerNameRequired", "BAD_REQUEST", 400);
   }
   ensureCustomerContact({ email, phone });
-  if (email && !emailPattern.test(email)) {
+  if (email && !normalizeCustomerContactEmail(email)) {
     throw new AppError("customerEmailInvalid", "BAD_REQUEST", 400);
   }
 
@@ -197,7 +199,7 @@ const validateImportRow = (
   } else if (!email && !phone) {
     warnings.push("customerContactMissing");
   }
-  if (email && !emailPattern.test(email)) {
+  if (email && !normalizeCustomerContactEmail(email)) {
     errors.push("customerEmailInvalid");
   }
 

@@ -635,8 +635,14 @@ const buildProductSqlSortExpression = ({
                 AND price."discountPercentage" IS NOT NULL
                 AND price."discountPercentage" > 0
                 AND price."discountPercentage" < 100
-                AND (price."discountStartsAt" IS NULL OR price."discountStartsAt" <= ${pricingTime})
-                AND (price."discountEndsAt" IS NULL OR ${pricingTime} < price."discountEndsAt")
+                AND (
+                  price."discountStartsAt" IS NULL
+                  OR price."discountStartsAt" <= (${pricingTime} AT TIME ZONE 'UTC')
+                )
+                AND (
+                  price."discountEndsAt" IS NULL
+                  OR (${pricingTime} AT TIME ZONE 'UTC') < price."discountEndsAt"
+                )
               THEN ROUND(price."priceKgs" * (100 - price."discountPercentage") / 100, 2)
               ELSE price."priceKgs"
             END

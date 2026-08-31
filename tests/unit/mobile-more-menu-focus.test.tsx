@@ -8,7 +8,15 @@ import { describe, expect, it, vi } from "vitest";
 import { MobileMoreMenu } from "@/components/mobile-app-shell";
 
 vi.mock("next/link", () => ({
-  default: ({ children, href, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
+  default: ({
+    children,
+    href,
+    prefetch: _prefetch,
+    ...props
+  }: React.AnchorHTMLAttributes<HTMLAnchorElement> & {
+    href?: string;
+    prefetch?: boolean;
+  }) => (
     <a href={String(href)} {...props}>
       {children}
     </a>

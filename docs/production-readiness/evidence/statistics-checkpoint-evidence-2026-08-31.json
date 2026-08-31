@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 1,
+  "artifactKind": "STATISTICS_CHECKPOINT_EVIDENCE",
+  "generatedAt": "2026-08-31T07:04:27.000Z",
+  "policy": {
+    "sourceInspectionAloneCanPass": false,
+    "buildAloneCanPass": false,
+    "unexecutedTestCanPass": false,
+    "interruptedMatrixCanPass": false,
+    "focusedRunCanProveBroaderWording": false,
+    "blockedRequirementsRemainInDenominator": true
+  },
+  "sourceFreeze": {
+    "branch": "main",
+    "head": "7db455397eb38e9bcaa09bda5acc951964df5ab2",
+    "capturedAt": "2026-08-31T07:03:20.722Z",
+    "scope": "src, messages, prisma/schema.prisma, prisma/migrations, public excluding public/uploads, package/lock, Next/env example, Docker and CI",
+    "files": 715,
+    "bytes": 10726862,
+    "sha256": "c534b39acaa30f6ba9eaa7714666fe34629259b79ee010a48c600702ef3070c0",
+    "workingTreeStatusEntries": 445,
+    "workingTreeStatusSha256": "474729951025a7f9a0a1e87a921c7b3c27eba6c77203efc45ab1fcf8e5c4f0eb",
+    "trackedDiffSha256": "fcf59f670c53ee2af99bc9b063d08fbccadfb1b08d1e4e01fbd82c9f47ca5d7b",
+    "changedFilesInsideFreezeScope": 222,
+    "latestApplicationMtimeLocal": "2026-08-31T09:16:34+0600",
+    "latestTestMtimeLocal": "2026-08-31T09:42:00+0600"
+  },
+  "sourceStatisticsAtFreeze": {
+    "statusEntries": 445,
+    "trackedModified": 242,
+    "trackedDeleted": 1,
+    "untracked": 202,
+    "productionApplicationFiles": 215,
+    "testTreeFiles": 174,
+    "executableTestFiles": 142,
+    "testSupportFiles": 32,
+    "dedicatedAuditToolFiles": 7,
+    "generatedReadinessEvidenceFiles": 8,
+    "trackedAdditions": 16234,
+    "trackedDeletions": 11089,
+    "untrackedTextLineAdditions": 65545,
+    "inclusiveTextAdditions": 81779,
+    "untrackedBinaryFiles": [
+      "public/favicon.ico"
+    ]
+  },
+  "existingResults": {
+    "deterministic": {
+      "command": "pnpm test:db:deterministic",
+      "reportedStatus": "PASS",
+      "filesPassed": 312,
+      "testsPassed": 1673,
+      "testsFailed": 0,
+      "provenance": "Exact result retained in the existing session report; no JUnit or raw console artifact was retained in the workspace.",
+      "scoringUse": "Corroboration for named, already-preserved focused results only; the aggregate count is not independently mapped to every tracker row."
+    },
+    "focusedPostgresqlRepair": {
+      "command": "NODE_ENV=test RUN_DB_TESTS=1 ALLOW_TEST_DB_RESET=1 EXPECTED_TEST_DB_NAME=bazaar_hardening_agent4_platform DATABASE_TEST_URL=<isolated-loopback-test-db> DATABASE_URL=<isolated-loopback-test-db> pnpm exec vitest run tests/integration/b0-agent-3-access-cache-p0.test.ts tests/integration/b0-agent-3-orders-p0.test.ts tests/integration/catalog-discounts.test.ts tests/integration/product-cost-initial-stock.test.ts",
+      "status": "PASS",
+      "filesPassed": 4,
+      "testsPassed": 18,
+      "artifact": "docs/production-readiness/evidence/provisional-non-browser-evidence-2026-08-31.md",
+      "artifactSha256": "c07cf449355c31deb0419f4594159933e9bd398f278ddd9cc831e0147f221fa1"
+    },
+    "publicBrowserMatrix": {
+      "artifact": "test-results/public-routes/.last-run.json",
+      "artifactSha256": "91d1c43004802cd49950d78eb11c8fa7d05da8ffffe219a8b13b2f561bc00903",
+      "artifactMtimeLocal": "2026-08-31T07:35:20+0600",
+      "status": "PASSED_HISTORICAL_SOURCE_ONLY",
+      "reasonNotCurrent": "The public route inventory changed at 08:03:15+0600, locale messages changed at 07:40-07:41+0600, and 50 public-relevant source/message/inventory files are newer than the pass artifact.",
+      "scoringUse": "No final-source route, viewport, localization, or accessibility promotion."
+    },
+    "adminRouteInventory": {
+      "status": "VALID_STATIC_INVENTORY_ONLY",
+      "currentCanonicalPatterns": 75,
+      "currentExactForms": 81,
+      "scoringUse": "Inventory existence/mapping only; no authenticated runtime pass inferred."
+    },
+    "focusedCorrection47Of47": {
+      "reportedStatus": "PASS",
+      "passed": 47,
+      "total": 47,
+      "persistentArtifact": null,
+      "exactCommandRetained": false,
+      "scoringUse": "No requirement promotion because the completed cases cannot be mapped from a preserved artifact."
+    },
+    "crossStoreIsolation": {
+      "reportedStatus": "PASS",
+      "persistentBrowserArtifact": null,
+      "preservedDatabaseEvidence": "docs/production-readiness/evidence/provisional-non-browser-evidence-2026-08-31.md",
+      "scoringUse": "Backend/service cross-organization evidence supports PARTIAL; authenticated direct-URL/UI/API isolation remains unverified."
+    },
+    "authenticatedMatrix": {
+      "artifact": "test-results/authenticated/artifacts/.last-run.json",
+      "artifactSha256": "cc4da0c3330a0d7b9e21136a08124357a7868a12354fe5235313bb6278fa1831",
+      "artifactMtimeLocal": "2026-08-31T12:38:38+0600",
+      "status": "INTERRUPTED",
+      "reportedProgressPassedApproximately": 352,
+      "retainedFailedIds": 2,
+      "retainedFailureContexts": [
+        "logout/session test: page.goto /dashboard returned net::ERR_ABORTED",
+        "purchase-orders role route: unexpected net::ERR_NETWORK_IO_SUSPENDED",
+        "purchase-orders-new retry: Chrome launch timed out after 180 seconds"
+      ],
+      "scoringUse": "No complete-matrix pass and no individual pass credit because the retained artifact contains no pass-case ledger."
+    },
+    "abortedOrInterruptedMatrices": {
+      "status": "NO_PASS_CREDIT",
+      "reason": "Collection, progress counters, aborted output, and interrupted last-run state are not final evidence."
+    }
+  },
+  "authenticatedCredentialArtifacts": {
+    "securityNote": "Only file identity, size/cookie count and hashes were inspected; cookie values are not copied into this evidence artifact.",
+    "rolesCredentialed": [
+      "ADMIN",
+      "MANAGER",
+      "STAFF",
+      "CASHIER",
+      "ORGANIZATION_OWNER",
+      "PLATFORM_OWNER"
+    ],
+    "secondTenantCredentialed": true,
+    "cookieCountPerArtifact": 3,
+    "files": 7
+  }
+}

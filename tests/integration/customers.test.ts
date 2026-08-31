@@ -328,6 +328,15 @@ describeDb("customer database", () => {
       },
     });
     const caller = createTestCaller(asCallerUser(adminUser));
+    await prisma.storeProduct.create({
+      data: {
+        organizationId: org.id,
+        storeId: otherStore.id,
+        productId: product.id,
+        assignedById: adminUser.id,
+        isActive: true,
+      },
+    });
 
     await caller.salesOrders.createDraft({
       idempotencyKey: "customers-order-email",
@@ -336,6 +345,7 @@ describeDb("customer database", () => {
       customerEmail: "Customer@Example.COM",
       customerPhone: null,
       customerAddress: "Bishkek, Chui 1",
+      lines: [{ productId: product.id, qty: 1 }],
     });
     await caller.salesOrders.createDraft({
       idempotencyKey: "customers-order-phone",
@@ -343,6 +353,7 @@ describeDb("customer database", () => {
       customerName: "Phone Customer",
       customerEmail: null,
       customerPhone: "+996 555 123 123",
+      lines: [{ productId: product.id, qty: 1 }],
     });
     await caller.salesOrders.createDraft({
       idempotencyKey: "customers-order-other-store",
@@ -350,6 +361,7 @@ describeDb("customer database", () => {
       customerName: "Other Store Same Email",
       customerEmail: "customer@example.com",
       customerPhone: null,
+      lines: [{ productId: product.id, qty: 1 }],
     });
     await caller.salesOrders.createDraft({
       idempotencyKey: "customers-order-no-contact",
@@ -357,6 +369,7 @@ describeDb("customer database", () => {
       customerName: "No Contact",
       customerEmail: null,
       customerPhone: null,
+      lines: [{ productId: product.id, qty: 1 }],
     });
     await createBazaarApiOrder({
       organizationId: org.id,

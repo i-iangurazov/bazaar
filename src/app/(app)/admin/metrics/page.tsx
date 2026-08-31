@@ -192,8 +192,8 @@ const AdminMetricsPage = () => {
   const selectedStoreName =
     storeId === allValue
       ? t("filters.allStores")
-      : data?.filterOptions.stores.find((store) => store.id === storeId)?.name ??
-        t("filters.storeFallback");
+      : (data?.filterOptions.stores.find((store) => store.id === storeId)?.name ??
+        t("filters.storeFallback"));
 
   const formatMoney = (value: number) =>
     formatKgsMoney(value, locale, baseAccountingCurrency, moneyOptions);
@@ -224,10 +224,7 @@ const AdminMetricsPage = () => {
   if (isForbidden) {
     return (
       <div>
-        <PageHeader
-          title={t("title")}
-          subtitle={t("subtitle")}
-        />
+        <PageHeader title={t("title")} subtitle={t("subtitle")} />
         <p className="mt-4 text-sm text-danger">{tErrors("forbidden")}</p>
       </div>
     );
@@ -235,10 +232,7 @@ const AdminMetricsPage = () => {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title={t("title")}
-        subtitle={t("subtitle")}
-      />
+      <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
       <Card>
         <CardContent className="grid gap-4 p-4 md:grid-cols-2 xl:grid-cols-5">
@@ -253,7 +247,7 @@ const AdminMetricsPage = () => {
                 resetPage();
               }}
             >
-              <SelectTrigger>
+              <SelectTrigger aria-label={t("filters.store")}>
                 <SelectValue placeholder={t("filters.allStores")} />
               </SelectTrigger>
               <SelectContent>
@@ -278,7 +272,7 @@ const AdminMetricsPage = () => {
                 resetPage();
               }}
             >
-              <SelectTrigger>
+              <SelectTrigger aria-label={t("filters.category")}>
                 <SelectValue placeholder={t("filters.allCategories")} />
               </SelectTrigger>
               <SelectContent>
@@ -388,9 +382,7 @@ const AdminMetricsPage = () => {
                 <p className="text-2xl font-semibold tracking-normal">
                   {formatMoney(summary.potentialGrossProfitKgs)}
                 </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {t("kpi.profitHint")}
-                </p>
+                <p className="mt-1 text-xs text-muted-foreground">{t("kpi.profitHint")}</p>
               </CardContent>
             </Card>
 
@@ -413,9 +405,7 @@ const AdminMetricsPage = () => {
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
                 <h2 className="text-lg font-semibold">{t("attention.title")}</h2>
-                <p className="text-sm text-muted-foreground">
-                  {t("attention.subtitle")}
-                </p>
+                <p className="text-sm text-muted-foreground">{t("attention.subtitle")}</p>
               </div>
               {metricsQuery.isFetching ? (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -436,7 +426,9 @@ const AdminMetricsPage = () => {
                   }}
                   className={cn(
                     "rounded-md border bg-card p-3 text-left shadow-sm transition hover:border-primary/60 hover:bg-accent/40",
-                    warning === item.value ? "border-primary ring-2 ring-primary/15" : "border-border",
+                    warning === item.value
+                      ? "border-primary ring-2 ring-primary/15"
+                      : "border-border",
                   )}
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -547,7 +539,9 @@ const AdminMetricsPage = () => {
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-sm text-muted-foreground">{t("sales.margin")}</span>
-                  <span className="font-semibold">{formatPercent(data.sales30d.grossMarginPercent)}</span>
+                  <span className="font-semibold">
+                    {formatPercent(data.sales30d.grossMarginPercent)}
+                  </span>
                 </div>
                 <p className="border-t border-border pt-3 text-xs text-muted-foreground">
                   {t("sales.note")}
@@ -618,7 +612,7 @@ const AdminMetricsPage = () => {
                     resetPage();
                   }}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger aria-label={`${tCommon("filters")}: ${t("columns.warnings")}`}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -636,7 +630,9 @@ const AdminMetricsPage = () => {
                     resetPage();
                   }}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger
+                    aria-label={`${tCommon("select")}: ${t("sections.productValues")}`}
+                  >
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -654,7 +650,7 @@ const AdminMetricsPage = () => {
                     resetPage();
                   }}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger aria-label={`${t("table.descending")} / ${t("table.ascending")}`}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -715,7 +711,9 @@ const AdminMetricsPage = () => {
                           <TableCell>{product.storeName}</TableCell>
                           <TableCell>{product.category}</TableCell>
                           <TableCell>
-                            <span className={product.stockQty < 0 ? "font-semibold text-danger" : ""}>
+                            <span
+                              className={product.stockQty < 0 ? "font-semibold text-danger" : ""}
+                            >
                               {formatQty(product.stockQty)}
                             </span>
                           </TableCell>

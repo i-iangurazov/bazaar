@@ -740,7 +740,7 @@ const ProductImageStudioPage = () => {
                       setBackgroundMode(value as ProductImageStudioBackground)
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger aria-label={t("presets.backgroundLabel")}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -756,7 +756,7 @@ const ProductImageStudioPage = () => {
                 <div className="space-y-2">
                   <Label>{t("presets.outputLabel")}</Label>
                   <Select value={ProductImageStudioOutputFormat.SQUARE} disabled>
-                    <SelectTrigger>
+                    <SelectTrigger aria-label={t("presets.outputLabel")}>
                       <SelectValue placeholder={t("presets.output.square")} />
                     </SelectTrigger>
                     <SelectContent>
@@ -800,6 +800,7 @@ const ProductImageStudioPage = () => {
                     checked={softShadow}
                     onCheckedChange={setSoftShadow}
                     disabled={!canEdit}
+                    aria-label={t("presets.optional.softShadowTitle")}
                   />
                 </div>
                 <div className="flex items-center justify-between gap-4">
@@ -813,6 +814,7 @@ const ProductImageStudioPage = () => {
                     checked={tighterCrop}
                     onCheckedChange={setTighterCrop}
                     disabled={!canEdit}
+                    aria-label={t("presets.optional.tighterCropTitle")}
                   />
                 </div>
                 <div className="flex items-center justify-between gap-4">
@@ -826,6 +828,7 @@ const ProductImageStudioPage = () => {
                     checked={brighterPresentation}
                     onCheckedChange={setBrighterPresentation}
                     disabled={!canEdit}
+                    aria-label={t("presets.optional.brighterTitle")}
                   />
                 </div>
               </div>
@@ -921,6 +924,7 @@ const ProductImageStudioPage = () => {
                   checked={saveAsPrimary}
                   onCheckedChange={setSaveAsPrimary}
                   disabled={!canEdit}
+                  aria-label={t("preview.setAsPrimary")}
                 />
                 <span className="text-sm text-muted-foreground">{t("preview.setAsPrimary")}</span>
               </div>

@@ -183,7 +183,6 @@ const resolveStorageProvider = (): { provider: ImageStorageProvider; config: R2C
 
   if (!storageWarningShown) {
     storageWarningShown = true;
-    // eslint-disable-next-line no-console
     console.warn(
       `[image-storage] IMAGE_STORAGE_PROVIDER=r2 but configuration is incomplete (${missing.join(
         ", ",
@@ -200,7 +199,6 @@ const warnUploadFailure = (error: unknown) => {
   }
   uploadWarningShown = true;
   const message = error instanceof Error ? error.message : String(error);
-  // eslint-disable-next-line no-console
   console.warn(`[image-storage] upload failed; using source URL fallback (${message})`);
 };
 

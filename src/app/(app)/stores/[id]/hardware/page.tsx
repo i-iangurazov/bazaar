@@ -9,7 +9,9 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
+import { DynamicResourceTerminalState } from "@/components/dynamic-resource-terminal-state";
 import { PageHeader } from "@/components/page-header";
+import { PageLoading } from "@/components/page-loading";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,6 +40,7 @@ import {
   PRICE_TAG_TEMPLATES,
   ROLL_PRICE_TAG_TEMPLATE,
 } from "@/lib/priceTags";
+import { normalizeDynamicRouteId } from "@/lib/dynamicRouteId";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { useToast } from "@/components/ui/toast";
@@ -72,17 +75,17 @@ const HardwarePage = () => {
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const { toast } = useToast();
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   const role = session?.user?.role;
   const canView = role === "ADMIN" || role === "MANAGER" || role === "STAFF";
   const canEdit = role === "ADMIN" || role === "MANAGER";
 
   const params = useParams();
-  const storeId = typeof params.id === "string" ? params.id : params.id?.[0] ?? "";
+  const storeId = normalizeDynamicRouteId(params?.id) ?? "";
 
   const settingsQuery = trpc.stores.hardware.useQuery(
     { storeId },
-    { enabled: Boolean(storeId && canView) },
+    { enabled: Boolean(storeId && canView), retry: false },
   );
 
   const schema = useMemo(
@@ -235,6 +238,10 @@ const HardwarePage = () => {
     });
   };
 
+  if (sessionStatus === "loading") {
+    return <PageLoading />;
+  }
+
   if (!canView) {
     return (
       <div>
@@ -242,6 +249,31 @@ const HardwarePage = () => {
         <p className="mt-4 text-sm text-danger">{tErrors("forbidden")}</p>
       </div>
     );
+  }
+
+  if (!storeId) {
+    return <DynamicResourceTerminalState title={t("title")} message={tErrors("storeNotFound")} />;
+  }
+
+  if (settingsQuery.isLoading) {
+    return (
+      <div>
+        <PageHeader title={t("title")} subtitle={tCommon("loading")} />
+        <PageLoading />
+      </div>
+    );
+  }
+
+  if (settingsQuery.error) {
+    const message =
+      settingsQuery.error.data?.code === "NOT_FOUND"
+        ? tErrors("storeNotFound")
+        : translateError(tErrors, settingsQuery.error);
+    return <DynamicResourceTerminalState title={t("title")} message={message} />;
+  }
+
+  if (!settingsQuery.data) {
+    return <DynamicResourceTerminalState title={t("title")} message={tErrors("storeNotFound")} />;
   }
 
   return (
@@ -254,17 +286,6 @@ const HardwarePage = () => {
             : t("subtitle")
         }
       />
-
-      {settingsQuery.isLoading ? (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Spinner className="h-4 w-4" />
-          {tCommon("loading")}
-        </div>
-      ) : null}
-
-      {settingsQuery.error ? (
-        <div className="text-sm text-danger">{translateError(tErrors, settingsQuery.error)}</div>
-      ) : null}
 
       {!settingsQuery.data ? null : (
         <>
@@ -288,12 +309,14 @@ const HardwarePage = () => {
                               onValueChange={(value) => field.onChange(value as PrinterPrintMode)}
                               disabled={!canEdit}
                             >
-                              <SelectTrigger>
+                              <SelectTrigger aria-label={t("receiptMode")}>
                                 <SelectValue placeholder={t("modePlaceholder")} />
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value={PrinterPrintMode.PDF}>{t("modePdf")}</SelectItem>
-                                <SelectItem value={PrinterPrintMode.CONNECTOR}>{t("modeConnector")}</SelectItem>
+                                <SelectItem value={PrinterPrintMode.CONNECTOR}>
+                                  {t("modeConnector")}
+                                </SelectItem>
                               </SelectContent>
                             </Select>
                           </FormControl>
@@ -315,12 +338,14 @@ const HardwarePage = () => {
                               onValueChange={(value) => field.onChange(value as PrinterPrintMode)}
                               disabled={!canEdit}
                             >
-                              <SelectTrigger>
+                              <SelectTrigger aria-label={t("labelMode")}>
                                 <SelectValue placeholder={t("modePlaceholder")} />
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value={PrinterPrintMode.PDF}>{t("modePdf")}</SelectItem>
-                                <SelectItem value={PrinterPrintMode.CONNECTOR}>{t("modeConnector")}</SelectItem>
+                                <SelectItem value={PrinterPrintMode.CONNECTOR}>
+                                  {t("modeConnector")}
+                                </SelectItem>
                               </SelectContent>
                             </Select>
                           </FormControl>
@@ -363,9 +388,7 @@ const HardwarePage = () => {
                         <h3 className="text-sm font-semibold text-foreground">
                           {t("labelProfileTitle")}
                         </h3>
-                        <p className="text-xs text-muted-foreground">
-                          {t("labelProfileHint")}
-                        </p>
+                        <p className="text-xs text-muted-foreground">{t("labelProfileHint")}</p>
                       </div>
                       <div className="grid gap-4 md:grid-cols-2">
                         <FormField
@@ -382,14 +405,16 @@ const HardwarePage = () => {
                                   }
                                   disabled={!canEdit}
                                 >
-                                  <SelectTrigger>
+                                  <SelectTrigger aria-label={t("labelTemplate")}>
                                     <SelectValue placeholder={t("labelTemplate")} />
                                   </SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="xp365b-roll-58x40">
                                       {t("templateRollXp365b")}
                                     </SelectItem>
-                                    <SelectItem value="3x8">{t("templateA4ThreeByEight")}</SelectItem>
+                                    <SelectItem value="3x8">
+                                      {t("templateA4ThreeByEight")}
+                                    </SelectItem>
                                     <SelectItem value="2x5">{t("templateA4TwoByFive")}</SelectItem>
                                   </SelectContent>
                                 </Select>
@@ -412,7 +437,7 @@ const HardwarePage = () => {
                                   }
                                   disabled={!canEdit}
                                 >
-                                  <SelectTrigger>
+                                  <SelectTrigger aria-label={t("labelPaperMode")}>
                                     <SelectValue placeholder={t("labelPaperMode")} />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -436,7 +461,13 @@ const HardwarePage = () => {
                             <FormItem>
                               <FormLabel>{t("labelDefaultCopies")}</FormLabel>
                               <FormControl>
-                                <Input {...field} type="number" min={1} max={100} disabled={!canEdit} />
+                                <Input
+                                  {...field}
+                                  type="number"
+                                  min={1}
+                                  max={100}
+                                  disabled={!canEdit}
+                                />
                               </FormControl>
                               <FormDescription>{t("labelDefaultCopiesHint")}</FormDescription>
                               <FormMessage />
@@ -457,7 +488,7 @@ const HardwarePage = () => {
                                   }
                                   disabled={!canEdit}
                                 >
-                                  <SelectTrigger>
+                                  <SelectTrigger aria-label={t("labelBarcodeType")}>
                                     <SelectValue placeholder={t("labelBarcodeType")} />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -584,7 +615,12 @@ const HardwarePage = () => {
                                   <FormItem>
                                     <FormLabel>{t(labelKey)}</FormLabel>
                                     <FormControl>
-                                      <Input {...field} type="number" step={0.5} disabled={!canEdit} />
+                                      <Input
+                                        {...field}
+                                        type="number"
+                                        step={0.5}
+                                        disabled={!canEdit}
+                                      />
                                     </FormControl>
                                     <FormMessage />
                                   </FormItem>
@@ -645,10 +681,12 @@ const HardwarePage = () => {
                           <FormControl>
                             <Select
                               value={field.value || "none"}
-                              onValueChange={(value) => field.onChange(value === "none" ? "" : value)}
+                              onValueChange={(value) =>
+                                field.onChange(value === "none" ? "" : value)
+                              }
                               disabled={!canEdit}
                             >
-                              <SelectTrigger>
+                              <SelectTrigger aria-label={t("connectorDevice")}>
                                 <SelectValue placeholder={t("connectorDevicePlaceholder")} />
                               </SelectTrigger>
                               <SelectContent>
@@ -672,10 +710,19 @@ const HardwarePage = () => {
                     ) : null}
 
                     <FormActions>
-                      <Button type="button" variant="secondary" className="w-full sm:w-auto" onClick={() => form.reset()}>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="w-full sm:w-auto"
+                        onClick={() => form.reset()}
+                      >
                         {t("reset")}
                       </Button>
-                      <Button type="submit" className="w-full sm:w-auto" disabled={!canEdit || updateMutation.isLoading}>
+                      <Button
+                        type="submit"
+                        className="w-full sm:w-auto"
+                        disabled={!canEdit || updateMutation.isLoading}
+                      >
                         {updateMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
                         {updateMutation.isLoading ? tCommon("loading") : tCommon("save")}
                       </Button>

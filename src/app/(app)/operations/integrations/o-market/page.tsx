@@ -14,6 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
+import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
 import {
   Select,
   SelectContent,
@@ -51,12 +52,7 @@ const statusVariant = (status?: string | null): BadgeVariant => {
   if (status === "READY" || status === "DONE" || status === "exported" || status === "updated") {
     return "success";
   }
-  if (
-    status === "ERROR" ||
-    status === "FAILED" ||
-    status === "TIMED_OUT" ||
-    status === "failed"
-  ) {
+  if (status === "ERROR" || status === "FAILED" || status === "TIMED_OUT" || status === "failed") {
     return "danger";
   }
   if (
@@ -134,6 +130,7 @@ const OMarketPage = () => {
   const role = session?.user?.role;
   const canManage = role === "ADMIN" || role === "MANAGER";
   const { toast } = useToast();
+  const { confirm, confirmDialog } = useConfirmDialog();
   const trpcUtils = trpc.useUtils();
 
   const settingsQuery = trpc.oMarket.settings.useQuery();
@@ -245,9 +242,33 @@ const OMarketPage = () => {
     setApiToken(result.data?.apiToken ?? "");
     setShowToken(true);
   };
+  const handleSaveSettings = async () => {
+    if (!canManage) {
+      return;
+    }
+    if (
+      clearToken &&
+      settingsQuery.data?.integration.hasToken &&
+      !(await confirm({
+        description: t("credentials.clearTokenWarning"),
+        confirmLabel: t("credentials.clearToken"),
+        confirmVariant: "danger",
+      }))
+    ) {
+      return;
+    }
+    saveSettingsMutation.mutate({
+      baseUrl,
+      apiToken: apiToken.trim() || null,
+      clearToken,
+    });
+  };
   const testConnectionMutation = trpc.oMarket.testConnection.useMutation({
     onSuccess: async (data) => {
-      toast({ variant: "success", description: t("toasts.connectionChecked", { status: data.status }) });
+      toast({
+        variant: "success",
+        description: t("toasts.connectionChecked", { status: data.status }),
+      });
       await refresh();
     },
     onError: (error) => toast({ variant: "error", description: error.message }),
@@ -268,7 +289,10 @@ const OMarketPage = () => {
   });
   const updateProductsMutation = trpc.oMarket.updateProducts.useMutation({
     onSuccess: async (data) => {
-      toast({ variant: "success", description: t("toasts.productsUpdated", { count: data.updatedCount }) });
+      toast({
+        variant: "success",
+        description: t("toasts.productsUpdated", { count: data.updatedCount }),
+      });
       await refresh();
     },
     onError: (error) => toast({ variant: "error", description: error.message }),
@@ -308,10 +332,7 @@ const OMarketPage = () => {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title={t("title")}
-        subtitle={t("subtitle")}
-      />
+      <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
         <Card className="bazaar-admin-surface">
@@ -319,9 +340,7 @@ const OMarketPage = () => {
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <CardTitle>{t("connection.title")}</CardTitle>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {t("connection.description")}
-                </p>
+                <p className="mt-1 text-sm text-muted-foreground">{t("connection.description")}</p>
               </div>
               <Badge variant={statusVariant(settingsQuery.data?.integration.status)}>
                 {settingsQuery.data?.integration.status ?? t("common.loading")}
@@ -419,13 +438,7 @@ const OMarketPage = () => {
               <Button
                 type="button"
                 disabled={!canManage || saveSettingsMutation.isLoading}
-                onClick={() =>
-                  saveSettingsMutation.mutate({
-                    baseUrl,
-                    apiToken: apiToken.trim() || null,
-                    clearToken,
-                  })
-                }
+                onClick={() => void handleSaveSettings()}
               >
                 {t("credentials.saveSettings")}
               </Button>
@@ -446,9 +459,7 @@ const OMarketPage = () => {
         <Card className="bazaar-admin-surface">
           <CardHeader className="border-b border-border/60 bg-muted/20">
             <CardTitle>{t("storeMapping.title")}</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              {t("storeMapping.description")}
-            </p>
+            <p className="text-sm text-muted-foreground">{t("storeMapping.description")}</p>
           </CardHeader>
           <CardContent className="space-y-3 p-5">
             {(settingsQuery.data?.stores ?? []).map((store) => (
@@ -490,9 +501,7 @@ const OMarketPage = () => {
         <Card className="bazaar-admin-surface">
           <CardHeader className="border-b border-border/60 bg-muted/20">
             <CardTitle>{t("categoryMapping.title")}</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              {t("categoryMapping.description")}
-            </p>
+            <p className="text-sm text-muted-foreground">{t("categoryMapping.description")}</p>
           </CardHeader>
           <CardContent className="max-h-[520px] space-y-3 overflow-y-auto p-5">
             {(settingsQuery.data?.categoryMappings ?? []).length === 0 ? (
@@ -566,8 +575,7 @@ const OMarketPage = () => {
                       categoryMappings[mapping.bazaarCategory]?.oMarketCategoryId ?? "",
                     oMarketCategoryName:
                       categoryMappings[mapping.bazaarCategory]?.oMarketCategoryName ?? "",
-                    attributesJson:
-                      categoryMappings[mapping.bazaarCategory]?.attributesJson ?? "",
+                    attributesJson: categoryMappings[mapping.bazaarCategory]?.attributesJson ?? "",
                   })),
                 })
               }
@@ -583,13 +591,11 @@ const OMarketPage = () => {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <CardTitle>{t("productExport.title")}</CardTitle>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {t("productExport.description")}
-              </p>
+              <p className="mt-1 text-sm text-muted-foreground">{t("productExport.description")}</p>
             </div>
             <div className="flex min-w-[240px] flex-col gap-2 sm:flex-row">
               <Select value={activeStoreId} onValueChange={setActiveStoreId}>
-                <SelectTrigger>
+                <SelectTrigger aria-label={t("productExport.store")}>
                   <SelectValue placeholder={t("productExport.selectStore")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -600,8 +606,11 @@ const OMarketPage = () => {
                   ))}
                 </SelectContent>
               </Select>
-              <Select value={jobType} onValueChange={(value) => setJobType(value as OMarketJobType)}>
-                <SelectTrigger>
+              <Select
+                value={jobType}
+                onValueChange={(value) => setJobType(value as OMarketJobType)}
+              >
+                <SelectTrigger aria-label={t("productExport.title")}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -623,10 +632,14 @@ const OMarketPage = () => {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-md border p-3">
               <p className="text-xs uppercase text-muted-foreground">{t("productExport.store")}</p>
-              <p className="mt-1 font-medium">{activeStore?.storeName ?? t("productExport.selectStore")}</p>
+              <p className="mt-1 font-medium">
+                {activeStore?.storeName ?? t("productExport.selectStore")}
+              </p>
             </div>
             <div className="rounded-md border p-3">
-              <p className="text-xs uppercase text-muted-foreground">{t("productExport.considered")}</p>
+              <p className="text-xs uppercase text-muted-foreground">
+                {t("productExport.considered")}
+              </p>
               <p className="mt-1 font-medium">{preflight?.summary.productsConsidered ?? 0}</p>
             </div>
             <div className="rounded-md border p-3">
@@ -634,7 +647,9 @@ const OMarketPage = () => {
               <p className="mt-1 font-medium">{preflight?.summary.productsReady ?? 0}</p>
             </div>
             <div className="rounded-md border p-3">
-              <p className="text-xs uppercase text-muted-foreground">{t("productExport.failedSkipped")}</p>
+              <p className="text-xs uppercase text-muted-foreground">
+                {t("productExport.failedSkipped")}
+              </p>
               <p className="mt-1 font-medium">{preflight?.summary.productsFailed ?? 0}</p>
             </div>
           </div>
@@ -696,7 +711,7 @@ const OMarketPage = () => {
                   setPage(1);
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger aria-label={t("productExport.allProducts")}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -767,7 +782,9 @@ const OMarketPage = () => {
                             })
                           }
                         >
-                          {product.included ? t("productExport.exclude") : t("productExport.include")}
+                          {product.included
+                            ? t("productExport.exclude")
+                            : t("productExport.include")}
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -795,7 +812,10 @@ const OMarketPage = () => {
             <Button
               type="button"
               variant="outline"
-              disabled={(productsQuery.data?.page ?? page) >= Math.ceil((productsQuery.data?.total ?? 0) / 10)}
+              disabled={
+                (productsQuery.data?.page ?? page) >=
+                Math.ceil((productsQuery.data?.total ?? 0) / 10)
+              }
               onClick={() => setPage((current) => current + 1)}
             >
               {t("pagination.next")}
@@ -904,9 +924,7 @@ const OMarketPage = () => {
                             <TableCell>{result.sku}</TableCell>
                             <TableCell>{result.name ?? ""}</TableCell>
                             <TableCell>
-                              <Badge variant={statusVariant(result.status)}>
-                                {result.status}
-                              </Badge>
+                              <Badge variant={statusVariant(result.status)}>{result.status}</Badge>
                             </TableCell>
                             <TableCell>{result.reason ?? ""}</TableCell>
                           </TableRow>
@@ -920,6 +938,7 @@ const OMarketPage = () => {
           })}
         </CardContent>
       </Card>
+      {confirmDialog}
     </div>
   );
 };

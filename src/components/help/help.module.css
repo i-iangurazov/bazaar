@@ -237,6 +237,13 @@
   box-shadow: 0 20px 48px rgba(0, 0, 0, 0.2);
 }
 
+.searchShell:focus-within {
+  border-color: #2563eb;
+  box-shadow:
+    0 0 0 3px rgba(147, 197, 253, 0.9),
+    0 20px 48px rgba(0, 0, 0, 0.2);
+}
+
 .searchIcon {
   width: 20px;
   height: 20px;
@@ -757,6 +764,7 @@
 }
 .footerInner nav {
   display: flex;
+  flex-wrap: wrap;
   gap: 20px;
 }
 .footerInner a {
@@ -764,6 +772,10 @@
   font-size: 12px;
   font-weight: 650;
   text-decoration: none;
+}
+.footerInner a:hover,
+.footerInner a:focus-visible {
+  color: var(--help-text);
 }
 
 .breadcrumbs {
@@ -1051,6 +1063,34 @@
   color: var(--help-muted);
   font-size: 15px;
   line-height: 1.7;
+}
+.stepGuidance {
+  display: grid;
+  max-width: 900px;
+  margin: 22px 0 26px 59px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.stepGuidance > div {
+  min-width: 0;
+  padding: 15px;
+  border: 1px solid var(--help-line);
+  border-radius: 12px;
+  background: var(--help-surface-soft);
+}
+.stepGuidance dt {
+  margin: 0 0 7px;
+  color: var(--help-blue);
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+.stepGuidance dd {
+  margin: 0;
+  color: var(--help-text);
+  font-size: 11px;
+  line-height: 1.55;
 }
 .visualChecklist {
   display: grid;
@@ -1526,12 +1566,16 @@
     padding-bottom: 58px;
   }
   .articleStep > p,
+  .stepGuidance,
   .visualChecklist,
   .stepNote,
   .annotatedFigure {
     margin-left: 0;
   }
   .visualChecklist {
+    grid-template-columns: 1fr;
+  }
+  .stepGuidance {
     grid-template-columns: 1fr;
   }
   .annotatedFigure {

@@ -3,6 +3,7 @@
 A production-minded Retail Inventory Management Platform built for a single-country rollout. The system prioritizes inventory correctness, auditability, and straightforward operations for non-technical retail staff.
 
 ## Tech Stack
+
 - **TypeScript-only**
 - **Next.js App Router**
 - **tRPC** (type-safe API inside Next.js; server layer modularized for extraction)
@@ -18,21 +19,25 @@ A production-minded Retail Inventory Management Platform built for a single-coun
 ## Setup
 
 ### 1) Install dependencies
+
 ```bash
 pnpm install
 ```
 
 ### 2) Start Postgres + Redis
+
 ```bash
 pnpm db:up
 ```
 
 ### 3) Configure environment
+
 ```bash
 cp .env.example .env
 ```
 
 ### 4) Environment variables
+
 - `DATABASE_URL` (required)
 - `NEXTAUTH_SECRET` + `NEXTAUTH_URL` (required for auth; `NEXTAUTH_URL` should be public in production for email links/assets)
 - `NEXT_PUBLIC_APP_URL` or `APP_URL` (optional fallback public app URL for Email Marketing assets and unsubscribe links)
@@ -46,15 +51,16 @@ cp .env.example .env
 - `IMPORT_TRANSACTION_TIMEOUT_MS` (optional; defaults to `120000` ms for large import batches)
 - `TRIAL_DAYS` (optional; defaults to `14` for self-serve organizations)
 - `PLAN_PRICE_STARTER_KGS`, `PLAN_PRICE_BUSINESS_KGS`, `PLAN_PRICE_ENTERPRISE_KGS` (optional pricing used in platform revenue analytics)
-- `PLATFORM_OWNER_EMAILS` (comma-separated emails allowed to access `/platform`)
+- `PLATFORM_OWNER_EMAILS` (comma-separated, operator-managed emails allowed to access `/platform`)
 - `EMAIL_PROVIDER` (`log` for local/test, `resend` for production delivery)
 - `ALLOW_LOG_EMAIL_IN_PRODUCTION` (`0` by default; set to `1` only for temporary production fallback before SMTP/Resend is configured)
 - `EMAIL_FROM` (required when `EMAIL_PROVIDER=resend`; Email Marketing requires `no-reply@bazaar.kg`)
 - `EMAIL_UNSUBSCRIBE_SECRET` (recommended for signing Email Marketing unsubscribe links; falls back to `NEXTAUTH_SECRET` or `JOBS_SECRET`)
 - `RESEND_API_KEY` (required when `EMAIL_PROVIDER=resend`)
-- `SEED_PLATFORM_OWNER_EMAIL` (optional, local seed only)
-- `SEED_PLATFORM_OWNER_PASSWORD` (optional, local seed only)
-- `SEED_PLATFORM_OWNER_NAME` (optional, local seed only)
+- `SEED_DEMO_DATA` (must be explicitly set to `1` for local/test demo seeding)
+- `SEED_ADMIN_EMAIL`, `SEED_MANAGER_EMAIL`, `SEED_STAFF_EMAIL`, `SEED_PLATFORM_OWNER_EMAIL` (required, unique, local/test seed identities)
+- `SEED_ADMIN_PASSWORD`, `SEED_MANAGER_PASSWORD`, `SEED_STAFF_PASSWORD`, `SEED_PLATFORM_OWNER_PASSWORD` (required, unique, password-manager-generated local/test seed secrets)
+- `SEED_PLATFORM_OWNER_NAME` (optional local/test display name)
 - `IMAGE_STORAGE_PROVIDER` (`local` or `r2`; use `r2` for Cloudflare R2 product images)
 - `R2_ACCOUNT_ID` (required when `IMAGE_STORAGE_PROVIDER=r2`)
 - `R2_ACCESS_KEY_ID` (required when `IMAGE_STORAGE_PROVIDER=r2`)
@@ -70,51 +76,68 @@ cp .env.example .env
 - `NEXT_PUBLIC_PRODUCT_IMAGE_MAX_INPUT_BYTES` (optional client-side pre-compression input cap; default `33554432`)
 
 ### 5) Create DB schema + seed
+
 ```bash
 pnpm prisma:migrate
-pnpm prisma:seed
 ```
 
-The seed script is for local development and test data only. It refuses to run when
-`NODE_ENV=production` or `VERCEL_ENV=production` because it creates demo users with
-public local-only passwords.
+Demo seeding is disabled by default. It runs only when `NODE_ENV` is explicitly
+`development` or `test`, `SEED_DEMO_DATA=1`, no Vercel deployment environment is present,
+and every seeded user has a unique environment-provided email and strong, unique password.
+There are no shipped password defaults. The seed validates all inputs before its first
+database operation and reapplies the configured passwords to the local seeded accounts.
+
+For an opt-in local seed:
+
+1. Create an ignored `.env.seed.local` file. Start from the seed variable names in
+   `.env.example`; change `SEED_DEMO_DATA` to `1`, replace every blank seed email/password,
+   and add the platform-owner email to `PLATFORM_OWNER_EMAILS`.
+2. Generate each password independently with a password manager. Each must be 20-128
+   characters and include upper-case, lower-case, numeric, and symbol characters. Do not
+   reuse a password, account identifier, product name, common phrase, or real/live secret.
+3. Load the normal local environment and the ignored seed environment without printing
+   their contents, then run the seed:
+
+```bash
+node --env-file=.env --env-file=.env.seed.local --import tsx prisma/seed.ts
+```
+
+If your local environment manager already injects both sets of variables, run
+`pnpm prisma:seed` instead. Never enable this gate in a deployed environment.
 
 For a full reset (drop + migrate + seed):
+
 ```bash
 pnpm db:reset
 ```
 
-To reset demo user passwords if they already exist:
-```bash
-SEED_RESET_PASSWORDS=1 pnpm prisma:seed
-```
+The same seed gate and credential requirements apply to reset commands. Ensure the ignored
+seed environment is injected before running a reset. The seed always applies the current
+configured passwords to its local accounts, so no separate password-reset flag is needed.
 
 ### 6) Run the app
+
 ```bash
 pnpm dev
 ```
 
 Open `http://localhost:3000`.
 
-### Local-only demo users
-- `admin@example.com / Admin123!`
-- `manager@example.com / Manager123!`
-- `staff@example.com / Staff123!`
-- `owner@example.com / Owner123!` (platform owner in seed)
-
 ### Platform owner access
-- Add platform owner email to `PLATFORM_OWNER_EMAILS` (for local default: `owner@example.com`).
-- Sign in with the seeded platform owner credentials.
+
+- Add the chosen local platform-owner seed email to `PLATFORM_OWNER_EMAILS` before seeding.
+- Sign in with the locally configured platform-owner identity and secret.
 - Open `/platform` to manage all organizations and subscription billing values.
 - Platform owner panel includes: organization list, plan/status updates, trial/period dates, usage counters, and estimated MRR rollup.
 
 ## Subscription Plans & Feature Gates
+
 The app enforces subscription rules server-side (not UI-only) and checks both limits and features before executing protected operations.
 
-| Plan | Limits | Enabled feature modules |
-| --- | --- | --- |
-| `STARTER` | `1` store, `3` active users, `1000` products | Core inventory/catalog/PO flows only |
-| `BUSINESS` | `5` stores, `15` active users, `50000` products | `imports`, `exports`, `analytics`, `compliance` |
+| Plan         | Limits                                            | Enabled feature modules                                           |
+| ------------ | ------------------------------------------------- | ----------------------------------------------------------------- |
+| `STARTER`    | `1` store, `3` active users, `1000` products      | Core inventory/catalog/PO flows only                              |
+| `BUSINESS`   | `5` stores, `15` active users, `50000` products   | `imports`, `exports`, `analytics`, `compliance`                   |
 | `ENTERPRISE` | `20` stores, `60` active users, `200000` products | `imports`, `exports`, `analytics`, `compliance`, `supportToolkit` |
 
 - Billing state model: `ACTIVE`, `PAST_DUE`, `CANCELED` with `trialEndsAt` and `currentPeriodEndsAt`.
@@ -122,10 +145,12 @@ The app enforces subscription rules server-side (not UI-only) and checks both li
 - `/billing` shows current tier, usage, limits, features, trial status, and monthly price. Platform plan analytics are currently KGS-denominated.
 
 ## Access Control & Users
+
 - Role-based access: ADMIN, MANAGER, STAFF with protected routes.
 - Admin-only user management at `/settings/users`: create/update users, set roles/locales, activate/deactivate, reset passwords.
 
 ## Auth Session Policy
+
 - NextAuth credentials auth uses JWT session strategy only.
 - Session token lifetime is `8h` (`maxAge=28800`) with `15m` refresh window (`updateAge=900`).
 - Production cookies are explicitly hardened:
@@ -135,6 +160,7 @@ The app enforces subscription rules server-side (not UI-only) and checks both li
 - Redirect callback policy only allows relative URLs or same-origin absolute URLs.
 
 ## Signup, Verification & Invites
+
 - `/signup` supports `invite_only` (request access) or `open` (self-signup) based on `SIGNUP_MODE`.
 - By default, email verification is required before login; verification/reset/invite links are delivered via configured email provider.
 - Temporary dev bypass: set `SKIP_EMAIL_VERIFICATION=1` to allow signup/invite login without verification emails.
@@ -144,17 +170,20 @@ The app enforces subscription rules server-side (not UI-only) and checks both li
 - `invite` flow works in both modes; accepted invite places user into inviter organization and keeps tenant isolation.
 
 ## Onboarding Wizard
+
 - Admin-only guided setup at `/onboarding` to reach first value fast.
 - Steps cover store legal setup, users, catalog bootstrap, inventory defaults, procurement, and first receive/print flow.
 - Progress is saved per organization; every step except store setup can be skipped.
 
 ## Stores
+
 - Multi-store directory with unique store codes and per-store policy (allow negative stock).
 - Optional expiry lot tracking per store.
 - Store profiles include legal entity details (type, legal name, INN, address, phone).
 - Stores are operationally isolated: products are organization master records, but a store only shows products assigned to that store through `StoreProduct`, inventory actions, imports, or explicit copy/setup flows.
 
 ## Customer Database
+
 - `/customers` is a store-scoped customer database for ADMIN and MANAGER roles only.
 - Customers belong to both organization and store; Store A customers do not appear in Store B unless created/imported there too.
 - Fields: name, email, phone, address, source, created/updated timestamps, last order timestamp, and order count.
@@ -163,10 +192,12 @@ The app enforces subscription rules server-side (not UI-only) and checks both li
 - Customer orders, POS draft sales, public catalogue checkout, and bazaar API orders auto-create/update the selected-store customer when email or phone is present.
 
 ## Dashboard
+
 - Store selector with low-stock alerts, pending purchase orders, recent movements, and recent activity summaries (from audit logs).
 - Real-time refresh via SSE events (dashboard, inventory, and purchase orders).
 
 ## Localization (en/ru/kg)
+
 - Locales: `ru` (default), `kg` (Kyrgyz), and `en` (English). Locale persistence uses the `NEXT_LOCALE` cookie (HttpOnly).
 - Canonical URLs do not include a locale prefix (e.g. `/inventory`).
 - Legacy links with `/ru/*`, `/kg/*`, `/ky/*`, or `/en/*` redirect to canonical paths and update the locale cookie.
@@ -175,6 +206,7 @@ The app enforces subscription rules server-side (not UI-only) and checks both li
 - User locale preference is stored in `User.preferredLocale` and synced on login.
 
 ## Install Bazaar as an app
+
 - Bazaar is web-only, but it ships with PWA metadata so supported browsers can install it as a standalone home-screen/desktop app.
 - Android Chrome and desktop Chromium browsers can show the browser install prompt from the app header's **Install app** action once the browser marks the app installable.
 - iPhone and iPad users install through Safari: open Bazaar in Safari, tap Share, choose **Add to Home Screen**, then confirm.
@@ -183,19 +215,23 @@ The app enforces subscription rules server-side (not UI-only) and checks both li
 - Offline support is intentionally minimal: static app/icon assets and an offline message can load, but POS, inventory, orders, auth, and API-backed work still require network access.
 
 ## Help Center
+
 - `/help` provides short, task-focused articles in `ru` and `kg`.
 - Contextual `?` links on complex screens open the relevant article anchor.
 
 ## Admin Support & Metrics
+
 - `/admin/support` (ADMIN): view-as-user sessions, support bundle export, and per-store feature flags.
 - `/admin/jobs` (ADMIN): dead-letter job queue with retry/resolve.
 - `/admin/metrics` (ADMIN): onboarding completion, time-to-first-value, WAU, adjustments, stockouts.
 
 ## Currency & Formatting
+
 - Use `src/lib/i18nFormat.ts`, `src/lib/currency.ts`, and `src/lib/currencyDisplay.ts` helpers for dates, numbers, currency normalization, and store-currency display.
 - Store/accounting amounts are persisted in KGS where schema fields are named `*Kgs`; customer-facing display uses the selected store currency when a store context exists.
 
 ## Catalog & CSV (Products)
+
 - Fields: `sku`, `name`, `category`, `unit`, `description`, `photoUrl`
 - Multiple barcodes per product; optional variants with JSON attributes
 - Product image gallery (`ProductImage`) with ordered positions, used by product page/edit flows
@@ -207,28 +243,33 @@ The app enforces subscription rules server-side (not UI-only) and checks both li
 - CSV import/export available on `/products` (import preview, updates existing SKUs)
 
 ### CSV format
+
 ```csv
 sku,name,category,unit,description,photoUrl,barcodes
 TEA-001,Black Tea,Beverages,box,Assorted black tea,https://example.com/tea.jpg,1234567890123|9876543210987
 ```
 
 ## Pricing, Costs & Tags
+
 - Base price on product with per-store overrides (effective price + overridden badge).
 - Bulk price updates by store (set / increase % / increase amount).
 - Average cost tracking from receipts with markup/margin display on product details.
 - Price tags PDF (A4 templates) from product list selections.
 
 ## Bundles (Kits) & Expiry Lots
+
 - Bundle components per product; assemble bundles (consume components, receive bundle) in one transaction and idempotent.
 - Expiry lots are optional per store; receiving can assign expiry date or keep “no expiry”.
 
 ## Variant Attributes
+
 - Attribute definitions (`/settings/attributes`) with ru/kg labels, types, and options.
 - Category templates map attributes to product categories.
 - Variant generator builds a matrix of options for bulk variant creation.
 - Variant editor renders friendly attribute controls (no raw JSON) with required validation.
 
 ## Migration Importers
+
 - `/settings/import` for Excel/CSV imports with column mapping, preview, and validation.
 - Import type selector supports Products and Customers.
 - Product import remains admin-only and preserves the existing product preview/apply/rollback behavior.
@@ -241,6 +282,7 @@ TEA-001,Black Tea,Beverages,box,Assorted black tea,https://example.com/tea.jpg,1
 - Import batch summary tracks image resolution outcomes (`downloaded`, `fallback`, `missing`) and stores them per batch.
 
 ## Product Image Storage (Local / Cloudflare R2)
+
 - Storage mode is controlled by `IMAGE_STORAGE_PROVIDER` (`local` or `r2`).
 - In `r2` mode, imported/uploaded product images are written to Cloudflare R2 and resolved via `R2_PUBLIC_BASE_URL`.
 - Object key pattern: `retails/<organizationId>/products/<productId|unassigned>/<sha1>.<ext>`.
@@ -268,6 +310,7 @@ TEA-001,Black Tea,Beverages,box,Assorted black tea,https://example.com/tea.jpg,1
 - The app falls back to the backend upload endpoint when the direct R2 PUT fails before a readable response, but that fallback is only a safety net; correct production performance still requires the R2 CORS policy above.
 
 ## Integrations
+
 - `/operations/integrations/bazaar-catalog` manages the public store catalogue.
 - `/operations/integrations/bazaar-api` manages separate store-scoped API keys for external product reads and order creation.
 - bazaar API product responses are store-scoped and include `currencyCode`; callers should not assume KGS for display.
@@ -280,10 +323,12 @@ TEA-001,Black Tea,Beverages,box,Assorted black tea,https://example.com/tea.jpg,1
 - Image Studio history uses responsive table wrapping so thumbnails/status/actions remain accessible on small screens.
 
 ## Operational Analytics
+
 - `/reports` includes stockouts, slow movers, and shrinkage summaries.
 - Store + date-range filters with CSV export.
 
 ## Exports & Period Close
+
 - `/reports/exports` supports background export jobs with status tracking, retry, and secured download endpoint.
 - Supported formats: `csv` and `xlsx`.
 - Export types include:
@@ -300,6 +345,7 @@ TEA-001,Black Tea,Beverages,box,Assorted black tea,https://example.com/tea.jpg,1
 - `/reports/close` creates monthly period-close snapshots with duplicate-period protection and audit logs.
 
 ## KG Compliance-Ready Modules
+
 - Store-level compliance profile at `/stores/[id]/compliance` with progressive settings:
   - KKM (`OFF` / `EXPORT_ONLY` / `ADAPTER`)
   - ESF
@@ -310,6 +356,7 @@ TEA-001,Black Tea,Beverages,box,Assorted black tea,https://example.com/tea.jpg,1
 - Compliance export columns are included when modules are enabled.
 
 ## Inventory Operations
+
 - Receive stock, adjust stock with reason, and transfer stock between stores.
 - Stock counts (inventory revisions) with scan-first workflow, apply -> adjustment movements, and variance report.
 - Low-stock thresholds set per store/product (`minStock`) and surfaced on dashboard/inventory.
@@ -319,6 +366,7 @@ TEA-001,Black Tea,Beverages,box,Assorted black tea,https://example.com/tea.jpg,1
 - Reorder suggestions built from forecasts with optional "Why" breakdown in the UI.
 
 ## Suppliers & Purchase Orders
+
 - Supplier directory with contact details and notes.
 - Supplier deletion is guarded when referenced by products or purchase orders.
 - PO workflow: `DRAFT -> SUBMITTED -> APPROVED -> PARTIALLY_RECEIVED -> RECEIVED` (plus `CANCELLED`).
@@ -329,6 +377,7 @@ TEA-001,Black Tea,Beverages,box,Assorted black tea,https://example.com/tea.jpg,1
 - Role-based PO actions by status (submit/approve/cancel/receive).
 
 ## Sales Orders (Customer Orders)
+
 - Dedicated customer order flow at `/sales/orders` (separate from supplier purchase orders).
 - Status workflow: `DRAFT -> CONFIRMED -> READY -> COMPLETED` (or `CANCELED`).
 - Sales lines support both regular products and bundles.
@@ -340,6 +389,7 @@ TEA-001,Black Tea,Beverages,box,Assorted black tea,https://example.com/tea.jpg,1
 - Sales metrics page at `/sales/orders/metrics` provides revenue/cost/profit trends and top products/bundles.
 
 ## POS (Cash Register)
+
 - POS routes:
   - `/pos` (entry)
   - `/pos/registers` (register setup)
@@ -357,11 +407,13 @@ TEA-001,Black Tea,Beverages,box,Assorted black tea,https://example.com/tea.jpg,1
 - KKM-ready hooks are supported via store compliance mode (`EXPORT_ONLY`/`ADAPTER`); no legal compliance claim.
 
 ## Replenishment -> PO Drafts
+
 - Create draft POs from inventory planning, grouped by supplier.
 - Missing supplier assignments are flagged before creation; quantities remain editable.
 - Draft creation is idempotent via request keys.
 
 ## Scripts
+
 - `pnpm db:up` - start Postgres via docker compose
 - `pnpm db:down` - stop Postgres
 - `pnpm db:reset` - drop + migrate + seed (local only)
@@ -386,10 +438,15 @@ TEA-001,Black Tea,Beverages,box,Assorted black tea,https://example.com/tea.jpg,1
 ## Testing
 
 ### Database-backed tests
+
 Integration tests run against a real Postgres database. Use a dedicated test DB
-(created automatically if missing).
+(created automatically if missing). Bazaar requires a Unicode-aware ICU database
+locale so case-insensitive Cyrillic and Latin search behave consistently. New local
+Postgres volumes use `--locale-provider=icu --icu-locale=und`; `pnpm ops:preflight`
+fails with an actionable error when an existing database does not meet this invariant.
 
 Example:
+
 ```bash
 pnpm db:up
 export DATABASE_TEST_URL="postgresql://inventory:inventory@localhost:5432/inventory_test?schema=public"
@@ -397,9 +454,11 @@ RUN_DB_TESTS=1 pnpm test
 ```
 
 ## Production Runbook
+
 - `docs/production-readiness.md` contains the release checklist and operator runbook.
 
 CI-style run:
+
 ```bash
 pnpm db:up
 CI=1 DATABASE_TEST_URL="postgresql://inventory:inventory@localhost:5432/inventory_test?schema=public" pnpm test:ci
@@ -408,6 +467,7 @@ CI=1 DATABASE_TEST_URL="postgresql://inventory:inventory@localhost:5432/inventor
 ## Reliability Notes
 
 ### Inventory Ledger (immutable)
+
 - Stock is tracked via immutable `StockMovement` entries.
 - `InventorySnapshot.onHand` is **always derived** from the ledger (`SUM(qtyDelta)`).
 - All inventory adjustments/receipts run inside a single DB transaction:
@@ -416,11 +476,13 @@ CI=1 DATABASE_TEST_URL="postgresql://inventory:inventory@localhost:5432/inventor
 - Row-level locks (`SELECT ... FOR UPDATE`) prevent concurrent drift on `InventorySnapshot`.
 
 ### Negative Stock Constraints
+
 - Store policy is stored on `Store.allowNegativeStock` and duplicated on `InventorySnapshot.allowNegativeStock`.
 - A DB check constraint enforces: `allowNegativeStock OR onHand >= 0`.
 - The migration adds the constraint; the seed script re-checks it for local dev.
 
 ### Idempotency
+
 - `IdempotencyKey` table enforces replay safety.
 - Required on:
   - Inventory adjustments
@@ -430,26 +492,31 @@ CI=1 DATABASE_TEST_URL="postgresql://inventory:inventory@localhost:5432/inventor
 - Keys are scoped by route + user.
 
 ### Auditing
+
 - Every mutation writes `AuditLog` with actor, action, entity, before/after, requestId.
 - Request IDs are generated via middleware and propagated through logging, tRPC context, and audit logs.
 
 ### Purchase Order State Machine
+
 - `DRAFT -> SUBMITTED -> APPROVED -> PARTIALLY_RECEIVED -> RECEIVED`
 - `DRAFT -> CANCELLED`, `SUBMITTED -> CANCELLED`
 - `receivedEventId` ensures receive is idempotent and applied once (per full receipt).
 
 ### Snapshot Recompute (Admin)
+
 - Admin-only `inventory.recompute` rebuilds `InventorySnapshot` from the ledger and open POs.
 - Useful for validation/correction if snapshots drift.
 
 ## Forecasting & Replenishment
 
 ### Forecasting (MVP)
+
 - Uses daily sales (`StockMovement` type `SALE`) over last N days.
 - Bootstrap resampling provides P50/P90 daily demand.
 - Optional weekday weighting favors same-weekday history.
 
 ### Replenishment Formula
+
 - `demandDuringLeadTime = P50 * leadTimeDays`
 - `safetyStock = (P90 - P50) * leadTimeDays + safetyStockDays * P50`
 - `reorderPoint = demandDuringLeadTime + safetyStock`
@@ -459,22 +526,26 @@ CI=1 DATABASE_TEST_URL="postgresql://inventory:inventory@localhost:5432/inventor
 Each item in `/inventory` can reveal the calculation breakdown via the "Why" details.
 
 ### Upgrade Path (documented, not implemented)
+
 - ETS/ARIMA or probabilistic state space
 - Hierarchical forecasting for multi-store
 - Supplier lead time learning from historical receipts
 
 ## Observability
+
 - **Structured logging** via pino with requestId.
 - **Health check**: `GET /api/health` returns public liveness; detailed readiness requires `x-health-secret`.
 - **Preflight check**: `GET /api/preflight` returns `200 ready` or `503 not_ready` and verifies startup checks, DB, and Redis (internal access only via `x-health-secret` or ADMIN auth).
 - **Metrics**: `GET /api/metrics` requires `x-metrics-secret` when configured (Prometheus text format counters including SSE connections and event publish stats).
 
 ## Background Jobs
+
 - `POST /api/jobs/run?job=cleanup-idempotency-keys` with header `x-job-secret` (requires `JOBS_SECRET`).
 - Uses Redis locks when available; falls back to in-memory locks in dev.
 - Dead-letter queue support with retry/resolve UI in `/admin/jobs`.
 
 ## Real-time (SSE)
+
 - `GET /api/sse` (authenticated; org-scoped stream)
 - Events:
   - `inventory.updated` (storeId, productId)
@@ -483,16 +554,19 @@ Each item in `/inventory` can reveal the calculation breakdown via the "Why" det
 - Redis pub/sub when `REDIS_URL` is set; falls back to in-memory in dev with a warning.
 
 ## Search & Operator Productivity
+
 - Global scanner/search input in app shell supports Enter-to-lookup by barcode/SKU/name with fast redirect or result panel.
 - Command palette (`Cmd/Ctrl + K`) supports quick navigation and global search across products, stores, suppliers, and purchase orders.
 
 ## Known Limitations
+
 - Forecasting is intentionally simple for transparency.
 - Expiry lots do not include FEFO picking or depletion UI yet.
 - Background jobs are manual-trigger via `/api/jobs/run` (no scheduler UI).
 - No UI for snapshot recompute (API supports it).
 
 ## CI Release Gate
+
 - `.github/workflows/ci.yml` includes `release-gate` job.
 - It runs in `NODE_ENV=production` with Postgres + Redis services and executes:
   - `pnpm prisma:migrate`

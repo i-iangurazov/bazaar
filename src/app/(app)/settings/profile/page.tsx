@@ -57,6 +57,7 @@ const ProfilePage = () => {
   const { data: session, status, update: updateSession } = useSession();
   const { toast } = useToast();
   const trpcUtils = trpc.useUtils();
+  const personalSubmitInFlightRef = useRef(false);
 
   const canEditBusiness = session?.user?.role === "ADMIN" || Boolean(session?.user?.isOrgOwner);
   const sessionIdentity =
@@ -267,7 +268,22 @@ const ProfilePage = () => {
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
+    onSettled: () => {
+      personalSubmitInFlightRef.current = false;
+    },
   });
+
+  const handlePersonalSubmit = (values: z.infer<typeof personalSchema>) => {
+    if (personalSubmitInFlightRef.current) {
+      return;
+    }
+    personalSubmitInFlightRef.current = true;
+    updateProfileMutation.mutate({
+      name: values.name,
+      phone: values.phone ?? null,
+      jobTitle: values.jobTitle ?? null,
+    });
+  };
 
   const updatePreferencesMutation = trpc.userSettings.updateMyPreferences.useMutation({
     onSuccess: async (result) => {
@@ -368,8 +384,7 @@ const ProfilePage = () => {
       businessQuery.isFetching ||
       (businessQuery.data !== undefined && businessData === undefined));
   const productSettingsLoading = businessDataPending || productSettingsStorePending;
-  const productSettingsDisabled =
-    productSettingsLoading || updateProductSettingsMutation.isLoading;
+  const productSettingsDisabled = productSettingsLoading || updateProductSettingsMutation.isLoading;
 
   if (status === "loading" || profileQuery.isLoading) {
     return (
@@ -479,16 +494,7 @@ const ProfilePage = () => {
         </CardHeader>
         <CardContent>
           <Form {...personalForm}>
-            <form
-              className="space-y-4"
-              onSubmit={personalForm.handleSubmit((values) => {
-                updateProfileMutation.mutate({
-                  name: values.name,
-                  phone: values.phone ?? null,
-                  jobTitle: values.jobTitle ?? null,
-                });
-              })}
-            >
+            <form className="space-y-4" onSubmit={personalForm.handleSubmit(handlePersonalSubmit)}>
               <FormGrid>
                 <FormField
                   control={personalForm.control}
@@ -504,8 +510,8 @@ const ProfilePage = () => {
                   )}
                 />
                 <div className="space-y-2">
-                  <Label>{t("personal.email")}</Label>
-                  <Input value={userEmail} readOnly />
+                  <Label htmlFor="profile-account-email">{t("personal.email")}</Label>
+                  <Input id="profile-account-email" value={userEmail} readOnly />
                 </div>
                 <FormField
                   control={personalForm.control}
@@ -569,7 +575,7 @@ const ProfilePage = () => {
                       <FormLabel>{t("preferences.locale")}</FormLabel>
                       <FormControl>
                         <Select value={field.value ?? "ru"} onValueChange={field.onChange}>
-                          <SelectTrigger>
+                          <SelectTrigger aria-label={t("preferences.locale")}>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -602,7 +608,7 @@ const ProfilePage = () => {
                             handleThemeChange(value);
                           }}
                         >
-                          <SelectTrigger>
+                          <SelectTrigger aria-label={t("preferences.theme")}>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -682,7 +688,7 @@ const ProfilePage = () => {
                               handleStoreChange(value);
                             }}
                           >
-                            <SelectTrigger>
+                            <SelectTrigger aria-label={t("business.store")}>
                               <SelectValue placeholder={t("business.selectStore")} />
                             </SelectTrigger>
                             <SelectContent>
@@ -718,7 +724,7 @@ const ProfilePage = () => {
                               }
                             }}
                           >
-                            <SelectTrigger>
+                            <SelectTrigger aria-label={t("business.currency")}>
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -768,7 +774,7 @@ const ProfilePage = () => {
                         <FormLabel>{t("business.legalEntityType")}</FormLabel>
                         <FormControl>
                           <Select value={field.value} onValueChange={field.onChange}>
-                            <SelectTrigger>
+                            <SelectTrigger aria-label={t("business.legalEntityType")}>
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -902,7 +908,7 @@ const ProfilePage = () => {
                             businessQuery.isLoading || updateProductSettingsMutation.isLoading
                           }
                         >
-                          <SelectTrigger>
+                          <SelectTrigger aria-label={t("business.store")}>
                             <SelectValue placeholder={t("business.selectStore")} />
                           </SelectTrigger>
                           <SelectContent>

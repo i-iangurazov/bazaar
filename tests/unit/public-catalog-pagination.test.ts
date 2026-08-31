@@ -8,11 +8,11 @@ describe("public catalog pagination", () => {
   it("rejects invalid page and oversized page values before a database read", async () => {
     const invalidPage = await GET(
       new Request("http://localhost/api/public/catalog/example-slug?page=0"),
-      { params: { slug: "example-slug" } },
+      { params: Promise.resolve({ slug: "example-slug" }) },
     );
     const oversizedPage = await GET(
       new Request("http://localhost/api/public/catalog/example-slug?pageSize=61"),
-      { params: { slug: "example-slug" } },
+      { params: Promise.resolve({ slug: "example-slug" }) },
     );
 
     expect(invalidPage.status).toBe(400);

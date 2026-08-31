@@ -56,6 +56,38 @@ describeDb("sales orders", () => {
     expect(dbOrder?.lines[0]?.qty).toBe(2);
   });
 
+  it("rejects a zero-line order before allocating a record or sequence number", async () => {
+    const { org, store, product, adminUser } = await seedBase();
+    const caller = createTestCaller({
+      id: adminUser.id,
+      email: adminUser.email,
+      role: adminUser.role,
+      organizationId: org.id,
+      isOrgOwner: true,
+    });
+
+    await expect(
+      caller.salesOrders.createDraft({
+        idempotencyKey: "sales-create-empty-rejected",
+        storeId: store.id,
+      }),
+    ).rejects.toMatchObject({ message: "salesOrderEmpty" });
+
+    await expect(
+      prisma.customerOrder.count({ where: { organizationId: org.id, isPosSale: false } }),
+    ).resolves.toBe(0);
+    await expect(
+      prisma.organizationCounter.findUnique({ where: { organizationId: org.id } }),
+    ).resolves.toBeNull();
+
+    const valid = await caller.salesOrders.createDraft({
+      idempotencyKey: "sales-create-after-empty-rejected",
+      storeId: store.id,
+      lines: [{ productId: product.id, qty: 1 }],
+    });
+    expect(valid.number).toBe("SO-000001");
+  });
+
   it("normalizes new order contacts, rejects invalid writes, and permits unchanged legacy snapshots", async () => {
     const { org, store, product, adminUser } = await seedBase({ plan: "BUSINESS" });
     const caller = createTestCaller({
@@ -471,6 +503,30 @@ describeDb("sales orders", () => {
       recipientEmail: "cancel@example.com",
     });
 
+    await expect(
+      caller.salesOrders.updateTracking({
+        customerOrderId: order.id,
+        trackingNumber: "SHOULD-NOT-SAVE",
+      }),
+    ).rejects.toMatchObject({ message: "salesOrderNotEditable" });
+    await expect(
+      caller.salesOrders.sendEmail({
+        customerOrderId: order.id,
+        type: CustomerOrderEmailType.CONFIRMATION,
+      }),
+    ).rejects.toMatchObject({ message: "salesOrderNotEditable" });
+    await expect(
+      prisma.customerOrder.findUniqueOrThrow({ where: { id: order.id } }),
+    ).resolves.toMatchObject({ trackingNumber: null, status: CustomerOrderStatus.CANCELED });
+    await expect(
+      prisma.customerOrderEmailLog.count({
+        where: {
+          customerOrderId: order.id,
+          type: { in: [CustomerOrderEmailType.CONFIRMATION, CustomerOrderEmailType.TRACKING] },
+        },
+      }),
+    ).resolves.toBe(0);
+
     await expect(caller.salesOrders.cancel({ customerOrderId: order.id })).rejects.toMatchObject({
       message: "invalidTransition",
     });
@@ -559,7 +615,7 @@ describeDb("sales orders", () => {
   });
 
   it("snapshots unit price and line total using store override price", async () => {
-    const { org, store, product, adminUser } = await seedBase();
+    const { org, store, product, supplier, baseUnit, adminUser } = await seedBase();
 
     await prisma.product.update({
       where: { id: product.id },
@@ -583,9 +639,31 @@ describeDb("sales orders", () => {
       isOrgOwner: true,
     });
 
+    const placeholder = await prisma.product.create({
+      data: {
+        organizationId: org.id,
+        supplierId: supplier.id,
+        sku: "SALES-ORDER-PLACEHOLDER",
+        name: "Sales order placeholder",
+        unit: baseUnit.code,
+        baseUnitId: baseUnit.id,
+        basePriceKgs: 1,
+      },
+    });
+    await prisma.storeProduct.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        productId: placeholder.id,
+        assignedById: adminUser.id,
+        isActive: true,
+      },
+    });
+
     const order = await caller.salesOrders.createDraft({
       idempotencyKey: "sales-create-add-line",
       storeId: store.id,
+      lines: [{ productId: placeholder.id, qty: 1 }],
     });
     const line = await caller.salesOrders.addLine({
       customerOrderId: order.id,
@@ -623,11 +701,7 @@ describeDb("sales orders", () => {
       idempotencyKey: "sales-create-client-a",
       storeId: store.id,
       customerName: "Client A",
-    });
-    await caller.salesOrders.addLine({
-      customerOrderId: order.id,
-      productId: product.id,
-      qty: 2,
+      lines: [{ productId: product.id, qty: 2 }],
     });
     await caller.salesOrders.confirm({ customerOrderId: order.id });
     await caller.salesOrders.markReady({ customerOrderId: order.id });
@@ -697,11 +771,7 @@ describeDb("sales orders", () => {
       idempotencyKey: "sales-create-client-b",
       storeId: store.id,
       customerName: "Client B",
-    });
-    await caller.salesOrders.addLine({
-      customerOrderId: order.id,
-      productId: product.id,
-      qty: 3,
+      lines: [{ productId: product.id, qty: 3 }],
     });
     await caller.salesOrders.confirm({ customerOrderId: order.id });
     await caller.salesOrders.markReady({ customerOrderId: order.id });
@@ -757,11 +827,7 @@ describeDb("sales orders", () => {
     const order = await adminCaller.salesOrders.createDraft({
       idempotencyKey: "sales-create-store-access",
       storeId: store.id,
-    });
-    await adminCaller.salesOrders.addLine({
-      customerOrderId: order.id,
-      productId: product.id,
-      qty: 1,
+      lines: [{ productId: product.id, qty: 1 }],
     });
     await adminCaller.salesOrders.confirm({ customerOrderId: order.id });
     await adminCaller.salesOrders.markReady({ customerOrderId: order.id });
@@ -877,15 +943,14 @@ describeDb("sales orders", () => {
     const order = await caller.salesOrders.createDraft({
       idempotencyKey: "sales-create-bundle-cost",
       storeId: store.id,
+      lines: [{ productId: bundle.id, qty: 3 }],
     });
-    const line = await caller.salesOrders.addLine({
-      customerOrderId: order.id,
-      productId: bundle.id,
-      qty: 3,
+    const line = await prisma.customerOrderLine.findFirstOrThrow({
+      where: { customerOrderId: order.id, productId: bundle.id },
     });
 
-    expect(line.unitCostKgs).toBe(140);
-    expect(line.lineCostTotalKgs).toBe(420);
+    expect(Number(line.unitCostKgs)).toBe(140);
+    expect(Number(line.lineCostTotalKgs)).toBe(420);
   });
 
   it("returns revenue/cost/profit metrics with bundle split", async () => {
@@ -949,6 +1014,8 @@ describeDb("sales orders", () => {
           productId: product.id,
           variantKey: "BASE",
           avgCostKgs: 30,
+          costBasisQty: 10,
+          costBasisValueKgs: 300,
         },
         {
           organizationId: org.id,
@@ -956,28 +1023,25 @@ describeDb("sales orders", () => {
           variantKey: "BASE",
           avgCostKgs: 10,
         },
+        {
+          organizationId: org.id,
+          productId: bundle.id,
+          variantKey: "BASE",
+          avgCostKgs: 20,
+          costBasisQty: 10,
+          costBasisValueKgs: 200,
+        },
       ],
     });
 
-    await adjustStock({
-      organizationId: org.id,
-      actorId: adminUser.id,
-      storeId: store.id,
-      productId: product.id,
-      qtyDelta: 10,
-      reason: "seed-product",
-      idempotencyKey: "seed-sales-product-metric",
-      requestId: "req-sales-product-metric",
-    });
-    await adjustStock({
-      organizationId: org.id,
-      actorId: adminUser.id,
-      storeId: store.id,
-      productId: bundle.id,
-      qtyDelta: 10,
-      reason: "seed-bundle",
-      idempotencyKey: "seed-sales-bundle-metric",
-      requestId: "req-sales-bundle-metric",
+    await prisma.inventorySnapshot.createMany({
+      data: [product, bundle].map((stockedProduct) => ({
+        storeId: store.id,
+        productId: stockedProduct.id,
+        variantKey: "BASE",
+        onHand: 10,
+        allowNegativeStock: false,
+      })),
     });
 
     const caller = createTestCaller({
@@ -991,9 +1055,11 @@ describeDb("sales orders", () => {
     const order = await caller.salesOrders.createDraft({
       idempotencyKey: "sales-create-metrics",
       storeId: store.id,
+      lines: [
+        { productId: product.id, qty: 2 },
+        { productId: bundle.id, qty: 1 },
+      ],
     });
-    await caller.salesOrders.addLine({ customerOrderId: order.id, productId: product.id, qty: 2 });
-    await caller.salesOrders.addLine({ customerOrderId: order.id, productId: bundle.id, qty: 1 });
     await caller.salesOrders.confirm({ customerOrderId: order.id });
     await caller.salesOrders.markReady({ customerOrderId: order.id });
     await caller.salesOrders.complete({

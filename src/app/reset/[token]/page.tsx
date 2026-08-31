@@ -1,62 +1,37 @@
-"use client";
-
-import { useMemo, useState } from "react";
-import { useParams } from "next/navigation";
-import { useTranslations } from "next-intl";
+import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
 import Link from "next/link";
-import { z } from "zod";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PasswordInput } from "@/components/ui/password-input";
-import { Spinner } from "@/components/ui/spinner";
 import { LanguageSwitcher } from "@/components/language-switcher";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { FormStack } from "@/components/form-layout";
-import { useToast } from "@/components/ui/toast";
-import { trpc } from "@/lib/trpc";
-import { translateError } from "@/lib/translateError";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getAuthTokenStatus } from "@/server/services/authTokens";
+import { ResetTokenForm } from "./reset-token-form";
 
-const ResetTokenPage = () => {
-  const params = useParams();
-  const token = String(params?.token ?? "");
-  const t = useTranslations("reset");
-  const tCommon = useTranslations("common");
-  const tErrors = useTranslations("errors");
-  const { toast } = useToast();
-  const [done, setDone] = useState(false);
+export const dynamic = "force-dynamic";
 
-  const schema = useMemo(
-    () =>
-      z.object({
-        password: z.string().min(8, t("passwordMin")),
-      }),
-    [t],
-  );
+export const generateMetadata = async (): Promise<Metadata> => {
+  const t = await getTranslations("reset");
+  return { title: t("resetTitle") };
+};
 
-  const form = useForm<z.infer<typeof schema>>({
-    resolver: zodResolver(schema),
-    defaultValues: { password: "" },
+type ResetTokenPageProps = {
+  params: Promise<{ token: string }>;
+};
+
+const ResetTokenPage = async ({ params }: ResetTokenPageProps) => {
+  const { token } = await params;
+  const status = await getAuthTokenStatus({
+    purpose: "PASSWORD_RESET",
+    token,
+    requireUser: true,
   });
 
-  const resetMutation = trpc.publicAuth.resetPassword.useMutation({
-    onSuccess: () => {
-      setDone(true);
-      toast({ variant: "success", description: t("resetSuccess") });
-    },
-    onError: (error) => {
-      toast({ variant: "error", description: translateError(tErrors, error) });
-    },
-  });
+  if (status === "valid") {
+    return <ResetTokenForm token={token} />;
+  }
+
+  const t = await getTranslations("reset");
+  const tErrors = await getTranslations("errors");
 
   return (
     <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-4 px-4 py-8 sm:py-12">
@@ -65,48 +40,17 @@ const ResetTokenPage = () => {
       </div>
       <Card>
         <CardHeader>
-          <CardTitle>{t("resetTitle")}</CardTitle>
+          <CardTitle as="h1">{t("linkUnavailableTitle")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          {done ? (
-            <>
-              <p className="text-sm text-muted-foreground">{t("resetSuccess")}</p>
-              <Link href="/login" className="text-sm font-semibold text-primary hover:text-primary/80">
-                {t("backToLogin")}
-              </Link>
-            </>
-          ) : (
-            <Form {...form}>
-              <form
-                onSubmit={form.handleSubmit((values) => resetMutation.mutate({ token, ...values }))}
-              >
-                <FormStack>
-                  <FormField
-                    control={form.control}
-                    name="password"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t("newPassword")}</FormLabel>
-                        <FormControl>
-                          <PasswordInput
-                            {...field}
-                            placeholder={t("passwordPlaceholder")}
-                            showLabel={tCommon("showPassword")}
-                            hideLabel={tCommon("hidePassword")}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <Button type="submit" className="w-full" disabled={resetMutation.isLoading}>
-                    {resetMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
-                    {resetMutation.isLoading ? tCommon("loading") : t("save")}
-                  </Button>
-                </FormStack>
-              </form>
-            </Form>
-          )}
+          <p className="text-sm text-muted-foreground" role="status">
+            {status === "expired" ? tErrors("tokenExpired") : tErrors("tokenInvalid")}
+          </p>
+          <p className="text-sm text-muted-foreground">{t("linkUnavailableDescription")}</p>
+          <div className="flex flex-wrap gap-3 text-sm font-semibold">
+            <Link href="/reset">{t("requestNewLink")}</Link>
+            <Link href="/login">{t("backToLogin")}</Link>
+          </div>
         </CardContent>
       </Card>
     </div>

@@ -934,6 +934,7 @@ const PurchaseOrderDetailPage = () => {
                           <TableCell>{formatNumber(line.remaining, locale)}</TableCell>
                           <TableCell>
                             <Input
+                              aria-label={`${t("receiveQty")} — ${line.productName}`}
                               type="number"
                               inputMode="numeric"
                               min={0}
@@ -977,7 +978,7 @@ const PurchaseOrderDetailPage = () => {
                                   );
                                 }}
                               >
-                                <SelectTrigger>
+                                <SelectTrigger aria-label={`${t("unit")} — ${line.productName}`}>
                                   <SelectValue placeholder={t("unitPlaceholder")} />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -1038,6 +1039,7 @@ const PurchaseOrderDetailPage = () => {
                         {t("remaining")}: {formatNumber(line.remaining, locale)}
                       </div>
                       <Input
+                        aria-label={`${t("receiveQty")} — ${line.productName}`}
                         type="number"
                         inputMode="numeric"
                         min={0}
@@ -1077,7 +1079,7 @@ const PurchaseOrderDetailPage = () => {
                             );
                           }}
                         >
-                          <SelectTrigger>
+                          <SelectTrigger aria-label={`${t("unit")} — ${line.productName}`}>
                             <SelectValue placeholder={t("unitPlaceholder")} />
                           </SelectTrigger>
                           <SelectContent>
@@ -1117,7 +1119,11 @@ const PurchaseOrderDetailPage = () => {
               </div>
             </div>
             <div className="flex items-start gap-3 rounded-md border border-border/70 bg-muted/30 p-3">
-              <Switch checked={allowOverReceive} onCheckedChange={setAllowOverReceive} />
+              <Switch
+                checked={allowOverReceive}
+                onCheckedChange={setAllowOverReceive}
+                aria-label={t("allowOverReceive")}
+              />
               <div>
                 <p className="text-sm font-medium text-foreground">{t("allowOverReceive")}</p>
                 <p className="text-xs text-muted-foreground">{t("allowOverReceiveHint")}</p>

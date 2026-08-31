@@ -17,6 +17,8 @@ export const EmptyState = ({
   className?: string;
 }) => (
   <div
+    data-empty-state
+    role="status"
     className={cn(
       "flex min-h-[12rem] flex-col items-center justify-center rounded-xl border border-dashed border-border bg-background p-6 text-center",
       className,

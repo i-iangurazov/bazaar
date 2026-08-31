@@ -12,9 +12,9 @@ export const unitsRouter = router({
   create: managerProcedure
     .input(
       z.object({
-        code: z.string().min(1),
-        labelRu: z.string().min(1),
-        labelKg: z.string().min(1),
+        code: z.string().trim().min(1),
+        labelRu: z.string().trim().min(1),
+        labelKg: z.string().trim().min(1),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -23,9 +23,9 @@ export const unitsRouter = router({
           organizationId: ctx.user.organizationId,
           actorId: ctx.user.id,
           requestId: ctx.requestId,
-          code: input.code.trim(),
-          labelRu: input.labelRu.trim(),
-          labelKg: input.labelKg.trim(),
+          code: input.code,
+          labelRu: input.labelRu,
+          labelKg: input.labelKg,
         });
       } catch (error) {
         throw toTRPCError(error);
@@ -35,9 +35,9 @@ export const unitsRouter = router({
   update: managerProcedure
     .input(
       z.object({
-        unitId: z.string(),
-        labelRu: z.string().min(1),
-        labelKg: z.string().min(1),
+        unitId: z.string().trim().min(1),
+        labelRu: z.string().trim().min(1),
+        labelKg: z.string().trim().min(1),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -47,8 +47,8 @@ export const unitsRouter = router({
           organizationId: ctx.user.organizationId,
           actorId: ctx.user.id,
           requestId: ctx.requestId,
-          labelRu: input.labelRu.trim(),
-          labelKg: input.labelKg.trim(),
+          labelRu: input.labelRu,
+          labelKg: input.labelKg,
         });
       } catch (error) {
         throw toTRPCError(error);
@@ -56,7 +56,7 @@ export const unitsRouter = router({
     }),
 
   remove: managerProcedure
-    .input(z.object({ unitId: z.string() }))
+    .input(z.object({ unitId: z.string().trim().min(1) }))
     .mutation(async ({ ctx, input }) => {
       try {
         return await removeUnit({

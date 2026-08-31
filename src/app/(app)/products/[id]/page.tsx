@@ -9,6 +9,7 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
+import { DynamicResourceTerminalState } from "@/components/dynamic-resource-terminal-state";
 import { PageHeader } from "@/components/page-header";
 import {
   ProductEditorCard,
@@ -82,6 +83,7 @@ import {
 import { formatMovementNote } from "@/lib/i18n/movementNote";
 import { deriveBasePriceFallbackCandidate } from "@/lib/basePriceFallback";
 import { buildBarcodeLabelPrintItems, hasPrintableBarcode } from "@/lib/barcodePrint";
+import { normalizeDynamicRouteId } from "@/lib/dynamicRouteId";
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
 import { getQzTrayBinding, printPdfBlobViaQzTray, qzTrayErrorMessageKey } from "@/lib/qzTrayPrint";
 import {
@@ -173,7 +175,7 @@ const formatVariantAttributeDisplayValue = (value: unknown, depth = 0): string =
 
 const ProductDetailPage = () => {
   const params = useParams();
-  const productId = String(params?.id ?? "");
+  const productId = normalizeDynamicRouteId(params?.id) ?? "";
   const productEditFormId = "product-edit-form";
   const t = useTranslations("products");
   const tInventory = useTranslations("inventory");
@@ -239,7 +241,7 @@ const ProductDetailPage = () => {
 
   const productQuery = trpc.products.getById.useQuery(
     { productId },
-    { enabled: Boolean(productId) },
+    { enabled: Boolean(productId), retry: false },
   );
   const bundleComponentsQuery = trpc.bundles.listComponents.useQuery(
     { bundleProductId: productId },
@@ -387,6 +389,8 @@ const ProductDetailPage = () => {
         receivingDraftKey,
       })
     : "/products";
+  const updateInFlightRef = useRef(false);
+  const assembleInFlightRef = useRef(false);
   const updateMutation = trpc.products.update.useMutation({
     onSuccess: async () => {
       const refreshes: Promise<unknown>[] = [
@@ -407,6 +411,9 @@ const ProductDetailPage = () => {
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+    onSettled: () => {
+      updateInFlightRef.current = false;
     },
   });
   const basePriceMutation = trpc.products.inlineUpdate.useMutation({
@@ -482,6 +489,9 @@ const ProductDetailPage = () => {
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+    onSettled: () => {
+      assembleInFlightRef.current = false;
     },
   });
   const archiveMutation = trpc.products.archive.useMutation({
@@ -1135,7 +1145,11 @@ const ProductDetailPage = () => {
     }
   };
 
-  if (productQuery.isLoading || storePricingQuery.isLoading || !formValues) {
+  if (!productId) {
+    return <DynamicResourceTerminalState title={t("editTitle")} message={t("notFound")} />;
+  }
+
+  if (productQuery.isLoading) {
     return (
       <div>
         <PageHeader title={t("editTitle")} subtitle={tCommon("loading")} />
@@ -1144,27 +1158,26 @@ const ProductDetailPage = () => {
   }
 
   if (productQuery.error) {
-    return (
-      <div>
-        <PageHeader title={t("editTitle")} subtitle={tErrors("genericTitle")} />
-        <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-danger">
-          <span>{translateError(tErrors, productQuery.error)}</span>
-          <Button type="button" variant="ghost" size="sm" onClick={() => productQuery.refetch()}>
-            {tErrors("tryAgain")}
-          </Button>
-        </div>
-      </div>
-    );
+    const message =
+      productQuery.error.data?.code === "NOT_FOUND"
+        ? t("notFound")
+        : translateError(tErrors, productQuery.error);
+    return <DynamicResourceTerminalState title={t("editTitle")} message={message} />;
   }
 
   if (!productQuery.data) {
+    return <DynamicResourceTerminalState title={t("editTitle")} message={t("notFound")} />;
+  }
+
+  if (storePricingQuery.isLoading || !formValues) {
     return (
       <div>
-        <PageHeader title={t("editTitle")} subtitle={t("notFound")} />
+        <PageHeader title={t("editTitle")} subtitle={tCommon("loading")} />
       </div>
     );
   }
 
+  const productRevision = productQuery.data.updatedAt;
   const productCategories = productQuery.data.categories?.length
     ? productQuery.data.categories
     : productQuery.data.category
@@ -1277,7 +1290,7 @@ const ProductDetailPage = () => {
       <ProductEditorCard title={t("productAvailabilityTitle")}>
         <div className="space-y-2">
           <Select value={pricingStoreId} onValueChange={(value) => setPricingStoreId(value)}>
-            <SelectTrigger>
+            <SelectTrigger aria-label={tCommon("selectStore")}>
               <SelectValue placeholder={tCommon("selectStore")} />
             </SelectTrigger>
             <SelectContent>
@@ -1412,14 +1425,19 @@ const ProductDetailPage = () => {
             <ProductForm
               key={`${productId}:${selectedSettingsStore?.storeId ?? "store"}:${selectedSettingsStore?.minStock ?? "min"}:${selectedPricingCurrencyCode}:${selectedPricingCurrencyRateKgsPerUnit}:${enableSku}:${enableBarcode}:${enableSimilarProductCheck}`}
               initialValues={formValues}
-              onSubmit={(values) =>
+              onSubmit={(values) => {
+                if (updateInFlightRef.current) {
+                  return;
+                }
+                updateInFlightRef.current = true;
                 updateMutation.mutate({
                   productId,
+                  expectedUpdatedAt: productRevision,
                   storeId: selectedSettingsStore?.storeId ?? undefined,
                   ...values,
                   basePriceKgs: resolveDraftBasePrice(),
-                })
-              }
+                });
+              }}
               attributeDefinitions={attributesQuery.data ?? []}
               units={unitsQuery.data ?? []}
               onDirtyChange={setProductFormDirty}
@@ -1822,7 +1840,7 @@ const ProductDetailPage = () => {
                     value={pricingStoreId}
                     onValueChange={(value) => setPricingStoreId(value)}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger aria-label={tCommon("selectStore")}>
                       <SelectValue placeholder={tCommon("selectStore")} />
                     </SelectTrigger>
                     <SelectContent>
@@ -2225,7 +2243,7 @@ const ProductDetailPage = () => {
                       onValueChange={(value) => field.onChange(value === "BASE" ? null : value)}
                       disabled={!selectedComponent}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger aria-label={t("variant")}>
                         <SelectValue placeholder={t("variant")} />
                       </SelectTrigger>
                       <SelectContent>
@@ -2297,11 +2315,15 @@ const ProductDetailPage = () => {
           <form
             className="space-y-4"
             onSubmit={assembleForm.handleSubmit((values) => {
+              if (assembleInFlightRef.current) {
+                return;
+              }
               const targetStoreId = pricingStoreId || movementStoreId;
               if (!targetStoreId) {
                 toast({ variant: "error", description: tErrors("storeRequired") });
                 return;
               }
+              assembleInFlightRef.current = true;
               assembleMutation.mutate({
                 storeId: targetStoreId,
                 bundleProductId: productId,
@@ -2359,7 +2381,7 @@ const ProductDetailPage = () => {
         <div className="space-y-4">
           <div className="w-full sm:max-w-xs">
             <Select value={movementStoreId} onValueChange={(value) => setMovementStoreId(value)}>
-              <SelectTrigger>
+              <SelectTrigger aria-label={tCommon("selectStore")}>
                 <SelectValue placeholder={tCommon("selectStore")} />
               </SelectTrigger>
               <SelectContent>

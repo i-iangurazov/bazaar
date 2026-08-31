@@ -15,6 +15,7 @@ export type MovementPrintDocumentLabels = {
   reason: string;
   comment: string;
   product: string;
+  store: string;
   skuBarcode: string;
   unit: string;
   quantity: string;
@@ -54,10 +55,9 @@ const getPrintableLines = (document: ProductMovementDocumentDetail) => {
     return document.lines;
   }
 
-  const outgoing = document.lines.filter((line) => line.movementType === "TRANSFER_OUT");
-  return outgoing.length
-    ? outgoing
-    : document.lines.filter((line) => line.movementType === "TRANSFER_IN");
+  return document.lines.filter(
+    (line) => line.movementType === "TRANSFER_OUT" || line.movementType === "TRANSFER_IN",
+  );
 };
 
 const isReceivingDocument = (document: ProductMovementDocumentDetail) =>
@@ -65,6 +65,19 @@ const isReceivingDocument = (document: ProductMovementDocumentDetail) =>
 
 const formatMaybeMoney = (value: number | null | undefined, locale: string, fallback: string) =>
   typeof value === "number" ? formatCurrencyKGS(value, locale) : fallback;
+
+const getPrintableLineTotal = (
+  document: ProductMovementDocumentDetail,
+  line: ProductMovementDocumentDetail["lines"][number],
+) => {
+  if (line.lineTotalKgs === null || line.lineTotalKgs === undefined) {
+    return null;
+  }
+  if (document.documentType !== "TRANSFER") {
+    return line.lineTotalKgs;
+  }
+  return Math.sign(line.qtyDelta) * Math.abs(line.lineTotalKgs);
+};
 
 const productSecondaryText = (
   line: ProductMovementDocumentDetail["lines"][number],
@@ -76,15 +89,24 @@ const productSecondaryText = (
 
 export const MovementPrintDocument = ({ document, labels, locale }: MovementPrintDocumentProps) => {
   const lines = getPrintableLines(document);
+  const isTransferDocument = document.documentType === "TRANSFER";
   const showMoneyColumns =
-    isReceivingDocument(document) &&
-    (document.totalAmount !== null ||
-      lines.some((line) => line.unitCostKgs !== null || line.lineTotalKgs !== null));
-  const totalAmount = showMoneyColumns
-    ? (document.totalAmount ??
-      lines.reduce((sum, line) => sum + (line.lineTotalKgs ?? 0), 0))
+    isTransferDocument ||
+    (isReceivingDocument(document) &&
+      (document.totalAmount !== null ||
+        lines.some((line) => line.unitCostKgs !== null || line.lineTotalKgs !== null)));
+  const transferTotalAmount = lines.every((line) => line.lineTotalKgs !== null)
+    ? lines.reduce((sum, line) => sum + (getPrintableLineTotal(document, line) ?? 0), 0)
     : null;
-  const totalQuantity = lines.reduce((sum, line) => sum + Math.abs(line.qtyDelta), 0);
+  const totalAmount = showMoneyColumns
+    ? isTransferDocument
+      ? transferTotalAmount
+      : (document.totalAmount ?? lines.reduce((sum, line) => sum + (line.lineTotalKgs ?? 0), 0))
+    : null;
+  const totalQuantity = lines.reduce(
+    (sum, line) => sum + (isTransferDocument ? line.qtyDelta : Math.abs(line.qtyDelta)),
+    0,
+  );
   const senderLabel =
     document.documentType === "TRANSFER"
       ? labels.sourceStore
@@ -260,6 +282,10 @@ export const MovementPrintDocument = ({ document, labels, locale }: MovementPrin
 
         .movement-print-unit {
           width: 18mm;
+        }
+
+        .movement-print-store {
+          width: 32mm;
         }
 
         .movement-print-qty {
@@ -457,6 +483,7 @@ export const MovementPrintDocument = ({ document, labels, locale }: MovementPrin
           <tr>
             <th className="movement-print-num">№</th>
             <th>{labels.product}</th>
+            {isTransferDocument ? <th className="movement-print-store">{labels.store}</th> : null}
             <th className="movement-print-qty">{labels.quantity}</th>
             <th className="movement-print-unit">{labels.unit}</th>
             {showMoneyColumns ? (
@@ -480,17 +507,34 @@ export const MovementPrintDocument = ({ document, labels, locale }: MovementPrin
                   ) : null}
                   {secondary ? <div className="movement-print-muted">{secondary}</div> : null}
                 </td>
+                {isTransferDocument ? (
+                  <td className="movement-print-store">
+                    <div className="movement-print-product-name">{line.storeName}</div>
+                    <div className="movement-print-muted">
+                      {line.movementType === "TRANSFER_OUT"
+                        ? labels.sourceStore
+                        : labels.destinationStore}
+                    </div>
+                  </td>
+                ) : null}
                 <td className="movement-print-qty">
-                  {formatNumber(Math.abs(line.qtyDelta), locale)}
+                  {formatNumber(
+                    isTransferDocument ? line.qtyDelta : Math.abs(line.qtyDelta),
+                    locale,
+                  )}
                 </td>
                 <td>{line.unit || labels.notAvailable}</td>
                 {showMoneyColumns ? (
                   <>
                     <td className="movement-print-money">
-                      {formatMaybeMoney(line.unitCostKgs, locale, labels.notAvailable)}
+                      {formatMaybeMoney(line.unitCostKgs, locale, labels.costNotSpecified)}
                     </td>
-                    <td className="movement-print-money">
-                      {formatMaybeMoney(line.lineTotalKgs, locale, labels.notAvailable)}
+                    <td className="movement-print-money" data-movement-line-value>
+                      {formatMaybeMoney(
+                        getPrintableLineTotal(document, line),
+                        locale,
+                        labels.costNotSpecified,
+                      )}
                     </td>
                   </>
                 ) : null}
@@ -504,7 +548,7 @@ export const MovementPrintDocument = ({ document, labels, locale }: MovementPrin
         <div className="movement-print-total-box">
           <div className="movement-print-total-row">
             <span>{labels.positions}</span>
-            <strong>{formatNumber(lines.length, locale)}</strong>
+            <strong>{formatNumber(document.positionsCount, locale)}</strong>
           </div>
           <div className="movement-print-total-row">
             <span>{labels.quantity}</span>
@@ -513,7 +557,7 @@ export const MovementPrintDocument = ({ document, labels, locale }: MovementPrin
           {showMoneyColumns ? (
             <div className="movement-print-total-row">
               <span>{labels.amount}</span>
-              <strong>{formatMaybeMoney(totalAmount, locale, labels.notAvailable)}</strong>
+              <strong>{formatMaybeMoney(totalAmount, locale, labels.costNotSpecified)}</strong>
             </div>
           ) : null}
         </div>

@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
+import { RouteIntlProvider } from "@/components/route-intl-provider";
 import { getServerAuthToken } from "@/server/auth/token";
 import { prisma } from "@/server/db/prisma";
 
@@ -10,7 +11,7 @@ const AppLayout = async ({ children }: { children: React.ReactNode }) => {
     redirect("/login");
   }
 
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const impersonationId = cookieStore.get("impersonation_session")?.value ?? "";
   let role = String(token.role ?? "STAFF");
   let displayName = token.name ?? null;
@@ -53,20 +54,25 @@ const AppLayout = async ({ children }: { children: React.ReactNode }) => {
   }
 
   return (
-    <AppShell
-      user={{
-        name: displayName,
-        email: displayEmail,
-        role,
-        organizationId: (token as { organizationId?: string | null } | null)?.organizationId ?? null,
-        isPlatformOwner: Boolean((token as { isPlatformOwner?: boolean } | null)?.isPlatformOwner),
-        isOrgOwner,
-        emailVerified,
-      }}
-      impersonation={impersonation}
-    >
-      {children}
-    </AppShell>
+    <RouteIntlProvider>
+      <AppShell
+        user={{
+          name: displayName,
+          email: displayEmail,
+          role,
+          organizationId:
+            (token as { organizationId?: string | null } | null)?.organizationId ?? null,
+          isPlatformOwner: Boolean(
+            (token as { isPlatformOwner?: boolean } | null)?.isPlatformOwner,
+          ),
+          isOrgOwner,
+          emailVerified,
+        }}
+        impersonation={impersonation}
+      >
+        {children}
+      </AppShell>
+    </RouteIntlProvider>
   );
 };
 

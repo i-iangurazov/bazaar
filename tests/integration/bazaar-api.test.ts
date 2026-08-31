@@ -295,7 +295,7 @@ describeDb("bazaar api integration", () => {
         method: "GET",
         headers: { authorization: `Bearer ${token}` },
       }),
-      { params: { id: createPayload.order.id } },
+      { params: Promise.resolve({ id: createPayload.order.id }) },
     );
     const getByIdPayload = await getByIdResponse.json();
 
@@ -344,7 +344,7 @@ describeDb("bazaar api integration", () => {
         method: "GET",
         headers: { authorization: `Bearer ${token}` },
       }),
-      { params: { id: createPayload.order.number } },
+      { params: Promise.resolve({ id: createPayload.order.number }) },
     );
     await expect(getByNumberResponse.json()).resolves.toMatchObject({
       order: { id: createPayload.order.id, status: "CONFIRMED" },
@@ -355,7 +355,7 @@ describeDb("bazaar api integration", () => {
         method: "GET",
         headers: { authorization: `Bearer ${token}` },
       }),
-      { params: { id: "EXT-STATUS-1" } },
+      { params: Promise.resolve({ id: "EXT-STATUS-1" }) },
     );
     await expect(getByExternalIdResponse.json()).resolves.toMatchObject({
       order: { id: createPayload.order.id, externalOrderId: "EXT-STATUS-1" },
@@ -412,7 +412,7 @@ describeDb("bazaar api integration", () => {
         method: "GET",
         headers: { authorization: `Bearer ${token}` },
       }),
-      { params: { id: createPayload.order.id } },
+      { params: Promise.resolve({ id: createPayload.order.id }) },
     );
     await expect(cancelledResponse.json()).resolves.toMatchObject({
       order: {
@@ -545,7 +545,7 @@ describeDb("bazaar api integration", () => {
         method: "GET",
         headers: { authorization: `Bearer ${primaryToken}` },
       }),
-      { params: { id: order.id } },
+      { params: Promise.resolve({ id: order.id }) },
     );
     expect(positiveResponse.status).toBe(200);
     await expect(positiveResponse.json()).resolves.toMatchObject({ order: { id: order.id } });
@@ -562,7 +562,7 @@ describeDb("bazaar api integration", () => {
             method: "GET",
             headers: { authorization: `Bearer ${token}` },
           }),
-          { params: { id: identifier } },
+          { params: Promise.resolve({ id: identifier }) },
         ),
       ),
     );

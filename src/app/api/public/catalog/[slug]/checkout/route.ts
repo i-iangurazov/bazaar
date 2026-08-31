@@ -25,7 +25,11 @@ const checkoutSchema = z.object({
 
 const toMessage = (value: unknown) => (value instanceof Error ? value.message : "genericMessage");
 
-export const POST = async (request: Request, context: { params: { slug: string } }) => {
+export const POST = async (
+  request: Request,
+  context: { params: Promise<{ slug: string }> },
+) => {
+  const { slug } = await context.params;
   const body = await request.json().catch(() => null);
   const parsed = checkoutSchema.safeParse(body);
   if (!parsed.success) {
@@ -38,7 +42,7 @@ export const POST = async (request: Request, context: { params: { slug: string }
       return Response.json({ message: "idempotencyKeyRequired" }, { status: 400 });
     }
     const operation = await createCatalogCheckoutOrderOperation({
-      slug: context.params.slug,
+      slug,
       idempotencyKey,
       customerName: parsed.data.customerName,
       customerEmail: parsed.data.customerEmail,

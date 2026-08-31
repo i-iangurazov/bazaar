@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 
@@ -50,6 +50,7 @@ const PosDebtsPage = () => {
 
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
+  const settleDebtInFlightRef = useRef(false);
   const deferredSearch = useDeferredValue(search);
   const normalizedSearch = deferredSearch.trim().replace(/\s+/g, " ");
 
@@ -137,11 +138,21 @@ const PosDebtsPage = () => {
       toast({ variant: "error", description: t("debts.openShiftRequired") });
       return;
     }
-    await settleDebtMutation.mutateAsync({
-      saleId,
-      registerId,
-      idempotencyKey: createIdempotencyKey(),
-    });
+    if (settleDebtInFlightRef.current) {
+      return;
+    }
+    settleDebtInFlightRef.current = true;
+    try {
+      await settleDebtMutation.mutateAsync({
+        saleId,
+        registerId,
+        idempotencyKey: createIdempotencyKey(),
+      });
+    } catch {
+      // handled by mutation onError
+    } finally {
+      settleDebtInFlightRef.current = false;
+    }
   };
 
   const formatDebtMoney = (debt: (typeof debts)[number]) =>

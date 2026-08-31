@@ -12,7 +12,7 @@ describeDb("search router", () => {
   });
 
   it("returns command palette results scoped to the current organization", async () => {
-    const { org, store, supplier, product, adminUser, baseUnit } = await seedBase();
+    const { org, store, supplier, product, adminUser } = await seedBase();
 
     await prisma.store.update({
       where: { id: store.id },

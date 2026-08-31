@@ -1,6 +1,12 @@
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 
+import {
+  SUPPLIER_EMAIL_MAX_LENGTH,
+  SUPPLIER_NAME_MAX_LENGTH,
+  SUPPLIER_NOTES_MAX_LENGTH,
+  SUPPLIER_PHONE_MAX_LENGTH,
+} from "@/lib/supplierForm";
 import { managerProcedure, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
 import {
@@ -55,10 +61,10 @@ export const suppliersRouter = router({
   create: managerProcedure
     .input(
       z.object({
-        name: z.string().min(2),
-        email: z.string().email().optional(),
-        phone: z.string().optional(),
-        notes: z.string().optional(),
+        name: z.string().trim().min(2).max(SUPPLIER_NAME_MAX_LENGTH),
+        email: z.string().trim().email().max(SUPPLIER_EMAIL_MAX_LENGTH).optional(),
+        phone: z.string().trim().max(SUPPLIER_PHONE_MAX_LENGTH).optional(),
+        notes: z.string().trim().max(SUPPLIER_NOTES_MAX_LENGTH).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -81,10 +87,10 @@ export const suppliersRouter = router({
     .input(
       z.object({
         supplierId: z.string(),
-        name: z.string().min(2),
-        email: z.string().email().optional(),
-        phone: z.string().optional(),
-        notes: z.string().optional(),
+        name: z.string().trim().min(2).max(SUPPLIER_NAME_MAX_LENGTH),
+        email: z.string().trim().email().max(SUPPLIER_EMAIL_MAX_LENGTH).optional(),
+        phone: z.string().trim().max(SUPPLIER_PHONE_MAX_LENGTH).optional(),
+        notes: z.string().trim().max(SUPPLIER_NOTES_MAX_LENGTH).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {

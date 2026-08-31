@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent }
 
 import { PageHeader } from "@/components/page-header";
 import { PageLoading } from "@/components/page-loading";
+import { DynamicResourceTerminalState } from "@/components/dynamic-resource-terminal-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -133,7 +134,7 @@ export const InventoryReceivingPage = ({
   const stores: StoreRow[] = useMemo(() => storesQuery.data ?? [], [storesQuery.data]);
   const editableDocumentQuery = trpc.inventory.editableProductMovementDocument.useQuery(
     { documentKey: editDocumentKey ?? "" },
-    { enabled: Boolean(editDocumentKey && canManageStock), staleTime: 0 },
+    { enabled: Boolean(editDocumentKey && canManageStock), retry: false, staleTime: 0 },
   );
   const editableDocument = editableDocumentQuery.data ?? null;
   const [storeId, setStoreId] = useState("");
@@ -156,6 +157,7 @@ export const InventoryReceivingPage = ({
   const handledCreatedProductRef = useRef("");
   const storeRefreshSequenceRef = useRef(0);
   const activeDraftKeyRef = useRef("");
+  const submissionInFlightRef = useRef(false);
 
   const authenticatedDraftOwner =
     sessionStatus === "authenticated" &&
@@ -763,6 +765,9 @@ export const InventoryReceivingPage = ({
         description: translateError(tErrors, error) || t("receivingPostFailed"),
       });
     },
+    onSettled: () => {
+      submissionInFlightRef.current = false;
+    },
   });
   const editMutation = trpc.inventory.editProductMovementDocument.useMutation({
     onSuccess: async () => {
@@ -784,15 +789,24 @@ export const InventoryReceivingPage = ({
         description: translateError(tErrors, error) || t("receivingPostFailed"),
       });
     },
+    onSettled: () => {
+      submissionInFlightRef.current = false;
+    },
   });
 
   const handlePost = () => {
-    if (validationMessage || postMutation.isLoading || editMutation.isLoading) {
+    if (
+      validationMessage ||
+      postMutation.isLoading ||
+      editMutation.isLoading ||
+      submissionInFlightRef.current
+    ) {
       if (validationMessage) {
         toast({ variant: "error", description: validationMessage });
       }
       return;
     }
+    submissionInFlightRef.current = true;
     const parsedDate = dateTime ? new Date(dateTime) : null;
     const normalizedLines = lines.map((line) => {
       const metric = metricByKey.get(line.key);
@@ -886,26 +900,16 @@ export const InventoryReceivingPage = ({
     );
   }
 
-  if (isEditMode && editableDocumentQuery.error) {
-    return (
-      <div>
-        <PageHeader
-          title={pageTitle}
-          subtitle={pageSubtitle}
-          action={
-            <Button asChild variant="secondary">
-              <Link href={backHref} onClick={clearReceivingDraft}>
-                <BackIcon className="h-4 w-4" aria-hidden />
-                {t("backToMovements")}
-              </Link>
-            </Button>
-          }
-        />
-        <div className="rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
-          {translateError(tErrors, editableDocumentQuery.error)}
-        </div>
-      </div>
-    );
+  if (
+    isEditMode &&
+    (editableDocumentQuery.error || (editableDocumentQuery.isSuccess && !editableDocument))
+  ) {
+    const message =
+      (editableDocumentQuery.isSuccess && !editableDocument) ||
+      editableDocumentQuery.error?.data?.code === "NOT_FOUND"
+        ? t("movementJournal.documentNotFound")
+        : translateError(tErrors, editableDocumentQuery.error);
+    return <DynamicResourceTerminalState title={pageTitle} message={message} />;
   }
 
   return (
@@ -941,7 +945,7 @@ export const InventoryReceivingPage = ({
             <div className="space-y-2">
               <Label>{tCommon("store")}</Label>
               <Select value={storeId} onValueChange={handleStoreChange}>
-                <SelectTrigger>
+                <SelectTrigger aria-label={tCommon("store")}>
                   <SelectValue placeholder={tCommon("selectStore")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -1243,6 +1247,7 @@ export const InventoryReceivingPage = ({
                           {t("receiveQty")}
                         </Label>
                         <Input
+                          aria-label={t("receiveQty")}
                           ref={(node) => {
                             setReceivingInputRef(line.key, "quantity", "desktop", node);
                           }}
@@ -1273,6 +1278,7 @@ export const InventoryReceivingPage = ({
                           {t("unitCost")}
                         </Label>
                         <Input
+                          aria-label={t("unitCost")}
                           ref={(node) => {
                             setReceivingInputRef(line.key, "unitCost", "desktop", node);
                           }}

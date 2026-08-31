@@ -39,7 +39,7 @@ const getSessionTokenFromCookieHeader = (cookieHeader?: string | null) => {
   return null;
 };
 
-const getSessionTokenFromCookieStore = (cookieStore: ReturnType<typeof cookies>) => {
+const getSessionTokenFromCookieStore = (cookieStore: Awaited<ReturnType<typeof cookies>>) => {
   for (const name of sessionCookieNames) {
     const value = cookieStore.get(name)?.value;
     if (value) {
@@ -109,8 +109,7 @@ export const getAuthTokenFromCookieHeader = async (cookieHeader?: string | null)
 };
 
 export const getServerAuthToken = async () => {
-  const cookieStore = cookies();
-  const headerStore = headers();
+  const [cookieStore, headerStore] = await Promise.all([cookies(), headers()]);
   const sessionToken =
     getSessionTokenFromCookieStore(cookieStore) ??
     getSessionTokenFromCookieHeader(headerStore.get("cookie"));

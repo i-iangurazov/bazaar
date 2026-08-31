@@ -360,8 +360,11 @@ const buildProductMovementJournalCte = (input: {
       m."type"::text AS "movementType",
       m."qtyDelta",
       m."linePosition",
-      m."unitCostKgs",
-      m."lineTotalKgs",
+      COALESCE(
+        m."unitCostKgs",
+        ABS(COALESCE(m."inventoryValueDeltaKgs", m."lineTotalKgs") / NULLIF(m."qtyDelta", 0))
+      ) AS "unitCostKgs",
+      COALESCE(m."inventoryValueDeltaKgs", m."lineTotalKgs") AS "lineTotalKgs",
       m."referenceType",
       m."referenceId",
       m."note",
@@ -563,7 +566,12 @@ const buildProductMovementJournalCte = (input: {
       STRING_AGG(DISTINCT CASE WHEN b."movementType" = 'TRANSFER_OUT' THEN b."storeName" END, ', ') AS "sourceStoreName",
       STRING_AGG(DISTINCT CASE WHEN b."movementType" = 'TRANSFER_IN' THEN b."storeName" END, ', ') AS "destinationStoreName",
       STRING_AGG(DISTINCT b."productName", ', ') AS "productPreview",
-      SUM(b."lineTotalKgs") AS "movementLineTotalAmount",
+      CASE
+        WHEN b."documentType" = 'TRANSFER' THEN
+          ABS(SUM(b."lineTotalKgs") FILTER (WHERE b."movementType" = 'TRANSFER_OUT'))
+        WHEN b."documentType" = 'WRITE_OFF' THEN ABS(SUM(b."lineTotalKgs"))
+        ELSE SUM(b."lineTotalKgs")
+      END AS "movementLineTotalAmount",
       BOOL_OR(b."lineTotalKgs" IS NOT NULL) AS "hasMovementLineTotal",
       (ARRAY_AGG(b."note" ORDER BY b."createdAt" DESC) FILTER (WHERE b."note" IS NOT NULL AND BTRIM(b."note") <> ''))[1] AS "comment",
       (ARRAY_AGG(b."createdById" ORDER BY b."createdAt" DESC) FILTER (WHERE b."createdById" IS NOT NULL))[1] AS "authorId",
@@ -855,7 +863,11 @@ const buildEffectiveStockDocumentLines = (
   lines: ProductMovementDocumentLineSqlRow[],
   documentType: "STOCK_RECEIVING" | "TRANSFER" | "WRITE_OFF",
 ) => {
-  const effectiveMovementType = getEffectiveMovementType(documentType);
+  const effectiveMovementTypes = new Set(
+    documentType === "TRANSFER"
+      ? ["TRANSFER_OUT", "TRANSFER_IN"]
+      : [getEffectiveMovementType(documentType)],
+  );
   const aggregates = new Map<
     string,
     {
@@ -874,10 +886,10 @@ const buildEffectiveStockDocumentLines = (
   >();
 
   lines.forEach((line, index) => {
-    if (line.movementType !== effectiveMovementType) {
+    if (!effectiveMovementTypes.has(line.movementType)) {
       return;
     }
-    const key = `${line.productId}:${line.variantId ?? "BASE"}`;
+    const key = `${line.movementType}:${line.storeId}:${line.productId}:${line.variantId ?? "BASE"}`;
     const unitCostKgs = toNumberOrNull(line.unitCostKgs);
     const lineTotalKgs = toNumberOrNull(line.lineTotalKgs);
     const existing = aggregates.get(key);
@@ -925,7 +937,9 @@ const buildEffectiveStockDocumentLines = (
         return null;
       }
       const latestLine = aggregate.latestLine;
-      const lineTotalKgs = aggregate.hasLineTotal ? roundMoney(aggregate.lineTotalKgs) : null;
+      const lineTotalKgs = aggregate.hasLineTotal
+        ? Math.abs(roundMoney(aggregate.lineTotalKgs))
+        : null;
       const unitCostKgs =
         lineTotalKgs !== null && quantity > 0
           ? roundMoney(lineTotalKgs / quantity)
@@ -1241,8 +1255,11 @@ export const getProductMovementDocument = async (
         m."type"::text AS "movementType",
         m."qtyDelta",
         m."linePosition",
-        m."unitCostKgs",
-        m."lineTotalKgs",
+        COALESCE(
+          m."unitCostKgs",
+          ABS(COALESCE(m."inventoryValueDeltaKgs", m."lineTotalKgs") / NULLIF(m."qtyDelta", 0))
+        ) AS "unitCostKgs",
+        COALESCE(m."inventoryValueDeltaKgs", m."lineTotalKgs") AS "lineTotalKgs",
         m."note",
         m."createdAt",
         u."name" AS "authorName",

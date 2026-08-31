@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 import { z } from "zod";
@@ -44,12 +44,7 @@ import { useToast } from "@/components/ui/toast";
 import { AddIcon, CloseIcon, DeleteIcon, EditIcon, EmptyIcon } from "@/components/icons";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { RowActions } from "@/components/row-actions";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
@@ -64,10 +59,18 @@ const AttributesPage = () => {
   const isForbidden = status === "authenticated" && !canManageAttributes;
   const { toast } = useToast();
   const { confirm, confirmDialog } = useConfirmDialog();
+  const saveLockRef = useRef(false);
+  const removeLockRef = useRef(false);
 
-  const attributesQuery = trpc.attributes.list.useQuery(undefined, { enabled: canManageAttributes });
-  const templatesQuery = trpc.categoryTemplates.list.useQuery(undefined, { enabled: canManageAttributes });
-  const categoriesQuery = trpc.categoryTemplates.categories.useQuery(undefined, { enabled: canManageAttributes });
+  const attributesQuery = trpc.attributes.list.useQuery(undefined, {
+    enabled: canManageAttributes,
+  });
+  const templatesQuery = trpc.categoryTemplates.list.useQuery(undefined, {
+    enabled: canManageAttributes,
+  });
+  const categoriesQuery = trpc.categoryTemplates.categories.useQuery(undefined, {
+    enabled: canManageAttributes,
+  });
 
   type AttributeRow = NonNullable<typeof attributesQuery.data>[number];
   type TemplateRow = NonNullable<typeof templatesQuery.data>[number];
@@ -86,12 +89,12 @@ const AttributesPage = () => {
     () =>
       z
         .object({
-          key: z.string().min(1, t("keyRequired")),
-          labelRu: z.string().min(1, t("labelRequired")),
-          labelKg: z.string().min(1, t("labelRequired")),
+          key: z.string().trim().min(1, t("keyRequired")),
+          labelRu: z.string().trim().min(1, t("labelRequired")),
+          labelKg: z.string().trim().min(1, t("labelRequired")),
           type: z.enum(["TEXT", "NUMBER", "SELECT", "MULTI_SELECT"]),
-          optionsRu: z.array(z.string()).optional(),
-          optionsKg: z.array(z.string()).optional(),
+          optionsRu: z.array(z.string().trim().min(1)).optional(),
+          optionsKg: z.array(z.string().trim().min(1)).optional(),
           required: z.boolean().optional(),
         })
         .superRefine((values, ctx) => {
@@ -130,8 +133,7 @@ const AttributesPage = () => {
   const typeValue = form.watch("type");
   const showOptions = typeValue === "SELECT" || typeValue === "MULTI_SELECT";
   const definitionMap = useMemo(
-    () =>
-      new Map((attributesQuery.data ?? []).map((attribute) => [attribute.key, attribute])),
+    () => new Map((attributesQuery.data ?? []).map((attribute) => [attribute.key, attribute])),
     [attributesQuery.data],
   );
   const resolveLabel = (attribute?: AttributeRow, fallbackKey?: string) => {
@@ -307,20 +309,47 @@ const AttributesPage = () => {
     });
   };
 
-  const onSubmit = (values: z.infer<typeof schema>) => {
+  const onSubmit = async (values: z.infer<typeof schema>) => {
+    if (saveLockRef.current) {
+      return;
+    }
+    saveLockRef.current = true;
     const payload = {
-      key: values.key.trim(),
-      labelRu: values.labelRu.trim(),
-      labelKg: values.labelKg.trim(),
+      key: values.key,
+      labelRu: values.labelRu,
+      labelKg: values.labelKg,
       type: values.type,
-      optionsRu: values.optionsRu?.map((value) => value.trim()).filter(Boolean),
-      optionsKg: values.optionsKg?.map((value) => value.trim()).filter(Boolean),
+      optionsRu: values.optionsRu,
+      optionsKg: values.optionsKg,
       required: values.required ?? false,
     };
-    if (editing) {
-      updateMutation.mutate({ id: editing.id, ...payload });
-    } else {
-      createMutation.mutate(payload);
+    try {
+      if (editing) {
+        await updateMutation.mutateAsync({ id: editing.id, ...payload });
+      } else {
+        await createMutation.mutateAsync(payload);
+      }
+    } catch {
+      // Mutation callbacks surface localized errors.
+    } finally {
+      saveLockRef.current = false;
+    }
+  };
+
+  const handleRemoveAttribute = async (attribute: AttributeRow) => {
+    if (removeLockRef.current) {
+      return;
+    }
+    removeLockRef.current = true;
+    try {
+      if (!(await confirm({ description: t("confirmRemove"), confirmVariant: "danger" }))) {
+        return;
+      }
+      await removeMutation.mutateAsync({ id: attribute.id });
+    } catch {
+      // Mutation callbacks surface localized errors.
+    } finally {
+      removeLockRef.current = false;
     }
   };
 
@@ -348,18 +377,13 @@ const AttributesPage = () => {
 
       {attributesQuery.isLoading ? (
         <div className="bazaar-admin-empty mt-4 min-h-[9rem] gap-2">
-              <Spinner className="h-4 w-4" />
-              {tCommon("loading")}
-            </div>
+          <Spinner className="h-4 w-4" />
+          {tCommon("loading")}
+        </div>
       ) : attributesQuery.error ? (
         <div className="bazaar-admin-error mt-4 flex flex-wrap items-center gap-2">
           <span>{translateError(tErrors, attributesQuery.error)}</span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => attributesQuery.refetch()}
-          >
+          <Button type="button" variant="ghost" size="sm" onClick={() => attributesQuery.refetch()}>
             {tErrors("tryAgain")}
           </Button>
         </div>
@@ -371,79 +395,76 @@ const AttributesPage = () => {
             renderDesktop={(visibleItems) => (
               <div className="bazaar-admin-table-shell">
                 <div className="bazaar-admin-table-scroll">
-                <Table className="min-w-[640px]">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t("key")}</TableHead>
-                      <TableHead>{t("labelRu")}</TableHead>
-                      <TableHead>{t("labelKg")}</TableHead>
-                      <TableHead>{t("type")}</TableHead>
-                      <TableHead>{t("required")}</TableHead>
-                      <TableHead>{tCommon("actions")}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {visibleItems.map((attribute: AttributeRow) => (
-                      <TableRow key={attribute.id}>
-                        <TableCell className="font-mono text-xs">{attribute.key}</TableCell>
-                        <TableCell>{attribute.labelRu}</TableCell>
-                        <TableCell>{attribute.labelKg}</TableCell>
-                        <TableCell>{t(`types.${attribute.type}`)}</TableCell>
-                        <TableCell>
-                          {attribute.required ? (
-                            <Badge variant="muted">{t("requiredYes")}</Badge>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">{t("requiredNo")}</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    type="button"
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-8 w-8"
-                                    aria-label={t("edit")}
-                                    onClick={() => openEdit(attribute)}
-                                  >
-                                    <EditIcon className="h-4 w-4" aria-hidden />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>{t("edit")}</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    type="button"
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-8 w-8 text-danger hover:text-danger"
-                                    aria-label={t("remove")}
-                                    onClick={async () => {
-                                      if (!(await confirm({ description: t("confirmRemove"), confirmVariant: "danger" }))) {
-                                        return;
-                                      }
-                                      removeMutation.mutate({ id: attribute.id });
-                                    }}
-                                    disabled={removeMutation.isLoading}
-                                  >
-                                    <DeleteIcon className="h-4 w-4" aria-hidden />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>{t("remove")}</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          </div>
-                        </TableCell>
+                  <Table className="min-w-[640px]">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{t("key")}</TableHead>
+                        <TableHead>{t("labelRu")}</TableHead>
+                        <TableHead>{t("labelKg")}</TableHead>
+                        <TableHead>{t("type")}</TableHead>
+                        <TableHead>{t("required")}</TableHead>
+                        <TableHead>{tCommon("actions")}</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {visibleItems.map((attribute: AttributeRow) => (
+                        <TableRow key={attribute.id}>
+                          <TableCell className="font-mono text-xs">{attribute.key}</TableCell>
+                          <TableCell>{attribute.labelRu}</TableCell>
+                          <TableCell>{attribute.labelKg}</TableCell>
+                          <TableCell>{t(`types.${attribute.type}`)}</TableCell>
+                          <TableCell>
+                            {attribute.required ? (
+                              <Badge variant="muted">{t("requiredYes")}</Badge>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">
+                                {t("requiredNo")}
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      type="button"
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-8 w-8"
+                                      aria-label={t("edit")}
+                                      onClick={() => openEdit(attribute)}
+                                    >
+                                      <EditIcon className="h-4 w-4" aria-hidden />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>{t("edit")}</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      type="button"
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-8 w-8 text-danger hover:text-danger"
+                                      aria-label={t("remove")}
+                                      onClick={() => void handleRemoveAttribute(attribute)}
+                                      disabled={removeMutation.isLoading}
+                                    >
+                                      <DeleteIcon className="h-4 w-4" aria-hidden />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>{t("remove")}</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
               </div>
             )}
@@ -454,7 +475,9 @@ const AttributesPage = () => {
                     <p className="font-mono text-xs text-muted-foreground">{attribute.key}</p>
                     <p className="text-sm font-medium text-foreground">{attribute.labelRu}</p>
                     <p className="text-xs text-muted-foreground">{attribute.labelKg}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">{t(`types.${attribute.type}`)}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {t(`types.${attribute.type}`)}
+                    </p>
                     <div className="mt-1">
                       {attribute.required ? (
                         <Badge variant="muted">{t("requiredYes")}</Badge>
@@ -477,12 +500,7 @@ const AttributesPage = () => {
                         icon: DeleteIcon,
                         variant: "danger",
                         disabled: removeMutation.isLoading,
-                        onSelect: async () => {
-                          if (!(await confirm({ description: t("confirmRemove"), confirmVariant: "danger" }))) {
-                            return;
-                          }
-                          removeMutation.mutate({ id: attribute.id });
-                        },
+                        onSelect: () => void handleRemoveAttribute(attribute),
                       },
                     ]}
                     maxInline={1}
@@ -538,10 +556,7 @@ const AttributesPage = () => {
           ) : templateGroups.length ? (
             <div className="space-y-3">
               {templateGroups.map((group) => (
-                <div
-                  key={group.category}
-                  className="bazaar-admin-mobile-card p-4"
-                >
+                <div key={group.category} className="bazaar-admin-mobile-card p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <p className="text-sm font-semibold text-foreground">{group.category}</p>
@@ -656,7 +671,7 @@ const AttributesPage = () => {
                       <FormLabel>{t("type")}</FormLabel>
                       <FormControl>
                         <Select value={field.value} onValueChange={field.onChange}>
-                          <SelectTrigger>
+                          <SelectTrigger aria-label={t("type")}>
                             <SelectValue placeholder={t("selectType")} />
                           </SelectTrigger>
                           <SelectContent>
@@ -760,7 +775,11 @@ const AttributesPage = () => {
                         <div className="flex min-h-[36px] flex-wrap gap-2">
                           {field.value?.length ? (
                             field.value.map((option, index) => (
-                              <Badge key={`${option}-${index}`} variant="muted" className="gap-1 pr-1">
+                              <Badge
+                                key={`${option}-${index}`}
+                                variant="muted"
+                                className="gap-1 pr-1"
+                              >
                                 <span>{option}</span>
                                 <Button
                                   type="button"
@@ -827,7 +846,11 @@ const AttributesPage = () => {
                         <div className="flex min-h-[36px] flex-wrap gap-2">
                           {field.value?.length ? (
                             field.value.map((option, index) => (
-                              <Badge key={`${option}-${index}`} variant="muted" className="gap-1 pr-1">
+                              <Badge
+                                key={`${option}-${index}`}
+                                variant="muted"
+                                className="gap-1 pr-1"
+                              >
                                 <span>{option}</span>
                                 <Button
                                   type="button"
@@ -919,7 +942,7 @@ const AttributesPage = () => {
                 onValueChange={(value) => setTemplateDraftKey(value)}
                 disabled={!availableTemplateDefinitions.length}
               >
-                <SelectTrigger className="min-w-[220px]">
+                <SelectTrigger className="min-w-[220px]" aria-label={t("templateAddAttribute")}>
                   <SelectValue placeholder={t("templateAddAttribute")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -984,11 +1007,7 @@ const AttributesPage = () => {
             >
               {tCommon("cancel")}
             </Button>
-            <Button
-              type="button"
-              onClick={submitTemplate}
-              disabled={setTemplateMutation.isLoading}
-            >
+            <Button type="button" onClick={submitTemplate} disabled={setTemplateMutation.isLoading}>
               {setTemplateMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
               {setTemplateMutation.isLoading ? tCommon("saving") : tCommon("save")}
             </Button>

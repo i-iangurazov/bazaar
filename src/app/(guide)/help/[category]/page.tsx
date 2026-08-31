@@ -13,9 +13,10 @@ export const generateStaticParams = () =>
 export const generateMetadata = async ({
   params,
 }: {
-  params: { category: string };
+  params: Promise<{ category: string }>;
 }): Promise<Metadata> => {
-  const category = getHelpCategory(params.category);
+  const { category: categorySlug } = await params;
+  const category = getHelpCategory(categorySlug);
   if (!category) return {};
   const locale = normalizeLocale(await getLocale()) ?? defaultLocale;
   const title = `${localize(category.title, locale)} — Bazaar Guide`;
@@ -33,8 +34,9 @@ export const generateMetadata = async ({
   };
 };
 
-const CategoryPage = ({ params }: { params: { category: string } }) => {
-  const category = getHelpCategory(params.category);
+const CategoryPage = async ({ params }: { params: Promise<{ category: string }> }) => {
+  const { category: categorySlug } = await params;
+  const category = getHelpCategory(categorySlug);
   if (!category) notFound();
   return <HelpCategoryPage category={category} />;
 };

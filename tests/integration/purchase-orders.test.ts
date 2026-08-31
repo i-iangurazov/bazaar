@@ -19,7 +19,7 @@ describeDb("purchase orders", () => {
   });
 
   it("receives purchase orders idempotently with partial receipts", async () => {
-    const { org, store, supplier, product, adminUser, baseUnit } = await seedBase();
+    const { org, store, supplier, product, adminUser } = await seedBase();
 
     const po = await createPurchaseOrder({
       organizationId: org.id,
@@ -104,7 +104,7 @@ describeDb("purchase orders", () => {
   });
 
   it("blocks over-receive by default", async () => {
-    const { org, store, supplier, product, adminUser, baseUnit } = await seedBase();
+    const { org, store, supplier, product, adminUser } = await seedBase();
 
     const po = await createPurchaseOrder({
       organizationId: org.id,
@@ -136,7 +136,7 @@ describeDb("purchase orders", () => {
   });
 
   it("rejects invalid state transitions", async () => {
-    const { org, store, supplier, product, adminUser, baseUnit } = await seedBase();
+    const { org, store, supplier, product, adminUser } = await seedBase();
 
     const po = await prisma.purchaseOrder.create({
       data: {

@@ -96,6 +96,7 @@ describeDb("manager operational permissions", () => {
 
     const updated = await caller.products.update({
       productId: created.id,
+      expectedUpdatedAt: created.updatedAt,
       sku: "MGR-PRODUCT-1",
       name: "Manager Product Updated",
       baseUnitId: baseUnit.id,

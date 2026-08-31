@@ -33,10 +33,11 @@ export const MMARKET_IMPORT_ENDPOINTS: Record<MMarketEnvironment, string> = {
   PROD: "https://market.mbank.kg/api/crm/products/import_products/",
 };
 
-const MMARKET_SPECS_ENDPOINTS: Partial<Record<MMarketEnvironment, string>> = {
-  DEV: process.env.MMARKET_SPECS_KEYS_ENDPOINT_DEV?.trim() || "",
-  PROD: process.env.MMARKET_SPECS_KEYS_ENDPOINT_PROD?.trim() || "",
-};
+const resolveMMarketSpecsEndpoint = (environment: MMarketEnvironment) =>
+  (environment === MMarketEnvironment.DEV
+    ? process.env.MMARKET_SPECS_KEYS_ENDPOINT_DEV
+    : process.env.MMARKET_SPECS_KEYS_ENDPOINT_PROD
+  )?.trim() ?? "";
 
 const MMARKET_EXPORT_LOCK_PREFIX = "mmarket:export:";
 const MMARKET_EXPORT_COOLDOWN_MS = 15 * 60 * 1000;
@@ -874,7 +875,7 @@ const loadRemoteSpecCatalog = async (input: {
   token: string | null;
   categories: string[];
 }): Promise<RemoteSpecCatalog> => {
-  const endpoint = MMARKET_SPECS_ENDPOINTS[input.environment]?.trim() ?? "";
+  const endpoint = resolveMMarketSpecsEndpoint(input.environment);
   if (!endpoint || !input.token || !input.categories.length) {
     return {
       mode: "SEND_AS_IS",

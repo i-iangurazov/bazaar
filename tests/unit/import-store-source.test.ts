@@ -35,7 +35,11 @@ describe("import store selection source", () => {
 
     expect(pageSource).toContain('type ImportType = "products" | "customers"');
     expect(pageSource).toContain("CustomerImportPanel");
-    expect(pageSource).toContain('accept=".csv,text/csv,.xlsx,.xls"');
+    expect(pageSource).toContain(
+      'import { spreadsheetUploadAccept, validateSpreadsheetUploadFile } from "@/lib/spreadsheetUpload"',
+    );
+    expect(pageSource.match(/accept=\{spreadsheetUploadAccept\}/g)).toHaveLength(2);
+    expect(pageSource.match(/validateSpreadsheetUploadFile\(file\)/g)).toHaveLength(2);
     expect(pageSource).toContain('"phoneFallback"');
     expect(pageSource).toContain('"address1"');
     expect(pageSource).toContain('"createdAt"');

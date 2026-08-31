@@ -5,8 +5,8 @@ import { cookies } from "next/headers";
 import "./globals.css";
 import { Providers } from "./providers";
 import { GlobalNumberInputGuard } from "@/components/global-number-input-guard";
-import { bazaarBaseFontStylesheetHref } from "@/lib/catalogFonts";
-import { defaultLocale } from "@/lib/locales";
+import { pickClientMessageNamespaces, rootClientMessageNamespaces } from "@/lib/clientMessages";
+import { defaultLocale, toIntlLocale } from "@/lib/locales";
 import { defaultTimeZone } from "@/lib/timezone";
 import { resolveThemePreference, themeClassName, themeCookieName } from "@/lib/theme";
 
@@ -63,19 +63,17 @@ export const generateMetadata = async (): Promise<Metadata> => {
 
 const RootLayout = async ({ children }: { children: React.ReactNode }) => {
   const locale = (await getLocale()) ?? defaultLocale;
-  const messages = await getMessages();
-  const theme = resolveThemePreference(cookies().get(themeCookieName)?.value);
+  const messages = pickClientMessageNamespaces(await getMessages(), rootClientMessageNamespaces);
+  const cookieStore = await cookies();
+  const theme = resolveThemePreference(cookieStore.get(themeCookieName)?.value);
   const htmlClassName = themeClassName(theme);
 
   return (
-    <html lang={locale} className={htmlClassName} suppressHydrationWarning>
+    <html lang={toIntlLocale(locale)} className={htmlClassName} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: forceLandingLightThemeScript }} />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link rel="stylesheet" href={bazaarBaseFontStylesheetHref} />
       </head>
-      <body className="font-sans min-h-screen bg-gradient-to-br from-background via-background to-secondary/40">
+      <body className="min-h-screen bg-gradient-to-br from-background via-background to-secondary/40 font-sans">
         <Providers locale={locale} messages={messages} timeZone={defaultTimeZone}>
           <GlobalNumberInputGuard />
           {children}

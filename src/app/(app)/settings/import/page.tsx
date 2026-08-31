@@ -41,6 +41,7 @@ import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { formatDateTime } from "@/lib/i18nFormat";
 import { readHistoryPagination, writeHistoryPagination } from "@/lib/inventory/historyRouteState";
+import { spreadsheetUploadAccept, validateSpreadsheetUploadFile } from "@/lib/spreadsheetUpload";
 
 type ImportRow = {
   sourceRowNumber: number;
@@ -1203,8 +1204,17 @@ const CustomerImportPanel = ({
     setLastSummary(null);
     setImportSourceLabel("Import");
 
+    const validation = validateSpreadsheetUploadFile(file);
+    if (!validation.ok) {
+      setFileError(
+        validation.code === "importTooLarge" ? tErrors("importTooLarge") : t("fileParseError"),
+      );
+      setIsParsingFile(false);
+      return;
+    }
+
     try {
-      if (file.name.endsWith(".xlsx") || file.name.endsWith(".xls")) {
+      if (validation.extension === "xlsx" || validation.extension === "xls") {
         const xlsx = await loadXlsx();
         const buffer = await file.arrayBuffer();
         const workbook = xlsx.read(buffer, { type: "array" });
@@ -1307,7 +1317,8 @@ const CustomerImportPanel = ({
         <CardContent className="space-y-4">
           <Input
             type="file"
-            accept=".csv,text/csv,.xlsx,.xls"
+            aria-label={t("customerImport.uploadTitle")}
+            accept={spreadsheetUploadAccept}
             onChange={(event) => {
               const file = event.target.files?.[0];
               if (file) {
@@ -1369,7 +1380,7 @@ const CustomerImportPanel = ({
                       }))
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger aria-label={t(`customerImport.fields.${field}`)}>
                       <SelectValue placeholder={t("mappingSelectPlaceholder")} />
                     </SelectTrigger>
                     <SelectContent>
@@ -2199,8 +2210,16 @@ const ImportPage = () => {
     setSkippedRows([]);
     setProductRowActions({});
 
+    const validation = validateSpreadsheetUploadFile(file);
+    if (!validation.ok) {
+      setFileError(
+        validation.code === "importTooLarge" ? tErrors("importTooLarge") : t("fileParseError"),
+      );
+      return;
+    }
+
     try {
-      if (file.name.endsWith(".xlsx") || file.name.endsWith(".xls")) {
+      if (validation.extension === "xlsx" || validation.extension === "xls") {
         const xlsx = await loadXlsx();
         const buffer = await file.arrayBuffer();
         const workbook = xlsx.read(buffer, { type: "array" });
@@ -2612,7 +2631,7 @@ const ImportPage = () => {
           onValueChange={(value) => setImportType(value as ImportType)}
           disabled={!isAdmin}
         >
-          <SelectTrigger>
+          <SelectTrigger aria-label={t("importType.title")}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -2639,7 +2658,7 @@ const ImportPage = () => {
             onValueChange={setTargetStoreId}
             disabled={storesQuery.isLoading || !stores.length}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label={t("targetStoreTitle")}>
               <SelectValue placeholder={t("targetStorePlaceholder")} />
             </SelectTrigger>
             <SelectContent>
@@ -2725,7 +2744,8 @@ const ImportPage = () => {
         <CardContent className="space-y-4">
           <Input
             type="file"
-            accept=".csv,text/csv,.xlsx,.xls"
+            aria-label={t("uploadTitle")}
+            accept={spreadsheetUploadAccept}
             onChange={(event) => {
               const file = event.target.files?.[0];
               if (file) {
@@ -2762,7 +2782,7 @@ const ImportPage = () => {
                     value={importMode}
                     onValueChange={(value) => setImportMode(value as ImportMode)}
                   >
-                    <SelectTrigger className="max-w-sm">
+                    <SelectTrigger aria-label={t("importModeTitle")} className="max-w-sm">
                       <SelectValue placeholder={t("importModePlaceholder")} />
                     </SelectTrigger>
                     <SelectContent>
@@ -2784,7 +2804,7 @@ const ImportPage = () => {
                         setExistingBehavior(value as ProductExistingBehavior)
                       }
                     >
-                      <SelectTrigger>
+                      <SelectTrigger aria-label={t("existingBehaviorTitle")}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -2803,7 +2823,7 @@ const ImportPage = () => {
                         setEmptyValueBehavior(value as ProductEmptyValueBehavior)
                       }
                     >
-                      <SelectTrigger>
+                      <SelectTrigger aria-label={t("emptyValueBehaviorTitle")}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -2820,7 +2840,7 @@ const ImportPage = () => {
                       value={stockBehavior}
                       onValueChange={(value) => setStockBehavior(value as ProductStockBehavior)}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger aria-label={t("stockBehaviorTitle")}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -2925,7 +2945,7 @@ const ImportPage = () => {
                         }))
                       }
                     >
-                      <SelectTrigger>
+                      <SelectTrigger aria-label={field.label}>
                         <SelectValue placeholder={t("mappingPlaceholder")} />
                       </SelectTrigger>
                       <SelectContent>
@@ -2951,7 +2971,7 @@ const ImportPage = () => {
                   value={defaultUnitCode || "none"}
                   onValueChange={(value) => setDefaultUnitCode(value === "none" ? "" : value)}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger aria-label={t("defaultUnitTitle")}>
                     <SelectValue placeholder={t("defaultUnitPlaceholder")} />
                   </SelectTrigger>
                   <SelectContent>

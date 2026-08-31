@@ -12,22 +12,9 @@ import {
 } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
-const prisma = new PrismaClient();
-const RESET_PASSWORDS = process.env.SEED_RESET_PASSWORDS === "1";
-const PLATFORM_OWNER_EMAIL = process.env.SEED_PLATFORM_OWNER_EMAIL?.trim() || "owner@example.com";
-const PLATFORM_OWNER_PASSWORD = process.env.SEED_PLATFORM_OWNER_PASSWORD || "Owner123!";
-const PLATFORM_OWNER_NAME = process.env.SEED_PLATFORM_OWNER_NAME || "Platform Owner";
-const isProductionSeedTarget =
-  process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production";
+import { getSafeSeedFailureMessage, runWithDevelopmentSeedConfiguration } from "./seed-config";
 
-const assertSeedAllowed = () => {
-  if (!isProductionSeedTarget) {
-    return;
-  }
-  throw new Error(
-    "Refusing to seed local demo users in production. This seed creates public local-only credentials.",
-  );
-};
+const prisma = new PrismaClient();
 
 const seededRandom = (seed: number) => {
   let state = seed;
@@ -74,67 +61,29 @@ const getOrCreateUser = async (
   input: { email: string; name: string; role: Role; password: string; isOrgOwner?: boolean },
 ): Promise<User> => {
   const baseEmail = input.email.trim().toLowerCase();
-  let targetEmail = baseEmail;
-  let existing = await prisma.user.findUnique({ where: { email: targetEmail } });
+  const existing = await prisma.user.findUnique({ where: { email: baseEmail } });
   const passwordHash = await bcrypt.hash(input.password, 10);
 
   if (existing && existing.organizationId && existing.organizationId !== org.id) {
-    const atIndex = baseEmail.indexOf("@");
-    if (atIndex <= 0 || atIndex === baseEmail.length - 1) {
-      throw new Error(`Seed email ${baseEmail} is invalid`);
-    }
-
-    const localPart = baseEmail.slice(0, atIndex);
-    const domain = baseEmail.slice(atIndex + 1);
-    const orgSuffix = org.id.slice(0, 8);
-
-    let resolved = false;
-    for (let attempt = 1; attempt <= 20; attempt += 1) {
-      const candidate =
-        attempt === 1
-          ? `${localPart}+seed-${orgSuffix}@${domain}`
-          : `${localPart}+seed-${orgSuffix}-${attempt}@${domain}`;
-      const candidateExisting = await prisma.user.findUnique({ where: { email: candidate } });
-      if (!candidateExisting || candidateExisting.organizationId === org.id) {
-        targetEmail = candidate;
-        existing = candidateExisting;
-        resolved = true;
-        break;
-      }
-    }
-
-    if (!resolved) {
-      throw new Error(`Unable to resolve seed email conflict for ${baseEmail}`);
-    }
-
-    console.warn(
-      `[seed] ${baseEmail} is used by another organization; seeding this org with ${targetEmail}`,
+    throw new Error(
+      "A configured seed identity belongs to a different organization. Use unique local-only seed emails.",
     );
   }
 
   return prisma.user.upsert({
-    where: { email: targetEmail },
-    update: RESET_PASSWORDS
-      ? {
-          passwordHash,
-          name: input.name,
-          role: input.role,
-          isOrgOwner: Boolean(input.isOrgOwner),
-          isActive: true,
-          preferredLocale: "ru",
-          emailVerifiedAt: new Date(),
-        }
-      : {
-          name: input.name,
-          role: input.role,
-          isOrgOwner: input.isOrgOwner ?? existing?.isOrgOwner ?? false,
-          isActive: true,
-          preferredLocale: existing?.preferredLocale ?? "ru",
-          emailVerifiedAt: existing?.emailVerifiedAt ?? new Date(),
-        },
+    where: { email: baseEmail },
+    update: {
+      passwordHash,
+      name: input.name,
+      role: input.role,
+      isOrgOwner: Boolean(input.isOrgOwner),
+      isActive: true,
+      preferredLocale: existing?.preferredLocale ?? "ru",
+      emailVerifiedAt: existing?.emailVerifiedAt ?? new Date(),
+    },
     create: {
       organizationId: org.id,
-      email: targetEmail,
+      email: baseEmail,
       name: input.name,
       passwordHash,
       role: input.role,
@@ -289,7 +238,12 @@ const upsertProducts = async (
   return products;
 };
 
-const seedStockMovements = async (stores: Store[], products: Product[], adminUser: User, staffUser: User) => {
+const seedStockMovements = async (
+  stores: Store[],
+  products: Product[],
+  adminUser: User,
+  staffUser: User,
+) => {
   const existingSeedMovement = await prisma.stockMovement.findFirst({
     where: {
       referenceType: "INITIAL",
@@ -472,7 +426,8 @@ const seedForecasts = async (storeId: string, products: Product[]) => {
   });
   const existingSet = new Set(existing.map((forecast) => forecast.productId));
 
-  const forecasts = products.slice(0, 8)
+  const forecasts = products
+    .slice(0, 8)
     .filter((product) => !existingSet.has(product.id))
     .map((product, index) => ({
       storeId,
@@ -487,103 +442,103 @@ const seedForecasts = async (storeId: string, products: Product[]) => {
   }
 };
 
-const main = async () => {
-  assertSeedAllowed();
-  await ensureInventoryConstraints();
+const main = async () =>
+  runWithDevelopmentSeedConfiguration(process.env, async ({ users }) => {
+    await ensureInventoryConstraints();
 
-  const org = await getOrCreateOrganization();
+    const org = await getOrCreateOrganization();
 
-  const [adminUser, managerUser, staffUser] = await Promise.all([
-    getOrCreateUser(org, {
-      email: "admin@example.com",
-      name: "Admin User",
-      role: Role.ADMIN,
-      password: "Admin123!",
-      isOrgOwner: false,
-    }),
-    getOrCreateUser(org, {
-      email: "manager@example.com",
-      name: "Manager User",
-      role: Role.MANAGER,
-      password: "Manager123!",
-    }),
-    getOrCreateUser(org, {
-      email: "staff@example.com",
-      name: "Staff User",
-      role: Role.STAFF,
-      password: "Staff123!",
-    }),
-  ]);
-
-  await getOrCreateUser(org, {
-    email: PLATFORM_OWNER_EMAIL,
-    name: PLATFORM_OWNER_NAME,
-    role: Role.ADMIN,
-    password: PLATFORM_OWNER_PASSWORD,
-    isOrgOwner: true,
-  });
-
-  const stores = await upsertStores(org.id);
-  const [storeA] = stores;
-
-  const unitMap = await ensureUnits(org.id);
-  const supplier = await getOrCreateSupplier(org.id);
-  const products = await upsertProducts(org.id, supplier.id, unitMap);
-
-  await Promise.all(
-    products.slice(0, 8).map((product, index) =>
-      prisma.reorderPolicy.upsert({
-        where: { storeId_productId: { storeId: storeA.id, productId: product.id } },
-        update: {
-          minStock: 15 + (index % 4) * 5,
-          leadTimeDays: 5 + (index % 3),
-          reviewPeriodDays: 7,
-          safetyStockDays: 2,
-          minOrderQty: 10,
-        },
-        create: {
-          storeId: storeA.id,
-          productId: product.id,
-          minStock: 15 + (index % 4) * 5,
-          leadTimeDays: 5 + (index % 3),
-          reviewPeriodDays: 7,
-          safetyStockDays: 2,
-          minOrderQty: 10,
-        },
+    const [adminUser, , staffUser] = await Promise.all([
+      getOrCreateUser(org, {
+        email: users.admin.email,
+        name: users.admin.name,
+        role: Role.ADMIN,
+        password: users.admin.password,
+        isOrgOwner: false,
       }),
-    ),
-  );
+      getOrCreateUser(org, {
+        email: users.manager.email,
+        name: users.manager.name,
+        role: Role.MANAGER,
+        password: users.manager.password,
+      }),
+      getOrCreateUser(org, {
+        email: users.staff.email,
+        name: users.staff.name,
+        role: Role.STAFF,
+        password: users.staff.password,
+      }),
+    ]);
 
-  await seedStockMovements(stores, products, adminUser, staffUser);
-  await seedPurchaseOrder(org.id, storeA, supplier.id, adminUser, products);
-  await refreshInventorySnapshots(stores, products);
-  await seedForecasts(storeA.id, products);
-
-  const existingAudit = await prisma.auditLog.findFirst({
-    where: { organizationId: org.id, action: "SEED", requestId: "seed" },
-  });
-  if (!existingAudit) {
-    await prisma.auditLog.create({
-      data: {
-        organizationId: org.id,
-        actorId: adminUser.id,
-        action: "SEED",
-        entity: "Seed",
-        entityId: org.id,
-        before: Prisma.DbNull,
-        after: { message: "Initial seed completed" },
-        requestId: "seed",
-      },
+    await getOrCreateUser(org, {
+      email: users.platformOwner.email,
+      name: users.platformOwner.name,
+      role: Role.ADMIN,
+      password: users.platformOwner.password,
+      isOrgOwner: true,
     });
-  }
 
-  console.log("Seed complete");
-};
+    const stores = await upsertStores(org.id);
+    const [storeA] = stores;
+
+    const unitMap = await ensureUnits(org.id);
+    const supplier = await getOrCreateSupplier(org.id);
+    const products = await upsertProducts(org.id, supplier.id, unitMap);
+
+    await Promise.all(
+      products.slice(0, 8).map((product, index) =>
+        prisma.reorderPolicy.upsert({
+          where: { storeId_productId: { storeId: storeA.id, productId: product.id } },
+          update: {
+            minStock: 15 + (index % 4) * 5,
+            leadTimeDays: 5 + (index % 3),
+            reviewPeriodDays: 7,
+            safetyStockDays: 2,
+            minOrderQty: 10,
+          },
+          create: {
+            storeId: storeA.id,
+            productId: product.id,
+            minStock: 15 + (index % 4) * 5,
+            leadTimeDays: 5 + (index % 3),
+            reviewPeriodDays: 7,
+            safetyStockDays: 2,
+            minOrderQty: 10,
+          },
+        }),
+      ),
+    );
+
+    await seedStockMovements(stores, products, adminUser, staffUser);
+    await seedPurchaseOrder(org.id, storeA, supplier.id, adminUser, products);
+    await refreshInventorySnapshots(stores, products);
+    await seedForecasts(storeA.id, products);
+
+    const existingAudit = await prisma.auditLog.findFirst({
+      where: { organizationId: org.id, action: "SEED", requestId: "seed" },
+    });
+    if (!existingAudit) {
+      await prisma.auditLog.create({
+        data: {
+          organizationId: org.id,
+          actorId: adminUser.id,
+          action: "SEED",
+          entity: "Seed",
+          entityId: org.id,
+          before: Prisma.DbNull,
+          after: { message: "Initial seed completed" },
+          requestId: "seed",
+        },
+      });
+    }
+
+    console.log("Seed complete");
+  });
 
 main()
-  .catch(async (error) => {
-    console.error(error);
-    process.exit(1);
+  .catch((error) => {
+    console.error(getSafeSeedFailureMessage(error));
+    process.exitCode = 1;
   })
   .finally(async () => {
     await prisma.$disconnect();

@@ -317,7 +317,7 @@ describeDb("inventory service", () => {
     await assertSnapshotMatchesLedger(store.id, secondProduct.id);
   });
 
-  it("posts receiving when stock remains negative after a positive receipt", async () => {
+  it("keeps unvalued negative stock explicit and rejects valued recovery without side effects", async () => {
     const { org, store, product, adminUser } = await seedBase();
 
     await prisma.store.update({
@@ -339,27 +339,61 @@ describeDb("inventory service", () => {
       data: { allowNegativeStock: false },
     });
 
-    const result = await postStockReceiving({
-      storeId: store.id,
-      referenceNumber: "RCV-NEGATIVE-1",
-      lines: [{ productId: product.id, quantity: 25, unitCost: 10 }],
-      actorId: adminUser.id,
-      organizationId: org.id,
-      requestId: "req-receiving-negative-post",
-      idempotencyKey: "receiving-negative-post-1",
+    const before = await Promise.all([
+      prisma.stockMovement.count({ where: { storeId: store.id, productId: product.id } }),
+      prisma.auditLog.count({ where: { organizationId: org.id } }),
+      prisma.idempotencyKey.count(),
+    ]);
+    await expect(
+      postStockReceiving({
+        storeId: store.id,
+        referenceNumber: "RCV-NEGATIVE-1",
+        lines: [{ productId: product.id, quantity: 25, unitCost: 10 }],
+        actorId: adminUser.id,
+        organizationId: org.id,
+        requestId: "req-receiving-negative-post",
+        idempotencyKey: "receiving-negative-post-1",
+      }),
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "valuedNegativeStockRecoveryBlocked",
     });
 
-    expect(result.lines[0]?.onHand).toBe(-25);
-    const snapshot = await prisma.inventorySnapshot.findUnique({
-      where: {
-        storeId_productId_variantKey: {
-          storeId: store.id,
-          productId: product.id,
-          variantKey: "BASE",
+    const [snapshot, cost, setupMovement, after] = await Promise.all([
+      prisma.inventorySnapshot.findUnique({
+        where: {
+          storeId_productId_variantKey: {
+            storeId: store.id,
+            productId: product.id,
+            variantKey: "BASE",
+          },
         },
-      },
-    });
-    expect(snapshot?.onHand).toBe(-25);
+      }),
+      prisma.productCost.findUnique({
+        where: {
+          organizationId_productId_variantKey: {
+            organizationId: org.id,
+            productId: product.id,
+            variantKey: "BASE",
+          },
+        },
+      }),
+      prisma.stockMovement.findFirstOrThrow({
+        where: { storeId: store.id, productId: product.id },
+      }),
+      Promise.all([
+        prisma.stockMovement.count({ where: { storeId: store.id, productId: product.id } }),
+        prisma.auditLog.count({ where: { organizationId: org.id } }),
+        prisma.idempotencyKey.count(),
+      ]),
+    ]);
+    expect(snapshot?.onHand).toBe(-50);
+    expect(cost).toBeNull();
+    expect({
+      unitCostKgs: setupMovement.unitCostKgs,
+      inventoryValueDeltaKgs: setupMovement.inventoryValueDeltaKgs,
+    }).toEqual({ unitCostKgs: null, inventoryValueDeltaKgs: null });
+    expect(after).toEqual(before);
     await assertSnapshotMatchesLedger(store.id, product.id);
   });
 
@@ -738,12 +772,15 @@ describeDb("inventory service", () => {
         },
       },
     });
-    expect({ avgCostKgs: Number(productCost.avgCostKgs), basis: productCost.costBasisQty }).toEqual(
-      {
-        avgCostKgs: 4,
-        basis: 5,
-      },
-    );
+    expect({
+      avgCostKgs: Number(productCost.avgCostKgs),
+      basis: productCost.costBasisQty,
+      basisValueKgs: Number(productCost.costBasisValueKgs),
+    }).toEqual({
+      avgCostKgs: 4,
+      basis: 2,
+      basisValueKgs: 8,
+    });
 
     await expect(
       caller.inventory.productMovementDocument({ documentKey: receivingKey }),
@@ -1202,10 +1239,15 @@ describeDb("inventory service", () => {
     expect(document?.recipientName).toBe(storeB.name);
     expect(document?.sourceStoreId).toBe(store.id);
     expect(document?.destinationStoreId).toBe(storeB.id);
-    expect(document?.lines.map((line) => line.movementType)).toEqual(["TRANSFER_OUT"]);
+    expect(document?.lines.map((line) => line.movementType)).toEqual([
+      "TRANSFER_OUT",
+      "TRANSFER_IN",
+    ]);
     expect(document?.lines.map((line) => line.productDetailUrl)).toEqual([
       `/products/${product.id}?storeId=${encodeURIComponent(store.id)}`,
+      `/products/${product.id}?storeId=${encodeURIComponent(storeB.id)}`,
     ]);
+    expect(document?.lines.map((line) => line.qtyDelta)).toEqual([-5, 5]);
   });
 
   it("edits a transfer movement document with product replacement and store-safe stock deltas", async () => {
@@ -1365,11 +1407,25 @@ describeDb("inventory service", () => {
     expect(document?.totalQuantity).toBe(7);
     expect(document?.sourceStoreId).toBe(store.id);
     expect(document?.destinationStoreId).toBe(storeC.id);
-    expect(document?.lines.map((line) => line.productId)).toEqual([product.id, addedProduct.id]);
+    expect(document?.lines.map((line) => line.productId)).toEqual([
+      product.id,
+      product.id,
+      addedProduct.id,
+      addedProduct.id,
+    ]);
     expect(document?.lines.map((line) => line.movementType)).toEqual([
       "TRANSFER_OUT",
+      "TRANSFER_IN",
       "TRANSFER_OUT",
+      "TRANSFER_IN",
     ]);
+    expect(document?.lines.map((line) => line.storeId)).toEqual([
+      store.id,
+      storeC.id,
+      store.id,
+      storeC.id,
+    ]);
+    expect(document?.lines.reduce((sum, line) => sum + line.qtyDelta, 0)).toBe(0);
     expect(document?.lines.some((line) => line.productId === removedProduct.id)).toBe(false);
     await expect(
       caller.inventory.editProductMovementDocument({

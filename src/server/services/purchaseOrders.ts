@@ -21,6 +21,10 @@ import { applyStockLotAdjustment } from "@/server/services/stockLots";
 import { resolveBaseQuantity } from "@/server/services/uom";
 import { recordFirstEvent } from "@/server/services/productEvents";
 import { resolveCurrencySnapshot } from "@/lib/currencyDisplay";
+import {
+  normalizePurchaseOrderUnitCost,
+  PURCHASE_ORDER_MAX_QUANTITY,
+} from "@/lib/purchaseOrderMoney";
 import { assertUserCanAccessStore } from "@/server/services/storeAccess";
 import { classifyDatabaseOperationFailure } from "@/server/services/databaseOperationFailure";
 import {
@@ -59,6 +63,18 @@ const assertUniqueLines = (lines: CreatePurchaseOrderInput["lines"]) => {
     }
     seen.add(key);
   }
+};
+
+const assertPurchaseOrderQuantityFitsStorage = (quantity: number) => {
+  if (
+    !Number.isFinite(quantity) ||
+    !Number.isInteger(quantity) ||
+    quantity <= 0 ||
+    quantity > PURCHASE_ORDER_MAX_QUANTITY
+  ) {
+    throw new AppError("invalidQuantity", "BAD_REQUEST", 400);
+  }
+  return quantity;
 };
 
 const lockInventorySnapshot = async (
@@ -288,16 +304,22 @@ const createPurchaseOrderTx = async (
       if (!baseUnitId) {
         throw new AppError("productNotFound", "NOT_FOUND", 404);
       }
-      const qtyOrdered = await resolveBaseQuantity(tx, {
-        organizationId: input.organizationId,
-        productId: line.productId,
-        baseUnitId,
-        qty: line.qtyOrdered,
-        unitId: line.unitId,
-        packId: line.packId,
-        mode: "purchasing",
-      });
-      return { ...line, qtyOrdered };
+      const qtyOrdered = assertPurchaseOrderQuantityFitsStorage(
+        await resolveBaseQuantity(tx, {
+          organizationId: input.organizationId,
+          productId: line.productId,
+          baseUnitId,
+          qty: line.qtyOrdered,
+          unitId: line.unitId,
+          packId: line.packId,
+          mode: "purchasing",
+        }),
+      );
+      return {
+        ...line,
+        qtyOrdered,
+        unitCost: normalizePurchaseOrderUnitCost(line.unitCost),
+      };
     }),
   );
 
@@ -850,6 +872,23 @@ export const receivePurchaseOrder = async (input: {
             throw new AppError("poOverReceiveNotAllowed", "CONFLICT", 409);
           }
 
+          if (line.unitCost !== null) {
+            await updateProductCost(tx, {
+              organizationId: input.organizationId,
+              productId: line.productId,
+              variantId: line.variantId ?? undefined,
+              qtyReceived: receiveQty,
+              unitCost: Number(line.unitCost),
+            });
+          }
+
+          const inventoryValueDeltaKgs =
+            line.unitCost === null
+              ? null
+              : new Prisma.Decimal(line.unitCost)
+                  .mul(receiveQty)
+                  .toDecimalPlaces(6, Prisma.Decimal.ROUND_HALF_UP)
+                  .toNumber();
           const movement = await applyStockMovement(tx, {
             storeId: po.storeId,
             productId: line.productId,
@@ -861,6 +900,7 @@ export const receivePurchaseOrder = async (input: {
               line.unitCost === null
                 ? null
                 : new Prisma.Decimal(line.unitCost).mul(receiveQty).toDecimalPlaces(2).toNumber(),
+            inventoryValueDeltaKgs,
             referenceType: "PURCHASE_ORDER",
             referenceId: po.id,
             actorId: input.actorId,
@@ -892,16 +932,6 @@ export const receivePurchaseOrder = async (input: {
               onOrderDelta,
               po.store.allowNegativeStock,
             );
-          }
-
-          if (line.unitCost !== null) {
-            await updateProductCost(tx, {
-              organizationId: input.organizationId,
-              productId: line.productId,
-              variantId: line.variantId ?? undefined,
-              qtyReceived: receiveQty,
-              unitCost: Number(line.unitCost),
-            });
           }
 
           const nextReceived = line.qtyReceived + receiveQty;
@@ -1265,11 +1295,7 @@ export const addPurchaseOrderLine = async (input: {
   const logger = getLogger(input.requestId);
 
   const result = await prisma.$transaction(async (tx) => {
-    await lockPurchaseOrderForOrganization(
-      tx,
-      input.purchaseOrderId,
-      input.organizationId,
-    );
+    await lockPurchaseOrderForOrganization(tx, input.purchaseOrderId, input.organizationId);
     const po = await tx.purchaseOrder.findUnique({
       where: { id: input.purchaseOrderId },
     });
@@ -1295,15 +1321,17 @@ export const addPurchaseOrderLine = async (input: {
       throw new AppError("productNotFound", "NOT_FOUND", 404);
     }
 
-    const qtyOrdered = await resolveBaseQuantity(tx, {
-      organizationId: input.organizationId,
-      productId: input.productId,
-      baseUnitId: product.baseUnitId,
-      qty: input.qtyOrdered,
-      unitId: input.unitId,
-      packId: input.packId,
-      mode: "purchasing",
-    });
+    const qtyOrdered = assertPurchaseOrderQuantityFitsStorage(
+      await resolveBaseQuantity(tx, {
+        organizationId: input.organizationId,
+        productId: input.productId,
+        baseUnitId: product.baseUnitId,
+        qty: input.qtyOrdered,
+        unitId: input.unitId,
+        packId: input.packId,
+        mode: "purchasing",
+      }),
+    );
 
     if (input.variantId) {
       const variant = await tx.productVariant.findUnique({ where: { id: input.variantId } });
@@ -1343,7 +1371,7 @@ export const addPurchaseOrderLine = async (input: {
         variantKey,
         position: (lastLine?.position ?? -1) + 1,
         qtyOrdered,
-        unitCost: input.unitCost ?? undefined,
+        unitCost: normalizePurchaseOrderUnitCost(input.unitCost) ?? undefined,
       },
     });
 
@@ -1419,21 +1447,23 @@ export const updatePurchaseOrderLine = async (input: {
       throw new AppError("productNotFound", "NOT_FOUND", 404);
     }
 
-    const qtyOrdered = await resolveBaseQuantity(tx, {
-      organizationId: input.organizationId,
-      productId: line.productId,
-      baseUnitId: product.baseUnitId,
-      qty: input.qtyOrdered,
-      unitId: input.unitId,
-      packId: input.packId,
-      mode: "purchasing",
-    });
+    const qtyOrdered = assertPurchaseOrderQuantityFitsStorage(
+      await resolveBaseQuantity(tx, {
+        organizationId: input.organizationId,
+        productId: line.productId,
+        baseUnitId: product.baseUnitId,
+        qty: input.qtyOrdered,
+        unitId: input.unitId,
+        packId: input.packId,
+        mode: "purchasing",
+      }),
+    );
 
     const updated = await tx.purchaseOrderLine.update({
       where: { id: line.id },
       data: {
         qtyOrdered,
-        unitCost: input.unitCost ?? null,
+        unitCost: normalizePurchaseOrderUnitCost(input.unitCost) ?? null,
       },
     });
 

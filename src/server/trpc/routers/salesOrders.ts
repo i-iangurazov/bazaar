@@ -216,6 +216,7 @@ export const salesOrdersRouter = router({
               qty: z.number().int().positive(),
             }),
           )
+          .min(1)
           .optional(),
       }),
     )

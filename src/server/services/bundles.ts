@@ -1,9 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { StockMovementType } from "@prisma/client";
+import { Prisma, StockMovementType } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
 import { applyStockMovement } from "@/server/services/inventory";
+import {
+  applyCurrentProductCostQuantityDelta,
+  applyValuedProductCostDelta,
+} from "@/server/services/productCost";
 import { withIdempotency } from "@/server/services/idempotency";
 import { writeAuditLog } from "@/server/services/audit";
 import { eventBus } from "@/server/events/eventBus";
@@ -114,7 +118,9 @@ export const removeBundleComponent = async (input: {
   requestId: string;
 }) =>
   prisma.$transaction(async (tx) => {
-    const component = await tx.productBundleComponent.findUnique({ where: { id: input.componentId } });
+    const component = await tx.productBundleComponent.findUnique({
+      where: { id: input.componentId },
+    });
     if (!component || component.organizationId !== input.organizationId) {
       throw new AppError("bundleComponentNotFound", "NOT_FOUND", 404);
     }
@@ -167,18 +173,34 @@ export const assembleBundle = async (input: {
         }
 
         const assemblyId = randomUUID();
+        let transferredValueKgs = new Prisma.Decimal(0);
 
         for (const component of bundle.bundleComponents) {
           const totalQty = component.qty * input.qty;
           if (totalQty <= 0) {
             continue;
           }
+          const valuation = await applyCurrentProductCostQuantityDelta(tx, {
+            organizationId: input.organizationId,
+            productId: component.componentProductId,
+            variantId: component.componentVariantId,
+            quantityDelta: -totalQty,
+          });
+          if (!valuation) {
+            throw new AppError("productCostContributionMismatch", "CONFLICT", 409);
+          }
+          transferredValueKgs = transferredValueKgs.plus(
+            new Prisma.Decimal(valuation.inventoryValueDeltaKgs).abs(),
+          );
           await applyStockMovement(tx, {
             storeId: input.storeId,
             productId: component.componentProductId,
             variantId: component.componentVariantId ?? undefined,
-            qtyDelta: -Math.abs(totalQty),
+            qtyDelta: -totalQty,
             type: StockMovementType.ADJUSTMENT,
+            unitCostKgs: valuation.unitCostKgs,
+            lineTotalKgs: valuation.inventoryValueDeltaKgs,
+            inventoryValueDeltaKgs: valuation.inventoryValueDeltaKgs,
             referenceType: "BUNDLE_ASSEMBLY",
             referenceId: assemblyId,
             note: `bundleAssemble:${bundle.sku}`,
@@ -187,11 +209,28 @@ export const assembleBundle = async (input: {
           });
         }
 
+        const normalizedTransferredValueKgs = transferredValueKgs.toDecimalPlaces(
+          6,
+          Prisma.Decimal.ROUND_HALF_UP,
+        );
+        await applyValuedProductCostDelta(tx, {
+          organizationId: input.organizationId,
+          productId: input.bundleProductId,
+          quantityDelta: input.qty,
+          valueDeltaKgs: normalizedTransferredValueKgs,
+        });
+        const bundleUnitCostKgs = normalizedTransferredValueKgs
+          .div(input.qty)
+          .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)
+          .toNumber();
         const bundleMovement = await applyStockMovement(tx, {
           storeId: input.storeId,
           productId: input.bundleProductId,
-          qtyDelta: Math.abs(input.qty),
+          qtyDelta: input.qty,
           type: StockMovementType.RECEIVE,
+          unitCostKgs: bundleUnitCostKgs,
+          lineTotalKgs: normalizedTransferredValueKgs.toNumber(),
+          inventoryValueDeltaKgs: normalizedTransferredValueKgs.toNumber(),
           referenceType: "BUNDLE_ASSEMBLY",
           referenceId: assemblyId,
           note: `bundleAssemble:${bundle.sku}`,
@@ -199,7 +238,9 @@ export const assembleBundle = async (input: {
           organizationId: input.organizationId,
         });
 
-        affectedProductIds = bundle.bundleComponents.map((component) => component.componentProductId);
+        affectedProductIds = bundle.bundleComponents.map(
+          (component) => component.componentProductId,
+        );
         affectedProductIds.push(bundleMovement.snapshot.productId);
 
         await writeAuditLog(tx, {

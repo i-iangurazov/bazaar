@@ -96,7 +96,7 @@ export const Sidebar = React.forwardRef<
       data-state={state}
       data-collapsible={collapsible}
       className={cn(
-        "hidden min-h-svh shrink-0 border-r border-sidebar-border/80 bg-sidebar text-sidebar-foreground shadow-[18px_0_50px_rgba(15,23,42,0.08)] transition-[width] duration-200 md:flex md:flex-col dark:shadow-none",
+        "hidden min-h-svh shrink-0 border-r border-sidebar-border/80 bg-sidebar text-sidebar-foreground shadow-[18px_0_50px_rgba(15,23,42,0.08)] transition-[width] duration-200 dark:shadow-none md:flex md:flex-col",
         collapsible === "icon"
           ? "w-[var(--sidebar-width)] data-[state=collapsed]:w-[var(--sidebar-width-icon)]"
           : "w-[var(--sidebar-width)]",
@@ -110,7 +110,11 @@ Sidebar.displayName = "Sidebar";
 
 export const SidebarInset = React.forwardRef<HTMLDivElement, React.ComponentPropsWithoutRef<"div">>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn("min-w-0 flex-1 bg-background", className)} {...props} />
+    <div
+      ref={ref}
+      className={cn("w-0 min-w-0 max-w-full flex-1 bg-background", className)}
+      {...props}
+    />
   ),
 );
 SidebarInset.displayName = "SidebarInset";

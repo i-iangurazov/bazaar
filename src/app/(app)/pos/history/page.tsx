@@ -100,6 +100,7 @@ const PosHistoryPage = () => {
   const [returnSaleId, setReturnSaleId] = useState<string | null>(null);
   const [returnQtyByLine, setReturnQtyByLine] = useState<Record<string, string>>({});
   const [refundMethod, setRefundMethod] = useState<PosPaymentMethod>(PosPaymentMethod.CASH);
+  const returnSubmitInFlightRef = useRef(false);
   const [receiptAction, setReceiptAction] = useState<{
     saleId: string;
     mode: "download" | "print" | "share";
@@ -566,6 +567,10 @@ const PosHistoryPage = () => {
       toast({ variant: "error", description: t("history.returnQtyRequired") });
       return;
     }
+    if (returnSubmitInFlightRef.current) {
+      return;
+    }
+    returnSubmitInFlightRef.current = true;
 
     try {
       const draft = await createReturnMutation.mutateAsync({
@@ -607,6 +612,8 @@ const PosHistoryPage = () => {
       await Promise.all([salesQuery.refetch(), returnsQuery.refetch()]);
     } catch (error) {
       toast({ variant: "error", description: translateError(tErrors, error as never) });
+    } finally {
+      returnSubmitInFlightRef.current = false;
     }
   };
 

@@ -6,6 +6,7 @@ import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
 import { withIdempotency } from "@/server/services/idempotency";
 import { applyStockMovement } from "@/server/services/inventory";
+import { applyCurrentProductCostQuantityDelta } from "@/server/services/productCost";
 import { writeAuditLog } from "@/server/services/audit";
 import { eventBus } from "@/server/events/eventBus";
 import { toJson } from "@/server/services/json";
@@ -362,12 +363,21 @@ export const applyStockCount = async (input: {
           }
 
           const before = snapshot ?? null;
+          const valuation = await applyCurrentProductCostQuantityDelta(tx, {
+            organizationId: input.organizationId,
+            productId: line.productId,
+            variantId: line.variantId,
+            quantityDelta: deltaQty,
+          });
           const movement = await applyStockMovement(tx, {
             storeId: count.storeId,
             productId: line.productId,
             variantId: line.variantId ?? undefined,
             qtyDelta: deltaQty,
             type: StockMovementType.ADJUSTMENT,
+            unitCostKgs: valuation?.unitCostKgs,
+            lineTotalKgs: valuation?.inventoryValueDeltaKgs,
+            inventoryValueDeltaKgs: valuation?.inventoryValueDeltaKgs,
             referenceType: "STOCK_COUNT",
             referenceId: count.id,
             note: `stockCount:${count.code}`,
@@ -405,9 +415,9 @@ export const applyStockCount = async (input: {
     const count = await tx.stockCount.findUnique({ where: { id: input.stockCountId } });
     const touched: Array<{ productId: string; variantId: string | null }> =
       await tx.stockCountLine.findMany({
-      where: { stockCountId: input.stockCountId },
-      select: { productId: true, variantId: true },
-    });
+        where: { stockCountId: input.stockCountId },
+        select: { productId: true, variantId: true },
+      });
 
     return { result, storeId: count?.storeId ?? null, touched };
   });

@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
-import type { InventorySnapshot, Prisma } from "@prisma/client";
+import type { InventorySnapshot } from "@prisma/client";
 import {
   OperationRequestPrincipalType,
+  Prisma,
   PurchaseOrderStatus,
   StockMovementType,
 } from "@prisma/client";
@@ -13,7 +14,15 @@ import { withIdempotency } from "@/server/services/idempotency";
 import { eventBus } from "@/server/events/eventBus";
 import { getLogger } from "@/server/logging";
 import { toJson } from "@/server/services/json";
-import { replaceProductCostContribution, updateProductCost } from "@/server/services/productCost";
+import {
+  applyCurrentProductCostQuantityDelta,
+  applyValuedProductCostDelta,
+  productCostBasisSelect,
+  replaceProductCostContribution,
+  resolveCurrentProductCostUnitNumber,
+  resolveCurrentProductCostValuation,
+  updateProductCost,
+} from "@/server/services/productCost";
 import { classifyDatabaseOperationFailure } from "@/server/services/databaseOperationFailure";
 import { runOperationRequest } from "@/server/services/operationRequests";
 import { applyStockLotAdjustment } from "@/server/services/stockLots";
@@ -84,6 +93,7 @@ export type ApplyStockMovementInput = {
   linePosition?: number | null;
   unitCostKgs?: number | null;
   lineTotalKgs?: number | null;
+  inventoryValueDeltaKgs?: number | null;
   note?: string | null;
   actorId?: string | null;
   organizationId?: string;
@@ -105,7 +115,18 @@ export const applyStockMovement = async (
     throw new AppError("storeOrgMismatch", "FORBIDDEN", 403);
   }
 
-  const product = await tx.product.findUnique({ where: { id: input.productId } });
+  // Every stock writer takes the same product lock. Besides serializing the
+  // organization-wide cost basis, this closes the race between a historical
+  // receiving-document edit and a newly posted downstream movement.
+  const productRows = await tx.$queryRaw<
+    Array<{ id: string; organizationId: string; isDeleted: boolean }>
+  >`
+    SELECT "id", "organizationId", "isDeleted"
+    FROM "Product"
+    WHERE "id" = ${input.productId}
+    FOR UPDATE
+  `;
+  const product = productRows[0];
   if (!product || product.isDeleted) {
     throw new AppError("productNotFound", "NOT_FOUND", 404);
   }
@@ -155,6 +176,33 @@ export const applyStockMovement = async (
     throw new AppError("insufficientStock", "CONFLICT", 409);
   }
 
+  const crossesBelowZero = input.qtyDelta < 0 && nextOnHand < 0;
+  const appliesValuationToNegativeStock = snapshot.onHand < 0 && input.qtyDelta >= 0;
+  if (crossesBelowZero || appliesValuationToNegativeStock) {
+    const hasExplicitValuation =
+      (input.unitCostKgs !== null && input.unitCostKgs !== undefined) ||
+      (input.inventoryValueDeltaKgs !== null && input.inventoryValueDeltaKgs !== undefined);
+    const isFinanciallyTracked =
+      hasExplicitValuation ||
+      Boolean(
+        await tx.productCost.findFirst({
+          where: {
+            organizationId: store.organizationId,
+            productId: input.productId,
+            variantKey: { in: variantKey === "BASE" ? ["BASE"] : [variantKey, "BASE"] },
+          },
+          select: { id: true },
+        }),
+      );
+
+    if (isFinanciallyTracked && crossesBelowZero) {
+      throw new AppError("valuedNegativeStockDepletionBlocked", "CONFLICT", 409);
+    }
+    if (isFinanciallyTracked && appliesValuationToNegativeStock) {
+      throw new AppError("valuedNegativeStockRecoveryBlocked", "CONFLICT", 409);
+    }
+  }
+
   const updatedSnapshot = await tx.inventorySnapshot.update({
     where: { id: snapshot.id },
     data: {
@@ -173,6 +221,7 @@ export const applyStockMovement = async (
       linePosition: input.linePosition ?? undefined,
       unitCostKgs: input.unitCostKgs ?? undefined,
       lineTotalKgs: input.lineTotalKgs ?? undefined,
+      inventoryValueDeltaKgs: input.inventoryValueDeltaKgs ?? undefined,
       referenceType: input.referenceType,
       referenceId: input.referenceId,
       note: input.note ?? undefined,
@@ -229,12 +278,21 @@ export const adjustStock = async (input: StockAdjustmentInput): Promise<StockAdj
           },
         });
 
+        const valuation = await applyCurrentProductCostQuantityDelta(tx, {
+          organizationId: input.organizationId,
+          productId: input.productId,
+          variantId: input.variantId,
+          quantityDelta: qtyDelta,
+        });
         const { snapshot, movementId } = await applyStockMovement(tx, {
           storeId: input.storeId,
           productId: input.productId,
           variantId: input.variantId,
           qtyDelta,
           type: StockMovementType.ADJUSTMENT,
+          unitCostKgs: valuation?.unitCostKgs,
+          lineTotalKgs: valuation?.inventoryValueDeltaKgs,
+          inventoryValueDeltaKgs: valuation?.inventoryValueDeltaKgs,
           note: input.reason,
           actorId: input.actorId,
           organizationId: input.organizationId,
@@ -370,12 +428,21 @@ export const bulkSetOnHand = async (input: BulkSetOnHandInput): Promise<BulkSetO
           continue;
         }
 
+        const valuation = await applyCurrentProductCostQuantityDelta(tx, {
+          organizationId: input.organizationId,
+          productId: snapshot.productId,
+          variantId: snapshot.variantId,
+          quantityDelta: qtyDelta,
+        });
         const { snapshot: updatedSnapshot, movementId } = await applyStockMovement(tx, {
           storeId: input.storeId,
           productId: snapshot.productId,
           variantId: snapshot.variantId,
           qtyDelta,
           type: StockMovementType.ADJUSTMENT,
+          unitCostKgs: valuation?.unitCostKgs,
+          lineTotalKgs: valuation?.inventoryValueDeltaKgs,
+          inventoryValueDeltaKgs: valuation?.inventoryValueDeltaKgs,
           note: input.reason,
           actorId: input.actorId,
           organizationId: input.organizationId,
@@ -520,6 +587,20 @@ export const receiveStock = async (input: ReceiveStockInput): Promise<StockAdjus
           },
         });
 
+        if (input.unitCost !== null && input.unitCost !== undefined) {
+          await updateProductCost(tx, {
+            organizationId: input.organizationId,
+            productId: input.productId,
+            variantId: input.variantId,
+            qtyReceived,
+            unitCost: input.unitCost,
+          });
+        }
+
+        const inventoryValueDeltaKgs =
+          input.unitCost === null || input.unitCost === undefined
+            ? undefined
+            : qtyReceived * input.unitCost;
         const { snapshot, movementId } = await applyStockMovement(tx, {
           storeId: input.storeId,
           productId: input.productId,
@@ -531,6 +612,7 @@ export const receiveStock = async (input: ReceiveStockInput): Promise<StockAdjus
             input.unitCost === null || input.unitCost === undefined
               ? undefined
               : qtyReceived * input.unitCost,
+          inventoryValueDeltaKgs,
           note: input.note ?? undefined,
           actorId: input.actorId,
           organizationId: input.organizationId,
@@ -549,16 +631,6 @@ export const receiveStock = async (input: ReceiveStockInput): Promise<StockAdjus
           await tx.stockMovement.update({
             where: { id: movementId },
             data: { stockLotId: lot.id },
-          });
-        }
-
-        if (input.unitCost !== null && input.unitCost !== undefined) {
-          await updateProductCost(tx, {
-            organizationId: input.organizationId,
-            productId: input.productId,
-            variantId: input.variantId,
-            qtyReceived,
-            unitCost: input.unitCost,
           });
         }
 
@@ -813,6 +885,15 @@ export const postStockReceiving = async (
             },
           });
 
+          await updateProductCost(tx, {
+            organizationId: input.organizationId,
+            productId: line.productId,
+            variantId: line.variantId,
+            qtyReceived: line.quantity,
+            unitCost: line.unitCost,
+          });
+
+          const inventoryValueDeltaKgs = line.quantity * line.unitCost;
           const { snapshot, movementId } = await applyStockMovement(tx, {
             storeId: input.storeId,
             productId: line.productId,
@@ -824,19 +905,12 @@ export const postStockReceiving = async (
             linePosition: index + 1,
             unitCostKgs: line.unitCost,
             lineTotalKgs: line.quantity * line.unitCost,
+            inventoryValueDeltaKgs,
             note: movementNote,
             actorId: input.actorId,
             organizationId: input.organizationId,
             movementDate: input.date ?? null,
             allowNegativeStock: true,
-          });
-
-          await updateProductCost(tx, {
-            organizationId: input.organizationId,
-            productId: line.productId,
-            variantId: line.variantId,
-            qtyReceived: line.quantity,
-            unitCost: line.unitCost,
           });
 
           await writeAuditLog(tx, {
@@ -1016,17 +1090,6 @@ export const postStockWriteOff = async (
           }
         }
 
-        const costs = await tx.productCost.findMany({
-          where: {
-            organizationId: input.organizationId,
-            productId: { in: productIds },
-          },
-          select: { productId: true, variantKey: true, avgCostKgs: true },
-        });
-        const costMap = new Map(
-          costs.map((cost) => [`${cost.productId}:${cost.variantKey}`, Number(cost.avgCostKgs)]),
-        );
-
         const lineResults: StockWriteOffResult["lines"] = [];
         for (const [index, line] of normalizedLines.entries()) {
           const product = productMap.get(line.productId);
@@ -1046,8 +1109,14 @@ export const postStockWriteOff = async (
             throw new AppError("invalidWriteOffQty", "BAD_REQUEST", 400);
           }
 
-          const unitCost = costMap.get(`${line.productId}:${line.variantKey}`) ?? null;
-          const lineTotal = unitCost !== null ? unitCost * qty : null;
+          const valuation = await applyCurrentProductCostQuantityDelta(tx, {
+            organizationId: input.organizationId,
+            productId: line.productId,
+            variantId: line.variantId,
+            quantityDelta: -Math.abs(qty),
+          });
+          const unitCost = valuation?.unitCostKgs ?? null;
+          const lineTotal = valuation === null ? null : Math.abs(valuation.inventoryValueDeltaKgs);
           const before = await tx.inventorySnapshot.findUnique({
             where: {
               storeId_productId_variantKey: {
@@ -1069,6 +1138,7 @@ export const postStockWriteOff = async (
             linePosition: index + 1,
             unitCostKgs: unitCost,
             lineTotalKgs: lineTotal,
+            inventoryValueDeltaKgs: valuation?.inventoryValueDeltaKgs,
             note: movementNote,
             actorId: input.actorId,
             organizationId: input.organizationId,
@@ -1289,17 +1359,6 @@ export const transferStock = async (input: TransferStockInput) => {
           }
         }
 
-        const costs = await tx.productCost.findMany({
-          where: {
-            organizationId: input.organizationId,
-            productId: { in: productIds },
-          },
-          select: { productId: true, variantKey: true, avgCostKgs: true },
-        });
-        const costMap = new Map(
-          costs.map((cost) => [`${cost.productId}:${cost.variantKey}`, Number(cost.avgCostKgs)]),
-        );
-
         const lineResults: Array<{
           productId: string;
           variantId: string | null;
@@ -1330,8 +1389,14 @@ export const transferStock = async (input: TransferStockInput) => {
           if (!Number.isInteger(qty) || qty <= 0) {
             throw new AppError("invalidTransferQty", "BAD_REQUEST", 400);
           }
-          const unitCost = costMap.get(`${line.productId}:${line.variantKey}`) ?? null;
-          const lineTotal = unitCost !== null ? unitCost * qty : null;
+          const valuation = await resolveCurrentProductCostValuation(tx, {
+            organizationId: input.organizationId,
+            productId: line.productId,
+            variantId: line.variantId,
+            quantity: qty,
+          });
+          const unitCost = valuation?.unitCostKgs ?? null;
+          const lineTotal = valuation?.totalValueKgs ?? null;
 
           const outBefore = await tx.inventorySnapshot.findUnique({
             where: {
@@ -1364,6 +1429,7 @@ export const transferStock = async (input: TransferStockInput) => {
             linePosition: index + 1,
             unitCostKgs: unitCost,
             lineTotalKgs: lineTotal,
+            inventoryValueDeltaKgs: lineTotal === null ? undefined : -Math.abs(lineTotal),
             note: input.note ?? undefined,
             actorId: input.actorId,
             organizationId: input.organizationId,
@@ -1379,6 +1445,9 @@ export const transferStock = async (input: TransferStockInput) => {
             referenceType: "TRANSFER",
             referenceId: transferId,
             linePosition: index + 1,
+            unitCostKgs: unitCost,
+            lineTotalKgs: lineTotal,
+            inventoryValueDeltaKgs: lineTotal === null ? undefined : Math.abs(lineTotal),
             note: input.note ?? undefined,
             actorId: input.actorId,
             organizationId: input.organizationId,
@@ -1710,6 +1779,82 @@ const normalizeStockDocumentEditLines = (
   return normalized;
 };
 
+type StockReceivingMovementBoundary = {
+  productId: string;
+  variantId: string | null;
+  createdAt: Date;
+};
+
+/**
+ * A receiving document is mutable only while it is the tip of every affected
+ * product/variant movement stream. Locking the Product rows before the lookup
+ * serializes this check with every writer that enters through applyStockMovement.
+ */
+const assertStockReceivingDocumentIsEditable = async (
+  tx: Prisma.TransactionClient,
+  input: {
+    organizationId: string;
+    referenceType: string;
+    referenceId: string;
+    movements: StockReceivingMovementBoundary[];
+    requestedLines?: EditStockMovementDocumentLineInput[];
+  },
+) => {
+  const scopeMap = new Map<string, { productId: string; variantId: string | null }>();
+  for (const movement of input.movements) {
+    const variantId = movement.variantId ?? null;
+    scopeMap.set(stockDocumentLineKey(movement.productId, resolveVariantKey(variantId)), {
+      productId: movement.productId,
+      variantId,
+    });
+  }
+  for (const line of input.requestedLines ?? []) {
+    const variantId = line.variantId ?? null;
+    scopeMap.set(stockDocumentLineKey(line.productId, resolveVariantKey(variantId)), {
+      productId: line.productId,
+      variantId,
+    });
+  }
+
+  const scopes = Array.from(scopeMap.values());
+  const productIds = Array.from(new Set(scopes.map((scope) => scope.productId))).sort();
+  if (!productIds.length) {
+    throw new AppError("productMovementDocumentNotFound", "NOT_FOUND", 404);
+  }
+
+  await tx.$queryRaw<Array<{ id: string }>>`
+    SELECT "id"
+    FROM "Product"
+    WHERE "organizationId" = ${input.organizationId}
+      AND "id" IN (${Prisma.join(productIds)})
+    ORDER BY "id"
+    FOR UPDATE
+  `;
+
+  const documentBoundary = new Date(
+    Math.min(...input.movements.map((movement) => movement.createdAt.getTime())),
+  );
+  const laterMovement = await tx.stockMovement.findFirst({
+    where: {
+      store: { organizationId: input.organizationId },
+      createdAt: { gte: documentBoundary },
+      OR: scopes.map((scope) => ({
+        productId: scope.productId,
+        variantId: scope.variantId,
+      })),
+      NOT: {
+        referenceType: input.referenceType,
+        referenceId: input.referenceId,
+      },
+    },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    select: { id: true },
+  });
+  if (laterMovement) {
+    throw new AppError("stockReceivingEditLockedAfterDownstreamMovement", "CONFLICT", 409);
+  }
+};
+
 export const editStockMovementDocument = async (input: EditStockMovementDocumentInput) => {
   if (
     (input.documentType === "STOCK_RECEIVING" && input.referenceType !== "STOCK_RECEIVING") ||
@@ -1762,6 +1907,16 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
         });
         if (!movements.length) {
           throw new AppError("productMovementDocumentNotFound", "NOT_FOUND", 404);
+        }
+
+        if (input.documentType === "STOCK_RECEIVING") {
+          await assertStockReceivingDocumentIsEditable(tx, {
+            organizationId: input.organizationId,
+            referenceType: input.referenceType,
+            referenceId: input.referenceId,
+            movements,
+            requestedLines: input.lines,
+          });
         }
 
         const storeIds = Array.from(new Set(movements.map((movement) => movement.storeId)));
@@ -1884,13 +2039,16 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
             organizationId: input.organizationId,
             productId: { in: costProductIds },
           },
-          select: { productId: true, variantKey: true, avgCostKgs: true },
+          select: { productId: true, variantKey: true, ...productCostBasisSelect },
         });
         const unitCostMap = new Map(
           costs.map((cost) => [
             stockDocumentLineKey(cost.productId, cost.variantKey),
-            Number(cost.avgCostKgs),
+            resolveCurrentProductCostUnitNumber(cost),
           ]),
+        );
+        const productCostKeys = new Set(
+          costs.map((cost) => stockDocumentLineKey(cost.productId, cost.variantKey)),
         );
 
         const beforeLines = aggregateStockDocumentLines(movements, input.documentType);
@@ -1939,6 +2097,7 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
                   linePosition,
                   unitCostKgs: beforeLine?.unitCostKgs ?? unitCostKgs,
                   lineTotalKgs: -oldLineTotal,
+                  inventoryValueDeltaKgs: -oldLineTotal,
                   note: reason,
                   actorId: input.actorId,
                   organizationId: input.organizationId,
@@ -1963,6 +2122,7 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
                   linePosition,
                   unitCostKgs,
                   lineTotalKgs: newLineTotal,
+                  inventoryValueDeltaKgs: newLineTotal,
                   note: reason,
                   actorId: input.actorId,
                   organizationId: input.organizationId,
@@ -1987,6 +2147,7 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
                 linePosition,
                 unitCostKgs,
                 lineTotalKgs: lineTotalDelta,
+                inventoryValueDeltaKgs: lineTotalDelta,
                 note: reason,
                 actorId: input.actorId,
                 organizationId: input.organizationId,
@@ -2018,6 +2179,20 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
           }
 
           if (input.documentType === "WRITE_OFF") {
+            const writeOffQuantityDelta = oldQuantity - newQuantity;
+            const writeOffValueDeltaKgs = -lineTotalDelta;
+            const hasProductCost =
+              productCostKeys.has(key) ||
+              productCostKeys.has(stockDocumentLineKey(movementLine.productId, "BASE"));
+            if (hasProductCost && (writeOffQuantityDelta !== 0 || writeOffValueDeltaKgs !== 0)) {
+              await applyValuedProductCostDelta(tx, {
+                organizationId: input.organizationId,
+                productId: movementLine.productId,
+                variantId: movementLine.variantId,
+                quantityDelta: writeOffQuantityDelta,
+                valueDeltaKgs: writeOffValueDeltaKgs,
+              });
+            }
             if (sourceStoreId !== oldSourceStoreId) {
               if (oldQuantity !== 0 || oldLineTotal !== 0) {
                 const reversed = await applyStockMovement(tx, {
@@ -2031,6 +2206,7 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
                   linePosition,
                   unitCostKgs: beforeLine?.unitCostKgs ?? unitCostKgs,
                   lineTotalKgs: -oldLineTotal,
+                  inventoryValueDeltaKgs: oldLineTotal,
                   note: reason,
                   actorId: input.actorId,
                   organizationId: input.organizationId,
@@ -2055,6 +2231,7 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
                   linePosition,
                   unitCostKgs,
                   lineTotalKgs: newLineTotal,
+                  inventoryValueDeltaKgs: -newLineTotal,
                   note: reason,
                   actorId: input.actorId,
                   organizationId: input.organizationId,
@@ -2079,6 +2256,7 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
                 linePosition,
                 unitCostKgs,
                 lineTotalKgs: lineTotalDelta,
+                inventoryValueDeltaKgs: -lineTotalDelta,
                 note: reason,
                 actorId: input.actorId,
                 organizationId: input.organizationId,
@@ -2110,6 +2288,7 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
                 linePosition,
                 unitCostKgs: beforeLine?.unitCostKgs ?? unitCostKgs,
                 lineTotalKgs: -oldLineTotal,
+                inventoryValueDeltaKgs: oldLineTotal,
                 note: reason,
                 actorId: input.actorId,
                 organizationId: input.organizationId,
@@ -2124,6 +2303,9 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
                 referenceType: input.referenceType,
                 referenceId: input.referenceId,
                 linePosition,
+                unitCostKgs: beforeLine?.unitCostKgs ?? unitCostKgs,
+                lineTotalKgs: -oldLineTotal,
+                inventoryValueDeltaKgs: -oldLineTotal,
                 note: reason,
                 actorId: input.actorId,
                 organizationId: input.organizationId,
@@ -2154,6 +2336,7 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
                 linePosition,
                 unitCostKgs,
                 lineTotalKgs: newLineTotal,
+                inventoryValueDeltaKgs: -newLineTotal,
                 note: reason,
                 actorId: input.actorId,
                 organizationId: input.organizationId,
@@ -2168,6 +2351,9 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
                 referenceType: input.referenceType,
                 referenceId: input.referenceId,
                 linePosition,
+                unitCostKgs,
+                lineTotalKgs: newLineTotal,
+                inventoryValueDeltaKgs: newLineTotal,
                 note: reason,
                 actorId: input.actorId,
                 organizationId: input.organizationId,
@@ -2200,6 +2386,7 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
               linePosition,
               unitCostKgs,
               lineTotalKgs: lineTotalDelta,
+              inventoryValueDeltaKgs: -lineTotalDelta,
               note: reason,
               actorId: input.actorId,
               organizationId: input.organizationId,
@@ -2224,6 +2411,9 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
                 referenceType: input.referenceType,
                 referenceId: input.referenceId,
                 linePosition,
+                unitCostKgs,
+                lineTotalKgs: lineTotalDelta,
+                inventoryValueDeltaKgs: lineTotalDelta,
                 note: reason,
                 actorId: input.actorId,
                 organizationId: input.organizationId,
@@ -2246,6 +2436,9 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
                 referenceType: input.referenceType,
                 referenceId: input.referenceId,
                 linePosition,
+                unitCostKgs: beforeLine?.unitCostKgs ?? unitCostKgs,
+                lineTotalKgs: -oldLineTotal,
+                inventoryValueDeltaKgs: -oldLineTotal,
                 note: reason,
                 actorId: input.actorId,
                 organizationId: input.organizationId,
@@ -2268,6 +2461,9 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
                 referenceType: input.referenceType,
                 referenceId: input.referenceId,
                 linePosition,
+                unitCostKgs,
+                lineTotalKgs: newLineTotal,
+                inventoryValueDeltaKgs: newLineTotal,
                 note: reason,
                 actorId: input.actorId,
                 organizationId: input.organizationId,
@@ -2431,6 +2627,15 @@ export const archiveStockMovementDocument = async (input: ArchiveStockMovementDo
         });
         if (!movements.length) {
           throw new AppError("productMovementDocumentNotFound", "NOT_FOUND", 404);
+        }
+
+        if (input.documentType === "STOCK_RECEIVING") {
+          await assertStockReceivingDocumentIsEditable(tx, {
+            organizationId: input.organizationId,
+            referenceType: input.referenceType,
+            referenceId: input.referenceId,
+            movements,
+          });
         }
 
         const storeIds = Array.from(new Set(movements.map((movement) => movement.storeId)));

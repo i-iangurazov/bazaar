@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import {
   OperationRequestPrincipalType,
+  Prisma,
   StockMovementType,
   type AttributeType,
-  type Prisma,
   type PrismaClient,
 } from "@prisma/client";
 
@@ -37,6 +37,12 @@ import { assignProductToStore, productStoreAssignmentInWhere } from "@/server/se
 import { resolveProductCatalogStoresForStore } from "@/server/services/productCatalogs";
 import { getLogger } from "@/server/logging";
 import { applyStockMovement } from "@/server/services/inventory";
+import {
+  applyCurrentProductCostQuantityDelta,
+  applyValuedProductCostDelta,
+  resolveCurrentProductCostUnit,
+  setProductCostBasis,
+} from "@/server/services/productCost";
 import {
   OPERATION_TRANSACTION_TIMEOUT_MAX_MS,
   runOperationRequest,
@@ -874,6 +880,7 @@ const upsertBaseProductCost = async (
     organizationId: string;
     productId: string;
     avgCostKgs: number;
+    costBasisQty?: number;
   },
 ) => {
   const existing = await tx.productCost.findUnique({
@@ -884,28 +891,26 @@ const upsertBaseProductCost = async (
         variantKey: "BASE",
       },
     },
-    select: { id: true, costBasisQty: true },
+    select: { avgCostKgs: true, costBasisQty: true },
   });
 
-  if (existing) {
-    await tx.productCost.update({
-      where: { id: existing.id },
-      data: {
-        avgCostKgs: input.avgCostKgs,
-        costBasisQty: Math.max(existing.costBasisQty, 1),
-      },
-    });
-    return;
+  // Product forms submit the displayed two-decimal projection even when the cost
+  // field was untouched. Treat that as unchanged so an unrelated product edit
+  // cannot replace the precise six-decimal basis with a rounded reconstruction.
+  if (
+    existing &&
+    new Prisma.Decimal(input.avgCostKgs)
+      .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)
+      .equals(existing.avgCostKgs)
+  ) {
+    return existing;
   }
 
-  await tx.productCost.create({
-    data: {
-      organizationId: input.organizationId,
-      productId: input.productId,
-      variantKey: "BASE",
-      avgCostKgs: input.avgCostKgs,
-      costBasisQty: 1,
-    },
+  return setProductCostBasis(tx, {
+    organizationId: input.organizationId,
+    productId: input.productId,
+    quantity: input.costBasisQty ?? existing?.costBasisQty ?? 0,
+    unitCost: input.avgCostKgs,
   });
 };
 
@@ -1546,6 +1551,7 @@ const applyInitialVariantInventory = async (
     actorId: string;
     store?: { id: string; allowNegativeStock: boolean } | null;
     productId: string;
+    initialUnitCostKgs?: number | null;
     variants?: Array<{ id: string; initialOnHand?: number | null }>;
   },
 ) => {
@@ -1581,6 +1587,10 @@ const applyInitialVariantInventory = async (
     if (initialOnHand <= 0) {
       continue;
     }
+    const inventoryValueDelta =
+      input.initialUnitCostKgs === null || input.initialUnitCostKgs === undefined
+        ? null
+        : new Prisma.Decimal(input.initialUnitCostKgs.toString()).mul(initialOnHand);
     await tx.inventorySnapshot.update({
       where: {
         storeId_productId_variantKey: {
@@ -1604,9 +1614,21 @@ const applyInitialVariantInventory = async (
         referenceType: "ProductVariant",
         referenceId: variant.id,
         note: "Initial variant stock",
+        unitCostKgs: input.initialUnitCostKgs ?? undefined,
+        lineTotalKgs: inventoryValueDelta ?? undefined,
+        inventoryValueDeltaKgs: inventoryValueDelta ?? undefined,
         createdById: input.actorId,
       },
     });
+    if (input.initialUnitCostKgs !== null && input.initialUnitCostKgs !== undefined) {
+      await setProductCostBasis(tx, {
+        organizationId: input.organizationId,
+        productId: input.productId,
+        variantId: variant.id,
+        quantity: initialOnHand,
+        unitCost: input.initialUnitCostKgs,
+      });
+    }
   }
 };
 
@@ -1626,6 +1648,7 @@ const applyInitialInventorySettings = async (
     store?: { id: string; allowNegativeStock: boolean } | null;
     productId: string;
     initialOnHand?: number | null;
+    initialUnitCostKgs?: number | null;
     minStock?: number | null;
   },
 ) => {
@@ -1670,6 +1693,15 @@ const applyInitialInventorySettings = async (
         referenceType: "Product",
         referenceId: input.productId,
         note: "Initial stock",
+        unitCostKgs: input.initialUnitCostKgs ?? undefined,
+        lineTotalKgs:
+          input.initialUnitCostKgs === null || input.initialUnitCostKgs === undefined
+            ? undefined
+            : initialOnHand * input.initialUnitCostKgs,
+        inventoryValueDeltaKgs:
+          input.initialUnitCostKgs === null || input.initialUnitCostKgs === undefined
+            ? undefined
+            : initialOnHand * input.initialUnitCostKgs,
         createdById: input.actorId,
       },
     });
@@ -1842,166 +1874,169 @@ export const createProduct = async (input: CreateProductInput) => {
 
   const runCreateTransaction = async () => {
     const executeCreate = async (tx: Prisma.TransactionClient) => {
-        await ensureSupplier(tx, input.organizationId, input.supplierId);
-        const baseUnit = await ensureUnit(tx, input.organizationId, input.baseUnitId);
-        const attributeDefinitions = await loadAttributeDefinitions(tx, input.organizationId);
-        ensureRequiredAttributes(input.variants, attributeDefinitions);
-        const barcodes = normalizeBarcodes(input.barcodes);
-        await ensureBarcodesAvailable(tx, input.organizationId, barcodes);
-        const normalizedPacks = normalizePacks(input.packs);
-        const packBarcodes = normalizedPacks
-          .map((pack) => pack.packBarcode)
-          .filter(Boolean) as string[];
-        await ensurePackBarcodesAvailable(tx, input.organizationId, packBarcodes);
-        const normalizedImages = withStableProductImageIds(resolvedMedia.images);
-        const imageReferences = buildProductImageReferenceMap(normalizedImages);
-        const normalizedCategories = resolveNormalizedProductCategories({
-          category: input.category,
-          categories: input.categories,
-        });
-        for (const category of normalizedCategories) {
-          await ensureProductCategory(tx, {
-            organizationId: input.organizationId,
-            name: category,
-          });
-        }
-        if (input.isBundle && normalizedBundleComponents.length < 1) {
-          throw new AppError("bundleEmpty", "BAD_REQUEST", 400);
-        }
-
-        const resolvedSku = await resolveCreateSku(tx, {
+      await ensureSupplier(tx, input.organizationId, input.supplierId);
+      const baseUnit = await ensureUnit(tx, input.organizationId, input.baseUnitId);
+      const attributeDefinitions = await loadAttributeDefinitions(tx, input.organizationId);
+      ensureRequiredAttributes(input.variants, attributeDefinitions);
+      const barcodes = normalizeBarcodes(input.barcodes);
+      await ensureBarcodesAvailable(tx, input.organizationId, barcodes);
+      const normalizedPacks = normalizePacks(input.packs);
+      const packBarcodes = normalizedPacks
+        .map((pack) => pack.packBarcode)
+        .filter(Boolean) as string[];
+      await ensurePackBarcodesAvailable(tx, input.organizationId, packBarcodes);
+      const normalizedImages = withStableProductImageIds(resolvedMedia.images);
+      const imageReferences = buildProductImageReferenceMap(normalizedImages);
+      const normalizedCategories = resolveNormalizedProductCategories({
+        category: input.category,
+        categories: input.categories,
+      });
+      for (const category of normalizedCategories) {
+        await ensureProductCategory(tx, {
           organizationId: input.organizationId,
-          requestedSku,
+          name: category,
         });
+      }
+      if (input.isBundle && normalizedBundleComponents.length < 1) {
+        throw new AppError("bundleEmpty", "BAD_REQUEST", 400);
+      }
 
-        const product = await tx.product.create({
-          data: {
-            id: productId,
-            organizationId: input.organizationId,
-            sku: resolvedSku,
-            name: input.name,
-            category: resolvePrimaryProductCategory(normalizedCategories),
-            categories: normalizedCategories,
-            unit: baseUnit.code,
-            baseUnitId: baseUnit.id,
-            basePriceKgs: input.basePriceKgs ?? null,
-            description: input.description ?? null,
-            photoUrl: resolvedMedia.photoUrl,
-            supplierId: input.supplierId,
-            isBundle: Boolean(input.isBundle),
-            barcodes: barcodes.length
-              ? {
-                  create: barcodes.map((value) => ({
-                    organizationId: input.organizationId,
-                    value,
-                  })),
-                }
-              : undefined,
-          },
-        });
+      const resolvedSku = await resolveCreateSku(tx, {
+        organizationId: input.organizationId,
+        requestedSku,
+      });
 
-        if (normalizedPacks.length) {
-          await tx.productPack.createMany({
-            data: normalizedPacks.map((pack) => ({
-              organizationId: input.organizationId,
-              productId: product.id,
-              packName: pack.packName,
-              packBarcode: pack.packBarcode,
-              multiplierToBase: pack.multiplierToBase,
-              allowInPurchasing: pack.allowInPurchasing ?? true,
-              allowInReceiving: pack.allowInReceiving ?? true,
-            })),
-          });
-        }
+      const product = await tx.product.create({
+        data: {
+          id: productId,
+          organizationId: input.organizationId,
+          sku: resolvedSku,
+          name: input.name,
+          category: resolvePrimaryProductCategory(normalizedCategories),
+          categories: normalizedCategories,
+          unit: baseUnit.code,
+          baseUnitId: baseUnit.id,
+          basePriceKgs: input.basePriceKgs ?? null,
+          description: input.description ?? null,
+          photoUrl: resolvedMedia.photoUrl,
+          supplierId: input.supplierId,
+          isBundle: Boolean(input.isBundle),
+          barcodes: barcodes.length
+            ? {
+                create: barcodes.map((value) => ({
+                  organizationId: input.organizationId,
+                  value,
+                })),
+              }
+            : undefined,
+        },
+      });
 
-        if (normalizedImages.length) {
-          await tx.productImage.createMany({
-            data: normalizedImages.map((image) => ({
-              id: image.id,
-              organizationId: input.organizationId,
-              productId: product.id,
-              url: image.url,
-              position: image.position,
-            })),
-          });
-        }
-
-        const createdVariants = await createVariants(
-          tx,
-          product.id,
-          input.variants,
-          input.organizationId,
-          attributeDefinitions,
-          imageReferences,
-        );
-        if (normalizedBundleComponents.length) {
-          await syncBundleComponents(tx, {
+      if (normalizedPacks.length) {
+        await tx.productPack.createMany({
+          data: normalizedPacks.map((pack) => ({
             organizationId: input.organizationId,
             productId: product.id,
-            components: normalizedBundleComponents,
-            mode: "create-only",
-          });
-        }
-        await createInitialStoreAssignments(tx, {
-          organizationId: input.organizationId,
-          actorId: input.actorId,
-          productId: product.id,
-          stores: assignmentStores,
-        });
-        await ensureBaseSnapshots(tx, input.organizationId, product.id, assignmentStores);
-        await applyInitialInventorySettings(tx, {
-          organizationId: input.organizationId,
-          actorId: input.actorId,
-          requestId: input.requestId,
-          store: assignmentStores[0] ?? null,
-          productId: product.id,
-          initialOnHand: input.initialOnHand,
-          minStock: input.minStock,
-        });
-        await applyInitialVariantInventory(tx, {
-          organizationId: input.organizationId,
-          actorId: input.actorId,
-          store: assignmentStores[0] ?? null,
-          productId: product.id,
-          variants: createdVariants.map((variant, index) => ({
-            id: variant.id,
-            initialOnHand: input.variants?.[index]?.initialOnHand,
+            packName: pack.packName,
+            packBarcode: pack.packBarcode,
+            multiplierToBase: pack.multiplierToBase,
+            allowInPurchasing: pack.allowInPurchasing ?? true,
+            allowInReceiving: pack.allowInReceiving ?? true,
           })),
         });
-        await upsertStoreVariantPrices(tx, {
-          organizationId: input.organizationId,
-          actorId: input.actorId,
-          storeId: assignmentStores[0]?.id ?? input.storeId,
-          productId: product.id,
-          variants: createdVariants.map((variant, index) => ({
-            id: variant.id,
-            storePriceKgs: input.variants?.[index]?.storePriceKgs,
-          })),
-        });
-        if (resolvedBaseCost !== undefined) {
-          await upsertBaseProductCost(tx, {
+      }
+
+      if (normalizedImages.length) {
+        await tx.productImage.createMany({
+          data: normalizedImages.map((image) => ({
+            id: image.id,
             organizationId: input.organizationId,
             productId: product.id,
-            avgCostKgs: resolvedBaseCost,
-          });
-        }
-
-        await writeAuditLog(tx, {
-          organizationId: input.organizationId,
-          actorId: input.actorId,
-          action: "PRODUCT_CREATE",
-          entity: "Product",
-          entityId: product.id,
-          before: null,
-          after: toJson(product),
-          requestId: input.requestId,
+            url: image.url,
+            position: image.position,
+          })),
         });
+      }
 
-        return {
-          response: { productId: product.id },
-          responseStatus: 201,
-          resource: { type: "Product", id: product.id },
-        };
+      const createdVariants = await createVariants(
+        tx,
+        product.id,
+        input.variants,
+        input.organizationId,
+        attributeDefinitions,
+        imageReferences,
+      );
+      if (normalizedBundleComponents.length) {
+        await syncBundleComponents(tx, {
+          organizationId: input.organizationId,
+          productId: product.id,
+          components: normalizedBundleComponents,
+          mode: "create-only",
+        });
+      }
+      await createInitialStoreAssignments(tx, {
+        organizationId: input.organizationId,
+        actorId: input.actorId,
+        productId: product.id,
+        stores: assignmentStores,
+      });
+      await ensureBaseSnapshots(tx, input.organizationId, product.id, assignmentStores);
+      await applyInitialInventorySettings(tx, {
+        organizationId: input.organizationId,
+        actorId: input.actorId,
+        requestId: input.requestId,
+        store: assignmentStores[0] ?? null,
+        productId: product.id,
+        initialOnHand: input.initialOnHand,
+        initialUnitCostKgs: resolvedBaseCost,
+        minStock: input.minStock,
+      });
+      await applyInitialVariantInventory(tx, {
+        organizationId: input.organizationId,
+        actorId: input.actorId,
+        store: assignmentStores[0] ?? null,
+        productId: product.id,
+        initialUnitCostKgs: resolvedBaseCost,
+        variants: createdVariants.map((variant, index) => ({
+          id: variant.id,
+          initialOnHand: input.variants?.[index]?.initialOnHand,
+        })),
+      });
+      await upsertStoreVariantPrices(tx, {
+        organizationId: input.organizationId,
+        actorId: input.actorId,
+        storeId: assignmentStores[0]?.id ?? input.storeId,
+        productId: product.id,
+        variants: createdVariants.map((variant, index) => ({
+          id: variant.id,
+          storePriceKgs: input.variants?.[index]?.storePriceKgs,
+        })),
+      });
+      if (resolvedBaseCost !== undefined) {
+        await upsertBaseProductCost(tx, {
+          organizationId: input.organizationId,
+          productId: product.id,
+          avgCostKgs: resolvedBaseCost,
+          costBasisQty: Math.max(Math.trunc(input.initialOnHand ?? 0), 0),
+        });
+      }
+
+      await writeAuditLog(tx, {
+        organizationId: input.organizationId,
+        actorId: input.actorId,
+        action: "PRODUCT_CREATE",
+        entity: "Product",
+        entityId: product.id,
+        before: null,
+        after: toJson(product),
+        requestId: input.requestId,
+      });
+
+      return {
+        response: { productId: product.id },
+        responseStatus: 201,
+        resource: { type: "Product", id: product.id },
+      };
     };
     const operation = await runOperationRequest(
       {
@@ -2043,8 +2078,7 @@ export const createProduct = async (input: CreateProductInput) => {
           maxWait: 10_000,
           timeout: PRODUCT_CREATE_TRANSACTION_TIMEOUT_MS,
         },
-        classifyFailure: (error) =>
-          classifyDatabaseOperationFailure(error, "productsCreateFailed"),
+        classifyFailure: (error) => classifyDatabaseOperationFailure(error, "productsCreateFailed"),
       },
       executeCreate,
     );
@@ -2219,6 +2253,7 @@ export const assignExistingProductsToStore = async (input: AssignExistingProduct
 
 export type UpdateProductInput = {
   productId: string;
+  expectedUpdatedAt?: Date;
   organizationId: string;
   actorId: string;
   requestId: string;
@@ -2334,8 +2369,12 @@ export const updateProduct = async (input: UpdateProductInput) => {
     ) {
       throw new AppError("bundleEmpty", "BAD_REQUEST", 400);
     }
-    const product = await tx.product.update({
-      where: { id: input.productId },
+    const updateResult = await tx.product.updateMany({
+      where: {
+        id: input.productId,
+        organizationId: input.organizationId,
+        ...(input.expectedUpdatedAt ? { updatedAt: input.expectedUpdatedAt } : {}),
+      },
       data: {
         sku: input.sku,
         name: input.name,
@@ -2351,6 +2390,10 @@ export const updateProduct = async (input: UpdateProductInput) => {
         isBundle: nextIsBundle,
       },
     });
+    if (updateResult.count !== 1) {
+      throw new AppError("productStaleUpdate", "CONFLICT", 409);
+    }
+    const product = await tx.product.findUniqueOrThrow({ where: { id: input.productId } });
 
     await tx.productBarcode.deleteMany({ where: { productId: input.productId } });
     if (barcodes.length) {
@@ -2634,6 +2677,8 @@ export const duplicateProduct = async (input: {
             variantKey: true,
             avgCostKgs: true,
             costBasisQty: true,
+            costBasisValueKgs: true,
+            lastReceiptAt: true,
           },
         },
         inventorySnapshots: {
@@ -2784,9 +2829,7 @@ export const duplicateProduct = async (input: {
               name: variant.name,
               sku: copiedVariantSku(variant.sku, index),
               attributes:
-                    copyCharacteristics &&
-                    variant.attributes &&
-                    typeof variant.attributes === "object"
+                copyCharacteristics && variant.attributes && typeof variant.attributes === "object"
                   ? (variant.attributes as Record<string, unknown>)
                   : {},
             })),
@@ -2903,31 +2946,12 @@ export const duplicateProduct = async (input: {
       });
     }
 
-    if (copyCost && source.productCosts.length) {
-      const copiedCosts = source.productCosts.flatMap((cost) => {
-        const copiedVariantId =
-          cost.variantKey === "BASE"
-            ? null
-            : (copiedVariantIdBySourceId.get(cost.variantKey) ?? null);
-        if (cost.variantKey !== "BASE" && !copiedVariantId) {
-          return [];
-        }
-        return [
-          {
-            organizationId: input.organizationId,
-            productId: duplicate.id,
-            variantId: copiedVariantId,
-            variantKey: copiedVariantId ?? "BASE",
-            avgCostKgs: cost.avgCostKgs,
-            costBasisQty: copyInventory ? cost.costBasisQty : 0,
-          },
-        ];
-      });
-      if (copiedCosts.length) {
-        await tx.productCost.createMany({ data: copiedCosts, skipDuplicates: true });
-      }
-    }
-
+    const sourceCostByVariantKey = new Map(
+      source.productCosts.map((cost) => [cost.variantKey, cost]),
+    );
+    const resolveSourceUnitCost = (cost: (typeof source.productCosts)[number]) =>
+      resolveCurrentProductCostUnit(cost);
+    const copiedQuantityBySourceVariantKey = new Map<string, number>();
     let copiedInventoryRows = 0;
     if (copyInventory) {
       for (const snapshot of source.inventorySnapshots) {
@@ -2941,6 +2965,14 @@ export const duplicateProduct = async (input: {
           continue;
         }
         const variantKey = copiedVariantId ?? "BASE";
+        copiedQuantityBySourceVariantKey.set(
+          snapshot.variantKey,
+          (copiedQuantityBySourceVariantKey.get(snapshot.variantKey) ?? 0) + snapshot.onHand,
+        );
+        const sourceCost = copyCost ? sourceCostByVariantKey.get(snapshot.variantKey) : undefined;
+        if (snapshot.onHand < 0 && sourceCost) {
+          throw new AppError("valuedNegativeStockDepletionBlocked", "CONFLICT", 409);
+        }
         await tx.inventorySnapshot.update({
           where: {
             storeId_productId_variantKey: {
@@ -2953,6 +2985,8 @@ export const duplicateProduct = async (input: {
         });
         copiedInventoryRows += 1;
         if (snapshot.onHand !== 0) {
+          const sourceUnitCost = sourceCost ? resolveSourceUnitCost(sourceCost) : null;
+          const inventoryValueDelta = sourceUnitCost?.mul(snapshot.onHand) ?? null;
           await tx.stockMovement.create({
             data: {
               storeId: snapshot.storeId,
@@ -2963,10 +2997,36 @@ export const duplicateProduct = async (input: {
               referenceType: "PRODUCT_DUPLICATE",
               referenceId: duplicate.id,
               note: `Copied inventory from ${source.sku}`,
+              unitCostKgs: sourceUnitCost ?? undefined,
+              lineTotalKgs: inventoryValueDelta ?? undefined,
+              inventoryValueDeltaKgs: inventoryValueDelta ?? undefined,
               createdById: input.actorId,
             },
           });
         }
+      }
+    }
+
+    if (copyCost) {
+      for (const cost of source.productCosts) {
+        const copiedVariantId =
+          cost.variantKey === "BASE"
+            ? null
+            : (copiedVariantIdBySourceId.get(cost.variantKey) ?? null);
+        if (cost.variantKey !== "BASE" && !copiedVariantId) {
+          continue;
+        }
+        const copiedQuantity = copyInventory
+          ? (copiedQuantityBySourceVariantKey.get(cost.variantKey) ?? 0)
+          : 0;
+        await setProductCostBasis(tx, {
+          organizationId: input.organizationId,
+          productId: duplicate.id,
+          variantId: copiedVariantId,
+          quantity: copiedQuantity,
+          unitCost: copiedQuantity > 0 ? resolveSourceUnitCost(cost) : cost.avgCostKgs,
+          lastReceiptAt: cost.lastReceiptAt,
+        });
       }
     }
 
@@ -4036,36 +4096,20 @@ export const importProductsTx = async (
   };
 
   const setBaseCost = async (productId: string, avgCostKgs: number) => {
-    const existing = await tx.productCost.findUnique({
+    const inventory = await tx.inventorySnapshot.aggregate({
       where: {
-        organizationId_productId_variantKey: {
-          organizationId: input.organizationId,
-          productId,
-          variantKey: "BASE",
-        },
-      },
-      select: { id: true, costBasisQty: true },
-    });
-
-    if (existing) {
-      await tx.productCost.update({
-        where: { id: existing.id },
-        data: {
-          avgCostKgs,
-          costBasisQty: Math.max(existing.costBasisQty, 1),
-        },
-      });
-      return;
-    }
-
-    await tx.productCost.create({
-      data: {
-        organizationId: input.organizationId,
         productId,
         variantKey: "BASE",
-        avgCostKgs,
-        costBasisQty: 1,
+        store: { organizationId: input.organizationId },
       },
+      _sum: { onHand: true },
+    });
+
+    await setProductCostBasis(tx, {
+      organizationId: input.organizationId,
+      productId,
+      quantity: inventory._sum.onHand ?? 0,
+      unitCost: avgCostKgs,
     });
   };
 
@@ -4129,7 +4173,11 @@ export const importProductsTx = async (
     }
   };
 
-  const applyImportedStock = async (productId: string, stockQty?: number) => {
+  const applyImportedStock = async (
+    productId: string,
+    stockQty?: number,
+    importedUnitCostKgs?: number,
+  ) => {
     if (stockBehavior === "ignore" || stockQty === undefined) {
       return;
     }
@@ -4156,6 +4204,29 @@ export const importProductsTx = async (
       return;
     }
 
+    let valuation: { unitCostKgs: number; inventoryValueDeltaKgs: number } | null;
+    if (importedUnitCostKgs !== undefined) {
+      const inventoryValueDelta = new Prisma.Decimal(importedUnitCostKgs.toString())
+        .mul(qtyDelta)
+        .toDecimalPlaces(6, Prisma.Decimal.ROUND_HALF_UP);
+      await applyValuedProductCostDelta(tx, {
+        organizationId: input.organizationId,
+        productId,
+        quantityDelta: qtyDelta,
+        valueDeltaKgs: inventoryValueDelta,
+      });
+      valuation = {
+        unitCostKgs: importedUnitCostKgs,
+        inventoryValueDeltaKgs: Number(inventoryValueDelta),
+      };
+    } else {
+      valuation = await applyCurrentProductCostQuantityDelta(tx, {
+        organizationId: input.organizationId,
+        productId,
+        quantityDelta: qtyDelta,
+      });
+    }
+
     await applyStockMovement(tx, {
       storeId: input.storeId,
       productId,
@@ -4164,6 +4235,9 @@ export const importProductsTx = async (
       referenceType: "IMPORT",
       referenceId: input.batchId,
       note: stockBehavior === "add" ? "importStockAdd" : "importStockSet",
+      unitCostKgs: valuation?.unitCostKgs,
+      lineTotalKgs: valuation?.inventoryValueDeltaKgs,
+      inventoryValueDeltaKgs: valuation?.inventoryValueDeltaKgs,
       actorId: input.actorId,
       organizationId: input.organizationId,
     });
@@ -4507,7 +4581,7 @@ export const importProductsTx = async (
       if (shouldApplyField("minStock")) {
         await upsertMinStock(existing.id, minStock);
       }
-      await applyImportedStock(existing.id, stockQty);
+      await applyImportedStock(existing.id, stockQty, resolvedBaseCost);
 
       await writeAuditLog(tx, {
         organizationId: input.organizationId,
@@ -4596,7 +4670,7 @@ export const importProductsTx = async (
       if (shouldApplyField("variants") && variants.length) {
         await upsertImportVariants(product.id, variants);
       }
-      await applyImportedStock(product.id, stockQty);
+      await applyImportedStock(product.id, stockQty, resolvedBaseCost);
 
       await writeAuditLog(tx, {
         organizationId: input.organizationId,

@@ -40,6 +40,10 @@ import {
 } from "@/lib/currency";
 import { resolveCurrencySnapshot } from "@/lib/currencyDisplay";
 import { getEffectiveProductPrice } from "@/server/services/effectiveProductPrice";
+import {
+  productCostBasisSelect,
+  resolveCurrentProductCostUnitNumber,
+} from "@/server/services/productCost";
 
 const DEFAULT_ACCENT_COLOR = "#2a6be4";
 const DEFAULT_FONT_FAMILY = BazaarCatalogFontFamily.NotoSans;
@@ -760,7 +764,7 @@ export const createBazaarCatalogLogoImage = async (input: {
   });
 };
 
-type PublicCatalogPayload = {
+export type PublicCatalogPayload = {
   slug: string;
   storeId: string;
   title: string;
@@ -1265,7 +1269,7 @@ const createCatalogCheckoutOrderTx = async (
         productId: true,
         variantId: true,
         variantKey: true,
-        avgCostKgs: true,
+        ...productCostBasisSelect,
       },
     }),
   ]);
@@ -1285,7 +1289,7 @@ const createCatalogCheckoutOrderTx = async (
   const productCostByProductVariantKey = new Map(
     productCosts.map((productCost) => [
       `${productCost.productId}:${productCost.variantKey}`,
-      Number(productCost.avgCostKgs),
+      resolveCurrentProductCostUnitNumber(productCost),
     ]),
   );
 

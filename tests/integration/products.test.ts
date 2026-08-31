@@ -508,14 +508,18 @@ describeDb("products", () => {
         safetyStockDays: 4,
       },
     });
-    await prisma.productCost.create({
+    await prisma.productCost.update({
+      where: {
+        organizationId_productId_variantKey: {
+          organizationId: org.id,
+          productId: source.id,
+          variantKey: sourceLarge.id,
+        },
+      },
       data: {
-        organizationId: org.id,
-        productId: source.id,
-        variantId: sourceLarge.id,
-        variantKey: sourceLarge.id,
         avgCostKgs: 95,
         costBasisQty: 16,
+        costBasisValueKgs: 1520,
       },
     });
     await prisma.storePrice.createMany({
@@ -1631,6 +1635,33 @@ describeDb("products", () => {
     expect(byHeader.get("Штрихкоды")).toBe("EXPORT-BC-1, EXPORT-BC-2");
   });
 
+  it("enforces the product export role boundary while preserving CASHIER access", async () => {
+    const { org, store, product, staffUser, cashierUser } = await seedBase();
+    const staffCaller = createTestCaller({
+      id: staffUser.id,
+      email: staffUser.email,
+      role: staffUser.role,
+      organizationId: org.id,
+    });
+    const cashierCaller = createTestCaller({
+      id: cashierUser.id,
+      email: cashierUser.email,
+      role: cashierUser.role,
+      organizationId: org.id,
+    });
+
+    await expect(staffCaller.products.exportCsv({ storeId: store.id })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    const cashierCsv = await cashierCaller.products.exportCsv({
+      storeId: store.id,
+      columns: ["sku", "name"],
+    });
+
+    expect(cashierCsv).toContain(product.sku);
+    expect(cashierCsv).toContain(product.name);
+  });
+
   it("reflects create, update, archive, and restore flows in subsequent product lists", async () => {
     const { org, store, managerUser, baseUnit } = await seedBase();
     await grantStoreAccess(org.id, managerUser.id, store.id);
@@ -1665,6 +1696,7 @@ describeDb("products", () => {
 
     await caller.products.update({
       productId: created.id,
+      expectedUpdatedAt: created.updatedAt,
       sku: "SKU-LIST-FLOW",
       name: "List Flow Product Updated",
       category: "Updated",
@@ -1759,8 +1791,14 @@ describeDb("products", () => {
     const initialList = await caller.products.list({ page: 1, pageSize: 3 });
     expect(initialList.items.map((item) => item.id)).toEqual([newer.id, older.id, product.id]);
 
+    const olderAfterTimestampFixture = await prisma.product.findUniqueOrThrow({
+      where: { id: older.id },
+      select: { updatedAt: true },
+    });
+
     await caller.products.update({
       productId: older.id,
+      expectedUpdatedAt: olderAfterTimestampFixture.updatedAt,
       sku: older.sku,
       name: "Older Sort Product Edited",
       baseUnitId: baseUnit.id,

@@ -1,12 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
-import {
-  GuidanceCloseButton,
-  GuidanceTourNavButtons,
-} from "@/components/guidance/GuidanceButtons";
+import { GuidanceCloseButton, GuidanceTourNavButtons } from "@/components/guidance/GuidanceButtons";
 import { useGuidance } from "@/components/guidance/guidance-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -162,8 +159,16 @@ const buildCardPosition = (rect: DOMRect | null, placement: TipPlacement = "bott
   }
 
   return {
-    left: clamp(left, EDGE_PADDING, Math.max(EDGE_PADDING, viewportWidth - CARD_WIDTH - EDGE_PADDING)),
-    top: clamp(top, EDGE_PADDING, Math.max(EDGE_PADDING, viewportHeight - CARD_HEIGHT - EDGE_PADDING)),
+    left: clamp(
+      left,
+      EDGE_PADDING,
+      Math.max(EDGE_PADDING, viewportWidth - CARD_WIDTH - EDGE_PADDING),
+    ),
+    top: clamp(
+      top,
+      EDGE_PADDING,
+      Math.max(EDGE_PADDING, viewportHeight - CARD_HEIGHT - EDGE_PADDING),
+    ),
     width: CARD_WIDTH,
   };
 };
@@ -312,7 +317,11 @@ const TourOverlay = ({
   const tCommon = useTranslations("common");
   const rect = useTargetRect(step.selector);
   const panelRef = useRef<HTMLDivElement | null>(null);
-  const cardPosition = useMemo(() => buildCardPosition(rect, step.placement), [rect, step.placement]);
+  const titleId = useId();
+  const cardPosition = useMemo(
+    () => buildCardPosition(rect, step.placement),
+    [rect, step.placement],
+  );
 
   useTourFocusTrap({
     enabled: true,
@@ -338,6 +347,7 @@ const TourOverlay = ({
         ref={panelRef}
         role="dialog"
         aria-modal="true"
+        aria-labelledby={titleId}
         className="fixed z-[47] max-w-[calc(100vw-24px)]"
         style={cardPosition}
       >
@@ -349,7 +359,9 @@ const TourOverlay = ({
               </p>
               <GuidanceCloseButton label={tCommon("close")} onClick={onSkip} />
             </div>
-            <CardTitle className="text-base">{t(step.titleKey)}</CardTitle>
+            <CardTitle id={titleId} className="text-base">
+              {t(step.titleKey)}
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">{t(step.bodyKey)}</p>
@@ -393,7 +405,9 @@ const TipsOverlay = ({
     >
       <CardHeader className="space-y-2 pb-2">
         <div className="flex items-start justify-between gap-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("tipsBadge")}</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {t("tipsBadge")}
+          </p>
           <GuidanceCloseButton label={tCommon("close")} onClick={onDismiss} />
         </div>
         <CardTitle className="text-base">{t(tip.titleKey)}</CardTitle>
@@ -401,11 +415,23 @@ const TipsOverlay = ({
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">{t(tip.bodyKey)}</p>
         <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" variant="ghost" size="default" className="h-10 px-4 text-sm" onClick={onDismiss}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="default"
+            className="h-10 px-4 text-sm"
+            onClick={onDismiss}
+          >
             {t("dismiss")}
           </Button>
           {nextTip ? (
-            <Button type="button" variant="secondary" size="default" className="h-10 px-4 text-sm" onClick={onNext}>
+            <Button
+              type="button"
+              variant="secondary"
+              size="default"
+              className="h-10 px-4 text-sm"
+              onClick={onNext}
+            >
               {t("nextTip")}
             </Button>
           ) : null}

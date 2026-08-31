@@ -1796,36 +1796,43 @@ const ProductsPage = () => {
     [stores],
   );
   const totalStores = stores.length;
-  const getBarcodeSummary = useCallback((barcodes: { value: string }[]) => {
-    const values = barcodes.map((barcode) => barcode.value).filter(Boolean);
-    if (!values.length) {
-      return { label: tCommon("notAvailable"), values };
-    }
-    if (values.length === 1) {
-      return { label: values[0], values };
-    }
-    return { label: t("barcodesCount", { count: values.length }), values };
-  }, [t, tCommon]);
-  const getStoreInfo = useCallback((storeIds: string[]) => {
-    const uniqueIds = Array.from(new Set(storeIds));
-    const names = uniqueIds
-      .map((storeId) => storeNameById.get(storeId))
-      .filter((name): name is string => Boolean(name))
-      .sort((a, b) => a.localeCompare(b));
-    const count = uniqueIds.length;
-    const summary =
-      totalStores > 0 && count === totalStores
-        ? t("allStores")
-        : count > 0
-          ? t("storesCount", { count })
-          : tCommon("notAvailable");
-    return { summary, names };
-  }, [storeNameById, t, tCommon, totalStores]);
+  const getBarcodeSummary = useCallback(
+    (barcodes: { value: string }[]) => {
+      const values = barcodes.map((barcode) => barcode.value).filter(Boolean);
+      if (!values.length) {
+        return { label: tCommon("notAvailable"), values };
+      }
+      if (values.length === 1) {
+        return { label: values[0], values };
+      }
+      return { label: t("barcodesCount", { count: values.length }), values };
+    },
+    [t, tCommon],
+  );
+  const getStoreInfo = useCallback(
+    (storeIds: string[]) => {
+      const uniqueIds = Array.from(new Set(storeIds));
+      const names = uniqueIds
+        .map((storeId) => storeNameById.get(storeId))
+        .filter((name): name is string => Boolean(name))
+        .sort((a, b) => a.localeCompare(b));
+      const count = uniqueIds.length;
+      const summary =
+        totalStores > 0 && count === totalStores
+          ? t("allStores")
+          : count > 0
+            ? t("storesCount", { count })
+            : tCommon("notAvailable");
+      return { summary, names };
+    },
+    [storeNameById, t, tCommon, totalStores],
+  );
 
-  const getProductPreviewUrl = useCallback((product: {
-    photoUrl?: string | null;
-    images?: { url: string }[];
-  }) => product.images?.[0]?.url ?? product.photoUrl ?? null, []);
+  const getProductPreviewUrl = useCallback(
+    (product: { photoUrl?: string | null; images?: { url: string }[] }) =>
+      product.images?.[0]?.url ?? product.photoUrl ?? null,
+    [],
+  );
   const hasProductImage = useCallback(
     (product: { photoUrl?: string | null; images?: { url?: string | null }[] }) =>
       [...(product.images ?? []).map((image) => image.url), product.photoUrl].some((url) => {
@@ -1835,41 +1842,47 @@ const ProductsPage = () => {
     [],
   );
   type ProductRow = NonNullable<typeof products>[number];
-  const getProductReadiness = useCallback((product: ProductRow) => {
-    const price = showEffectivePrice ? product.effectivePriceKgs : product.basePriceKgs;
-    const hasImage = hasProductImage(product);
-    return {
-      missingBarcode: enableBarcode && !product.barcodes.some((barcode) => barcode.value.trim()),
-      missingImage: !hasImage,
-      missingPrice: price === null || price === undefined,
-      negativeStock: product.onHandQty < 0,
-      outOfStock: product.onHandQty <= 0,
-      lowStock: product.onHandQty <= 0,
-    };
-  }, [enableBarcode, hasProductImage, showEffectivePrice]);
-  const getProductReadinessSummary = useCallback((
-    readinessState: ReturnType<typeof getProductReadiness>,
-  ): { label: string; variant: ProductReadinessBadgeVariant } => {
-    if (readinessState.negativeStock) {
-      return { label: t("negativeStock"), variant: "danger" };
-    }
-    if (readinessState.missingPrice) {
-      return { label: t("missingPrice"), variant: "danger" };
-    }
-    if (readinessState.missingImage) {
-      return { label: t("missingImage"), variant: "warning" };
-    }
-    if (readinessState.missingBarcode) {
-      return { label: t("missingBarcode"), variant: "warning" };
-    }
-    if (readinessState.outOfStock) {
-      return { label: t("outOfStock"), variant: "warning" };
-    }
-    if (readinessState.lowStock) {
-      return { label: t("missingStock"), variant: "warning" };
-    }
-    return { label: t("readyForSale"), variant: "muted" };
-  }, [t]);
+  const getProductReadiness = useCallback(
+    (product: ProductRow) => {
+      const price = showEffectivePrice ? product.effectivePriceKgs : product.basePriceKgs;
+      const hasImage = hasProductImage(product);
+      return {
+        missingBarcode: enableBarcode && !product.barcodes.some((barcode) => barcode.value.trim()),
+        missingImage: !hasImage,
+        missingPrice: price === null || price === undefined,
+        negativeStock: product.onHandQty < 0,
+        outOfStock: product.onHandQty <= 0,
+        lowStock: product.onHandQty <= 0,
+      };
+    },
+    [enableBarcode, hasProductImage, showEffectivePrice],
+  );
+  const getProductReadinessSummary = useCallback(
+    (
+      readinessState: ReturnType<typeof getProductReadiness>,
+    ): { label: string; variant: ProductReadinessBadgeVariant } => {
+      if (readinessState.negativeStock) {
+        return { label: t("negativeStock"), variant: "danger" };
+      }
+      if (readinessState.missingPrice) {
+        return { label: t("missingPrice"), variant: "danger" };
+      }
+      if (readinessState.missingImage) {
+        return { label: t("missingImage"), variant: "warning" };
+      }
+      if (readinessState.missingBarcode) {
+        return { label: t("missingBarcode"), variant: "warning" };
+      }
+      if (readinessState.outOfStock) {
+        return { label: t("outOfStock"), variant: "warning" };
+      }
+      if (readinessState.lowStock) {
+        return { label: t("missingStock"), variant: "warning" };
+      }
+      return { label: t("readyForSale"), variant: "muted" };
+    },
+    [t],
+  );
   const sortCollator = useMemo(
     () =>
       new Intl.Collator(locale, {
@@ -2227,525 +2240,525 @@ const ProductsPage = () => {
       trpcUtils.products.byIds,
     ],
   );
-  const getProductActions = useCallback((product: ProductRow) => {
-    if (!canManageProducts) {
-      return [
-        {
-          key: "view",
-          label: tCommon("view"),
-          icon: ViewIcon,
-          href: `/products/${product.id}`,
-          openInNewTab: false,
-        },
-      ];
-    }
-
-    const managementActions = product.isDeleted
-      ? [
+  const getProductActions = useCallback(
+    (product: ProductRow) => {
+      if (!canManageProducts) {
+        return [
           {
-            key: "restore",
-            label: t("restore"),
-            icon: RestoreIcon,
-            onSelect: async () => {
-              if (
-                !(await confirm({ description: t("confirmRestore"), confirmVariant: "danger" }))
-              ) {
-                return;
-              }
-              restoreMutation.mutate({ productId: product.id });
-            },
-          },
-        ]
-      : [
-          {
-            key: "edit",
-            label: tCommon("edit"),
-            icon: EditIcon,
-            href: buildProductListLaunchedHref(`/products/${product.id}`),
+            key: "view",
+            label: tCommon("view"),
+            icon: ViewIcon,
+            href: `/products/${product.id}`,
             openInNewTab: false,
-            onSelect: persistProductsReturnState,
-          },
-          ...(enableBarcode
-            ? [
-                {
-                  key: "print-labels",
-                  label: t("printLabels"),
-                  icon: PrintIcon,
-                  onSelect: () => {
-                    if (!hasPrintableBarcode(product as BarcodePrintProduct)) {
-                      toast({ variant: "error", description: t("printMissingBarcode") });
-                      return;
-                    }
-                    void openPrintForProducts([product.id]);
-                  },
-                },
-              ]
-            : []),
-          {
-            key: "duplicate",
-            label: t("duplicate"),
-            icon: CopyIcon,
-            disabled: quickDuplicate.isLoading,
-            onSelect: () => quickDuplicate.duplicateProduct(product.id),
-          },
-          {
-            key: "selective-duplicate",
-            label: t("selectiveDuplicate"),
-            icon: CopyIcon,
-            onSelect: () => {
-              setDuplicateTarget({ id: product.id, name: product.name });
-            },
-          },
-          {
-            key: "archive",
-            label: tCommon("archive"),
-            icon: ArchiveIcon,
-            variant: "danger" as const,
-            onSelect: async () => {
-              if (
-                !(await confirm({ description: t("confirmArchive"), confirmVariant: "danger" }))
-              ) {
-                return;
-              }
-              archiveMutation.mutate({ productId: product.id });
-            },
           },
         ];
+      }
 
-    return managementActions;
-  }, [
-    archiveMutation,
-    buildProductListLaunchedHref,
-    canManageProducts,
-    confirm,
-    enableBarcode,
-    openPrintForProducts,
-    persistProductsReturnState,
-    quickDuplicate,
-    restoreMutation,
-    t,
-    tCommon,
-    toast,
-  ]);
+      const managementActions = product.isDeleted
+        ? [
+            {
+              key: "restore",
+              label: t("restore"),
+              icon: RestoreIcon,
+              onSelect: async () => {
+                if (
+                  !(await confirm({ description: t("confirmRestore"), confirmVariant: "danger" }))
+                ) {
+                  return;
+                }
+                restoreMutation.mutate({ productId: product.id });
+              },
+            },
+          ]
+        : [
+            {
+              key: "edit",
+              label: tCommon("edit"),
+              icon: EditIcon,
+              href: buildProductListLaunchedHref(`/products/${product.id}`),
+              openInNewTab: false,
+              onSelect: persistProductsReturnState,
+            },
+            ...(enableBarcode
+              ? [
+                  {
+                    key: "print-labels",
+                    label: t("printLabels"),
+                    icon: PrintIcon,
+                    onSelect: () => {
+                      if (!hasPrintableBarcode(product as BarcodePrintProduct)) {
+                        toast({ variant: "error", description: t("printMissingBarcode") });
+                        return;
+                      }
+                      void openPrintForProducts([product.id]);
+                    },
+                  },
+                ]
+              : []),
+            {
+              key: "duplicate",
+              label: t("duplicate"),
+              icon: CopyIcon,
+              disabled: quickDuplicate.isLoading,
+              onSelect: () => quickDuplicate.duplicateProduct(product.id),
+            },
+            {
+              key: "selective-duplicate",
+              label: t("selectiveDuplicate"),
+              icon: CopyIcon,
+              onSelect: () => {
+                setDuplicateTarget({ id: product.id, name: product.name });
+              },
+            },
+            {
+              key: "archive",
+              label: tCommon("archive"),
+              icon: ArchiveIcon,
+              variant: "danger" as const,
+              onSelect: async () => {
+                if (
+                  !(await confirm({ description: t("confirmArchive"), confirmVariant: "danger" }))
+                ) {
+                  return;
+                }
+                archiveMutation.mutate({ productId: product.id });
+              },
+            },
+          ];
 
-  const productColumns = useMemo<ColumnDef<ProductRow>[]>(
-    () => {
-      const sortableColumn = (
-        key: ProductSortKey,
-        label: string,
-        cell: ColumnDef<ProductRow>["cell"],
-        options?: {
-          accessorFn?: (product: ProductRow) => string | number | boolean | null;
-          className?: string;
-          headerClassName?: string;
-          cellClassName?: string;
+      return managementActions;
+    },
+    [
+      archiveMutation,
+      buildProductListLaunchedHref,
+      canManageProducts,
+      confirm,
+      enableBarcode,
+      openPrintForProducts,
+      persistProductsReturnState,
+      quickDuplicate,
+      restoreMutation,
+      t,
+      tCommon,
+      toast,
+    ],
+  );
+
+  const productColumns = useMemo<ColumnDef<ProductRow>[]>(() => {
+    const sortableColumn = (
+      key: ProductSortKey,
+      label: string,
+      cell: ColumnDef<ProductRow>["cell"],
+      options?: {
+        accessorFn?: (product: ProductRow) => string | number | boolean | null;
+        className?: string;
+        headerClassName?: string;
+        cellClassName?: string;
+      },
+    ): ColumnDef<ProductRow> => ({
+      id: key,
+      header: label,
+      accessorFn: options?.accessorFn ?? (() => ""),
+      cell,
+      sortDescFirst: defaultSortDirectionByKey[key] === "desc",
+      meta: {
+        className: options?.className,
+        headerClassName: options?.headerClassName,
+        cellClassName: options?.cellClassName,
+      },
+    });
+
+    const columns: ColumnDef<ProductRow>[] = [];
+
+    if (canSelectProducts) {
+      columns.push({
+        id: "select",
+        header: () => (
+          <Checkbox
+            checked={allSelected}
+            onCheckedChange={toggleSelectAll}
+            aria-label={t("selectAll")}
+          />
+        ),
+        cell: ({ row }) => {
+          const product = row.original;
+          return (
+            <Checkbox
+              checked={selectedIds.has(product.id)}
+              onCheckedChange={() => toggleSelect(product.id)}
+              aria-label={t("selectProduct", { name: product.name })}
+            />
+          );
         },
-      ): ColumnDef<ProductRow> => ({
-        id: key,
-        header: label,
-        accessorFn: options?.accessorFn ?? (() => ""),
-        cell,
-        sortDescFirst: defaultSortDirectionByKey[key] === "desc",
+        enableSorting: false,
         meta: {
-          className: options?.className,
-          headerClassName: options?.headerClassName,
-          cellClassName: options?.cellClassName,
+          className: "w-11",
         },
       });
+    }
 
-      const columns: ColumnDef<ProductRow>[] = [];
-
-      if (canSelectProducts) {
-        columns.push({
-          id: "select",
-          header: () => (
-            <Checkbox
-              checked={allSelected}
-              onCheckedChange={toggleSelectAll}
-              aria-label={t("selectAll")}
-            />
+    if (visibleProductColumnSet.has("sku")) {
+      columns.push(
+        sortableColumn(
+          "sku",
+          t("sku"),
+          ({ row }) => (
+            <span className="font-mono text-xs text-muted-foreground">{row.original.sku}</span>
           ),
-          cell: ({ row }) => {
+          {
+            accessorFn: (product) => product.sku,
+            className: "min-w-[8rem]",
+          },
+        ),
+      );
+    }
+
+    if (visibleProductColumnSet.has("image")) {
+      columns.push(
+        sortableColumn(
+          "image",
+          t("imageLabel"),
+          ({ row }) => {
             const product = row.original;
-            return (
-              <Checkbox
-                checked={selectedIds.has(product.id)}
-                onCheckedChange={() => toggleSelect(product.id)}
-                aria-label={t("selectProduct", { name: product.name })}
+            const previewImageUrl = getProductPreviewUrl(product);
+            return previewImageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={previewImageUrl}
+                alt={product.name}
+                className="h-12 w-12 rounded-lg border border-border object-cover shadow-sm"
               />
+            ) : (
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-dashed border-border bg-muted/60">
+                <EmptyIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
+              </div>
             );
           },
-          enableSorting: false,
-          meta: {
-            className: "w-11",
+          {
+            accessorFn: (product) => hasProductImage(product),
+            className: "w-16",
           },
-        });
-      }
+        ),
+      );
+    }
 
-      if (visibleProductColumnSet.has("sku")) {
-        columns.push(
-          sortableColumn(
-            "sku",
-            t("sku"),
-            ({ row }) => (
-              <span className="font-mono text-xs text-muted-foreground">{row.original.sku}</span>
-            ),
-            {
-              accessorFn: (product) => product.sku,
-              className: "min-w-[8rem]",
-            },
-          ),
-        );
-      }
-
-      if (visibleProductColumnSet.has("image")) {
-        columns.push(
-          sortableColumn(
-            "image",
-            t("imageLabel"),
-            ({ row }) => {
-              const product = row.original;
-              const previewImageUrl = getProductPreviewUrl(product);
-              return previewImageUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={previewImageUrl}
-                  alt={product.name}
-                  className="h-12 w-12 rounded-lg border border-border object-cover shadow-sm"
-                />
-              ) : (
-                <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-dashed border-border bg-muted/60">
-                  <EmptyIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
-                </div>
-              );
-            },
-            {
-              accessorFn: (product) => hasProductImage(product),
-              className: "w-16",
-            },
-          ),
-        );
-      }
-
-      if (visibleProductColumnSet.has("name")) {
-        columns.push(
-          sortableColumn(
-            "name",
-            t("name"),
-            ({ row }) => {
-              const product = row.original;
-              return (
-                <div className="min-w-[15rem] space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <InlineEditableCell
-                      rowId={product.id}
-                      row={product}
-                      value={product.name}
-                      definition={inlineEditRegistry.products.name}
-                      context={inlineProductsContext}
-                      role={role}
-                      locale={locale}
-                      columnLabel={t("name")}
-                      tTable={t}
-                      tCommon={tCommon}
-                      enabled={inlineEditingEnabled}
-                      executeMutation={executeInlineProductMutation}
-                      className="font-semibold text-foreground"
-                    />
-                    <Badge variant="muted">
-                      {product.isBundle ? t("typeBundle") : t("typeProduct")}
-                    </Badge>
-                    {product.isDeleted ? <Badge variant="muted">{t("archived")}</Badge> : null}
-                  </div>
-                </div>
-              );
-            },
-            {
-              accessorFn: (product) => product.name,
-              className: "min-w-[18rem]",
-            },
-          ),
-        );
-      }
-
-      if (visibleProductColumnSet.has("category")) {
-        columns.push(
-          sortableColumn(
-            "category",
-            t("category"),
-            ({ row }) => {
-              const product = row.original;
-              const productCategories = getProductCategories(product);
-              return (
-                <div className="flex min-w-[12rem] flex-wrap items-center gap-1.5">
+    if (visibleProductColumnSet.has("name")) {
+      columns.push(
+        sortableColumn(
+          "name",
+          t("name"),
+          ({ row }) => {
+            const product = row.original;
+            return (
+              <div className="min-w-[15rem] space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
                   <InlineEditableCell
                     rowId={product.id}
                     row={product}
-                    value={product.category}
-                    definition={inlineEditRegistry.products.category}
+                    value={product.name}
+                    definition={inlineEditRegistry.products.name}
                     context={inlineProductsContext}
                     role={role}
                     locale={locale}
-                    columnLabel={t("category")}
-                    tTable={t}
-                    tCommon={tCommon}
-                    enabled={inlineEditingEnabled}
-                    executeMutation={executeInlineProductMutation}
-                  />
-                  {productCategories
-                    .filter((value) => value !== product.category)
-                    .map((value) => (
-                      <Badge key={value} variant="muted">
-                        {value}
-                      </Badge>
-                    ))}
-                </div>
-              );
-            },
-            {
-              accessorFn: (product) => product.category ?? "",
-              className: "min-w-[13rem]",
-            },
-          ),
-        );
-      }
-
-      if (visibleProductColumnSet.has("unit")) {
-        columns.push(
-          sortableColumn("unit", t("unit"), ({ row }) => <span>{row.original.unit}</span>, {
-            accessorFn: (product) => product.unit ?? "",
-            className: "min-w-[7rem]",
-          }),
-        );
-      }
-
-      if (visibleProductColumnSet.has("onHandQty")) {
-        columns.push(
-          sortableColumn(
-            "onHandQty",
-            tInventory("onHand"),
-            ({ row }) => {
-              const product = row.original;
-              const readinessState = getProductReadiness(product);
-              return (
-                <InlineEditableCell
-                  rowId={product.id}
-                  row={product}
-                  value={product.onHandQty}
-                  definition={inlineEditRegistry.products.onHand}
-                  context={inlineProductsContext}
-                  role={role}
-                  locale={locale}
-                  columnLabel={tInventory("onHand")}
-                  tTable={t}
-                  tCommon={tCommon}
-                  enabled={inlineEditingEnabled}
-                  executeMutation={executeInlineProductMutation}
-                  className={
-                    readinessState.negativeStock
-                      ? "font-semibold text-danger"
-                      : "font-semibold text-foreground"
-                  }
-                />
-              );
-            },
-            {
-              accessorFn: (product) => product.onHandQty,
-              className: "min-w-[8rem]",
-              headerClassName: "text-right",
-              cellClassName: "text-right",
-            },
-          ),
-        );
-      }
-
-      if (visibleProductColumnSet.has("salePrice")) {
-        columns.push(
-          sortableColumn(
-            "salePrice",
-            t("salePrice"),
-            ({ row }) => {
-              const product = row.original;
-              return (
-                <div className="flex min-w-[8rem] flex-wrap items-center justify-end gap-2">
-                  <InlineEditableCell
-                    rowId={product.id}
-                    row={product}
-                    value={showEffectivePrice ? product.effectivePriceKgs : product.basePriceKgs}
-                    definition={inlineEditRegistry.products.salePrice}
-                    context={inlineProductsContext}
-                    role={role}
-                    locale={locale}
-                    columnLabel={t("salePrice")}
+                    columnLabel={t("name")}
                     tTable={t}
                     tCommon={tCommon}
                     enabled={inlineEditingEnabled}
                     executeMutation={executeInlineProductMutation}
                     className="font-semibold text-foreground"
                   />
-                  {showEffectivePrice && product.priceOverridden ? (
-                    <Badge variant="muted">{t("priceOverridden")}</Badge>
-                  ) : null}
+                  <Badge variant="muted">
+                    {product.isBundle ? t("typeBundle") : t("typeProduct")}
+                  </Badge>
+                  {product.isDeleted ? <Badge variant="muted">{t("archived")}</Badge> : null}
                 </div>
-              );
-            },
-            {
-              accessorFn: resolveSalePriceForSort,
-              className: "min-w-[9rem]",
-              headerClassName: "text-right",
-              cellClassName: "text-right",
-            },
-          ),
-        );
-      }
+              </div>
+            );
+          },
+          {
+            accessorFn: (product) => product.name,
+            className: "min-w-[18rem]",
+          },
+        ),
+      );
+    }
 
-      if (visibleProductColumnSet.has("avgCost")) {
-        columns.push(
-          sortableColumn(
-            "avgCost",
-            t("avgCost"),
-            ({ row }) => {
-              const product = row.original;
-              return (
+    if (visibleProductColumnSet.has("category")) {
+      columns.push(
+        sortableColumn(
+          "category",
+          t("category"),
+          ({ row }) => {
+            const product = row.original;
+            const productCategories = getProductCategories(product);
+            return (
+              <div className="flex min-w-[12rem] flex-wrap items-center gap-1.5">
                 <InlineEditableCell
                   rowId={product.id}
                   row={product}
-                  value={product.avgCostKgs}
-                  definition={inlineEditRegistry.products.avgCost}
+                  value={product.category}
+                  definition={inlineEditRegistry.products.category}
                   context={inlineProductsContext}
                   role={role}
                   locale={locale}
-                  columnLabel={t("avgCost")}
+                  columnLabel={t("category")}
                   tTable={t}
                   tCommon={tCommon}
                   enabled={inlineEditingEnabled}
                   executeMutation={executeInlineProductMutation}
-                  className="justify-end font-semibold text-foreground"
                 />
-              );
-            },
-            {
-              accessorFn: (product) => product.avgCostKgs ?? Number.NEGATIVE_INFINITY,
-              className: "min-w-[8rem]",
-              headerClassName: "text-right",
-              cellClassName: "text-right",
-            },
-          ),
-        );
-      }
-
-      if (visibleProductColumnSet.has("barcodes")) {
-        columns.push(
-          sortableColumn(
-            "barcodes",
-            t("barcodes"),
-            ({ row }) => {
-              const barcodeSummary = getBarcodeSummary(row.original.barcodes);
-              return <span className="text-xs text-muted-foreground">{barcodeSummary.label}</span>;
-            },
-            {
-              accessorFn: resolveBarcodeSortValue,
-              className: "min-w-[9rem]",
-            },
-          ),
-        );
-      }
-
-      if (visibleProductColumnSet.has("readiness")) {
-        columns.push({
-          id: "readiness",
-          header: t("readinessColumn"),
-          cell: ({ row }) => {
-            const readinessSummary = getProductReadinessSummary(getProductReadiness(row.original));
-            return <Badge variant={readinessSummary.variant}>{readinessSummary.label}</Badge>;
+                {productCategories
+                  .filter((value) => value !== product.category)
+                  .map((value) => (
+                    <Badge key={value} variant="muted">
+                      {value}
+                    </Badge>
+                  ))}
+              </div>
+            );
           },
-          enableSorting: false,
-          meta: {
+          {
+            accessorFn: (product) => product.category ?? "",
+            className: "min-w-[13rem]",
+          },
+        ),
+      );
+    }
+
+    if (visibleProductColumnSet.has("unit")) {
+      columns.push(
+        sortableColumn("unit", t("unit"), ({ row }) => <span>{row.original.unit}</span>, {
+          accessorFn: (product) => product.unit ?? "",
+          className: "min-w-[7rem]",
+        }),
+      );
+    }
+
+    if (visibleProductColumnSet.has("onHandQty")) {
+      columns.push(
+        sortableColumn(
+          "onHandQty",
+          tInventory("onHand"),
+          ({ row }) => {
+            const product = row.original;
+            const readinessState = getProductReadiness(product);
+            return (
+              <InlineEditableCell
+                rowId={product.id}
+                row={product}
+                value={product.onHandQty}
+                definition={inlineEditRegistry.products.onHand}
+                context={inlineProductsContext}
+                role={role}
+                locale={locale}
+                columnLabel={tInventory("onHand")}
+                tTable={t}
+                tCommon={tCommon}
+                enabled={inlineEditingEnabled}
+                executeMutation={executeInlineProductMutation}
+                className={
+                  readinessState.negativeStock
+                    ? "font-semibold text-danger"
+                    : "font-semibold text-foreground"
+                }
+              />
+            );
+          },
+          {
+            accessorFn: (product) => product.onHandQty,
+            className: "min-w-[8rem]",
+            headerClassName: "text-right",
+            cellClassName: "text-right",
+          },
+        ),
+      );
+    }
+
+    if (visibleProductColumnSet.has("salePrice")) {
+      columns.push(
+        sortableColumn(
+          "salePrice",
+          t("salePrice"),
+          ({ row }) => {
+            const product = row.original;
+            return (
+              <div className="flex min-w-[8rem] flex-wrap items-center justify-end gap-2">
+                <InlineEditableCell
+                  rowId={product.id}
+                  row={product}
+                  value={showEffectivePrice ? product.effectivePriceKgs : product.basePriceKgs}
+                  definition={inlineEditRegistry.products.salePrice}
+                  context={inlineProductsContext}
+                  role={role}
+                  locale={locale}
+                  columnLabel={t("salePrice")}
+                  tTable={t}
+                  tCommon={tCommon}
+                  enabled={inlineEditingEnabled}
+                  executeMutation={executeInlineProductMutation}
+                  className="font-semibold text-foreground"
+                />
+                {showEffectivePrice && product.priceOverridden ? (
+                  <Badge variant="muted">{t("priceOverridden")}</Badge>
+                ) : null}
+              </div>
+            );
+          },
+          {
+            accessorFn: resolveSalePriceForSort,
+            className: "min-w-[9rem]",
+            headerClassName: "text-right",
+            cellClassName: "text-right",
+          },
+        ),
+      );
+    }
+
+    if (visibleProductColumnSet.has("avgCost")) {
+      columns.push(
+        sortableColumn(
+          "avgCost",
+          t("avgCost"),
+          ({ row }) => {
+            const product = row.original;
+            return (
+              <InlineEditableCell
+                rowId={product.id}
+                row={product}
+                value={product.avgCostKgs}
+                definition={inlineEditRegistry.products.avgCost}
+                context={inlineProductsContext}
+                role={role}
+                locale={locale}
+                columnLabel={t("avgCost")}
+                tTable={t}
+                tCommon={tCommon}
+                enabled={inlineEditingEnabled}
+                executeMutation={executeInlineProductMutation}
+                className="justify-end font-semibold text-foreground"
+              />
+            );
+          },
+          {
+            accessorFn: (product) => product.avgCostKgs ?? Number.NEGATIVE_INFINITY,
+            className: "min-w-[8rem]",
+            headerClassName: "text-right",
+            cellClassName: "text-right",
+          },
+        ),
+      );
+    }
+
+    if (visibleProductColumnSet.has("barcodes")) {
+      columns.push(
+        sortableColumn(
+          "barcodes",
+          t("barcodes"),
+          ({ row }) => {
+            const barcodeSummary = getBarcodeSummary(row.original.barcodes);
+            return <span className="text-xs text-muted-foreground">{barcodeSummary.label}</span>;
+          },
+          {
+            accessorFn: resolveBarcodeSortValue,
             className: "min-w-[9rem]",
           },
-        });
-      }
-
-      if (visibleProductColumnSet.has("stores")) {
-        columns.push(
-          sortableColumn(
-            "stores",
-            t("stores"),
-            ({ row }) => {
-              const storeInfo = getStoreInfo(
-                row.original.inventorySnapshots.map((snapshot) => snapshot.storeId),
-              );
-              return storeInfo.names.length ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="cursor-help text-foreground">{storeInfo.summary}</span>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>{storeInfo.names.join(", ")}</p>
-                  </TooltipContent>
-                </Tooltip>
-              ) : (
-                <span className="text-muted-foreground">{storeInfo.summary}</span>
-              );
-            },
-            {
-              accessorFn: resolveStoreSortValue,
-              className: "min-w-[10rem]",
-            },
-          ),
-        );
-      }
-
-      columns.push({
-        id: "actions",
-        header: tCommon("actions"),
-        cell: ({ row }) => (
-          <RowActions
-            actions={getProductActions(row.original)}
-            maxInline={1}
-            moreLabel={tCommon("tooltips.moreActions")}
-            className="justify-end"
-          />
         ),
+      );
+    }
+
+    if (visibleProductColumnSet.has("readiness")) {
+      columns.push({
+        id: "readiness",
+        header: t("readinessColumn"),
+        cell: ({ row }) => {
+          const readinessSummary = getProductReadinessSummary(getProductReadiness(row.original));
+          return <Badge variant={readinessSummary.variant}>{readinessSummary.label}</Badge>;
+        },
         enableSorting: false,
         meta: {
-          className: "w-[9rem]",
-          headerClassName: "text-right",
-          cellClassName: "text-right",
+          className: "min-w-[9rem]",
         },
       });
+    }
 
-      return columns;
-    },
-    [
-      allSelected,
-      canSelectProducts,
-      executeInlineProductMutation,
-      getBarcodeSummary,
-      getProductCategories,
-      getProductReadiness,
-      getProductReadinessSummary,
-      getProductActions,
-      getProductPreviewUrl,
-      getStoreInfo,
-      hasProductImage,
-      inlineEditingEnabled,
-      inlineProductsContext,
-      locale,
-      resolveBarcodeSortValue,
-      resolveSalePriceForSort,
-      resolveStoreSortValue,
-      role,
-      selectedIds,
-      showEffectivePrice,
-      t,
-      tCommon,
-      tInventory,
-      toggleSelect,
-      toggleSelectAll,
-      visibleProductColumnSet,
-    ],
-  );
+    if (visibleProductColumnSet.has("stores")) {
+      columns.push(
+        sortableColumn(
+          "stores",
+          t("stores"),
+          ({ row }) => {
+            const storeInfo = getStoreInfo(
+              row.original.inventorySnapshots.map((snapshot) => snapshot.storeId),
+            );
+            return storeInfo.names.length ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="cursor-help text-foreground">{storeInfo.summary}</span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{storeInfo.names.join(", ")}</p>
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <span className="text-muted-foreground">{storeInfo.summary}</span>
+            );
+          },
+          {
+            accessorFn: resolveStoreSortValue,
+            className: "min-w-[10rem]",
+          },
+        ),
+      );
+    }
+
+    columns.push({
+      id: "actions",
+      header: tCommon("actions"),
+      cell: ({ row }) => (
+        <RowActions
+          actions={getProductActions(row.original)}
+          maxInline={1}
+          moreLabel={tCommon("tooltips.moreActions")}
+          className="justify-end"
+        />
+      ),
+      enableSorting: false,
+      meta: {
+        className: "w-[9rem]",
+        headerClassName: "text-right",
+        cellClassName: "text-right",
+      },
+    });
+
+    return columns;
+  }, [
+    allSelected,
+    canSelectProducts,
+    executeInlineProductMutation,
+    getBarcodeSummary,
+    getProductCategories,
+    getProductReadiness,
+    getProductReadinessSummary,
+    getProductActions,
+    getProductPreviewUrl,
+    getStoreInfo,
+    hasProductImage,
+    inlineEditingEnabled,
+    inlineProductsContext,
+    locale,
+    resolveBarcodeSortValue,
+    resolveSalePriceForSort,
+    resolveStoreSortValue,
+    role,
+    selectedIds,
+    showEffectivePrice,
+    t,
+    tCommon,
+    tInventory,
+    toggleSelect,
+    toggleSelectAll,
+    visibleProductColumnSet,
+  ]);
 
   const handleExportImages = () => {
     const startedAt = Date.now();
@@ -2771,22 +2784,16 @@ const ProductsPage = () => {
     }, 1000);
 
     es.onmessage = (event: MessageEvent<string>) => {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const data = JSON.parse(event.data);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       if (data.type === "total") {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
         setExportImagesProgress((prev) => (prev ? { ...prev, total: data.count as number } : prev));
       } else if (data.type === "progress") {
         setExportImagesProgress((prev) =>
           prev
             ? {
                 ...prev,
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
                 done: data.done as number,
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
                 total: data.total as number,
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
                 currentName: (data.name as string) || prev.currentName,
               }
             : prev,
@@ -2805,9 +2812,7 @@ const ProductsPage = () => {
               }
             : prev,
         );
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
         const downloadToken = data.token as string;
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
         const filename = data.filename as string;
         const link = document.createElement("a");
         link.href = `/api/products/export-images/download?token=${encodeURIComponent(downloadToken)}`;
@@ -3428,7 +3433,7 @@ const ProductsPage = () => {
                 value={storeId || "all"}
                 onValueChange={(value) => setStoreId(value === "all" ? "" : value)}
               >
-                <SelectTrigger className="h-11 bg-card shadow-sm">
+                <SelectTrigger aria-label={tCommon("store")} className="h-11 bg-card shadow-sm">
                   <SelectValue placeholder={tCommon("selectStore")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -3446,7 +3451,7 @@ const ProductsPage = () => {
                 value={category || "all"}
                 onValueChange={(value) => setCategory(value === "all" ? "" : value)}
               >
-                <SelectTrigger className="h-11 bg-card shadow-sm">
+                <SelectTrigger aria-label={t("category")} className="h-11 bg-card shadow-sm">
                   <SelectValue placeholder={t("allCategories")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -3476,7 +3481,7 @@ const ProductsPage = () => {
                 value={productType}
                 onValueChange={(value) => setProductType(value as "all" | "product" | "bundle")}
               >
-                <SelectTrigger className="h-11 bg-card shadow-sm">
+                <SelectTrigger aria-label={t("typeLabel")} className="h-11 bg-card shadow-sm">
                   <SelectValue placeholder={t("typeLabel")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -3493,7 +3498,7 @@ const ProductsPage = () => {
                   setReadiness(value as z.infer<typeof productReadinessFilterSchema>)
                 }
               >
-                <SelectTrigger className="h-11 bg-card shadow-sm">
+                <SelectTrigger aria-label={t("readinessFilter")} className="h-11 bg-card shadow-sm">
                   <SelectValue placeholder={t("readinessFilter")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -3552,7 +3557,7 @@ const ProductsPage = () => {
           value={storeId || "all"}
           onValueChange={(value) => setStoreId(value === "all" ? "" : value)}
         >
-          <SelectTrigger className="min-h-11">
+          <SelectTrigger aria-label={tCommon("store")} className="min-h-11">
             <SelectValue placeholder={tCommon("selectStore")} />
           </SelectTrigger>
           <SelectContent>
@@ -3884,104 +3889,106 @@ const ProductsPage = () => {
                       {canManageProducts ? (
                         <>
                           <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          disabled={aiFeaturesVisuallyDisabled || arrangeCategoriesRunning}
-                          onSelect={() => void handleArrangeCategoriesWithAi()}
-                        >
-                          {arrangeCategoriesRunning ? (
-                            <Spinner className="h-4 w-4" />
-                          ) : (
-                            <SparklesIcon className="h-4 w-4" aria-hidden />
-                          )}
-                          {arrangeCategoriesRunning ? tCommon("loading") : t("aiArrangeCategories")}
-                          <Badge variant="muted" className="ml-auto">
-                            {t("aiUnavailableBadge")}
-                          </Badge>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          disabled={aiDescriptionGenerationDisabled || bulkDescriptionRunning}
-                          onSelect={() => void handleBulkGenerateDescriptions()}
-                        >
-                          {bulkDescriptionRunning ? (
-                            <Spinner className="h-4 w-4" />
-                          ) : (
-                            <SparklesIcon className="h-4 w-4" aria-hidden />
-                          )}
-                          {bulkDescriptionRunning
-                            ? tCommon("loading")
-                            : t("bulkGenerateDescriptions")}
-                          {aiDescriptionGenerationDisabled ? (
+                          <DropdownMenuItem
+                            disabled={aiFeaturesVisuallyDisabled || arrangeCategoriesRunning}
+                            onSelect={() => void handleArrangeCategoriesWithAi()}
+                          >
+                            {arrangeCategoriesRunning ? (
+                              <Spinner className="h-4 w-4" />
+                            ) : (
+                              <SparklesIcon className="h-4 w-4" aria-hidden />
+                            )}
+                            {arrangeCategoriesRunning
+                              ? tCommon("loading")
+                              : t("aiArrangeCategories")}
                             <Badge variant="muted" className="ml-auto">
                               {t("aiUnavailableBadge")}
                             </Badge>
-                          ) : null}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          disabled={aiDescriptionGenerationDisabled || bulkDescriptionRunning}
-                          onSelect={() => void handleBulkGenerateMissingDescriptions()}
-                        >
-                          {bulkDescriptionRunning ? (
-                            <Spinner className="h-4 w-4" />
-                          ) : (
-                            <SparklesIcon className="h-4 w-4" aria-hidden />
-                          )}
-                          {bulkDescriptionRunning
-                            ? tCommon("loading")
-                            : t("bulkGenerateMissingDescriptions")}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          disabled={
-                            aiDescriptionGenerationDisabled ||
-                            bulkDescriptionRunning ||
-                            selectingAllResults ||
-                            productsTotal <= 0
-                          }
-                          onSelect={() => void handleBulkGenerateDescriptionsForCurrentFilter()}
-                        >
-                          {selectingAllResults || bulkDescriptionRunning ? (
-                            <Spinner className="h-4 w-4" />
-                          ) : (
-                            <SparklesIcon className="h-4 w-4" aria-hidden />
-                          )}
-                          {t("bulkGenerateDescriptions")} ({productsTotal})
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          disabled={
-                            aiDescriptionGenerationDisabled ||
-                            bulkDescriptionRunning ||
-                            selectingAllResults ||
-                            productsTotal <= 0
-                          }
-                          onSelect={() =>
-                            void handleBulkGenerateDescriptionsForCurrentFilter({
-                              overwriteExisting: false,
-                            })
-                          }
-                        >
-                          {selectingAllResults || bulkDescriptionRunning ? (
-                            <Spinner className="h-4 w-4" />
-                          ) : (
-                            <SparklesIcon className="h-4 w-4" aria-hidden />
-                          )}
-                          {t("bulkGenerateMissingDescriptions")} ({productsTotal})
-                        </DropdownMenuItem>
-                        {enableBarcode ? (
+                          </DropdownMenuItem>
                           <DropdownMenuItem
-                            disabled={
-                              bulkGenerateBarcodesMutation.isLoading || bulkDescriptionRunning
-                            }
-                            onSelect={() => void handleBulkGenerateBarcodes()}
+                            disabled={aiDescriptionGenerationDisabled || bulkDescriptionRunning}
+                            onSelect={() => void handleBulkGenerateDescriptions()}
                           >
-                            {bulkGenerateBarcodesMutation.isLoading ? (
+                            {bulkDescriptionRunning ? (
                               <Spinner className="h-4 w-4" />
                             ) : (
-                              <AddIcon className="h-4 w-4" aria-hidden />
+                              <SparklesIcon className="h-4 w-4" aria-hidden />
                             )}
-                            {bulkGenerateBarcodesMutation.isLoading
+                            {bulkDescriptionRunning
                               ? tCommon("loading")
-                              : t("bulkGenerateBarcodes")}
+                              : t("bulkGenerateDescriptions")}
+                            {aiDescriptionGenerationDisabled ? (
+                              <Badge variant="muted" className="ml-auto">
+                                {t("aiUnavailableBadge")}
+                              </Badge>
+                            ) : null}
                           </DropdownMenuItem>
-                        ) : null}
+                          <DropdownMenuItem
+                            disabled={aiDescriptionGenerationDisabled || bulkDescriptionRunning}
+                            onSelect={() => void handleBulkGenerateMissingDescriptions()}
+                          >
+                            {bulkDescriptionRunning ? (
+                              <Spinner className="h-4 w-4" />
+                            ) : (
+                              <SparklesIcon className="h-4 w-4" aria-hidden />
+                            )}
+                            {bulkDescriptionRunning
+                              ? tCommon("loading")
+                              : t("bulkGenerateMissingDescriptions")}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            disabled={
+                              aiDescriptionGenerationDisabled ||
+                              bulkDescriptionRunning ||
+                              selectingAllResults ||
+                              productsTotal <= 0
+                            }
+                            onSelect={() => void handleBulkGenerateDescriptionsForCurrentFilter()}
+                          >
+                            {selectingAllResults || bulkDescriptionRunning ? (
+                              <Spinner className="h-4 w-4" />
+                            ) : (
+                              <SparklesIcon className="h-4 w-4" aria-hidden />
+                            )}
+                            {t("bulkGenerateDescriptions")} ({productsTotal})
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            disabled={
+                              aiDescriptionGenerationDisabled ||
+                              bulkDescriptionRunning ||
+                              selectingAllResults ||
+                              productsTotal <= 0
+                            }
+                            onSelect={() =>
+                              void handleBulkGenerateDescriptionsForCurrentFilter({
+                                overwriteExisting: false,
+                              })
+                            }
+                          >
+                            {selectingAllResults || bulkDescriptionRunning ? (
+                              <Spinner className="h-4 w-4" />
+                            ) : (
+                              <SparklesIcon className="h-4 w-4" aria-hidden />
+                            )}
+                            {t("bulkGenerateMissingDescriptions")} ({productsTotal})
+                          </DropdownMenuItem>
+                          {enableBarcode ? (
+                            <DropdownMenuItem
+                              disabled={
+                                bulkGenerateBarcodesMutation.isLoading || bulkDescriptionRunning
+                              }
+                              onSelect={() => void handleBulkGenerateBarcodes()}
+                            >
+                              {bulkGenerateBarcodesMutation.isLoading ? (
+                                <Spinner className="h-4 w-4" />
+                              ) : (
+                                <AddIcon className="h-4 w-4" aria-hidden />
+                              )}
+                              {bulkGenerateBarcodesMutation.isLoading
+                                ? tCommon("loading")
+                                : t("bulkGenerateBarcodes")}
+                            </DropdownMenuItem>
+                          ) : null}
                         </>
                       ) : null}
                       {(hasActiveSelected || hasArchivedSelected) && canManageProducts ? (
@@ -4954,7 +4961,7 @@ const ProductsPage = () => {
                   <FormLabel>{tCommon("store")}</FormLabel>
                   <FormControl>
                     <Select value={field.value} onValueChange={field.onChange}>
-                      <SelectTrigger>
+                      <SelectTrigger aria-label={tCommon("store")}>
                         <SelectValue placeholder={tCommon("selectStore")} />
                       </SelectTrigger>
                       <SelectContent>
@@ -4994,7 +5001,7 @@ const ProductsPage = () => {
                       value={field.value || "all"}
                       onValueChange={(value) => field.onChange(value === "all" ? "" : value)}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger aria-label={t("category")}>
                         <SelectValue placeholder={t("allCategories")} />
                       </SelectTrigger>
                       <SelectContent>
@@ -5019,7 +5026,7 @@ const ProductsPage = () => {
                   <FormLabel>{t("bulkMode")}</FormLabel>
                   <FormControl>
                     <Select value={field.value} onValueChange={field.onChange}>
-                      <SelectTrigger>
+                      <SelectTrigger aria-label={t("bulkMode")}>
                         <SelectValue placeholder={t("bulkMode")} />
                       </SelectTrigger>
                       <SelectContent>
@@ -5102,7 +5109,7 @@ const ProductsPage = () => {
               value={exportFormat}
               onValueChange={(value) => setExportFormat(value as DownloadFormat)}
             >
-              <SelectTrigger>
+              <SelectTrigger aria-label={t("exportFormatLabel")}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -5270,7 +5277,7 @@ const ProductsPage = () => {
                 {t("categoriesManageRemoveLabel")}
               </label>
               <Select value={categoryToRemove || undefined} onValueChange={setCategoryToRemove}>
-                <SelectTrigger>
+                <SelectTrigger aria-label={t("categoriesManageRemoveLabel")}>
                   <SelectValue placeholder={t("categoriesManageRemovePlaceholder")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -5338,7 +5345,7 @@ const ProductsPage = () => {
                 setBulkCategoryValue(value);
               }}
             >
-              <SelectTrigger>
+              <SelectTrigger aria-label={t("category")}>
                 <SelectValue placeholder={t("bulkCategorySelectPlaceholder")} />
               </SelectTrigger>
               <SelectContent>
@@ -5413,7 +5420,7 @@ const ProductsPage = () => {
                   <FormLabel>{tCommon("store")}</FormLabel>
                   <FormControl>
                     <Select value={field.value} onValueChange={field.onChange}>
-                      <SelectTrigger>
+                      <SelectTrigger aria-label={tCommon("store")}>
                         <SelectValue placeholder={tCommon("selectStore")} />
                       </SelectTrigger>
                       <SelectContent>
@@ -5569,7 +5576,7 @@ const ProductsPage = () => {
                                   field.onChange(value === "all" ? "" : value)
                                 }
                               >
-                                <SelectTrigger>
+                                <SelectTrigger aria-label={tCommon("store")}>
                                   <SelectValue placeholder={tCommon("selectStore")} />
                                 </SelectTrigger>
                                 <SelectContent>

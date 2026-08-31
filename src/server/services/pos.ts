@@ -31,6 +31,11 @@ import { processAdapterFiscalReceipt, queueFiscalReceipt } from "@/server/servic
 import { writeAuditLog } from "@/server/services/audit";
 import { AppError } from "@/server/services/errors";
 import { applyStockMovement } from "@/server/services/inventory";
+import {
+  applyValuedProductCostDelta,
+  productCostBasisSelect,
+  resolveCurrentProductCostUnitNumber,
+} from "@/server/services/productCost";
 import { withIdempotency } from "@/server/services/idempotency";
 import { toJson } from "@/server/services/json";
 import { sanitizeListImageUrl } from "@/server/services/products/serializers";
@@ -577,10 +582,10 @@ const resolveUnitCost = async (input: {
           variantKey,
         },
       },
-      select: { avgCostKgs: true },
+      select: productCostBasisSelect,
     });
-    if (direct?.avgCostKgs) {
-      return Number(direct.avgCostKgs);
+    if (direct) {
+      return resolveCurrentProductCostUnitNumber(direct);
     }
     if (variantKey !== "BASE") {
       const fallback = await tx.productCost.findUnique({
@@ -591,9 +596,9 @@ const resolveUnitCost = async (input: {
             variantKey: "BASE",
           },
         },
-        select: { avgCostKgs: true },
+        select: productCostBasisSelect,
       });
-      return fallback?.avgCostKgs ? Number(fallback.avgCostKgs) : null;
+      return fallback ? resolveCurrentProductCostUnitNumber(fallback) : null;
     }
     return null;
   }
@@ -621,10 +626,10 @@ const resolveUnitCost = async (input: {
           variantKey,
         },
       },
-      select: { avgCostKgs: true },
+      select: productCostBasisSelect,
     });
     const fallback =
-      !direct?.avgCostKgs && variantKey !== "BASE"
+      !direct && variantKey !== "BASE"
         ? await tx.productCost.findUnique({
             where: {
               organizationId_productId_variantKey: {
@@ -633,15 +638,15 @@ const resolveUnitCost = async (input: {
                 variantKey: "BASE",
               },
             },
-            select: { avgCostKgs: true },
+            select: productCostBasisSelect,
           })
         : null;
 
-    const componentCost = direct?.avgCostKgs ?? fallback?.avgCostKgs;
+    const componentCost = direct ?? fallback;
     if (!componentCost) {
       return null;
     }
-    total += Number(componentCost) * component.qty;
+    total += resolveCurrentProductCostUnitNumber(componentCost) * component.qty;
   }
 
   return roundMoney(total);
@@ -3576,6 +3581,7 @@ export const editCompletedPosSale = async (input: {
         );
 
         const existingLineIds = new Set(sale.lines.map((line) => line.id));
+        const oldLineById = new Map(sale.lines.map((line) => [line.id, line]));
         const requestedLineIds = new Set<string>();
         const normalizedLines: NormalizedPosReceiptEditLine[] = [];
         const desiredKeys = new Set<string>();
@@ -3612,13 +3618,21 @@ export const editCompletedPosSale = async (input: {
           }
           desiredKeys.add(key);
 
-          const unitCostKgs = await resolveUnitCost({
-            tx,
-            organizationId: input.organizationId,
-            productId: line.productId,
-            variantId: line.variantId ?? null,
-            isBundle: resolvedPrice.isBundle,
-          });
+          const existingLine = lineId ? oldLineById.get(lineId) : null;
+          const preservesExistingCost =
+            existingLine?.productId === line.productId &&
+            (existingLine.variantId ?? null) === (line.variantId ?? null);
+          const unitCostKgs = preservesExistingCost
+            ? existingLine.unitCostKgs === null
+              ? null
+              : toMoney(existingLine.unitCostKgs)
+            : await resolveUnitCost({
+                tx,
+                organizationId: input.organizationId,
+                productId: line.productId,
+                variantId: line.variantId ?? null,
+                isBundle: resolvedPrice.isBundle,
+              });
           normalizedLines.push({
             lineId,
             productId: line.productId,
@@ -3639,7 +3653,6 @@ export const editCompletedPosSale = async (input: {
             )
             .map((line) => line.id),
         );
-        const oldLineById = new Map(sale.lines.map((line) => [line.id, line]));
         for (const normalized of normalizedLines) {
           if (!normalized.lineId || !protectedLineIds.has(normalized.lineId)) {
             continue;
@@ -3712,6 +3725,30 @@ export const editCompletedPosSale = async (input: {
         for (const line of normalizedLines) {
           addLineAggregateQty(desiredAggregates, line);
         }
+        const oldCostByKey = new Map<string, number | null>();
+        for (const line of sale.lines) {
+          const key = lineAggregateKey(line.productId, line.variantKey);
+          const lineCost = line.lineCostTotalKgs === null ? null : toMoney(line.lineCostTotalKgs);
+          const previous = oldCostByKey.get(key);
+          oldCostByKey.set(
+            key,
+            lineCost === null || previous === null ? null : roundMoney((previous ?? 0) + lineCost),
+          );
+        }
+        const desiredCostByKey = new Map<string, number | null>();
+        const desiredLineByKey = new Map(
+          normalizedLines.map((line) => [lineAggregateKey(line.productId, line.variantKey), line]),
+        );
+        for (const line of normalizedLines) {
+          const key = lineAggregateKey(line.productId, line.variantKey);
+          const previous = desiredCostByKey.get(key);
+          desiredCostByKey.set(
+            key,
+            line.lineCostTotalKgs === null || previous === null
+              ? null
+              : roundMoney((previous ?? 0) + line.lineCostTotalKgs),
+          );
+        }
 
         const changedProducts = new Map<
           string,
@@ -3731,6 +3768,30 @@ export const editCompletedPosSale = async (input: {
           if (!movementLine) {
             continue;
           }
+          const oldCostTotalKgs = oldCostByKey.has(key) ? oldCostByKey.get(key)! : 0;
+          const desiredCostTotalKgs = desiredCostByKey.has(key) ? desiredCostByKey.get(key)! : 0;
+          const inventoryValueDeltaKgs =
+            oldCostTotalKgs === null || desiredCostTotalKgs === null
+              ? null
+              : roundMoney(oldCostTotalKgs - desiredCostTotalKgs);
+          if (inventoryValueDeltaKgs !== null) {
+            await applyValuedProductCostDelta(tx, {
+              organizationId: input.organizationId,
+              productId: movementLine.productId,
+              variantId: movementLine.variantId,
+              quantityDelta: stockDelta,
+              valueDeltaKgs: inventoryValueDeltaKgs,
+            });
+          }
+          const desiredCostLine = desiredLineByKey.get(key);
+          const oldCostLine = sale.lines.find(
+            (line) => lineAggregateKey(line.productId, line.variantKey) === key,
+          );
+          const movementUnitCostKgs =
+            desiredCostLine?.unitCostKgs ??
+            (oldCostLine?.unitCostKgs === null || oldCostLine?.unitCostKgs === undefined
+              ? null
+              : toMoney(oldCostLine.unitCostKgs));
           const movement = await applyStockMovement(tx, {
             storeId: sale.storeId,
             productId: movementLine.productId,
@@ -3739,6 +3800,8 @@ export const editCompletedPosSale = async (input: {
             type: StockMovementType.SALE,
             referenceType: "CustomerOrder",
             referenceId: sale.id,
+            unitCostKgs: movementUnitCostKgs,
+            inventoryValueDeltaKgs,
             note: input.reason?.trim() || `Редактирование чека ${sale.number}`,
             actorId: input.actorId,
             organizationId: input.organizationId,
@@ -4715,6 +4778,18 @@ export const completePosSale = async (input: {
           }
 
           for (const line of sale.lines) {
+            const frozenCostTotalKgs =
+              line.lineCostTotalKgs ??
+              (line.unitCostKgs === null ? null : line.unitCostKgs.mul(line.qty));
+            if (frozenCostTotalKgs !== null) {
+              await applyValuedProductCostDelta(tx, {
+                organizationId: input.organizationId,
+                productId: line.productId,
+                variantId: line.variantId,
+                quantityDelta: -line.qty,
+                valueDeltaKgs: frozenCostTotalKgs.negated(),
+              });
+            }
             await applyStockMovement(tx, {
               storeId: sale.storeId,
               productId: line.productId,
@@ -4723,6 +4798,9 @@ export const completePosSale = async (input: {
               type: StockMovementType.SALE,
               referenceType: "CustomerOrder",
               referenceId: sale.id,
+              unitCostKgs: line.unitCostKgs === null ? null : Number(line.unitCostKgs),
+              inventoryValueDeltaKgs:
+                frozenCostTotalKgs === null ? null : Number(frozenCostTotalKgs.negated()),
               note: sale.number,
               actorId: input.actorId,
               organizationId: input.organizationId,
@@ -5746,6 +5824,31 @@ export const editCompletedSaleReturn = async (input: {
         >();
         normalizedLines.forEach((line) => addLineAggregateQty(desiredAggregates, line));
 
+        const oldReturnCostByKey = new Map<string, number | null>();
+        for (const line of saleReturn.lines) {
+          const key = lineAggregateKey(line.productId, line.variantKey);
+          const lineCost = line.lineCostTotalKgs === null ? null : toMoney(line.lineCostTotalKgs);
+          const previous = oldReturnCostByKey.get(key);
+          oldReturnCostByKey.set(
+            key,
+            lineCost === null || previous === null ? null : roundMoney((previous ?? 0) + lineCost),
+          );
+        }
+        const desiredReturnCostByKey = new Map<string, number | null>();
+        const desiredReturnLineByKey = new Map(
+          normalizedLines.map((line) => [lineAggregateKey(line.productId, line.variantKey), line]),
+        );
+        for (const line of normalizedLines) {
+          const key = lineAggregateKey(line.productId, line.variantKey);
+          const previous = desiredReturnCostByKey.get(key);
+          desiredReturnCostByKey.set(
+            key,
+            line.lineCostTotalKgs === null || previous === null
+              ? null
+              : roundMoney((previous ?? 0) + line.lineCostTotalKgs),
+          );
+        }
+
         const changedProducts = new Map<
           string,
           { storeId: string; productId: string; variantId: string | null; onHand: number | null }
@@ -5762,6 +5865,32 @@ export const editCompletedSaleReturn = async (input: {
           if (!movementLine) {
             continue;
           }
+          const oldCostTotalKgs = oldReturnCostByKey.has(key) ? oldReturnCostByKey.get(key)! : 0;
+          const desiredCostTotalKgs = desiredReturnCostByKey.has(key)
+            ? desiredReturnCostByKey.get(key)!
+            : 0;
+          const inventoryValueDeltaKgs =
+            oldCostTotalKgs === null || desiredCostTotalKgs === null
+              ? null
+              : roundMoney(desiredCostTotalKgs - oldCostTotalKgs);
+          if (inventoryValueDeltaKgs !== null) {
+            await applyValuedProductCostDelta(tx, {
+              organizationId: input.organizationId,
+              productId: movementLine.productId,
+              variantId: movementLine.variantId,
+              quantityDelta: stockDelta,
+              valueDeltaKgs: inventoryValueDeltaKgs,
+            });
+          }
+          const desiredCostLine = desiredReturnLineByKey.get(key);
+          const oldCostLine = saleReturn.lines.find(
+            (line) => lineAggregateKey(line.productId, line.variantKey) === key,
+          );
+          const movementUnitCostKgs =
+            desiredCostLine?.unitCostKgs ??
+            (oldCostLine?.unitCostKgs === null || oldCostLine?.unitCostKgs === undefined
+              ? null
+              : toMoney(oldCostLine.unitCostKgs));
           const movement = await applyStockMovement(tx, {
             storeId: saleReturn.storeId,
             productId: movementLine.productId,
@@ -5770,6 +5899,8 @@ export const editCompletedSaleReturn = async (input: {
             type: StockMovementType.RETURN,
             referenceType: "SaleReturn",
             referenceId: saleReturn.id,
+            unitCostKgs: movementUnitCostKgs,
+            inventoryValueDeltaKgs,
             note: input.reason?.trim() || `Редактирование возврата ${saleReturn.number}`,
             actorId: input.actorId,
             organizationId: input.organizationId,
@@ -6137,6 +6268,18 @@ export const completeSaleReturn = async (input: {
         }
 
         for (const line of saleReturn.lines) {
+          const frozenCostTotalKgs =
+            line.lineCostTotalKgs ??
+            (line.unitCostKgs === null ? null : line.unitCostKgs.mul(line.qty));
+          if (frozenCostTotalKgs !== null) {
+            await applyValuedProductCostDelta(tx, {
+              organizationId: input.organizationId,
+              productId: line.productId,
+              variantId: line.variantId,
+              quantityDelta: line.qty,
+              valueDeltaKgs: frozenCostTotalKgs,
+            });
+          }
           await applyStockMovement(tx, {
             storeId: saleReturn.storeId,
             productId: line.productId,
@@ -6145,6 +6288,8 @@ export const completeSaleReturn = async (input: {
             type: StockMovementType.RETURN,
             referenceType: "SaleReturn",
             referenceId: saleReturn.id,
+            unitCostKgs: line.unitCostKgs === null ? null : Number(line.unitCostKgs),
+            inventoryValueDeltaKgs: frozenCostTotalKgs === null ? null : Number(frozenCostTotalKgs),
             note: saleReturn.number,
             actorId: input.actorId,
             organizationId: input.organizationId,

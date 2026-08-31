@@ -2,12 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { FiscalReceiptStatus } from "@prisma/client";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 
 import { PageHeader } from "@/components/page-header";
-import { QueryErrorState } from "@/components/query-error-state";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
@@ -21,11 +22,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
 import { formatDateTime } from "@/lib/i18nFormat";
-import {
-  buildPosFilterHref,
-  readPosEnumParam,
-  readPosPageParam,
-} from "@/lib/posUrlFilters";
+import { buildPosFilterHref, readPosEnumParam, readPosPageParam } from "@/lib/posUrlFilters";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 
@@ -41,13 +38,15 @@ const PosKkmPage = () => {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const searchParamsString = searchParams.toString();
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   const role = session?.user?.role;
   const canView = role === "ADMIN" || role === "MANAGER";
   const canEdit = role === "ADMIN";
   const { toast } = useToast();
 
-  const storesQuery = trpc.stores.list.useQuery(undefined, { enabled: canView });
+  const kkmEntitlementsQuery = trpc.billing.features.useQuery(undefined, { enabled: canView });
+  const kkmEnabled = kkmEntitlementsQuery.data?.featureFlags.kkm === true;
+  const storesQuery = trpc.stores.list.useQuery(undefined, { enabled: canView && kkmEnabled });
   const [storeId, setStoreId] = useState(searchParams.get("store") ?? "");
   const [status, setStatus] = useState<FiscalReceiptStatus | "ALL">(
     readPosEnumParam(searchParams, "status", kkmStatusValues, "ALL"),
@@ -63,7 +62,7 @@ const PosKkmPage = () => {
       page,
       pageSize: kkmPageSize,
     },
-    { enabled: canView, refetchOnWindowFocus: true },
+    { enabled: canView && kkmEnabled, refetchOnWindowFocus: true },
   );
 
   useEffect(() => {
@@ -133,6 +132,18 @@ const PosKkmPage = () => {
     },
   });
 
+  if (sessionStatus === "loading") {
+    return (
+      <div className="space-y-4">
+        <PageHeader title={t("title")} subtitle={t("subtitle")} />
+        <div className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
+          <Spinner className="h-4 w-4" />
+          {t("checkingAccess")}
+        </div>
+      </div>
+    );
+  }
+
   if (!canView) {
     return (
       <div className="space-y-4">
@@ -142,17 +153,92 @@ const PosKkmPage = () => {
     );
   }
 
+  if (kkmEntitlementsQuery.isLoading) {
+    return (
+      <div className="space-y-4">
+        <PageHeader title={t("title")} subtitle={t("subtitle")} />
+        <div className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
+          <Spinner className="h-4 w-4" />
+          {t("checkingAccess")}
+        </div>
+      </div>
+    );
+  }
+
+  if (kkmEntitlementsQuery.isError) {
+    return (
+      <div className="space-y-4">
+        <PageHeader title={t("title")} subtitle={t("subtitle")} />
+        <Alert variant="destructive" role="alert" className="space-y-3">
+          <div>
+            <AlertTitle>{t("accessCheckFailedTitle")}</AlertTitle>
+            <AlertDescription>{t("accessCheckFailedDescription")}</AlertDescription>
+          </div>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => void kkmEntitlementsQuery.refetch()}
+          >
+            {tCommon("tryAgain")}
+          </Button>
+        </Alert>
+      </div>
+    );
+  }
+
+  if (!kkmEnabled) {
+    return (
+      <div className="space-y-4">
+        <PageHeader title={t("title")} subtitle={t("subtitle")} />
+        <Alert variant="warning" role="status" className="space-y-3">
+          <div>
+            <AlertTitle>{t("planRequiredTitle")}</AlertTitle>
+            <AlertDescription>
+              {canEdit ? t("planRequiredAdminDescription") : t("planRequiredManagerDescription")}
+            </AlertDescription>
+          </div>
+          {canEdit ? (
+            <Button asChild variant="secondary" size="sm">
+              <Link href="/billing">{t("viewPlans")}</Link>
+            </Button>
+          ) : null}
+        </Alert>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
       {storesQuery.isError || receiptsQuery.isError ? (
-        <QueryErrorState
-          onRetry={() => {
-            if (storesQuery.isError) void storesQuery.refetch();
-            if (receiptsQuery.isError) void receiptsQuery.refetch();
-          }}
-        />
+        <Alert variant="destructive" role="alert" className="space-y-3">
+          <div>
+            <AlertTitle>
+              {storesQuery.isError ? t("storesLoadFailedTitle") : t("queueLoadFailedTitle")}
+            </AlertTitle>
+            <AlertDescription>
+              {storesQuery.isError
+                ? t("storesLoadFailedDescription")
+                : t("queueLoadFailedDescription")}
+            </AlertDescription>
+            <p className="mt-2 text-xs text-danger">
+              {translateError(tErrors, storesQuery.error ?? receiptsQuery.error)}
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              if (storesQuery.isError) void storesQuery.refetch();
+              if (receiptsQuery.isError) void receiptsQuery.refetch();
+            }}
+          >
+            {tCommon("tryAgain")}
+          </Button>
+        </Alert>
       ) : null}
 
       <Card>
@@ -190,14 +276,19 @@ const PosKkmPage = () => {
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="grid gap-3 sm:grid-cols-2">
-            <Select value={status} onValueChange={(value) => setStatus(value as FiscalReceiptStatus | "ALL")}>
+            <Select
+              value={status}
+              onValueChange={(value) => setStatus(value as FiscalReceiptStatus | "ALL")}
+            >
               <SelectTrigger aria-label={t("status")}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">{t("statusAll")}</SelectItem>
                 <SelectItem value={FiscalReceiptStatus.QUEUED}>{t("statusQueued")}</SelectItem>
-                <SelectItem value={FiscalReceiptStatus.PROCESSING}>{t("statusProcessing")}</SelectItem>
+                <SelectItem value={FiscalReceiptStatus.PROCESSING}>
+                  {t("statusProcessing")}
+                </SelectItem>
                 <SelectItem value={FiscalReceiptStatus.SENT}>{t("statusSent")}</SelectItem>
                 <SelectItem value={FiscalReceiptStatus.FAILED}>{t("statusFailed")}</SelectItem>
               </SelectContent>
@@ -215,6 +306,7 @@ const PosKkmPage = () => {
           {(receiptsQuery.data?.items ?? []).map((receipt) => (
             <div
               key={receipt.id}
+              data-kkm-receipt
               className="flex flex-col gap-3 rounded-md border border-border p-3 sm:flex-row sm:items-center sm:justify-between"
             >
               <div className="space-y-1">

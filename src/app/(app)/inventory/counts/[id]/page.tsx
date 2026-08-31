@@ -8,6 +8,7 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
+import { DynamicResourceTerminalState } from "@/components/dynamic-resource-terminal-state";
 import { PageHeader } from "@/components/page-header";
 import { HelpLink } from "@/components/help-link";
 import { ScanInput } from "@/components/ScanInput";
@@ -55,6 +56,7 @@ import {
 } from "@/components/icons";
 import { useToast } from "@/components/ui/toast";
 import { downloadTableFile, type DownloadFormat } from "@/lib/fileExport";
+import { normalizeDynamicRouteId } from "@/lib/dynamicRouteId";
 import { formatDateTime, formatNumber } from "@/lib/i18nFormat";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
@@ -71,7 +73,7 @@ const statusVariants: Record<string, "default" | "warning" | "success" | "danger
 
 const StockCountDetailPage = () => {
   const params = useParams();
-  const countId = typeof params?.id === "string" ? params.id : "";
+  const countId = normalizeDynamicRouteId(params?.id) ?? "";
   const t = useTranslations("stockCounts");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
@@ -87,7 +89,7 @@ const StockCountDetailPage = () => {
 
   const countQuery = trpc.stockCounts.get.useQuery(
     { stockCountId: countId },
-    { enabled: Boolean(countId) },
+    { enabled: Boolean(countId), retry: false },
   );
 
   type CountData = NonNullable<typeof countQuery.data>;
@@ -95,6 +97,8 @@ const StockCountDetailPage = () => {
 
   const count = countQuery.data;
   const scanInputRef = useRef<HTMLInputElement | null>(null);
+  const setQtyInFlightRef = useRef(false);
+  const applyActionPendingRef = useRef(false);
   const [scanMode, setScanMode] = useState(true);
   const [editingLine, setEditingLine] = useState<CountLine | null>(null);
   const [exportFormat, setExportFormat] = useState<DownloadFormat>("csv");
@@ -157,6 +161,9 @@ const StockCountDetailPage = () => {
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
+    onSettled: () => {
+      setQtyInFlightRef.current = false;
+    },
   });
 
   const removeLineMutation = trpc.stockCounts.removeLine.useMutation({
@@ -175,6 +182,9 @@ const StockCountDetailPage = () => {
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+    onSettled: () => {
+      applyActionPendingRef.current = false;
     },
   });
 
@@ -272,6 +282,15 @@ const StockCountDetailPage = () => {
     }
   };
 
+  if (!countId) {
+    return (
+      <DynamicResourceTerminalState
+        title={t("detailTitle")}
+        message={tErrors("stockCountNotFound")}
+      />
+    );
+  }
+
   if (countQuery.isLoading) {
     return (
       <div>
@@ -294,6 +313,23 @@ const StockCountDetailPage = () => {
           </CardContent>
         </Card>
       </div>
+    );
+  }
+
+  if (countQuery.error) {
+    const message =
+      countQuery.error.data?.code === "NOT_FOUND"
+        ? tErrors("stockCountNotFound")
+        : translateError(tErrors, countQuery.error);
+    return <DynamicResourceTerminalState title={t("detailTitle")} message={message} />;
+  }
+
+  if (!count) {
+    return (
+      <DynamicResourceTerminalState
+        title={t("detailTitle")}
+        message={tErrors("stockCountNotFound")}
+      />
     );
   }
 
@@ -336,15 +372,17 @@ const StockCountDetailPage = () => {
                 className="w-full sm:w-auto"
                 disabled={!count || isLocked || applyMutation.isLoading}
                 onClick={async () => {
-                  if (!count) {
+                  if (!count || applyActionPendingRef.current) {
                     return;
                   }
+                  applyActionPendingRef.current = true;
                   if (
                     !(await confirm({
                       description: t("confirmApply", { count: summary.varianceLines }),
                       confirmVariant: "danger",
                     }))
                   ) {
+                    applyActionPendingRef.current = false;
                     return;
                   }
                   applyMutation.mutate({
@@ -364,10 +402,6 @@ const StockCountDetailPage = () => {
           </div>
         }
       />
-
-      {countQuery.error ? (
-        <p className="mb-4 text-sm text-danger">{translateError(tErrors, countQuery.error)}</p>
-      ) : null}
 
       <Card className="mb-6 overflow-hidden">
         <CardHeader>
@@ -389,7 +423,11 @@ const StockCountDetailPage = () => {
               <p className="mt-2 text-xs text-muted-foreground">{t("scanHint")}</p>
             </div>
             <div className="flex items-center gap-3">
-              <Switch checked={scanMode} onCheckedChange={setScanMode} />
+              <Switch
+                checked={scanMode}
+                onCheckedChange={setScanMode}
+                aria-label={t("scanMode")}
+              />
               <span className="text-sm text-muted-foreground">{t("scanMode")}</span>
             </div>
           </div>
@@ -719,9 +757,10 @@ const StockCountDetailPage = () => {
           <form
             className="space-y-4"
             onSubmit={editForm.handleSubmit((values) => {
-              if (!editingLine) {
+              if (!editingLine || setQtyInFlightRef.current) {
                 return;
               }
+              setQtyInFlightRef.current = true;
               setQtyMutation.mutate({ lineId: editingLine.id, countedQty: values.countedQty });
             })}
           >

@@ -117,8 +117,12 @@ const getLegalEntityLabel = (tStores: Translator, value?: string | null) => {
   }
 };
 
-export const GET = async (_request: Request, { params }: { params: { id: string } }) => {
-  const localeCookie = cookies().get("NEXT_LOCALE")?.value;
+export const GET = async (
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) => {
+  const [{ id }, cookieStore] = await Promise.all([params, cookies()]);
+  const localeCookie = cookieStore.get("NEXT_LOCALE")?.value;
   const locale = normalizeLocale(localeCookie) ?? defaultLocale;
   let messages: MessageTree | undefined;
   try {
@@ -150,7 +154,7 @@ export const GET = async (_request: Request, { params }: { params: { id: string 
   const intlLocale = toIntlLocale(locale);
 
   const po = await prisma.purchaseOrder.findFirst({
-    where: { id: params.id, organizationId: token.organizationId as string },
+    where: { id, organizationId: token.organizationId as string },
     include: {
       supplier: true,
       store: true,

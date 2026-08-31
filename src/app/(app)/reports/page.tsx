@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 import { PageHeader } from "@/components/page-header";
@@ -37,7 +38,12 @@ import {
   SpreadsheetIcon,
 } from "@/components/icons";
 import { downloadTableFile, type DownloadFormat } from "@/lib/fileExport";
-import { formatDate, formatNumber } from "@/lib/i18nFormat";
+import { formatCurrencyKGS, formatDate, formatDateTime, formatNumber } from "@/lib/i18nFormat";
+import {
+  readAuthorizedReportStoreId,
+  reportStoreRouteNeedsCanonicalization,
+  writeReportStoreRouteState,
+} from "@/lib/reportsRouteState";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 
@@ -91,10 +97,13 @@ const ReportsPage = () => {
   const tExports = useTranslations("exports");
   const locale = useLocale();
   const { data: session, status } = useSession();
+  const pathname = usePathname() ?? "/reports";
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const currentQueryString = searchParams.toString();
   const canView = session?.user?.role && session.user.role !== "STAFF";
   const reportsEnabled = status === "authenticated" && Boolean(canView);
 
-  const [storeId, setStoreId] = useState("");
   const initialRange = useMemo(() => buildPresetRange("last30"), []);
   const [dateFrom, setDateFrom] = useState(initialRange.from);
   const [dateTo, setDateTo] = useState(initialRange.to);
@@ -108,19 +117,45 @@ const ReportsPage = () => {
   const [shrinkagePageSize, setShrinkagePageSize] = useState(25);
 
   const storesQuery = trpc.stores.list.useQuery(undefined, { enabled: reportsEnabled });
+  const authorizedStoreIds = useMemo(
+    () => (storesQuery.data ?? []).map((store) => store.id),
+    [storesQuery.data],
+  );
+  const storeRouteReady = reportsEnabled && storesQuery.data !== undefined;
+  const storeId = storeRouteReady
+    ? readAuthorizedReportStoreId(searchParams, authorizedStoreIds)
+    : "";
+  const invalidStoreRoute =
+    storeRouteReady && reportStoreRouteNeedsCanonicalization(searchParams, authorizedStoreIds);
+  const reportQueriesEnabled = storeRouteReady && !storesQuery.isError && !invalidStoreRoute;
   const reportRangeInput = { storeId: storeId || undefined, dateFrom, dateTo };
   const stockoutsQuery = trpc.reports.stockouts.useQuery(
     { ...reportRangeInput, page: stockoutsPage, pageSize: stockoutsPageSize },
-    { enabled: reportsEnabled },
+    { enabled: reportQueriesEnabled },
   );
   const slowMoversQuery = trpc.reports.slowMovers.useQuery(
     { ...reportRangeInput, page: slowMoversPage, pageSize: slowMoversPageSize },
-    { enabled: reportsEnabled },
+    { enabled: reportQueriesEnabled },
   );
   const shrinkageQuery = trpc.reports.shrinkage.useQuery(
     { ...reportRangeInput, page: shrinkagePage, pageSize: shrinkagePageSize },
-    { enabled: reportsEnabled },
+    { enabled: reportQueriesEnabled },
   );
+
+  useEffect(() => {
+    if (!storeRouteReady || !invalidStoreRoute) {
+      return;
+    }
+    const nextQuery = writeReportStoreRouteState(currentQueryString, "");
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+  }, [
+    authorizedStoreIds,
+    currentQueryString,
+    pathname,
+    router,
+    invalidStoreRoute,
+    storeRouteReady,
+  ]);
 
   useEffect(() => {
     setStockoutsPage(1);
@@ -129,6 +164,14 @@ const ReportsPage = () => {
   }, [storeId, dateFrom, dateTo]);
 
   const storeOptions = storesQuery.data ?? [];
+
+  const selectStore = (nextStoreId: string) => {
+    const nextQuery = writeReportStoreRouteState(
+      currentQueryString,
+      nextStoreId === "all" ? "" : nextStoreId,
+    );
+    router.push(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+  };
 
   const stockoutRows = useMemo(() => stockoutsQuery.data?.items ?? [], [stockoutsQuery.data]);
   const slowMoverRows = useMemo(() => slowMoversQuery.data?.items ?? [], [slowMoversQuery.data]);
@@ -249,11 +292,8 @@ const ReportsPage = () => {
         filters={
           <>
             <div className="w-full sm:max-w-xs">
-              <Select
-                value={storeId || "all"}
-                onValueChange={(value) => setStoreId(value === "all" ? "" : value)}
-              >
-                <SelectTrigger>
+              <Select value={storeId || "all"} onValueChange={selectStore}>
+                <SelectTrigger aria-label={tCommon("selectStore")}>
                   <SelectValue placeholder={tCommon("selectStore")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -659,8 +699,14 @@ const ReportsPage = () => {
                 row.storeName,
                 row.productName,
                 row.variantName ?? "",
+                row.reason ?? "",
                 row.userName ?? "",
                 String(row.totalQty),
+                row.totalValueKgs === null ? "" : String(row.totalValueKgs),
+                new Date(row.occurredAt).toISOString(),
+                new Date(row.updatedAt).toISOString(),
+                row.documentId,
+                row.movementIds.join(";"),
                 String(row.movementCount),
               ]);
               downloadTableFile({
@@ -670,8 +716,14 @@ const ReportsPage = () => {
                   t("columns.store"),
                   t("columns.product"),
                   t("columns.variant"),
-                  t("columns.user"),
+                  t("columns.reason"),
+                  t("columns.operator"),
                   t("columns.qty"),
+                  t("columns.valueKgs"),
+                  t("columns.occurredAt"),
+                  t("columns.updatedAt"),
+                  t("columns.documentId"),
+                  t("columns.movementIds"),
                   t("columns.movements"),
                 ],
                 rows,
@@ -714,11 +766,11 @@ const ReportsPage = () => {
               paginationKey="reports-shrinkage"
               defaultPageSize={shrinkagePageSize}
               getKey={(row) =>
-                `${row.storeId}-${row.productId}-${row.variantId ?? "base"}-${row.userId ?? "anon"}`
+                `${row.documentType}-${row.documentId}-${row.storeId}-${row.productId}-${row.variantId ?? "base"}`
               }
               renderDesktop={(visibleItems) => (
                 <div className="overflow-x-auto">
-                  <Table className="min-w-[720px]">
+                  <Table className="min-w-[1180px]">
                     <TableHeader>
                       <TableRow>
                         <TableHead>{t("columns.store")}</TableHead>
@@ -726,15 +778,19 @@ const ReportsPage = () => {
                         <TableHead className="hidden md:table-cell">
                           {t("columns.variant")}
                         </TableHead>
-                        <TableHead>{t("columns.user")}</TableHead>
+                        <TableHead>{t("columns.reason")}</TableHead>
+                        <TableHead>{t("columns.operator")}</TableHead>
                         <TableHead>{t("columns.qty")}</TableHead>
+                        <TableHead>{t("columns.valueKgs")}</TableHead>
+                        <TableHead>{t("columns.occurredAt")}</TableHead>
+                        <TableHead>{t("columns.movementId")}</TableHead>
                         <TableHead>{t("columns.movements")}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {visibleItems.map((row) => (
                         <TableRow
-                          key={`${row.storeId}-${row.productId}-${row.variantId ?? "base"}-${row.userId ?? "anon"}`}
+                          key={`${row.documentType}-${row.documentId}-${row.storeId}-${row.productId}-${row.variantId ?? "base"}`}
                         >
                           <TableCell className="text-xs text-muted-foreground">
                             {row.storeName}
@@ -744,9 +800,26 @@ const ReportsPage = () => {
                             {row.variantName ?? tCommon("notAvailable")}
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground">
+                            {row.reason ?? tCommon("notAvailable")}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
                             {row.userName ?? tCommon("notAvailable")}
                           </TableCell>
                           <TableCell>{formatNumber(row.totalQty, locale)}</TableCell>
+                          <TableCell>
+                            {row.totalValueKgs === null
+                              ? tCommon("notAvailable")
+                              : formatCurrencyKGS(row.totalValueKgs, locale)}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                            {formatDateTime(row.occurredAt, locale)}
+                          </TableCell>
+                          <TableCell
+                            className="max-w-40 truncate font-mono text-xs text-muted-foreground"
+                            title={row.latestMovementId}
+                          >
+                            {row.latestMovementId}
+                          </TableCell>
                           <TableCell>{formatNumber(row.movementCount, locale)}</TableCell>
                         </TableRow>
                       ))}
@@ -773,7 +846,13 @@ const ReportsPage = () => {
                     </div>
                     <div>
                       <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
-                        {t("columns.user")}
+                        {t("columns.reason")}
+                      </p>
+                      <p className="text-foreground/90">{row.reason ?? tCommon("notAvailable")}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
+                        {t("columns.operator")}
                       </p>
                       <p className="text-foreground/90">
                         {row.userName ?? tCommon("notAvailable")}
@@ -787,10 +866,29 @@ const ReportsPage = () => {
                     </div>
                     <div>
                       <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
-                        {t("columns.movements")}
+                        {t("columns.valueKgs")}
                       </p>
                       <p className="text-foreground/90">
-                        {formatNumber(row.movementCount, locale)}
+                        {row.totalValueKgs === null
+                          ? tCommon("notAvailable")
+                          : formatCurrencyKGS(row.totalValueKgs, locale)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
+                        {t("columns.occurredAt")}
+                      </p>
+                      <p className="text-foreground/90">{formatDateTime(row.occurredAt, locale)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
+                        {t("columns.movementId")}
+                      </p>
+                      <p
+                        className="truncate font-mono text-foreground/90"
+                        title={row.latestMovementId}
+                      >
+                        {row.latestMovementId}
                       </p>
                     </div>
                   </div>

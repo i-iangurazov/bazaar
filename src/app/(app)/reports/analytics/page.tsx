@@ -55,9 +55,7 @@ const pageSize = 25;
 
 const SalesOverviewChart = dynamic(
   () =>
-    import("@/components/reports/sales-overview-chart").then(
-      (module) => module.SalesOverviewChart,
-    ),
+    import("@/components/reports/sales-overview-chart").then((module) => module.SalesOverviewChart),
   { ssr: false },
 );
 
@@ -166,7 +164,7 @@ const AnalyticsPage = () => {
 
   const resolvedStoreId = storeId === "all" ? undefined : storeId || undefined;
   const selectedStore = resolvedStoreId
-    ? storesQuery.data?.find((store) => store.id === resolvedStoreId) ?? null
+    ? (storesQuery.data?.find((store) => store.id === resolvedStoreId) ?? null)
     : null;
   const currencySource = selectedStore ?? baseAccountingCurrency;
   const commonAnalyticsInput = {
@@ -352,9 +350,11 @@ const AnalyticsPage = () => {
             <CardContent className="space-y-4 p-4 sm:p-5">
               <div className="grid gap-3 md:grid-cols-[minmax(160px,1fr)_minmax(160px,1fr)_minmax(160px,1fr)_minmax(160px,1fr)]">
                 <label className="space-y-1.5 text-sm">
-                  <span className="text-xs font-medium text-muted-foreground">{t("filters.store")}</span>
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {t("filters.store")}
+                  </span>
                   <Select value={storeId || "all"} onValueChange={setStoreId}>
-                    <SelectTrigger>
+                    <SelectTrigger aria-label={t("filters.store")}>
                       <SelectValue placeholder={tCommon("selectStore")} />
                     </SelectTrigger>
                     <SelectContent>
@@ -368,9 +368,11 @@ const AnalyticsPage = () => {
                   </Select>
                 </label>
                 <label className="space-y-1.5 text-sm">
-                  <span className="text-xs font-medium text-muted-foreground">{t("filters.register")}</span>
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {t("filters.register")}
+                  </span>
                   <Select value={registerId} onValueChange={setRegisterId}>
-                    <SelectTrigger>
+                    <SelectTrigger aria-label={t("filters.register")}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -384,9 +386,11 @@ const AnalyticsPage = () => {
                   </Select>
                 </label>
                 <label className="space-y-1.5 text-sm">
-                  <span className="text-xs font-medium text-muted-foreground">{t("filters.cashier")}</span>
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {t("filters.cashier")}
+                  </span>
                   <Select value={cashierId} onValueChange={setCashierId}>
-                    <SelectTrigger>
+                    <SelectTrigger aria-label={t("filters.cashier")}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -400,9 +404,11 @@ const AnalyticsPage = () => {
                   </Select>
                 </label>
                 <label className="space-y-1.5 text-sm">
-                  <span className="text-xs font-medium text-muted-foreground">{t("filters.category")}</span>
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {t("filters.category")}
+                  </span>
                   <Select value={category} onValueChange={setCategory}>
-                    <SelectTrigger>
+                    <SelectTrigger aria-label={t("filters.category")}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -419,7 +425,9 @@ const AnalyticsPage = () => {
 
               <div className="grid gap-3 lg:grid-cols-[140px_140px_minmax(220px,1fr)]">
                 <label className="space-y-1.5 text-sm">
-                  <span className="text-xs font-medium text-muted-foreground">{t("filters.dateFrom")}</span>
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {t("filters.dateFrom")}
+                  </span>
                   <Input
                     type="date"
                     value={dateFrom}
@@ -427,7 +435,9 @@ const AnalyticsPage = () => {
                   />
                 </label>
                 <label className="space-y-1.5 text-sm">
-                  <span className="text-xs font-medium text-muted-foreground">{t("filters.dateTo")}</span>
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {t("filters.dateTo")}
+                  </span>
                   <Input
                     type="date"
                     value={dateTo}
@@ -435,28 +445,39 @@ const AnalyticsPage = () => {
                   />
                 </label>
                 <div className="space-y-1.5">
-                  <span className="text-xs font-medium text-muted-foreground">{t("filters.presets")}</span>
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {t("filters.presets")}
+                  </span>
                   <div className="flex flex-wrap gap-2">
-                    {(["today", "yesterday", "last7", "last30", "thisMonth", "lastMonth"] as Preset[]).map(
-                      (item) => (
-                        <Button
-                          key={item}
-                          type="button"
-                          variant={preset === item ? "primary" : "outline"}
-                          size="sm"
-                          onClick={() => applyPreset(item)}
-                        >
-                          {t(`presets.${item}`)}
-                        </Button>
-                      ),
-                    )}
+                    {(
+                      [
+                        "today",
+                        "yesterday",
+                        "last7",
+                        "last30",
+                        "thisMonth",
+                        "lastMonth",
+                      ] as Preset[]
+                    ).map((item) => (
+                      <Button
+                        key={item}
+                        type="button"
+                        variant={preset === item ? "primary" : "outline"}
+                        size="sm"
+                        onClick={() => applyPreset(item)}
+                      >
+                        {t(`presets.${item}`)}
+                      </Button>
+                    ))}
                   </div>
                 </div>
               </div>
 
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <label className="relative flex-1 space-y-1.5 text-sm">
-                  <span className="text-xs font-medium text-muted-foreground">{t("filters.productSearch")}</span>
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {t("filters.productSearch")}
+                  </span>
                   <SearchIcon className="pointer-events-none absolute bottom-3 left-3 h-4 w-4 text-muted-foreground" />
                   <Input
                     value={search}
@@ -466,7 +487,10 @@ const AnalyticsPage = () => {
                   />
                 </label>
                 <div className="flex gap-2">
-                  <Select value={downloadFormat} onValueChange={(value) => setDownloadFormat(value as DownloadFormat)}>
+                  <Select
+                    value={downloadFormat}
+                    onValueChange={(value) => setDownloadFormat(value as DownloadFormat)}
+                  >
                     <SelectTrigger className="w-[120px]" aria-label={tExports("formatLabel")}>
                       <SelectValue />
                     </SelectTrigger>
@@ -497,11 +521,18 @@ const AnalyticsPage = () => {
 
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
             {[
-              { label: t("kpis.netSales"), value: renderMoney(totals?.netSalesKgs ?? 0), emphasis: true },
+              {
+                label: t("kpis.netSales"),
+                value: renderMoney(totals?.netSalesKgs ?? 0),
+                emphasis: true,
+              },
               { label: t("kpis.grossSales"), value: renderMoney(totals?.grossSalesKgs ?? 0) },
               { label: t("kpis.returns"), value: renderMoney(totals?.returnsKgs ?? 0) },
               { label: t("kpis.receipts"), value: formatNumber(totals?.receiptCount ?? 0, locale) },
-              { label: t("kpis.averageReceipt"), value: renderMoney(totals?.averageReceiptKgs ?? 0) },
+              {
+                label: t("kpis.averageReceipt"),
+                value: renderMoney(totals?.averageReceiptKgs ?? 0),
+              },
               { label: t("kpis.nonCash"), value: renderMoney(totals?.nonCashSalesKgs ?? 0) },
             ].map((item) => (
               <div
@@ -534,7 +565,9 @@ const AnalyticsPage = () => {
             <CardContent className="p-4 sm:p-5">
               {overviewQuery.isLoading ? (
                 <Skeleton className="h-[22rem] w-full" />
-              ) : chartData.some((point) => point.grossSalesKgs || point.returnsKgs || point.receiptCount) ? (
+              ) : chartData.some(
+                  (point) => point.grossSalesKgs || point.returnsKgs || point.receiptCount,
+                ) ? (
                 <div className="h-[22rem] w-full">
                   <SalesOverviewChart
                     data={chartData}
@@ -586,23 +619,41 @@ const AnalyticsPage = () => {
                       <Table className="min-w-[1080px]" sortable={false}>
                         <TableHeader className="bg-muted/40">
                           <TableRow>
-                            <TableHead className="px-4 py-3">{t("products.columns.product")}</TableHead>
+                            <TableHead className="px-4 py-3">
+                              {t("products.columns.product")}
+                            </TableHead>
                             <TableHead className="px-4 py-3">{t("products.columns.sku")}</TableHead>
-                            <TableHead className="px-4 py-3 text-right">{t("products.columns.quantity")}</TableHead>
-                            <TableHead className="px-4 py-3 text-right">{t("products.columns.revenue")}</TableHead>
-                            <TableHead className="px-4 py-3 text-right">{t("products.columns.averagePrice")}</TableHead>
-                            <TableHead className="px-4 py-3 text-right">{t("products.columns.stock")}</TableHead>
-                            <TableHead className="px-4 py-3 text-right">{t("products.columns.receipts")}</TableHead>
-                            <TableHead className="px-4 py-3 text-right">{t("products.columns.actions")}</TableHead>
+                            <TableHead className="px-4 py-3 text-right">
+                              {t("products.columns.quantity")}
+                            </TableHead>
+                            <TableHead className="px-4 py-3 text-right">
+                              {t("products.columns.revenue")}
+                            </TableHead>
+                            <TableHead className="px-4 py-3 text-right">
+                              {t("products.columns.averagePrice")}
+                            </TableHead>
+                            <TableHead className="px-4 py-3 text-right">
+                              {t("products.columns.stock")}
+                            </TableHead>
+                            <TableHead className="px-4 py-3 text-right">
+                              {t("products.columns.receipts")}
+                            </TableHead>
+                            <TableHead className="px-4 py-3 text-right">
+                              {t("products.columns.actions")}
+                            </TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {soldProducts.map((product) => (
                             <TableRow key={`${product.productId}:${product.variantKey}`}>
                               <TableCell className="px-4 py-3">
-                                <div className="font-medium text-foreground">{product.productName}</div>
+                                <div className="font-medium text-foreground">
+                                  {product.productName}
+                                </div>
                                 <div className="text-xs text-muted-foreground">
-                                  {product.variantName ?? product.category ?? tCommon("notAvailable")}
+                                  {product.variantName ??
+                                    product.category ??
+                                    tCommon("notAvailable")}
                                 </div>
                               </TableCell>
                               <TableCell className="px-4 py-3 text-xs text-muted-foreground">
@@ -615,7 +666,8 @@ const AnalyticsPage = () => {
                                 </div>
                                 {product.quantityReturned > 0 ? (
                                   <div className="text-xs text-warning">
-                                    -{formatNumber(product.quantityReturned, locale)} {t("products.returned")}
+                                    -{formatNumber(product.quantityReturned, locale)}{" "}
+                                    {t("products.returned")}
                                   </div>
                                 ) : null}
                               </TableCell>
@@ -625,7 +677,8 @@ const AnalyticsPage = () => {
                                 </div>
                                 {product.returnedRevenueKgs > 0 ? (
                                   <div className="text-xs text-warning">
-                                    {t("products.returns")}: {renderMoney(product.returnedRevenueKgs)}
+                                    {t("products.returns")}:{" "}
+                                    {renderMoney(product.returnedRevenueKgs)}
                                   </div>
                                 ) : null}
                               </TableCell>
@@ -719,8 +772,12 @@ const AnalyticsPage = () => {
                         <TableHeader className="bg-muted/40">
                           <TableRow>
                             <TableHead className="px-4 py-3">{t("dayTable.date")}</TableHead>
-                            <TableHead className="px-4 py-3 text-right">{t("dayTable.sales")}</TableHead>
-                            <TableHead className="px-4 py-3 text-right">{t("dayTable.receipts")}</TableHead>
+                            <TableHead className="px-4 py-3 text-right">
+                              {t("dayTable.sales")}
+                            </TableHead>
+                            <TableHead className="px-4 py-3 text-right">
+                              {t("dayTable.receipts")}
+                            </TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -791,7 +848,13 @@ const AnalyticsPage = () => {
                 setSelectedDay(null);
               }
             }}
-            title={selectedDay ? t("dayDetail.title", { date: formatDate(dateOnlyToDisplayDate(selectedDay), locale) }) : t("dayDetail.titleFallback")}
+            title={
+              selectedDay
+                ? t("dayDetail.title", {
+                    date: formatDate(dateOnlyToDisplayDate(selectedDay), locale),
+                  })
+                : t("dayDetail.titleFallback")
+            }
             className="max-w-6xl"
             bodyClassName="p-0"
             mobileSheet
@@ -831,23 +894,35 @@ const AnalyticsPage = () => {
                 <div className="grid gap-0 lg:grid-cols-2">
                   <div className="border-b border-border lg:border-b-0 lg:border-r">
                     <div className="border-b border-border px-4 py-3 lg:px-6">
-                      <h3 className="text-sm font-semibold text-foreground">{t("dayDetail.products")}</h3>
+                      <h3 className="text-sm font-semibold text-foreground">
+                        {t("dayDetail.products")}
+                      </h3>
                     </div>
                     <div className="max-h-[28rem] overflow-auto">
                       <Table className="min-w-[600px]" sortable={false}>
                         <TableHeader className="bg-muted/40">
                           <TableRow>
-                            <TableHead className="px-4 py-3 lg:px-6">{t("products.columns.product")}</TableHead>
-                            <TableHead className="px-4 py-3 text-right">{t("products.columns.quantity")}</TableHead>
-                            <TableHead className="px-4 py-3 text-right lg:px-6">{t("products.columns.revenue")}</TableHead>
+                            <TableHead className="px-4 py-3 lg:px-6">
+                              {t("products.columns.product")}
+                            </TableHead>
+                            <TableHead className="px-4 py-3 text-right">
+                              {t("products.columns.quantity")}
+                            </TableHead>
+                            <TableHead className="px-4 py-3 text-right lg:px-6">
+                              {t("products.columns.revenue")}
+                            </TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {dayDetailQuery.data.products.map((product) => (
                             <TableRow key={`${product.productId}:${product.variantKey}`}>
                               <TableCell className="px-4 py-3 lg:px-6">
-                                <div className="font-medium text-foreground">{product.productName}</div>
-                                <div className="text-xs text-muted-foreground">{product.productSku}</div>
+                                <div className="font-medium text-foreground">
+                                  {product.productName}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  {product.productSku}
+                                </div>
                               </TableCell>
                               <TableCell className="px-4 py-3 text-right">
                                 {formatNumber(product.netQuantity, locale)}
@@ -859,7 +934,10 @@ const AnalyticsPage = () => {
                           ))}
                           {!dayDetailQuery.data.products.length ? (
                             <TableRow>
-                              <TableCell colSpan={3} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                              <TableCell
+                                colSpan={3}
+                                className="px-4 py-8 text-center text-sm text-muted-foreground"
+                              >
                                 {t("emptyTopProducts")}
                               </TableCell>
                             </TableRow>
@@ -870,16 +948,26 @@ const AnalyticsPage = () => {
                   </div>
                   <div>
                     <div className="border-b border-border px-4 py-3 lg:px-6">
-                      <h3 className="text-sm font-semibold text-foreground">{t("dayDetail.receipts")}</h3>
+                      <h3 className="text-sm font-semibold text-foreground">
+                        {t("dayDetail.receipts")}
+                      </h3>
                     </div>
                     <div className="max-h-[28rem] overflow-auto">
                       <Table className="min-w-[660px]" sortable={false}>
                         <TableHeader className="bg-muted/40">
                           <TableRow>
-                            <TableHead className="px-4 py-3 lg:px-6">{t("receipts.columns.number")}</TableHead>
-                            <TableHead className="px-4 py-3">{t("receipts.columns.cashier")}</TableHead>
-                            <TableHead className="px-4 py-3">{t("receipts.columns.payment")}</TableHead>
-                            <TableHead className="px-4 py-3 text-right lg:px-6">{t("receipts.columns.total")}</TableHead>
+                            <TableHead className="px-4 py-3 lg:px-6">
+                              {t("receipts.columns.number")}
+                            </TableHead>
+                            <TableHead className="px-4 py-3">
+                              {t("receipts.columns.cashier")}
+                            </TableHead>
+                            <TableHead className="px-4 py-3">
+                              {t("receipts.columns.payment")}
+                            </TableHead>
+                            <TableHead className="px-4 py-3 text-right lg:px-6">
+                              {t("receipts.columns.total")}
+                            </TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -896,7 +984,9 @@ const AnalyticsPage = () => {
                                 </div>
                               </TableCell>
                               <TableCell className="px-4 py-3 text-xs text-muted-foreground">
-                                {receipt.cashier?.name ?? receipt.cashier?.email ?? t("receipts.unknownCashier")}
+                                {receipt.cashier?.name ??
+                                  receipt.cashier?.email ??
+                                  t("receipts.unknownCashier")}
                               </TableCell>
                               <TableCell className="px-4 py-3 text-xs text-muted-foreground">
                                 {paymentMethods
@@ -911,7 +1001,10 @@ const AnalyticsPage = () => {
                           ))}
                           {!dayDetailQuery.data.receipts.length ? (
                             <TableRow>
-                              <TableCell colSpan={4} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                              <TableCell
+                                colSpan={4}
+                                className="px-4 py-8 text-center text-sm text-muted-foreground"
+                              >
                                 {t("receipts.empty")}
                               </TableCell>
                             </TableRow>
@@ -932,7 +1025,11 @@ const AnalyticsPage = () => {
                 setSelectedProduct(null);
               }
             }}
-            title={selectedProduct ? t("productReceipts.title", { product: selectedProduct.name }) : t("productReceipts.titleFallback")}
+            title={
+              selectedProduct
+                ? t("productReceipts.title", { product: selectedProduct.name })
+                : t("productReceipts.titleFallback")
+            }
             className="max-w-4xl"
             bodyClassName="p-0"
             mobileSheet
@@ -952,11 +1049,15 @@ const AnalyticsPage = () => {
                 <Table className="min-w-[760px]" sortable={false}>
                   <TableHeader className="bg-muted/40">
                     <TableRow>
-                      <TableHead className="px-4 py-3 lg:px-6">{t("receipts.columns.number")}</TableHead>
+                      <TableHead className="px-4 py-3 lg:px-6">
+                        {t("receipts.columns.number")}
+                      </TableHead>
                       <TableHead className="px-4 py-3">{t("receipts.columns.store")}</TableHead>
                       <TableHead className="px-4 py-3">{t("receipts.columns.cashier")}</TableHead>
                       <TableHead className="px-4 py-3">{t("receipts.columns.payment")}</TableHead>
-                      <TableHead className="px-4 py-3 text-right lg:px-6">{t("receipts.columns.total")}</TableHead>
+                      <TableHead className="px-4 py-3 text-right lg:px-6">
+                        {t("receipts.columns.total")}
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -976,7 +1077,9 @@ const AnalyticsPage = () => {
                           {receipt.store.name}
                         </TableCell>
                         <TableCell className="px-4 py-3 text-xs text-muted-foreground">
-                          {receipt.cashier?.name ?? receipt.cashier?.email ?? t("receipts.unknownCashier")}
+                          {receipt.cashier?.name ??
+                            receipt.cashier?.email ??
+                            t("receipts.unknownCashier")}
                         </TableCell>
                         <TableCell className="px-4 py-3 text-xs text-muted-foreground">
                           {paymentMethods
@@ -989,9 +1092,13 @@ const AnalyticsPage = () => {
                         </TableCell>
                       </TableRow>
                     ))}
-                    {!productReceiptsQuery.isLoading && !(productReceiptsQuery.data?.items ?? []).length ? (
+                    {!productReceiptsQuery.isLoading &&
+                    !(productReceiptsQuery.data?.items ?? []).length ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                        <TableCell
+                          colSpan={5}
+                          className="px-4 py-8 text-center text-sm text-muted-foreground"
+                        >
                           {t("receipts.empty")}
                         </TableCell>
                       </TableRow>

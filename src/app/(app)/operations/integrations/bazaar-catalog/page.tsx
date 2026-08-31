@@ -58,7 +58,11 @@ type CatalogFormState = {
 const DEFAULT_ACCENT_COLOR = "#2a6be4";
 const accentColorPattern = /^#[0-9a-fA-F]{6}$/;
 
-const formatCatalogCurrency = (amount: number, locale: string, currencyCode: SupportedCurrencyCode) =>
+const formatCatalogCurrency = (
+  amount: number,
+  locale: string,
+  currencyCode: SupportedCurrencyCode,
+) =>
   formatCurrency(amount, locale, currencyCode, {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
@@ -149,13 +153,7 @@ const resolveAbsoluteCatalogUrl = (publicUrlPath: string) => {
   return publicUrlPath;
 };
 
-const ProductImageThumb = ({
-  imageUrl,
-  name,
-}: {
-  imageUrl?: string | null;
-  name: string;
-}) => {
+const ProductImageThumb = ({ imageUrl, name }: { imageUrl?: string | null; name: string }) => {
   const fallbackLabel = name.trim().charAt(0).toUpperCase() || "#";
 
   if (imageUrl) {
@@ -187,6 +185,7 @@ const BazaarCatalogSettingsPage = () => {
   const searchParams = useSearchParams();
   const storeIdParam = searchParams.get("storeId");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const saveInFlightRef = useRef(false);
 
   const role = session?.user?.role ?? "STAFF";
   const canView = role === "ADMIN" || role === "MANAGER" || role === "STAFF";
@@ -421,22 +420,30 @@ const BazaarCatalogSettingsPage = () => {
   };
 
   const handleSave = () => {
-    if (!formState || !selectedStoreId) {
+    if (!formState || !selectedStoreId || saveInFlightRef.current) {
       return;
     }
     if (!accentColorPattern.test(formState.accentColor.trim())) {
       toast({ variant: "error", description: t("accentColorInvalid") });
       return;
     }
-    upsertMutation.mutate({
-      storeId: selectedStoreId,
-      title: formState.title.trim() || null,
-      accentColor: formState.accentColor.trim(),
-      fontFamily: formState.fontFamily,
-      headerStyle: formState.headerStyle,
-      logoImageId: formState.logoImageId ?? null,
-      status: formState.publish ? BazaarCatalogStatus.PUBLISHED : BazaarCatalogStatus.DRAFT,
-    });
+    saveInFlightRef.current = true;
+    upsertMutation.mutate(
+      {
+        storeId: selectedStoreId,
+        title: formState.title.trim() || null,
+        accentColor: formState.accentColor.trim(),
+        fontFamily: formState.fontFamily,
+        headerStyle: formState.headerStyle,
+        logoImageId: formState.logoImageId ?? null,
+        status: formState.publish ? BazaarCatalogStatus.PUBLISHED : BazaarCatalogStatus.DRAFT,
+      },
+      {
+        onSettled: () => {
+          saveInFlightRef.current = false;
+        },
+      },
+    );
   };
   const settingsData = settingsQuery.data;
 
@@ -544,7 +551,7 @@ const BazaarCatalogSettingsPage = () => {
                     setProductVisibilityFilter(value as "all" | "visible" | "hidden")
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger aria-label={t("productsVisibility.title")}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -552,9 +559,7 @@ const BazaarCatalogSettingsPage = () => {
                     <SelectItem value="visible">
                       {t("productsVisibility.filters.visible")}
                     </SelectItem>
-                    <SelectItem value="hidden">
-                      {t("productsVisibility.filters.hidden")}
-                    </SelectItem>
+                    <SelectItem value="hidden">{t("productsVisibility.filters.hidden")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -610,109 +615,105 @@ const BazaarCatalogSettingsPage = () => {
                   onPageSizeChange={setProductsPageSize}
                   scrollToTopOnPageChange
                   empty={
-                    <p className="text-sm text-muted-foreground">
-                      {t("productsVisibility.empty")}
-                    </p>
+                    <p className="text-sm text-muted-foreground">{t("productsVisibility.empty")}</p>
                   }
                   renderDesktop={(visibleItems) =>
                     visibleItems.length ? (
                       <div className="bazaar-admin-table-shell">
                         <div className="bazaar-admin-table-scroll">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              {canEdit ? (
-                                <TableHead className="w-10">
-                                  <input
-                                    type="checkbox"
-                                    className="h-4 w-4 rounded-md border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                                    checked={allProductsSelectedOnPage}
-                                    onChange={toggleSelectAllProductsOnPage}
-                                    aria-label={t("productsVisibility.selectAll")}
-                                  />
-                                </TableHead>
-                              ) : null}
-                              <TableHead>{t("productsVisibility.columns.sku")}</TableHead>
-                              <TableHead className="w-16">
-                                {t("productsVisibility.columns.image")}
-                              </TableHead>
-                              <TableHead>{t("productsVisibility.columns.name")}</TableHead>
-                              <TableHead>{t("productsVisibility.columns.category")}</TableHead>
-                              <TableHead>{t("productsVisibility.columns.price")}</TableHead>
-                              <TableHead>{t("productsVisibility.columns.onHand")}</TableHead>
-                              <TableHead>{t("productsVisibility.columns.status")}</TableHead>
-                              {canEdit ? (
-                                <TableHead>{t("productsVisibility.columns.actions")}</TableHead>
-                              ) : null}
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {visibleItems.map((product) => (
-                              <TableRow key={product.id}>
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
                                 {canEdit ? (
-                                  <TableCell>
+                                  <TableHead className="w-10">
                                     <input
                                       type="checkbox"
                                       className="h-4 w-4 rounded-md border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                                      checked={selectedProductIds.has(product.id)}
-                                      onChange={() => toggleProductSelection(product.id)}
-                                      aria-label={t("productsVisibility.selectProduct", {
-                                        name: product.name,
-                                      })}
+                                      checked={allProductsSelectedOnPage}
+                                      onChange={toggleSelectAllProductsOnPage}
+                                      aria-label={t("productsVisibility.selectAll")}
                                     />
-                                  </TableCell>
+                                  </TableHead>
                                 ) : null}
-                                <TableCell className="font-mono text-xs">{product.sku}</TableCell>
-                                <TableCell>
-                                  <ProductImageThumb
-                                    imageUrl={product.imageUrl}
-                                    name={product.name}
-                                  />
-                                </TableCell>
-                                <TableCell className="font-medium">{product.name}</TableCell>
-                                <TableCell>{product.category ?? "-"}</TableCell>
-                                <TableCell>
-                                  {formatCatalogCurrency(
-                                    product.priceKgs,
-                                    locale,
-                                    catalogCurrencyCode,
-                                  )}
-                                </TableCell>
-                                <TableCell>{product.onHandQty}</TableCell>
-                                <TableCell>
-                                  <Badge variant={product.hidden ? "muted" : "success"}>
-                                    {product.hidden
-                                      ? t("productsVisibility.statusHidden")
-                                      : t("productsVisibility.statusVisible")}
-                                  </Badge>
-                                </TableCell>
+                                <TableHead>{t("productsVisibility.columns.sku")}</TableHead>
+                                <TableHead className="w-16">
+                                  {t("productsVisibility.columns.image")}
+                                </TableHead>
+                                <TableHead>{t("productsVisibility.columns.name")}</TableHead>
+                                <TableHead>{t("productsVisibility.columns.category")}</TableHead>
+                                <TableHead>{t("productsVisibility.columns.price")}</TableHead>
+                                <TableHead>{t("productsVisibility.columns.onHand")}</TableHead>
+                                <TableHead>{t("productsVisibility.columns.status")}</TableHead>
                                 {canEdit ? (
-                                  <TableCell>
-                                    <Button
-                                      type="button"
-                                      size="sm"
-                                      variant={product.hidden ? "secondary" : "outline"}
-                                      onClick={() =>
-                                        handleUpdateProducts(!product.hidden, [product.id])
-                                      }
-                                      disabled={updateProductsMutation.isLoading}
-                                    >
-                                      {product.hidden
-                                        ? t("productsVisibility.rowShow")
-                                        : t("productsVisibility.rowHide")}
-                                    </Button>
-                                  </TableCell>
+                                  <TableHead>{t("productsVisibility.columns.actions")}</TableHead>
                                 ) : null}
                               </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
+                            </TableHeader>
+                            <TableBody>
+                              {visibleItems.map((product) => (
+                                <TableRow key={product.id}>
+                                  {canEdit ? (
+                                    <TableCell>
+                                      <input
+                                        type="checkbox"
+                                        className="h-4 w-4 rounded-md border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                        checked={selectedProductIds.has(product.id)}
+                                        onChange={() => toggleProductSelection(product.id)}
+                                        aria-label={t("productsVisibility.selectProduct", {
+                                          name: product.name,
+                                        })}
+                                      />
+                                    </TableCell>
+                                  ) : null}
+                                  <TableCell className="font-mono text-xs">{product.sku}</TableCell>
+                                  <TableCell>
+                                    <ProductImageThumb
+                                      imageUrl={product.imageUrl}
+                                      name={product.name}
+                                    />
+                                  </TableCell>
+                                  <TableCell className="font-medium">{product.name}</TableCell>
+                                  <TableCell>{product.category ?? "-"}</TableCell>
+                                  <TableCell>
+                                    {formatCatalogCurrency(
+                                      product.priceKgs,
+                                      locale,
+                                      catalogCurrencyCode,
+                                    )}
+                                  </TableCell>
+                                  <TableCell>{product.onHandQty}</TableCell>
+                                  <TableCell>
+                                    <Badge variant={product.hidden ? "muted" : "success"}>
+                                      {product.hidden
+                                        ? t("productsVisibility.statusHidden")
+                                        : t("productsVisibility.statusVisible")}
+                                    </Badge>
+                                  </TableCell>
+                                  {canEdit ? (
+                                    <TableCell>
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant={product.hidden ? "secondary" : "outline"}
+                                        onClick={() =>
+                                          handleUpdateProducts(!product.hidden, [product.id])
+                                        }
+                                        disabled={updateProductsMutation.isLoading}
+                                      >
+                                        {product.hidden
+                                          ? t("productsVisibility.rowShow")
+                                          : t("productsVisibility.rowHide")}
+                                      </Button>
+                                    </TableCell>
+                                  ) : null}
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
                         </div>
                       </div>
                     ) : (
-                      <p className="bazaar-admin-empty">
-                        {t("productsVisibility.empty")}
-                      </p>
+                      <p className="bazaar-admin-empty">{t("productsVisibility.empty")}</p>
                     )
                   }
                   renderMobile={(product) => (
@@ -1003,13 +1004,17 @@ const BazaarCatalogSettingsPage = () => {
                   <div
                     className={cn(
                       "mb-3 flex items-center justify-between",
-                      formState.headerStyle === BazaarCatalogHeaderStyle.COMPACT ? "gap-2" : "gap-3",
+                      formState.headerStyle === BazaarCatalogHeaderStyle.COMPACT
+                        ? "gap-2"
+                        : "gap-3",
                     )}
                   >
                     <div
                       className={cn(
                         "flex min-w-0 items-center",
-                        formState.headerStyle === BazaarCatalogHeaderStyle.COMPACT ? "gap-2" : "gap-3",
+                        formState.headerStyle === BazaarCatalogHeaderStyle.COMPACT
+                          ? "gap-2"
+                          : "gap-3",
                       )}
                     >
                       <div
@@ -1120,7 +1125,6 @@ const BazaarCatalogSettingsPage = () => {
               </div>
             </CardContent>
           </Card>
-
         </>
       )}
     </div>

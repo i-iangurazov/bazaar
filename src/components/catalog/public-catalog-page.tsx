@@ -7,6 +7,10 @@ import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 
 import { LanguageSwitcher } from "@/components/language-switcher";
+import {
+  resolveCatalogAccentForeground,
+  sanitizeCatalogAccent,
+} from "@/components/catalog/catalog-accessibility";
 import { AddIcon, ChevronDownIcon, DeleteIcon, MinusIcon } from "@/components/icons";
 import { PhoneNumberInput } from "@/components/phone-number-input";
 import { Badge } from "@/components/ui/badge";
@@ -26,58 +30,9 @@ import { formatCurrency } from "@/lib/i18nFormat";
 import { defaultCurrencyCode, type SupportedCurrencyCode } from "@/lib/currency";
 import { isCompleteInternationalPhone } from "@/lib/phoneCountries";
 import { cn } from "@/lib/utils";
+import type { PublicCatalogPayload } from "@/server/services/bazaarCatalog";
 
-type CatalogPayload = {
-  slug: string;
-  storeId: string;
-  title: string;
-  storeName: string;
-  currencyCode: SupportedCurrencyCode;
-  accentColor: string;
-  fontFamily:
-    | "NotoSans"
-    | "Inter"
-    | "System"
-    | "Roboto"
-    | "OpenSans"
-    | "Montserrat"
-    | "Lato"
-    | "PTSans"
-    | "SourceSans3"
-    | "Manrope";
-  headerStyle: "COMPACT" | "STANDARD";
-  logoUrl: string | null;
-  categories: Array<{ key: string; name: string | null; count: number }>;
-  pagination: {
-    page: number;
-    pageSize: number;
-    total: number;
-    totalPages: number;
-    hasMore: boolean;
-  };
-  products: Array<{
-    id: string;
-    name: string;
-    category: string | null;
-    priceKgs: number;
-    quotedUnitPriceKgs: number;
-    compareAtPriceKgs: number | null;
-    hasDiscount: boolean;
-    discountPercentage: number | null;
-    imageUrl: string | null;
-    isBundle: boolean;
-    variants: Array<{
-      id: string;
-      name: string;
-      priceKgs: number;
-      quotedUnitPriceKgs: number;
-      compareAtPriceKgs: number | null;
-      hasDiscount: boolean;
-      discountPercentage: number | null;
-      imageUrl: string | null;
-    }>;
-  }>;
-};
+type CatalogPayload = PublicCatalogPayload;
 
 type CheckoutResponse = {
   order?: {
@@ -88,12 +43,14 @@ type CheckoutResponse = {
 };
 
 type CatalogResponse = CatalogPayload | { message?: string };
+type CheckoutField = "name" | "email" | "phone";
 
 const uncategorizedKey = "__uncategorized";
 const numericPattern = /^\d*$/;
 const baseVariantKey = "BASE";
 const catalogImageWidths = [320, 480, 720] as const;
 const catalogPageSize = 24;
+const checkoutErrorId = "catalog-checkout-error";
 
 const formatCatalogCurrency = (
   amount: number,
@@ -169,9 +126,6 @@ const catalogTypographyStyle = (fontFamily: CatalogPayload["fontFamily"]) => {
 const categoryKeyOf = (category: string | null | undefined) =>
   category?.trim() ? category.toLowerCase() : uncategorizedKey;
 
-const sanitizeAccent = (value?: string | null) =>
-  value && /^#[0-9a-fA-F]{6}$/.test(value) ? value.toLowerCase() : "#2a6be4";
-
 const isProxyableCatalogImageUrl = (sourceUrl: string | null | undefined) => {
   const normalized = sourceUrl?.trim();
   if (!normalized) {
@@ -225,14 +179,20 @@ const parseCartKey = (value: string) => {
   };
 };
 
-export const PublicCatalogPage = ({ slug }: { slug: string }) => {
+export const PublicCatalogPage = ({
+  slug,
+  initialCatalog = null,
+}: {
+  slug: string;
+  initialCatalog?: CatalogPayload | null;
+}) => {
   const t = useTranslations("catalogPublic");
   const tErrors = useTranslations("errors");
   const locale = useLocale();
   const router = useRouter();
 
-  const [catalog, setCatalog] = useState<CatalogPayload | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [catalog, setCatalog] = useState<CatalogPayload | null>(initialCatalog);
+  const [loading, setLoading] = useState(!initialCatalog);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -241,7 +201,9 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [knownProducts, setKnownProducts] = useState<
     Record<string, CatalogPayload["products"][number]>
-  >({});
+  >(() =>
+    Object.fromEntries((initialCatalog?.products ?? []).map((product) => [product.id, product])),
+  );
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
   const [cart, setCart] = useState<Record<string, number>>({});
   const [qtyInputs, setQtyInputs] = useState<Record<string, string>>({});
@@ -254,9 +216,13 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
   const [checkoutComment, setCheckoutComment] = useState("");
   const [orderNumber, setOrderNumber] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [checkoutFieldErrors, setCheckoutFieldErrors] = useState<
+    Partial<Record<CheckoutField, boolean>>
+  >({});
   const [submitting, setSubmitting] = useState(false);
   const checkoutAttemptRef = useRef<{ payload: string; idempotencyKey: string } | null>(null);
   const loadMoreControllerRef = useRef<AbortController | null>(null);
+  const skipInitialLoadRef = useRef(Boolean(initialCatalog));
 
   const mergeKnownProducts = useCallback((products: CatalogPayload["products"]) => {
     setKnownProducts((current) => {
@@ -274,6 +240,10 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
   }, [search]);
 
   useEffect(() => {
+    if (skipInitialLoadRef.current && !appliedSearch && categoryFilter === "all") {
+      skipInitialLoadRef.current = false;
+      return;
+    }
     const controller = new AbortController();
     loadMoreControllerRef.current?.abort();
     loadMoreControllerRef.current = null;
@@ -375,7 +345,12 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
     }
   };
 
-  const accentColor = sanitizeAccent(catalog?.accentColor);
+  const accentColor = sanitizeCatalogAccent(catalog?.accentColor);
+  const accentForegroundColor = resolveCatalogAccentForeground(accentColor);
+  const accentActionStyle = {
+    backgroundColor: accentColor,
+    color: accentForegroundColor,
+  };
   const catalogCurrencyCode = catalog?.currencyCode ?? defaultCurrencyCode;
 
   const visibleProducts = useMemo(() => catalog?.products ?? [], [catalog?.products]);
@@ -479,6 +454,18 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
     [cartItems],
   );
 
+  const clearCheckoutFieldError = (field: CheckoutField) => {
+    if (!checkoutFieldErrors[field]) {
+      return;
+    }
+    const nextErrors = { ...checkoutFieldErrors };
+    delete nextErrors[field];
+    setCheckoutFieldErrors(nextErrors);
+    if (Object.keys(nextErrors).length === 0) {
+      setSubmitError(null);
+    }
+  };
+
   const setLineQty = (lineKey: string, nextQty: number) => {
     setCart((prev) => {
       const next = { ...prev };
@@ -548,6 +535,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
     }
     setCheckoutStep("cart");
     setSubmitError(null);
+    setCheckoutFieldErrors({});
     setCartOpen(true);
   };
 
@@ -558,23 +546,37 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
     setCartOpen(false);
     setCheckoutStep("cart");
     setSubmitError(null);
+    setCheckoutFieldErrors({});
   };
 
   const submitCheckout = async () => {
     if (!catalog || !cartItems.length || submitting) {
       return;
     }
-    if (!checkoutName.trim() || !checkoutEmail.trim() || !checkoutPhone.trim()) {
+    const requiredFieldErrors: Partial<Record<CheckoutField, boolean>> = {};
+    if (!checkoutName.trim()) {
+      requiredFieldErrors.name = true;
+    }
+    if (!checkoutEmail.trim()) {
+      requiredFieldErrors.email = true;
+    }
+    if (!checkoutPhone.trim()) {
+      requiredFieldErrors.phone = true;
+    }
+    if (Object.keys(requiredFieldErrors).length > 0) {
+      setCheckoutFieldErrors(requiredFieldErrors);
       setSubmitError(t("checkoutRequired"));
       return;
     }
     if (!isCompleteInternationalPhone(checkoutPhone)) {
+      setCheckoutFieldErrors({ phone: true });
       setSubmitError(t("checkoutPhoneInvalid"));
       return;
     }
 
     setSubmitting(true);
     setSubmitError(null);
+    setCheckoutFieldErrors({});
     try {
       const checkoutPayload = {
         customerName: checkoutName.trim(),
@@ -653,6 +655,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
       setCheckoutEmail("");
       setCheckoutPhone("");
       setCheckoutComment("");
+      setCheckoutFieldErrors({});
       checkoutAttemptRef.current = null;
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : tErrors("genericMessage"));
@@ -780,10 +783,10 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
                   <Button
                     type="button"
                     size="icon"
-                    className="h-10 w-10 shrink-0 text-white hover:opacity-95"
+                    className="h-10 w-10 shrink-0 hover:shadow-md"
                     aria-label={t("qtyIncrease", { product: product.name })}
                     onClick={() => adjustLineQty(lineKey, 1)}
-                    style={{ backgroundColor: accentColor }}
+                    style={accentActionStyle}
                   >
                     <AddIcon className="h-4 w-4" aria-hidden />
                   </Button>
@@ -817,10 +820,10 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
               <Button
                 type="button"
                 size="icon"
-                className="h-10 w-10 shrink-0 text-white hover:opacity-95"
+                className="h-10 w-10 shrink-0 hover:shadow-md"
                 aria-label={t("qtyIncrease", { product: product.name })}
                 onClick={() => adjustLineQty(lineKey, 1)}
-                style={{ backgroundColor: accentColor }}
+                style={accentActionStyle}
               >
                 <AddIcon className="h-4 w-4" aria-hidden />
               </Button>
@@ -861,7 +864,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
   if (!catalog || errorMessage) {
     return (
       <div className="mx-auto flex min-h-[60vh] w-full max-w-xl flex-col items-center justify-center gap-4 px-4 text-center sm:px-6">
-        <p className="text-lg font-semibold">{t("notFoundTitle")}</p>
+        <h1 className="text-lg font-semibold">{t("notFoundTitle")}</h1>
         <p className="text-sm text-muted-foreground">{errorMessage ?? t("notFoundDescription")}</p>
         <Button type="button" onClick={() => router.refresh()}>
           {t("retry")}
@@ -946,8 +949,10 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
             <LanguageSwitcher
               compact={isCompactHeader}
               className="shrink-0 rounded-md bg-background/70"
-              activeButtonClassName="text-white"
-              activeButtonStyle={{ backgroundColor: accentColor, borderColor: accentColor }}
+              activeButtonStyle={{
+                ...accentActionStyle,
+                borderColor: accentColor,
+              }}
               buttonClassName="font-medium"
             />
           </div>
@@ -1005,10 +1010,20 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
         ) : (
           groupedProducts.map((group) => {
             const collapsed = collapsedCategories[group.key] ?? false;
+            const categoryDomKey = encodeURIComponent(group.key);
+            const categoryTriggerId = `catalog-category-trigger-${categoryDomKey}`;
+            const categoryRegionId = `catalog-category-region-${categoryDomKey}`;
             return (
-              <section key={group.key} className="rounded-md border border-border/70 bg-card/70">
+              <section
+                key={group.key}
+                aria-labelledby={categoryTriggerId}
+                className="rounded-md border border-border/70 bg-card/70"
+              >
                 <button
+                  id={categoryTriggerId}
                   type="button"
+                  aria-expanded={!collapsed}
+                  aria-controls={categoryRegionId}
                   className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
                   onClick={() =>
                     setCollapsedCategories((prev) => ({
@@ -1030,13 +1045,18 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
                     />
                   </span>
                 </button>
-                {!collapsed ? (
-                  <div className="grid gap-3 border-t border-border/70 p-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                    {group.products.map((product) =>
-                      renderProductCard(product, priorityProductIds.has(product.id)),
-                    )}
-                  </div>
-                ) : null}
+                <div
+                  id={categoryRegionId}
+                  hidden={collapsed}
+                  className={cn(
+                    "gap-3 border-t border-border/70 p-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4",
+                    collapsed ? "hidden" : "grid",
+                  )}
+                >
+                  {group.products.map((product) =>
+                    renderProductCard(product, priorityProductIds.has(product.id)),
+                  )}
+                </div>
               </section>
             );
           })
@@ -1088,8 +1108,8 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
                 </span>
               </span>
               <span
-                className="inline-flex items-center rounded-md px-3.5 py-2 text-sm font-semibold text-white shadow-sm"
-                style={{ backgroundColor: accentColor }}
+                className="inline-flex items-center rounded-md px-3.5 py-2 text-sm font-semibold shadow-sm"
+                style={accentActionStyle}
               >
                 {t("cartButton", { count: cartItemsCount })}
               </span>
@@ -1140,8 +1160,8 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
             <Button
               type="button"
               onClick={closeCart}
-              className="text-white hover:opacity-95"
-              style={{ backgroundColor: accentColor }}
+              className="hover:shadow-md"
+              style={accentActionStyle}
             >
               {t("successClose")}
             </Button>
@@ -1155,7 +1175,12 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
               <Input
                 id="checkout-name"
                 value={checkoutName}
-                onChange={(event) => setCheckoutName(event.target.value)}
+                aria-invalid={checkoutFieldErrors.name || undefined}
+                aria-describedby={checkoutFieldErrors.name ? checkoutErrorId : undefined}
+                onChange={(event) => {
+                  setCheckoutName(event.target.value);
+                  clearCheckoutFieldError("name");
+                }}
                 placeholder={t("checkoutNamePlaceholder")}
               />
             </div>
@@ -1167,7 +1192,12 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
                 id="checkout-email"
                 type="email"
                 value={checkoutEmail}
-                onChange={(event) => setCheckoutEmail(event.target.value)}
+                aria-invalid={checkoutFieldErrors.email || undefined}
+                aria-describedby={checkoutFieldErrors.email ? checkoutErrorId : undefined}
+                onChange={(event) => {
+                  setCheckoutEmail(event.target.value);
+                  clearCheckoutFieldError("email");
+                }}
                 placeholder={t("checkoutEmailPlaceholder")}
               />
             </div>
@@ -1178,7 +1208,12 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
               <PhoneNumberInput
                 inputId="checkout-phone"
                 value={checkoutPhone}
-                onChange={setCheckoutPhone}
+                onChange={(value) => {
+                  setCheckoutPhone(value);
+                  clearCheckoutFieldError("phone");
+                }}
+                inputAriaInvalid={checkoutFieldErrors.phone || undefined}
+                inputAriaDescribedBy={checkoutFieldErrors.phone ? checkoutErrorId : undefined}
                 placeholder={t("checkoutPhonePlaceholder")}
                 countrySelectLabel={t("checkoutPhoneCountry")}
               />
@@ -1194,7 +1229,17 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
                 placeholder={t("checkoutCommentPlaceholder")}
               />
             </div>
-            {submitError ? <p className="text-sm text-danger">{submitError}</p> : null}
+            {submitError ? (
+              <p
+                id={checkoutErrorId}
+                role="alert"
+                aria-live="assertive"
+                aria-atomic="true"
+                className="text-sm text-danger"
+              >
+                {submitError}
+              </p>
+            ) : null}
             <div className="flex items-center justify-between gap-2">
               <Button
                 type="button"
@@ -1208,8 +1253,8 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
                 type="button"
                 onClick={submitCheckout}
                 disabled={submitting}
-                className="text-white hover:opacity-95"
-                style={{ backgroundColor: accentColor }}
+                className="hover:shadow-md"
+                style={accentActionStyle}
               >
                 {submitting ? <Spinner className="h-4 w-4" /> : null}
                 {t("checkoutSubmit")}
@@ -1281,10 +1326,10 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
                           <Button
                             type="button"
                             size="icon"
-                            className="h-10 w-10 shrink-0 text-white hover:opacity-95"
+                            className="h-10 w-10 shrink-0 hover:shadow-md"
                             aria-label={t("qtyIncrease", { product: item.product.name })}
                             onClick={() => adjustLineQty(item.lineKey, 1)}
-                            style={{ backgroundColor: accentColor }}
+                            style={accentActionStyle}
                           >
                             <AddIcon className="h-4 w-4" aria-hidden />
                           </Button>
@@ -1305,9 +1350,9 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
                   </div>
                   <Button
                     type="button"
-                    className="mt-3 w-full text-white hover:opacity-95"
+                    className="mt-3 w-full hover:shadow-md"
                     onClick={() => setCheckoutStep("form")}
-                    style={{ backgroundColor: accentColor }}
+                    style={accentActionStyle}
                   >
                     {t("checkoutOpen")}
                   </Button>
@@ -1321,10 +1366,10 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
       <div className="mt-10 text-center">
         <Link
           href="/"
+          aria-label={t("poweredBy")}
           className="inline-flex items-center justify-center rounded-md px-2 py-1 hover:opacity-90"
         >
-          <img src="/brand/logo.png" alt={t("poweredBy")} className="h-7 w-auto" />
-          <span className="sr-only">{t("poweredBy")}</span>
+          <img src="/brand/logo.png" alt="" className="h-7 w-auto" />
         </Link>
       </div>
     </div>

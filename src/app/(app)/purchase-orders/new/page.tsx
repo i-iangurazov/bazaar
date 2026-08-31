@@ -44,14 +44,15 @@ import { Spinner } from "@/components/ui/spinner";
 import { AddIcon, DeleteIcon, EditIcon, EmptyIcon, UploadIcon } from "@/components/icons";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { RowActions } from "@/components/row-actions";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatStoreMoney } from "@/lib/currencyDisplay";
 import { formatNumber } from "@/lib/i18nFormat";
+import {
+  calculatePurchaseOrderLineTotal,
+  normalizePurchaseOrderUnitCost,
+  PURCHASE_ORDER_MAX_QUANTITY,
+  PURCHASE_ORDER_MAX_UNIT_COST,
+} from "@/lib/purchaseOrderMoney";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { useToast } from "@/components/ui/toast";
@@ -77,12 +78,20 @@ const NewPurchaseOrderPage = () => {
   const lineSchema = useMemo(() => {
     const optionalCost = z.preprocess(
       (value) => (value === "" || value === null ? undefined : value),
-      z.coerce.number().min(0, t("unitCostNonNegative")).optional(),
+      z.coerce
+        .number()
+        .min(0, t("unitCostNonNegative"))
+        .max(PURCHASE_ORDER_MAX_UNIT_COST, t("unitCostTooLarge"))
+        .optional(),
     );
     return z.object({
       productId: z.string().min(1, t("productRequired")),
       variantId: z.string().optional().nullable(),
-      qtyOrdered: z.coerce.number().int().positive(t("qtyPositive")),
+      qtyOrdered: z.coerce
+        .number()
+        .int(t("qtyWholeNumber"))
+        .positive(t("qtyPositive"))
+        .max(PURCHASE_ORDER_MAX_QUANTITY, t("qtyTooLarge")),
       unitSelection: z.string().min(1, t("unitRequired")),
       unitCost: optionalCost,
     });
@@ -111,7 +120,20 @@ const NewPurchaseOrderPage = () => {
     control: form.control,
     name: "lines",
   });
+  const hasUnsavedChanges = form.formState.isDirty || fields.length > 0;
   const storeId = form.watch("storeId");
+
+  useEffect(() => {
+    if (!hasUnsavedChanges) {
+      return;
+    }
+    const preventUnsavedRefresh = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", preventUnsavedRefresh);
+    return () => window.removeEventListener("beforeunload", preventUnsavedRefresh);
+  }, [hasUnsavedChanges]);
 
   const [lineDialogOpen, setLineDialogOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -159,7 +181,9 @@ const NewPurchaseOrderPage = () => {
 
   const productSearchQuery = trpc.products.searchQuick.useQuery(
     { q: lineSearch, storeId: storeId || undefined },
-    { enabled: !isForbidden && Boolean(storeId) && lineDialogOpen && lineSearch.trim().length >= 1 },
+    {
+      enabled: !isForbidden && Boolean(storeId) && lineDialogOpen && lineSearch.trim().length >= 1,
+    },
   );
   const lineProductQuery = trpc.products.getById.useQuery(
     { productId: lineProductId },
@@ -224,11 +248,7 @@ const NewPurchaseOrderPage = () => {
   };
 
   const resolveBasePreview = useCallback(
-    (
-      product: ProductCacheEntry | null | undefined,
-      selection: string,
-      qty: number,
-    ) => {
+    (product: ProductCacheEntry | null | undefined, selection: string, qty: number) => {
       if (!product || !Number.isFinite(qty)) {
         return null;
       }
@@ -258,10 +278,7 @@ const NewPurchaseOrderPage = () => {
     variantId: line.variantId ?? undefined,
     qtyOrdered: line.qtyOrdered,
     unitCost: line.unitCost ?? undefined,
-    unitId:
-      line.unitSelection === "BASE"
-        ? productCache[line.productId]?.baseUnit?.id
-        : undefined,
+    unitId: line.unitSelection === "BASE" ? productCache[line.productId]?.baseUnit?.id : undefined,
     packId: line.unitSelection !== "BASE" ? line.unitSelection : undefined,
   });
 
@@ -338,7 +355,9 @@ const NewPurchaseOrderPage = () => {
       unitCost: line.unitCost ?? undefined,
     });
     setLineSearch(product?.name ?? "");
-    setSelectedProduct(product ? { id: line.productId, name: product.name, sku: product.sku } : null);
+    setSelectedProduct(
+      product ? { id: line.productId, name: product.name, sku: product.sku } : null,
+    );
     setShowResults(false);
     setLineDialogOpen(true);
   };
@@ -375,9 +394,19 @@ const NewPurchaseOrderPage = () => {
   const hasCost = lines.some((line) => line.unitCost !== undefined && line.unitCost !== null);
 
   const totals = useMemo(() => {
-    const lineTotals = lines.map((line) => (line.unitCost ?? 0) * resolveLineBaseQty(line));
+    const lineTotals = lines.map((line) =>
+      calculatePurchaseOrderLineTotal(resolveLineBaseQty(line), line.unitCost ?? 0),
+    );
     return lineTotals.reduce((sum, total) => sum + total, 0);
   }, [lines, resolveLineBaseQty]);
+
+  const cancelPurchaseOrderDraft = () => {
+    if (hasUnsavedChanges && !window.confirm(tCommon("unsavedChangesConfirm"))) {
+      return;
+    }
+    form.reset();
+    router.push("/purchase-orders");
+  };
 
   if (isForbidden) {
     return (
@@ -493,8 +522,8 @@ const NewPurchaseOrderPage = () => {
                           const unitLabel =
                             line.unitSelection === "BASE"
                               ? baseUnitLabel
-                              : product?.packs?.find((pack) => pack.id === line.unitSelection)?.packName ??
-                                baseUnitLabel;
+                              : (product?.packs?.find((pack) => pack.id === line.unitSelection)
+                                  ?.packName ?? baseUnitLabel);
                           const baseQty = resolveBasePreview(
                             product,
                             line.unitSelection,
@@ -509,7 +538,7 @@ const NewPurchaseOrderPage = () => {
                               <TableCell className="font-medium">
                                 {product?.name ?? tCommon("notAvailable")}
                               </TableCell>
-                              <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">
+                              <TableCell className="hidden text-xs text-muted-foreground sm:table-cell">
                                 {variantLabel}
                               </TableCell>
                               <TableCell>
@@ -567,7 +596,12 @@ const NewPurchaseOrderPage = () => {
                                         className="text-danger shadow-none hover:text-danger"
                                         aria-label={t("removeLine")}
                                         onClick={async () => {
-                                          if (!(await confirm({ description: t("confirmRemoveLine"), confirmVariant: "danger" }))) {
+                                          if (
+                                            !(await confirm({
+                                              description: t("confirmRemoveLine"),
+                                              confirmVariant: "danger",
+                                            }))
+                                          ) {
                                             return;
                                           }
                                           remove(absoluteIndex);
@@ -598,8 +632,8 @@ const NewPurchaseOrderPage = () => {
                 const unitLabel =
                   line.unitSelection === "BASE"
                     ? baseUnitLabel
-                    : product?.packs?.find((pack) => pack.id === line.unitSelection)?.packName ??
-                      baseUnitLabel;
+                    : (product?.packs?.find((pack) => pack.id === line.unitSelection)?.packName ??
+                      baseUnitLabel);
                 const baseQty = resolveBasePreview(product, line.unitSelection, line.qtyOrdered);
                 const variantLabel =
                   line.variantId && variantCache[line.variantId]
@@ -637,7 +671,9 @@ const NewPurchaseOrderPage = () => {
                         </p>
                         <p className="text-xs text-muted-foreground">
                           {t("lineTotal")}{" "}
-                          {lineTotal === null ? tCommon("notAvailable") : formatStoreMoney(lineTotal, locale, selectedStore)}
+                          {lineTotal === null
+                            ? tCommon("notAvailable")
+                            : formatStoreMoney(lineTotal, locale, selectedStore)}
                         </p>
                       </div>
                       <RowActions
@@ -654,7 +690,12 @@ const NewPurchaseOrderPage = () => {
                             icon: DeleteIcon,
                             variant: "danger",
                             onSelect: async () => {
-                              if (!(await confirm({ description: t("confirmRemoveLine"), confirmVariant: "danger" }))) {
+                              if (
+                                !(await confirm({
+                                  description: t("confirmRemoveLine"),
+                                  confirmVariant: "danger",
+                                }))
+                              ) {
                                 return;
                               }
                               remove(index);
@@ -686,6 +727,15 @@ const NewPurchaseOrderPage = () => {
             </div>
 
             <FormActions className="mt-6">
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full sm:w-auto"
+                onClick={cancelPurchaseOrderDraft}
+                disabled={createMutation.isLoading}
+              >
+                {tCommon("cancel")}
+              </Button>
               <Button
                 type="button"
                 variant="secondary"
@@ -734,6 +784,7 @@ const NewPurchaseOrderPage = () => {
         <Form {...lineForm}>
           <form
             className="space-y-4"
+            noValidate
             onSubmit={lineForm.handleSubmit((values) => {
               const key = `${values.productId}:${values.variantId ?? "BASE"}`;
               const hasDuplicate = lines.some((line, index) => {
@@ -752,7 +803,7 @@ const NewPurchaseOrderPage = () => {
                   variantId: values.variantId ?? null,
                   qtyOrdered: values.qtyOrdered,
                   unitSelection: values.unitSelection,
-                  unitCost: values.unitCost ?? undefined,
+                  unitCost: normalizePurchaseOrderUnitCost(values.unitCost) ?? undefined,
                 });
               } else {
                 update(editingIndex, {
@@ -760,7 +811,7 @@ const NewPurchaseOrderPage = () => {
                   variantId: values.variantId ?? null,
                   qtyOrdered: values.qtyOrdered,
                   unitSelection: values.unitSelection,
-                  unitCost: values.unitCost ?? undefined,
+                  unitCost: normalizePurchaseOrderUnitCost(values.unitCost) ?? undefined,
                 });
               }
               const productEntry = selectedProduct
@@ -816,20 +867,20 @@ const NewPurchaseOrderPage = () => {
                               </div>
                             ) : productSearchQuery.data?.length ? (
                               productSearchQuery.data.map((product) => (
-                              <ProductSearchResultItem
-                                key={product.id}
-                                product={product}
-                                currencySource={selectedStore}
-                                onMouseDown={(event) => event.preventDefault()}
-                                onPointerDown={(event) => event.preventDefault()}
-                                onClick={() => {
-                                  applySelectedProduct({
-                                    id: product.id,
-                                    name: product.name,
-                                    sku: product.sku,
-                                  });
-                                }}
-                              />
+                                <ProductSearchResultItem
+                                  key={product.id}
+                                  product={product}
+                                  currencySource={selectedStore}
+                                  onMouseDown={(event) => event.preventDefault()}
+                                  onPointerDown={(event) => event.preventDefault()}
+                                  onClick={() => {
+                                    applySelectedProduct({
+                                      id: product.id,
+                                      name: product.name,
+                                      sku: product.sku,
+                                    });
+                                  }}
+                                />
                               ))
                             ) : (
                               <div className="px-3 py-3 text-sm text-muted-foreground">
@@ -840,7 +891,9 @@ const NewPurchaseOrderPage = () => {
                         </div>
                       ) : null}
                     </div>
-                    {editingIndex === null ? <FormDescription>{t("productSearchHint")}</FormDescription> : null}
+                    {editingIndex === null ? (
+                      <FormDescription>{t("productSearchHint")}</FormDescription>
+                    ) : null}
                     <FormMessage />
                   </FormItem>
                 )}
@@ -888,6 +941,9 @@ const NewPurchaseOrderPage = () => {
                         ref={qtyInputRef}
                         type="number"
                         inputMode="numeric"
+                        min={1}
+                        max={PURCHASE_ORDER_MAX_QUANTITY}
+                        step={1}
                         placeholder={t("qtyPlaceholder")}
                       />
                     </FormControl>
@@ -954,7 +1010,9 @@ const NewPurchaseOrderPage = () => {
                         {...field}
                         type="number"
                         inputMode="decimal"
-                        step="0.01"
+                        min={0}
+                        max={PURCHASE_ORDER_MAX_UNIT_COST}
+                        step="any"
                         placeholder={t("unitCostPlaceholder")}
                       />
                     </FormControl>

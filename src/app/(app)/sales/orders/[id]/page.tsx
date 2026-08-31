@@ -8,6 +8,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 import Image from "next/image";
 
+import { DynamicResourceTerminalState } from "@/components/dynamic-resource-terminal-state";
 import { FormGrid } from "@/components/form-layout";
 import {
   AddIcon,
@@ -55,6 +56,7 @@ import {
 } from "@/lib/customerContact";
 import { formatDate } from "@/lib/i18nFormat";
 import { getCustomerOrderStatusLabel } from "@/lib/i18n/status";
+import { normalizeDynamicRouteId } from "@/lib/dynamicRouteId";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import type { ScanResolvedResult } from "@/lib/scanning/scanRouter";
@@ -119,7 +121,7 @@ const ProductImageThumb = ({ imageUrl, name }: { imageUrl?: string | null; name:
 const SalesOrderDetailPage = () => {
   const params = useParams();
   const searchParams = useSearchParams();
-  const customerOrderId = String(params?.id ?? "");
+  const customerOrderId = normalizeDynamicRouteId(params?.id) ?? "";
   const requestedReturnTo = searchParams.get("returnTo");
   const returnTo =
     requestedReturnTo === "/sales/orders" || requestedReturnTo?.startsWith("/sales/orders?")
@@ -145,7 +147,7 @@ const SalesOrderDetailPage = () => {
 
   const orderQuery = trpc.salesOrders.getById.useQuery(
     { customerOrderId },
-    { enabled: Boolean(customerOrderId) },
+    { enabled: Boolean(customerOrderId), retry: false },
   );
   const orderStore = orderQuery.data?.store ?? null;
   const orderCurrencySource = currencySourceWithFallback(orderQuery.data, orderStore);
@@ -584,8 +586,10 @@ const SalesOrderDetailPage = () => {
 
   const lineActionsDisabled =
     addLineMutation.isLoading || updateLineMutation.isLoading || removeLineMutation.isLoading;
+  const isCanceled = order?.status === CustomerOrderStatus.CANCELED;
   const trackingActionsDisabled =
     !canFinalize ||
+    isCanceled ||
     saveTrackingMutation.isLoading ||
     saveTrackingBeforeSendMutation.isLoading ||
     sendEmailMutation.isLoading;
@@ -629,13 +633,38 @@ const SalesOrderDetailPage = () => {
     return true;
   };
 
-  const loading = orderQuery.isLoading;
-  const error = orderQuery.error ? translateError(tErrors, orderQuery.error) : null;
-
   const currentLine = useMemo(
     () => lines.find((line) => line.id === editingLineId) ?? null,
     [editingLineId, lines],
   );
+
+  if (!customerOrderId) {
+    return <DynamicResourceTerminalState title={t("detailsTitle")} message={t("notFound")} />;
+  }
+
+  if (orderQuery.isLoading) {
+    return (
+      <div>
+        <PageHeader title={t("detailsTitle")} subtitle={tCommon("loading")} />
+        <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+          <Spinner className="h-4 w-4" />
+          {tCommon("loading")}
+        </div>
+      </div>
+    );
+  }
+
+  if (orderQuery.error) {
+    const message =
+      orderQuery.error.data?.code === "NOT_FOUND"
+        ? t("notFound")
+        : translateError(tErrors, orderQuery.error);
+    return <DynamicResourceTerminalState title={t("detailsTitle")} message={message} />;
+  }
+
+  if (!order) {
+    return <DynamicResourceTerminalState title={t("detailsTitle")} message={t("notFound")} />;
+  }
 
   const headerActions = (
     <div className="flex flex-wrap items-center gap-2">
@@ -704,19 +733,6 @@ const SalesOrderDetailPage = () => {
         subtitle={t("detailsSubtitle")}
         action={headerActions}
       />
-
-      {loading ? (
-        <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
-          <Spinner className="h-4 w-4" />
-          {tCommon("loading")}
-        </div>
-      ) : null}
-
-      {error ? <p className="mt-4 text-sm text-danger">{error}</p> : null}
-
-      {!loading && !error && !order ? (
-        <p className="mt-4 text-sm text-danger">{t("notFound")}</p>
-      ) : null}
 
       {order ? (
         <div className="space-y-6">
@@ -953,7 +969,7 @@ const SalesOrderDetailPage = () => {
                   <Button
                     variant="secondary"
                     onClick={() => void handleSendEmail(CustomerOrderEmailType.CONFIRMATION)}
-                    disabled={sendEmailMutation.isLoading}
+                    disabled={isCanceled || sendEmailMutation.isLoading}
                   >
                     {sendEmailMutation.isLoading ? (
                       <Spinner className="h-4 w-4" />

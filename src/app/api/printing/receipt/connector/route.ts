@@ -53,7 +53,8 @@ const createTranslator = (messages: MessageTree | undefined, namespace?: string)
 };
 
 export const POST = async (request: Request) => {
-  const localeCookie = cookies().get("NEXT_LOCALE")?.value;
+  const cookieStore = await cookies();
+  const localeCookie = cookieStore.get("NEXT_LOCALE")?.value;
   const locale = normalizeLocale(localeCookie) ?? defaultLocale;
 
   let messages: MessageTree | undefined;

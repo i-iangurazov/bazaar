@@ -37,7 +37,7 @@ type ColumnMeta = {
 
 export type DataTablePaginationLabels = {
   items: (from: number, to: number, total: number) => React.ReactNode;
-  rowsPerPage: React.ReactNode;
+  rowsPerPage: string;
   page: (page: number, totalPages: number) => React.ReactNode;
   previous: string;
   next: string;
@@ -112,7 +112,7 @@ export const DataTable = <TData, TValue>({
       : data.length;
 
   return (
-    <div className={cn("min-w-0", className)} data-component="data-table">
+    <div className={cn("min-w-0 [contain:layout]", className)} data-component="data-table">
       <div className="w-full overflow-x-auto rounded-xl border border-border/65 bg-card/95 shadow-[0_14px_36px_rgba(15,23,42,0.045)] ring-1 ring-foreground/[0.012] dark:shadow-none">
         <table className={cn("w-full caption-bottom text-sm", tableClassName)}>
           <thead
@@ -189,7 +189,10 @@ export const DataTable = <TData, TValue>({
           <tbody>
             {isLoading && !rows.length ? (
               Array.from({ length: 5 }).map((_, rowIndex) => (
-                <tr key={`loading-${rowIndex}`} className="border-b border-border/55 last:border-b-0">
+                <tr
+                  key={`loading-${rowIndex}`}
+                  className="border-b border-border/55 last:border-b-0"
+                >
                   {table.getAllLeafColumns().map((column) => {
                     const meta = getColumnMeta(column);
                     return (
@@ -263,7 +266,7 @@ export const DataTable = <TData, TValue>({
                     pagination.onPageSizeChange(parsed);
                   }}
                 >
-                  <SelectTrigger className="h-10 sm:h-8">
+                  <SelectTrigger className="h-10 sm:h-8" aria-label={pagination.labels.rowsPerPage}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>

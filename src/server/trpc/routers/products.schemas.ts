@@ -204,6 +204,7 @@ export const createProductInputSchema = z.object({
 
 export const updateProductInputSchema = z.object({
   productId: z.string(),
+  expectedUpdatedAt: z.coerce.date(),
   storeId: z.string().optional(),
   sku: z.string().min(2),
   name: z.string().min(2),

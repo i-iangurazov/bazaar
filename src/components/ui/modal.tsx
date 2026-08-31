@@ -1,7 +1,7 @@
 "use client";
 
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import React, { useId, useRef } from "react";
+import React, { useRef } from "react";
 import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
@@ -34,7 +34,6 @@ export const Modal = ({
   animated?: boolean;
 }) => {
   const tCommon = useTranslations("common");
-  const subtitleId = useId();
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
 
   const content = (
@@ -47,7 +46,7 @@ export const Modal = ({
         )}
       />
       <DialogPrimitive.Content
-        aria-describedby={subtitle ? subtitleId : undefined}
+        {...(!subtitle ? { "aria-describedby": undefined } : {})}
         onOpenAutoFocus={() => {
           previouslyFocusedRef.current =
             document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -86,10 +85,7 @@ export const Modal = ({
               {title}
             </DialogPrimitive.Title>
             {subtitle ? (
-              <DialogPrimitive.Description
-                id={subtitleId}
-                className="text-sm text-muted-foreground"
-              >
+              <DialogPrimitive.Description className="text-sm text-muted-foreground">
                 {subtitle}
               </DialogPrimitive.Description>
             ) : null}

@@ -3,14 +3,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { prisma } from "@/server/db/prisma";
 import { createBazaarApiOrder, listBazaarApiProducts } from "@/server/services/bazaarApi";
-import {
-  applyCatalogDiscount,
-  removeCatalogDiscount,
-} from "@/server/services/catalogDiscounts";
-import {
-  addCustomerOrderLine,
-  createCustomerOrderDraft,
-} from "@/server/services/salesOrders";
+import { applyCatalogDiscount, removeCatalogDiscount } from "@/server/services/catalogDiscounts";
+import { addCustomerOrderLine, createCustomerOrderDraft } from "@/server/services/salesOrders";
 
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 
@@ -209,15 +203,16 @@ describeDb("store/variant catalog discounts", () => {
       appliedDiscountPercentage: new Prisma.Decimal(20),
       appliedDiscountAmountKgs: new Prisma.Decimal(300),
     });
-    const emptyManualOrder = await createCustomerOrderDraft({
+    const seededManualOrder = await createCustomerOrderDraft({
       organizationId: org.id,
       storeId: store.id,
       actorId: adminUser.id,
-      requestId: "discount-empty-manual-order",
+      requestId: "discount-seeded-manual-order",
+      lines: [{ productId: product.id, qty: 1 }],
     });
     const addedManualLine = await addCustomerOrderLine({
       organizationId: org.id,
-      customerOrderId: emptyManualOrder.id,
+      customerOrderId: seededManualOrder.id,
       productId: product.id,
       variantId: variant.id,
       qty: 1,

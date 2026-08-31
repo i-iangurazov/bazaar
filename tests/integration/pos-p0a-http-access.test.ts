@@ -139,7 +139,7 @@ describeDb("Agent 1 POS receipt HTTP store authorization", () => {
 
     const restrictedPdf = await receiptPdfGet(
       new Request(`http://localhost/api/pos/receipts/${restrictedSale.id}/pdf`),
-      { params: { id: restrictedSale.id } },
+      { params: Promise.resolve({ id: restrictedSale.id }) },
     );
     const restrictedConnector = await receiptConnectorPost(
       new Request("http://localhost/api/printing/receipt/connector", {
@@ -149,7 +149,7 @@ describeDb("Agent 1 POS receipt HTTP store authorization", () => {
     );
     const foreignPdf = await receiptPdfGet(
       new Request(`http://localhost/api/pos/receipts/${foreignSale.id}/pdf`),
-      { params: { id: foreignSale.id } },
+      { params: Promise.resolve({ id: foreignSale.id }) },
     );
     const foreignConnector = await receiptConnectorPost(
       new Request("http://localhost/api/printing/receipt/connector", {
@@ -170,7 +170,7 @@ describeDb("Agent 1 POS receipt HTTP store authorization", () => {
 
     const assignedPdf = await receiptPdfGet(
       new Request(`http://localhost/api/pos/receipts/${assignedSale.id}/pdf`),
-      { params: { id: assignedSale.id } },
+      { params: Promise.resolve({ id: assignedSale.id }) },
     );
     const assignedConnector = await receiptConnectorPost(
       new Request("http://localhost/api/printing/receipt/connector", {

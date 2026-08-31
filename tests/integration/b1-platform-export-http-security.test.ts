@@ -48,7 +48,7 @@ describeDb("B1 platform export HTTP authorization", () => {
       role: cashierUser.role,
     });
     const denied = await GET(new Request("http://localhost/api/exports/denied"), {
-      params: { id: exportJob.id },
+      params: Promise.resolve({ id: exportJob.id }),
     });
     expect(denied.status).toBe(403);
 
@@ -58,7 +58,7 @@ describeDb("B1 platform export HTTP authorization", () => {
       role: "MANAGER",
     });
     const crossOrg = await GET(new Request("http://localhost/api/exports/cross-org"), {
-      params: { id: exportJob.id },
+      params: Promise.resolve({ id: exportJob.id }),
     });
     expect(crossOrg.status).toBe(404);
 
@@ -72,7 +72,7 @@ describeDb("B1 platform export HTTP authorization", () => {
       role: managerUser.role,
     });
     const allowed = await GET(new Request("http://localhost/api/exports/allowed"), {
-      params: { id: exportJob.id },
+      params: Promise.resolve({ id: exportJob.id }),
     });
     expect(allowed.status).toBe(200);
     expect(allowed.headers.get("content-disposition")).toContain("receipts-registry-");

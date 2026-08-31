@@ -1,12 +1,29 @@
 import { isCompleteInternationalPhone } from "@/lib/phoneCountries";
 
 export const CUSTOMER_PHONE_MAX_LENGTH = 64;
+export const CUSTOMER_EMAIL_MAX_LENGTH = 254;
 export const CUSTOMER_ADDRESS_MIN_LENGTH = 2;
-export const CUSTOMER_ADDRESS_MAX_LENGTH = 512;
+export const CUSTOMER_ADDRESS_MAX_LENGTH = 500;
+
+const customerEmailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const trimToNull = (value?: string | null) => {
   const normalized = value?.trim();
   return normalized ? normalized : null;
+};
+
+export const normalizeCustomerContactEmail = (value?: string | null) => {
+  const normalized = trimToNull(value)?.toLowerCase() ?? null;
+  return normalized &&
+    normalized.length <= CUSTOMER_EMAIL_MAX_LENGTH &&
+    customerEmailPattern.test(normalized)
+    ? normalized
+    : null;
+};
+
+export const isValidOptionalCustomerEmail = (value?: string | null) => {
+  const normalized = trimToNull(value);
+  return !normalized || normalizeCustomerContactEmail(normalized) !== null;
 };
 
 export const normalizeCustomerContactPhone = (value?: string | null) => {

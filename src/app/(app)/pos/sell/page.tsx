@@ -4795,6 +4795,7 @@ const PosSellPage = () => {
         </Button>
 
         <div className="flex min-h-16 flex-1 items-center gap-3 bg-card px-4">
+          <h1 className="shrink-0 text-base font-semibold text-foreground">{t("sell.title")}</h1>
           <SearchIcon className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
           <ScanInput
             ref={lineSearchInputRef}
@@ -4809,7 +4810,7 @@ const PosSellPage = () => {
             showDropdown={false}
             disabled={!hasOpenShift}
             className="w-full"
-            inputClassName="h-12 border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-0"
+            inputClassName="h-12 border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background"
           />
         </div>
 
@@ -5468,7 +5469,7 @@ const PosSellPage = () => {
                                         }
                                         onFocus={(event) => event.currentTarget.select()}
                                         onBlur={() => handleQtyBlur(line)}
-                                        className="h-8 w-11 rounded-md border-y-0 px-1 text-center text-sm shadow-none focus-visible:ring-0"
+                                        className="h-8 w-11 rounded-md border-y-0 px-1 text-center text-sm shadow-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background"
                                         inputMode="numeric"
                                         disabled={
                                           cancelDraftMutation.isLoading ||
@@ -6641,7 +6642,7 @@ const PosSellPage = () => {
                 }
               }}
               placeholder={t("sell.mobile.commentPlaceholder")}
-              className="min-w-0 flex-1 border-0 bg-transparent text-[15px] text-foreground shadow-none outline-none ring-0 placeholder:text-muted-foreground focus:outline-none focus:ring-0 focus-visible:ring-0"
+              className="min-w-0 flex-1 border-0 bg-transparent text-[15px] text-foreground shadow-none outline-none ring-0 placeholder:text-muted-foreground focus:outline-none focus:ring-0 focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background"
             />
           </label>
         </section>
@@ -6668,7 +6669,6 @@ const PosSellPage = () => {
                 type="button"
                 className="min-h-[48px] w-full rounded-[12px] bg-primary px-3 text-[15px] font-semibold text-primary-foreground shadow-[0_12px_28px_rgba(64,156,255,0.24)]"
                 onClick={() => setMobileSaleTab("payment")}
-                aria-label={t("sell.openCart")}
               >
                 {t("sell.mobile.goToPayment")}
               </button>
@@ -6847,7 +6847,10 @@ const PosSellPage = () => {
                               )
                             }
                           >
-                            <SelectTrigger className="h-11 border-border bg-card text-foreground">
+                            <SelectTrigger
+                              className="h-11 border-border bg-card text-foreground"
+                              aria-label={t("sell.paymentMethod")}
+                            >
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -7003,7 +7006,7 @@ const PosSellPage = () => {
                 showDropdown={false}
                 disabled={!hasOpenShift}
                 className="min-w-0 flex-1"
-                inputClassName="h-10 border-0 bg-transparent px-0 text-[15px] text-foreground shadow-none placeholder:text-muted-foreground focus-visible:ring-0"
+                inputClassName="h-10 border-0 bg-transparent px-0 text-[15px] text-foreground shadow-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background"
               />
             </div>
 
@@ -7195,7 +7198,7 @@ const PosSellPage = () => {
                   showDropdown={false}
                   disabled={!hasOpenShift}
                   className="w-full"
-                  inputClassName="h-10 border-0 bg-transparent px-0 text-center text-[14px] text-foreground shadow-none placeholder:text-muted-foreground focus-visible:ring-0"
+                  inputClassName="h-10 border-0 bg-transparent px-0 text-center text-[14px] text-foreground shadow-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background"
                 />
               </div>
             </section>
@@ -7568,7 +7571,7 @@ const PosSellPage = () => {
               showDropdown={false}
               disabled={!hasOpenShift}
               className="min-w-0 flex-1"
-              inputClassName="h-11 border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-0"
+              inputClassName="h-11 border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background"
             />
           </div>
         </header>
@@ -8087,7 +8090,7 @@ const PosSellPage = () => {
                                         }
                                         onFocus={(event) => event.currentTarget.select()}
                                         onBlur={() => handleQtyBlur(line)}
-                                        className="h-11 w-11 rounded-md border-y-0 px-1 text-center shadow-none focus-visible:ring-0"
+                                        className="h-11 w-11 rounded-md border-y-0 px-1 text-center shadow-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background"
                                         inputMode="numeric"
                                         disabled={
                                           cancelDraftMutation.isLoading ||

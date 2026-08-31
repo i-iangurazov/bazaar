@@ -500,7 +500,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
       toast({ variant: "success", description: tSupport("impersonationEnded") });
       router.push("/dashboard");
       router.refresh();
-    } catch (error) {
+    } catch {
       toast({ variant: "error", description: tErrors("unexpectedError") });
     }
   };
@@ -698,6 +698,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                                       prefetch={false}
                                       onClick={onNavigate}
                                       data-tour={`nav-${child.key}`}
+                                      aria-current={isChildActive ? "page" : undefined}
                                       className="min-h-9 rounded-lg text-[13px] [&>svg]:h-[18px] [&>svg]:w-[18px]"
                                     >
                                       <child.icon aria-hidden />
@@ -722,6 +723,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                             prefetch={false}
                             onClick={onNavigate}
                             data-tour={`nav-${item.key}`}
+                            aria-current={isActive ? "page" : undefined}
                           >
                             <item.icon aria-hidden />
                             <span>{tNav(item.key)}</span>
@@ -1010,6 +1012,34 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
     return tNav("brand");
   }, [normalizedPath, tBreadcrumbs, tNav]);
 
+  useEffect(() => {
+    const appName = tNav("brand");
+    const updateDocumentTitle = () => {
+      const headings = Array.from(document.querySelectorAll("h1"));
+      const heading =
+        headings.find((candidate) => {
+          const style = window.getComputedStyle(candidate);
+          return (
+            style.display !== "none" &&
+            style.visibility !== "hidden" &&
+            candidate.getClientRects().length > 0
+          );
+        }) ?? headings[0];
+      const headingText = heading?.innerText.replace(/\s+/g, " ").trim();
+      if (!headingText) return;
+      const nextTitle = [headingText, appName].join(" | ");
+      if (document.title !== nextTitle) {
+        document.title = nextTitle;
+      }
+    };
+
+    updateDocumentTitle();
+    const observer = new MutationObserver(updateDocumentTitle);
+    observer.observe(document.head, { childList: true, subtree: true, characterData: true });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    return () => observer.disconnect();
+  }, [normalizedPath, tNav]);
+
   const mobileStoreName = storesQuery.data?.[0]?.name ?? null;
 
   if (normalizedPath === "/pos/sell") {
@@ -1123,7 +1153,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
           </Sidebar>
 
           <SidebarInset className="bg-transparent">
-            <main className="min-w-0 flex-1 px-4 py-5 sm:px-6 lg:px-10 lg:py-7">
+            <main className="w-full min-w-0 max-w-full flex-1 px-4 py-5 sm:px-6 lg:px-10 lg:py-7">
               <MobilePageContainer>
                 <div className="mx-auto max-w-[1500px]">
                   <div className="mb-6 hidden flex-col gap-3 rounded-xl border border-border/65 bg-card/95 p-3 shadow-[0_14px_34px_rgba(15,23,42,0.055)] ring-1 ring-foreground/[0.015] backdrop-blur-xl dark:shadow-none sm:flex-row sm:items-center sm:justify-between md:flex">

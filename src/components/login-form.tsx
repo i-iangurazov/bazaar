@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { getSession, signIn } from "next-auth/react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
@@ -30,6 +30,7 @@ export const LoginForm = () => {
   const tCommon = useTranslations("common");
   const router = useRouter();
   const searchParams = useSearchParams();
+  const submitInFlightRef = useRef(false);
 
   const normalizeNext = (next: string | null) => {
     if (!next || !next.startsWith("/")) {
@@ -45,10 +46,7 @@ export const LoginForm = () => {
   };
 
   const schema = z.object({
-    email: z
-      .string()
-      .min(1, t("emailRequired"))
-      .email(t("emailInvalid")),
+    email: z.string().min(1, t("emailRequired")).email(t("emailInvalid")),
     password: z.string().min(1, t("passwordRequired")),
   });
 
@@ -62,49 +60,59 @@ export const LoginForm = () => {
   });
 
   const handleSubmit = async (values: z.infer<typeof schema>) => {
+    if (submitInFlightRef.current) return;
+    submitInFlightRef.current = true;
     setIsLoading(true);
     setError(null);
+    let keepLockedForNavigation = false;
 
-    const result = await signIn("credentials", {
-      email: values.email,
-      password: values.password,
-      redirect: false,
-    });
+    try {
+      const result = await signIn("credentials", {
+        email: values.email,
+        password: values.password,
+        redirect: false,
+      });
 
-    setIsLoading(false);
-
-    if (result?.error) {
-      if (result.error === "loginRateLimited") {
-        setError("loginRateLimited");
-      } else if (result.error === "loginLocked") {
-        setError("loginLocked");
-      } else if (result.error === "loginBackoff") {
-        setError("loginBackoff");
-      } else if (result.error === "emailNotVerified") {
-        setError("emailNotVerified");
-      } else if (result.error === "registrationNotCompleted") {
-        setError("registrationNotCompleted");
-      } else {
-        setError("invalidCredentials");
+      if (result?.error) {
+        if (result.error === "loginRateLimited") {
+          setError("loginRateLimited");
+        } else if (result.error === "loginLocked") {
+          setError("loginLocked");
+        } else if (result.error === "loginBackoff") {
+          setError("loginBackoff");
+        } else if (result.error === "emailNotVerified") {
+          setError("emailNotVerified");
+        } else if (result.error === "registrationNotCompleted") {
+          setError("registrationNotCompleted");
+        } else {
+          setError("invalidCredentials");
+        }
+        return;
       }
-      return;
-    }
 
-    const next = searchParams.get("next");
-    const normalizedNext = normalizeNext(next);
-    if (normalizedNext) {
-      router.replace(normalizedNext);
-      return;
-    }
+      const next = searchParams.get("next");
+      const normalizedNext = normalizeNext(next);
+      if (normalizedNext) {
+        keepLockedForNavigation = true;
+        router.replace(normalizedNext);
+        return;
+      }
 
-    const session = await getSession();
-    const destination = session?.user?.isPlatformOwner ? "/platform" : "/dashboard";
-    router.replace(destination);
+      const session = await getSession();
+      const destination = session?.user?.isPlatformOwner ? "/platform" : "/dashboard";
+      keepLockedForNavigation = true;
+      router.replace(destination);
+    } finally {
+      if (!keepLockedForNavigation) {
+        submitInFlightRef.current = false;
+        setIsLoading(false);
+      }
+    }
   };
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)}>
+      <form onSubmit={form.handleSubmit(handleSubmit)} noValidate aria-live="polite">
         <FormStack>
           <FormField
             control={form.control}
@@ -143,9 +151,16 @@ export const LoginForm = () => {
               </FormItem>
             )}
           />
-          {error ? <p className="text-sm text-danger">{t(error)}</p> : null}
+          {error ? (
+            <p className="text-sm text-danger" role="alert">
+              {t(error)}
+            </p>
+          ) : null}
           <div className="text-right">
-            <Link href="/reset" className="text-xs font-semibold text-primary hover:text-primary/80">
+            <Link
+              href="/reset"
+              className="text-xs font-semibold text-primary hover:text-primary/90"
+            >
               {t("forgotPassword")}
             </Link>
           </div>

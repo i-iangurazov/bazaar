@@ -1,0 +1,10 @@
+.next/
+.pnpm-store/
+.vercel/
+android/
+ios/
+mobile-shell/
+node_modules/
+pnpm-lock.yaml
+public/uploads/
+tmp/

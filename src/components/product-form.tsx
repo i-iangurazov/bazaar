@@ -1349,7 +1349,10 @@ export const ProductForm = ({
     !readOnly &&
     enableSimilarProductCheck &&
     (compactCreate
-      ? deferredDuplicateDiagnosticsInput.barcodes.length > 0
+      ? Boolean(
+          deferredDuplicateDiagnosticsInput.sku &&
+          deferredDuplicateDiagnosticsInput.sku.length >= 2,
+        ) || deferredDuplicateDiagnosticsInput.barcodes.length > 0
       : Boolean(
           deferredDuplicateDiagnosticsInput.sku &&
           deferredDuplicateDiagnosticsInput.sku.length >= 2,
@@ -1503,11 +1506,9 @@ export const ProductForm = ({
       return;
     }
     if (error) {
-      // eslint-disable-next-line no-console
       console.error(`[product-image] ${step}`, details ?? {}, error);
       return;
     }
-    // eslint-disable-next-line no-console
     console.warn(`[product-image] ${step}`, details ?? {});
   };
 
@@ -4944,7 +4945,7 @@ export const ProductForm = ({
                         disabled={readOnly || !unitOptions.length}
                       >
                         <FormControl>
-                          <SelectTrigger>
+                          <SelectTrigger aria-label={t("unit")}>
                             <SelectValue placeholder={t("unitPlaceholder")} />
                           </SelectTrigger>
                         </FormControl>
@@ -5392,7 +5393,10 @@ export const ProductForm = ({
                                   }
                                   disabled={readOnly}
                                 >
-                                  <SelectTrigger className="h-16 min-w-0 gap-3 whitespace-nowrap px-2 [&>span]:flex [&>span]:min-w-0 [&>span]:items-center [&>span]:gap-3 [&>span]:truncate">
+                                  <SelectTrigger
+                                    aria-label={t("variantImage")}
+                                    className="h-16 min-w-0 gap-3 whitespace-nowrap px-2 [&>span]:flex [&>span]:min-w-0 [&>span]:items-center [&>span]:gap-3 [&>span]:truncate"
+                                  >
                                     <SelectValue placeholder={t("variantImageNone")} />
                                   </SelectTrigger>
                                   <SelectContent className="min-w-[280px]">
@@ -5574,7 +5578,10 @@ export const ProductForm = ({
                                     }
                                     disabled={readOnly}
                                   >
-                                    <SelectTrigger className="h-16 min-w-0 gap-3 whitespace-nowrap px-2 [&>span]:flex [&>span]:min-w-0 [&>span]:items-center [&>span]:gap-3 [&>span]:truncate">
+                                    <SelectTrigger
+                                      aria-label={t("variantTableImage")}
+                                      className="h-16 min-w-0 gap-3 whitespace-nowrap px-2 [&>span]:flex [&>span]:min-w-0 [&>span]:items-center [&>span]:gap-3 [&>span]:truncate"
+                                    >
                                       <SelectValue placeholder={t("variantImageNone")} />
                                     </SelectTrigger>
                                     <SelectContent className="min-w-[280px]">
@@ -5776,7 +5783,10 @@ export const ProductForm = ({
                         value={generatorDraftKey}
                         onValueChange={(value) => setGeneratorDraftKey(value)}
                       >
-                        <SelectTrigger className="min-w-[180px]">
+                        <SelectTrigger
+                          aria-label={t("generatorAttributePlaceholder")}
+                          className="min-w-[180px]"
+                        >
                           <SelectValue placeholder={t("generatorAttributePlaceholder")} />
                         </SelectTrigger>
                         <SelectContent>
@@ -6079,7 +6089,7 @@ export const ProductForm = ({
                               disabled={readOnly}
                             >
                               <FormControl>
-                                <SelectTrigger>
+                                <SelectTrigger aria-label={t("typeLabel")}>
                                   <SelectValue />
                                 </SelectTrigger>
                               </FormControl>
@@ -6268,7 +6278,7 @@ export const ProductForm = ({
                               disabled={readOnly || !unitOptions.length}
                             >
                               <FormControl>
-                                <SelectTrigger>
+                                <SelectTrigger aria-label={t("unit")}>
                                   <SelectValue placeholder={t("unitPlaceholder")} />
                                 </SelectTrigger>
                               </FormControl>
@@ -7154,7 +7164,10 @@ export const ProductForm = ({
                                       disabled={readOnly}
                                     >
                                       <FormControl>
-                                        <SelectTrigger className="h-16 min-w-0 gap-3 whitespace-nowrap px-2 [&>span]:flex [&>span]:min-w-0 [&>span]:items-center [&>span]:gap-3 [&>span]:truncate">
+                                        <SelectTrigger
+                                          aria-label={t("variantImage")}
+                                          className="h-16 min-w-0 gap-3 whitespace-nowrap px-2 [&>span]:flex [&>span]:min-w-0 [&>span]:items-center [&>span]:gap-3 [&>span]:truncate"
+                                        >
                                           <SelectValue placeholder={t("variantImageNone")} />
                                         </SelectTrigger>
                                       </FormControl>
@@ -7217,7 +7230,10 @@ export const ProductForm = ({
                                         }))
                                       }
                                     >
-                                      <SelectTrigger className="min-w-[160px]">
+                                      <SelectTrigger
+                                        aria-label={t("addAttribute")}
+                                        className="min-w-[160px]"
+                                      >
                                         <SelectValue placeholder={t("addAttribute")} />
                                       </SelectTrigger>
                                       <SelectContent>
@@ -7349,7 +7365,9 @@ export const ProductForm = ({
                                                   }
                                                   disabled={readOnly}
                                                 >
-                                                  <SelectTrigger>
+                                                  <SelectTrigger
+                                                    aria-label={t("selectAttributeValue")}
+                                                  >
                                                     <SelectValue
                                                       placeholder={t("selectAttributeValue")}
                                                     />
@@ -7545,7 +7563,10 @@ export const ProductForm = ({
                       value={generatorDraftKey}
                       onValueChange={(value) => setGeneratorDraftKey(value)}
                     >
-                      <SelectTrigger className="min-w-[180px]">
+                      <SelectTrigger
+                        aria-label={t("generatorAttributePlaceholder")}
+                        className="min-w-[180px]"
+                      >
                         <SelectValue placeholder={t("generatorAttributePlaceholder")} />
                       </SelectTrigger>
                       <SelectContent>

@@ -11,9 +11,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type RouteParams = {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 };
 
 const asRecord = (value: unknown): Record<string, unknown> | null => {
@@ -32,6 +32,7 @@ const MMARKET_IMPORT_ENDPOINTS: Record<MMarketEnvironment, string> = {
 };
 
 export const GET = async (_request: Request, { params }: RouteParams) => {
+  const { id } = await params;
   const token = await getServerAuthToken();
   if (!token?.organizationId) {
     return new Response(null, { status: 401 });
@@ -53,7 +54,7 @@ export const GET = async (_request: Request, { params }: RouteParams) => {
 
   const job = await prisma.mMarketExportJob.findFirst({
     where: {
-      id: params.id,
+      id,
       orgId: token.organizationId as string,
       ...(accessibleStoreIds ? { storeId: { in: accessibleStoreIds } } : {}),
     },

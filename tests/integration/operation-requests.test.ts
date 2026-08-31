@@ -87,6 +87,67 @@ describeDb("operation request lifecycle", () => {
     ).resolves.toMatchObject({ status: OperationRequestStatus.COMPLETED });
   });
 
+  it("waits briefly for an active identical request to settle into a replay", async () => {
+    const { org, store } = await seedBase();
+    const input = operationInput({
+      organizationId: org.id,
+      storeId: store.id,
+      key: "op-active-replay-1",
+    });
+    const response = { id: "settled-supplier", name: "Settled supplier" };
+    const operation = await prisma.operationRequest.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        scope: input.scope,
+        principalType: OperationRequestPrincipalType.AUTHENTICATED_USER,
+        principalKey: "user:operation-test-user",
+        idempotencyKey: input.idempotencyKey,
+        requestFingerprint: fingerprintOperationRequest({
+          storeId: store.id,
+          payload: input.payload,
+        }),
+        status: OperationRequestStatus.PROCESSING,
+        attemptCount: 1,
+        leaseToken: "active-replay-lease",
+        leaseExpiresAt: new Date(Date.now() + 60_000),
+        processingStartedAt: new Date(),
+        lastAttemptAt: new Date(),
+        expiresAt: new Date(Date.now() + 30_000),
+      },
+    });
+    let handlerCalls = 0;
+    const settle = (async () => {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      await prisma.operationRequest.update({
+        where: { id: operation.id },
+        data: {
+          status: OperationRequestStatus.COMPLETED,
+          responseStatus: 201,
+          response,
+          responseBytes: Buffer.byteLength(JSON.stringify(response), "utf8"),
+          leaseToken: null,
+          leaseExpiresAt: null,
+          completedAt: new Date(),
+        },
+      });
+    })();
+
+    const result = await runOperationRequest(input, async () => {
+      handlerCalls += 1;
+      throw new Error("an active identical request must not execute a second handler");
+    });
+    await settle;
+
+    expect(result).toMatchObject({
+      operationRequestId: operation.id,
+      response,
+      responseStatus: 201,
+      replayed: true,
+    });
+    expect(handlerCalls).toBe(0);
+  });
+
   it("accepts bounded handler transaction options at their inclusive limits", async () => {
     const { org, store } = await seedBase();
     const lowerBound = await runOperationRequest(

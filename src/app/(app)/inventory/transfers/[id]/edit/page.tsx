@@ -1,18 +1,34 @@
+import { notFound } from "next/navigation";
+
 import { InventoryTransfersPage } from "@/components/inventory/transfer-workflow";
+import { normalizeDynamicRouteId } from "@/lib/dynamicRouteId";
+import { resolveProductMovementEditDocumentKey } from "@/lib/productMovementEditDocumentKey";
 import { resolveSafeReturnTo } from "@/lib/safeReturnTo";
 
 const getParam = (value?: string | string[]) => (Array.isArray(value) ? value[0] : value);
 
-const TransferEditPage = ({
+const TransferEditPage = async ({
   params,
   searchParams,
 }: {
-  params: { id: string };
-  searchParams?: Record<string, string | string[] | undefined>;
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) => {
-  const documentId = decodeURIComponent(params.id);
-  const documentKey = getParam(searchParams?.documentKey) ?? `TRANSFER:TRANSFER:${documentId}`;
-  const backHref = resolveSafeReturnTo(getParam(searchParams?.returnTo));
+  const [{ id }, resolvedSearchParams] = await Promise.all([params, searchParams]);
+  const documentId = normalizeDynamicRouteId(id);
+  if (!documentId) {
+    notFound();
+  }
+  const documentKey = resolveProductMovementEditDocumentKey({
+    routeId: documentId,
+    requestedDocumentKey: getParam(resolvedSearchParams.documentKey),
+    fallbackDocumentType: "TRANSFER",
+    fallbackReferenceType: "TRANSFER",
+  });
+  if (!documentKey) {
+    notFound();
+  }
+  const backHref = resolveSafeReturnTo(getParam(resolvedSearchParams.returnTo));
 
   return <InventoryTransfersPage editDocumentKey={documentKey} editBackHref={backHref} />;
 };

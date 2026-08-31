@@ -239,6 +239,10 @@ describe("pos entry navigation", () => {
 
     expect(pageSource).toContain('window.matchMedia("(max-width: 767px)")');
     expect(pageSource).toContain("const DesktopPosSaleView = () => (");
+    expect(pageSource).toContain(
+      '<h1 className="shrink-0 text-base font-semibold text-foreground">',
+    );
+    expect(pageSource).toContain('{t("sell.title")}');
     expect(pageSource).toContain("const MobilePosView = () => {");
     expect(pageSource).toContain("return isPhoneScreen ? MobilePosView() : DesktopPosSaleView();");
     expect(pageSource).toContain("const MobileCustomerSheet = () => {");
@@ -272,7 +276,9 @@ describe("pos entry navigation", () => {
     expect(posRouterSource).toContain("cashiers: router({");
     expect(customerServiceSource).toContain("normalizeOptionalCustomerPhone(input.phone)");
     expect(customerServiceSource).toContain("ensureCustomerContact({ email, phone });");
-    expect(customerServiceSource).toContain("normalizeUpdatedCustomerPhone(input.phone, existing.phone)");
+    expect(customerServiceSource).toContain(
+      "normalizeUpdatedCustomerPhone(input.phone, existing.phone)",
+    );
   });
 
   it("keeps receipt journal returns tied to loaded receipt lines and blocks zero-quantity completion", async () => {
@@ -300,7 +306,9 @@ describe("pos entry navigation", () => {
 
     expect(pageSource).toContain("completedSaleEditHydratedRef");
     expect(pageSource).toContain("receiptEditDeepLinkRef.current = null;");
-    expect(pageSource).toContain("const deepLinkedEditSaleId = receiptEditDeepLinkRef.current?.startsWith");
+    expect(pageSource).toContain(
+      "const deepLinkedEditSaleId = receiptEditDeepLinkRef.current?.startsWith",
+    );
     expect(pageSource).toContain("setJournalEditSaleId(deepLinkedEditSaleId);");
     expect(pageSource).toContain("journalSaleDetailQuery.isFetching");
     expect(pageSource).toContain(

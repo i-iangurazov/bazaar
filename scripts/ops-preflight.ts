@@ -1,4 +1,5 @@
 import { prisma } from "@/server/db/prisma";
+import { assertUnicodeCaseInsensitiveSearch } from "@/server/db/databaseCapabilities";
 import { assertStartupConfigured } from "@/server/config/startupChecks";
 import { getRedisPublisher } from "@/server/redis";
 import { assertBuildEnvConfigured, getRuntimeEnv } from "@/server/config/runtime";
@@ -81,6 +82,13 @@ const main = async () => {
     ok("Database connectivity check passed");
   } catch (error) {
     fail(`Database connectivity check failed: ${(error as Error).message}`);
+  }
+
+  try {
+    await assertUnicodeCaseInsensitiveSearch(prisma);
+    ok("Database Unicode case-insensitive search check passed");
+  } catch (error) {
+    fail(`Database Unicode search check failed: ${(error as Error).message}`);
   }
 
   try {

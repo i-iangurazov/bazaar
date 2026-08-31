@@ -5,6 +5,7 @@ import { AppError } from "@/server/services/errors";
 import { writeAuditLog } from "@/server/services/audit";
 import { toJson } from "@/server/services/json";
 import { assertWithinLimits } from "@/server/services/planLimits";
+import { applyCurrentProductCostQuantityDelta } from "@/server/services/productCost";
 import {
   createDefaultProductCatalog,
   resolveProductCatalog,
@@ -214,19 +215,31 @@ export const createStore = async (input: CreateStoreInput) =>
         await tx.inventorySnapshot.createMany({ data: nextSnapshots });
       }
 
-      const stockMovements = nextSnapshots
-        .filter((snapshot) => snapshot.onHand !== 0)
-        .map((snapshot) => ({
+      const stockMovements = [];
+      for (const snapshot of nextSnapshots) {
+        if (snapshot.onHand === 0) {
+          continue;
+        }
+        const valuation = await applyCurrentProductCostQuantityDelta(tx, {
+          organizationId: input.organizationId,
+          productId: snapshot.productId,
+          variantId: snapshot.variantId,
+          quantityDelta: snapshot.onHand,
+        });
+        stockMovements.push({
           storeId: store.id,
           productId: snapshot.productId,
           variantId: snapshot.variantId,
           type: StockMovementType.ADJUSTMENT,
           qtyDelta: snapshot.onHand,
+          unitCostKgs: valuation?.unitCostKgs,
+          inventoryValueDeltaKgs: valuation?.inventoryValueDeltaKgs,
           referenceType: "STORE_CLONE",
           referenceId: store.id,
           note: `Copied from ${sourceStore.name}`,
           createdById: input.actorId,
-        }));
+        });
+      }
       if (stockMovements.length) {
         await tx.stockMovement.createMany({ data: stockMovements });
       }

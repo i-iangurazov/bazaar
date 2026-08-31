@@ -521,8 +521,9 @@ describeDb("B0 Agent 3 order P0 runtime verification", () => {
     const addLineDraft = await createCustomerOrderDraft({
       organizationId: org.id,
       storeId: store.id,
+      lines: [{ productId: product.id, qty: 1 }],
       actorId: adminUser.id,
-      requestId: "b1-a3-009-empty-draft",
+      requestId: "b1-a3-009-authorized-line-draft",
     });
     await expect(
       addCustomerOrderLine({
@@ -552,8 +553,9 @@ describeDb("B0 Agent 3 order P0 runtime verification", () => {
       actorId: adminUser.id,
       requestId: "b1-a3-009-positive",
     });
-    const persistedRejectedLines = await prisma.customerOrderLine.count({
+    const persistedDraftLines = await prisma.customerOrderLine.findMany({
       where: { customerOrderId: addLineDraft.id },
+      select: { productId: true },
     });
     const rejectedProductSnapshots = await prisma.inventorySnapshot.count({
       where: { storeId: store.id, productId: unassignedProduct.id },
@@ -568,13 +570,13 @@ describeDb("B0 Agent 3 order P0 runtime verification", () => {
       productId: unassignedProduct.id,
       addLineDraftId: addLineDraft.id,
       positiveDraftId: positiveDraft.id,
-      persistedRejectedLines,
+      persistedDraftProductIds: persistedDraftLines.map((line) => line.productId),
       rejectedProductSnapshots,
       rejectedProductMovements,
     });
 
     expect(positiveDraft.id).toBeTruthy();
-    expect(persistedRejectedLines).toBe(0);
+    expect(persistedDraftLines.map((line) => line.productId)).toEqual([product.id]);
     expect(rejectedProductSnapshots).toBe(0);
     expect(rejectedProductMovements).toBe(0);
     await expect(

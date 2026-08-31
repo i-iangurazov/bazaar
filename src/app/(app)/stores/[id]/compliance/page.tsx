@@ -9,10 +9,19 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
+import { DynamicResourceTerminalState } from "@/components/dynamic-resource-terminal-state";
 import { PageHeader } from "@/components/page-header";
+import { PageLoading } from "@/components/page-loading";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
@@ -26,6 +35,7 @@ import {
 import { FormActions, FormStack } from "@/components/form-layout";
 import { useToast } from "@/components/ui/toast";
 import { ChevronDownIcon } from "@/components/icons";
+import { normalizeDynamicRouteId } from "@/lib/dynamicRouteId";
 import { locales } from "@/lib/locales";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
@@ -77,18 +87,21 @@ const CompliancePage = () => {
   const t = useTranslations("compliance");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   const role = session?.user?.role;
   const canView = role === "ADMIN" || role === "MANAGER";
   const canEdit = role === "ADMIN";
   const { toast } = useToast();
   const params = useParams();
-  const storeId = typeof params.id === "string" ? params.id : params.id?.[0] ?? "";
+  const storeId = normalizeDynamicRouteId(params?.id) ?? "";
 
-  const storesQuery = trpc.stores.list.useQuery(undefined, { enabled: Boolean(storeId) });
+  const storesQuery = trpc.stores.list.useQuery(undefined, {
+    enabled: Boolean(storeId && canView),
+    retry: false,
+  });
   const profileQuery = trpc.compliance.getStore.useQuery(
     { storeId },
-    { enabled: Boolean(storeId) },
+    { enabled: Boolean(storeId && canView), retry: false },
   );
 
   const store = storesQuery.data?.find((item) => item.id === storeId);
@@ -99,12 +112,7 @@ const CompliancePage = () => {
         defaultLocale: z.string().optional(),
         taxRegime: z.string().optional(),
         enableKkm: z.boolean(),
-        kkmMode: z.enum([
-          KKM_MODE.OFF,
-          KKM_MODE.EXPORT_ONLY,
-          KKM_MODE.CONNECTOR,
-          KKM_MODE.ADAPTER,
-        ]),
+        kkmMode: z.enum([KKM_MODE.OFF, KKM_MODE.EXPORT_ONLY, KKM_MODE.CONNECTOR, KKM_MODE.ADAPTER]),
         enableEsf: z.boolean(),
         enableEttn: z.boolean(),
         enableMarking: z.boolean(),
@@ -194,6 +202,10 @@ const CompliancePage = () => {
     });
   };
 
+  if (sessionStatus === "loading") {
+    return <PageLoading />;
+  }
+
   if (!canView) {
     return (
       <div>
@@ -201,6 +213,32 @@ const CompliancePage = () => {
         <p className="mt-4 text-sm text-danger">{tErrors("forbidden")}</p>
       </div>
     );
+  }
+
+  if (!storeId) {
+    return <DynamicResourceTerminalState title={t("title")} message={tErrors("storeNotFound")} />;
+  }
+
+  if (storesQuery.isLoading || profileQuery.isLoading) {
+    return (
+      <div>
+        <PageHeader title={t("title")} subtitle={tCommon("loading")} />
+        <PageLoading />
+      </div>
+    );
+  }
+
+  const routeError = storesQuery.error ?? profileQuery.error;
+  if (routeError) {
+    const message =
+      routeError.data?.code === "NOT_FOUND"
+        ? tErrors("storeNotFound")
+        : translateError(tErrors, routeError);
+    return <DynamicResourceTerminalState title={t("title")} message={message} />;
+  }
+
+  if (!store) {
+    return <DynamicResourceTerminalState title={t("title")} message={tErrors("storeNotFound")} />;
   }
 
   return (
@@ -245,7 +283,11 @@ const CompliancePage = () => {
                         <p className="text-xs text-muted-foreground">{t("kkmHint")}</p>
                       </div>
                       <FormControl>
-                        <Switch checked={field.value} onCheckedChange={field.onChange} disabled={!canEdit} />
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          disabled={!canEdit}
+                        />
                       </FormControl>
                     </FormItem>
                   )}
@@ -261,7 +303,11 @@ const CompliancePage = () => {
                         <p className="text-xs text-muted-foreground">{t("esfHint")}</p>
                       </div>
                       <FormControl>
-                        <Switch checked={field.value} onCheckedChange={field.onChange} disabled={!canEdit} />
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          disabled={!canEdit}
+                        />
                       </FormControl>
                     </FormItem>
                   )}
@@ -277,7 +323,11 @@ const CompliancePage = () => {
                         <p className="text-xs text-muted-foreground">{t("ettnHint")}</p>
                       </div>
                       <FormControl>
-                        <Switch checked={field.value} onCheckedChange={field.onChange} disabled={!canEdit} />
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          disabled={!canEdit}
+                        />
                       </FormControl>
                     </FormItem>
                   )}
@@ -293,7 +343,11 @@ const CompliancePage = () => {
                         <p className="text-xs text-muted-foreground">{t("markingHint")}</p>
                       </div>
                       <FormControl>
-                        <Switch checked={field.value} onCheckedChange={field.onChange} disabled={!canEdit} />
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          disabled={!canEdit}
+                        />
                       </FormControl>
                     </FormItem>
                   )}
@@ -312,7 +366,7 @@ const CompliancePage = () => {
                             onValueChange={(value) => field.onChange(value as MarkingModeValue)}
                             disabled={!canEdit}
                           >
-                            <SelectTrigger>
+                            <SelectTrigger aria-label={t("markingMode")}>
                               <SelectValue placeholder={t("markingMode")} />
                             </SelectTrigger>
                             <SelectContent>
@@ -348,7 +402,7 @@ const CompliancePage = () => {
                                 onValueChange={field.onChange}
                                 disabled={!canEdit}
                               >
-                                <SelectTrigger>
+                                <SelectTrigger aria-label={t("defaultLocale")}>
                                   <SelectValue placeholder={tCommon("selectLocale")} />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -391,14 +445,20 @@ const CompliancePage = () => {
                                 onValueChange={(value) => field.onChange(value as KkmModeValue)}
                                 disabled={!canEdit}
                               >
-                                <SelectTrigger>
+                                <SelectTrigger aria-label={t("kkmMode")}>
                                   <SelectValue placeholder={t("kkmMode")} />
                                 </SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value={KKM_MODE.OFF}>{t("kkmModeOff")}</SelectItem>
-                                  <SelectItem value={KKM_MODE.EXPORT_ONLY}>{t("kkmModeExport")}</SelectItem>
-                                  <SelectItem value={KKM_MODE.CONNECTOR}>{t("kkmModeConnector")}</SelectItem>
-                                  <SelectItem value={KKM_MODE.ADAPTER}>{t("kkmModeAdapter")}</SelectItem>
+                                  <SelectItem value={KKM_MODE.EXPORT_ONLY}>
+                                    {t("kkmModeExport")}
+                                  </SelectItem>
+                                  <SelectItem value={KKM_MODE.CONNECTOR}>
+                                    {t("kkmModeConnector")}
+                                  </SelectItem>
+                                  <SelectItem value={KKM_MODE.ADAPTER}>
+                                    {t("kkmModeAdapter")}
+                                  </SelectItem>
                                 </SelectContent>
                               </Select>
                             </FormControl>

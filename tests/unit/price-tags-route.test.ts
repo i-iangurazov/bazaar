@@ -17,6 +17,7 @@ const {
     product: { findMany: vi.fn(), findUnique: vi.fn() },
     storePrice: { findMany: vi.fn() },
     storePrinterSettings: { upsert: vi.fn() },
+    userStoreAccess: { findFirst: vi.fn(), findMany: vi.fn() },
   },
 }));
 
@@ -76,6 +77,8 @@ describe("price tags pdf route", () => {
     });
     prisma.store.findFirst.mockResolvedValue({ id: "store-1" });
     prisma.store.findMany.mockResolvedValue([{ id: "store-1" }]);
+    prisma.userStoreAccess.findMany.mockResolvedValue([{ store: { id: "store-1" } }]);
+    prisma.userStoreAccess.findFirst.mockResolvedValue({ id: "store-access-1" });
     prisma.product.findMany.mockResolvedValue([
       {
         id: "prod-1",
@@ -110,6 +113,50 @@ describe("price tags pdf route", () => {
     expect(response.headers.get("Content-Type")).toBe("application/pdf");
     const pdf = Buffer.from(await response.arrayBuffer());
     expect(pdf.length).toBeGreaterThan(500);
+  });
+
+  it("denies STAFF before parsing a label payload or reading tenant data", async () => {
+    mockGetServerAuthToken.mockResolvedValueOnce({
+      organizationId: "org-1",
+      sub: "staff-1",
+      role: "STAFF",
+    });
+    const request = new Request("http://localhost/api/price-tags/pdf", {
+      method: "POST",
+      body: "not-json",
+    });
+
+    const response = await priceTagsPost(request);
+
+    expect(response.status).toBe(403);
+    expect(prisma.organization.findUnique).not.toHaveBeenCalled();
+    expect(prisma.store.findFirst).not.toHaveBeenCalled();
+    expect(prisma.product.findMany).not.toHaveBeenCalled();
+    expect(prisma.storePrice.findMany).not.toHaveBeenCalled();
+    expect(prisma.storePrinterSettings.upsert).not.toHaveBeenCalled();
+    expect(mockRecordFirstEvent).not.toHaveBeenCalled();
+  });
+
+  it("keeps CASHIER label printing authorized", async () => {
+    mockGetServerAuthToken.mockResolvedValueOnce({
+      organizationId: "org-1",
+      sub: "cashier-1",
+      role: "CASHIER",
+    });
+    const request = new Request("http://localhost/api/price-tags/pdf", {
+      method: "POST",
+      body: JSON.stringify({
+        template: "3x8",
+        items: [{ productId: "prod-1", quantity: 1 }],
+        storeId: "store-1",
+      }),
+    });
+
+    const response = await priceTagsPost(request);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toBe("application/pdf");
+    expect(prisma.product.findMany).toHaveBeenCalled();
   });
 
   it("rejects requests with per-item quantity above cap", async () => {
