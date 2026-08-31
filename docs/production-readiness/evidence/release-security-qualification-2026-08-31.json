@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "artifactKind": "RELEASE_SECURITY_QUALIFICATION",
-  "generatedAt": "2026-08-31T17:57:28Z",
+  "generatedAt": "2026-08-31T18:07:08Z",
   "releaseBranch": "codex/bazaar-readiness-release-20260831",
-  "sourceCheckpoint": "2f5f7bf48024fe2e878ca0515421c1a7d4ce6cda",
+  "sourceCheckpoint": "466b6fb1fbb895221e25521765b4f016a7a8ed3d",
   "priorLocalGateCheckpoint": "998ad625d878197a42bbf00afe450dd1b187357a",
   "rescueCommit": "e04df7c322c0da46665aa764e113423223222390",
   "productionRollbackPoint": "7db455397eb38e9bcaa09bda5acc951964df5ab2",
@@ -25,7 +25,7 @@
       "severity": "critical",
       "status": "LOCALLY_REMEDIATED_AWAITING_CODEQL",
       "boundary": "/api/product-images/source",
-      "remediation": "The authenticated route rebuilds R2 URLs from the configured origin and a canonical tenant path, and the downloader reapplies the same policy to every redirect hop."
+      "remediation": "The authenticated route uses a dedicated managed-R2 fetcher, physically separate from generic remote-image downloads. It rebuilds every request and redirect from the configured origin and a canonical tenant path immediately before the dedicated fetch sink."
     },
     {
       "githubAlert": 32,
@@ -43,10 +43,10 @@
       "passed": 110,
       "failed": 0,
       "skipped": 0,
-      "jsonArtifact": "test-results/release-security-targeted-2026-08-31.json",
-      "jsonSha256": "5767c823f3203b9cb4451cd1ac8dbb8270b1a2f10faaef1edd1240b4652c3013",
-      "junitArtifact": "test-results/release-security-targeted-2026-08-31.xml",
-      "junitSha256": "ffe710b6a0080635c5a8c6299f81c3953a519cd2e54ae32e3d2d3d46f312238b"
+      "jsonArtifact": "test-results/release-security-targeted-2026-09-01.json",
+      "jsonSha256": "1265de24f5e62a6e06570da7c289541caab68f8d9837223aaca3ac85c408e84e",
+      "junitArtifact": "test-results/release-security-targeted-2026-09-01.xml",
+      "junitSha256": "ec45719e60481cd5044e8da343be68ef0a04da8a63afb30143c697d4b3076f2a"
     },
     "lint": { "status": "PASS", "command": "pnpm lint", "maxWarnings": 0 },
     "typeScript": { "status": "PASS", "command": "pnpm typecheck" },
@@ -130,7 +130,7 @@
   },
   "pendingRemoteGates": {
     "codeQl": "A new GitHub scan must close alerts 29, 31 and 32 on the PR merge ref.",
-    "ci": "A new full CI run is required for source checkpoint 2f5f7bf.",
+    "ci": "A new full CI run is required for source checkpoint 466b6fb.",
     "vercelPreview": "The prior Preview failed before build because DATABASE_URL is not configured in the Vercel Preview environment.",
     "productionBackupOrPitr": "Must be confirmed before merge or production migration."
   },
