@@ -1,0 +1,177 @@
+{
+  "schemaVersion": 1,
+  "artifactKind": "FINAL_CURRENT_SOURCE_LOCAL_GATES",
+  "generatedAt": "2026-08-31T17:27:00.000Z",
+  "releaseBranch": "codex/bazaar-readiness-release-20260831",
+  "qualificationCheckpoint": "77aabf3d4bb24b8b7cf858e0cc8ba172677fe7fb",
+  "applicationSourceCheckpoint": "69ab77b36211ad697d9486093ec680f615a99d9f",
+  "rescueCommit": "e04df7c322c0da46665aa764e113423223222390",
+  "productionRollbackPoint": "7db455397eb38e9bcaa09bda5acc951964df5ab2",
+  "sourceChangedAfterDeterministicGates": false,
+  "sourceChangedDuringBrowserMatrices": false,
+  "productionDataUsed": false,
+  "externalProvidersEnabled": false,
+  "gates": {
+    "secretPatternScan": {
+      "status": "PASS",
+      "scope": "All added, copied, modified, and renamed files between the production rollback point and the release checkpoint",
+      "matches": 0
+    },
+    "gitDiffCheck": {
+      "status": "PASS"
+    },
+    "formatting": {
+      "status": "PASS",
+      "scope": "Changed release source at the source checkpoint and newly generated qualification evidence"
+    },
+    "lint": {
+      "status": "PASS",
+      "command": "pnpm lint",
+      "maxWarnings": 0
+    },
+    "typeScript": {
+      "status": "PASS",
+      "command": "pnpm typecheck"
+    },
+    "localization": {
+      "status": "PASS",
+      "command": "pnpm i18n:check"
+    },
+    "targetedSecurityTests": {
+      "status": "PASS",
+      "unit": {
+        "passed": 74,
+        "failed": 0,
+        "artifact": "test-results/codeql-targeted-unit-junit.xml",
+        "sha256": "a5db8f92ceec58d114deb411aded5bf3342282b2081dce72ad81d81dd9619a56"
+      },
+      "database": {
+        "passed": 43,
+        "failed": 0,
+        "artifact": "test-results/codeql-targeted-db-junit.xml",
+        "sha256": "b464fef9c233f1ff66275a7bbacb7fcfc1cdee61b64eca8cbbd8e394ea9bd0a7"
+      }
+    },
+    "fullDeterministic": {
+      "status": "PASS",
+      "testFiles": 317,
+      "passed": 1714,
+      "failed": 0,
+      "skipped": 0,
+      "jsonArtifact": "test-results/release-security-full-deterministic.json",
+      "jsonSha256": "bf3d1683eb042bf2949861007240d877353d13f670ad63d66da83521ae793230",
+      "junitArtifact": "test-results/release-security-full-deterministic-junit.xml",
+      "junitSha256": "6ddedc48696147203049bef7df8cf3ee1eab70562accb071f5beff593a267708"
+    },
+    "productionDependencyAudit": {
+      "status": "PASS",
+      "dependencies": 434,
+      "vulnerabilities": 0,
+      "artifact": "test-results/release-security-audit-prod.json",
+      "sha256": "ebc3a968b098451322cee794315258645e6eef075d2b94e04c74453e80310895"
+    },
+    "fullDependencyAudit": {
+      "status": "PASS",
+      "dependencies": 1042,
+      "vulnerabilities": 0,
+      "artifact": "test-results/release-security-audit-full.json",
+      "sha256": "dd488b39652ff3764ccd1d8f4e711194aedc4c12c629e594dad5ef1796ec96b4"
+    },
+    "migrationCompatibility": {
+      "status": "PASS",
+      "oldBeforeExpand": "129/129",
+      "oldAfterExpand": "129/129",
+      "mixedOldNewWrites": "PASS",
+      "backfillInterruptionResume": "PASS",
+      "backfillIdempotency": "PASS",
+      "newApplicationReconciliation": "134/134",
+      "applicationRollback": "PASS",
+      "deployedStage": "expand only",
+      "futureContractDeferred": true,
+      "evidence": "docs/production-readiness/evidence/release-mixed-version-migration-2026-08-31.json"
+    },
+    "emptyDatabaseMigration": {
+      "status": "PASS",
+      "appliedMigrations": 100,
+      "database": "fresh isolated PostgreSQL"
+    },
+    "productionBuild": {
+      "status": "PASS",
+      "command": "pnpm build",
+      "nextVersion": "15.5.21",
+      "staticPagesGenerated": 120,
+      "staticPagesTotal": 120,
+      "providerMode": "disabled",
+      "imageStorageProvider": "local"
+    },
+    "publicMatrix": {
+      "status": "PASS",
+      "collected": 189,
+      "passed": 189,
+      "failed": 0,
+      "skipped": 0,
+      "timedOut": 0,
+      "flaky": 0,
+      "viewports": ["desktop", "tablet", "mobile"],
+      "jsonArtifact": "test-results/release-final-public-current-source-2026-08-31.json",
+      "jsonSha256": "f82894874b329be5c2673049d312a5a84404191ca733d5909873d23088024f76",
+      "junitArtifact": "test-results/release-final-public-current-source-2026-08-31.xml",
+      "junitSha256": "147467cb63d75c3ce3cea53fe3c2cb0cd73114d8502c29f7eb26494901595042",
+      "htmlArtifact": "test-results/release-final-public-current-source-html/index.html",
+      "htmlSha256": "55bf8c6cdffdfac4f0ee11e6d9c4b4fdaa86fd035242932ec3c50faa9c4f78ff"
+    },
+    "authenticatedMatrix": {
+      "status": "PASS",
+      "collected": 762,
+      "passed": 762,
+      "failed": 0,
+      "skipped": 0,
+      "timedOut": 0,
+      "flaky": 0,
+      "singleUninterruptedRun": true,
+      "evidence": "docs/production-readiness/evidence/release-final-authenticated-clean-2026-08-31.json"
+    },
+    "readinessGovernance": {
+      "status": "PASS",
+      "testFiles": 3,
+      "passed": 20,
+      "failed": 0
+    }
+  },
+  "readiness": {
+    "officialPercent": 95.6,
+    "applicationOwnedPercent": 97.2,
+    "execution": "225/230",
+    "executionPercent": 97.8,
+    "verifiedPass": "209/230",
+    "verifiedPassPercent": 90.9,
+    "criticalWorkflowVerified": "64/67",
+    "criticalWorkflowVerifiedPercent": 95.5,
+    "outcomes": {
+      "PASS": 209,
+      "PARTIAL": 16,
+      "FAIL": 0,
+      "BLOCKED": 5
+    },
+    "defects": {
+      "BLOCKER": 0,
+      "CRITICAL": 0,
+      "HIGH": 0,
+      "MEDIUM": 6,
+      "LOW": 2
+    },
+    "tracker": "docs/production-readiness/readiness-release-final-authenticated-clean-2026-08-31.json"
+  },
+  "pendingRemoteGates": {
+    "codeQlRescan": "Requires push and GitHub Actions analysis of application source checkpoint 69ab77b.",
+    "ci": "Requires push.",
+    "vercelPreview": "Requires push and a configured Preview DATABASE_URL.",
+    "productionBackupOrPitr": "Must be confirmed before merge or production migration."
+  },
+  "providerRestrictions": [
+    "Fiscalization and KKM remain disabled.",
+    "Billing remains disabled.",
+    "Production email remains disabled.",
+    "Live integrations remain disabled."
+  ]
+}
