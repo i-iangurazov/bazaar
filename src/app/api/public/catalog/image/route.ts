@@ -72,7 +72,13 @@ class CatalogImageProxyError extends Error {
 
 type AllowedSource = {
   origin: string;
+  hostname: string;
   pathPrefixes: string[];
+};
+
+type SafeFetchTarget = {
+  fetchUrl: string;
+  hostname: string;
 };
 
 const parseWidth = (value: string | null) => {
@@ -96,9 +102,49 @@ const parsePositiveInt = (value: string | undefined, fallback: number) => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 };
 
+const safeManagedPathSegmentPattern = /^[A-Za-z0-9._-]+$/;
+
+const encodeManagedPath = (pathname: string) => {
+  if (!pathname.startsWith("/") || pathname.includes("//")) {
+    return null;
+  }
+
+  const encodedSegments: string[] = [];
+  for (const [index, rawSegment] of pathname.split("/").entries()) {
+    if (!rawSegment) {
+      if (index === 0 || index === pathname.split("/").length - 1) {
+        encodedSegments.push("");
+        continue;
+      }
+      return null;
+    }
+
+    let segment: string;
+    try {
+      segment = decodeURIComponent(rawSegment);
+    } catch {
+      return null;
+    }
+    if (
+      segment === "." ||
+      segment === ".." ||
+      segment.includes("%") ||
+      !safeManagedPathSegmentPattern.test(segment)
+    ) {
+      return null;
+    }
+    encodedSegments.push(encodeURIComponent(segment));
+  }
+
+  return encodedSegments.join("/");
+};
+
 const normalizePathPrefix = (pathname: string) => {
-  const normalized = pathname.replace(/\/{2,}/g, "/");
-  return normalized.endsWith("/") ? normalized : `${normalized}/`;
+  const encoded = encodeManagedPath(pathname.replace(/\/{2,}/g, "/"));
+  if (!encoded) {
+    return null;
+  }
+  return encoded.endsWith("/") ? encoded : `${encoded}/`;
 };
 
 const parseConfiguredHttpUrl = (value: string | undefined) => {
@@ -126,8 +172,15 @@ const getAllowedSources = () => {
   const sources = new Map<string, Set<string>>();
   const addSource = (url: URL, pathPrefixes: string[]) => {
     const existing = sources.get(url.origin) ?? new Set<string>();
-    pathPrefixes.forEach((prefix) => existing.add(normalizePathPrefix(prefix)));
-    sources.set(url.origin, existing);
+    pathPrefixes.forEach((prefix) => {
+      const normalized = normalizePathPrefix(prefix);
+      if (normalized) {
+        existing.add(normalized);
+      }
+    });
+    if (existing.size) {
+      sources.set(url.origin, existing);
+    }
   };
 
   const appUrl =
@@ -139,7 +192,10 @@ const getAllowedSources = () => {
 
   const r2PublicUrl = parseConfiguredHttpUrl(process.env.R2_PUBLIC_BASE_URL);
   if (r2PublicUrl) {
-    addSource(r2PublicUrl, [normalizePathPrefix(r2PublicUrl.pathname)]);
+    const r2PathPrefix = normalizePathPrefix(r2PublicUrl.pathname);
+    if (r2PathPrefix) {
+      addSource(r2PublicUrl, [r2PathPrefix]);
+    }
   }
 
   return {
@@ -147,6 +203,7 @@ const getAllowedSources = () => {
     r2PublicUrl,
     sources: Array.from(sources, ([origin, pathPrefixes]) => ({
       origin,
+      hostname: new URL(origin).hostname,
       pathPrefixes: Array.from(pathPrefixes),
     })),
   };
@@ -155,7 +212,10 @@ const getAllowedSources = () => {
 const hasAllowedPath = (source: AllowedSource, pathname: string) =>
   source.pathPrefixes.some((prefix) => pathname.startsWith(prefix));
 
-const resolveAllowedManagedUrl = (rawSourceUrl: string, relativeTo?: URL) => {
+const resolveAllowedManagedUrl = (
+  rawSourceUrl: string,
+  relativeTo?: URL,
+): SafeFetchTarget | null => {
   const sourceUrl = rawSourceUrl.trim();
   if (!sourceUrl) {
     return null;
@@ -171,7 +231,11 @@ const resolveAllowedManagedUrl = (rawSourceUrl: string, relativeTo?: URL) => {
         return null;
       }
       const r2BaseUrl = new URL(r2PublicUrl);
-      r2BaseUrl.pathname = normalizePathPrefix(r2BaseUrl.pathname);
+      const r2PathPrefix = normalizePathPrefix(r2BaseUrl.pathname);
+      if (!r2PathPrefix) {
+        return null;
+      }
+      r2BaseUrl.pathname = r2PathPrefix;
       parsed = new URL(sourceUrl.replace(/^\/+/, ""), r2BaseUrl);
     } else if (sourceUrl.startsWith("/")) {
       if (!appUrl) {
@@ -189,16 +253,25 @@ const resolveAllowedManagedUrl = (rawSourceUrl: string, relativeTo?: URL) => {
     (parsed.protocol !== "http:" && parsed.protocol !== "https:") ||
     parsed.port ||
     parsed.username ||
-    parsed.password
+    parsed.password ||
+    parsed.search ||
+    parsed.hash
   ) {
     return null;
   }
 
-  const allowedSource = sources.find((source) => source.origin === parsed.origin);
-  if (!allowedSource || !hasAllowedPath(allowedSource, parsed.pathname)) {
+  const safePath = encodeManagedPath(parsed.pathname);
+  if (!safePath) {
     return null;
   }
-  return parsed;
+  const allowedSource = sources.find((source) => source.origin === parsed.origin);
+  if (!allowedSource || !hasAllowedPath(allowedSource, safePath)) {
+    return null;
+  }
+  return {
+    fetchUrl: `${allowedSource.origin}${safePath}`,
+    hostname: allowedSource.hostname,
+  };
 };
 
 const normalizeHostName = (hostName: string) =>
@@ -273,16 +346,13 @@ const assertPublicHost = async (hostName: string, signal: AbortSignal) => {
   }
 };
 
-const fetchAllowedImage = async (sourceUrl: URL, signal: AbortSignal) => {
-  let currentUrl = sourceUrl;
+const fetchAllowedImage = async (sourceTarget: SafeFetchTarget, signal: AbortSignal) => {
+  let currentTarget = sourceTarget;
   for (let redirectCount = 0; redirectCount <= MAX_REDIRECTS; redirectCount += 1) {
-    await assertPublicHost(currentUrl.hostname, signal);
+    await assertPublicHost(currentTarget.hostname, signal);
     let response: Response;
     try {
-      // The URL is restricted to configured application/R2 origins and managed
-      // path prefixes, then DNS/IP validated again before every redirect hop.
-      // lgtm[js/request-forgery]
-      response = await fetch(currentUrl.toString(), {
+      response = await fetch(currentTarget.fetchUrl, {
         cache: "force-cache",
         next: { revalidate: 86_400 },
         redirect: "manual",
@@ -303,11 +373,13 @@ const fetchAllowedImage = async (sourceUrl: URL, signal: AbortSignal) => {
     }
 
     const location = response.headers.get("location");
-    const redirectUrl = location ? resolveAllowedManagedUrl(location, currentUrl) : null;
-    if (!redirectUrl) {
+    const redirectTarget = location
+      ? resolveAllowedManagedUrl(location, new URL(currentTarget.fetchUrl))
+      : null;
+    if (!redirectTarget) {
       throw new CatalogImageProxyError(404, "catalogNotFound");
     }
-    currentUrl = redirectUrl;
+    currentTarget = redirectTarget;
   }
   throw new CatalogImageProxyError(502, "imageReadFailed");
 };
@@ -357,8 +429,8 @@ export const GET = async (request: Request) => {
     return Response.json({ message: "invalidInput" }, { status: 400 });
   }
 
-  const sourceUrl = resolveAllowedManagedUrl(rawSourceUrl);
-  if (!sourceUrl) {
+  const sourceTarget = resolveAllowedManagedUrl(rawSourceUrl);
+  if (!sourceTarget) {
     return Response.json({ message: "catalogNotFound" }, { status: 404 });
   }
 
@@ -373,7 +445,7 @@ export const GET = async (request: Request) => {
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const sourceResponse = await fetchAllowedImage(sourceUrl, controller.signal);
+    const sourceResponse = await fetchAllowedImage(sourceTarget, controller.signal);
     if (!sourceResponse.ok) {
       throw new CatalogImageProxyError(502, "imageReadFailed");
     }

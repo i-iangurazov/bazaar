@@ -117,7 +117,51 @@ const inferImageMimeTypeFromBytes = (bytes: Uint8Array) => {
 const normalizeOrgPath = (organizationId: string) =>
   organizationId.replace(/[^a-zA-Z0-9_-]/g, "").trim() || "default";
 
-type ManagedSource = { kind: "local" | "remote"; url: string };
+type ManagedSource =
+  | { kind: "local"; url: string }
+  | {
+      kind: "remote";
+      url: string;
+      policy: { allowedOrigin: string; allowedPathPrefix: string };
+    };
+
+const safeManagedPathSegmentPattern = /^[A-Za-z0-9._-]+$/;
+
+const encodeManagedPath = (pathname: string) => {
+  if (!pathname.startsWith("/") || pathname.includes("//")) {
+    return null;
+  }
+
+  const rawSegments = pathname.split("/");
+  const encodedSegments: string[] = [];
+  for (const [index, rawSegment] of rawSegments.entries()) {
+    if (!rawSegment) {
+      if (index === 0 || index === rawSegments.length - 1) {
+        encodedSegments.push("");
+        continue;
+      }
+      return null;
+    }
+
+    let segment: string;
+    try {
+      segment = decodeURIComponent(rawSegment);
+    } catch {
+      return null;
+    }
+    if (
+      segment === "." ||
+      segment === ".." ||
+      segment.includes("%") ||
+      !safeManagedPathSegmentPattern.test(segment)
+    ) {
+      return null;
+    }
+    encodedSegments.push(encodeURIComponent(segment));
+  }
+
+  return encodedSegments.join("/");
+};
 
 const resolveManagedSource = (
   rawSourceUrl: string,
@@ -175,9 +219,34 @@ const resolveManagedSource = (
   if (r2Base) {
     try {
       const configuredR2Base = new URL(`${r2Base.replace(/\/+$/, "")}/`);
-      const r2OrgPrefix = `${configuredR2Base.pathname.replace(/\/?$/, "/")}retails/${normalizedOrganizationId}/`;
-      if (parsed.origin === configuredR2Base.origin && parsed.pathname.startsWith(r2OrgPrefix)) {
-        return { kind: "remote", url: parsed.toString() };
+      if (
+        (configuredR2Base.protocol !== "http:" && configuredR2Base.protocol !== "https:") ||
+        configuredR2Base.port ||
+        configuredR2Base.username ||
+        configuredR2Base.password ||
+        parsed.search ||
+        parsed.hash
+      ) {
+        return null;
+      }
+      const configuredBasePath = encodeManagedPath(configuredR2Base.pathname);
+      const safePath = encodeManagedPath(parsed.pathname);
+      if (!configuredBasePath || !safePath) {
+        return null;
+      }
+      const basePathPrefix = configuredBasePath.endsWith("/")
+        ? configuredBasePath
+        : `${configuredBasePath}/`;
+      const r2OrgPrefix = `${basePathPrefix}retails/${encodeURIComponent(normalizedOrganizationId)}/`;
+      if (parsed.origin === configuredR2Base.origin && safePath.startsWith(r2OrgPrefix)) {
+        return {
+          kind: "remote",
+          url: `${configuredR2Base.origin}${safePath}`,
+          policy: {
+            allowedOrigin: configuredR2Base.origin,
+            allowedPathPrefix: r2OrgPrefix,
+          },
+        };
       }
     } catch {
       return null;
@@ -214,7 +283,7 @@ export const GET = async (request: Request) => {
             url: managedSource.url,
             organizationId: token.organizationId,
           })
-        : await downloadRemoteImage(managedSource.url);
+        : await downloadRemoteImage(managedSource.url, managedSource.policy);
     if (!source) {
       return Response.json({ message: "imageReadFailed" }, { status: 502 });
     }

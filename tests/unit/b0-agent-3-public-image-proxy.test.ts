@@ -82,6 +82,28 @@ describe("HARD-A3-026 public catalogue image proxy", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it.each([
+    "https://images.example.com/uploads/imported-products/%2Fsecret.png",
+    "https://images.example.com/uploads/imported-products/%5Csecret.png",
+    "https://images.example.com/uploads/imported-products/..%2Fsecret.png",
+    "https://images.example.com/uploads/imported-products/%252Fsecret.png",
+    "https://images.example.com/uploads/imported-products/%zz.png",
+    "https://images.example.com/uploads/imported-products/probe.png?redirect=https://169.254.169.254",
+    "https://images.example.com/uploads/imported-products/probe.png#fragment",
+  ])(
+    "rejects ambiguous managed paths, queries, and fragments before I/O: %s",
+    async (sourceUrl) => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock);
+
+      const response = await requestImage(sourceUrl);
+
+      expect(response.status).toBe(404);
+      expect(lookupMock).not.toHaveBeenCalled();
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
+
   it.each(["localhost", "assets.localhost", "catalog.local", "catalog.internal"])(
     "blocks local hostnames and suffixes before DNS or fetch: %s",
     async (host) => {
@@ -188,6 +210,28 @@ describe("HARD-A3-026 public catalogue image proxy", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it.each([
+    "https://images.example.com/uploads/imported-products/%2Fsecret.png",
+    "https://images.example.com/uploads/imported-products/..%2Fsecret.png",
+    "https://images.example.com/uploads/imported-products/%252Fsecret.png",
+    "https://images.example.com/uploads/imported-products/final.png?token=unsafe",
+  ])("rejects an ambiguous managed redirect before the second fetch: %s", async (location) => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(null, {
+        status: 302,
+        headers: { location },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await requestImage(
+      "https://images.example.com/uploads/imported-products/redirect.png",
+    );
+
+    expect(response.status).toBe(404);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("revalidates DNS and the allowlist on every successful public redirect hop", async () => {
     const fetchMock = vi
       .fn()
@@ -277,9 +321,11 @@ describe("HARD-A3-026 public catalogue image proxy", () => {
 
   it("rejects an oversized declared content length without reading or transforming", async () => {
     process.env.PRODUCT_IMAGE_MAX_BYTES = "10";
-    const fetchMock = vi.fn().mockResolvedValue(imageResponse(new Uint8Array([1]), {
-      "content-length": "11",
-    }));
+    const fetchMock = vi.fn().mockResolvedValue(
+      imageResponse(new Uint8Array([1]), {
+        "content-length": "11",
+      }),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const response = await requestImage(

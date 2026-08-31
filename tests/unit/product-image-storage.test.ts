@@ -192,6 +192,87 @@ describe("product image storage", () => {
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ redirect: "manual" });
   });
 
+  it("keeps managed R2 redirects inside the configured origin and tenant prefix", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(null, {
+        status: 302,
+        headers: { location: "https://93.184.216.35/retails/org-1/products/secret.png" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { downloadRemoteImage } = await import("../../src/server/services/productImageStorage");
+
+    await expect(
+      downloadRemoteImage("https://93.184.216.34/retails/org-1/products/image.jpg", {
+        allowedOrigin: "https://93.184.216.34",
+        allowedPathPrefix: "/retails/org-1/",
+      }),
+    ).resolves.toBeNull();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ redirect: "manual" });
+  });
+
+  it("rejects encoded separators in managed R2 redirects before the second fetch", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(null, {
+        status: 302,
+        headers: {
+          location: "https://93.184.216.34/retails/org-1/products/hidden%2Fsecret.png",
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { downloadRemoteImage } = await import("../../src/server/services/productImageStorage");
+
+    await expect(
+      downloadRemoteImage("https://93.184.216.34/retails/org-1/products/image.jpg", {
+        allowedOrigin: "https://93.184.216.34",
+        allowedPathPrefix: "/retails/org-1/",
+      }),
+    ).resolves.toBeNull();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("canonicalizes each same-tenant managed R2 redirect before fetching", async () => {
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(null, {
+          status: 302,
+          headers: {
+            location: "https://93.184.216.34/retails/org-1/products/final.png",
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(png, {
+          status: 200,
+          headers: { "content-type": "image/png", "content-length": String(png.length) },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { downloadRemoteImage } = await import("../../src/server/services/productImageStorage");
+
+    await expect(
+      downloadRemoteImage("https://93.184.216.34/retails/org-1/products/image.jpg", {
+        allowedOrigin: "https://93.184.216.34",
+        allowedPathPrefix: "/retails/org-1/",
+      }),
+    ).resolves.toEqual({ buffer: png, contentType: "image/png" });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://93.184.216.34/retails/org-1/products/final.png",
+      expect.objectContaining({ redirect: "manual" }),
+    );
+  });
+
   it("keeps already-managed unassigned upload URLs without synchronous re-copying", async () => {
     const { resolveProductImageUrl } =
       await import("../../src/server/services/productImageStorage");

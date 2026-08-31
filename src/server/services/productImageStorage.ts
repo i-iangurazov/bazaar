@@ -109,6 +109,68 @@ const maxRemoteImageRedirects = 3;
 const remoteImageRedirectStatuses = new Set([301, 302, 303, 307, 308]);
 const remoteHostAllowCache = new Map<string, boolean>();
 
+export type RemoteImageFetchPolicy = {
+  allowedOrigin: string;
+  allowedPathPrefix: string;
+};
+
+const safeManagedRemotePathSegmentPattern = /^[A-Za-z0-9._-]+$/;
+
+const encodeManagedRemotePath = (pathname: string) => {
+  if (!pathname.startsWith("/") || pathname.includes("//")) {
+    return null;
+  }
+
+  const rawSegments = pathname.split("/");
+  const encodedSegments: string[] = [];
+  for (const [index, rawSegment] of rawSegments.entries()) {
+    if (!rawSegment) {
+      if (index === 0 || index === rawSegments.length - 1) {
+        encodedSegments.push("");
+        continue;
+      }
+      return null;
+    }
+
+    let segment: string;
+    try {
+      segment = decodeURIComponent(rawSegment);
+    } catch {
+      return null;
+    }
+    if (
+      segment === "." ||
+      segment === ".." ||
+      segment.includes("%") ||
+      !safeManagedRemotePathSegmentPattern.test(segment)
+    ) {
+      return null;
+    }
+    encodedSegments.push(encodeURIComponent(segment));
+  }
+
+  return encodedSegments.join("/");
+};
+
+const canonicalizeManagedRemoteTarget = (url: URL, policy: RemoteImageFetchPolicy) => {
+  if (
+    url.origin !== policy.allowedOrigin ||
+    url.search ||
+    url.hash ||
+    !policy.allowedPathPrefix.startsWith("/") ||
+    !policy.allowedPathPrefix.endsWith("/")
+  ) {
+    return null;
+  }
+
+  const safePath = encodeManagedRemotePath(url.pathname);
+  if (!safePath || !safePath.startsWith(policy.allowedPathPrefix)) {
+    return null;
+  }
+
+  return new URL(`${policy.allowedOrigin}${safePath}`);
+};
+
 type ImageStorageProvider = "local" | "r2";
 
 type R2Config = {
@@ -782,7 +844,11 @@ const isRemoteHostAllowed = async (hostName: string) => {
   }
 };
 
-const fetchAllowedRemoteImage = async (sourceUrl: string, signal: AbortSignal) => {
+const fetchAllowedRemoteImage = async (
+  sourceUrl: string,
+  signal: AbortSignal,
+  policy?: RemoteImageFetchPolicy,
+) => {
   let currentUrl: URL;
   try {
     currentUrl = new URL(sourceUrl);
@@ -793,6 +859,16 @@ const fetchAllowedRemoteImage = async (sourceUrl: string, signal: AbortSignal) =
   for (let redirectCount = 0; redirectCount <= maxRemoteImageRedirects; redirectCount += 1) {
     if (currentUrl.protocol !== "http:" && currentUrl.protocol !== "https:") {
       return null;
+    }
+    if (currentUrl.port || currentUrl.username || currentUrl.password) {
+      return null;
+    }
+    if (policy) {
+      const managedTarget = canonicalizeManagedRemoteTarget(currentUrl, policy);
+      if (!managedTarget) {
+        return null;
+      }
+      currentUrl = managedTarget;
     }
 
     const hostAllowed = await isRemoteHostAllowed(currentUrl.hostname);
@@ -824,12 +900,12 @@ const fetchAllowedRemoteImage = async (sourceUrl: string, signal: AbortSignal) =
   return null;
 };
 
-export const downloadRemoteImage = async (url: string) => {
+export const downloadRemoteImage = async (url: string, policy?: RemoteImageFetchPolicy) => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), remoteImageFetchTimeoutMs);
 
   try {
-    const response = await fetchAllowedRemoteImage(url, controller.signal);
+    const response = await fetchAllowedRemoteImage(url, controller.signal, policy);
     if (!response?.ok) {
       return null;
     }

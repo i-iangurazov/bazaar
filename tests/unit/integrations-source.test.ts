@@ -82,6 +82,9 @@ describe("integration source structure", () => {
     expect(emailWorkspace).toContain("(min-width: 1280px) and (pointer: fine)");
     expect(emailWorkspace).toContain('tWorkspace("builder.unavailableTitle")');
     expect(emailWorkspace).toContain("disabled={!builderAvailable}");
+    expect(emailWorkspace).toContain("resolved?.replace(/[<>'\"]/g");
+    expect(emailWorkspace).toContain("encodeURIComponent(character)");
+    expect(emailWorkspace).toContain("src={safeSrc ?? undefined}");
     expect(emailRouter).toContain("showDescription: z.boolean().optional()");
     expect(emailRouter).toContain('z.enum(["left", "center", "right"])');
     expect(emailRouter).toContain("bodyBold: z.boolean().optional()");

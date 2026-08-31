@@ -2849,7 +2849,10 @@ const PreviewImageFrame = ({
   imageClassName: string;
 }) => {
   const [failed, setFailed] = useState(false);
-  const safeSrc = useMemo(() => resolveBuilderPreviewImageSrc(src), [src]);
+  const safeSrc = useMemo(() => {
+    const resolved = resolveBuilderPreviewImageSrc(src);
+    return resolved?.replace(/[<>'"]/g, (character) => encodeURIComponent(character)) ?? null;
+  }, [src]);
   const canPreview = useMemo(() => {
     if (!safeSrc) return false;
     if (typeof window === "undefined") return true;

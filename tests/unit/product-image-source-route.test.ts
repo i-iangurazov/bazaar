@@ -103,7 +103,10 @@ describe("product image source route", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mockDownloadRemoteImage).toHaveBeenCalledWith(allowedUrl);
+    expect(mockDownloadRemoteImage).toHaveBeenCalledWith(allowedUrl, {
+      allowedOrigin: "https://images.example.com",
+      allowedPathPrefix: "/assets/retails/org-1/",
+    });
     expect(mockReadManagedLocalProductImage).not.toHaveBeenCalled();
   });
 
@@ -127,6 +130,12 @@ describe("product image source route", () => {
     "/uploads/imported-products/other-org/products/prod-1/photo.jpg",
     "/uploads/product-images/other-org/photo.jpg",
     "https://images.example.com/assets/retails/other-org/products/prod-1/photo.jpg",
+    "https://images.example.com/assets/retails/org-1/products/%2Fsecret.png",
+    "https://images.example.com/assets/retails/org-1/products/%5Csecret.png",
+    "https://images.example.com/assets/retails/org-1/products/..%2Fsecret.png",
+    "https://images.example.com/assets/retails/org-1/products/%252Fsecret.png",
+    "https://images.example.com/assets/retails/org-1/products/photo.png?token=unsafe",
+    "https://images.example.com/assets/retails/org-1/products/photo.png#fragment",
   ])(
     "rejects cross-origin or cross-tenant managed-looking urls before I/O: %s",
     async (imageUrl) => {
