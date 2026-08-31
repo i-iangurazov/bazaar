@@ -1,5 +1,6 @@
 import { PrismaClient, PurchaseOrderStatus, StockMovementType } from "@prisma/client";
 import type { Locator, Page } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 
 import { assertAuthenticatedE2EDatabaseUrl, authenticatedE2ESeedPrefix } from "./contract";
 import {
@@ -75,12 +76,20 @@ const readyProductSearch = async (page: Page) => {
 };
 
 const selectPurchaseOrderSupplier = async (page: Page) => {
-  const storeTrigger = page.getByRole("combobox").first();
-  await storeTrigger.click();
-  await page.getByRole("option", { name: fixture.storeName }).click();
-  const supplierTrigger = page.getByRole("combobox").nth(1);
-  await supplierTrigger.click();
-  await page.getByRole("option", { name: fixture.supplier.name }).click();
+  const storeTrigger = page.getByRole("combobox", { name: "Store", exact: true });
+  const supplierTrigger = page.getByRole("combobox", { name: "Supplier", exact: true });
+  await expect(storeTrigger).toHaveCount(1);
+  await expect(supplierTrigger).toHaveCount(1);
+
+  await storeTrigger.press("Enter");
+  await page.getByRole("option", { name: fixture.storeName, exact: true }).press("Enter");
+  await expect(storeTrigger).toContainText(fixture.storeName);
+  await expect(supplierTrigger).not.toContainText(fixture.storeName);
+
+  await supplierTrigger.press("Enter");
+  await page.getByRole("option", { name: fixture.supplier.name, exact: true }).press("Enter");
+  await expect(supplierTrigger).toContainText(fixture.supplier.name);
+  await expect(storeTrigger).not.toContainText(fixture.supplier.name);
 };
 
 const openPurchaseOrderLineDialog = async (page: Page) => {
@@ -137,6 +146,7 @@ const createPurchaseOrderFromUi = async (
   );
   await assertSingleMutation(mutationAudit, "purchaseOrders.create");
   await expect.poll(() => pathname(page).startsWith("/purchase-orders/")).toBe(true);
+  await expect(page.getByText("Total: KGS 221.00", { exact: true })).toBeVisible();
   const purchaseOrderId = decodeURIComponent(pathname(page).slice("/purchase-orders/".length));
   expect(purchaseOrderId).toMatch(/\S/);
   return purchaseOrderId;
@@ -821,11 +831,16 @@ test("@procurement draft validation, edit, PDF, list Back and cancel reconcile w
     (response) =>
       new URL(response.url()).pathname === `/api/purchase-orders/${purchaseOrderId}/pdf`,
   );
+  const pdfDownloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "PDF", exact: true }).click();
-  const pdfResponse = await pdfResponsePromise;
+  const [pdfResponse, pdfDownload] = await Promise.all([pdfResponsePromise, pdfDownloadPromise]);
   expect(pdfResponse.status()).toBe(200);
   expect(pdfResponse.headers()["content-type"]).toContain("application/pdf");
-  expect((await pdfResponse.body()).length).toBeGreaterThan(500);
+  await pdfResponse.finished();
+  expect(pdfDownload.suggestedFilename()).toBe(`po-${purchaseOrderId}.pdf`);
+  const pdfPath = await pdfDownload.path();
+  expect(pdfPath).not.toBeNull();
+  expect((await readFile(pdfPath!)).length).toBeGreaterThan(500);
 
   let orderRow = page.getByRole("row").filter({ hasText: fixture.cancelProduct.name });
   await orderRow.getByRole("button", { name: "Edit line" }).click();
@@ -861,6 +876,7 @@ test("@procurement draft validation, edit, PDF, list Back and cancel reconcile w
   await gotoDirect(page, "/purchase-orders");
   const listSearch = page.getByPlaceholder("Search by number, supplier, or store");
   await listSearch.fill(purchaseOrderId);
+  await expect.poll(() => new URL(page.url()).searchParams.get("search")).toBe(purchaseOrderId);
   let listRow = page
     .getByRole("row")
     .filter({ hasText: purchaseOrderId.slice(0, 8).toUpperCase() });
@@ -868,6 +884,9 @@ test("@procurement draft validation, edit, PDF, list Back and cancel reconcile w
   await listRow.getByRole("link", { name: fixture.supplier.name }).click();
   await assertPathname(page, `/purchase-orders/${purchaseOrderId}`);
   await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(page.getByRole("row").filter({ hasText: fixture.cancelProduct.name })).toContainText(
+    "6",
+  );
   await page.goBack({ waitUntil: "domcontentloaded" });
   await assertPathname(page, "/purchase-orders");
   await expect(listSearch).toHaveValue(purchaseOrderId);

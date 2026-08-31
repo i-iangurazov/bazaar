@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "artifactKind": "MIXED_VERSION_MIGRATION_QUALIFICATION",
+  "generatedAt": "2026-08-31T11:08:00.000Z",
+  "releaseBranch": "codex/bazaar-readiness-release-20260831",
+  "releaseCheckpoint": "5667c99e88d54251b945194e415b5ac03a4eccda",
+  "oldApplicationCommit": "7db455397eb38e9bcaa09bda5acc951964df5ab2",
+  "database": {
+    "engine": "PostgreSQL 16",
+    "host": "127.0.0.1",
+    "port": 55433,
+    "identity": "bazaar_hardening_agent3_commerce",
+    "productionDataUsed": false,
+    "explicitTestCostScopesBeforeMigration": 15
+  },
+  "oldSchemaBaseline": {
+    "migrations": 96,
+    "result": "PASS",
+    "testSuites": 10,
+    "tests": 129,
+    "passed": 129,
+    "failed": 0,
+    "skipped": 0,
+    "artifact": "test-results/release-mixed-version-old-before-expand.json",
+    "artifactSha256": "3ef2c21098d2c315309ca454dab7305ce96693389b27f40b66581b7eccf3cafe",
+    "coverage": [
+      "product reads and writes",
+      "inventory reads and writes",
+      "POS reads and writes",
+      "sales-order reads and writes",
+      "report reads"
+    ]
+  },
+  "releaseMigrations": {
+    "migrations": [
+      "20260831120000_product_cost_precise_basis_value",
+      "20260831121000_stock_movement_inventory_value",
+      "20260831122000_allow_zero_cost_stock_movement"
+    ],
+    "applyResult": "PASS",
+    "observedCombinedApplyWallSeconds": 2.9,
+    "boundedBackfill": false,
+    "resumableBackfill": false,
+    "separateExpandAndContractStages": false
+  },
+  "oldApplicationAfterReleaseMigrations": {
+    "result": "FAIL",
+    "testSuites": 2,
+    "passedSuites": 0,
+    "failedSuites": 2,
+    "tests": 28,
+    "passed": 4,
+    "failed": 24,
+    "skipped": 0,
+    "artifact": "test-results/release-mixed-version-old-after-migrations.json",
+    "artifactSha256": "98bce7952b7bb1741afdf76886a459cf67af0329e9d8e002349787ffbf6ad53f",
+    "primaryDatabaseError": {
+      "sqlstate": "23514",
+      "constraint": "StockMovement_inventoryValueDelta_sign_check",
+      "reason": "The old Prisma client cannot populate inventoryValueDeltaKgs for positive stock movements."
+    }
+  },
+  "safetyAnalysis": {
+    "mixedVersionWriteCompatible": false,
+    "oldApplicationRollbackWriteCompatible": false,
+    "triggerBridgeApproved": false,
+    "triggerBridgeRejectionReasons": [
+      "Old writers lock InventorySnapshot before ProductCost while new writers lock ProductCost before InventorySnapshot, creating a deadlock cycle.",
+      "Legacy receipt, receipt-edit, import-rollback, product-create, and duplication paths would double-apply or overwrite basis changes.",
+      "Legacy positive zero-cost movements contain no durable D-009 confirmation reason.",
+      "Movement type alone cannot infer value because edits emit signed reversals and sale line totals can represent revenue rather than COGS."
+    ]
+  },
+  "releaseDecision": {
+    "migrationGate": "FAIL",
+    "completeAuthenticatedMatrixAuthorizedToStart": false,
+    "pushPermitted": false,
+    "mergePermitted": false,
+    "productionMigrationPermitted": false,
+    "productionDeploymentPermitted": false
+  }
+}

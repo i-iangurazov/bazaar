@@ -1,31 +1,27 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { getSession, signIn } from "next-auth/react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { z } from "zod";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 
 import { normalizeLocale } from "@/lib/locales";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+import { Label } from "@/components/ui/label";
 import { FormStack } from "@/components/form-layout";
 
 export const LoginForm = () => {
   const [isLoading, setIsLoading] = useState(false);
+  const [isHydrated, setIsHydrated] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{
+    email?: string;
+    password?: string;
+  }>({});
   const t = useTranslations("auth");
   const tCommon = useTranslations("common");
   const router = useRouter();
@@ -50,14 +46,7 @@ export const LoginForm = () => {
     password: z.string().min(1, t("passwordRequired")),
   });
 
-  const form = useForm<z.infer<typeof schema>>({
-    resolver: zodResolver(schema),
-    defaultValues: {
-      email: "",
-      password: "",
-    },
-    mode: "onSubmit",
-  });
+  useEffect(() => setIsHydrated(true), []);
 
   const handleSubmit = async (values: z.infer<typeof schema>) => {
     if (submitInFlightRef.current) return;
@@ -110,65 +99,102 @@ export const LoginForm = () => {
     }
   };
 
+  const handleFormSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const visibleValues = new FormData(event.currentTarget);
+    const parsed = schema.safeParse({
+      email: String(visibleValues.get("email") ?? ""),
+      password: String(visibleValues.get("password") ?? ""),
+    });
+
+    if (!parsed.success) {
+      const errors = parsed.error.flatten().fieldErrors;
+      setFieldErrors({
+        email: errors.email?.[0],
+        password: errors.password?.[0],
+      });
+      return;
+    }
+
+    setFieldErrors({});
+    await handleSubmit(parsed.data);
+  };
+
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} noValidate aria-live="polite">
-        <FormStack>
-          <FormField
-            control={form.control}
+    <form
+      data-login-form
+      data-hydrated={isHydrated ? "true" : "false"}
+      onSubmit={handleFormSubmit}
+      noValidate
+      aria-live="polite"
+    >
+      <FormStack>
+        <div className="space-y-1">
+          <Label className={fieldErrors.email ? "text-danger" : undefined} htmlFor="login-email">
+            {t("email")}
+          </Label>
+          <Input
+            id="login-email"
             name="email"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t("email")}</FormLabel>
-                <FormControl>
-                  <Input
-                    {...field}
-                    type="email"
-                    autoComplete="email"
-                    placeholder={t("emailPlaceholder")}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+            type="email"
+            autoComplete="email"
+            placeholder={t("emailPlaceholder")}
+            aria-invalid={Boolean(fieldErrors.email)}
+            aria-describedby={fieldErrors.email ? "login-email-error" : undefined}
           />
-          <FormField
-            control={form.control}
-            name="password"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t("password")}</FormLabel>
-                <FormControl>
-                  <PasswordInput
-                    {...field}
-                    autoComplete="current-password"
-                    placeholder={t("passwordPlaceholder")}
-                    showLabel={tCommon("showPassword")}
-                    hideLabel={tCommon("hidePassword")}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          {error ? (
-            <p className="text-sm text-danger" role="alert">
-              {t(error)}
+          {fieldErrors.email ? (
+            <p
+              id="login-email-error"
+              role="alert"
+              aria-live="assertive"
+              className="text-xs font-medium text-danger"
+            >
+              {fieldErrors.email}
             </p>
           ) : null}
-          <div className="text-right">
-            <Link
-              href="/reset"
-              className="text-xs font-semibold text-primary hover:text-primary/90"
+        </div>
+        <div className="space-y-1">
+          <Label
+            className={fieldErrors.password ? "text-danger" : undefined}
+            htmlFor="login-password"
+          >
+            {t("password")}
+          </Label>
+          <PasswordInput
+            id="login-password"
+            name="password"
+            autoComplete="current-password"
+            placeholder={t("passwordPlaceholder")}
+            showLabel={tCommon("showPassword")}
+            hideLabel={tCommon("hidePassword")}
+            aria-invalid={Boolean(fieldErrors.password)}
+            aria-describedby={fieldErrors.password ? "login-password-error" : undefined}
+          />
+          {fieldErrors.password ? (
+            <p
+              id="login-password-error"
+              role="alert"
+              aria-live="assertive"
+              className="text-xs font-medium text-danger"
             >
-              {t("forgotPassword")}
-            </Link>
-          </div>
-          <Button className="w-full" type="submit" disabled={isLoading}>
-            {isLoading ? t("signingIn") : t("signIn")}
-          </Button>
-        </FormStack>
-      </form>
-    </Form>
+              {fieldErrors.password}
+            </p>
+          ) : null}
+        </div>
+        {error ? (
+          <p className="text-sm text-danger" role="alert">
+            {t(error)}
+          </p>
+        ) : null}
+        <div className="text-right">
+          <Link href="/reset" className="text-xs font-semibold text-primary hover:text-primary/90">
+            {t("forgotPassword")}
+          </Link>
+        </div>
+        <Button className="w-full" type="submit" disabled={isLoading}>
+          {isLoading ? t("signingIn") : t("signIn")}
+        </Button>
+      </FormStack>
+    </form>
   );
 };

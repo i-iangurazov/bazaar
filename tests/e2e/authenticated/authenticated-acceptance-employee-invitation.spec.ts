@@ -282,12 +282,27 @@ test("BZR-REQ-0188/0116/0117 admin creates one scoped invite and the employee ac
     1,
   );
 
-  await page.goto("/login?next=/dashboard", { waitUntil: "domcontentloaded" });
-  await page.getByLabel("Email", { exact: true }).fill(fixture.invitedUser.email);
-  await page.getByLabel("Password", { exact: true }).fill(fixture.invitedUser.password);
+  await page.goto("/login?next=/dashboard", { waitUntil: "commit" });
+  const invitedEmailInput = page.getByLabel("Email", { exact: true });
+  const invitedPasswordInput = page.getByLabel("Password", { exact: true });
+  await invitedEmailInput.fill(fixture.invitedUser.email);
+  await invitedPasswordInput.fill(fixture.invitedUser.password);
+  await expect(page.locator("form[data-login-form]")).toHaveAttribute("data-hydrated", "true");
+  await page.getByRole("button", { name: "Show password", exact: true }).press("Enter");
+  await expect(invitedPasswordInput).toHaveAttribute("type", "text");
+  await expect(invitedEmailInput).toHaveValue(fixture.invitedUser.email);
+  await expect(invitedPasswordInput).toHaveValue(fixture.invitedUser.password);
+  await page.getByRole("button", { name: "Hide password", exact: true }).press("Enter");
+  await expect(invitedPasswordInput).toHaveAttribute("type", "password");
+  await expect(invitedEmailInput).toHaveValue(fixture.invitedUser.email);
+  await expect(invitedPasswordInput).toHaveValue(fixture.invitedUser.password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Dashboard" })).toBeVisible();
   expect(employeeInvitationAudit.allowedCredentialCallbacks).toBe(1);
+  const dashboardReload = await page.reload({ waitUntil: "domcontentloaded" });
+  expect(dashboardReload).not.toBeNull();
+  expect(dashboardReload!.status()).toBeLessThan(500);
+  await expect(page.getByRole("heading", { level: 1, name: "Dashboard" })).toBeVisible();
 
   const session = await page.evaluate(async () => {
     const response = await fetch("/api/auth/session", { credentials: "same-origin" });

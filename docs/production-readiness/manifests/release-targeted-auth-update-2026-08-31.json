@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "timestamp": "2026-08-31T11:04:20.000Z",
+  "requirements": [
+    {
+      "id": "BZR-REQ-0116",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "The complete employee-invite token lifecycle passes: one scoped invite is created, accepted once, followed by a successful credential callback, role-bound dashboard access, and a durable refreshed session.",
+      "statusJustification": "The retained production-mode browser case exercises the previously failing post-acceptance sign-in boundary and completes the valid invite lifecycle without a duplicate invite, user, acceptance, or credential callback.",
+      "verificationTimestampSource": "Preserved Playwright JSON completed 2026-08-31T10:47:33.849Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-auth-two-scenarios-combined.json",
+          "description": "Clean combined targeted run: 9 expected, zero unexpected, skipped, or flaky; SHA-256 29ac4b37201ce4b92199822d7c0bdd61cdf50adea2e2511bf8eab6c3da115b3a"
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-auth-two-scenarios-combined.xml",
+          "description": "JUnit for the clean combined targeted run; SHA-256 f45d9f273348b27c1be772972956c298cc5fffb2a3a81a014bcf6b56ef25c66f"
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec playwright test --config=playwright.authenticated.production.config.ts tests/e2e/authenticated/authenticated-acceptance-employee-invitation.spec.ts tests/e2e/authenticated/authenticated-acceptance-master-data-procurement.spec.ts"
+        ],
+        "tests": ["tests/e2e/authenticated/authenticated-acceptance-employee-invitation.spec.ts"],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0117",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Malformed, expired, and already-used employee invite tokens all render the invalid-or-expired terminal state before exposing name, password, or acceptance controls.",
+      "statusJustification": "The retained browser case proves all required invalid token families, verifies no acceptance mutation occurs for them, and confirms the valid token becomes unusable immediately after its single successful acceptance.",
+      "verificationTimestampSource": "Preserved Playwright JSON completed 2026-08-31T10:47:33.849Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-auth-two-scenarios-combined.json",
+          "description": "Clean combined targeted run: 9 expected, zero unexpected, skipped, or flaky; SHA-256 29ac4b37201ce4b92199822d7c0bdd61cdf50adea2e2511bf8eab6c3da115b3a"
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-invitation-corrected.json",
+          "description": "Independent clean invitation run: 8 expected, zero unexpected, skipped, or flaky; SHA-256 08c93d85113355f84e06ad8436de9c8f060feda6e39baba998435c3d2066b181"
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec playwright test --config=playwright.authenticated.production.config.ts tests/e2e/authenticated/authenticated-acceptance-employee-invitation.spec.ts"
+        ],
+        "tests": ["tests/e2e/authenticated/authenticated-acceptance-employee-invitation.spec.ts"],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0188",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "An admin creates exactly one store-scoped MANAGER invitation; the employee accepts it once, receives the intended organization, role, and store access, signs in, refreshes successfully, and remains denied the admin Users route.",
+      "statusJustification": "The retained end-to-end case reconciles the rendered workflow with InviteToken, User, UserStoreAccess, AuthToken, and AuditLog rows and proves single-effect mutation boundaries and role-bound navigation.",
+      "verificationTimestampSource": "Preserved Playwright JSON completed 2026-08-31T10:47:33.849Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-auth-two-scenarios-combined.json",
+          "description": "Clean combined targeted run: 9 expected, zero unexpected, skipped, or flaky; SHA-256 29ac4b37201ce4b92199822d7c0bdd61cdf50adea2e2511bf8eab6c3da115b3a"
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-invitation-corrected.xml",
+          "description": "JUnit for the independent corrected invitation run; SHA-256 1b768fad651c730663ef9fe4366cc43701b0dabc034f53edb1cd72a0320779d9"
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec playwright test --config=playwright.authenticated.production.config.ts tests/e2e/authenticated/authenticated-acceptance-employee-invitation.spec.ts"
+        ],
+        "tests": ["tests/e2e/authenticated/authenticated-acceptance-employee-invitation.spec.ts"],
+        "manualProcedure": null
+      }
+    }
+  ],
+  "defects": []
+}

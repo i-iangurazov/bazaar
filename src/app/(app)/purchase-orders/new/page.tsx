@@ -165,6 +165,7 @@ const NewPurchaseOrderPage = () => {
   const [variantCache, setVariantCache] = useState<Record<string, string>>({});
   const qtyInputRef = useRef<HTMLInputElement | null>(null);
   const createAttemptRef = useRef<{ payload: string; idempotencyKey: string } | null>(null);
+  const createInFlightRef = useRef(false);
 
   const lineForm = useForm<z.infer<typeof lineSchema>>({
     resolver: zodResolver(lineSchema),
@@ -369,11 +370,16 @@ const NewPurchaseOrderPage = () => {
       router.push(`/purchase-orders/${po.id}`);
     },
     onError: (error) => {
+      createInFlightRef.current = false;
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
   });
 
   const submitPurchaseOrderCreate = (values: z.infer<typeof schema>, submit: boolean) => {
+    if (createInFlightRef.current) {
+      return;
+    }
+    createInFlightRef.current = true;
     const payload = {
       storeId: values.storeId,
       supplierId:
@@ -433,10 +439,15 @@ const NewPurchaseOrderPage = () => {
                 name="storeId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t("store")}</FormLabel>
+                    <FormLabel id="purchase-order-store-label" htmlFor="purchase-order-store">
+                      {t("store")}
+                    </FormLabel>
                     <Select value={field.value} onValueChange={field.onChange}>
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger
+                          id="purchase-order-store"
+                          aria-labelledby="purchase-order-store-label"
+                        >
                           <SelectValue placeholder={tCommon("selectStore")} />
                         </SelectTrigger>
                       </FormControl>
@@ -457,13 +468,18 @@ const NewPurchaseOrderPage = () => {
                 name="supplierId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t("supplier")}</FormLabel>
+                    <FormLabel id="purchase-order-supplier-label" htmlFor="purchase-order-supplier">
+                      {t("supplier")}
+                    </FormLabel>
                     <Select
                       value={field.value ?? "__none__"}
                       onValueChange={(value) => field.onChange(value === "__none__" ? null : value)}
                     >
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger
+                          id="purchase-order-supplier"
+                          aria-labelledby="purchase-order-supplier-label"
+                        >
                           <SelectValue placeholder={tCommon("selectSupplier")} />
                         </SelectTrigger>
                       </FormControl>
