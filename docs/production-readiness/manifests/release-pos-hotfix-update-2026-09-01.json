@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 1,
+  "timestamp": "2026-08-31T21:52:31.000Z",
+  "requirements": [
+    {
+      "id": "BZR-REQ-0079",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "POS returns remain idempotent and preserve frozen COGS. CASHIER payment correction changes only the completed receipt tender; stock, quantity, ProductCost, stock movements, sale lines, total, and completion time remain unchanged. Fiscalized receipts reject direct mutation with a precise lawful-correction explanation.",
+      "statusJustification": "The production complaint fixtures S-006065 and S-006072 passed in a fresh production-mode browser journey, and the affected POS/inventory integration suites passed 77/77.",
+      "verificationTimestampSource": "Focused production-mode POS journey completed 2026-08-31T21:52:04.464Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/release-pos-hotfix-2026-09-01.json",
+          "description": "Hash-pinned POS hotfix browser, deterministic, build, and exact-case authenticated reconciliation evidence."
+        },
+        {
+          "type": "file",
+          "path": "test-results/pos-hotfix-final-targeted.json",
+          "description": "Nine of nine production-mode cases pass, including the exact CASHIER correction and fiscal boundary journey."
+        },
+        {
+          "type": "file",
+          "path": "test-results/final-pos-inventory-hotfix.json",
+          "description": "Seventy-seven of seventy-seven POS and inventory integration tests pass."
+        }
+      ]
+    },
+    {
+      "id": "BZR-REQ-0080",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Debt balances remain reconciled. Cash-to-transfer, transfer-to-cash, and split-payment corrections preserve tender sum equal to the completed sale total and remain durable after refresh and relogin without creating a duplicate sale, payment correction, or receipt.",
+      "statusJustification": "Tender transformations, durable receipt history, total equality, and idempotency pass in retained browser and integration evidence.",
+      "verificationTimestampSource": "Focused production-mode POS journey completed 2026-08-31T21:52:04.464Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/release-pos-hotfix-2026-09-01.json",
+          "description": "All payment-method, total-reconciliation, persistence, and duplicate-prevention acceptance fields are PASS."
+        },
+        {
+          "type": "file",
+          "path": "test-results/pos-hotfix-final-targeted.json",
+          "description": "The completed-receipt cash-to-transfer journey passes after refresh and a fresh login."
+        },
+        {
+          "type": "file",
+          "path": "test-results/final-pos-inventory-hotfix.json",
+          "description": "Integration evidence covers reverse and split tender corrections."
+        }
+      ]
+    },
+    {
+      "id": "BZR-REQ-0081",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Cash pay-in/pay-out remains reconciled. Payment correction changes derived expected cash, shift totals, receipt details, reports, CSV, and XLSX exactly once without fabricating a drawer movement, reselling stock, or reversing COGS. Before/after, actor, and reason are audited.",
+      "statusJustification": "Cash ledger/report/export and exact-once mutation/audit behavior pass in the retained production-mode browser and integration evidence.",
+      "verificationTimestampSource": "Focused production-mode POS journey completed 2026-08-31T21:52:04.464Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/release-pos-hotfix-2026-09-01.json",
+          "description": "One correction request, one audit event, unchanged stock/COGS, and reconciled reports/exports are retained."
+        },
+        {
+          "type": "file",
+          "path": "test-results/pos-hotfix-final-targeted.json",
+          "description": "Browser evidence records one mutation, one audit event, and unchanged stock/COGS."
+        },
+        {
+          "type": "file",
+          "path": "test-results/final-pos-inventory-hotfix.json",
+          "description": "Integration evidence covers cash ledger, shift report, CSV/XLSX, and audit invariants."
+        }
+      ]
+    },
+    {
+      "id": "BZR-REQ-0082",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Shift opening/closing and cash reconciliation remain correct. A CASHIER can correct a non-fiscal completed receipt even after its shift closes; the original closed timestamp and counted cash remain frozen while expected cash changes exactly once. STAFF receives HTTP 403. Active receipt S-006097 can be discarded beside Open receipt without navigation, stock, payment, or drawer mutation, after which the shift closes successfully.",
+      "statusJustification": "Closed-shift correction, CASHIER/STAFF role boundaries, rapid double submit, S-006097 instant cancellation, and subsequent shift closure pass in the production-mode browser journey.",
+      "verificationTimestampSource": "Focused production-mode POS journey completed 2026-08-31T21:52:04.464Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/release-pos-hotfix-2026-09-01.json",
+          "description": "CASHIER/STAFF, closed-shift, expected-cash, refresh/relogin, viewport, idempotency, and instant-cancel acceptance fields are PASS."
+        },
+        {
+          "type": "file",
+          "path": "test-results/pos-hotfix-final-targeted.json",
+          "description": "Production-mode browser evidence covers S-006065, S-006072, and S-006097."
+        },
+        {
+          "type": "file",
+          "path": "test-results/final-pos-inventory-hotfix.json",
+          "description": "POS and inventory integration suites pass 77/77 with closed-shift and exact-once boundaries."
+        }
+      ]
+    }
+  ],
+  "defects": []
+}

@@ -152,6 +152,16 @@ const PosShiftsPage = () => {
     },
   });
 
+  const cancelDraftMutation = trpc.pos.sales.cancelDraft.useMutation({
+    onSuccess: async () => {
+      toast({ variant: "success", description: t("sell.saleDiscarded") });
+      await currentShiftQuery.refetch();
+    },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
+
   const cancelReturnMutation = trpc.pos.returns.cancel.useMutation({
     onSuccess: async () => {
       toast({ variant: "success", description: t("shifts.returnDraftCanceled") });
@@ -797,6 +807,8 @@ const PosShiftsPage = () => {
                         {activeReceipts.map((receipt) => (
                           <div
                             key={receipt.id}
+                            data-testid="pos-shift-active-receipt"
+                            data-sale-id={receipt.id}
                             className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/70 bg-background/70 p-2"
                           >
                             <div className="min-w-0">
@@ -808,13 +820,27 @@ const PosShiftsPage = () => {
                               </p>
                             </div>
                             {receipt.ownedByCurrentUser ? (
-                              <Button size="sm" variant="secondary" asChild>
-                                <Link
-                                  href={`/pos/sell?registerId=${encodeURIComponent(registerId)}`}
+                              <div className="flex flex-wrap gap-2">
+                                <Button size="sm" variant="secondary" asChild>
+                                  <Link
+                                    href={`/pos/sell?registerId=${encodeURIComponent(registerId)}`}
+                                  >
+                                    {t("shifts.resolveReceipt")}
+                                  </Link>
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="danger"
+                                  disabled={cancelDraftMutation.isLoading}
+                                  onClick={() => cancelDraftMutation.mutate({ saleId: receipt.id })}
                                 >
-                                  {t("shifts.resolveReceipt")}
-                                </Link>
-                              </Button>
+                                  {cancelDraftMutation.isLoading ? (
+                                    <Spinner className="h-4 w-4" />
+                                  ) : null}
+                                  {t("sell.discardSale")}
+                                </Button>
+                              </div>
                             ) : (
                               <Button
                                 size="sm"

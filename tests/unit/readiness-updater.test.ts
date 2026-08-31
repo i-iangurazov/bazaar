@@ -110,7 +110,7 @@ const validManifest = (): Manifest => ({
   ],
   defects: [
     {
-      id: "PUBLIC-004",
+      id: "PUBLIC-002",
       currentStatus: "RESOLVED",
       resolutionEvidence: [fileEvidence(), commandEvidence()],
     },
@@ -205,7 +205,7 @@ describe("production readiness updater", () => {
       }>;
     };
     const requirement = updated.requirements.find(({ id }) => id === "BZR-REQ-0001");
-    const defect = updated.defects.find(({ id }) => id === "PUBLIC-004");
+    const defect = updated.defects.find(({ id }) => id === "PUBLIC-002");
     expect(updated.generatedAt).toBe(timestamp);
     expect(requirement).toMatchObject({
       currentStatus: "PARTIAL",

@@ -617,37 +617,21 @@ const InventoryPage = () => {
 
   const adjustSchema = useMemo(
     () =>
-      z
-        .object({
-          productId: z.string().min(1, t("productRequired")),
-          variantId: z.string().optional().nullable(),
-          qtyDelta: z.coerce
-            .number()
-            .int()
-            .refine((value) => value !== 0, t("qtyNonZero")),
-          unitCostKgs: z.preprocess(
-            (value) => (value === "" || value === null ? undefined : value),
-            z.coerce.number().min(0, t("unitCostInvalid")).optional(),
-          ),
-          zeroCostConfirmed: z.boolean().optional(),
-          zeroCostReason: z.string().trim().max(500).optional(),
-          unitSelection: z.string().min(1, t("unitRequired")),
-          reason: z.string().trim().min(3, t("reasonRequired")),
-          expiryDate: z.string().optional(),
-        })
-        .superRefine((values, context) => {
-          if (
-            values.qtyDelta > 0 &&
-            values.unitCostKgs === 0 &&
-            (!values.zeroCostConfirmed || !values.zeroCostReason?.trim())
-          ) {
-            context.addIssue({
-              code: z.ZodIssueCode.custom,
-              path: ["zeroCostReason"],
-              message: t("zeroCostConfirmationRequired"),
-            });
-          }
-        }),
+      z.object({
+        productId: z.string().min(1, t("productRequired")),
+        variantId: z.string().optional().nullable(),
+        qtyDelta: z.coerce
+          .number()
+          .int()
+          .refine((value) => value !== 0, t("qtyNonZero")),
+        unitCostKgs: z.preprocess(
+          (value) => (value === "" || value === null ? undefined : value),
+          z.coerce.number().min(0, t("unitCostInvalid")).optional(),
+        ),
+        unitSelection: z.string().min(1, t("unitRequired")),
+        reason: z.string().trim().min(3, t("reasonRequired")),
+        expiryDate: z.string().optional(),
+      }),
     [t],
   );
 
@@ -769,8 +753,6 @@ const InventoryPage = () => {
       variantId: null,
       qtyDelta: 0,
       unitCostKgs: undefined,
-      zeroCostConfirmed: false,
-      zeroCostReason: "",
       unitSelection: "BASE",
       reason: "",
       expiryDate: "",
@@ -1353,7 +1335,6 @@ const InventoryPage = () => {
   const adjustVariantId = adjustForm.watch("variantId");
   const adjustUnitSelection = adjustForm.watch("unitSelection");
   const adjustQty = adjustForm.watch("qtyDelta");
-  const adjustUnitCost = adjustForm.watch("unitCostKgs");
   const transferProductId = transferForm.watch("productId");
   const transferVariantId = transferForm.watch("variantId");
   const transferUnitSelection = transferForm.watch("unitSelection");
@@ -1866,8 +1847,6 @@ const InventoryPage = () => {
       void trpcUtils.inventory.searchProducts.invalidate();
       adjustForm.setValue("qtyDelta", 0);
       adjustForm.setValue("unitCostKgs", undefined);
-      adjustForm.setValue("zeroCostConfirmed", false);
-      adjustForm.setValue("zeroCostReason", "");
       adjustForm.setValue("reason", "");
       toast({ variant: "success", description: t("adjustSuccess") });
       setActiveDialog(null);
@@ -3821,8 +3800,6 @@ const InventoryPage = () => {
                 variantId: values.variantId ?? undefined,
                 qtyDelta: values.qtyDelta,
                 unitCostKgs: values.unitCostKgs,
-                zeroCostConfirmed: values.zeroCostConfirmed,
-                zeroCostReason: values.zeroCostReason?.trim() || undefined,
                 unitId: values.unitSelection === "BASE" ? adjustProduct?.baseUnitId : undefined,
                 packId: values.unitSelection !== "BASE" ? values.unitSelection : undefined,
                 reason: values.reason,
@@ -3957,38 +3934,6 @@ const InventoryPage = () => {
                     </FormItem>
                   )}
                 />
-              ) : null}
-              {Number(adjustQty) > 0 && adjustUnitCost === 0 ? (
-                <div className="space-y-3 rounded-xl border border-warning/40 bg-warning/10 p-3 md:col-span-2">
-                  <FormField
-                    control={adjustForm.control}
-                    name="zeroCostConfirmed"
-                    render={({ field }) => (
-                      <FormItem className="flex items-center justify-between gap-4">
-                        <div>
-                          <FormLabel>{t("zeroCostConfirmationLabel")}</FormLabel>
-                          <FormDescription>{t("zeroCostConfirmationHelp")}</FormDescription>
-                        </div>
-                        <FormControl>
-                          <Switch checked={field.value} onCheckedChange={field.onChange} />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={adjustForm.control}
-                    name="zeroCostReason"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t("zeroCostReasonLabel")}</FormLabel>
-                        <FormControl>
-                          <Textarea {...field} placeholder={t("zeroCostReasonPlaceholder")} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
               ) : null}
               {trackExpiryLots ? (
                 <FormField

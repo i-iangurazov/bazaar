@@ -919,9 +919,6 @@ export const resolvePosPaymentCorrectionEligibility = (input: {
   if (!input.shiftId || input.shiftStatus === null) {
     return { eligible: false, reason: "SHIFT_MISSING" };
   }
-  if (input.shiftStatus !== RegisterShiftStatus.OPEN) {
-    return { eligible: false, reason: "SHIFT_CLOSED" };
-  }
   if (input.registerActive === false) {
     return { eligible: false, reason: "REGISTER_INACTIVE" };
   }
@@ -2987,10 +2984,17 @@ export const cancelPosSaleDraft = async (input: {
     if (input.user) {
       await assertUserCanAccessStore(tx, input.user, sale.storeId);
     }
+    assertPosSaleDraftOwner(sale, input.actorId);
+    if (sale.status === CustomerOrderStatus.CANCELED) {
+      return {
+        id: sale.id,
+        number: sale.number,
+        status: sale.status,
+      };
+    }
     if (sale.status !== CustomerOrderStatus.DRAFT) {
       throw new AppError("posSaleNotEditable", "CONFLICT", 409);
     }
-    assertPosSaleDraftOwner(sale, input.actorId);
 
     const canceled = await tx.customerOrder.update({
       where: { id: sale.id },
@@ -4182,7 +4186,7 @@ export const editCompletedPosSale = async (input: {
           }
           const oldCostTotalKgs = oldCostByKey.has(key) ? oldCostByKey.get(key)! : 0;
           const desiredCostTotalKgs = desiredCostByKey.has(key) ? desiredCostByKey.get(key)! : 0;
-          const inventoryValueDeltaKgs =
+          const requestedInventoryValueDeltaKgs =
             oldCostTotalKgs === null || desiredCostTotalKgs === null
               ? null
               : roundMoney(oldCostTotalKgs - desiredCostTotalKgs);
@@ -4195,6 +4199,26 @@ export const editCompletedPosSale = async (input: {
             (oldCostLine?.unitCostKgs === null || oldCostLine?.unitCostKgs === undefined
               ? null
               : toMoney(oldCostLine.unitCostKgs));
+          let inventoryValueDeltaKgs = requestedInventoryValueDeltaKgs;
+          let inventoryValueStatus: string | undefined;
+          let inventoryValueReason: string | undefined;
+          if (requestedInventoryValueDeltaKgs !== null) {
+            const costApplication = await applyValuedProductCostDelta(tx, {
+              organizationId: input.organizationId,
+              productId: movementLine.productId,
+              variantId: movementLine.variantId,
+              quantityDelta: stockDelta,
+              valueDeltaKgs: requestedInventoryValueDeltaKgs,
+              allowNegativeStock: true,
+            });
+            inventoryValueDeltaKgs =
+              costApplication?.inventoryValueDeltaKgs ?? requestedInventoryValueDeltaKgs;
+            if (Math.abs(inventoryValueDeltaKgs - requestedInventoryValueDeltaKgs) > 0.0000005) {
+              inventoryValueStatus =
+                stockDelta > 0 && inventoryValueDeltaKgs === 0 ? "EXPLICIT_ZERO" : "NEGATIVE_STOCK";
+              inventoryValueReason = "NEGATIVE_STOCK_ASSET_BOUNDARY";
+            }
+          }
           const movement = await applyStockMovement(tx, {
             storeId: sale.storeId,
             productId: movementLine.productId,
@@ -4204,21 +4228,15 @@ export const editCompletedPosSale = async (input: {
             referenceType: "CustomerOrder",
             referenceId: sale.id,
             unitCostKgs: movementUnitCostKgs,
+            lineTotalKgs: requestedInventoryValueDeltaKgs,
             inventoryValueDeltaKgs,
+            inventoryValueStatus,
+            inventoryValueReason,
             note: input.reason?.trim() || `Редактирование чека ${sale.number}`,
             actorId: input.actorId,
             organizationId: input.organizationId,
+            allowValuedNegativeStock: true,
           });
-          if (inventoryValueDeltaKgs !== null) {
-            await applyValuedProductCostDelta(tx, {
-              organizationId: input.organizationId,
-              productId: movementLine.productId,
-              variantId: movementLine.variantId,
-              quantityDelta: stockDelta,
-              valueDeltaKgs: inventoryValueDeltaKgs,
-              alreadyAppliedPhysicalQuantityDelta: stockDelta,
-            });
-          }
           changedProducts.set(key, {
             storeId: sale.storeId,
             productId: movementLine.productId,
@@ -5210,14 +5228,25 @@ export const completePosSale = async (input: {
             const frozenCostTotalKgs =
               line.lineCostTotalKgs ??
               (line.unitCostKgs === null ? null : line.unitCostKgs.mul(line.qty));
+            let inventoryValueDeltaKgs: number | null = null;
+            let inventoryValueStatus: string | undefined;
+            let inventoryValueReason: string | undefined;
             if (frozenCostTotalKgs !== null) {
-              await applyValuedProductCostDelta(tx, {
+              const requestedValueDeltaKgs = Number(frozenCostTotalKgs.negated());
+              const costApplication = await applyValuedProductCostDelta(tx, {
                 organizationId: input.organizationId,
                 productId: line.productId,
                 variantId: line.variantId,
                 quantityDelta: -line.qty,
                 valueDeltaKgs: frozenCostTotalKgs.negated(),
+                allowNegativeStock: true,
               });
+              inventoryValueDeltaKgs =
+                costApplication?.inventoryValueDeltaKgs ?? requestedValueDeltaKgs;
+              if (Math.abs(inventoryValueDeltaKgs - requestedValueDeltaKgs) > 0.0000005) {
+                inventoryValueStatus = "NEGATIVE_STOCK";
+                inventoryValueReason = "NEGATIVE_STOCK_ASSET_BOUNDARY";
+              }
             }
             await applyStockMovement(tx, {
               storeId: sale.storeId,
@@ -5228,11 +5257,13 @@ export const completePosSale = async (input: {
               referenceType: "CustomerOrder",
               referenceId: sale.id,
               unitCostKgs: line.unitCostKgs === null ? null : Number(line.unitCostKgs),
-              inventoryValueDeltaKgs:
-                frozenCostTotalKgs === null ? null : Number(frozenCostTotalKgs.negated()),
+              inventoryValueDeltaKgs,
+              inventoryValueStatus,
+              inventoryValueReason,
               note: sale.number,
               actorId: input.actorId,
               organizationId: input.organizationId,
+              allowValuedNegativeStock: true,
             });
           }
 
@@ -6298,18 +6329,29 @@ export const editCompletedSaleReturn = async (input: {
           const desiredCostTotalKgs = desiredReturnCostByKey.has(key)
             ? desiredReturnCostByKey.get(key)!
             : 0;
-          const inventoryValueDeltaKgs =
+          const requestedInventoryValueDeltaKgs =
             oldCostTotalKgs === null || desiredCostTotalKgs === null
               ? null
               : roundMoney(desiredCostTotalKgs - oldCostTotalKgs);
-          if (inventoryValueDeltaKgs !== null) {
-            await applyValuedProductCostDelta(tx, {
+          let inventoryValueDeltaKgs = requestedInventoryValueDeltaKgs;
+          let inventoryValueStatus: string | undefined;
+          let inventoryValueReason: string | undefined;
+          if (requestedInventoryValueDeltaKgs !== null) {
+            const costApplication = await applyValuedProductCostDelta(tx, {
               organizationId: input.organizationId,
               productId: movementLine.productId,
               variantId: movementLine.variantId,
               quantityDelta: stockDelta,
-              valueDeltaKgs: inventoryValueDeltaKgs,
+              valueDeltaKgs: requestedInventoryValueDeltaKgs,
+              allowNegativeStock: true,
             });
+            inventoryValueDeltaKgs =
+              costApplication?.inventoryValueDeltaKgs ?? requestedInventoryValueDeltaKgs;
+            if (Math.abs(inventoryValueDeltaKgs - requestedInventoryValueDeltaKgs) > 0.0000005) {
+              inventoryValueStatus =
+                stockDelta > 0 && inventoryValueDeltaKgs === 0 ? "EXPLICIT_ZERO" : "NEGATIVE_STOCK";
+              inventoryValueReason = "NEGATIVE_STOCK_ASSET_BOUNDARY";
+            }
           }
           const desiredCostLine = desiredReturnLineByKey.get(key);
           const oldCostLine = saleReturn.lines.find(
@@ -6329,10 +6371,14 @@ export const editCompletedSaleReturn = async (input: {
             referenceType: "SaleReturn",
             referenceId: saleReturn.id,
             unitCostKgs: movementUnitCostKgs,
+            lineTotalKgs: requestedInventoryValueDeltaKgs,
             inventoryValueDeltaKgs,
+            inventoryValueStatus,
+            inventoryValueReason,
             note: input.reason?.trim() || `Редактирование возврата ${saleReturn.number}`,
             actorId: input.actorId,
             organizationId: input.organizationId,
+            allowValuedNegativeStock: true,
           });
           changedProducts.set(key, {
             storeId: saleReturn.storeId,
@@ -6700,14 +6746,26 @@ export const completeSaleReturn = async (input: {
           const frozenCostTotalKgs =
             line.lineCostTotalKgs ??
             (line.unitCostKgs === null ? null : line.unitCostKgs.mul(line.qty));
+          let inventoryValueDeltaKgs: number | null = null;
+          let inventoryValueStatus: string | undefined;
+          let inventoryValueReason: string | undefined;
           if (frozenCostTotalKgs !== null) {
-            await applyValuedProductCostDelta(tx, {
+            const requestedValueDeltaKgs = Number(frozenCostTotalKgs);
+            const costApplication = await applyValuedProductCostDelta(tx, {
               organizationId: input.organizationId,
               productId: line.productId,
               variantId: line.variantId,
               quantityDelta: line.qty,
               valueDeltaKgs: frozenCostTotalKgs,
+              allowNegativeStock: true,
             });
+            inventoryValueDeltaKgs =
+              costApplication?.inventoryValueDeltaKgs ?? requestedValueDeltaKgs;
+            if (Math.abs(inventoryValueDeltaKgs - requestedValueDeltaKgs) > 0.0000005) {
+              inventoryValueStatus =
+                inventoryValueDeltaKgs === 0 ? "EXPLICIT_ZERO" : "NEGATIVE_STOCK";
+              inventoryValueReason = "NEGATIVE_STOCK_ASSET_BOUNDARY";
+            }
           }
           await applyStockMovement(tx, {
             storeId: saleReturn.storeId,
@@ -6718,10 +6776,13 @@ export const completeSaleReturn = async (input: {
             referenceType: "SaleReturn",
             referenceId: saleReturn.id,
             unitCostKgs: line.unitCostKgs === null ? null : Number(line.unitCostKgs),
-            inventoryValueDeltaKgs: frozenCostTotalKgs === null ? null : Number(frozenCostTotalKgs),
+            inventoryValueDeltaKgs,
+            inventoryValueStatus,
+            inventoryValueReason,
             note: saleReturn.number,
             actorId: input.actorId,
             organizationId: input.organizationId,
+            allowValuedNegativeStock: true,
           });
         }
 

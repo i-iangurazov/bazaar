@@ -906,7 +906,9 @@ const upsertBaseProductCost = async (
     existing &&
     new Prisma.Decimal(input.avgCostKgs)
       .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)
-      .equals(resolveCurrentProductCostUnit(existing).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP))
+      .equals(
+        resolveCurrentProductCostUnit(existing).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP),
+      )
   ) {
     return existing;
   }
@@ -1863,14 +1865,6 @@ export const createProduct = async (input: CreateProductInput) => {
   if (requestedOpeningStock > 0 && resolvedBaseCost === undefined) {
     throw new AppError("openingStockUnitCostRequired", "BAD_REQUEST", 400);
   }
-  if (
-    requestedOpeningStock > 0 &&
-    resolvedBaseCost === 0 &&
-    (!input.zeroCostConfirmed || !input.zeroCostReason?.trim())
-  ) {
-    throw new AppError("zeroCostConfirmationRequired", "BAD_REQUEST", 400);
-  }
-
   const requestedSku = input.sku?.trim();
   const shouldGenerateSku = !requestedSku;
 
@@ -4227,27 +4221,50 @@ export const importProductsTx = async (
       return;
     }
 
-    let valuation: { unitCostKgs: number; inventoryValueDeltaKgs: number } | null;
+    let valuation: {
+      unitCostKgs: number;
+      lineTotalKgs: number;
+      inventoryValueDeltaKgs: number;
+      inventoryValueStatus?: string;
+      inventoryValueReason?: string;
+    } | null;
     if (importedUnitCostKgs !== undefined) {
       const inventoryValueDelta = new Prisma.Decimal(importedUnitCostKgs.toString())
         .mul(qtyDelta)
         .toDecimalPlaces(6, Prisma.Decimal.ROUND_HALF_UP);
-      await applyValuedProductCostDelta(tx, {
+      const costApplication = await applyValuedProductCostDelta(tx, {
         organizationId: input.organizationId,
         productId,
         quantityDelta: qtyDelta,
         valueDeltaKgs: inventoryValueDelta,
+        allowNegativeStock: qtyDelta > 0,
       });
+      const appliedValueKgs =
+        costApplication?.inventoryValueDeltaKgs ?? Number(inventoryValueDelta);
+      const hasNegativeStockVariance =
+        Math.abs(Number(inventoryValueDelta) - appliedValueKgs) > 0.0000005;
       valuation = {
         unitCostKgs: importedUnitCostKgs,
-        inventoryValueDeltaKgs: Number(inventoryValueDelta),
+        lineTotalKgs: Number(inventoryValueDelta),
+        inventoryValueDeltaKgs: appliedValueKgs,
+        inventoryValueStatus: hasNegativeStockVariance
+          ? appliedValueKgs === 0
+            ? "EXPLICIT_ZERO"
+            : "NEGATIVE_STOCK"
+          : undefined,
+        inventoryValueReason: hasNegativeStockVariance
+          ? "NEGATIVE_STOCK_ASSET_BOUNDARY"
+          : undefined,
       };
     } else {
-      valuation = await applyCurrentProductCostQuantityDelta(tx, {
+      const currentCostValuation = await applyCurrentProductCostQuantityDelta(tx, {
         organizationId: input.organizationId,
         productId,
         quantityDelta: qtyDelta,
       });
+      valuation = currentCostValuation
+        ? { ...currentCostValuation, lineTotalKgs: currentCostValuation.inventoryValueDeltaKgs }
+        : null;
     }
 
     await applyStockMovement(tx, {
@@ -4259,10 +4276,13 @@ export const importProductsTx = async (
       referenceId: input.batchId,
       note: stockBehavior === "add" ? "importStockAdd" : "importStockSet",
       unitCostKgs: valuation?.unitCostKgs,
-      lineTotalKgs: valuation?.inventoryValueDeltaKgs,
+      lineTotalKgs: valuation?.lineTotalKgs,
       inventoryValueDeltaKgs: valuation?.inventoryValueDeltaKgs,
+      inventoryValueStatus: valuation?.inventoryValueStatus,
+      inventoryValueReason: valuation?.inventoryValueReason,
       actorId: input.actorId,
       organizationId: input.organizationId,
+      allowValuedNegativeStock: qtyDelta > 0,
     });
   };
 

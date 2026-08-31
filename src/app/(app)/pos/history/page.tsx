@@ -895,7 +895,7 @@ const PosHistoryPage = () => {
                           aria-describedby={`payment-correction-reason-${sale.id}`}
                         >
                           <EditIcon className="h-4 w-4" aria-hidden />
-                          {t("sell.paymentCorrection.title")}
+                          {t("sell.editReceipt")}
                         </Button>
                         <Button
                           type="button"
@@ -1068,7 +1068,7 @@ const PosHistoryPage = () => {
                       aria-describedby={`desktop-payment-correction-reason-${sale.id}`}
                     >
                       <EditIcon className="h-4 w-4" aria-hidden />
-                      {t("sell.paymentCorrection.title")}
+                      {t("sell.editReceipt")}
                     </Button>
                     {!sale.paymentCorrectionEligibility.eligible ? (
                       <p

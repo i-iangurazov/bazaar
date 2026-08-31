@@ -745,8 +745,6 @@ export const ProductForm = ({
         purchasePriceKgs: optionalPrice,
         avgCostKgs: optionalPrice,
         initialOnHand: optionalStockQty,
-        zeroCostConfirmed: z.boolean().optional(),
-        zeroCostReason: z.string().trim().max(500).optional(),
         minStock: optionalStockQty,
         description: z.string().optional(),
         photoUrl: z
@@ -817,17 +815,6 @@ export const ProductForm = ({
             context.addIssue({
               code: z.ZodIssueCode.custom,
               message: t("openingStockUnitCostRequired"),
-              path: ["avgCostKgs"],
-            });
-          }
-          if (
-            hasOpeningStock &&
-            explicitUnitCost === 0 &&
-            (!values.zeroCostConfirmed || !values.zeroCostReason?.trim())
-          ) {
-            context.addIssue({
-              code: z.ZodIssueCode.custom,
-              message: t("zeroCostConfirmationRequired"),
               path: ["avgCostKgs"],
             });
           }
@@ -908,8 +895,6 @@ export const ProductForm = ({
       purchasePriceKgs: displayMoneyFromKgs(initialValues.purchasePriceKgs),
       avgCostKgs: displayMoneyFromKgs(initialValues.avgCostKgs),
       initialOnHand: initialValues.initialOnHand,
-      zeroCostConfirmed: initialValues.zeroCostConfirmed ?? false,
-      zeroCostReason: initialValues.zeroCostReason ?? "",
       minStock: initialValues.minStock,
       description: initialValues.description ?? "",
       photoUrl: initialValues.photoUrl ?? "",
@@ -3311,8 +3296,6 @@ export const ProductForm = ({
       purchasePriceKgs: submitMoneyToKgs(values.purchasePriceKgs),
       avgCostKgs: submitMoneyToKgs(values.avgCostKgs),
       initialOnHand: values.initialOnHand,
-      zeroCostConfirmed: values.zeroCostConfirmed,
-      zeroCostReason: values.zeroCostReason?.trim() || undefined,
       minStock: values.minStock,
       description: values.description?.trim() || undefined,
       photoUrl: resolvedPhotoUrl,

@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 1,
+  "artifactKind": "POS_HOTFIX_RELEASE_QUALIFICATION",
+  "generatedAt": "2026-08-31T21:52:31.000Z",
+  "branch": "main",
+  "baseCommit": "1e1b7924d6f6203dbeb1d0e0bd3f4c9aad299ee4",
+  "sourceDiffSha256": "c67063b0ee2858cac6c1e072b4de0fa26544992f5b3fd3e3b4d76781c92cee50",
+  "productionDataUsed": false,
+  "productionDatabaseTouched": false,
+  "externalProvidersEnabled": false,
+  "environment": {
+    "runtimeMode": "production",
+    "databaseClass": "isolated loopback PostgreSQL test database",
+    "redisClass": "isolated loopback Redis",
+    "imageStorageProvider": "local",
+    "workers": 1
+  },
+  "targetedProductionModeBrowser": {
+    "result": "PASS",
+    "collected": 9,
+    "passed": 9,
+    "failed": 0,
+    "skipped": 0,
+    "flaky": 0,
+    "artifact": "test-results/pos-hotfix-final-targeted.json",
+    "artifactSha256": "7b3a31ae836b2978cbcc2e3b4592d5268744f422555484ce6a7fe4a057154c14",
+    "junitArtifact": "test-results/pos-hotfix-final-targeted.xml",
+    "junitSha256": "834f3766ffaa2bab4782e797606f1a68097a2da5c4702b425a5ae677810c615c"
+  },
+  "authenticatedMatrixReconciliation": {
+    "result": "PASS_BY_EXACT_CASE_IDENTITY",
+    "total": 762,
+    "passed": 762,
+    "failed": 0,
+    "skipped": 0,
+    "singleRawRun": false,
+    "completeRun": {
+      "passed": 759,
+      "failed": 2,
+      "skipped": 1,
+      "artifact": "test-results/final-authenticated-matrix-corrected.json",
+      "artifactSha256": "5bc1a02de03b32c0814cbad2e9e778e68859f84fe8b18d403cfe24c500557cc3"
+    },
+    "cleanAffectedRerun": {
+      "collected": 12,
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0,
+      "artifact": "test-results/authenticated-affected-clean.json",
+      "artifactSha256": "0714500764783a121e9fc863f6f81abb63500425cf9bcb2a7a40c443c9d82223"
+    },
+    "interpretation": "The full run retained 759 exact PASS identities. Its two failures and one dependent skip were caused by state left by an interrupted local run; the contaminated database was preserved, a fresh deterministic database was seeded, and all three non-PASS identities passed in the clean affected shard. Later POS changes were requalified by the 9/9 targeted production-mode journey. No failed product behavior was relabelled as PASS."
+  },
+  "focusedDeterministic": {
+    "posAndInventoryIntegration": {
+      "result": "PASS",
+      "tests": 77,
+      "passed": 77,
+      "failed": 0,
+      "skipped": 0,
+      "artifact": "test-results/final-pos-inventory-hotfix.json",
+      "artifactSha256": "64876f7a016711c2ee8d3c54e7c9b9e59eed8c78f8f48dda47576422d5b08e8b"
+    },
+    "unit": {
+      "result": "PASS",
+      "tests": 18,
+      "passed": 18,
+      "failed": 0,
+      "skipped": 0,
+      "artifact": "test-results/final-hotfix-units.json",
+      "artifactSha256": "75d2057d71919d3a2f7e80179580915eee524505574fe011ec70e3425b73896a"
+    }
+  },
+  "localGates": {
+    "formatting": "PASS",
+    "gitDiffCheck": "PASS",
+    "lint": "PASS",
+    "typescript": "PASS",
+    "localization": "PASS",
+    "productionBuild": "PASS",
+    "staticPages": "120/120"
+  },
+  "acceptance": {
+    "historyEligibleReceipt": "PASS",
+    "historyIneligibleFiscalExplanation": "PASS",
+    "cashToTransfer": "PASS",
+    "transferToCash": "PASS",
+    "splitPaymentCorrection": "PASS",
+    "paymentSumEqualsSaleTotal": "PASS",
+    "stockAndCogsUnchanged": "PASS",
+    "cashAndShiftExactOnce": "PASS",
+    "reportsAndExportsReconcile": "PASS",
+    "refreshAndRelogin": "PASS",
+    "beforeAfterActorReasonAudit": "PASS",
+    "cashierAllowed": "PASS",
+    "staffForbidden403": "PASS",
+    "doubleSubmitIdempotent": "PASS",
+    "fiscalizedDirectMutationBlocked": "PASS",
+    "desktopAndClientViewport": "PASS",
+    "timestampConsistency": "PASS",
+    "activeDraftInstantCancel": "PASS",
+    "cancelDoesNotNavigate": "PASS",
+    "cancelDoesNotMutateStockOrCash": "PASS",
+    "shiftClosesAfterCancel": "PASS",
+    "negativeStockSaleAllowedByStorePolicy": "PASS",
+    "negativeStockReceivingRecovery": "PASS",
+    "zeroCostHasNoConfirmationOrReasonPrompt": "PASS"
+  }
+}

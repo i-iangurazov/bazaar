@@ -13,6 +13,7 @@ import { buildPosPaymentSubmitPayload } from "@/lib/posSaleMath";
 import { fetchAllReceiptPages } from "@/components/pos/receipt-registry-export";
 import { prisma } from "@/server/db/prisma";
 import { runJob } from "@/server/jobs";
+import { receiveStock } from "@/server/services/inventory";
 import {
   connectorPullQueue,
   connectorPushResult,
@@ -146,6 +147,66 @@ describeDb("pos", () => {
 
     expect(secondDraft.id).toBe(firstDraft.id);
     expect(draftCount).toBe(1);
+  });
+
+  it("cancels an owned active draft idempotently without stock or cash effects", async () => {
+    const { org, store, product, cashierUser } = await seedBase({ plan: "BUSINESS" });
+    await prisma.product.update({ where: { id: product.id }, data: { basePriceKgs: 100 } });
+    const register = await prisma.posRegister.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        name: "Instant cancel register",
+        code: "INSTANT-CANCEL",
+      },
+    });
+    const caller = createTestCaller({
+      id: cashierUser.id,
+      email: cashierUser.email,
+      role: cashierUser.role,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+    const shift = await caller.pos.shifts.open({
+      registerId: register.id,
+      openingCashKgs: 0,
+      idempotencyKey: "pos-instant-cancel-open-1",
+    });
+    const sale = await caller.pos.sales.createDraft({ registerId: register.id });
+    await caller.pos.sales.addLine({ saleId: sale.id, productId: product.id, qty: 1 });
+    expect((await caller.pos.shifts.current({ registerId: register.id }))?.activeReceiptCount).toBe(
+      1,
+    );
+
+    const first = await caller.pos.sales.cancelDraft({ saleId: sale.id });
+    const replay = await caller.pos.sales.cancelDraft({ saleId: sale.id });
+    expect(first.status).toBe("CANCELED");
+    expect(replay).toEqual(first);
+
+    const [currentShift, movements, payments, audits] = await Promise.all([
+      caller.pos.shifts.current({ registerId: register.id }),
+      prisma.stockMovement.count({ where: { referenceId: sale.id } }),
+      prisma.salePayment.count({ where: { customerOrderId: sale.id } }),
+      prisma.auditLog.count({
+        where: {
+          action: "POS_SALE_DRAFT_CANCEL",
+          entity: "CustomerOrder",
+          entityId: sale.id,
+        },
+      }),
+    ]);
+    expect(currentShift?.activeReceiptCount).toBe(0);
+    expect(movements).toBe(0);
+    expect(payments).toBe(0);
+    expect(audits).toBe(1);
+
+    await expect(
+      caller.pos.shifts.close({
+        shiftId: shift.id,
+        closingCashCountedKgs: 0,
+        idempotencyKey: "pos-instant-cancel-close-1",
+      }),
+    ).resolves.toMatchObject({ status: "CLOSED" });
   });
 
   it("normalizes new POS customer contacts, rejects invalid writes, and accepts selected legacy records", async () => {
@@ -2447,11 +2508,22 @@ describeDb("pos", () => {
   });
 
   it("allows POS sale completion to drive stock negative when the store permits it", async () => {
-    const { org, store, product, cashierUser } = await seedBase({
+    const { org, store, product, cashierUser, adminUser } = await seedBase({
       plan: "BUSINESS",
       allowNegativeStock: true,
     });
     await prisma.product.update({ where: { id: product.id }, data: { basePriceKgs: 100 } });
+    await adjustStock({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 1,
+      unitCostKgs: 10,
+      reason: "seed valued negative-stock POS sale",
+      idempotencyKey: "pos-negative-valued-seed-1",
+      requestId: "pos-negative-valued-seed-1",
+    });
     const register = await prisma.posRegister.create({
       data: {
         organizationId: org.id,
@@ -2481,8 +2553,11 @@ describeDb("pos", () => {
       payments: [{ method: PosPaymentMethod.CASH, amountKgs: 200 }],
     });
 
-    const [completedSale, snapshot, movement, payments] = await Promise.all([
-      prisma.customerOrder.findUniqueOrThrow({ where: { id: sale.id } }),
+    const [completedSale, snapshot, movement, payments, negativeCost] = await Promise.all([
+      prisma.customerOrder.findUniqueOrThrow({
+        where: { id: sale.id },
+        include: { lines: true },
+      }),
       prisma.inventorySnapshot.findUniqueOrThrow({
         where: {
           storeId_productId_variantKey: {
@@ -2496,14 +2571,85 @@ describeDb("pos", () => {
         where: { type: StockMovementType.SALE, referenceId: sale.id },
       }),
       prisma.salePayment.findMany({ where: { customerOrderId: sale.id } }),
+      prisma.productCost.findUniqueOrThrow({
+        where: {
+          organizationId_productId_variantKey: {
+            organizationId: org.id,
+            productId: product.id,
+            variantKey: "BASE",
+          },
+        },
+      }),
     ]);
 
     expect(store.allowNegativeStock).toBe(true);
     expect(completedSale.status).toBe("COMPLETED");
-    expect(snapshot.onHand).toBe(-2);
+    expect(snapshot.onHand).toBe(-1);
     expect(snapshot.allowNegativeStock).toBe(true);
     expect(movement.qtyDelta).toBe(-2);
+    expect(Number(movement.inventoryValueDeltaKgs)).toBe(-10);
+    expect(movement.inventoryValueStatus).toBe("NEGATIVE_STOCK");
+    expect(Number(completedSale.lines[0]?.lineCostTotalKgs)).toBe(20);
+    expect(negativeCost.preciseCostBasisQty).toBe(-1);
+    expect(Number(negativeCost.costBasisValueKgs)).toBe(0);
     expect(payments).toHaveLength(1);
+
+    await receiveStock({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      storeId: store.id,
+      productId: product.id,
+      qtyReceived: 1,
+      unitCost: 12,
+      note: "recover negative stock to zero",
+      idempotencyKey: "pos-negative-valued-recover-zero-1",
+      requestId: "pos-negative-valued-recover-zero-1",
+    });
+    await receiveStock({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      storeId: store.id,
+      productId: product.id,
+      qtyReceived: 1,
+      unitCost: 12,
+      note: "recover negative stock to positive",
+      idempotencyKey: "pos-negative-valued-recover-positive-1",
+      requestId: "pos-negative-valued-recover-positive-1",
+    });
+    const [recoveredSnapshot, recoveredCost, recoveryMovements] = await Promise.all([
+      prisma.inventorySnapshot.findUniqueOrThrow({
+        where: {
+          storeId_productId_variantKey: {
+            storeId: store.id,
+            productId: product.id,
+            variantKey: "BASE",
+          },
+        },
+      }),
+      prisma.productCost.findUniqueOrThrow({
+        where: {
+          organizationId_productId_variantKey: {
+            organizationId: org.id,
+            productId: product.id,
+            variantKey: "BASE",
+          },
+        },
+      }),
+      prisma.stockMovement.findMany({
+        where: {
+          productId: product.id,
+          note: { in: ["recover negative stock to zero", "recover negative stock to positive"] },
+        },
+        orderBy: { createdAt: "asc" },
+      }),
+    ]);
+    expect(recoveredSnapshot.onHand).toBe(1);
+    expect(recoveredCost.preciseCostBasisQty).toBe(1);
+    expect(Number(recoveredCost.costBasisValueKgs)).toBe(12);
+    expect(recoveryMovements.map((item) => Number(item.inventoryValueDeltaKgs))).toEqual([0, 12]);
+    expect(recoveryMovements.map((item) => Number(item.lineTotalKgs))).toEqual([12, 12]);
+    expect(recoveryMovements[0]?.inventoryValueStatus).toBe("EXPLICIT_ZERO");
+    expect(recoveryMovements[0]?.inventoryValueReason).toBe("NEGATIVE_STOCK_ASSET_BOUNDARY");
   });
 
   it("rejects a completed-sale quantity increase when restricted stock is exhausted", async () => {
@@ -5104,6 +5250,68 @@ describeDb("pos", () => {
     });
     expect(registryReceipt?.completedAt?.toISOString()).toBe(before.completedAt?.toISOString());
 
+    await managerCaller.pos.shifts.close({
+      shiftId: eligibleShift.id,
+      closingCashCountedKgs: 2_000,
+      idempotencyKey: "pos-payment-correction-close-eligible",
+    });
+    const closedCorrectionInput = {
+      saleId: eligibleDraft.id,
+      payments: [{ method: PosPaymentMethod.TRANSFER, amountKgs: 4_100 }],
+      reason: "Оплата уточнена после закрытия смены",
+      idempotencyKey: "pos-payment-correction-closed-shift",
+    };
+    const closedCorrection = await cashierCaller.pos.sales.correctPayments(closedCorrectionInput);
+    const closedCorrectionReplay =
+      await cashierCaller.pos.sales.correctPayments(closedCorrectionInput);
+    expect(closedCorrection.cashDeltaKgs).toBe(-1_000);
+    expect(closedCorrectionReplay.replayed).toBe(true);
+
+    const [closedShift, closedReport, closedSale, closedStock, closedCost, closedMovements] =
+      await Promise.all([
+        prisma.registerShift.findUniqueOrThrow({ where: { id: eligibleShift.id } }),
+        cashierCaller.pos.shifts.xReport({ shiftId: eligibleShift.id }),
+        prisma.customerOrder.findUniqueOrThrow({
+          where: { id: eligibleDraft.id },
+          include: { lines: true, payments: true },
+        }),
+        prisma.inventorySnapshot.findUniqueOrThrow({
+          where: {
+            storeId_productId_variantKey: {
+              storeId: store.id,
+              productId: product.id,
+              variantKey: "BASE",
+            },
+          },
+        }),
+        prisma.productCost.findUnique({
+          where: {
+            organizationId_productId_variantKey: {
+              organizationId: org.id,
+              productId: product.id,
+              variantKey: "BASE",
+            },
+          },
+        }),
+        prisma.stockMovement.findMany({
+          where: { referenceType: "CustomerOrder", referenceId: eligibleDraft.id },
+          orderBy: { id: "asc" },
+        }),
+      ]);
+    expect(closedShift.status).toBe("CLOSED");
+    expect(Number(closedShift.closingCashCountedKgs)).toBe(2_000);
+    expect(Number(closedShift.expectedCashKgs)).toBe(1_000);
+    expect(closedReport.summary.expectedCashKgs).toBe(1_000);
+    expect(closedReport.paymentsByMethod.CASH.salesKgs).toBe(0);
+    expect(closedReport.paymentsByMethod.TRANSFER.salesKgs).toBe(4_100);
+    expect(closedSale.completedAt?.toISOString()).toBe(before.completedAt?.toISOString());
+    expect(closedSale.lines).toEqual(before.lines);
+    expect(closedSale.payments).toHaveLength(1);
+    expect(closedSale.payments[0]?.method).toBe(PosPaymentMethod.TRANSFER);
+    expect(stockBefore).toEqual(closedStock);
+    expect(costBefore).toEqual(closedCost);
+    expect(movementsBefore).toEqual(closedMovements);
+
     const exportPeriod = {
       periodStart: new Date("2026-08-31T00:00:00.000Z"),
       periodEnd: new Date("2026-08-31T23:59:59.999Z"),
@@ -5121,7 +5329,7 @@ describeDb("pos", () => {
     const csv = await fs.readFile(csvJob?.storagePath ?? "", "utf8");
     const csvReceiptRow = csv.split(/\r?\n/).find((line) => line.includes("S-006065"));
     expect(csvReceiptRow).toContain(fixtureCompletedAt.toISOString());
-    expect(csvReceiptRow).toContain(";1000;0;3100;0;");
+    expect(csvReceiptRow).toContain(";0;0;4100;0;");
 
     const xlsxExport = await managerCaller.exports.create({
       storeId: store.id,
@@ -5141,8 +5349,8 @@ describeDb("pos", () => {
       Создано: fixtureCompletedAt.toISOString(),
       Завершено: fixtureCompletedAt.toISOString(),
     });
-    expect(Number(xlsxReceiptRow?.["Наличные KGS"])).toBe(1_000);
-    expect(Number(xlsxReceiptRow?.["Перевод KGS"])).toBe(3_100);
+    expect(Number(xlsxReceiptRow?.["Наличные KGS"])).toBe(0);
+    expect(Number(xlsxReceiptRow?.["Перевод KGS"])).toBe(4_100);
 
     await prisma.product.update({ where: { id: product.id }, data: { basePriceKgs: 66_390 } });
     const ineligibleShift = await cashierCaller.pos.shifts.open({
@@ -5203,7 +5411,7 @@ describeDb("pos", () => {
     expect(lockedHistory.items[0]?.number).toBe("S-006072");
     expect(lockedHistory.items[0]?.paymentCorrectionEligibility).toEqual({
       eligible: false,
-      reason: "SHIFT_CLOSED",
+      reason: "FISCAL_CORRECTION_REQUIRED",
     });
   });
 });

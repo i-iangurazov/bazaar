@@ -38,6 +38,7 @@ import {
   resolveCurrentProductCostUnitNumber,
 } from "@/server/services/productCost";
 import { resolveFrozenMovementCost } from "@/server/services/costReadModels";
+import { sanitizeMovementNote } from "@/lib/i18n/movementNote";
 
 type ExportRequestInput = {
   organizationId: string;
@@ -1550,7 +1551,7 @@ const buildInventoryMovementsLedgerRows = async (
       unitCostKgs: frozenCost.unitCostKgs ?? "",
       totalCostKgs: frozenCost.totalCostKgs ?? "",
       effectivePriceKgs: effectivePrice ?? "",
-      reason: movement.note ?? "",
+      reason: sanitizeMovementNote(movement.note),
       docType: movement.referenceType ?? "",
       docNumber: movement.referenceId ?? "",
       userEmail: movement.createdBy?.email ?? "",

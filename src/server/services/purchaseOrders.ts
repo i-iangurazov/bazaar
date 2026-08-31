@@ -872,23 +872,30 @@ export const receivePurchaseOrder = async (input: {
             throw new AppError("poOverReceiveNotAllowed", "CONFLICT", 409);
           }
 
-          if (line.unitCost !== null) {
-            await updateProductCost(tx, {
-              organizationId: input.organizationId,
-              productId: line.productId,
-              variantId: line.variantId ?? undefined,
-              qtyReceived: receiveQty,
-              unitCost: Number(line.unitCost),
-            });
-          }
+          const costApplication =
+            line.unitCost === null
+              ? null
+              : await updateProductCost(tx, {
+                  organizationId: input.organizationId,
+                  productId: line.productId,
+                  variantId: line.variantId ?? undefined,
+                  qtyReceived: receiveQty,
+                  unitCost: Number(line.unitCost),
+                  allowNegativeStockRecovery: true,
+                });
 
-          const inventoryValueDeltaKgs =
+          const lineValueKgs =
             line.unitCost === null
               ? null
               : new Prisma.Decimal(line.unitCost)
                   .mul(receiveQty)
                   .toDecimalPlaces(6, Prisma.Decimal.ROUND_HALF_UP)
                   .toNumber();
+          const inventoryValueDeltaKgs = costApplication?.inventoryValueDeltaKgs ?? lineValueKgs;
+          const hasNegativeStockVariance =
+            lineValueKgs !== null &&
+            inventoryValueDeltaKgs !== null &&
+            Math.abs(lineValueKgs - inventoryValueDeltaKgs) > 0.0000005;
           const movement = await applyStockMovement(tx, {
             storeId: po.storeId,
             productId: line.productId,
@@ -901,10 +908,19 @@ export const receivePurchaseOrder = async (input: {
                 ? null
                 : new Prisma.Decimal(line.unitCost).mul(receiveQty).toDecimalPlaces(2).toNumber(),
             inventoryValueDeltaKgs,
+            inventoryValueStatus: hasNegativeStockVariance
+              ? inventoryValueDeltaKgs === 0
+                ? "EXPLICIT_ZERO"
+                : "NEGATIVE_STOCK"
+              : undefined,
+            inventoryValueReason: hasNegativeStockVariance
+              ? "NEGATIVE_STOCK_ASSET_BOUNDARY"
+              : undefined,
             referenceType: "PURCHASE_ORDER",
             referenceId: po.id,
             actorId: input.actorId,
             organizationId: input.organizationId,
+            allowValuedNegativeStock: true,
           });
 
           const lot = await applyStockLotAdjustment(tx, {

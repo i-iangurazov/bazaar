@@ -375,7 +375,13 @@ export const applyStockCount = async (input: {
 
           const before = snapshot ?? null;
           const explicitValuation = deltaQty > 0 ? input.lineValuations?.[line.id] : undefined;
-          let valuation: { unitCostKgs: number; inventoryValueDeltaKgs: number } | null;
+          let valuation: {
+            unitCostKgs: number;
+            lineTotalKgs: number;
+            inventoryValueDeltaKgs: number;
+            inventoryValueStatus?: string;
+            inventoryValueReason?: string;
+          } | null;
           if (explicitValuation) {
             if (
               !Number.isFinite(explicitValuation.unitCostKgs) ||
@@ -388,26 +394,46 @@ export const applyStockCount = async (input: {
                 .mul(deltaQty)
                 .toDecimalPlaces(6, Prisma.Decimal.ROUND_HALF_UP),
             );
-            await applyValuedProductCostDelta(tx, {
+            const costApplication = await applyValuedProductCostDelta(tx, {
               organizationId: input.organizationId,
               productId: line.productId,
               variantId: line.variantId,
               quantityDelta: deltaQty,
               valueDeltaKgs: inventoryValueDeltaKgs,
+              allowNegativeStock: true,
               zeroCostConfirmed: explicitValuation.zeroCostConfirmed,
               zeroCostReason: explicitValuation.zeroCostReason,
             });
+            const appliedValueKgs =
+              costApplication?.inventoryValueDeltaKgs ?? inventoryValueDeltaKgs;
+            const hasNegativeStockVariance =
+              Math.abs(inventoryValueDeltaKgs - appliedValueKgs) > 0.0000005;
             valuation = {
               unitCostKgs: explicitValuation.unitCostKgs,
-              inventoryValueDeltaKgs,
+              lineTotalKgs: inventoryValueDeltaKgs,
+              inventoryValueDeltaKgs: appliedValueKgs,
+              inventoryValueStatus: hasNegativeStockVariance
+                ? appliedValueKgs === 0
+                  ? "EXPLICIT_ZERO"
+                  : "NEGATIVE_STOCK"
+                : undefined,
+              inventoryValueReason: hasNegativeStockVariance
+                ? "NEGATIVE_STOCK_ASSET_BOUNDARY"
+                : undefined,
             };
           } else {
-            valuation = await applyCurrentProductCostQuantityDelta(tx, {
+            const currentCostValuation = await applyCurrentProductCostQuantityDelta(tx, {
               organizationId: input.organizationId,
               productId: line.productId,
               variantId: line.variantId,
               quantityDelta: deltaQty,
             });
+            valuation = currentCostValuation
+              ? {
+                  ...currentCostValuation,
+                  lineTotalKgs: currentCostValuation.inventoryValueDeltaKgs,
+                }
+              : null;
           }
           const movement = await applyStockMovement(tx, {
             storeId: count.storeId,
@@ -416,8 +442,10 @@ export const applyStockCount = async (input: {
             qtyDelta: deltaQty,
             type: StockMovementType.ADJUSTMENT,
             unitCostKgs: valuation?.unitCostKgs,
-            lineTotalKgs: valuation?.inventoryValueDeltaKgs,
+            lineTotalKgs: valuation?.lineTotalKgs,
             inventoryValueDeltaKgs: valuation?.inventoryValueDeltaKgs,
+            inventoryValueStatus: valuation?.inventoryValueStatus,
+            inventoryValueReason: valuation?.inventoryValueReason,
             referenceType: "STOCK_COUNT",
             referenceId: count.id,
             note: `stockCount:${count.code}`,
@@ -425,6 +453,7 @@ export const applyStockCount = async (input: {
             zeroCostReason: explicitValuation?.zeroCostReason,
             actorId: input.actorId,
             organizationId: input.organizationId,
+            allowValuedNegativeStock: true,
           });
 
           await writeAuditLog(tx, {

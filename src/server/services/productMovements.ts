@@ -1,6 +1,7 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
 
 import { parseWriteOffMovementNote } from "@/lib/inventory/writeOff";
+import { sanitizeMovementNote } from "@/lib/i18n/movementNote";
 import { resolveProductMovementDocumentViewTarget } from "@/lib/productMovementDocumentTarget";
 import {
   resolveAccessibleStoreIds,
@@ -362,9 +363,19 @@ const buildProductMovementJournalCte = (input: {
       m."linePosition",
       COALESCE(
         m."unitCostKgs",
-        ABS(COALESCE(m."inventoryValueDeltaKgs", m."lineTotalKgs") / NULLIF(m."qtyDelta", 0))
+        ABS(
+          CASE
+            WHEN m."inventoryValueReason" = 'NEGATIVE_STOCK_ASSET_BOUNDARY'
+              THEN m."lineTotalKgs"
+            ELSE COALESCE(m."inventoryValueDeltaKgs", m."lineTotalKgs")
+          END / NULLIF(m."qtyDelta", 0)
+        )
       ) AS "unitCostKgs",
-      COALESCE(m."inventoryValueDeltaKgs", m."lineTotalKgs") AS "lineTotalKgs",
+      CASE
+        WHEN m."inventoryValueReason" = 'NEGATIVE_STOCK_ASSET_BOUNDARY'
+          THEN COALESCE(m."lineTotalKgs", m."unitCostKgs" * m."qtyDelta")
+        ELSE COALESCE(m."inventoryValueDeltaKgs", m."lineTotalKgs")
+      END AS "lineTotalKgs",
       m."referenceType",
       m."referenceId",
       m."note",
@@ -853,7 +864,7 @@ const normalizeProductMovementDocumentLine = (
   linePosition: line.linePosition,
   unitCostKgs: toNumberOrNull(line.unitCostKgs),
   lineTotalKgs: toNumberOrNull(line.lineTotalKgs),
-  note: line.note,
+  note: sanitizeMovementNote(line.note),
   createdAt: line.createdAt,
   authorName: line.authorName,
   authorEmail: line.authorEmail,
@@ -1257,9 +1268,19 @@ export const getProductMovementDocument = async (
         m."linePosition",
         COALESCE(
           m."unitCostKgs",
-          ABS(COALESCE(m."inventoryValueDeltaKgs", m."lineTotalKgs") / NULLIF(m."qtyDelta", 0))
+          ABS(
+            CASE
+              WHEN m."inventoryValueReason" = 'NEGATIVE_STOCK_ASSET_BOUNDARY'
+                THEN m."lineTotalKgs"
+              ELSE COALESCE(m."inventoryValueDeltaKgs", m."lineTotalKgs")
+            END / NULLIF(m."qtyDelta", 0)
+          )
         ) AS "unitCostKgs",
-        COALESCE(m."inventoryValueDeltaKgs", m."lineTotalKgs") AS "lineTotalKgs",
+        CASE
+          WHEN m."inventoryValueReason" = 'NEGATIVE_STOCK_ASSET_BOUNDARY'
+            THEN COALESCE(m."lineTotalKgs", m."unitCostKgs" * m."qtyDelta")
+          ELSE COALESCE(m."inventoryValueDeltaKgs", m."lineTotalKgs")
+        END AS "lineTotalKgs",
         m."note",
         m."createdAt",
         u."name" AS "authorName",

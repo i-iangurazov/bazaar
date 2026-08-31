@@ -5,11 +5,15 @@ export type FrozenMovementCostInput = {
   unitCostKgs: Prisma.Decimal | number | null;
   lineTotalKgs: Prisma.Decimal | number | null;
   inventoryValueDeltaKgs: Prisma.Decimal | number | null;
+  inventoryValueReason?: string | null;
 };
 
 /** Resolve historical movement COGS without consulting today's ProductCost row. */
 export const resolveFrozenMovementCost = (input: FrozenMovementCostInput) => {
-  const storedTotal = input.inventoryValueDeltaKgs ?? input.lineTotalKgs;
+  const storedTotal =
+    input.inventoryValueReason === "NEGATIVE_STOCK_ASSET_BOUNDARY"
+      ? input.lineTotalKgs
+      : (input.inventoryValueDeltaKgs ?? input.lineTotalKgs);
   const storedUnit = input.unitCostKgs;
   let total = storedTotal === null ? null : new Prisma.Decimal(storedTotal.toString());
   if (total === null && storedUnit !== null) {

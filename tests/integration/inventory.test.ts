@@ -333,7 +333,7 @@ describeDb("inventory service", () => {
     await assertSnapshotMatchesLedger(store.id, secondProduct.id);
   });
 
-  it("keeps unvalued negative stock explicit and rejects valued recovery without side effects", async () => {
+  it("recovers unvalued negative stock with explicit receipt cost without valuing the deficit", async () => {
     const { org, store, product, adminUser } = await seedBase();
 
     await prisma.store.update({
@@ -360,22 +360,31 @@ describeDb("inventory service", () => {
       prisma.auditLog.count({ where: { organizationId: org.id } }),
       prisma.idempotencyKey.count(),
     ]);
-    await expect(
-      postStockReceiving({
-        storeId: store.id,
-        referenceNumber: "RCV-NEGATIVE-1",
-        lines: [{ productId: product.id, quantity: 25, unitCost: 10 }],
-        actorId: adminUser.id,
-        organizationId: org.id,
-        requestId: "req-receiving-negative-post",
-        idempotencyKey: "receiving-negative-post-1",
-      }),
-    ).rejects.toMatchObject({
-      code: "CONFLICT",
-      message: "valuedNegativeStockRecoveryBlocked",
+    const zeroRecoveryInput = {
+      storeId: store.id,
+      referenceNumber: "RCV-NEGATIVE-ZERO",
+      lines: [{ productId: product.id, quantity: 50, unitCost: 10 }],
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "req-receiving-negative-zero",
+      idempotencyKey: "receiving-negative-zero-1",
+    };
+    const zeroRecovery = await postStockReceiving(zeroRecoveryInput);
+    const zeroReplay = await postStockReceiving(zeroRecoveryInput);
+    expect(zeroReplay.receivingId).toBe(zeroRecovery.receivingId);
+    await receiveStock({
+      storeId: store.id,
+      productId: product.id,
+      qtyReceived: 5,
+      unitCost: 12,
+      note: "recover negative stock to positive",
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "req-receiving-negative-positive",
+      idempotencyKey: "receiving-negative-positive-1",
     });
 
-    const [snapshot, cost, setupMovement, after] = await Promise.all([
+    const [snapshot, cost, movements, after] = await Promise.all([
       prisma.inventorySnapshot.findUnique({
         where: {
           storeId_productId_variantKey: {
@@ -394,8 +403,9 @@ describeDb("inventory service", () => {
           },
         },
       }),
-      prisma.stockMovement.findFirstOrThrow({
+      prisma.stockMovement.findMany({
         where: { storeId: store.id, productId: product.id },
+        orderBy: { createdAt: "asc" },
       }),
       Promise.all([
         prisma.stockMovement.count({ where: { storeId: store.id, productId: product.id } }),
@@ -403,13 +413,34 @@ describeDb("inventory service", () => {
         prisma.idempotencyKey.count(),
       ]),
     ]);
-    expect(snapshot?.onHand).toBe(-50);
-    expect(cost).toBeNull();
+    expect(snapshot?.onHand).toBe(5);
+    expect(cost?.preciseCostBasisQty).toBe(5);
+    expect(Number(cost?.costBasisValueKgs)).toBe(60);
+    expect(Number(cost?.preciseAvgCostKgs)).toBe(12);
+    const [setupMovement, zeroMovement, positiveMovement] = movements;
     expect({
-      unitCostKgs: setupMovement.unitCostKgs,
-      inventoryValueDeltaKgs: setupMovement.inventoryValueDeltaKgs,
+      unitCostKgs: setupMovement?.unitCostKgs,
+      inventoryValueDeltaKgs: setupMovement?.inventoryValueDeltaKgs,
     }).toEqual({ unitCostKgs: null, inventoryValueDeltaKgs: null });
-    expect(after).toEqual(before);
+    expect({
+      qtyDelta: zeroMovement?.qtyDelta,
+      lineTotalKgs: Number(zeroMovement?.lineTotalKgs),
+      inventoryValueDeltaKgs: Number(zeroMovement?.inventoryValueDeltaKgs),
+      inventoryValueStatus: zeroMovement?.inventoryValueStatus,
+      inventoryValueReason: zeroMovement?.inventoryValueReason,
+    }).toEqual({
+      qtyDelta: 50,
+      lineTotalKgs: 500,
+      inventoryValueDeltaKgs: 0,
+      inventoryValueStatus: "EXPLICIT_ZERO",
+      inventoryValueReason: "NEGATIVE_STOCK_ASSET_BOUNDARY",
+    });
+    expect({
+      qtyDelta: positiveMovement?.qtyDelta,
+      lineTotalKgs: Number(positiveMovement?.lineTotalKgs),
+      inventoryValueDeltaKgs: Number(positiveMovement?.inventoryValueDeltaKgs),
+    }).toEqual({ qtyDelta: 5, lineTotalKgs: 60, inventoryValueDeltaKgs: 60 });
+    expect(after).toEqual(before.map((value) => value + 2));
     await assertSnapshotMatchesLedger(store.id, product.id);
   });
 

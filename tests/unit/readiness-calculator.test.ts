@@ -27,42 +27,39 @@ describe("production readiness calculator", () => {
       appliedCap: { value: number; reason: string } | null;
     };
 
-    expect(result.overallReadiness).toBe(49);
-    expect(result.rawOverallReadiness).toBe(51.4);
-    expect(result.applicationOwnedReadiness).toBe(52.2);
+    expect(result.overallReadiness).toBe(95.6);
+    expect(result.rawOverallReadiness).toBe(95.6);
+    expect(result.applicationOwnedReadiness).toBe(97.2);
     expect(result.counts).toEqual({
-      PASS: 58,
-      PARTIAL: 114,
-      FAIL: 16,
-      BLOCKED: 42,
+      PASS: 209,
+      PARTIAL: 16,
+      FAIL: 0,
+      BLOCKED: 5,
       N_A: 0,
     });
     expect(result.coverage).toMatchObject({
       applicable: 230,
-      executed: 188,
-      passed: 58,
-      executionPercent: 81.7,
-      verifiedPassPercent: 25.2,
+      executed: 225,
+      passed: 209,
+      executionPercent: 97.8,
+      verifiedPassPercent: 90.9,
     });
     expect(result.criticalWorkflowCoverage).toEqual({
       total: 67,
-      executed: 51,
-      passed: 23,
-      executionPercent: 76.1,
-      verifiedPassPercent: 34.3,
+      executed: 64,
+      passed: 64,
+      executionPercent: 95.5,
+      verifiedPassPercent: 95.5,
     });
     expect(result.defectCounts).toEqual({
       BLOCKER: 0,
-      CRITICAL: 1,
-      HIGH: 2,
-      MEDIUM: 18,
-      LOW: 3,
-      total: 24,
+      CRITICAL: 0,
+      HIGH: 0,
+      MEDIUM: 6,
+      LOW: 2,
+      total: 8,
     });
-    expect(result.appliedCap).toEqual({
-      value: 49,
-      reason: "Unresolved BLOCKER or CRITICAL defect",
-    });
+    expect(result.appliedCap).toBeNull();
   });
 
   it("is byte-for-byte deterministic for an unchanged tracker", () => {

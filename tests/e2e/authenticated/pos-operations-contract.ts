@@ -44,12 +44,26 @@ export const authenticatedPosOperationsFixture = {
       id: "qa_bazaar_pos_payment_correction_ineligible",
       lineId: "qa_bazaar_pos_payment_correction_ineligible_line",
       paymentId: "qa_bazaar_pos_payment_correction_ineligible_payment",
+      fiscalReceiptId: "qa_bazaar_pos_payment_correction_ineligible_fiscal",
+      fiscalIdempotencyKey: "qa-pos-payment-correction-ineligible-fiscal",
       number: "S-006072",
       totalKgs: 66_390,
       createdAt: "2026-08-31T02:06:00.000Z",
       completedAt: "2026-08-31T05:24:00.000Z",
     },
     reason: `${authenticatedE2ESeedPrefix} cashier selected cash instead of transfer`,
+  },
+  shiftCloseDraft: {
+    register: {
+      id: "qa_bazaar_pos_shift_close_draft_register",
+      name: `${authenticatedE2ESeedPrefix} Shift Close Draft Register`,
+      code: "QA-POS-DRAFT-CANCEL",
+    },
+    shiftId: "qa_bazaar_pos_shift_close_draft_shift",
+    receipt: {
+      id: "qa_bazaar_pos_shift_close_draft_receipt",
+      number: "S-006097",
+    },
   },
   variantKey: "BASE",
   register: {

@@ -37,14 +37,17 @@ describe("POS completed-payment correction eligibility", () => {
     ).toEqual({ eligible: false, reason: "ROLE_REQUIRED" });
   });
 
-  it("returns the exact operational blocker instead of exposing a dead edit action", () => {
+  it("allows a non-fiscal correction after the original shift is closed", () => {
     expect(
       resolvePosPaymentCorrectionEligibility({
         ...eligibleInput,
         shiftStatus: RegisterShiftStatus.CLOSED,
         user: userFor(Role.CASHIER),
       }),
-    ).toEqual({ eligible: false, reason: "SHIFT_CLOSED" });
+    ).toEqual({ eligible: true, reason: "ELIGIBLE" });
+  });
+
+  it("keeps fiscal receipts immutable", () => {
     expect(
       resolvePosPaymentCorrectionEligibility({
         ...eligibleInput,

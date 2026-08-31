@@ -8,7 +8,7 @@ import {
   postStockReceiving,
   postStockWriteOff,
   receiveStock,
-  ZERO_COST_REASON_MARKER,
+  EXPLICIT_ZERO_COST_REASON,
 } from "@/server/services/inventory";
 import { setProductCostBasis } from "@/server/services/productCost";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
@@ -170,15 +170,7 @@ describeDb("D-009, D-010, and D-011 conservative accounting policies", () => {
       requestId: "d009-zero-cost",
       idempotencyKey: "d009-zero-cost",
     };
-    await expect(adjustStock(zeroInput)).rejects.toMatchObject({
-      code: "BAD_REQUEST",
-      message: "zeroCostConfirmationRequired",
-    });
-    await adjustStock({
-      ...zeroInput,
-      zeroCostConfirmed: true,
-      zeroCostReason: "Supplier samples supplied at no charge",
-    });
+    await adjustStock(zeroInput);
     const [zeroSnapshot, zeroCost, zeroMovement] = await Promise.all([
       prisma.inventorySnapshot.findUniqueOrThrow({
         where: {
@@ -198,9 +190,9 @@ describeDb("D-009, D-010, and D-011 conservative accounting policies", () => {
       valueKgs: Number(zeroCost.costBasisValueKgs),
       avgCostKgs: Number(zeroCost.preciseAvgCostKgs),
     }).toEqual({ onHand: 2, quantity: 2, valueKgs: 0, avgCostKgs: 0 });
-    expect(zeroMovement.note).toContain(
-      `${ZERO_COST_REASON_MARKER} Supplier samples supplied at no charge`,
-    );
+    expect(zeroMovement.note).toBe(zeroInput.reason);
+    expect(zeroMovement.inventoryValueStatus).toBe("EXPLICIT_ZERO");
+    expect(zeroMovement.inventoryValueReason).toBe(EXPLICIT_ZERO_COST_REASON);
     await expect(
       adjustStock({
         storeId: store.id,

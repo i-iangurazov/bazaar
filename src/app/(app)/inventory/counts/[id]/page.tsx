@@ -102,9 +102,9 @@ const StockCountDetailPage = () => {
   const [scanMode, setScanMode] = useState(true);
   const [editingLine, setEditingLine] = useState<CountLine | null>(null);
   const [exportFormat, setExportFormat] = useState<DownloadFormat>("csv");
-  const [lineValuations, setLineValuations] = useState<
-    Record<string, { unitCostInput: string; zeroCostConfirmed: boolean; zeroCostReason: string }>
-  >({});
+  const [lineValuations, setLineValuations] = useState<Record<string, { unitCostInput: string }>>(
+    {},
+  );
   const [movementTarget, setMovementTarget] = useState<{
     productId: string;
     variantId?: string | null;
@@ -398,8 +398,6 @@ const StockCountDetailPage = () => {
                           lineId,
                           {
                             unitCostKgs: Number(value.unitCostInput.replace(",", ".")),
-                            zeroCostConfirmed: value.zeroCostConfirmed,
-                            zeroCostReason: value.zeroCostReason.trim() || undefined,
                           },
                         ]),
                     ),
@@ -691,8 +689,6 @@ const StockCountDetailPage = () => {
             {overageLines.map((line) => {
               const valuation = lineValuations[line.id] ?? {
                 unitCostInput: "",
-                zeroCostConfirmed: false,
-                zeroCostReason: "",
               };
               const setValuation = (patch: Partial<typeof valuation>) =>
                 setLineValuations((current) => ({
@@ -727,25 +723,6 @@ const StockCountDetailPage = () => {
                       />
                     </div>
                   </div>
-                  {Number(valuation.unitCostInput) === 0 && valuation.unitCostInput.trim() ? (
-                    <div className="mt-3 space-y-3 rounded-lg border border-warning/40 bg-warning/10 p-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-sm">{t("zeroCostConfirmationLabel")}</span>
-                        <Switch
-                          checked={valuation.zeroCostConfirmed}
-                          onCheckedChange={(checked) =>
-                            setValuation({ zeroCostConfirmed: checked })
-                          }
-                        />
-                      </div>
-                      <Input
-                        value={valuation.zeroCostReason}
-                        onChange={(event) => setValuation({ zeroCostReason: event.target.value })}
-                        placeholder={t("zeroCostReasonPlaceholder")}
-                        disabled={!valuation.zeroCostConfirmed}
-                      />
-                    </div>
-                  ) : null}
                 </div>
               );
             })}

@@ -8,14 +8,25 @@ const STOCK_COUNT_PREFIX = "stockCount:";
 const STOCK_COUNT_LEGACY_PREFIX = "Stock count ";
 const BUNDLE_PREFIX = "bundleAssemble:";
 const BUNDLE_LEGACY_PREFIX = "Bundle assemble ";
+const LEGACY_ZERO_COST_MARKER = "[ZERO_COST_REASON]";
 
 const extractSuffix = (value: string, prefix: string) => value.slice(prefix.length).trim();
 
-export const formatMovementNote = (tInventory: Translator, note?: string | null) => {
-  if (!note) {
-    return "";
+/** Keep historical audit data internal while preserving the user's original note. */
+export const sanitizeMovementNote = (note?: string | null) => {
+  const trimmed = note?.trim() ?? "";
+  const markerIndex = trimmed.indexOf(LEGACY_ZERO_COST_MARKER);
+  if (markerIndex < 0) {
+    return trimmed;
   }
-  const trimmed = note.trim();
+  return trimmed
+    .slice(0, markerIndex)
+    .replace(/\s*•\s*$/, "")
+    .trim();
+};
+
+export const formatMovementNote = (tInventory: Translator, note?: string | null) => {
+  const trimmed = sanitizeMovementNote(note);
   if (!trimmed) {
     return "";
   }

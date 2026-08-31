@@ -107,6 +107,27 @@ describe("frozen movement COGS", () => {
       }),
     ).toEqual({ unitCostKgs: null, totalCostKgs: null });
   });
+
+  it("keeps frozen COGS separate from a negative-stock asset-boundary delta", () => {
+    expect(
+      resolveFrozenMovementCost({
+        qtyDelta: -2,
+        unitCostKgs: new Prisma.Decimal(10),
+        lineTotalKgs: null,
+        inventoryValueDeltaKgs: new Prisma.Decimal(-10),
+        inventoryValueReason: "NEGATIVE_STOCK_ASSET_BOUNDARY",
+      }),
+    ).toEqual({ unitCostKgs: 10, totalCostKgs: -20 });
+    expect(
+      resolveFrozenMovementCost({
+        qtyDelta: 1,
+        unitCostKgs: new Prisma.Decimal(12),
+        lineTotalKgs: new Prisma.Decimal(12),
+        inventoryValueDeltaKgs: new Prisma.Decimal(0),
+        inventoryValueReason: "NEGATIVE_STOCK_ASSET_BOUNDARY",
+      }),
+    ).toEqual({ unitCostKgs: 12, totalCostKgs: 12 });
+  });
 });
 
 describe("read-only ProductCost reconciliation classification", () => {

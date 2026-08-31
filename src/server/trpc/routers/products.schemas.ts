@@ -216,17 +216,6 @@ export const createProductInputSchema = z
         message: "openingStockUnitCostRequired",
       });
     }
-    if (
-      hasOpeningStock &&
-      explicitUnitCost === 0 &&
-      (!input.zeroCostConfirmed || !input.zeroCostReason?.trim())
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["zeroCostReason"],
-        message: "zeroCostConfirmationRequired",
-      });
-    }
   });
 
 export const updateProductInputSchema = z.object({

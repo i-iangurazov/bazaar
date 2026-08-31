@@ -101,12 +101,28 @@ export type ApplyStockMovementInput = {
   actorId?: string | null;
   organizationId?: string;
   allowNegativeStock?: boolean;
+  allowValuedNegativeStock?: boolean;
   movementDate?: Date | null;
   zeroCostConfirmed?: boolean;
   zeroCostReason?: string | null;
+  inventoryValueStatus?: string | null;
+  inventoryValueReason?: string | null;
 };
 
-export const ZERO_COST_REASON_MARKER = "[ZERO_COST_REASON]";
+export const EXPLICIT_ZERO_COST_REASON = "EXPLICIT_ZERO_UNIT_COST";
+const NEGATIVE_STOCK_VALUE_REASON = "NEGATIVE_STOCK_ASSET_BOUNDARY";
+
+const negativeStockValueMetadata = (requestedValueKgs: number, appliedValueKgs: number) =>
+  Math.abs(requestedValueKgs - appliedValueKgs) > 0.0000005
+    ? {
+        // The expand-stage compatibility constraint permits an intentional zero
+        // value on a positive movement only when it is explicitly classified.
+        // This is an automatic ledger classification, never a user-facing
+        // confirmation or reason prompt.
+        inventoryValueStatus: appliedValueKgs === 0 ? "EXPLICIT_ZERO" : "NEGATIVE_STOCK",
+        inventoryValueReason: NEGATIVE_STOCK_VALUE_REASON,
+      }
+    : {};
 
 const resolveAuditedMovementNote = (input: ApplyStockMovementInput) => {
   const value = input.inventoryValueDeltaKgs;
@@ -126,12 +142,7 @@ const resolveAuditedMovementNote = (input: ApplyStockMovementInput) => {
     throw new AppError("productCostContributionMismatch", "CONFLICT", 409);
   }
   if (input.qtyDelta > 0 && value === 0) {
-    const reason = input.zeroCostReason?.trim();
-    if (!input.zeroCostConfirmed || !reason) {
-      throw new AppError("zeroCostConfirmationRequired", "BAD_REQUEST", 400);
-    }
-    const baseNote = input.note?.trim();
-    return [baseNote || null, `${ZERO_COST_REASON_MARKER} ${reason}`].filter(Boolean).join(" • ");
+    return input.note ?? undefined;
   }
   return input.note ?? undefined;
 };
@@ -144,13 +155,14 @@ export const applyStockMovement = async (
 ): Promise<{ snapshot: InventorySnapshot; movementId: string }> => {
   const auditedNote = resolveAuditedMovementNote(input);
   const inventoryValueStatus =
-    input.inventoryValueDeltaKgs === null || input.inventoryValueDeltaKgs === undefined
+    input.inventoryValueStatus ??
+    (input.inventoryValueDeltaKgs === null || input.inventoryValueDeltaKgs === undefined
       ? input.qtyDelta === 0
         ? "NOT_APPLICABLE"
         : "REVIEW_REQUIRED"
       : input.qtyDelta > 0 && input.inventoryValueDeltaKgs === 0
         ? "EXPLICIT_ZERO"
-        : "PRECISE";
+        : "PRECISE");
   const store = await tx.store.findUnique({ where: { id: input.storeId } });
   if (!store) {
     throw new AppError("storeNotFound", "NOT_FOUND", 404);
@@ -239,10 +251,14 @@ export const applyStockMovement = async (
         }),
       );
 
-    if (isFinanciallyTracked && crossesBelowZero) {
+    if (isFinanciallyTracked && crossesBelowZero && !input.allowValuedNegativeStock) {
       throw new AppError("valuedNegativeStockDepletionBlocked", "CONFLICT", 409);
     }
-    if (isFinanciallyTracked && appliesValuationToNegativeStock) {
+    if (
+      isFinanciallyTracked &&
+      appliesValuationToNegativeStock &&
+      !input.allowValuedNegativeStock
+    ) {
       throw new AppError("valuedNegativeStockRecoveryBlocked", "CONFLICT", 409);
     }
   }
@@ -268,7 +284,10 @@ export const applyStockMovement = async (
       inventoryValueDeltaKgs: input.inventoryValueDeltaKgs ?? undefined,
       inventoryValueStatus,
       inventoryValueReason:
-        inventoryValueStatus === "EXPLICIT_ZERO" ? input.zeroCostReason?.trim() : undefined,
+        input.inventoryValueReason ??
+        (inventoryValueStatus === "EXPLICIT_ZERO"
+          ? input.zeroCostReason?.trim() || EXPLICIT_ZERO_COST_REASON
+          : undefined),
       inventoryValueUpdatedAt: new Date(),
       referenceType: input.referenceType,
       referenceId: input.referenceId,
@@ -326,7 +345,13 @@ export const adjustStock = async (input: StockAdjustmentInput): Promise<StockAdj
           },
         });
 
-        let valuation: { unitCostKgs: number; inventoryValueDeltaKgs: number } | null;
+        let valuation: {
+          unitCostKgs: number;
+          lineTotalKgs: number;
+          inventoryValueDeltaKgs: number;
+          inventoryValueStatus?: string;
+          inventoryValueReason?: string;
+        } | null;
         if (qtyDelta > 0 && input.unitCostKgs !== null && input.unitCostKgs !== undefined) {
           if (!Number.isFinite(input.unitCostKgs) || input.unitCostKgs < 0) {
             throw new AppError("unitCostInvalid", "BAD_REQUEST", 400);
@@ -336,23 +361,33 @@ export const adjustStock = async (input: StockAdjustmentInput): Promise<StockAdj
               .mul(qtyDelta)
               .toDecimalPlaces(6, Prisma.Decimal.ROUND_HALF_UP),
           );
-          await applyValuedProductCostDelta(tx, {
+          const costApplication = await applyValuedProductCostDelta(tx, {
             organizationId: input.organizationId,
             productId: input.productId,
             variantId: input.variantId,
             quantityDelta: qtyDelta,
             valueDeltaKgs: inventoryValueDeltaKgs,
+            allowNegativeStock: qtyDelta > 0,
             zeroCostConfirmed: input.zeroCostConfirmed,
             zeroCostReason: input.zeroCostReason,
           });
-          valuation = { unitCostKgs: input.unitCostKgs, inventoryValueDeltaKgs };
+          const appliedValueKgs = costApplication?.inventoryValueDeltaKgs ?? inventoryValueDeltaKgs;
+          valuation = {
+            unitCostKgs: input.unitCostKgs,
+            lineTotalKgs: inventoryValueDeltaKgs,
+            inventoryValueDeltaKgs: appliedValueKgs,
+            ...negativeStockValueMetadata(inventoryValueDeltaKgs, appliedValueKgs),
+          };
         } else {
-          valuation = await applyCurrentProductCostQuantityDelta(tx, {
+          const currentCostValuation = await applyCurrentProductCostQuantityDelta(tx, {
             organizationId: input.organizationId,
             productId: input.productId,
             variantId: input.variantId,
             quantityDelta: qtyDelta,
           });
+          valuation = currentCostValuation
+            ? { ...currentCostValuation, lineTotalKgs: currentCostValuation.inventoryValueDeltaKgs }
+            : null;
         }
         const { snapshot, movementId } = await applyStockMovement(tx, {
           storeId: input.storeId,
@@ -361,14 +396,17 @@ export const adjustStock = async (input: StockAdjustmentInput): Promise<StockAdj
           qtyDelta,
           type: StockMovementType.ADJUSTMENT,
           unitCostKgs: valuation?.unitCostKgs,
-          lineTotalKgs: valuation?.inventoryValueDeltaKgs,
+          lineTotalKgs: valuation?.lineTotalKgs,
           inventoryValueDeltaKgs: valuation?.inventoryValueDeltaKgs,
+          inventoryValueStatus: valuation?.inventoryValueStatus,
+          inventoryValueReason: valuation?.inventoryValueReason,
           note: input.reason,
           zeroCostConfirmed: input.zeroCostConfirmed,
           zeroCostReason: input.zeroCostReason,
           actorId: input.actorId,
           organizationId: input.organizationId,
           allowNegativeStock: true,
+          allowValuedNegativeStock: qtyDelta > 0,
         });
 
         const lot = await applyStockLotAdjustment(tx, {
@@ -660,17 +698,19 @@ export const receiveStock = async (input: ReceiveStockInput): Promise<StockAdjus
           },
         });
 
-        await updateProductCost(tx, {
+        const costApplication = await updateProductCost(tx, {
           organizationId: input.organizationId,
           productId: input.productId,
           variantId: input.variantId,
           qtyReceived,
           unitCost: input.unitCost,
+          allowNegativeStockRecovery: true,
           zeroCostConfirmed: input.zeroCostConfirmed,
           zeroCostReason: input.zeroCostReason,
         });
 
-        const inventoryValueDeltaKgs = qtyReceived * input.unitCost;
+        const lineTotalKgs = qtyReceived * input.unitCost;
+        const inventoryValueDeltaKgs = costApplication?.inventoryValueDeltaKgs ?? lineTotalKgs;
         const { snapshot, movementId } = await applyStockMovement(tx, {
           storeId: input.storeId,
           productId: input.productId,
@@ -678,14 +718,16 @@ export const receiveStock = async (input: ReceiveStockInput): Promise<StockAdjus
           qtyDelta: qtyReceived,
           type: StockMovementType.RECEIVE,
           unitCostKgs: input.unitCost,
-          lineTotalKgs: qtyReceived * input.unitCost,
+          lineTotalKgs,
           inventoryValueDeltaKgs,
+          ...negativeStockValueMetadata(lineTotalKgs, inventoryValueDeltaKgs),
           note: input.note ?? undefined,
           zeroCostConfirmed: input.zeroCostConfirmed,
           zeroCostReason: input.zeroCostReason,
           actorId: input.actorId,
           organizationId: input.organizationId,
           allowNegativeStock: true,
+          allowValuedNegativeStock: true,
         });
 
         const lot = await applyStockLotAdjustment(tx, {
@@ -884,12 +926,6 @@ export const postStockReceiving = async (
           unitCost: line.unitCost,
         }));
         const lineKeys = new Set<string>();
-        if (
-          normalizedLines.some((line) => line.unitCost === 0) &&
-          (!input.zeroCostConfirmed || !input.zeroCostReason?.trim())
-        ) {
-          throw new AppError("zeroCostConfirmationRequired", "BAD_REQUEST", 400);
-        }
         for (const line of normalizedLines) {
           const key = `${line.productId}:${line.variantKey}`;
           if (lineKeys.has(key)) {
@@ -960,17 +996,19 @@ export const postStockReceiving = async (
             },
           });
 
-          await updateProductCost(tx, {
+          const costApplication = await updateProductCost(tx, {
             organizationId: input.organizationId,
             productId: line.productId,
             variantId: line.variantId,
             qtyReceived: line.quantity,
             unitCost: line.unitCost,
+            allowNegativeStockRecovery: true,
             zeroCostConfirmed: input.zeroCostConfirmed,
             zeroCostReason: input.zeroCostReason,
           });
 
-          const inventoryValueDeltaKgs = line.quantity * line.unitCost;
+          const lineTotalKgs = line.quantity * line.unitCost;
+          const inventoryValueDeltaKgs = costApplication?.inventoryValueDeltaKgs ?? lineTotalKgs;
           const { snapshot, movementId } = await applyStockMovement(tx, {
             storeId: input.storeId,
             productId: line.productId,
@@ -981,8 +1019,9 @@ export const postStockReceiving = async (
             referenceId: receivingId,
             linePosition: index + 1,
             unitCostKgs: line.unitCost,
-            lineTotalKgs: line.quantity * line.unitCost,
+            lineTotalKgs,
             inventoryValueDeltaKgs,
+            ...negativeStockValueMetadata(lineTotalKgs, inventoryValueDeltaKgs),
             note: movementNote,
             zeroCostConfirmed: input.zeroCostConfirmed,
             zeroCostReason: input.zeroCostReason,
@@ -990,6 +1029,7 @@ export const postStockReceiving = async (
             organizationId: input.organizationId,
             movementDate: input.date ?? null,
             allowNegativeStock: true,
+            allowValuedNegativeStock: true,
           });
 
           await writeAuditLog(tx, {
@@ -1862,6 +1902,7 @@ type StockReceivingMovementBoundary = {
   productId: string;
   variantId: string | null;
   createdAt: Date;
+  inventoryValueReason: string | null;
 };
 
 /**
@@ -1879,6 +1920,13 @@ const assertStockReceivingDocumentIsEditable = async (
     requestedLines?: EditStockMovementDocumentLineInput[];
   },
 ) => {
+  if (
+    input.movements.some(
+      (movement) => movement.inventoryValueReason === NEGATIVE_STOCK_VALUE_REASON,
+    )
+  ) {
+    throw new AppError("stockReceivingEditLockedAtNegativeBoundary", "CONFLICT", 409);
+  }
   const scopeMap = new Map<string, { productId: string; variantId: string | null }>();
   for (const movement of input.movements) {
     const variantId = movement.variantId ?? null;

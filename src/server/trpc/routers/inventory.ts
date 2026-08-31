@@ -2,6 +2,8 @@ import { TRPCError } from "@trpc/server";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 
+import { sanitizeMovementNote } from "@/lib/i18n/movementNote";
+
 import {
   adminProcedure,
   managerProcedure,
@@ -807,7 +809,7 @@ export const inventoryRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "productAccessDenied" });
       }
 
-      return ctx.prisma.stockMovement.findMany({
+      const movements = await ctx.prisma.stockMovement.findMany({
         where: {
           storeId: input.storeId,
           productId: input.productId,
@@ -820,6 +822,10 @@ export const inventoryRouter = router({
         orderBy: { createdAt: "desc" },
         take: 20,
       });
+      return movements.map((movement) => ({
+        ...movement,
+        note: sanitizeMovementNote(movement.note),
+      }));
     }),
 
   productMovements: protectedProcedure

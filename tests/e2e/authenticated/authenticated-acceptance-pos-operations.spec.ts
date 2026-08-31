@@ -213,11 +213,14 @@ const seedPaymentCorrectionBrowserFixtures = async () => {
         organizationId: fixture.organizationId,
         storeId: fixture.storeId,
         registerId: paymentFixture.eligibleRegister.id,
-        status: RegisterShiftStatus.OPEN,
+        status: RegisterShiftStatus.CLOSED,
         openedAt,
         openedById: cashier.id,
+        closedAt: new Date("2026-08-31T05:30:00.000Z"),
+        closedById: cashier.id,
         openingCashKgs: 0,
         expectedCashKgs: paymentFixture.eligibleReceipt.totalKgs,
+        closingCashCountedKgs: paymentFixture.eligibleReceipt.totalKgs,
         currencyCode: "KGS",
         currencyRateKgsPerUnit: 1,
         notes: "QA-BAZAAR eligible payment-correction fixture",
@@ -247,6 +250,7 @@ const seedPaymentCorrectionBrowserFixtures = async () => {
       receipt: typeof paymentFixture.eligibleReceipt | typeof paymentFixture.ineligibleReceipt;
       registerId: string;
       shiftId: string;
+      fiscalized?: boolean;
     }) => {
       await tx.customerOrder.create({
         data: {
@@ -258,6 +262,7 @@ const seedPaymentCorrectionBrowserFixtures = async () => {
           number: input.receipt.number,
           status: CustomerOrderStatus.COMPLETED,
           isPosSale: true,
+          kkmStatus: input.fiscalized ? "SENT" : "NOT_SENT",
           customerName: `${authenticatedE2EAccounts.cashier.name} fixture customer`,
           subtotalKgs: input.receipt.totalKgs,
           discountKgs: 0,
@@ -297,6 +302,21 @@ const seedPaymentCorrectionBrowserFixtures = async () => {
               createdById: cashier.id,
             },
           },
+          fiscalReceipts: input.fiscalized
+            ? {
+                create: {
+                  id: paymentFixture.ineligibleReceipt.fiscalReceiptId,
+                  organizationId: fixture.organizationId,
+                  storeId: fixture.storeId,
+                  status: "SENT",
+                  mode: "EXPORT_ONLY",
+                  idempotencyKey: paymentFixture.ineligibleReceipt.fiscalIdempotencyKey,
+                  payloadJson: { receiptNumber: input.receipt.number },
+                  fiscalizedAt: new Date(input.receipt.completedAt),
+                  sentAt: new Date(input.receipt.completedAt),
+                },
+              }
+            : undefined,
         },
       });
     };
@@ -310,6 +330,79 @@ const seedPaymentCorrectionBrowserFixtures = async () => {
       receipt: paymentFixture.ineligibleReceipt,
       registerId: paymentFixture.ineligibleRegister.id,
       shiftId: paymentFixture.ineligibleShiftId,
+      fiscalized: true,
+    });
+  });
+};
+
+const seedShiftCloseDraftBrowserFixture = async () => {
+  const draftFixture = fixture.shiftCloseDraft;
+  const cashier = await prisma.user.findFirstOrThrow({
+    where: {
+      organizationId: fixture.organizationId,
+      email: authenticatedE2EAccounts.cashier.email,
+      role: "CASHIER",
+    },
+    select: { id: true },
+  });
+
+  await prisma.$transaction(async (tx) => {
+    await tx.auditLog.deleteMany({
+      where: {
+        organizationId: fixture.organizationId,
+        entityId: { in: [draftFixture.receipt.id, draftFixture.shiftId] },
+      },
+    });
+    await tx.customerOrder.deleteMany({ where: { id: draftFixture.receipt.id } });
+    await tx.registerShift.deleteMany({ where: { id: draftFixture.shiftId } });
+    await tx.posRegister.upsert({
+      where: { id: draftFixture.register.id },
+      create: {
+        ...draftFixture.register,
+        organizationId: fixture.organizationId,
+        storeId: fixture.storeId,
+        isActive: true,
+      },
+      update: {
+        organizationId: fixture.organizationId,
+        storeId: fixture.storeId,
+        name: draftFixture.register.name,
+        code: draftFixture.register.code,
+        isActive: true,
+      },
+    });
+    await tx.registerShift.create({
+      data: {
+        id: draftFixture.shiftId,
+        organizationId: fixture.organizationId,
+        storeId: fixture.storeId,
+        registerId: draftFixture.register.id,
+        status: RegisterShiftStatus.OPEN,
+        openedById: cashier.id,
+        openingCashKgs: 0,
+        expectedCashKgs: 0,
+        currencyCode: "KGS",
+        currencyRateKgsPerUnit: 1,
+      },
+    });
+    await tx.customerOrder.create({
+      data: {
+        id: draftFixture.receipt.id,
+        organizationId: fixture.organizationId,
+        storeId: fixture.storeId,
+        registerId: draftFixture.register.id,
+        shiftId: draftFixture.shiftId,
+        number: draftFixture.receipt.number,
+        status: CustomerOrderStatus.DRAFT,
+        isPosSale: true,
+        subtotalKgs: 0,
+        discountKgs: 0,
+        totalKgs: 0,
+        currencyCode: "KGS",
+        currencyRateKgsPerUnit: 1,
+        createdById: cashier.id,
+        updatedById: cashier.id,
+      },
     });
   });
 };
@@ -417,39 +510,48 @@ const runCashierPaymentCorrectionJourney = async (input: {
     },
     select: { id: true },
   });
-  const [saleBefore, snapshotBefore, costBefore, stockMovementsBefore, cashMovementsBefore] =
-    await Promise.all([
-      prisma.customerOrder.findUniqueOrThrow({
-        where: { id: eligibleId },
-        include: { lines: true, payments: true },
-      }),
-      prisma.inventorySnapshot.findUniqueOrThrow({
-        where: {
-          storeId_productId_variantKey: {
-            storeId: fixture.storeId,
-            productId: fixture.product.id,
-            variantKey: fixture.variantKey,
-          },
+  const [
+    saleBefore,
+    shiftBefore,
+    snapshotBefore,
+    costBefore,
+    stockMovementsBefore,
+    cashMovementsBefore,
+  ] = await Promise.all([
+    prisma.customerOrder.findUniqueOrThrow({
+      where: { id: eligibleId },
+      include: { lines: true, payments: true },
+    }),
+    prisma.registerShift.findUniqueOrThrow({
+      where: { id: paymentFixture.eligibleShiftId },
+    }),
+    prisma.inventorySnapshot.findUniqueOrThrow({
+      where: {
+        storeId_productId_variantKey: {
+          storeId: fixture.storeId,
+          productId: fixture.product.id,
+          variantKey: fixture.variantKey,
         },
-      }),
-      prisma.productCost.findUniqueOrThrow({
-        where: {
-          organizationId_productId_variantKey: {
-            organizationId: fixture.organizationId,
-            productId: fixture.product.id,
-            variantKey: fixture.variantKey,
-          },
+      },
+    }),
+    prisma.productCost.findUniqueOrThrow({
+      where: {
+        organizationId_productId_variantKey: {
+          organizationId: fixture.organizationId,
+          productId: fixture.product.id,
+          variantKey: fixture.variantKey,
         },
-      }),
-      prisma.stockMovement.findMany({
-        where: { storeId: fixture.storeId, productId: fixture.product.id },
-        orderBy: { id: "asc" },
-      }),
-      prisma.cashDrawerMovement.findMany({
-        where: { shiftId: paymentFixture.eligibleShiftId },
-        orderBy: { id: "asc" },
-      }),
-    ]);
+      },
+    }),
+    prisma.stockMovement.findMany({
+      where: { storeId: fixture.storeId, productId: fixture.product.id },
+      orderBy: { id: "asc" },
+    }),
+    prisma.cashDrawerMovement.findMany({
+      where: { shiftId: paymentFixture.eligibleShiftId },
+      orderBy: { id: "asc" },
+    }),
+  ]);
 
   const primaryContext = await createCashierBrowserContext(
     input.browser,
@@ -474,7 +576,7 @@ const runCashierPaymentCorrectionJourney = async (input: {
       (await eligibleSale.getByTestId("pos-history-occurred-at").textContent())?.trim() ?? "";
     expect(historyCompletedAt).not.toBe("");
 
-    await eligibleSale.getByRole("button", { name: "Correct payment", exact: true }).click();
+    await eligibleSale.getByRole("button", { name: "Edit receipt", exact: true }).click();
     const correctionDialog = primaryPage.getByRole("dialog", { name: "Correct payment" });
     await expect(correctionDialog).toBeVisible();
     await expect(correctionDialog).toContainText(paymentFixture.eligibleReceipt.number);
@@ -539,7 +641,7 @@ const runCashierPaymentCorrectionJourney = async (input: {
     const reloggedSale = paymentCorrectionSale(reloginPage, eligibleId);
     await expect(reloggedSale).toContainText(paymentFixture.eligibleReceipt.number);
     await expect(reloggedSale).toContainText("Transfer");
-    await reloggedSale.getByRole("button", { name: "Correct payment", exact: true }).click();
+    await reloggedSale.getByRole("button", { name: "Edit receipt", exact: true }).click();
     const historyDialog = reloginPage.getByRole("dialog", { name: "Correct payment" });
     await expect(historyDialog).toContainText(
       /Cash\s+KGS\s*4,100\.00\s+→\s+Transfer\s+KGS\s*4,100\.00/,
@@ -557,10 +659,10 @@ const runCashierPaymentCorrectionJourney = async (input: {
     await expect(ineligibleSale).toContainText(paymentFixture.ineligibleReceipt.number);
     await expect(ineligibleSale).toContainText("66,390.00");
     await expect(
-      ineligibleSale.getByRole("button", { name: "Correct payment", exact: true }),
+      ineligibleSale.getByRole("button", { name: "Edit receipt", exact: true }),
     ).toBeDisabled();
     await expect(ineligibleSale).toContainText(
-      "The original shift is closed, so its recorded payment cannot be changed.",
+      "This receipt has entered fiscal processing and cannot be changed directly.",
     );
     await input.testInfo.attach("cashier-payment-correction-ineligible", {
       body: await reloginPage.screenshot({ fullPage: true }),
@@ -633,6 +735,12 @@ const runCashierPaymentCorrectionJourney = async (input: {
     createdById: cashier.id,
   });
   expect(Number(saleAfter.payments[0]!.amountKgs)).toBe(paymentFixture.eligibleReceipt.totalKgs);
+  expect(shiftBefore.status).toBe(RegisterShiftStatus.CLOSED);
+  expect(shiftAfter.status).toBe(RegisterShiftStatus.CLOSED);
+  expect(shiftAfter.closedAt?.toISOString()).toBe(shiftBefore.closedAt?.toISOString());
+  expect(shiftAfter.closingCashCountedKgs?.toString()).toBe(
+    shiftBefore.closingCashCountedKgs?.toString(),
+  );
   expect(Number(shiftAfter.expectedCashKgs)).toBe(0);
   expect(snapshotAfter).toEqual(snapshotBefore);
   expect(costAfter).toEqual(costBefore);
@@ -657,8 +765,65 @@ const runCashierPaymentCorrectionJourney = async (input: {
   expect(reloginAudit.externalRequests).toEqual([]);
   expect(reloginAudit.correctionMutationRequests).toEqual([]);
 
+  const [paymentsBeforeStaffAttempt, auditsBeforeStaffAttempt] = await Promise.all([
+    prisma.salePayment.count({ where: { customerOrderId: eligibleId } }),
+    prisma.auditLog.count({
+      where: {
+        action: "POS_PAYMENT_CORRECTION",
+        entity: "CustomerOrder",
+        entityId: eligibleId,
+      },
+    }),
+  ]);
+  const staffContext = await input.browser.newContext({
+    baseURL: input.baseOrigin,
+    storageState: authenticatedE2EStorageStatePath("staff"),
+    ignoreHTTPSErrors: true,
+  });
+  try {
+    const response = await staffContext.request.post(
+      "/api/trpc/pos.sales.correctPayments?batch=1",
+      {
+        data: {
+          0: {
+            json: {
+              saleId: eligibleId,
+              payments: [{ method: PosPaymentMethod.CARD, amountKgs: 4_100 }],
+              reason: "Insufficient POS role",
+              idempotencyKey: `${paymentFixture.idempotencyKeyPrefix}staff-forbidden`,
+            },
+          },
+        },
+        headers: {
+          "content-type": "application/json",
+          "x-request-id": "authenticated-pos-payment-correction-staff-forbidden",
+        },
+        failOnStatusCode: false,
+      },
+    );
+    expect(response.status()).toBe(403);
+    const body = JSON.stringify((await response.json()) as unknown);
+    expect(body).toContain('"code":"FORBIDDEN"');
+    expect(body).toContain('"httpStatus":403');
+  } finally {
+    await staffContext.close();
+  }
+  await expect(prisma.salePayment.count({ where: { customerOrderId: eligibleId } })).resolves.toBe(
+    paymentsBeforeStaffAttempt,
+  );
+  await expect(
+    prisma.auditLog.count({
+      where: {
+        action: "POS_PAYMENT_CORRECTION",
+        entity: "CustomerOrder",
+        entityId: eligibleId,
+      },
+    }),
+  ).resolves.toBe(auditsBeforeStaffAttempt);
+
   const evidence = {
     actorRole: "CASHIER",
+    deniedRole: "STAFF",
     eligibleReceipt: paymentFixture.eligibleReceipt.number,
     ineligibleReceipt: paymentFixture.ineligibleReceipt.number,
     beforePayment: "CASH 4100",
@@ -672,13 +837,99 @@ const runCashierPaymentCorrectionJourney = async (input: {
     cogsUnchanged: true,
     refreshPassed: true,
     reloginPassed: true,
-    inaccessibleReason: "SHIFT_CLOSED",
+    inaccessibleReason: "FISCAL_CORRECTION_REQUIRED",
   };
   await input.testInfo.attach("cashier-payment-correction-evidence", {
     body: JSON.stringify(evidence, null, 2),
     contentType: "application/json",
   });
   console.info(`[POS-PAYMENT-CORRECTION-EVIDENCE] ${JSON.stringify(evidence)}`);
+};
+
+const runCashierShiftCancelJourney = async (input: {
+  browser: Browser;
+  baseOrigin: string;
+  testInfo: TestInfo;
+}) => {
+  const draftFixture = fixture.shiftCloseDraft;
+  const context = await createCashierBrowserContext(
+    input.browser,
+    input.baseOrigin,
+    authenticatedE2EStorageStatePath("cashier"),
+  );
+  const page = await context.newPage();
+  const audit = await installCashierPaymentBrowserAudit(page, input.baseOrigin);
+  try {
+    await gotoDirect(
+      page,
+      `/pos/shifts?registerId=${encodeURIComponent(draftFixture.register.id)}`,
+    );
+    await expect(
+      page.getByText("Complete or cancel active receipts before closing the shift."),
+    ).toBeVisible();
+    await expect(page.getByText("Active receipts: 1", { exact: true })).toBeVisible();
+    const receipt = page.locator(
+      `[data-testid="pos-shift-active-receipt"][data-sale-id="${draftFixture.receipt.id}"]`,
+    );
+    await expect(receipt).toContainText(draftFixture.receipt.number);
+    await expect(receipt).toContainText(authenticatedE2EAccounts.cashier.name);
+    await expect(receipt.getByRole("link", { name: "Open receipt", exact: true })).toBeVisible();
+    const discard = receipt.getByRole("button", { name: "Discard sale", exact: true });
+    await expect(discard).toBeVisible();
+    const locationBeforeCancel = page.url();
+    await discard.click();
+    await expect(page.getByText("Sale discarded", { exact: true })).toBeVisible();
+    await expect(page).toHaveURL(locationBeforeCancel);
+    await expect(page.getByText("Active receipts: 1", { exact: true })).toBeHidden();
+
+    await expect
+      .poll(async () => {
+        const persisted = await prisma.customerOrder.findUniqueOrThrow({
+          where: { id: draftFixture.receipt.id },
+        });
+        return persisted.status;
+      })
+      .toBe(CustomerOrderStatus.CANCELED);
+    await expect(
+      prisma.auditLog.count({
+        where: {
+          action: "POS_SALE_DRAFT_CANCEL",
+          entityId: draftFixture.receipt.id,
+        },
+      }),
+    ).resolves.toBe(1);
+    await expect(
+      prisma.salePayment.count({ where: { customerOrderId: draftFixture.receipt.id } }),
+    ).resolves.toBe(0);
+    await expect(
+      prisma.stockMovement.count({ where: { referenceId: draftFixture.receipt.id } }),
+    ).resolves.toBe(0);
+    await expect(
+      prisma.cashDrawerMovement.count({ where: { shiftId: draftFixture.shiftId } }),
+    ).resolves.toBe(0);
+
+    await page.getByPlaceholder("Counted cash").fill("0");
+    await page.getByRole("checkbox", { name: "Confirm close", exact: true }).check();
+    await page.getByRole("button", { name: "Close shift", exact: true }).click();
+    await expect(page.getByText("Closed completed.", { exact: true })).toBeVisible();
+    await expect
+      .poll(async () => {
+        const shift = await prisma.registerShift.findUniqueOrThrow({
+          where: { id: draftFixture.shiftId },
+        });
+        return shift.status;
+      })
+      .toBe(RegisterShiftStatus.CLOSED);
+    await input.testInfo.attach("cashier-shift-draft-cancel", {
+      body: await page.screenshot({ fullPage: true }),
+      contentType: "image/png",
+    });
+    expect(audit.consoleErrors).toEqual([]);
+    expect(audit.pageErrors).toEqual([]);
+    expect(audit.externalRequests).toEqual([]);
+  } finally {
+    await context.close();
+  }
 };
 
 const openMobileSaleWithProduct = async (
@@ -782,7 +1033,13 @@ test("BZR-REQ-0079/0080/0081/0082 POS operations and cashier payment corrections
   test.setTimeout(240_000);
   await installOwnedIdempotencyKeys(page);
   await seedPaymentCorrectionBrowserFixtures();
+  await seedShiftCloseDraftBrowserFixture();
   await runCashierPaymentCorrectionJourney({
+    browser,
+    baseOrigin: assertAuthenticatedE2EBaseUrl(baseURL),
+    testInfo,
+  });
+  await runCashierShiftCancelJourney({
     browser,
     baseOrigin: assertAuthenticatedE2EBaseUrl(baseURL),
     testInfo,

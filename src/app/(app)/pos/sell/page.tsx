@@ -4054,7 +4054,7 @@ const PosSellPage = () => {
               }
             >
               <EditIcon className="h-3.5 w-3.5" aria-hidden />
-              {isCompletedReceipt ? t("sell.paymentCorrection.title") : t("sell.editReceipt")}
+              {t("sell.editReceipt")}
             </Button>
           )}
           {isCompletedReceipt && !saleItem.paymentCorrectionEligibility.eligible ? (
