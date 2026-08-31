@@ -201,10 +201,11 @@ describe("product image storage", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const { downloadRemoteImage } = await import("../../src/server/services/productImageStorage");
+    const { downloadManagedRemoteImage } =
+      await import("../../src/server/services/productImageStorage");
 
     await expect(
-      downloadRemoteImage("https://93.184.216.34/retails/org-1/products/image.jpg", {
+      downloadManagedRemoteImage("https://93.184.216.34/retails/org-1/products/image.jpg", {
         allowedOrigin: "https://93.184.216.34",
         allowedPathPrefix: "/retails/org-1/",
       }),
@@ -225,10 +226,11 @@ describe("product image storage", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const { downloadRemoteImage } = await import("../../src/server/services/productImageStorage");
+    const { downloadManagedRemoteImage } =
+      await import("../../src/server/services/productImageStorage");
 
     await expect(
-      downloadRemoteImage("https://93.184.216.34/retails/org-1/products/image.jpg", {
+      downloadManagedRemoteImage("https://93.184.216.34/retails/org-1/products/image.jpg", {
         allowedOrigin: "https://93.184.216.34",
         allowedPathPrefix: "/retails/org-1/",
       }),
@@ -257,10 +259,11 @@ describe("product image storage", () => {
       );
     vi.stubGlobal("fetch", fetchMock);
 
-    const { downloadRemoteImage } = await import("../../src/server/services/productImageStorage");
+    const { downloadManagedRemoteImage } =
+      await import("../../src/server/services/productImageStorage");
 
     await expect(
-      downloadRemoteImage("https://93.184.216.34/retails/org-1/products/image.jpg", {
+      downloadManagedRemoteImage("https://93.184.216.34/retails/org-1/products/image.jpg", {
         allowedOrigin: "https://93.184.216.34",
         allowedPathPrefix: "/retails/org-1/",
       }),

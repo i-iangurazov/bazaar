@@ -1,6 +1,6 @@
 import { getServerAuthToken } from "@/server/auth/token";
 import {
-  downloadRemoteImage,
+  downloadManagedRemoteImage,
   readManagedLocalProductImage,
 } from "@/server/services/productImageStorage";
 
@@ -283,7 +283,7 @@ export const GET = async (request: Request) => {
             url: managedSource.url,
             organizationId: token.organizationId,
           })
-        : await downloadRemoteImage(managedSource.url, managedSource.policy);
+        : await downloadManagedRemoteImage(managedSource.url, managedSource.policy);
     if (!source) {
       return Response.json({ message: "imageReadFailed" }, { status: 502 });
     }

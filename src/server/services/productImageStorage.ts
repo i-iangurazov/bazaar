@@ -153,8 +153,24 @@ const encodeManagedRemotePath = (pathname: string) => {
 };
 
 const canonicalizeManagedRemoteTarget = (url: URL, policy: RemoteImageFetchPolicy) => {
+  let allowedOrigin: URL;
+  try {
+    allowedOrigin = new URL(policy.allowedOrigin);
+  } catch {
+    return null;
+  }
   if (
-    url.origin !== policy.allowedOrigin ||
+    (allowedOrigin.protocol !== "http:" && allowedOrigin.protocol !== "https:") ||
+    allowedOrigin.origin !== policy.allowedOrigin ||
+    allowedOrigin.pathname !== "/" ||
+    allowedOrigin.search ||
+    allowedOrigin.hash ||
+    allowedOrigin.username ||
+    allowedOrigin.password ||
+    url.origin !== allowedOrigin.origin ||
+    url.port ||
+    url.username ||
+    url.password ||
     url.search ||
     url.hash ||
     !policy.allowedPathPrefix.startsWith("/") ||
@@ -168,7 +184,10 @@ const canonicalizeManagedRemoteTarget = (url: URL, policy: RemoteImageFetchPolic
     return null;
   }
 
-  return new URL(`${policy.allowedOrigin}${safePath}`);
+  return {
+    fetchUrl: `${allowedOrigin.origin}${safePath}`,
+    hostname: allowedOrigin.hostname,
+  };
 };
 
 type ImageStorageProvider = "local" | "r2";
@@ -844,11 +863,7 @@ const isRemoteHostAllowed = async (hostName: string) => {
   }
 };
 
-const fetchAllowedRemoteImage = async (
-  sourceUrl: string,
-  signal: AbortSignal,
-  policy?: RemoteImageFetchPolicy,
-) => {
+const fetchAllowedRemoteImage = async (sourceUrl: string, signal: AbortSignal) => {
   let currentUrl: URL;
   try {
     currentUrl = new URL(sourceUrl);
@@ -863,14 +878,6 @@ const fetchAllowedRemoteImage = async (
     if (currentUrl.port || currentUrl.username || currentUrl.password) {
       return null;
     }
-    if (policy) {
-      const managedTarget = canonicalizeManagedRemoteTarget(currentUrl, policy);
-      if (!managedTarget) {
-        return null;
-      }
-      currentUrl = managedTarget;
-    }
-
     const hostAllowed = await isRemoteHostAllowed(currentUrl.hostname);
     if (!hostAllowed) {
       return null;
@@ -900,35 +907,92 @@ const fetchAllowedRemoteImage = async (
   return null;
 };
 
-export const downloadRemoteImage = async (url: string, policy?: RemoteImageFetchPolicy) => {
+const fetchAllowedManagedRemoteImage = async (
+  sourceUrl: string,
+  signal: AbortSignal,
+  policy: RemoteImageFetchPolicy,
+) => {
+  let currentSource = sourceUrl;
+
+  for (let redirectCount = 0; redirectCount <= maxRemoteImageRedirects; redirectCount += 1) {
+    let parsed: URL;
+    try {
+      parsed = new URL(currentSource);
+    } catch {
+      return null;
+    }
+
+    const target = canonicalizeManagedRemoteTarget(parsed, policy);
+    if (!target || !(await isRemoteHostAllowed(target.hostname))) {
+      return null;
+    }
+
+    const response = await fetch(target.fetchUrl, {
+      signal,
+      redirect: "manual",
+    });
+    if (!remoteImageRedirectStatuses.has(response.status)) {
+      return response;
+    }
+
+    const location = response.headers.get("location");
+    if (!location || redirectCount >= maxRemoteImageRedirects) {
+      return null;
+    }
+    try {
+      currentSource = new URL(location, target.fetchUrl).toString();
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+};
+
+const readDownloadedRemoteImage = async (response: Response | null) => {
+  if (!response?.ok) {
+    return null;
+  }
+
+  const contentType = safeImageMimeType(response.headers.get("content-type"));
+  if (!contentType) {
+    return null;
+  }
+
+  const contentLength = Number(response.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > maxImageBytes) {
+    return null;
+  }
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  if (!buffer.length || buffer.length > maxImageBytes) {
+    return null;
+  }
+
+  return { buffer, contentType };
+};
+
+export const downloadRemoteImage = async (url: string) => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), remoteImageFetchTimeoutMs);
 
   try {
-    const response = await fetchAllowedRemoteImage(url, controller.signal, policy);
-    if (!response?.ok) {
-      return null;
-    }
+    return await readDownloadedRemoteImage(await fetchAllowedRemoteImage(url, controller.signal));
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+};
 
-    const contentType = safeImageMimeType(response.headers.get("content-type"));
-    if (!contentType) {
-      return null;
-    }
+export const downloadManagedRemoteImage = async (url: string, policy: RemoteImageFetchPolicy) => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), remoteImageFetchTimeoutMs);
 
-    const contentLength = Number(response.headers.get("content-length"));
-    if (Number.isFinite(contentLength) && contentLength > maxImageBytes) {
-      return null;
-    }
-
-    const buffer = Buffer.from(await response.arrayBuffer());
-    if (!buffer.length || buffer.length > maxImageBytes) {
-      return null;
-    }
-
-    return {
-      buffer,
-      contentType,
-    };
+  try {
+    return await readDownloadedRemoteImage(
+      await fetchAllowedManagedRemoteImage(url, controller.signal, policy),
+    );
   } catch {
     return null;
   } finally {

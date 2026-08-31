@@ -13,7 +13,7 @@ vi.mock("@/server/auth/token", () => ({
 
 vi.mock("@/server/services/productImageStorage", () => ({
   readManagedLocalProductImage: mockReadManagedLocalProductImage,
-  downloadRemoteImage: mockDownloadRemoteImage,
+  downloadManagedRemoteImage: mockDownloadRemoteImage,
 }));
 
 describe("product image source route", () => {
