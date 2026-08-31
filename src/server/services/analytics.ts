@@ -495,12 +495,11 @@ export const getInventoryValue = async (input: {
   const valueRow = await prisma.$queryRaw<Array<{ total: string | number | null }>>(Prisma.sql`
     SELECT SUM(
       s."onHand" * CASE
-        WHEN cost."costBasisQty" > 0 THEN
-          CASE
-            WHEN cost."costBasisValueKgs" = 0 AND cost."avgCostKgs" <> 0
-              THEN cost."avgCostKgs"
-            ELSE cost."costBasisValueKgs" / cost."costBasisQty"
-          END
+        WHEN cost."preciseCostBasisQty" > 0
+          AND cost."costBasisValueKgs" IS NOT NULL
+          AND cost."valuationLegacyUpdatedAt" IS NOT NULL
+          AND cost."updatedAt" <= cost."valuationLegacyUpdatedAt"
+          THEN cost."costBasisValueKgs" / cost."preciseCostBasisQty"
         ELSE cost."avgCostKgs"
       END
     ) AS total

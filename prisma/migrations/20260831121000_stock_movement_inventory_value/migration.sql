@@ -1,32 +1,54 @@
 BEGIN;
 
--- Keep signed inventory-cost value separate from document totals and sales revenue.
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '30s';
+
+-- Expand only. Old writers may continue inserting NULL. Historical values are
+-- classified and populated by the bounded operational backfill, never by DDL.
 ALTER TABLE "StockMovement"
-ADD COLUMN IF NOT EXISTS "inventoryValueDeltaKgs" DECIMAL(18,6);
+  ADD COLUMN IF NOT EXISTS "inventoryValueDeltaKgs" DECIMAL(18,6),
+  ADD COLUMN IF NOT EXISTS "inventoryValueStatus" TEXT,
+  ADD COLUMN IF NOT EXISTS "inventoryValueReason" TEXT,
+  ADD COLUMN IF NOT EXISTS "inventoryValueUpdatedAt" TIMESTAMP(3),
+  ADD COLUMN IF NOT EXISTS "ledgerRecordedAt" TIMESTAMP(3);
 
--- Only backfill movement families whose historical line total has unambiguous cost meaning.
-UPDATE "StockMovement"
-SET "inventoryValueDeltaKgs" = CASE
-  WHEN "qtyDelta" = 0 THEN 0
-  WHEN "type" = 'RECEIVE' AND "lineTotalKgs" IS NOT NULL
-    THEN SIGN("qtyDelta") * ABS("lineTotalKgs")
-  WHEN "type" = 'WRITE_OFF' AND "lineTotalKgs" IS NOT NULL
-    THEN SIGN("qtyDelta") * ABS("lineTotalKgs")
-  WHEN "type" = 'TRANSFER_OUT' AND "lineTotalKgs" IS NOT NULL
-    THEN -ABS("lineTotalKgs")
-  WHEN "type" = 'TRANSFER_IN' AND "lineTotalKgs" IS NOT NULL
-    THEN ABS("lineTotalKgs")
-  WHEN "type" = 'ADJUSTMENT'
-    AND "referenceType" IN ('IMPORT_ROLLBACK', 'Product', 'ProductVariant')
-    AND "lineTotalKgs" IS NOT NULL
-    THEN SIGN("qtyDelta") * ABS("lineTotalKgs")
-  ELSE NULL
-END
-WHERE "inventoryValueDeltaKgs" IS NULL
-  AND ("qtyDelta" = 0 OR "lineTotalKgs" IS NOT NULL);
+-- Existing rows remain NULL; post-expand inserts from both old and new clients
+-- receive a database-clock watermark without a trigger or historical rewrite.
+-- Prisma DateTime values are persisted as UTC timestamp-without-time-zone values,
+-- so the database default must explicitly use UTC as well. Otherwise a non-UTC
+-- PostgreSQL TimeZone makes old-writer rows appear hours newer than application
+-- valuation watermarks and can double-apply already projected baseline stock.
+ALTER TABLE "StockMovement"
+  ALTER COLUMN "ledgerRecordedAt" SET DEFAULT (clock_timestamp() AT TIME ZONE 'UTC');
 
--- The final fail-closed constraint is installed by the following migration.
--- Keeping it out of this transitional step avoids rejecting historical explicit
--- zero-cost rows before D-009's audit-reason rule is available.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'StockMovement_inventoryValueDelta_compat_sign_check'
+      AND conrelid = '"StockMovement"'::regclass
+  ) THEN
+    ALTER TABLE "StockMovement"
+      ADD CONSTRAINT "StockMovement_inventoryValueDelta_compat_sign_check"
+      CHECK (
+        "inventoryValueDeltaKgs" IS NULL
+        OR "qtyDelta" = 0
+        OR ("qtyDelta" > 0 AND "inventoryValueDeltaKgs" > 0)
+        OR (
+          "qtyDelta" > 0
+          AND "inventoryValueDeltaKgs" = 0
+          AND "inventoryValueStatus" = 'EXPLICIT_ZERO'
+          AND NULLIF(BTRIM("inventoryValueReason"), '') IS NOT NULL
+        )
+        OR ("qtyDelta" < 0 AND "inventoryValueDeltaKgs" <= 0)
+      ) NOT VALID;
+  END IF;
+END $$;
+
+COMMENT ON COLUMN "StockMovement"."inventoryValueDeltaKgs" IS
+  'Signed cost-ledger value. NULL is permitted during expand/rollback compatibility and is explicitly unreconciled.';
+COMMENT ON COLUMN "StockMovement"."inventoryValueStatus" IS
+  'PRECISE, EXPLICIT_ZERO, LEGACY_EVIDENCE, NOT_APPLICABLE, or REVIEW_REQUIRED; NULL identifies an untouched old-writer row.';
 
 COMMIT;

@@ -103,6 +103,8 @@ describe("authenticated POS operations acceptance contract", () => {
     );
     expect(spec).toContain("rapidClick");
     expect(spec).toContain("finalStockMovements");
+    expect(spec).toContain("finalCost.preciseCostBasisQty");
+    expect(spec).toContain("finalCost.preciseAvgCostKgs");
     expect(spec).toContain("finalCost.costBasisValueKgs");
     expect(spec).toContain("finalShift.expectedCashKgs");
     expect(spec).toContain("fiscalReceiptCount");

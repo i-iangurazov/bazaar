@@ -509,93 +509,93 @@ model Organization {
   createdAt           DateTime                       @default(now())
   updatedAt           DateTime                       @updatedAt
 
-  users                       User[]
-  userStoreAccesses           UserStoreAccess[]
-  stores                      Store[]
-  productCatalogs             ProductCatalog[]
-  storeProducts               StoreProduct[]
-  suppliers                   Supplier[]
-  products                    Product[]
-  units                       Unit[]
-  productCategories           ProductCategory[]
-  storeCategoryPreferences    StoreCategoryPreference[]
-  productBarcodes             ProductBarcode[]
-  productImages               ProductImage[]
-  productPacks                ProductPack[]
-  purchaseOrders              PurchaseOrder[]
-  customerOrders              CustomerOrder[]
-  operationRequests           OperationRequest[]
-  customers                   Customer[]
-  customerOrderEmailLogs      CustomerOrderEmailLog[]
-  emailCampaigns              EmailCampaign[]
-  emailCampaignRecipients     EmailCampaignRecipient[]
+  users                        User[]
+  userStoreAccesses            UserStoreAccess[]
+  stores                       Store[]
+  productCatalogs              ProductCatalog[]
+  storeProducts                StoreProduct[]
+  suppliers                    Supplier[]
+  products                     Product[]
+  units                        Unit[]
+  productCategories            ProductCategory[]
+  storeCategoryPreferences     StoreCategoryPreference[]
+  productBarcodes              ProductBarcode[]
+  productImages                ProductImage[]
+  productPacks                 ProductPack[]
+  purchaseOrders               PurchaseOrder[]
+  customerOrders               CustomerOrder[]
+  operationRequests            OperationRequest[]
+  customers                    Customer[]
+  customerOrderEmailLogs       CustomerOrderEmailLog[]
+  emailCampaigns               EmailCampaign[]
+  emailCampaignRecipients      EmailCampaignRecipient[]
   emailCampaignRecipientEvents EmailCampaignRecipientEvent[]
-  emailMarketingSuppressions  EmailMarketingSuppression[]
-  emailMarketingLogos         EmailMarketingLogo[]
-  emailSenderDomains          EmailSenderDomain[]
-  emailSenderIdentities       EmailSenderIdentity[]
-  emailAutomations            EmailAutomation[]
-  emailAutomationDeliveries   EmailAutomationDelivery[]
-  auditLogs                   AuditLog[]
-  importBatches               ImportBatch[]
-  stockCounts                 StockCount[]
-  storePrices                 StorePrice[]
-  bazaarCatalogs              BazaarCatalog[]
-  bazaarCatalogImages         BazaarCatalogImage[]
-  bazaarApiKeys               BazaarApiKey[]
-  mMarketIntegrations         MMarketIntegration[]
-  mMarketBranchMappings       MMarketBranchMapping[]
-  mMarketExportJobs           MMarketExportJob[]
-  mMarketIncludedProducts     MMarketIncludedProduct[]
-  bakaiStoreIntegrations      BakaiStoreIntegration[]
-  bakaiStoreMappings          BakaiStoreStockMapping[]
-  bakaiStoreBranchMappings    BakaiStoreBranchMapping[]
-  bakaiStoreExportJobs        BakaiStoreExportJob[]
-  bakaiStoreIncludedProducts  BakaiStoreIncludedProduct[]
-  bakaiStoreProductSyncStates BakaiStoreProductSyncState[]
-  oMarketIntegrations         OMarketIntegration[]
-  oMarketStoreMappings        OMarketStoreMapping[]
-  oMarketCategoryMappings     OMarketCategoryMapping[]
-  oMarketExportJobs           OMarketExportJob[]
-  oMarketIncludedProducts     OMarketIncludedProduct[]
-  oMarketProductSyncStates    OMarketProductSyncState[]
-  productImageStudioJobs      ProductImageStudioJob[]
-  productDescriptionJobs      ProductDescriptionGenerationJob[]
-  productDescriptionJobItems  ProductDescriptionGenerationJobItem[]
-  productCosts                ProductCost[]
-  productBundleComponents     ProductBundleComponent[]
-  stockLots                   StockLot[]
-  attributeDefinitions        AttributeDefinition[]
-  categoryTemplates           CategoryAttributeTemplate[]
-  variantAttributeValues      VariantAttributeValue[]
-  onboardingProgress          OnboardingProgress?
-  productEvents               ProductEvent[]
-  deadLetterJobs              DeadLetterJob[]
-  impersonationSessions       ImpersonationSession[]
-  inviteTokens                InviteToken[]
-  accessRequests              AccessRequest[]
-  complianceProfiles          StoreComplianceProfile[]
-  productComplianceFlags      ProductComplianceFlags[]
-  exportJobs                  ExportJob[]
-  periodCloses                PeriodClose[]
-  diagnosticsReports          DiagnosticsReport[]
-  planUpgradeRequests         PlanUpgradeRequest[]
-  counters                    OrganizationCounter?
-  posRegisters                PosRegister[]
-  registerShifts              RegisterShift[]
-  salePayments                SalePayment[]
-  cashDrawerMovements         CashDrawerMovement[]
-  saleReturns                 SaleReturn[]
-  fiscalReceipts              FiscalReceipt[]
-  kkmConnectorDevices         KkmConnectorDevice[]
-  kkmConnectorPairingCodes    KkmConnectorPairingCode[]
-  refundRequests              RefundRequest[]
-  markingCodeCaptures         MarkingCodeCapture[]
-  ettnReferences              EttnReference[]
-  esfReferences               EsfReference[]
-  printerSettings             StorePrinterSettings[]
-  bazaarCatalogHiddenProducts BazaarCatalogHiddenProduct[]
-  mobileDevices               MobileDevice[]
+  emailMarketingSuppressions   EmailMarketingSuppression[]
+  emailMarketingLogos          EmailMarketingLogo[]
+  emailSenderDomains           EmailSenderDomain[]
+  emailSenderIdentities        EmailSenderIdentity[]
+  emailAutomations             EmailAutomation[]
+  emailAutomationDeliveries    EmailAutomationDelivery[]
+  auditLogs                    AuditLog[]
+  importBatches                ImportBatch[]
+  stockCounts                  StockCount[]
+  storePrices                  StorePrice[]
+  bazaarCatalogs               BazaarCatalog[]
+  bazaarCatalogImages          BazaarCatalogImage[]
+  bazaarApiKeys                BazaarApiKey[]
+  mMarketIntegrations          MMarketIntegration[]
+  mMarketBranchMappings        MMarketBranchMapping[]
+  mMarketExportJobs            MMarketExportJob[]
+  mMarketIncludedProducts      MMarketIncludedProduct[]
+  bakaiStoreIntegrations       BakaiStoreIntegration[]
+  bakaiStoreMappings           BakaiStoreStockMapping[]
+  bakaiStoreBranchMappings     BakaiStoreBranchMapping[]
+  bakaiStoreExportJobs         BakaiStoreExportJob[]
+  bakaiStoreIncludedProducts   BakaiStoreIncludedProduct[]
+  bakaiStoreProductSyncStates  BakaiStoreProductSyncState[]
+  oMarketIntegrations          OMarketIntegration[]
+  oMarketStoreMappings         OMarketStoreMapping[]
+  oMarketCategoryMappings      OMarketCategoryMapping[]
+  oMarketExportJobs            OMarketExportJob[]
+  oMarketIncludedProducts      OMarketIncludedProduct[]
+  oMarketProductSyncStates     OMarketProductSyncState[]
+  productImageStudioJobs       ProductImageStudioJob[]
+  productDescriptionJobs       ProductDescriptionGenerationJob[]
+  productDescriptionJobItems   ProductDescriptionGenerationJobItem[]
+  productCosts                 ProductCost[]
+  productBundleComponents      ProductBundleComponent[]
+  stockLots                    StockLot[]
+  attributeDefinitions         AttributeDefinition[]
+  categoryTemplates            CategoryAttributeTemplate[]
+  variantAttributeValues       VariantAttributeValue[]
+  onboardingProgress           OnboardingProgress?
+  productEvents                ProductEvent[]
+  deadLetterJobs               DeadLetterJob[]
+  impersonationSessions        ImpersonationSession[]
+  inviteTokens                 InviteToken[]
+  accessRequests               AccessRequest[]
+  complianceProfiles           StoreComplianceProfile[]
+  productComplianceFlags       ProductComplianceFlags[]
+  exportJobs                   ExportJob[]
+  periodCloses                 PeriodClose[]
+  diagnosticsReports           DiagnosticsReport[]
+  planUpgradeRequests          PlanUpgradeRequest[]
+  counters                     OrganizationCounter?
+  posRegisters                 PosRegister[]
+  registerShifts               RegisterShift[]
+  salePayments                 SalePayment[]
+  cashDrawerMovements          CashDrawerMovement[]
+  saleReturns                  SaleReturn[]
+  fiscalReceipts               FiscalReceipt[]
+  kkmConnectorDevices          KkmConnectorDevice[]
+  kkmConnectorPairingCodes     KkmConnectorPairingCode[]
+  refundRequests               RefundRequest[]
+  markingCodeCaptures          MarkingCodeCapture[]
+  ettnReferences               EttnReference[]
+  esfReferences                EsfReference[]
+  printerSettings              StorePrinterSettings[]
+  bazaarCatalogHiddenProducts  BazaarCatalogHiddenProduct[]
+  mobileDevices                MobileDevice[]
 }
 
 model User {
@@ -1554,10 +1554,10 @@ model ProductImageStudioJob {
   productId            String?
   createdById          String
   status               ProductImageStudioJobStatus    @default(QUEUED)
-  attemptCount         Int                             @default(0)
-  leaseToken           String?                         @db.VarChar(64)
+  attemptCount         Int                            @default(0)
+  leaseToken           String?                        @db.VarChar(64)
   leaseExpiresAt       DateTime?
-  activeDedupeKey      String?                         @unique @db.VarChar(64)
+  activeDedupeKey      String?                        @unique @db.VarChar(64)
   sourceImageUrl       String
   sourceImageMimeType  String
   sourceImageBytes     Int?
@@ -1749,22 +1749,26 @@ model InventorySnapshot {
 }
 
 model StockMovement {
-  id            String            @id @default(cuid())
-  storeId       String
-  productId     String
-  variantId     String?
-  stockLotId    String?
-  type          StockMovementType
-  qtyDelta      Int
-  linePosition  Int?
-  unitCostKgs   Decimal?          @db.Decimal(12, 2)
-  lineTotalKgs  Decimal?          @db.Decimal(12, 2)
-  inventoryValueDeltaKgs Decimal? @db.Decimal(18, 6)
-  referenceType String?
-  referenceId   String?
-  note          String?
-  createdAt     DateTime          @default(now())
-  createdById   String?
+  id                      String            @id @default(cuid())
+  storeId                 String
+  productId               String
+  variantId               String?
+  stockLotId              String?
+  type                    StockMovementType
+  qtyDelta                Int
+  linePosition            Int?
+  unitCostKgs             Decimal?          @db.Decimal(12, 2)
+  lineTotalKgs            Decimal?          @db.Decimal(12, 2)
+  inventoryValueDeltaKgs  Decimal?          @db.Decimal(18, 6)
+  inventoryValueStatus    String?
+  inventoryValueReason    String?
+  inventoryValueUpdatedAt DateTime?
+  ledgerRecordedAt        DateTime?         @default(dbgenerated("(clock_timestamp() AT TIME ZONE 'UTC')"))
+  referenceType           String?
+  referenceId             String?
+  note                    String?
+  createdAt               DateTime          @default(now())
+  createdById             String?
 
   store     Store           @relation(fields: [storeId], references: [id])
   product   Product         @relation(fields: [productId], references: [id])
@@ -1775,6 +1779,7 @@ model StockMovement {
   @@index([storeId, productId, variantId, createdAt])
   @@index([storeId, createdAt])
   @@index([type, createdAt])
+  @@index([ledgerRecordedAt, id], map: "StockMovement_valuation_backfill_cursor_idx")
 }
 
 model PurchaseOrder {
@@ -1998,14 +2003,14 @@ model EmailCampaign {
   createdAt              DateTime                @default(now())
   updatedAt              DateTime                @updatedAt
 
-  organization   Organization             @relation(fields: [organizationId], references: [id])
-  store          Store                    @relation(fields: [storeId], references: [id])
-  createdBy      User?                    @relation("emailCampaignsCreated", fields: [createdById], references: [id])
-  senderIdentity EmailSenderIdentity?     @relation(fields: [senderIdentityId], references: [id])
-  duplicatedFrom EmailCampaign?           @relation("emailCampaignDuplicates", fields: [duplicatedFromId], references: [id])
-  duplicates     EmailCampaign[]          @relation("emailCampaignDuplicates")
-  logoImage      BazaarCatalogImage?      @relation("emailCampaignLogoImage", fields: [logoImageId], references: [id])
-  recipients     EmailCampaignRecipient[]
+  organization    Organization                  @relation(fields: [organizationId], references: [id])
+  store           Store                         @relation(fields: [storeId], references: [id])
+  createdBy       User?                         @relation("emailCampaignsCreated", fields: [createdById], references: [id])
+  senderIdentity  EmailSenderIdentity?          @relation(fields: [senderIdentityId], references: [id])
+  duplicatedFrom  EmailCampaign?                @relation("emailCampaignDuplicates", fields: [duplicatedFromId], references: [id])
+  duplicates      EmailCampaign[]               @relation("emailCampaignDuplicates")
+  logoImage       BazaarCatalogImage?           @relation("emailCampaignLogoImage", fields: [logoImageId], references: [id])
+  recipients      EmailCampaignRecipient[]
   recipientEvents EmailCampaignRecipientEvent[]
 
   @@index([organizationId, storeId, createdAt])
@@ -2038,51 +2043,51 @@ model EmailMarketingLogo {
 }
 
 model EmailCampaignRecipient {
-  id                  String                       @id @default(cuid())
-  organizationId      String
-  campaignId          String
-  customerId          String
-  email               String
-  status              EmailCampaignRecipientStatus @default(QUEUED)
-  provider            String                       @default("resend")
-  providerMessageId   String?
-  providerStatus      String?
-  providerReason      String?                      @db.Text
-  normalizedErrorCategory EmailDeliveryErrorCategory @default(NONE)
-  errorMessage        String?                      @db.Text
-  attemptCount        Int                          @default(0)
-  acceptedAt          DateTime?
-  sentAt              DateTime?
-  deliveredAt         DateTime?
-  bouncedAt           DateTime?
-  complainedAt        DateTime?
-  failedAt            DateTime?
-  retryAt             DateTime?
-  terminalAt          DateTime?
-  sendOperationKey    String
-  providerOperationKey String?
+  id                         String                       @id @default(cuid())
+  organizationId             String
+  campaignId                 String
+  customerId                 String
+  email                      String
+  status                     EmailCampaignRecipientStatus @default(QUEUED)
+  provider                   String                       @default("resend")
+  providerMessageId          String?
+  providerStatus             String?
+  providerReason             String?                      @db.Text
+  normalizedErrorCategory    EmailDeliveryErrorCategory   @default(NONE)
+  errorMessage               String?                      @db.Text
+  attemptCount               Int                          @default(0)
+  acceptedAt                 DateTime?
+  sentAt                     DateTime?
+  deliveredAt                DateTime?
+  bouncedAt                  DateTime?
+  complainedAt               DateTime?
+  failedAt                   DateTime?
+  retryAt                    DateTime?
+  terminalAt                 DateTime?
+  sendOperationKey           String
+  providerOperationKey       String?
   providerOperationStartedAt DateTime?
-  sendLeaseToken      String?
-  sendLeaseExpiresAt  DateTime?
-  reconcileAttemptCount Int                        @default(0)
-  reconcileAt         DateTime?
-  lastProviderEvent   String?
-  lastProviderEventId String?
-  lastProviderEventAt DateTime?
-  createdAt           DateTime                     @default(now())
-  updatedAt           DateTime                     @updatedAt
+  sendLeaseToken             String?
+  sendLeaseExpiresAt         DateTime?
+  reconcileAttemptCount      Int                          @default(0)
+  reconcileAt                DateTime?
+  lastProviderEvent          String?
+  lastProviderEventId        String?
+  lastProviderEventAt        DateTime?
+  createdAt                  DateTime                     @default(now())
+  updatedAt                  DateTime                     @updatedAt
 
-  organization Organization  @relation(fields: [organizationId], references: [id])
-  campaign     EmailCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  customer     Customer      @relation(fields: [customerId], references: [id])
+  organization Organization                  @relation(fields: [organizationId], references: [id])
+  campaign     EmailCampaign                 @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  customer     Customer                      @relation(fields: [customerId], references: [id])
   events       EmailCampaignRecipientEvent[]
 
   @@unique([campaignId, customerId])
+  @@unique([provider, providerMessageId])
+  @@unique([sendOperationKey])
   @@index([organizationId, campaignId])
   @@index([customerId])
   @@index([email])
-  @@unique([provider, providerMessageId])
-  @@unique([sendOperationKey])
   @@index([campaignId, status, retryAt])
   @@index([campaignId, providerOperationKey])
   @@index([status, sendLeaseExpiresAt])
@@ -2111,8 +2116,8 @@ model EmailCampaignRecipientEvent {
   createdAt         DateTime                     @default(now())
 
   organization Organization           @relation(fields: [organizationId], references: [id])
-  campaign     EmailCampaign           @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  recipient    EmailCampaignRecipient  @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  campaign     EmailCampaign          @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  recipient    EmailCampaignRecipient @relation(fields: [recipientId], references: [id], onDelete: Cascade)
 
   @@unique([provider, eventIdentity])
   @@index([organizationId, campaignId, eventAt])
@@ -2817,28 +2822,28 @@ model StockCountLine {
 }
 
 model StorePrice {
-  id                      String               @id @default(cuid())
-  organizationId          String
-  storeId                 String
-  productId               String
-  variantId               String?
-  variantKey              String               @default("BASE")
-  priceKgs                Decimal              @db.Decimal(12, 2)
-  discountType            CatalogDiscountType?
-  discountPercentage      Decimal?             @db.Decimal(5, 2)
-  discountStartsAt        DateTime?
-  discountEndsAt          DateTime?
-  discountCreatedById     String?
-  discountUpdatedAt       DateTime?
-  updatedAt               DateTime             @updatedAt
-  updatedById             String?
+  id                  String               @id @default(cuid())
+  organizationId      String
+  storeId             String
+  productId           String
+  variantId           String?
+  variantKey          String               @default("BASE")
+  priceKgs            Decimal              @db.Decimal(12, 2)
+  discountType        CatalogDiscountType?
+  discountPercentage  Decimal?             @db.Decimal(5, 2)
+  discountStartsAt    DateTime?
+  discountEndsAt      DateTime?
+  discountCreatedById String?
+  discountUpdatedAt   DateTime?
+  updatedAt           DateTime             @updatedAt
+  updatedById         String?
 
-  organization Organization    @relation(fields: [organizationId], references: [id])
-  store        Store           @relation(fields: [storeId], references: [id])
-  product      Product         @relation(fields: [productId], references: [id])
-  variant      ProductVariant? @relation(fields: [variantId], references: [id])
-  updatedBy    User?           @relation("storePricesUpdated", fields: [updatedById], references: [id])
-  discountCreatedBy User?      @relation("storePriceDiscountCreatedBy", fields: [discountCreatedById], references: [id], onDelete: SetNull)
+  organization      Organization    @relation(fields: [organizationId], references: [id])
+  store             Store           @relation(fields: [storeId], references: [id])
+  product           Product         @relation(fields: [productId], references: [id])
+  variant           ProductVariant? @relation(fields: [variantId], references: [id])
+  updatedBy         User?           @relation("storePricesUpdated", fields: [updatedById], references: [id])
+  discountCreatedBy User?           @relation("storePriceDiscountCreatedBy", fields: [discountCreatedById], references: [id], onDelete: SetNull)
 
   @@unique([organizationId, storeId, productId, variantKey])
   @@index([storeId, productId])
@@ -2928,16 +2933,21 @@ model BazaarApiKey {
 }
 
 model ProductCost {
-  id                String    @id @default(cuid())
-  organizationId    String
-  productId         String
-  variantId         String?
-  variantKey        String    @default("BASE")
-  avgCostKgs        Decimal   @db.Decimal(12, 2)
-  costBasisQty      Int       @default(0)
-  costBasisValueKgs Decimal   @default(0) @db.Decimal(18, 6)
-  lastReceiptAt     DateTime?
-  updatedAt         DateTime  @updatedAt
+  id                       String    @id @default(cuid())
+  organizationId           String
+  productId                String
+  variantId                String?
+  variantKey               String    @default("BASE")
+  avgCostKgs               Decimal   @default(0) @db.Decimal(12, 2)
+  costBasisQty             Int       @default(0)
+  preciseAvgCostKgs        Decimal?  @db.Decimal(12, 2)
+  preciseCostBasisQty      Int?
+  costBasisValueKgs        Decimal?  @db.Decimal(18, 6)
+  valuationStatus          String?
+  valuationUpdatedAt       DateTime?
+  valuationLegacyUpdatedAt DateTime?
+  lastReceiptAt            DateTime?
+  updatedAt                DateTime  @updatedAt
 
   organization Organization    @relation(fields: [organizationId], references: [id])
   product      Product         @relation(fields: [productId], references: [id])
@@ -2945,6 +2955,55 @@ model ProductCost {
 
   @@unique([organizationId, productId, variantKey])
   @@index([productId])
+}
+
+model InventoryValuationBackfillRun {
+  id                      String                            @id
+  organizationId          String?
+  mode                    String
+  status                  String
+  phase                   String
+  algorithmVersion        String
+  batchSize               Int
+  highWaterRecordedAt     DateTime?
+  highWaterMovementId     String?
+  highWaterProductCostId  String?
+  cursorRecordedAt        DateTime?
+  cursorMovementId        String?
+  cursorProductId         String?
+  cursorVariantKey        String?
+  writerDrainConfirmedAt  DateTime?
+  writerDrainEvidenceJson Json?
+  batchCount              Int                               @default(0)
+  movementScannedRows     Int                               @default(0)
+  movementUpdatedRows     Int                               @default(0)
+  movementReviewRows      Int                               @default(0)
+  scopeScannedRows        Int                               @default(0)
+  scopeUpdatedRows        Int                               @default(0)
+  scopeReviewRows         Int                               @default(0)
+  scannedRows             Int                               @default(0)
+  updatedRows             Int                               @default(0)
+  reviewRows              Int                               @default(0)
+  beforeJson              Json?
+  afterJson               Json?
+  errorMessage            String?
+  startedAt               DateTime                          @default(now())
+  updatedAt               DateTime                          @updatedAt
+  completedAt             DateTime?
+  issues                  InventoryValuationBackfillIssue[]
+}
+
+model InventoryValuationBackfillIssue {
+  id           String                        @id
+  runId        String
+  entityType   String
+  entityId     String
+  reason       String
+  evidenceJson Json?
+  createdAt    DateTime                      @default(now())
+  run          InventoryValuationBackfillRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, entityType, entityId])
 }
 
 model ProductBundleComponent {

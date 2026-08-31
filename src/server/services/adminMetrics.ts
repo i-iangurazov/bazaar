@@ -214,12 +214,11 @@ const buildBaseCte = (input: NormalizedAdminMetricsInput) => {
         variant.name AS variant_name,
         variant.sku AS variant_sku,
         CASE
-          WHEN cost."costBasisQty" > 0 THEN
-            CASE
-              WHEN cost."costBasisValueKgs" = 0 AND cost."avgCostKgs" <> 0
-                THEN cost."avgCostKgs"
-              ELSE cost."costBasisValueKgs" / cost."costBasisQty"
-            END
+          WHEN cost."preciseCostBasisQty" > 0
+            AND cost."costBasisValueKgs" IS NOT NULL
+            AND cost."valuationLegacyUpdatedAt" IS NOT NULL
+            AND cost."updatedAt" <= cost."valuationLegacyUpdatedAt"
+            THEN cost."costBasisValueKgs" / cost."preciseCostBasisQty"
           ELSE cost."avgCostKgs"
         END AS cost_price_kgs,
         COALESCE(price."priceKgs", product."basePriceKgs") AS sale_price_kgs,

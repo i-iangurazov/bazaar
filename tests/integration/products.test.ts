@@ -521,7 +521,6 @@ describeDb("products", () => {
       data: {
         avgCostKgs: 95,
         costBasisQty: 16,
-        costBasisValueKgs: 1520,
       },
     });
     await prisma.storePrice.createMany({
@@ -608,11 +607,20 @@ describeDb("products", () => {
     expect(
       duplicate.reorderPolicies.find((policy) => policy.storeId === secondStore.id)?.minStock,
     ).toBe(6);
-    expect(
-      duplicate.productCosts
-        .find((cost) => cost.variantId === copiedLarge.id)
-        ?.avgCostKgs.toNumber(),
-    ).toBe(95);
+    const copiedLargeCost = duplicate.productCosts.find(
+      (cost) => cost.variantId === copiedLarge.id,
+    );
+    expect({
+      legacyAverage: copiedLargeCost?.avgCostKgs.toNumber(),
+      preciseAverage: copiedLargeCost?.preciseAvgCostKgs?.toNumber(),
+      preciseBasis: copiedLargeCost?.preciseCostBasisQty,
+      basisValueKgs: copiedLargeCost?.costBasisValueKgs?.toNumber(),
+    }).toEqual({
+      legacyAverage: 95,
+      preciseAverage: 95,
+      preciseBasis: 16,
+      basisValueKgs: 1520,
+    });
     expect(
       duplicate.storePrices
         .find((price) => price.storeId === secondStore.id && price.variantId === copiedLarge.id)

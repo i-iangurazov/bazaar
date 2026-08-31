@@ -40,6 +40,7 @@ import { applyStockMovement } from "@/server/services/inventory";
 import {
   applyCurrentProductCostQuantityDelta,
   applyValuedProductCostDelta,
+  productCostBasisSelect,
   resolveCurrentProductCostUnit,
   setProductCostBasis,
 } from "@/server/services/productCost";
@@ -895,7 +896,7 @@ const upsertBaseProductCost = async (
         variantKey: "BASE",
       },
     },
-    select: { avgCostKgs: true, costBasisQty: true },
+    select: productCostBasisSelect,
   });
 
   // Product forms submit the displayed two-decimal projection even when the cost
@@ -905,7 +906,7 @@ const upsertBaseProductCost = async (
     existing &&
     new Prisma.Decimal(input.avgCostKgs)
       .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)
-      .equals(existing.avgCostKgs)
+      .equals(resolveCurrentProductCostUnit(existing).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP))
   ) {
     return existing;
   }
@@ -913,7 +914,7 @@ const upsertBaseProductCost = async (
   return setProductCostBasis(tx, {
     organizationId: input.organizationId,
     productId: input.productId,
-    quantity: input.costBasisQty ?? existing?.costBasisQty ?? 0,
+    quantity: input.costBasisQty ?? existing?.preciseCostBasisQty ?? 0,
     unitCost: input.avgCostKgs,
     zeroCostConfirmed: input.zeroCostConfirmed,
     zeroCostReason: input.zeroCostReason,
@@ -2684,7 +2685,13 @@ export const duplicateProduct = async (input: {
             variantKey: true,
             avgCostKgs: true,
             costBasisQty: true,
+            preciseAvgCostKgs: true,
+            preciseCostBasisQty: true,
             costBasisValueKgs: true,
+            valuationStatus: true,
+            valuationUpdatedAt: true,
+            valuationLegacyUpdatedAt: true,
+            updatedAt: true,
             lastReceiptAt: true,
           },
         },
@@ -3040,7 +3047,7 @@ export const duplicateProduct = async (input: {
           productId: duplicate.id,
           variantId: copiedVariantId,
           quantity: copiedQuantity,
-          unitCost: copiedQuantity > 0 ? resolveSourceUnitCost(cost) : cost.avgCostKgs,
+          unitCost: resolveSourceUnitCost(cost),
           lastReceiptAt: cost.lastReceiptAt,
         });
       }

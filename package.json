@@ -39,6 +39,7 @@
     "ops:preflight": "node --import tsx scripts/ops-preflight.ts",
     "ops:email-check": "node --import tsx scripts/ops-email-flow-check.ts",
     "ops:images-backfill": "node --import tsx scripts/ops-product-images-backfill.ts",
+    "ops:inventory-valuation-backfill": "node --import tsx scripts/inventory-valuation-backfill.ts",
     "profile:hot-paths": "BAZAAR_PROFILE=1 node --import tsx scripts/profile-hot-paths.ts",
     "help:capture": "node --import tsx scripts/help-capture/capture.ts",
     "help:verify": "node --import tsx scripts/help-capture/verify.ts",

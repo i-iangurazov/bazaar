@@ -4216,6 +4216,7 @@ export const editCompletedPosSale = async (input: {
               variantId: movementLine.variantId,
               quantityDelta: stockDelta,
               valueDeltaKgs: inventoryValueDeltaKgs,
+              alreadyAppliedPhysicalQuantityDelta: stockDelta,
             });
           }
           changedProducts.set(key, {

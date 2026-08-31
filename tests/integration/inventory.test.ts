@@ -791,12 +791,16 @@ describeDb("inventory service", () => {
     });
     expect({
       avgCostKgs: Number(productCost.avgCostKgs),
-      basis: productCost.costBasisQty,
+      legacyCompatibilityBasis: productCost.costBasisQty,
+      preciseBasis: productCost.preciseCostBasisQty,
       basisValueKgs: Number(productCost.costBasisValueKgs),
+      valuationStatus: productCost.valuationStatus,
     }).toEqual({
       avgCostKgs: 4,
-      basis: 42,
+      legacyCompatibilityBasis: 25,
+      preciseBasis: 42,
       basisValueKgs: 168,
+      valuationStatus: "PRECISE",
     });
 
     await expect(
@@ -2072,6 +2076,159 @@ describeDb("inventory service", () => {
       },
     });
     expect(cost?.avgCostKgs ? Number(cost.avgCostKgs) : null).toBeCloseTo(6, 5);
+  });
+
+  it("reconciles old-writer receives across a rolling deployment without double-valuing baseline stock", async () => {
+    const { org, store, product, adminUser } = await seedBase();
+    const oldWriterReceive = async (quantity: number, unitCostKgs: number, referenceId: string) =>
+      prisma.$transaction(async (tx) => {
+        await tx.inventorySnapshot.upsert({
+          where: {
+            storeId_productId_variantKey: {
+              storeId: store.id,
+              productId: product.id,
+              variantKey: "BASE",
+            },
+          },
+          create: {
+            storeId: store.id,
+            productId: product.id,
+            variantKey: "BASE",
+            onHand: quantity,
+          },
+          update: { onHand: { increment: quantity } },
+        });
+        await tx.stockMovement.create({
+          data: {
+            storeId: store.id,
+            productId: product.id,
+            type: StockMovementType.RECEIVE,
+            qtyDelta: quantity,
+            unitCostKgs,
+            lineTotalKgs: quantity * unitCostKgs,
+            referenceType: "STOCK_RECEIVING",
+            referenceId,
+            createdById: adminUser.id,
+          },
+        });
+        const existing = await tx.productCost.findUnique({
+          where: {
+            organizationId_productId_variantKey: {
+              organizationId: org.id,
+              productId: product.id,
+              variantKey: "BASE",
+            },
+          },
+        });
+        const previousQuantity = existing?.costBasisQty ?? 0;
+        const nextQuantity = previousQuantity + quantity;
+        const nextAverage =
+          ((existing?.avgCostKgs.toNumber() ?? 0) * previousQuantity + unitCostKgs * quantity) /
+          nextQuantity;
+        await tx.productCost.upsert({
+          where: {
+            organizationId_productId_variantKey: {
+              organizationId: org.id,
+              productId: product.id,
+              variantKey: "BASE",
+            },
+          },
+          create: {
+            organizationId: org.id,
+            productId: product.id,
+            variantKey: "BASE",
+            avgCostKgs: nextAverage,
+            costBasisQty: nextQuantity,
+          },
+          update: {
+            avgCostKgs: nextAverage,
+            costBasisQty: nextQuantity,
+          },
+        });
+      });
+
+    await oldWriterReceive(2, 10, "rolling-old-baseline");
+    await receiveStock({
+      storeId: store.id,
+      productId: product.id,
+      qtyReceived: 3,
+      unitCost: 12,
+      note: "First new-version receive",
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "rolling-new-1",
+      idempotencyKey: "rolling-new-1",
+    });
+
+    const firstNewCost = await prisma.productCost.findUniqueOrThrow({
+      where: {
+        organizationId_productId_variantKey: {
+          organizationId: org.id,
+          productId: product.id,
+          variantKey: "BASE",
+        },
+      },
+    });
+    const baselineMovement = await prisma.stockMovement.findFirstOrThrow({
+      where: { referenceId: "rolling-old-baseline" },
+    });
+    expect(baselineMovement.ledgerRecordedAt?.getTime()).toBeLessThan(
+      firstNewCost.valuationUpdatedAt?.getTime() ?? 0,
+    );
+    expect({
+      quantity: firstNewCost.preciseCostBasisQty,
+      value: firstNewCost.costBasisValueKgs?.toNumber(),
+      status: firstNewCost.valuationStatus,
+    }).toEqual({ quantity: 5, value: 56, status: "LEGACY_PROJECTED" });
+
+    await oldWriterReceive(1, 14, "rolling-old-after-expand");
+    const rollingOldMovement = await prisma.stockMovement.findFirstOrThrow({
+      where: { referenceId: "rolling-old-after-expand" },
+    });
+    expect(rollingOldMovement.ledgerRecordedAt?.getTime()).toBeGreaterThanOrEqual(
+      firstNewCost.valuationUpdatedAt?.getTime() ?? 0,
+    );
+
+    await receiveStock({
+      storeId: store.id,
+      productId: product.id,
+      qtyReceived: 1,
+      unitCost: 16,
+      note: "New-version recovery receive",
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "rolling-new-2",
+      idempotencyKey: "rolling-new-2",
+    });
+
+    const recoveredCost = await prisma.productCost.findUniqueOrThrow({
+      where: {
+        organizationId_productId_variantKey: {
+          organizationId: org.id,
+          productId: product.id,
+          variantKey: "BASE",
+        },
+      },
+    });
+    const movements = await prisma.stockMovement.findMany({
+      where: { productId: product.id },
+      orderBy: [{ ledgerRecordedAt: "asc" }, { id: "asc" }],
+    });
+    expect({
+      physicalQuantity: await prisma.inventorySnapshot
+        .aggregate({ where: { productId: product.id }, _sum: { onHand: true } })
+        .then((result) => result._sum.onHand),
+      preciseQuantity: recoveredCost.preciseCostBasisQty,
+      preciseValue: recoveredCost.costBasisValueKgs?.toNumber(),
+      values: movements.map((movement) => movement.inventoryValueDeltaKgs?.toNumber() ?? null),
+      statuses: movements.map((movement) => movement.inventoryValueStatus),
+    }).toEqual({
+      physicalQuantity: 7,
+      preciseQuantity: 7,
+      preciseValue: 86,
+      values: [null, 36, 14, 16],
+      statuses: [null, "PRECISE", "LEGACY_EVIDENCE", "PRECISE"],
+    });
   });
 
   it("tracks expiry lots when enabled", async () => {

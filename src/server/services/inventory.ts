@@ -143,6 +143,14 @@ export const applyStockMovement = async (
   input: ApplyStockMovementInput,
 ): Promise<{ snapshot: InventorySnapshot; movementId: string }> => {
   const auditedNote = resolveAuditedMovementNote(input);
+  const inventoryValueStatus =
+    input.inventoryValueDeltaKgs === null || input.inventoryValueDeltaKgs === undefined
+      ? input.qtyDelta === 0
+        ? "NOT_APPLICABLE"
+        : "REVIEW_REQUIRED"
+      : input.qtyDelta > 0 && input.inventoryValueDeltaKgs === 0
+        ? "EXPLICIT_ZERO"
+        : "PRECISE";
   const store = await tx.store.findUnique({ where: { id: input.storeId } });
   if (!store) {
     throw new AppError("storeNotFound", "NOT_FOUND", 404);
@@ -258,6 +266,10 @@ export const applyStockMovement = async (
       unitCostKgs: input.unitCostKgs ?? undefined,
       lineTotalKgs: input.lineTotalKgs ?? undefined,
       inventoryValueDeltaKgs: input.inventoryValueDeltaKgs ?? undefined,
+      inventoryValueStatus,
+      inventoryValueReason:
+        inventoryValueStatus === "EXPLICIT_ZERO" ? input.zeroCostReason?.trim() : undefined,
+      inventoryValueUpdatedAt: new Date(),
       referenceType: input.referenceType,
       referenceId: input.referenceId,
       note: auditedNote,

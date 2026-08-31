@@ -266,9 +266,24 @@ export const buildProductCostReconciliationReport = async (
       movement_totals.value AS "ledgerValueKgs",
       COALESCE(movement_totals."valuedMovementCount", 0)::int AS "valuedMovementCount",
       COALESCE(movement_totals."unvaluedMovementCount", 0)::int AS "unvaluedMovementCount",
-      cost."avgCostKgs" AS "averageCostKgs",
-      cost."costBasisQty" AS "currentQuantity",
-      cost."costBasisValueKgs" AS "currentBasisValueKgs"
+      CASE
+        WHEN cost."valuationLegacyUpdatedAt" IS NOT NULL
+          AND cost."updatedAt" <= cost."valuationLegacyUpdatedAt"
+          THEN cost."preciseAvgCostKgs"
+        ELSE cost."avgCostKgs"
+      END AS "averageCostKgs",
+      CASE
+        WHEN cost."valuationLegacyUpdatedAt" IS NOT NULL
+          AND cost."updatedAt" <= cost."valuationLegacyUpdatedAt"
+          THEN cost."preciseCostBasisQty"
+        ELSE NULL
+      END AS "currentQuantity",
+      CASE
+        WHEN cost."valuationLegacyUpdatedAt" IS NOT NULL
+          AND cost."updatedAt" <= cost."valuationLegacyUpdatedAt"
+          THEN cost."costBasisValueKgs"
+        ELSE NULL
+      END AS "currentBasisValueKgs"
     FROM scope
     INNER JOIN "Product" product ON product.id = scope."productId"
     LEFT JOIN "ProductCost" cost
@@ -286,27 +301,19 @@ export const buildProductCostReconciliationReport = async (
     LEFT JOIN LATERAL (
       SELECT
         SUM(movement."qtyDelta")::int AS quantity,
-        SUM(
-          CASE
-            WHEN movement."inventoryValueDeltaKgs" IS NOT NULL
-              THEN movement."inventoryValueDeltaKgs"
-            WHEN movement."lineTotalKgs" IS NOT NULL
-              THEN SIGN(movement."qtyDelta") * ABS(movement."lineTotalKgs")
-            WHEN movement."unitCostKgs" IS NOT NULL
-              THEN movement."unitCostKgs" * movement."qtyDelta"
-            ELSE NULL
-          END
-        ) AS value,
+        CASE
+          WHEN COUNT(*) FILTER (
+            WHERE movement."qtyDelta" <> 0
+              AND movement."inventoryValueDeltaKgs" IS NULL
+          ) > 0 THEN NULL
+          ELSE COALESCE(SUM(movement."inventoryValueDeltaKgs"), 0)
+        END AS value,
         COUNT(*) FILTER (
           WHERE movement."inventoryValueDeltaKgs" IS NOT NULL
-             OR movement."unitCostKgs" IS NOT NULL
-             OR movement."lineTotalKgs" IS NOT NULL
         )::int AS "valuedMovementCount",
         COUNT(*) FILTER (
           WHERE movement."qtyDelta" <> 0
             AND movement."inventoryValueDeltaKgs" IS NULL
-            AND movement."unitCostKgs" IS NULL
-            AND movement."lineTotalKgs" IS NULL
         )::int AS "unvaluedMovementCount"
       FROM "StockMovement" movement
       INNER JOIN "Store" store ON store.id = movement."storeId"

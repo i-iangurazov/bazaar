@@ -10,7 +10,13 @@ describe("precise ProductCost read model", () => {
     const unitCost = resolveCurrentProductCostUnit({
       avgCostKgs: new Prisma.Decimal("80.46"),
       costBasisQty: 3,
+      preciseAvgCostKgs: new Prisma.Decimal("80.46"),
+      preciseCostBasisQty: 3,
       costBasisValueKgs: new Prisma.Decimal("241.39"),
+      valuationStatus: "PRECISE",
+      valuationUpdatedAt: new Date(0),
+      valuationLegacyUpdatedAt: new Date(0),
+      updatedAt: new Date(0),
     });
 
     expect(Number(unitCost)).toBeCloseTo(80.4633333333, 8);
@@ -22,7 +28,13 @@ describe("precise ProductCost read model", () => {
         resolveCurrentProductCostUnit({
           avgCostKgs: new Prisma.Decimal("80.46"),
           costBasisQty: 3,
-          costBasisValueKgs: new Prisma.Decimal(0),
+          preciseAvgCostKgs: null,
+          preciseCostBasisQty: null,
+          costBasisValueKgs: null,
+          valuationStatus: null,
+          valuationUpdatedAt: null,
+          valuationLegacyUpdatedAt: null,
+          updatedAt: new Date(0),
         }),
       ),
     ).toBe(80.46);
@@ -31,7 +43,13 @@ describe("precise ProductCost read model", () => {
         resolveCurrentProductCostUnit({
           avgCostKgs: new Prisma.Decimal("92.35"),
           costBasisQty: 0,
+          preciseAvgCostKgs: new Prisma.Decimal("92.35"),
+          preciseCostBasisQty: 0,
           costBasisValueKgs: new Prisma.Decimal(0),
+          valuationStatus: "PRECISE",
+          valuationUpdatedAt: new Date(0),
+          valuationLegacyUpdatedAt: new Date(0),
+          updatedAt: new Date(0),
         }),
       ),
     ).toBe(92.35);

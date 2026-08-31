@@ -18,13 +18,25 @@ export type ZeroCostAuthorization = {
 export type ProductCostBasis = {
   avgCostKgs: Prisma.Decimal;
   costBasisQty: number;
-  costBasisValueKgs: Prisma.Decimal;
+  preciseAvgCostKgs: Prisma.Decimal | null;
+  preciseCostBasisQty: number | null;
+  costBasisValueKgs: Prisma.Decimal | null;
+  valuationStatus: string | null;
+  valuationUpdatedAt: Date | null;
+  valuationLegacyUpdatedAt: Date | null;
+  updatedAt: Date;
 };
 
 export const productCostBasisSelect = {
   avgCostKgs: true,
   costBasisQty: true,
+  preciseAvgCostKgs: true,
+  preciseCostBasisQty: true,
   costBasisValueKgs: true,
+  valuationStatus: true,
+  valuationUpdatedAt: true,
+  valuationLegacyUpdatedAt: true,
+  updatedAt: true,
 } as const;
 
 type ValuedReceiptStream = {
@@ -83,27 +95,42 @@ const projectAverageCost = (basisValue: Prisma.Decimal, quantity: number) =>
     ? basisValue.div(quantity).toDecimalPlaces(AVERAGE_COST_SCALE, COST_ROUNDING)
     : new Prisma.Decimal(0);
 
+const valuationTimestampData = (timestamp = new Date()) => ({
+  valuationUpdatedAt: timestamp,
+  valuationLegacyUpdatedAt: timestamp,
+  updatedAt: timestamp,
+});
+
 /**
  * Rows created by older application code can briefly carry the column default until
  * every writer has moved to the precise basis API. Preserve their monetary basis by
  * reconstructing it from the legacy projection instead of treating it as free stock.
  */
-const resolveStoredBasisValue = (basis: ProductCostBasis) => {
-  if (basis.costBasisQty > 0 && basis.costBasisValueKgs.equals(0) && !basis.avgCostKgs.equals(0)) {
-    return normalizeBasisValue(basis.avgCostKgs.mul(basis.costBasisQty));
-  }
-  return normalizeBasisValue(basis.costBasisValueKgs);
-};
+const hasCompletePreciseBasis = (
+  basis: ProductCostBasis,
+): basis is ProductCostBasis & {
+  preciseAvgCostKgs: Prisma.Decimal;
+  preciseCostBasisQty: number;
+  costBasisValueKgs: Prisma.Decimal;
+} =>
+  basis.preciseAvgCostKgs !== null &&
+  basis.preciseCostBasisQty !== null &&
+  basis.costBasisValueKgs !== null;
 
 /**
  * ProductCost.avgCostKgs is a two-decimal compatibility/display projection. Use
  * the six-decimal basis value for calculations so repeated reads do not compound
  * rounding loss. A zero-quantity row intentionally keeps its display/manual cost.
  */
-export const resolveCurrentProductCostUnit = (basis: ProductCostBasis) =>
-  basis.costBasisQty > 0
-    ? resolveStoredBasisValue(basis).div(basis.costBasisQty)
+export const resolveCurrentProductCostUnit = (basis: ProductCostBasis) => {
+  const legacyProjectionChangedAfterSync =
+    !basis.valuationLegacyUpdatedAt || basis.updatedAt > basis.valuationLegacyUpdatedAt;
+  return hasCompletePreciseBasis(basis) &&
+    basis.preciseCostBasisQty > 0 &&
+    !legacyProjectionChangedAfterSync
+    ? normalizeBasisValue(basis.costBasisValueKgs).div(basis.preciseCostBasisQty)
     : basis.avgCostKgs;
+};
 
 export const resolveCurrentProductCostUnitNumber = (basis: ProductCostBasis) =>
   Number(resolveCurrentProductCostUnit(basis));
@@ -119,6 +146,299 @@ const lockProductCostScope = async (tx: Prisma.TransactionClient, input: Product
   if (!rows.length) {
     throw new AppError("productNotFound", "NOT_FOUND", 404);
   }
+};
+
+type CompletePreciseBasis = {
+  quantity: number;
+  basisValueKgs: Prisma.Decimal;
+  averageCostKgs: Prisma.Decimal;
+  status: "PRECISE" | "LEGACY_PROJECTED" | "LEGACY_EMPTY";
+};
+
+const readPhysicalQuantity = async (tx: Prisma.TransactionClient, input: ProductCostScope) => {
+  const rows = await tx.$queryRaw<Array<{ quantity: number }>>`
+    SELECT COALESCE(SUM(snapshot."onHand"), 0)::integer AS quantity
+    FROM "InventorySnapshot" snapshot
+    INNER JOIN "Store" store ON store."id" = snapshot."storeId"
+    WHERE store."organizationId" = ${input.organizationId}
+      AND snapshot."productId" = ${input.productId}
+      AND snapshot."variantKey" = ${resolveVariantKey(input.variantId)}
+  `;
+  return rows[0]?.quantity ?? 0;
+};
+
+type RollingMovement = {
+  id: string;
+  type: string;
+  qtyDelta: number;
+  unitCostKgs: Prisma.Decimal | null;
+  lineTotalKgs: Prisma.Decimal | null;
+  referenceType: string | null;
+  referenceId: string | null;
+};
+
+const resolveLinkedFrozenMovementValue = async (
+  tx: Prisma.TransactionClient,
+  input: ProductCostScope,
+  movement: RollingMovement,
+) => {
+  if (!movement.referenceId) {
+    return null;
+  }
+  const variantKey = resolveVariantKey(input.variantId);
+  if (movement.type === "SALE" && movement.referenceType === "CustomerOrder") {
+    const aggregate = await tx.customerOrderLine.aggregate({
+      where: {
+        customerOrderId: movement.referenceId,
+        productId: input.productId,
+        variantKey,
+      },
+      _sum: { qty: true, lineCostTotalKgs: true },
+    });
+    if (
+      aggregate._sum.qty === Math.abs(movement.qtyDelta) &&
+      aggregate._sum.lineCostTotalKgs !== null
+    ) {
+      return normalizeBasisValue(aggregate._sum.lineCostTotalKgs.negated());
+    }
+  }
+  if (movement.type === "RETURN" && movement.referenceType === "SaleReturn") {
+    const aggregate = await tx.saleReturnLine.aggregate({
+      where: {
+        saleReturnId: movement.referenceId,
+        productId: input.productId,
+        variantKey,
+      },
+      _sum: { qty: true, lineCostTotalKgs: true },
+    });
+    if (
+      aggregate._sum.qty === Math.abs(movement.qtyDelta) &&
+      aggregate._sum.lineCostTotalKgs !== null
+    ) {
+      return normalizeBasisValue(aggregate._sum.lineCostTotalKgs);
+    }
+  }
+  return null;
+};
+
+const reconcilePostExpandOldWrites = async (
+  tx: Prisma.TransactionClient,
+  input: ProductCostScope,
+  existing: ProductCostBasis & {
+    preciseAvgCostKgs: Prisma.Decimal;
+    preciseCostBasisQty: number;
+    costBasisValueKgs: Prisma.Decimal;
+  },
+  physicalQuantity: number,
+): Promise<CompletePreciseBasis | null> => {
+  if (!existing.valuationUpdatedAt) {
+    return null;
+  }
+  const candidates = await tx.stockMovement.findMany({
+    where: {
+      productId: input.productId,
+      variantId: input.variantId ?? null,
+      inventoryValueDeltaKgs: null,
+      ledgerRecordedAt: { not: null, gte: existing.valuationUpdatedAt },
+      store: { organizationId: input.organizationId },
+    },
+    select: {
+      id: true,
+      type: true,
+      qtyDelta: true,
+      unitCostKgs: true,
+      lineTotalKgs: true,
+      referenceType: true,
+      referenceId: true,
+      ledgerRecordedAt: true,
+    },
+    orderBy: [{ ledgerRecordedAt: "asc" }, { id: "asc" }],
+    take: 501,
+  });
+  if (!candidates.length || candidates.length > 500) {
+    return null;
+  }
+
+  let quantity = existing.preciseCostBasisQty;
+  let value = normalizeBasisValue(existing.costBasisValueKgs);
+  const status: CompletePreciseBasis["status"] =
+    existing.valuationStatus === "LEGACY_PROJECTED" ? "LEGACY_PROJECTED" : "PRECISE";
+
+  for (const movement of candidates) {
+    let movementValue: Prisma.Decimal | null = null;
+    let reason = "ROLLING_WAC";
+    if (movement.qtyDelta === 0) {
+      if (
+        movement.lineTotalKgs !== null &&
+        (movement.type === "RECEIVE" || movement.referenceType === "STOCK_RECEIVING")
+      ) {
+        movementValue = normalizeBasisValue(movement.lineTotalKgs);
+        reason = "ROLLING_RECEIPT_EDIT";
+      } else {
+        movementValue = new Prisma.Decimal(0);
+        reason = "ROLLING_NO_QUANTITY_EFFECT";
+      }
+    } else if (movement.type === "RECEIVE") {
+      const explicitValue =
+        movement.lineTotalKgs ??
+        (movement.unitCostKgs === null ? null : movement.unitCostKgs.mul(movement.qtyDelta));
+      movementValue = explicitValue === null ? null : normalizeBasisValue(explicitValue);
+      reason = "ROLLING_RECEIPT_EVIDENCE";
+    } else {
+      movementValue = await resolveLinkedFrozenMovementValue(tx, input, movement);
+      if (movementValue !== null) {
+        reason = "ROLLING_FROZEN_DOCUMENT_COST";
+      }
+    }
+
+    if (movementValue === null) {
+      if (quantity <= 0 || value.lte(0) || (movement.qtyDelta > 0 && status !== "PRECISE")) {
+        return null;
+      }
+      const nextQuantity = quantity + movement.qtyDelta;
+      if (nextQuantity < 0) {
+        return null;
+      }
+      movementValue =
+        nextQuantity === 0
+          ? value.negated()
+          : normalizeBasisValue(value.div(quantity).mul(movement.qtyDelta));
+    }
+
+    if (
+      (movement.qtyDelta > 0 && movementValue.lt(0)) ||
+      (movement.qtyDelta < 0 && movementValue.gt(0))
+    ) {
+      return null;
+    }
+    const nextQuantity = quantity + movement.qtyDelta;
+    const nextValue = normalizeBasisValue(value.plus(movementValue));
+    if (nextQuantity < 0 || nextValue.lt(0) || (nextQuantity === 0 && !nextValue.equals(0))) {
+      return null;
+    }
+    const updated = await tx.stockMovement.updateMany({
+      where: { id: movement.id, inventoryValueDeltaKgs: null },
+      data: {
+        inventoryValueDeltaKgs: movementValue,
+        inventoryValueStatus: "LEGACY_EVIDENCE",
+        inventoryValueReason: reason,
+        inventoryValueUpdatedAt: new Date(),
+      },
+    });
+    if (updated.count !== 1) {
+      return null;
+    }
+    quantity = nextQuantity;
+    value = nextValue;
+  }
+
+  if (quantity !== physicalQuantity) {
+    return null;
+  }
+  const averageCostKgs = projectAverageCost(value, quantity);
+  const timestamp = new Date();
+  await tx.productCost.update({
+    where: {
+      organizationId_productId_variantKey: {
+        organizationId: input.organizationId,
+        productId: input.productId,
+        variantKey: resolveVariantKey(input.variantId),
+      },
+    },
+    data: {
+      preciseAvgCostKgs: averageCostKgs,
+      preciseCostBasisQty: quantity,
+      costBasisValueKgs: value,
+      valuationStatus: status,
+      ...valuationTimestampData(timestamp),
+    },
+  });
+  return { quantity, basisValueKgs: value, averageCostKgs, status };
+};
+
+/**
+ * Initializes one mixed-version scope on demand. The legacy two-decimal average is
+ * authoritative enough to keep current inventory operable, but it cannot recover
+ * lost historical precision, so the row remains explicitly LEGACY_PROJECTED until
+ * the bounded reconciliation process proves a stronger basis.
+ */
+const resolvePreciseBasisForWrite = async (
+  tx: Prisma.TransactionClient,
+  input: ProductCostScope,
+  existing: ProductCostBasis | null,
+  options?: { alreadyAppliedPhysicalQuantityDelta?: number },
+): Promise<CompletePreciseBasis | null> => {
+  const physicalQuantityAfterCurrentOperation = await readPhysicalQuantity(tx, input);
+  const physicalQuantity =
+    physicalQuantityAfterCurrentOperation - (options?.alreadyAppliedPhysicalQuantityDelta ?? 0);
+  if (physicalQuantity < 0) {
+    throw new AppError("valuedNegativeStockRecoveryBlocked", "CONFLICT", 409);
+  }
+
+  if (existing && hasCompletePreciseBasis(existing)) {
+    const legacyChangedAfterSync =
+      !existing.valuationLegacyUpdatedAt || existing.updatedAt > existing.valuationLegacyUpdatedAt;
+    if (existing.preciseCostBasisQty !== physicalQuantity || legacyChangedAfterSync) {
+      return reconcilePostExpandOldWrites(tx, input, existing, physicalQuantity);
+    }
+    return {
+      quantity: existing.preciseCostBasisQty,
+      basisValueKgs: normalizeBasisValue(existing.costBasisValueKgs),
+      averageCostKgs: existing.preciseAvgCostKgs,
+      status: existing.valuationStatus === "LEGACY_PROJECTED" ? "LEGACY_PROJECTED" : "PRECISE",
+    };
+  }
+
+  if (!existing) {
+    return physicalQuantity === 0
+      ? {
+          quantity: 0,
+          basisValueKgs: new Prisma.Decimal(0),
+          averageCostKgs: new Prisma.Decimal(0),
+          status: "LEGACY_EMPTY",
+        }
+      : null;
+  }
+  if (physicalQuantity > 0 && existing.avgCostKgs.lte(0)) {
+    await tx.productCost.update({
+      where: {
+        organizationId_productId_variantKey: {
+          organizationId: input.organizationId,
+          productId: input.productId,
+          variantKey: resolveVariantKey(input.variantId),
+        },
+      },
+      data: { valuationStatus: "REVIEW_REQUIRED", ...valuationTimestampData() },
+    });
+    return null;
+  }
+
+  const basisValueKgs =
+    physicalQuantity === 0
+      ? new Prisma.Decimal(0)
+      : normalizeBasisValue(existing.avgCostKgs.mul(physicalQuantity));
+  const averageCostKgs =
+    physicalQuantity === 0
+      ? existing.avgCostKgs
+      : projectAverageCost(basisValueKgs, physicalQuantity);
+  const status = physicalQuantity === 0 ? "LEGACY_EMPTY" : "LEGACY_PROJECTED";
+  await tx.productCost.update({
+    where: {
+      organizationId_productId_variantKey: {
+        organizationId: input.organizationId,
+        productId: input.productId,
+        variantKey: resolveVariantKey(input.variantId),
+      },
+    },
+    data: {
+      preciseAvgCostKgs: averageCostKgs,
+      preciseCostBasisQty: physicalQuantity,
+      costBasisValueKgs: basisValueKgs,
+      valuationStatus: status,
+      ...valuationTimestampData(),
+    },
+  });
+  return { quantity: physicalQuantity, basisValueKgs, averageCostKgs, status };
 };
 
 const readValuedReceiptStream = async (
@@ -137,6 +457,7 @@ const readValuedReceiptStream = async (
       qtyDelta: true,
       unitCostKgs: true,
       lineTotalKgs: true,
+      inventoryValueDeltaKgs: true,
       referenceType: true,
       referenceId: true,
       createdAt: true,
@@ -168,6 +489,7 @@ const readValuedReceiptStream = async (
       seenStockReceivingReferenceIds.add(movement.referenceId);
     }
     const movementValue =
+      movement.inventoryValueDeltaKgs ??
       movement.lineTotalKgs ??
       (movement.unitCostKgs === null ? null : movement.unitCostKgs.mul(movement.qtyDelta));
     if (movementValue === null) {
@@ -213,18 +535,18 @@ export const inspectProductCostMismatch = async (
         },
       },
       select: {
-        avgCostKgs: true,
-        costBasisQty: true,
-        costBasisValueKgs: true,
+        ...productCostBasisSelect,
       },
     }),
   ]);
-  const actualQuantity = actual?.costBasisQty ?? 0;
+  const completeActual = actual && hasCompletePreciseBasis(actual) ? actual : null;
+  const actualQuantity = completeActual?.preciseCostBasisQty ?? 0;
   const supersededReceivingAggregate = actual
     ? (stream.supersededReceivingAggregates.find(
         (aggregate) =>
-          aggregate.costBasisQty === actual.costBasisQty &&
-          aggregate.avgCostKgs.equals(actual.avgCostKgs),
+          aggregate.costBasisQty === completeActual?.preciseCostBasisQty &&
+          completeActual !== null &&
+          aggregate.avgCostKgs.equals(completeActual.preciseAvgCostKgs),
       ) ?? null)
     : null;
   const isIndeterminate =
@@ -237,10 +559,10 @@ export const inspectProductCostMismatch = async (
     ? "INDETERMINATE_UNVALUED_STREAM"
     : streamIsInvalid(stream)
       ? "INVALID_AUTHORITATIVE_STREAM"
-      : actual &&
-          actual.costBasisQty === stream.quantity &&
-          actual.avgCostKgs.equals(expectedAverage) &&
-          resolveStoredBasisValue(actual).equals(expectedBasisValue)
+      : completeActual &&
+          completeActual.preciseCostBasisQty === stream.quantity &&
+          completeActual.preciseAvgCostKgs.equals(expectedAverage) &&
+          normalizeBasisValue(completeActual.costBasisValueKgs).equals(expectedBasisValue)
         ? "MATCH"
         : !actual && stream.quantity === 0
           ? "MATCH"
@@ -254,10 +576,10 @@ export const inspectProductCostMismatch = async (
     affectedStoreIds: stream.affectedStoreIds,
     stockReceivingReferenceIds: stream.stockReceivingReferenceIds,
     supersededReceivingReferenceId: supersededReceivingAggregate?.referenceId ?? null,
-    actual: actual
+    actual: completeActual
       ? {
-          avgCostKgs: Number(actual.avgCostKgs),
-          costBasisQty: actual.costBasisQty,
+          avgCostKgs: Number(completeActual.preciseAvgCostKgs),
+          costBasisQty: completeActual.preciseCostBasisQty,
         }
       : null,
     expected: isDeterminate
@@ -297,6 +619,21 @@ export const setProductCostBasis = async (
 
   await lockProductCostScope(tx, input);
   const variantKey = resolveVariantKey(input.variantId);
+  const existing = await tx.productCost.findUnique({
+    where: {
+      organizationId_productId_variantKey: {
+        organizationId: input.organizationId,
+        productId: input.productId,
+        variantKey,
+      },
+    },
+    select: {
+      avgCostKgs: true,
+      costBasisQty: true,
+      preciseCostBasisQty: true,
+      costBasisValueKgs: true,
+    },
+  });
   const negativeSnapshot = await tx.inventorySnapshot.findFirst({
     where: {
       productId: input.productId,
@@ -317,6 +654,7 @@ export const setProductCostBasis = async (
       : unitCost.toDecimalPlaces(AVERAGE_COST_SCALE, COST_ROUNDING);
   const lastReceiptUpdate =
     input.lastReceiptAt === undefined ? {} : { lastReceiptAt: input.lastReceiptAt };
+  const legacyQuantity = Math.max(existing?.costBasisQty ?? 0, input.quantity > 0 ? 1 : 0);
 
   const cost = await tx.productCost.upsert({
     where: {
@@ -327,9 +665,13 @@ export const setProductCostBasis = async (
       },
     },
     update: {
-      avgCostKgs: averageCost,
-      costBasisQty: input.quantity,
+      preciseAvgCostKgs: averageCost,
+      preciseCostBasisQty: input.quantity,
       costBasisValueKgs: basisValue,
+      avgCostKgs: averageCost,
+      costBasisQty: legacyQuantity,
+      valuationStatus: "PRECISE",
+      ...valuationTimestampData(),
       ...lastReceiptUpdate,
     },
     create: {
@@ -337,9 +679,13 @@ export const setProductCostBasis = async (
       productId: input.productId,
       variantId: input.variantId ?? undefined,
       variantKey,
-      avgCostKgs: averageCost,
-      costBasisQty: input.quantity,
+      preciseAvgCostKgs: averageCost,
+      preciseCostBasisQty: input.quantity,
       costBasisValueKgs: basisValue,
+      avgCostKgs: averageCost,
+      costBasisQty: legacyQuantity,
+      valuationStatus: "PRECISE",
+      ...valuationTimestampData(),
       lastReceiptAt: input.lastReceiptAt,
     },
   });
@@ -359,6 +705,12 @@ export const setProductCostBasis = async (
     select: { storeId: true },
   });
   if (latestReceipt) {
+    const previousBasisValue =
+      existing?.costBasisValueKgs ??
+      (input.quantity > 0
+        ? normalizeBasisValue((existing?.avgCostKgs ?? new Prisma.Decimal(0)).mul(input.quantity))
+        : new Prisma.Decimal(0));
+    const revaluationDelta = normalizeBasisValue(basisValue.minus(previousBasisValue));
     await tx.stockMovement.create({
       data: {
         storeId: latestReceipt.storeId,
@@ -367,6 +719,10 @@ export const setProductCostBasis = async (
         type: "ADJUSTMENT",
         qtyDelta: 0,
         unitCostKgs: unitCost,
+        inventoryValueDeltaKgs: revaluationDelta,
+        inventoryValueStatus: existing?.costBasisValueKgs === null ? "LEGACY_EVIDENCE" : "PRECISE",
+        inventoryValueReason: "PRODUCT_COST_REVALUATION",
+        inventoryValueUpdatedAt: new Date(),
         referenceType: "PRODUCT_COST_REVALUATION",
         referenceId: cost.id,
         note: "Product cost basis revalued",
@@ -390,6 +746,8 @@ export const applyValuedProductCostDelta = async (
     quantityDelta: number;
     valueDeltaKgs: number | Prisma.Decimal;
     lastReceiptAt?: Date | null;
+    legacyReceiptUnitCost?: number | Prisma.Decimal;
+    alreadyAppliedPhysicalQuantityDelta?: number;
   } & ZeroCostAuthorization,
 ) => {
   if (!Number.isInteger(input.quantityDelta)) {
@@ -423,8 +781,14 @@ export const applyValuedProductCostDelta = async (
       },
     },
   });
-  const previousQuantity = existing?.costBasisQty ?? 0;
-  const previousBasisValue = existing ? resolveStoredBasisValue(existing) : new Prisma.Decimal(0);
+  const preciseBasis = await resolvePreciseBasisForWrite(tx, input, existing, {
+    alreadyAppliedPhysicalQuantityDelta: input.alreadyAppliedPhysicalQuantityDelta,
+  });
+  if (!preciseBasis) {
+    throw new AppError("positiveStockUnitCostRequired", "BAD_REQUEST", 400);
+  }
+  const previousQuantity = preciseBasis.quantity;
+  const previousBasisValue = preciseBasis.basisValueKgs;
   const nextQuantity = previousQuantity + input.quantityDelta;
   const nextBasisValue = normalizeBasisValue(previousBasisValue.plus(valueDelta));
   if (input.quantityDelta < 0 && nextQuantity < 0) {
@@ -440,6 +804,31 @@ export const applyValuedProductCostDelta = async (
   const nextAverage = projectAverageCost(nextBasisValue, nextQuantity);
   const lastReceiptUpdate =
     input.lastReceiptAt === undefined ? {} : { lastReceiptAt: input.lastReceiptAt };
+  const legacyReceiptUnitCost =
+    input.legacyReceiptUnitCost === undefined ? null : decimal(input.legacyReceiptUnitCost);
+  const previousLegacyQuantity = existing?.costBasisQty ?? 0;
+  const previousLegacyValue = existing
+    ? existing.avgCostKgs.mul(previousLegacyQuantity)
+    : new Prisma.Decimal(0);
+  const nextLegacyQuantity =
+    legacyReceiptUnitCost === null
+      ? previousLegacyQuantity
+      : previousLegacyQuantity + input.quantityDelta;
+  const nextLegacyAverage =
+    legacyReceiptUnitCost === null
+      ? (existing?.avgCostKgs ?? projectAverageCost(nextBasisValue, nextQuantity))
+      : nextLegacyQuantity > 0
+        ? previousLegacyValue
+            .plus(legacyReceiptUnitCost.mul(input.quantityDelta))
+            .div(nextLegacyQuantity)
+            .toDecimalPlaces(AVERAGE_COST_SCALE, COST_ROUNDING)
+        : new Prisma.Decimal(0);
+  const compatibilityCreateQuantity =
+    nextLegacyQuantity > 0 ? nextLegacyQuantity : Math.max(nextQuantity, 1);
+  const compatibilityCreateAverage =
+    nextLegacyQuantity > 0 ? nextLegacyAverage : projectAverageCost(nextBasisValue, nextQuantity);
+  const valuationStatus =
+    preciseBasis.status === "LEGACY_PROJECTED" ? "LEGACY_PROJECTED" : "PRECISE";
 
   return tx.productCost.upsert({
     where: {
@@ -450,9 +839,17 @@ export const applyValuedProductCostDelta = async (
       },
     },
     update: {
-      avgCostKgs: nextAverage,
-      costBasisQty: nextQuantity,
+      preciseAvgCostKgs: nextAverage,
+      preciseCostBasisQty: nextQuantity,
       costBasisValueKgs: nextBasisValue,
+      ...(legacyReceiptUnitCost === null
+        ? {}
+        : {
+            avgCostKgs: nextLegacyAverage,
+            costBasisQty: nextLegacyQuantity,
+          }),
+      valuationStatus,
+      ...valuationTimestampData(),
       ...lastReceiptUpdate,
     },
     create: {
@@ -460,9 +857,13 @@ export const applyValuedProductCostDelta = async (
       productId: input.productId,
       variantId: input.variantId ?? undefined,
       variantKey,
-      avgCostKgs: nextAverage,
-      costBasisQty: nextQuantity,
+      preciseAvgCostKgs: nextAverage,
+      preciseCostBasisQty: nextQuantity,
       costBasisValueKgs: nextBasisValue,
+      avgCostKgs: compatibilityCreateAverage,
+      costBasisQty: compatibilityCreateQuantity,
+      valuationStatus,
+      ...valuationTimestampData(),
       lastReceiptAt: input.lastReceiptAt,
     },
   });
@@ -491,18 +892,16 @@ export const resolveCurrentProductCostValuation = async (
       },
     },
   });
-  if (!existing || existing.costBasisQty <= 0) {
+  if (!existing) {
     return null;
   }
-
-  const storedBasisValue = resolveStoredBasisValue(existing);
-  if (storedBasisValue.lte(0)) {
+  const currentUnitCost = resolveCurrentProductCostUnit(existing);
+  if (currentUnitCost.lte(0)) {
     return null;
   }
-  const preciseUnitCost = storedBasisValue.div(existing.costBasisQty);
   return {
-    unitCostKgs: Number(preciseUnitCost.toDecimalPlaces(AVERAGE_COST_SCALE, COST_ROUNDING)),
-    totalValueKgs: Number(normalizeBasisValue(preciseUnitCost.mul(input.quantity))),
+    unitCostKgs: Number(currentUnitCost.toDecimalPlaces(AVERAGE_COST_SCALE, COST_ROUNDING)),
+    totalValueKgs: Number(normalizeBasisValue(currentUnitCost.mul(input.quantity))),
   };
 };
 
@@ -530,16 +929,17 @@ export const applyCurrentProductCostQuantityDelta = async (
       },
     },
   });
-  if (!existing || existing.costBasisQty <= 0) {
+  const preciseBasis = await resolvePreciseBasisForWrite(tx, input, existing);
+  if (!preciseBasis || preciseBasis.quantity <= 0) {
     if (input.quantityDelta > 0) {
       throw new AppError("positiveStockUnitCostRequired", "BAD_REQUEST", 400);
     }
     return null;
   }
 
-  const previousQuantity = existing.costBasisQty;
-  const previousBasisValue = resolveStoredBasisValue(existing);
-  if (input.quantityDelta > 0 && previousBasisValue.lte(0)) {
+  const previousQuantity = preciseBasis.quantity;
+  const previousBasisValue = preciseBasis.basisValueKgs;
+  if (input.quantityDelta > 0 && (previousBasisValue.lte(0) || preciseBasis.status !== "PRECISE")) {
     throw new AppError("positiveStockUnitCostRequired", "BAD_REQUEST", 400);
   }
   const nextQuantity = previousQuantity + input.quantityDelta;
@@ -558,11 +958,19 @@ export const applyCurrentProductCostQuantityDelta = async (
   }
 
   await tx.productCost.update({
-    where: { id: existing.id },
+    where: {
+      organizationId_productId_variantKey: {
+        organizationId: input.organizationId,
+        productId: input.productId,
+        variantKey,
+      },
+    },
     data: {
-      avgCostKgs: projectAverageCost(nextBasisValue, nextQuantity),
-      costBasisQty: nextQuantity,
+      preciseAvgCostKgs: projectAverageCost(nextBasisValue, nextQuantity),
+      preciseCostBasisQty: nextQuantity,
       costBasisValueKgs: nextBasisValue,
+      valuationStatus: preciseBasis.status === "LEGACY_PROJECTED" ? "LEGACY_PROJECTED" : "PRECISE",
+      ...valuationTimestampData(),
     },
   });
 
@@ -596,6 +1004,7 @@ export const updateProductCost = async (
     quantityDelta: input.qtyReceived,
     valueDeltaKgs: normalizeBasisValue(decimal(input.unitCost).mul(input.qtyReceived)),
     lastReceiptAt: new Date(),
+    legacyReceiptUnitCost: input.unitCost,
     zeroCostConfirmed: input.zeroCostConfirmed,
     zeroCostReason: input.zeroCostReason,
   });
@@ -658,18 +1067,28 @@ export const replaceProductCostContribution = async (
         productId: input.productId,
         variantId: input.variantId ?? undefined,
         variantKey,
+        preciseAvgCostKgs: nextAverage,
+        preciseCostBasisQty: stream.quantity,
+        costBasisValueKgs: nextBasisValue,
         avgCostKgs: nextAverage,
         costBasisQty: stream.quantity,
-        costBasisValueKgs: nextBasisValue,
+        valuationStatus: "PRECISE",
+        ...valuationTimestampData(),
         lastReceiptAt: stream.lastReceiptAt,
       },
     });
   }
 
   const quantityDelta = input.nextQuantity - input.previousQuantity;
+  const preciseBasis = await resolvePreciseBasisForWrite(tx, input, existing, {
+    alreadyAppliedPhysicalQuantityDelta: quantityDelta,
+  });
+  if (!preciseBasis) {
+    throw new AppError("productCostContributionMismatch", "CONFLICT", 409);
+  }
   const previousStreamQuantity = stream.quantity - quantityDelta;
   const fullyValuedBeforeEdit =
-    stream.unvaluedMovementCount === 0 && existing.costBasisQty === previousStreamQuantity;
+    stream.unvaluedMovementCount === 0 && preciseBasis.quantity === previousStreamQuantity;
 
   let nextQuantity: number;
   let nextTotal: Prisma.Decimal;
@@ -680,10 +1099,8 @@ export const replaceProductCostContribution = async (
     nextQuantity = stream.quantity;
     nextTotal = normalizeBasisValue(stream.totalValueKgs);
   } else {
-    nextQuantity = existing.costBasisQty - input.previousQuantity + input.nextQuantity;
-    nextTotal = resolveStoredBasisValue(existing)
-      .minus(previousLineTotalKgs)
-      .plus(nextLineTotalKgs);
+    nextQuantity = preciseBasis.quantity - input.previousQuantity + input.nextQuantity;
+    nextTotal = preciseBasis.basisValueKgs.minus(previousLineTotalKgs).plus(nextLineTotalKgs);
     if (nextQuantity < 0 || nextTotal.lt(0) || (nextQuantity === 0 && !nextTotal.equals(0))) {
       throw new AppError("productCostContributionMismatch", "CONFLICT", 409);
     }
@@ -691,12 +1108,25 @@ export const replaceProductCostContribution = async (
 
   nextTotal = normalizeBasisValue(nextTotal);
   const nextAverage = projectAverageCost(nextTotal, nextQuantity);
+  const legacyQuantity = existing.costBasisQty - input.previousQuantity + input.nextQuantity;
+  const legacyValue = existing.avgCostKgs
+    .mul(existing.costBasisQty)
+    .minus(previousLineTotalKgs)
+    .plus(nextLineTotalKgs);
+  if (legacyQuantity < 0 || legacyValue.lt(0) || (legacyQuantity === 0 && !legacyValue.equals(0))) {
+    throw new AppError("productCostContributionMismatch", "CONFLICT", 409);
+  }
+  const legacyAverage = projectAverageCost(legacyValue, legacyQuantity);
   return tx.productCost.update({
     where: { id: existing.id },
     data: {
-      avgCostKgs: nextAverage,
-      costBasisQty: nextQuantity,
+      preciseAvgCostKgs: nextAverage,
+      preciseCostBasisQty: nextQuantity,
       costBasisValueKgs: nextTotal,
+      avgCostKgs: legacyAverage,
+      costBasisQty: legacyQuantity,
+      valuationStatus: preciseBasis.status === "LEGACY_PROJECTED" ? "LEGACY_PROJECTED" : "PRECISE",
+      ...valuationTimestampData(),
       lastReceiptAt: stream.lastReceiptAt ?? existing.lastReceiptAt,
     },
   });

@@ -818,9 +818,10 @@ test("BZR-REQ-0079/0080/0081/0082 POS operations and cashier payment corrections
   expect(baselineSnapshot.onHand).toBe(fixture.product.baselineOnHand);
   expect(Number(baselineCost.avgCostKgs)).toBe(fixture.product.unitCostKgs);
   expect(baselineCost.costBasisQty).toBe(fixture.product.baselineOnHand);
-  expect(Number(baselineCost.costBasisValueKgs)).toBe(
-    fixture.product.baselineOnHand * fixture.product.unitCostKgs,
-  );
+  expect(baselineCost.preciseAvgCostKgs).toBeNull();
+  expect(baselineCost.preciseCostBasisQty).toBeNull();
+  expect(baselineCost.costBasisValueKgs).toBeNull();
+  expect(baselineCost.valuationStatus).toBeNull();
   expect(baselineCustomer).toMatchObject({ orderCount: 0, lastOrderAt: null });
   await expect(
     prisma.customerOrder.count({ where: { registerId: fixture.register.id } }),
@@ -1232,10 +1233,13 @@ test("BZR-REQ-0079/0080/0081/0082 POS operations and cashier payment corrections
     -fixture.debtSaleQuantity * fixture.product.unitCostKgs,
   );
   expect(finalSnapshot.onHand).toBe(fixture.expectedFinalOnHand);
-  expect(finalCost.costBasisQty).toBe(fixture.expectedFinalOnHand);
+  expect(finalCost.preciseCostBasisQty).toBe(fixture.expectedFinalOnHand);
   expect(Number(finalCost.costBasisValueKgs)).toBe(
     fixture.expectedFinalOnHand * fixture.product.unitCostKgs,
   );
+  expect(Number(finalCost.preciseAvgCostKgs)).toBe(fixture.product.unitCostKgs);
+  expect(finalCost.valuationStatus).toBe("LEGACY_PROJECTED");
+  expect(finalCost.costBasisQty).toBe(fixture.product.baselineOnHand);
   expect(Number(finalCost.avgCostKgs)).toBe(fixture.product.unitCostKgs);
   expect(finalCustomer.orderCount).toBe(1);
   expect(finalCustomer.lastOrderAt).toBeInstanceOf(Date);
