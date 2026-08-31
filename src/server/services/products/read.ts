@@ -42,8 +42,8 @@ import {
 import { getEffectiveProductPrice } from "@/server/services/effectiveProductPrice";
 import {
   productCostBasisSelect,
-  resolveCurrentProductCostUnit,
-  resolveCurrentProductCostUnitNumber,
+  resolveProductCostDisplayUnit,
+  resolveProductCostDisplayUnitNumber,
 } from "@/server/services/productCost";
 
 type PrismaDbClient = PrismaClient | Prisma.TransactionClient;
@@ -666,7 +666,7 @@ const buildProductSqlSortExpression = ({
             AND cost."costBasisValueKgs" IS NOT NULL
             AND cost."valuationLegacyUpdatedAt" IS NOT NULL
             AND cost."updatedAt" <= cost."valuationLegacyUpdatedAt"
-            THEN cost."costBasisValueKgs" / cost."preciseCostBasisQty"
+            THEN ROUND(cost."costBasisValueKgs" / cost."preciseCostBasisQty", 2)
           ELSE cost."avgCostKgs"
         END
         FROM "ProductCost" cost
@@ -1350,7 +1350,7 @@ export const listProducts = async ({
   }
 
   const avgCostByProductId = new Map(
-    baseCosts.map((cost) => [cost.productId, resolveCurrentProductCostUnitNumber(cost)]),
+    baseCosts.map((cost) => [cost.productId, resolveProductCostDisplayUnitNumber(cost)]),
   );
   const purchasePriceByProductId = new Map(
     latestPurchaseLines.map((line) => [line.productId, Number(line.unitCost)]),
@@ -1674,7 +1674,7 @@ export const getProductById = async ({
     });
   }
 
-  const avgCostKgs = baseCost ? resolveCurrentProductCostUnitNumber(baseCost) : null;
+  const avgCostKgs = baseCost ? resolveProductCostDisplayUnitNumber(baseCost) : null;
   const purchasePriceKgs =
     latestPurchaseLine?.unitCost !== null && latestPurchaseLine?.unitCost !== undefined
       ? Number(latestPurchaseLine.unitCost)
@@ -1764,7 +1764,7 @@ export const getProductPricing = async ({
   return serializeProductPricing({
     basePriceKgs: product.basePriceKgs,
     effectivePriceKgs: storePrice?.priceKgs ?? product.basePriceKgs,
-    avgCostKgs: cost ? resolveCurrentProductCostUnit(cost) : null,
+    avgCostKgs: cost ? resolveProductCostDisplayUnit(cost) : null,
     priceOverridden: Boolean(storePrice),
   });
 };
@@ -1936,7 +1936,7 @@ export const getProductStorePricing = async ({
 
   return {
     basePriceKgs: basePrice,
-    avgCostKgs: cost ? resolveCurrentProductCostUnitNumber(cost) : null,
+    avgCostKgs: cost ? resolveProductCostDisplayUnitNumber(cost) : null,
     stores: stores.map((store) => {
       const override = overrideByStore.get(store.id);
       const effective = override ?? basePrice;
@@ -2093,7 +2093,7 @@ export const exportProductsCsv = async ({
     : [[], [], [], []];
 
   const avgCostByProductId = new Map(
-    baseCosts.map((cost) => [cost.productId, resolveCurrentProductCostUnitNumber(cost)]),
+    baseCosts.map((cost) => [cost.productId, resolveProductCostDisplayUnitNumber(cost)]),
   );
   const purchasePriceByProductId = new Map(
     latestPurchaseLines.map((line) => [line.productId, Number(line.unitCost)]),

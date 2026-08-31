@@ -52,9 +52,9 @@ const readAccountingState = async (input: {
       cost === null
         ? null
         : {
-            quantity: cost.costBasisQty,
+            quantity: cost.preciseCostBasisQty,
             valueKgs: Number(cost.costBasisValueKgs),
-            avgCostKgs: Number(cost.avgCostKgs),
+            avgCostKgs: Number(cost.preciseAvgCostKgs),
           },
     onHand: snapshots.map((snapshot) => snapshot?.onHand ?? null),
     movementCount,
@@ -140,9 +140,9 @@ describeDb("D-009, D-010, and D-011 conservative accounting policies", () => {
       }),
     ]);
     expect({
-      quantity: valuedCost.costBasisQty,
+      quantity: valuedCost.preciseCostBasisQty,
       valueKgs: Number(valuedCost.costBasisValueKgs),
-      avgCostKgs: Number(valuedCost.avgCostKgs),
+      avgCostKgs: Number(valuedCost.preciseAvgCostKgs),
     }).toEqual({ quantity: 5, valueKgs: 61.72839, avgCostKgs: 12.35 });
     expect({
       unitCostKgs: Number(inheritedMovement.unitCostKgs),
@@ -194,9 +194,9 @@ describeDb("D-009, D-010, and D-011 conservative accounting policies", () => {
     ]);
     expect({
       onHand: zeroSnapshot.onHand,
-      quantity: zeroCost.costBasisQty,
+      quantity: zeroCost.preciseCostBasisQty,
       valueKgs: Number(zeroCost.costBasisValueKgs),
-      avgCostKgs: Number(zeroCost.avgCostKgs),
+      avgCostKgs: Number(zeroCost.preciseAvgCostKgs),
     }).toEqual({ onHand: 2, quantity: 2, valueKgs: 0, avgCostKgs: 0 });
     expect(zeroMovement.note).toContain(
       `${ZERO_COST_REASON_MARKER} Supplier samples supplied at no charge`,
@@ -495,8 +495,8 @@ describeDb("D-009, D-010, and D-011 conservative accounting policies", () => {
     expect({
       qtyDelta: marker.qtyDelta,
       unitCostKgs: Number(marker.unitCostKgs),
-      inventoryValueDeltaKgs: marker.inventoryValueDeltaKgs,
-    }).toEqual({ qtyDelta: 0, unitCostKgs: 12, inventoryValueDeltaKgs: null });
+      inventoryValueDeltaKgs: Number(marker.inventoryValueDeltaKgs),
+    }).toEqual({ qtyDelta: 0, unitCostKgs: 12, inventoryValueDeltaKgs: 10 });
     await expect(
       prisma.idempotencyKey.count({ where: { key: "d011-edit-after-revaluation" } }),
     ).resolves.toBe(0);
@@ -563,11 +563,11 @@ describeDb("D-009, D-010, and D-011 conservative accounting policies", () => {
     ]);
     expect({
       variant: {
-        quantity: variantCost.costBasisQty,
+        quantity: variantCost.preciseCostBasisQty,
         valueKgs: Number(variantCost.costBasisValueKgs),
       },
       base: {
-        quantity: baseCost.costBasisQty,
+        quantity: baseCost.preciseCostBasisQty,
         valueKgs: Number(baseCost.costBasisValueKgs),
       },
       onHand: [variantSnapshot.onHand, baseSnapshot.onHand],

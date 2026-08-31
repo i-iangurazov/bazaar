@@ -818,6 +818,7 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
       const snapshot = await prisma.inventorySnapshot.create({
         data: { storeId: store.id, productId: product.id, variantKey: "BASE", onHand: index + 1 },
       });
+      const valuationTimestamp = new Date();
       await prisma.productCost.create({
         data: {
           organizationId: org.id,
@@ -825,7 +826,13 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
           variantKey: "BASE",
           avgCostKgs: 10,
           costBasisQty: index + 1,
+          preciseAvgCostKgs: 10,
+          preciseCostBasisQty: index + 1,
           costBasisValueKgs: (index + 1) * 10,
+          valuationStatus: "PRECISE",
+          valuationUpdatedAt: valuationTimestamp,
+          valuationLegacyUpdatedAt: valuationTimestamp,
+          updatedAt: valuationTimestamp,
         },
       });
       snapshotIds.push(snapshot.id);
@@ -942,6 +949,7 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
         data: { storeId: store.id, productId: secondProduct.id, variantKey: "BASE", onHand: 9 },
       }),
     ]);
+    const valuationTimestamp = new Date();
     await prisma.productCost.createMany({
       data: [
         {
@@ -950,7 +958,13 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
           variantKey: "BASE",
           avgCostKgs: 10,
           costBasisQty: 4,
+          preciseAvgCostKgs: 10,
+          preciseCostBasisQty: 4,
           costBasisValueKgs: 40,
+          valuationStatus: "PRECISE",
+          valuationUpdatedAt: valuationTimestamp,
+          valuationLegacyUpdatedAt: valuationTimestamp,
+          updatedAt: valuationTimestamp,
         },
         {
           organizationId: org.id,
@@ -958,7 +972,13 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
           variantKey: "BASE",
           avgCostKgs: 10,
           costBasisQty: 9,
+          preciseAvgCostKgs: 10,
+          preciseCostBasisQty: 9,
           costBasisValueKgs: 90,
+          valuationStatus: "PRECISE",
+          valuationUpdatedAt: valuationTimestamp,
+          valuationLegacyUpdatedAt: valuationTimestamp,
+          updatedAt: valuationTimestamp,
         },
       ],
     });
@@ -1037,6 +1057,7 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
     const snapshotA = await prisma.inventorySnapshot.create({
       data: { storeId: store.id, productId: product.id, variantKey: "BASE", onHand: 2 },
     });
+    const valuationTimestamp = new Date();
     await prisma.productCost.create({
       data: {
         organizationId: org.id,
@@ -1044,7 +1065,13 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
         variantKey: "BASE",
         avgCostKgs: 10,
         costBasisQty: 2,
+        preciseAvgCostKgs: 10,
+        preciseCostBasisQty: 2,
         costBasisValueKgs: 20,
+        valuationStatus: "PRECISE",
+        valuationUpdatedAt: valuationTimestamp,
+        valuationLegacyUpdatedAt: valuationTimestamp,
+        updatedAt: valuationTimestamp,
       },
     });
     const idempotencyKey = `a2-007-scope-${randomUUID()}`;

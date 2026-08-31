@@ -135,6 +135,17 @@ export const resolveCurrentProductCostUnit = (basis: ProductCostBasis) => {
 export const resolveCurrentProductCostUnitNumber = (basis: ProductCostBasis) =>
   Number(resolveCurrentProductCostUnit(basis));
 
+/**
+ * Product screens and exports expose KGS unit costs at the established two-decimal
+ * money boundary. Accounting mutations continue to use the unrounded resolver
+ * above so the six-decimal basis is never reconstructed from this projection.
+ */
+export const resolveProductCostDisplayUnit = (basis: ProductCostBasis) =>
+  resolveCurrentProductCostUnit(basis).toDecimalPlaces(AVERAGE_COST_SCALE, COST_ROUNDING);
+
+export const resolveProductCostDisplayUnitNumber = (basis: ProductCostBasis) =>
+  Number(resolveProductCostDisplayUnit(basis));
+
 const lockProductCostScope = async (tx: Prisma.TransactionClient, input: ProductCostScope) => {
   const rows = await tx.$queryRaw<Array<{ id: string }>>`
     SELECT "id"

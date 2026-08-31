@@ -28,6 +28,7 @@ describeDb("product cost across POS sales and returns", () => {
     const { org, store, product, adminUser, managerUser, cashierUser } = await seedBase({
       plan: "BUSINESS",
     });
+    const valuationTimestamp = new Date();
 
     await Promise.all([
       prisma.product.update({
@@ -49,7 +50,13 @@ describeDb("product cost across POS sales and returns", () => {
           variantKey: "BASE",
           avgCostKgs: new Prisma.Decimal(95),
           costBasisQty: 8,
+          preciseAvgCostKgs: new Prisma.Decimal(95),
+          preciseCostBasisQty: 8,
           costBasisValueKgs: new Prisma.Decimal(760),
+          valuationStatus: "PRECISE",
+          valuationUpdatedAt: valuationTimestamp,
+          valuationLegacyUpdatedAt: valuationTimestamp,
+          updatedAt: valuationTimestamp,
         },
       }),
     ]);
@@ -114,9 +121,9 @@ describeDb("product cost across POS sales and returns", () => {
       }),
     ]);
 
-    expect(costAfterSale.costBasisQty).toBe(5);
+    expect(costAfterSale.preciseCostBasisQty).toBe(5);
     expect(Number(costAfterSale.costBasisValueKgs)).toBe(475);
-    expect(Number(costAfterSale.avgCostKgs)).toBe(95);
+    expect(Number(costAfterSale.preciseAvgCostKgs)).toBe(95);
     expect(Number(frozenSaleLine.unitCostKgs)).toBe(95);
     expect(Number(frozenSaleLine.lineCostTotalKgs)).toBe(285);
     expect(saleMovement.qtyDelta).toBe(-3);
@@ -153,7 +160,7 @@ describeDb("product cost across POS sales and returns", () => {
       }),
     ]);
 
-    expect(costAfterSaleEdit.costBasisQty).toBe(6);
+    expect(costAfterSaleEdit.preciseCostBasisQty).toBe(6);
     expect(Number(costAfterSaleEdit.costBasisValueKgs)).toBe(570);
     expect(Number(editedSaleLine.unitCostKgs)).toBe(95);
     expect(Number(editedSaleLine.lineCostTotalKgs)).toBe(190);
@@ -166,9 +173,9 @@ describeDb("product cost across POS sales and returns", () => {
       idempotencyKey: "cost-lifecycle-intervening-receipt",
     });
     const costBeforeReturn = await readBaseCost(org.id, product.id);
-    expect(costBeforeReturn.costBasisQty).toBe(11);
+    expect(costBeforeReturn.preciseCostBasisQty).toBe(11);
     expect(Number(costBeforeReturn.costBasisValueKgs)).toBe(1145);
-    expect(Number(costBeforeReturn.avgCostKgs)).toBe(104.09);
+    expect(Number(costBeforeReturn.preciseAvgCostKgs)).toBe(104.09);
 
     const saleReturn = await cashierCaller.pos.returns.createDraft({
       shiftId: shift.id,
@@ -213,9 +220,9 @@ describeDb("product cost across POS sales and returns", () => {
     expect(Number(returnMovement.unitCostKgs)).toBe(95);
     expect(Number(returnMovement.inventoryValueDeltaKgs)).toBe(190);
     expect(Number(returnMovement.inventoryValueDeltaKgs)).not.toBe(500);
-    expect(costAfterReturn.costBasisQty).toBe(13);
+    expect(costAfterReturn.preciseCostBasisQty).toBe(13);
     expect(Number(costAfterReturn.costBasisValueKgs)).toBe(1335);
-    expect(Number(costAfterReturn.avgCostKgs)).toBe(102.69);
+    expect(Number(costAfterReturn.preciseAvgCostKgs)).toBe(102.69);
     expect(snapshot.onHand).toBe(13);
 
     await managerCaller.pos.returns.editCompleted({
@@ -257,9 +264,9 @@ describeDb("product cost across POS sales and returns", () => {
         }),
       ]);
 
-    expect(costAfterReturnEdit.costBasisQty).toBe(12);
+    expect(costAfterReturnEdit.preciseCostBasisQty).toBe(12);
     expect(Number(costAfterReturnEdit.costBasisValueKgs)).toBe(1240);
-    expect(Number(costAfterReturnEdit.avgCostKgs)).toBe(103.33);
+    expect(Number(costAfterReturnEdit.preciseAvgCostKgs)).toBe(103.33);
     expect(Number(editedReturnLine.unitCostKgs)).toBe(95);
     expect(Number(editedReturnLine.lineCostTotalKgs)).toBe(95);
     expect(Number(returnEditMovement.inventoryValueDeltaKgs)).toBe(-95);

@@ -69,9 +69,9 @@ describeDb("product cost inventory lifecycle", () => {
       ]);
 
       expect({
-        costBasisQty: cost.costBasisQty,
+        costBasisQty: cost.preciseCostBasisQty,
         costBasisValueKgs: Number(cost.costBasisValueKgs),
-        avgCostKgs: Number(cost.avgCostKgs),
+        avgCostKgs: Number(cost.preciseAvgCostKgs),
         physicalOnHand: snapshots._sum.onHand ?? 0,
       }).toEqual({
         costBasisQty: quantity,
@@ -178,12 +178,12 @@ describeDb("product cost inventory lifecycle", () => {
       where: costKey(org.id, product.id),
     });
     expect({
-      beforeQuantity: beforeTransferCost.costBasisQty,
-      afterQuantity: afterTransferCost.costBasisQty,
+      beforeQuantity: beforeTransferCost.preciseCostBasisQty,
+      afterQuantity: afterTransferCost.preciseCostBasisQty,
       beforeValueKgs: Number(beforeTransferCost.costBasisValueKgs),
       afterValueKgs: Number(afterTransferCost.costBasisValueKgs),
-      beforeAverageKgs: Number(beforeTransferCost.avgCostKgs),
-      afterAverageKgs: Number(afterTransferCost.avgCostKgs),
+      beforeAverageKgs: Number(beforeTransferCost.preciseAvgCostKgs),
+      afterAverageKgs: Number(afterTransferCost.preciseAvgCostKgs),
     }).toEqual({
       beforeQuantity: 6,
       afterQuantity: 6,

@@ -2,7 +2,10 @@ import { Prisma } from "@prisma/client";
 import { describe, expect, it } from "vitest";
 
 import { resolveFrozenMovementCost } from "@/server/services/costReadModels";
-import { resolveCurrentProductCostUnit } from "@/server/services/productCost";
+import {
+  resolveCurrentProductCostUnit,
+  resolveProductCostDisplayUnit,
+} from "@/server/services/productCost";
 import { classifyProductCostReconciliation } from "@/server/services/productCostReconciliation";
 
 describe("precise ProductCost read model", () => {
@@ -20,6 +23,23 @@ describe("precise ProductCost read model", () => {
     });
 
     expect(Number(unitCost)).toBeCloseTo(80.4633333333, 8);
+  });
+
+  it("rounds only the product display/export projection to two decimals", () => {
+    const basis = {
+      avgCostKgs: new Prisma.Decimal("80.46"),
+      costBasisQty: 3,
+      preciseAvgCostKgs: new Prisma.Decimal("80.46"),
+      preciseCostBasisQty: 3,
+      costBasisValueKgs: new Prisma.Decimal("241.39"),
+      valuationStatus: "PRECISE",
+      valuationUpdatedAt: new Date(0),
+      valuationLegacyUpdatedAt: new Date(0),
+      updatedAt: new Date(0),
+    };
+
+    expect(Number(resolveCurrentProductCostUnit(basis))).toBeCloseTo(80.4633333333, 8);
+    expect(Number(resolveProductCostDisplayUnit(basis))).toBe(80.46);
   });
 
   it("preserves legacy and zero-quantity manual/display costs", () => {

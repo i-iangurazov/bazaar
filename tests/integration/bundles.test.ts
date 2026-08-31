@@ -205,9 +205,9 @@ describeDb("bundles", () => {
       const cost = costs.find((candidate) => candidate.productId === productId);
       expect(cost).toBeDefined();
       return {
-        quantity: cost?.costBasisQty,
+        quantity: cost?.preciseCostBasisQty,
         valueKgs: Number(cost?.costBasisValueKgs),
-        averageKgs: Number(cost?.avgCostKgs),
+        averageKgs: Number(cost?.preciseAvgCostKgs),
       };
     };
     expect(costFor(componentA.id)).toEqual({

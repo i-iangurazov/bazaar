@@ -115,16 +115,14 @@ export const createStore = async (input: CreateStoreInput) =>
       },
     });
 
-    let cloneSummary:
-      | {
-          sourceStoreId: string;
-          inventorySnapshots: number;
-          stockMovements: number;
-	          storePrices: number;
-	          reorderPolicies: number;
-	          storeProducts: number;
-	        }
-      | null = null;
+    let cloneSummary: {
+      sourceStoreId: string;
+      inventorySnapshots: number;
+      stockMovements: number;
+      storePrices: number;
+      reorderPolicies: number;
+      storeProducts: number;
+    } | null = null;
 
     const cloneFromStoreId = normalizeOptional(input.cloneFromStoreId);
     if (cloneFromStoreId) {
@@ -141,65 +139,66 @@ export const createStore = async (input: CreateStoreInput) =>
       const priceAdjustmentMode = input.priceAdjustmentMode ?? "none";
       const priceAdjustmentValue = input.priceAdjustmentValue ?? 0;
 
-      const [sourceSnapshots, sourcePrices, sourceReorderPolicies, sourceStoreProducts] = await Promise.all([
-        copyInventory
-          ? tx.inventorySnapshot.findMany({
-              where: {
-                storeId: cloneFromStoreId,
-                product: {
-                  organizationId: input.organizationId,
-                  isDeleted: false,
+      const [sourceSnapshots, sourcePrices, sourceReorderPolicies, sourceStoreProducts] =
+        await Promise.all([
+          copyInventory
+            ? tx.inventorySnapshot.findMany({
+                where: {
+                  storeId: cloneFromStoreId,
+                  product: {
+                    organizationId: input.organizationId,
+                    isDeleted: false,
+                  },
                 },
-              },
-              select: {
-                productId: true,
-                variantId: true,
-                variantKey: true,
-                onHand: true,
-                onOrder: true,
-              },
-            })
-          : Promise.resolve([]),
-        tx.storePrice.findMany({
-          where: {
-            organizationId: input.organizationId,
-            storeId: cloneFromStoreId,
-            product: { isDeleted: false },
-          },
-          select: {
-            productId: true,
-            variantId: true,
-            variantKey: true,
-            priceKgs: true,
-          },
-        }),
-        tx.reorderPolicy.findMany({
-          where: {
-            storeId: cloneFromStoreId,
-            product: {
+                select: {
+                  productId: true,
+                  variantId: true,
+                  variantKey: true,
+                  onHand: true,
+                  onOrder: true,
+                },
+              })
+            : Promise.resolve([]),
+          tx.storePrice.findMany({
+            where: {
               organizationId: input.organizationId,
-              isDeleted: false,
+              storeId: cloneFromStoreId,
+              product: { isDeleted: false },
             },
-          },
-          select: {
-            productId: true,
-            minStock: true,
-            leadTimeDays: true,
-            reviewPeriodDays: true,
-            safetyStockDays: true,
-            minOrderQty: true,
-          },
-        }),
-        tx.storeProduct.findMany({
-          where: {
-            organizationId: input.organizationId,
-            storeId: cloneFromStoreId,
-            isActive: true,
-            product: { isDeleted: false },
-          },
-          select: { productId: true },
-        }),
-      ]);
+            select: {
+              productId: true,
+              variantId: true,
+              variantKey: true,
+              priceKgs: true,
+            },
+          }),
+          tx.reorderPolicy.findMany({
+            where: {
+              storeId: cloneFromStoreId,
+              product: {
+                organizationId: input.organizationId,
+                isDeleted: false,
+              },
+            },
+            select: {
+              productId: true,
+              minStock: true,
+              leadTimeDays: true,
+              reviewPeriodDays: true,
+              safetyStockDays: true,
+              minOrderQty: true,
+            },
+          }),
+          tx.storeProduct.findMany({
+            where: {
+              organizationId: input.organizationId,
+              storeId: cloneFromStoreId,
+              isActive: true,
+              product: { isDeleted: false },
+            },
+            select: { productId: true },
+          }),
+        ]);
 
       const nextSnapshots = sourceSnapshots.map((snapshot) => ({
         storeId: store.id,
@@ -210,10 +209,6 @@ export const createStore = async (input: CreateStoreInput) =>
         onOrder: snapshot.onOrder,
         allowNegativeStock: input.allowNegativeStock,
       }));
-
-      if (nextSnapshots.length) {
-        await tx.inventorySnapshot.createMany({ data: nextSnapshots });
-      }
 
       const stockMovements = [];
       for (const snapshot of nextSnapshots) {
@@ -239,6 +234,12 @@ export const createStore = async (input: CreateStoreInput) =>
           note: `Copied from ${sourceStore.name}`,
           createdById: input.actorId,
         });
+      }
+      // Value every copied position against the source-store physical quantity.
+      // Inserting the cloned snapshots first would make the precise-basis resolver
+      // observe the clone before its value delta and incorrectly fail closed.
+      if (nextSnapshots.length) {
+        await tx.inventorySnapshot.createMany({ data: nextSnapshots });
       }
       if (stockMovements.length) {
         await tx.stockMovement.createMany({ data: stockMovements });
@@ -270,39 +271,39 @@ export const createStore = async (input: CreateStoreInput) =>
         safetyStockDays: policy.safetyStockDays,
         minOrderQty: policy.minOrderQty,
       }));
-	      if (nextReorderPolicies.length) {
-	        await tx.reorderPolicy.createMany({ data: nextReorderPolicies });
-	      }
+      if (nextReorderPolicies.length) {
+        await tx.reorderPolicy.createMany({ data: nextReorderPolicies });
+      }
 
-	      const assignedProductIds = Array.from(
-	        new Set([
-	          ...sourceStoreProducts.map((row) => row.productId),
-	          ...sourceSnapshots.map((row) => row.productId),
-	          ...sourcePrices.map((row) => row.productId),
-	          ...sourceReorderPolicies.map((row) => row.productId),
-	        ]),
-	      );
-	      if (assignedProductIds.length) {
-	        await tx.storeProduct.createMany({
-	          data: assignedProductIds.map((productId) => ({
-	            organizationId: input.organizationId,
-	            storeId: store.id,
-	            productId,
-	            assignedById: input.actorId,
-	            isActive: true,
-	          })),
-	          skipDuplicates: true,
-	        });
-	      }
+      const assignedProductIds = Array.from(
+        new Set([
+          ...sourceStoreProducts.map((row) => row.productId),
+          ...sourceSnapshots.map((row) => row.productId),
+          ...sourcePrices.map((row) => row.productId),
+          ...sourceReorderPolicies.map((row) => row.productId),
+        ]),
+      );
+      if (assignedProductIds.length) {
+        await tx.storeProduct.createMany({
+          data: assignedProductIds.map((productId) => ({
+            organizationId: input.organizationId,
+            storeId: store.id,
+            productId,
+            assignedById: input.actorId,
+            isActive: true,
+          })),
+          skipDuplicates: true,
+        });
+      }
 
-	      cloneSummary = {
-	        sourceStoreId: sourceStore.id,
-	        inventorySnapshots: nextSnapshots.length,
-	        stockMovements: stockMovements.length,
-	        storePrices: nextPrices.length,
-	        reorderPolicies: nextReorderPolicies.length,
-	        storeProducts: assignedProductIds.length,
-	      };
+      cloneSummary = {
+        sourceStoreId: sourceStore.id,
+        inventorySnapshots: nextSnapshots.length,
+        stockMovements: stockMovements.length,
+        storePrices: nextPrices.length,
+        reorderPolicies: nextReorderPolicies.length,
+        storeProducts: assignedProductIds.length,
+      };
     }
 
     const catalogSyncSummary = requestedCatalog
@@ -320,7 +321,12 @@ export const createStore = async (input: CreateStoreInput) =>
       entity: "Store",
       entityId: store.id,
       before: null,
-      after: toJson({ store, cloneSummary, productCatalogId: productCatalog.id, catalogSyncSummary }),
+      after: toJson({
+        store,
+        cloneSummary,
+        productCatalogId: productCatalog.id,
+        catalogSyncSummary,
+      }),
       requestId: input.requestId,
     });
 
@@ -424,7 +430,10 @@ export const updateStorePolicy = async (input: UpdateStorePolicyInput) =>
 
     const updated = await tx.store.update({
       where: { id: input.storeId },
-      data: { allowNegativeStock: input.allowNegativeStock, trackExpiryLots: input.trackExpiryLots },
+      data: {
+        allowNegativeStock: input.allowNegativeStock,
+        trackExpiryLots: input.trackExpiryLots,
+      },
     });
 
     await tx.inventorySnapshot.updateMany({

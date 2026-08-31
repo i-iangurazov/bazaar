@@ -164,9 +164,9 @@ describeDb("stock counts", () => {
       },
     });
     expect({
-      quantity: afterIncrease.costBasisQty,
+      quantity: afterIncrease.preciseCostBasisQty,
       valueKgs: Number(afterIncrease.costBasisValueKgs),
-      averageKgs: Number(afterIncrease.avgCostKgs),
+      averageKgs: Number(afterIncrease.preciseAvgCostKgs),
     }).toEqual({ quantity: 7, valueKgs: 70.126, averageKgs: 10.02 });
 
     const decrease = await applyCount(4, "decrease");
@@ -200,9 +200,9 @@ describeDb("stock counts", () => {
     ]);
 
     expect({
-      quantity: afterDecrease.costBasisQty,
+      quantity: afterDecrease.preciseCostBasisQty,
       valueKgs: Number(afterDecrease.costBasisValueKgs),
-      averageKgs: Number(afterDecrease.avgCostKgs),
+      averageKgs: Number(afterDecrease.preciseAvgCostKgs),
       onHand: snapshot.onHand,
     }).toEqual({ quantity: 4, valueKgs: 40.072, averageKgs: 10.02, onHand: 4 });
     expect(

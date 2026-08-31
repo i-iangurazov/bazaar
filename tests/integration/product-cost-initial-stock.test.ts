@@ -112,8 +112,10 @@ const createInitiallyStockedProductAndReceive = async ({
   }
 
   return {
-    costBasisQty: cost.costBasisQty,
-    avgCostKgs: Number(cost.avgCostKgs),
+    costBasisQty: cost.preciseCostBasisQty,
+    avgCostKgs: Number(cost.preciseAvgCostKgs),
+    basisValueKgs: Number(cost.costBasisValueKgs),
+    valuationStatus: cost.valuationStatus,
     onHand: snapshot.onHand,
     movementQuantity: valuedMovements._sum.qtyDelta,
     totalValueKgs: Number(valuedMovements._sum.lineTotalKgs),
@@ -149,6 +151,8 @@ describeDb("BZR-PRD-001 initial-stock weighted average cost", () => {
     expect(state).toMatchObject({
       costBasisQty: 15,
       avgCostKgs: 80.9,
+      basisValueKgs: 1213.5,
+      valuationStatus: "PRECISE",
       onHand: 15,
       movementQuantity: 15,
       totalValueKgs: 1213.5,
@@ -177,6 +181,8 @@ describeDb("BZR-PRD-001 initial-stock weighted average cost", () => {
     expect(state).toMatchObject({
       costBasisQty: 7,
       avgCostKgs: 80.46,
+      basisValueKgs: 563.25,
+      valuationStatus: "PRECISE",
       onHand: 7,
       movementQuantity: 7,
       totalValueKgs: 563.25,

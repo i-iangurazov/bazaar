@@ -61,6 +61,7 @@ describeDb("store clone inventory valuation", () => {
         },
       ],
     });
+    const valuationTimestamp = new Date();
     await prisma.productCost.createMany({
       data: [
         {
@@ -69,7 +70,13 @@ describeDb("store clone inventory valuation", () => {
           variantKey: "BASE",
           avgCostKgs: 3.33,
           costBasisQty: 3,
+          preciseAvgCostKgs: 3.33,
+          preciseCostBasisQty: 3,
           costBasisValueKgs: 10,
+          valuationStatus: "PRECISE",
+          valuationUpdatedAt: valuationTimestamp,
+          valuationLegacyUpdatedAt: valuationTimestamp,
+          updatedAt: valuationTimestamp,
         },
         {
           organizationId: org.id,
@@ -172,8 +179,11 @@ describeDb("store clone inventory valuation", () => {
       stockMovements: 1,
     });
     expect(snapshots).toHaveLength(2);
-    expect(valuedCost).toMatchObject({ costBasisQty: 6 });
-    expect(Number(valuedCost.avgCostKgs)).toBe(3.33);
+    expect(valuedCost).toMatchObject({
+      preciseCostBasisQty: 6,
+      valuationStatus: "PRECISE",
+    });
+    expect(Number(valuedCost.preciseAvgCostKgs)).toBe(3.33);
     expect(Number(valuedCost.costBasisValueKgs)).toBe(20);
     expect(unvaluedCost).toBeNull();
     expect(zeroStockCost).toMatchObject({ costBasisQty: 4 });

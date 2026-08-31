@@ -341,6 +341,14 @@ describeDb("Agent 2 B2 receiving cost verification", () => {
 
   it("HARD-A2-018 preserves an external manual/import basis and reports the stream as indeterminate", async () => {
     const { org, store, product, adminUser } = await seedBase({ plan: "BUSINESS" });
+    await prisma.inventorySnapshot.create({
+      data: {
+        storeId: store.id,
+        productId: product.id,
+        variantKey: "BASE",
+        onHand: 1,
+      },
+    });
     await prisma.productCost.create({
       data: {
         organizationId: org.id,
@@ -375,13 +383,17 @@ describeDb("Agent 2 B2 receiving cost verification", () => {
       ),
     ]);
     expect({
-      avg: Number(cost.avgCostKgs),
-      basis: cost.costBasisQty,
+      preciseAvg: Number(cost.preciseAvgCostKgs),
+      preciseBasis: cost.preciseCostBasisQty,
       basisValue: Number(cost.costBasisValueKgs),
+      compatibilityAvg: Number(cost.avgCostKgs),
+      compatibilityBasis: cost.costBasisQty,
     }).toEqual({
-      avg: 6.5,
-      basis: 8,
+      preciseAvg: 6.5,
+      preciseBasis: 8,
       basisValue: 52,
+      compatibilityAvg: 6.49,
+      compatibilityBasis: 8,
     });
     expect(report).toMatchObject({
       status: "INDETERMINATE_UNVALUED_STREAM",
@@ -417,9 +429,20 @@ describeDb("Agent 2 B2 receiving cost verification", () => {
       lines: [{ productId: product.id, quantity: 7, unitCostKgs: 6 }],
       idempotencyKey: "hard-a2-018-detector-edit",
     });
+    const forcedMismatchAt = new Date();
     await prisma.productCost.update({
       where: costKey(org.id, product.id),
-      data: { avgCostKgs: 5, costBasisQty: 10 },
+      data: {
+        avgCostKgs: 5,
+        costBasisQty: 10,
+        preciseAvgCostKgs: 5,
+        preciseCostBasisQty: 10,
+        costBasisValueKgs: 50,
+        valuationStatus: "PRECISE",
+        valuationUpdatedAt: forcedMismatchAt,
+        valuationLegacyUpdatedAt: forcedMismatchAt,
+        updatedAt: forcedMismatchAt,
+      },
     });
 
     const report = await prisma.$transaction((tx) =>
@@ -464,9 +487,20 @@ describeDb("Agent 2 B2 receiving cost verification", () => {
       lines: [{ productId: product.id, quantity: 10, unitCost: 5 }],
       idempotencyKey: "hard-a2-018-mismatch-receive",
     });
+    const forcedMismatchAt = new Date();
     await prisma.productCost.update({
       where: costKey(org.id, product.id),
-      data: { avgCostKgs: 5, costBasisQty: 2 },
+      data: {
+        avgCostKgs: 5,
+        costBasisQty: 2,
+        preciseAvgCostKgs: 5,
+        preciseCostBasisQty: 2,
+        costBasisValueKgs: 10,
+        valuationStatus: "PRECISE",
+        valuationUpdatedAt: forcedMismatchAt,
+        valuationLegacyUpdatedAt: forcedMismatchAt,
+        updatedAt: forcedMismatchAt,
+      },
     });
     const before = await Promise.all([
       prisma.inventorySnapshot.findUniqueOrThrow({

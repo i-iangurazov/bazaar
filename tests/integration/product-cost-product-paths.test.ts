@@ -55,8 +55,11 @@ describeDb("product-service cost paths", () => {
       const expectedValue = expectedQuantity * 80.46;
       const cost = costByVariantId.get(variant.id);
       const movement = movementByVariantId.get(variant.id);
-      expect(cost).toMatchObject({ costBasisQty: expectedQuantity });
-      expect(Number(cost?.avgCostKgs)).toBe(80.46);
+      expect(cost).toMatchObject({
+        preciseCostBasisQty: expectedQuantity,
+        valuationStatus: "PRECISE",
+      });
+      expect(Number(cost?.preciseAvgCostKgs)).toBe(80.46);
       expect(Number(cost?.costBasisValueKgs)).toBeCloseTo(expectedValue, 6);
       expect(movement).toMatchObject({ qtyDelta: expectedQuantity });
       expect(Number(movement?.unitCostKgs)).toBe(80.46);
@@ -154,9 +157,9 @@ describeDb("product-service cost paths", () => {
 
     expect(snapshot.onHand).toBe(8);
     expect({
-      quantity: cost.costBasisQty,
+      quantity: cost.preciseCostBasisQty,
       valueKgs: Number(cost.costBasisValueKgs),
-      averageKgs: Number(cost.avgCostKgs),
+      averageKgs: Number(cost.preciseAvgCostKgs),
     }).toEqual({ quantity: 8, valueKgs: 120, averageKgs: 15 });
     expect(
       movements
@@ -282,15 +285,15 @@ describeDb("product-service cost paths", () => {
     const targetSmall = targetVariantByName.get("Small")!;
 
     expect({
-      quantity: targetCostByKey.get("BASE")?.costBasisQty,
+      quantity: targetCostByKey.get("BASE")?.preciseCostBasisQty,
       valueKgs: Number(targetCostByKey.get("BASE")?.costBasisValueKgs),
     }).toEqual({ quantity: 7, valueKgs: 71.75 });
     expect({
-      quantity: targetCostByKey.get(targetLarge.id)?.costBasisQty,
+      quantity: targetCostByKey.get(targetLarge.id)?.preciseCostBasisQty,
       valueKgs: Number(targetCostByKey.get(targetLarge.id)?.costBasisValueKgs),
     }).toEqual({ quantity: 16, valueKgs: 164 });
     expect({
-      quantity: targetCostByKey.get(targetSmall.id)?.costBasisQty,
+      quantity: targetCostByKey.get(targetSmall.id)?.preciseCostBasisQty,
       valueKgs: Number(targetCostByKey.get(targetSmall.id)?.costBasisValueKgs),
     }).toEqual({ quantity: 9, valueKgs: 92.25 });
 
@@ -322,9 +325,9 @@ describeDb("product-service cost paths", () => {
     expect(
       costOnlyRows.every(
         (cost) =>
-          cost.costBasisQty === 0 &&
+          cost.preciseCostBasisQty === 0 &&
           Number(cost.costBasisValueKgs) === 0 &&
-          Number(cost.avgCostKgs) === 10.25,
+          Number(cost.preciseAvgCostKgs) === 10.25,
       ),
     ).toBe(true);
   });
