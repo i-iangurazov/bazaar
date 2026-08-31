@@ -66,6 +66,12 @@ describe("authenticated inventory mutation acceptance contract", () => {
     expect(seeder).toContain("authenticatedE2ESeedPrefix");
     expect(seeder).toContain("$transaction");
     expect(seeder).toContain(".upsert(");
+    expect(seeder).toContain("preciseAvgCostKgs: product.unitCostKgs");
+    expect(seeder).toContain("preciseCostBasisQty: totalOnHand");
+    expect(seeder).toContain('valuationStatus: "PRECISE"');
+    expect(seeder).toContain("valuationUpdatedAt: valuationTimestamp");
+    expect(seeder).toContain("valuationLegacyUpdatedAt: valuationTimestamp");
+    expect(seeder).toContain("updatedAt: valuationTimestamp");
     expect(seeder).not.toMatch(/\.(?:delete|deleteMany)\s*\(/);
     expect(seeder).not.toMatch(/\b(?:TRUNCATE|DROP\s+(?:DATABASE|SCHEMA|TABLE))\b/i);
     expect(mainFixture.match(/seedAuthenticatedInventoryMutationFixtures\(prisma\)/g)).toHaveLength(

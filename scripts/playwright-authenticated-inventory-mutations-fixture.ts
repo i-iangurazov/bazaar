@@ -145,6 +145,7 @@ const assertMutationSeedOwnership = async (prisma: PrismaClient) => {
 export const seedAuthenticatedInventoryMutationFixtures = async (prisma: PrismaClient) => {
   await assertMutationSeedOwnership(prisma);
   const fixture = authenticatedInventoryMutationFixture;
+  const valuationTimestamp = new Date("2026-08-31T06:00:00.000Z");
 
   await prisma.$transaction(
     async (tx) => {
@@ -275,13 +276,25 @@ export const seedAuthenticatedInventoryMutationFixtures = async (prisma: PrismaC
             variantKey: fixture.variantKey,
             avgCostKgs: product.unitCostKgs,
             costBasisQty: totalOnHand,
+            preciseAvgCostKgs: product.unitCostKgs,
+            preciseCostBasisQty: totalOnHand,
             costBasisValueKgs: totalOnHand * product.unitCostKgs,
+            valuationStatus: "PRECISE",
+            valuationUpdatedAt: valuationTimestamp,
+            valuationLegacyUpdatedAt: valuationTimestamp,
+            updatedAt: valuationTimestamp,
           },
           update: {
             variantId: null,
             avgCostKgs: product.unitCostKgs,
             costBasisQty: totalOnHand,
+            preciseAvgCostKgs: product.unitCostKgs,
+            preciseCostBasisQty: totalOnHand,
             costBasisValueKgs: totalOnHand * product.unitCostKgs,
+            valuationStatus: "PRECISE",
+            valuationUpdatedAt: valuationTimestamp,
+            valuationLegacyUpdatedAt: valuationTimestamp,
+            updatedAt: valuationTimestamp,
             lastReceiptAt: null,
           },
         });

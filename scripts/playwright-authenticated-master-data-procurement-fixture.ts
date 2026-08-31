@@ -254,6 +254,7 @@ const assertMasterDataProcurementSeedOwnership = async (prisma: PrismaClient) =>
 export const seedAuthenticatedMasterDataProcurementFixtures = async (prisma: PrismaClient) => {
   await assertMasterDataProcurementSeedOwnership(prisma);
   const fixture = authenticatedMasterDataProcurementFixture;
+  const valuationTimestamp = new Date("2026-08-31T06:00:00.000Z");
 
   await prisma.$transaction(
     async (tx) => {
@@ -456,13 +457,25 @@ export const seedAuthenticatedMasterDataProcurementFixtures = async (prisma: Pri
             variantKey: fixture.variantKey,
             avgCostKgs: product.unitCostKgs,
             costBasisQty: product.baselineOnHand,
+            preciseAvgCostKgs: product.unitCostKgs,
+            preciseCostBasisQty: product.baselineOnHand,
             costBasisValueKgs: product.baselineOnHand * product.unitCostKgs,
+            valuationStatus: "PRECISE",
+            valuationUpdatedAt: valuationTimestamp,
+            valuationLegacyUpdatedAt: valuationTimestamp,
+            updatedAt: valuationTimestamp,
           },
           update: {
             variantId: null,
             avgCostKgs: product.unitCostKgs,
             costBasisQty: product.baselineOnHand,
+            preciseAvgCostKgs: product.unitCostKgs,
+            preciseCostBasisQty: product.baselineOnHand,
             costBasisValueKgs: product.baselineOnHand * product.unitCostKgs,
+            valuationStatus: "PRECISE",
+            valuationUpdatedAt: valuationTimestamp,
+            valuationLegacyUpdatedAt: valuationTimestamp,
+            updatedAt: valuationTimestamp,
             lastReceiptAt: null,
           },
         });

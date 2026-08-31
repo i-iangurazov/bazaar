@@ -47,6 +47,12 @@ describe("authenticated advanced-product acceptance contract", () => {
     expect(seeder).toContain("bundleAssemble:${fixture.browserBundle.sku}");
     expect(seeder).toContain("$transaction");
     expect(seeder).toContain(".upsert(");
+    expect(seeder).toContain("preciseAvgCostKgs: null");
+    expect(seeder).toContain("preciseCostBasisQty: null");
+    expect(seeder).toContain("costBasisValueKgs: null");
+    expect(seeder).toContain("valuationStatus: null");
+    expect(seeder).toContain("valuationUpdatedAt: null");
+    expect(seeder).toContain("valuationLegacyUpdatedAt: null");
     expect(seeder).not.toMatch(/\b(?:TRUNCATE|DROP\s+(?:DATABASE|SCHEMA|TABLE))\b/i);
     expect(mainSeeder).toContain(
       'import { seedAuthenticatedAdvancedProductFixtures } from "./playwright-authenticated-advanced-product-fixture"',

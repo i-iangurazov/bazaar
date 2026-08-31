@@ -43,6 +43,10 @@ describe("authenticated master-data and procurement fixture contract", () => {
       join(process.cwd(), "scripts/playwright-authenticated-fixture.ts"),
       "utf8",
     );
+    const procurementSeed = readFileSync(
+      join(process.cwd(), "scripts/playwright-authenticated-master-data-procurement-fixture.ts"),
+      "utf8",
+    );
     const mutationFixture = readFileSync(
       join(process.cwd(), "tests/e2e/authenticated/master-data-procurement-test-fixtures.ts"),
       "utf8",
@@ -50,6 +54,12 @@ describe("authenticated master-data and procurement fixture contract", () => {
 
     expect(mainSeed).toContain("seedAuthenticatedMasterDataProcurementFixtures");
     expect(mainSeed).toContain("await seedAuthenticatedMasterDataProcurementFixtures(prisma)");
+    expect(procurementSeed).toContain("preciseAvgCostKgs: product.unitCostKgs");
+    expect(procurementSeed).toContain("preciseCostBasisQty: product.baselineOnHand");
+    expect(procurementSeed).toContain('valuationStatus: "PRECISE"');
+    expect(procurementSeed).toContain("valuationUpdatedAt: valuationTimestamp");
+    expect(procurementSeed).toContain("valuationLegacyUpdatedAt: valuationTimestamp");
+    expect(procurementSeed).toContain("updatedAt: valuationTimestamp");
     for (const procedure of [
       "products.create",
       "products.update",

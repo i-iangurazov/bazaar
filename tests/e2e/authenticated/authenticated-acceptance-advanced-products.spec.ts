@@ -262,7 +262,14 @@ test("@advanced-products bundle create, view, edit and single assembly reconcile
             variantKey: fixture.variantKey,
           },
         },
-        select: { avgCostKgs: true, costBasisQty: true, costBasisValueKgs: true },
+        select: {
+          avgCostKgs: true,
+          costBasisQty: true,
+          preciseAvgCostKgs: true,
+          preciseCostBasisQty: true,
+          costBasisValueKgs: true,
+          valuationStatus: true,
+        },
       }),
       prisma.productCost.findUnique({
         where: {
@@ -272,7 +279,14 @@ test("@advanced-products bundle create, view, edit and single assembly reconcile
             variantKey: fixture.variantKey,
           },
         },
-        select: { avgCostKgs: true, costBasisQty: true, costBasisValueKgs: true },
+        select: {
+          avgCostKgs: true,
+          costBasisQty: true,
+          preciseAvgCostKgs: true,
+          preciseCostBasisQty: true,
+          costBasisValueKgs: true,
+          valuationStatus: true,
+        },
       }),
       prisma.stockMovement.findMany({
         where: {
@@ -298,14 +312,24 @@ test("@advanced-products bundle create, view, edit and single assembly reconcile
   expect(bundleSnapshot).toEqual({ onHand: fixture.browserBundle.assembleQty });
   expect(componentCost).not.toBeNull();
   expect(Number(componentCost!.avgCostKgs)).toBe(fixture.component.unitCostKgs);
-  expect(componentCost!.costBasisQty).toBe(fixture.component.onHand + expectedComponentDelta);
+  expect(componentCost!.costBasisQty).toBe(fixture.component.onHand);
+  expect(Number(componentCost!.preciseAvgCostKgs)).toBe(fixture.component.unitCostKgs);
+  expect(componentCost!.preciseCostBasisQty).toBe(
+    fixture.component.onHand + expectedComponentDelta,
+  );
   expect(Number(componentCost!.costBasisValueKgs)).toBe(
     (fixture.component.onHand + expectedComponentDelta) * fixture.component.unitCostKgs,
   );
+  expect(componentCost!.valuationStatus).toBe("LEGACY_PROJECTED");
   expect(bundleCost).not.toBeNull();
   expect(Number(bundleCost!.avgCostKgs)).toBe(transferredValue / fixture.browserBundle.assembleQty);
   expect(bundleCost!.costBasisQty).toBe(fixture.browserBundle.assembleQty);
+  expect(Number(bundleCost!.preciseAvgCostKgs)).toBe(
+    transferredValue / fixture.browserBundle.assembleQty,
+  );
+  expect(bundleCost!.preciseCostBasisQty).toBe(fixture.browserBundle.assembleQty);
   expect(Number(bundleCost!.costBasisValueKgs)).toBe(transferredValue);
+  expect(bundleCost!.valuationStatus).toBe("PRECISE");
   expect(movements).toHaveLength(2);
   expect(new Set(movements.map((movement) => movement.referenceId)).size).toBe(1);
   expect(

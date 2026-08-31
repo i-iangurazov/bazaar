@@ -146,7 +146,8 @@ const createPurchaseOrderFromUi = async (
   );
   await assertSingleMutation(mutationAudit, "purchaseOrders.create");
   await expect.poll(() => pathname(page).startsWith("/purchase-orders/")).toBe(true);
-  await expect(page.getByText("Total: KGS 221.00", { exact: true })).toBeVisible();
+  const expectedTotal = (input.qty * input.unitCost).toFixed(2);
+  await expect(page.getByText(`Total: KGS ${expectedTotal}`, { exact: true })).toBeVisible();
   const purchaseOrderId = decodeURIComponent(pathname(page).slice("/purchase-orders/".length));
   expect(purchaseOrderId).toMatch(/\S/);
   return purchaseOrderId;
@@ -874,12 +875,14 @@ test("@procurement draft validation, edit, PDF, list Back and cancel reconcile w
   orderRow = page.getByRole("row").filter({ hasText: fixture.cancelProduct.name });
   await expect(orderRow).toContainText("6");
   await gotoDirect(page, "/purchase-orders");
-  const listSearch = page.getByPlaceholder("Search by number, supplier, or store");
-  await listSearch.fill(purchaseOrderId);
-  await expect.poll(() => new URL(page.url()).searchParams.get("search")).toBe(purchaseOrderId);
   let listRow = page
     .getByRole("row")
     .filter({ hasText: purchaseOrderId.slice(0, 8).toUpperCase() });
+  await expect(listRow).toHaveCount(1);
+  const listSearch = page.getByPlaceholder("Search by number, supplier, or store");
+  await listSearch.fill(purchaseOrderId);
+  await expect.poll(() => new URL(page.url()).searchParams.get("search")).toBe(purchaseOrderId);
+  listRow = page.getByRole("row").filter({ hasText: purchaseOrderId.slice(0, 8).toUpperCase() });
   await expect(listRow).toHaveCount(1);
   await listRow.getByRole("link", { name: fixture.supplier.name }).click();
   await assertPathname(page, `/purchase-orders/${purchaseOrderId}`);
@@ -957,7 +960,9 @@ test("@procurement submitted PO approves, receives and links supplier, movement 
   await expect(receiveRow.getByRole("spinbutton")).toHaveValue(String(product.purchaseQty));
   await receiveDialog.getByRole("button", { name: "Receive submit" }).click();
   await assertSingleMutation(mutationAudit, "purchaseOrders.receive");
-  await expect(page.getByText("Received", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Received", { exact: true }).filter({ has: page.locator("svg") }),
+  ).toBeVisible();
 
   const receivedOrder = await prisma.purchaseOrder.findUnique({
     where: { id: purchaseOrderId },
