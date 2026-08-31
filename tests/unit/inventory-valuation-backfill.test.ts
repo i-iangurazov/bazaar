@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { classifyInventoryMovementEvidence } from "@/server/services/inventoryValuationBackfill";
 import {
-  InventoryValuationBackfillCliError,
+  type InventoryValuationBackfillCliError,
   parseInventoryValuationBackfillCliOptions,
 } from "../../scripts/inventory-valuation-backfill";
 
