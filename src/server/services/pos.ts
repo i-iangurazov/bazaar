@@ -4235,6 +4235,7 @@ export const editCompletedPosSale = async (input: {
             note: input.reason?.trim() || `Редактирование чека ${sale.number}`,
             actorId: input.actorId,
             organizationId: input.organizationId,
+            allowNegativeStock: true,
             allowValuedNegativeStock: true,
           });
           changedProducts.set(key, {
@@ -5263,6 +5264,7 @@ export const completePosSale = async (input: {
               note: sale.number,
               actorId: input.actorId,
               organizationId: input.organizationId,
+              allowNegativeStock: true,
               allowValuedNegativeStock: true,
             });
           }
@@ -6378,6 +6380,7 @@ export const editCompletedSaleReturn = async (input: {
             note: input.reason?.trim() || `Редактирование возврата ${saleReturn.number}`,
             actorId: input.actorId,
             organizationId: input.organizationId,
+            allowNegativeStock: true,
             allowValuedNegativeStock: true,
           });
           changedProducts.set(key, {
@@ -6782,6 +6785,7 @@ export const completeSaleReturn = async (input: {
             note: saleReturn.number,
             actorId: input.actorId,
             organizationId: input.organizationId,
+            allowNegativeStock: true,
             allowValuedNegativeStock: true,
           });
         }

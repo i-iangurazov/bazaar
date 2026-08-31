@@ -2400,8 +2400,11 @@ describeDb("pos", () => {
     });
   });
 
-  it("rejects restricted negative stock atomically and retries after replenishment", async () => {
-    const { org, store, product, cashierUser, adminUser } = await seedBase({ plan: "BUSINESS" });
+  it("allows cashier POS completion to drive stock negative regardless of adjustment policy", async () => {
+    const { org, store, product, cashierUser } = await seedBase({
+      plan: "BUSINESS",
+      allowNegativeStock: false,
+    });
 
     await prisma.product.update({
       where: { id: product.id },
@@ -2434,18 +2437,16 @@ describeDb("pos", () => {
     const sale = await caller.pos.sales.createDraft({ registerId: register.id });
     await caller.pos.sales.addLine({ saleId: sale.id, productId: product.id, qty: 2 });
 
-    await expect(
-      caller.pos.sales.complete({
-        saleId: sale.id,
-        idempotencyKey: "pos-sale-complete-negative-stock-1",
-        payments: [{ method: "CASH", amountKgs: 200 }],
-      }),
-    ).rejects.toMatchObject({ code: "CONFLICT", message: "insufficientStock" });
+    await caller.pos.sales.complete({
+      saleId: sale.id,
+      idempotencyKey: "pos-sale-complete-negative-stock-1",
+      payments: [{ method: "CASH", amountKgs: 200 }],
+    });
 
-    const [rejectedSale, rejectedSnapshot, rejectedMovements, rejectedPayments] = await Promise.all(
-      [
+    const [completedSale, snapshot, movements, payments, completionAudits, idempotencyKeys] =
+      await Promise.all([
         prisma.customerOrder.findUniqueOrThrow({ where: { id: sale.id } }),
-        prisma.inventorySnapshot.findUnique({
+        prisma.inventorySnapshot.findUniqueOrThrow({
           where: {
             storeId_productId_variantKey: {
               storeId: store.id,
@@ -2458,53 +2459,27 @@ describeDb("pos", () => {
           where: { type: StockMovementType.SALE, referenceId: sale.id },
         }),
         prisma.salePayment.findMany({ where: { customerOrderId: sale.id } }),
-      ],
-    );
-    expect(rejectedSale.status).toBe("DRAFT");
-    expect(rejectedSnapshot).toBeNull();
-    expect(rejectedMovements).toHaveLength(0);
-    expect(rejectedPayments).toHaveLength(0);
-
-    await adjustStock({
-      organizationId: org.id,
-      actorId: adminUser.id,
-      storeId: store.id,
-      productId: product.id,
-      qtyDelta: 2,
-      reason: "replenish restricted POS retry",
-      idempotencyKey: "pos-negative-stock-replenish-1",
-      requestId: "pos-negative-stock-replenish-1",
-    });
-    await caller.pos.sales.complete({
-      saleId: sale.id,
-      idempotencyKey: "pos-sale-complete-negative-stock-1",
-      payments: [{ method: "CASH", amountKgs: 200 }],
-    });
-
-    const [completedSale, snapshot, movements, payments] = await Promise.all([
-      prisma.customerOrder.findUniqueOrThrow({ where: { id: sale.id } }),
-      prisma.inventorySnapshot.findUniqueOrThrow({
-        where: {
-          storeId_productId_variantKey: {
-            storeId: store.id,
-            productId: product.id,
-            variantKey: "BASE",
+        prisma.auditLog.count({
+          where: { action: "POS_SALE_COMPLETE", entity: "CustomerOrder", entityId: sale.id },
+        }),
+        prisma.idempotencyKey.count({
+          where: {
+            key: "pos-sale-complete-negative-stock-1",
+            route: "pos.sales.complete",
+            userId: cashierUser.id,
           },
-        },
-      }),
-      prisma.stockMovement.findMany({
-        where: { type: StockMovementType.SALE, referenceId: sale.id },
-      }),
-      prisma.salePayment.findMany({ where: { customerOrderId: sale.id } }),
-    ]);
+        }),
+      ]);
 
     expect(store.allowNegativeStock).toBe(false);
     expect(completedSale.status).toBe("COMPLETED");
-    expect(snapshot.onHand).toBe(0);
-    expect(snapshot.allowNegativeStock).toBe(false);
+    expect(snapshot.onHand).toBe(-2);
+    expect(snapshot.allowNegativeStock).toBe(true);
     expect(movements).toHaveLength(1);
     expect(movements[0]?.qtyDelta).toBe(-2);
     expect(payments).toHaveLength(1);
+    expect(completionAudits).toBe(1);
+    expect(idempotencyKeys).toBe(1);
   });
 
   it("allows POS sale completion to drive stock negative when the store permits it", async () => {
@@ -2652,7 +2627,7 @@ describeDb("pos", () => {
     expect(recoveryMovements[0]?.inventoryValueReason).toBe("NEGATIVE_STOCK_ASSET_BOUNDARY");
   });
 
-  it("rejects a completed-sale quantity increase when restricted stock is exhausted", async () => {
+  it("allows a completed-sale quantity increase to drive stock negative", async () => {
     const { org, store, product, cashierUser, adminUser } = await seedBase({
       plan: "BUSINESS",
       allowNegativeStock: false,
@@ -2700,21 +2675,19 @@ describeDb("pos", () => {
       payments: [{ method: PosPaymentMethod.CASH, amountKgs: 100 }],
     });
 
-    await expect(
-      caller.pos.sales.editCompleted({
-        saleId: sale.id,
-        lines: [
-          {
-            lineId: line.id,
-            productId: product.id,
-            qty: 2,
-            unitPriceKgs: 100,
-          },
-        ],
-        reason: "policy regression control",
-        idempotencyKey: "pos-edit-stock-policy-increase-1",
-      }),
-    ).rejects.toMatchObject({ code: "CONFLICT", message: "insufficientStock" });
+    await caller.pos.sales.editCompleted({
+      saleId: sale.id,
+      lines: [
+        {
+          lineId: line.id,
+          productId: product.id,
+          qty: 2,
+          unitPriceKgs: 100,
+        },
+      ],
+      reason: "cashier negative-stock sale edit",
+      idempotencyKey: "pos-edit-stock-policy-increase-1",
+    });
 
     const [persistedSale, snapshot, saleMovements, payments, editAudits, editKeys] =
       await Promise.all([
@@ -2749,16 +2722,16 @@ describeDb("pos", () => {
 
     expect(persistedSale.status).toBe("COMPLETED");
     expect(persistedSale.lines).toHaveLength(1);
-    expect(persistedSale.lines[0]?.qty).toBe(1);
-    expect(Number(persistedSale.totalKgs)).toBe(100);
-    expect(snapshot.onHand).toBe(0);
-    expect(snapshot.allowNegativeStock).toBe(false);
-    expect(saleMovements).toHaveLength(1);
-    expect(saleMovements[0]?.qtyDelta).toBe(-1);
-    expect(payments).toHaveLength(1);
-    expect(Number(payments[0]?.amountKgs)).toBe(100);
-    expect(editAudits).toBe(0);
-    expect(editKeys).toBe(0);
+    expect(persistedSale.lines[0]?.qty).toBe(2);
+    expect(Number(persistedSale.totalKgs)).toBe(200);
+    expect(snapshot.onHand).toBe(-1);
+    expect(snapshot.allowNegativeStock).toBe(true);
+    expect(saleMovements).toHaveLength(2);
+    expect(saleMovements.map((movement) => movement.qtyDelta)).toEqual([-1, -1]);
+    expect(payments).toHaveLength(2);
+    expect(payments.reduce((total, payment) => total + Number(payment.amountKgs), 0)).toBe(200);
+    expect(editAudits).toBe(1);
+    expect(editKeys).toBe(1);
   });
 
   it("tracks discounted debt sales and settles debt into the active shift", async () => {

@@ -88,6 +88,9 @@ describe("pos entry navigation", () => {
     expect(pageSource).toContain("unresolvedDraftCount");
     expect(pageSource).toContain("transferDraftMutation");
     expect(pageSource).toContain("cancelReturnMutation");
+    expect(pageSource).toContain("optimisticallyResolvedActiveReceiptIds");
+    expect(pageSource).toContain("handleCancelActiveReceipt");
+    expect(pageSource).toContain("cancelDraftMutation.isLoading ||");
     expect(pageSource).toContain("parseMoneyInput(countedCash)");
   });
 
