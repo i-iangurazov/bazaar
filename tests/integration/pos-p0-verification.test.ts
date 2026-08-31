@@ -1576,7 +1576,7 @@ describeDb("Agent 1 P0 runtime verification", () => {
     expect(updateAudits).toBe(1);
   });
 
-  it("HARD-A1-008 rejects insufficient stock without persisting checkout side effects", async () => {
+  it("HARD-A1-008 allows POS checkout to create negative stock without duplicate side effects", async () => {
     const { org, store, product, cashierUser } = await seedBase({
       plan: "BUSINESS",
       allowNegativeStock: false,
@@ -1595,13 +1595,11 @@ describeDb("Agent 1 P0 runtime verification", () => {
       where: { storeId: store.id, productId: product.id },
     });
 
-    await expect(
-      caller.pos.sales.complete({
-        saleId: sale.id,
-        idempotencyKey: "hard-a1-008-complete",
-        payments: [{ method: PosPaymentMethod.CASH, amountKgs: 200 }],
-      }),
-    ).rejects.toMatchObject({ code: "CONFLICT", message: "insufficientStock" });
+    await caller.pos.sales.complete({
+      saleId: sale.id,
+      idempotencyKey: "hard-a1-008-complete",
+      payments: [{ method: PosPaymentMethod.CASH, amountKgs: 200 }],
+    });
     const [persistedStore, snapshot, persistedSale, movements, payments, completionAudits, keys] =
       await Promise.all([
         prisma.store.findUniqueOrThrow({ where: { id: store.id } }),
@@ -1633,14 +1631,16 @@ describeDb("Agent 1 P0 runtime verification", () => {
 
     expect(snapshotsBefore).toBe(0);
     expect(persistedStore.allowNegativeStock).toBe(false);
-    expect(snapshot).toBeNull();
-    expect(persistedSale.status).toBe("DRAFT");
-    expect(persistedSale.completedAt).toBeNull();
-    expect(persistedSale.completedEventId).toBeNull();
-    expect(movements).toHaveLength(0);
-    expect(payments).toHaveLength(0);
-    expect(completionAudits).toBe(0);
-    expect(keys).toBe(0);
+    expect(snapshot?.onHand).toBe(-2);
+    expect(snapshot?.allowNegativeStock).toBe(true);
+    expect(persistedSale.status).toBe("COMPLETED");
+    expect(persistedSale.completedAt).not.toBeNull();
+    expect(persistedSale.completedEventId).toBe("hard-a1-008-complete");
+    expect(movements).toHaveLength(1);
+    expect(movements[0]?.qtyDelta).toBe(-2);
+    expect(payments).toHaveLength(1);
+    expect(completionAudits).toBe(1);
+    expect(keys).toBe(1);
   });
 
   it("HARD-A1-009 claims one retry and reconciles concurrent and repeated callers", async () => {
