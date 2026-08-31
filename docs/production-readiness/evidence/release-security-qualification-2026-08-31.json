@@ -1,0 +1,143 @@
+{
+  "schemaVersion": 1,
+  "artifactKind": "RELEASE_SECURITY_QUALIFICATION",
+  "generatedAt": "2026-08-31T17:57:28Z",
+  "releaseBranch": "codex/bazaar-readiness-release-20260831",
+  "sourceCheckpoint": "2f5f7bf48024fe2e878ca0515421c1a7d4ce6cda",
+  "priorLocalGateCheckpoint": "998ad625d878197a42bbf00afe450dd1b187357a",
+  "rescueCommit": "e04df7c322c0da46665aa764e113423223222390",
+  "productionRollbackPoint": "7db455397eb38e9bcaa09bda5acc951964df5ab2",
+  "productionDataUsed": false,
+  "externalProvidersEnabled": false,
+  "releaseAuthorizedByThisArtifact": false,
+  "securityFindings": [
+    {
+      "githubAlert": 29,
+      "query": "js/request-forgery",
+      "severity": "critical",
+      "status": "LOCALLY_REMEDIATED_AWAITING_CODEQL",
+      "boundary": "/api/public/catalog/image",
+      "remediation": "Only configured application/R2 origins and canonical managed paths can reach fetch; query, fragment, credentials, ports, malformed encoding, traversal, encoded separators and unsafe redirects are rejected."
+    },
+    {
+      "githubAlert": 31,
+      "query": "js/request-forgery",
+      "severity": "critical",
+      "status": "LOCALLY_REMEDIATED_AWAITING_CODEQL",
+      "boundary": "/api/product-images/source",
+      "remediation": "The authenticated route rebuilds R2 URLs from the configured origin and a canonical tenant path, and the downloader reapplies the same policy to every redirect hop."
+    },
+    {
+      "githubAlert": 32,
+      "query": "js/xss-through-dom",
+      "severity": "high",
+      "status": "LOCALLY_REMEDIATED_AWAITING_CODEQL",
+      "boundary": "email-marketing PreviewImageFrame",
+      "remediation": "The existing HTTP(S)/same-origin allowlist is followed by global HTML-metacharacter percent encoding immediately before the img src sink."
+    }
+  ],
+  "localGates": {
+    "targetedSecurityTests": {
+      "status": "PASS",
+      "testFiles": 6,
+      "passed": 110,
+      "failed": 0,
+      "skipped": 0,
+      "jsonArtifact": "test-results/release-security-targeted-2026-08-31.json",
+      "jsonSha256": "5767c823f3203b9cb4451cd1ac8dbb8270b1a2f10faaef1edd1240b4652c3013",
+      "junitArtifact": "test-results/release-security-targeted-2026-08-31.xml",
+      "junitSha256": "ffe710b6a0080635c5a8c6299f81c3953a519cd2e54ae32e3d2d3d46f312238b"
+    },
+    "lint": { "status": "PASS", "command": "pnpm lint", "maxWarnings": 0 },
+    "typeScript": { "status": "PASS", "command": "pnpm typecheck" },
+    "localization": { "status": "PASS", "command": "pnpm i18n:check" },
+    "changedFileFormatting": { "status": "PASS" },
+    "gitDiffCheck": { "status": "PASS" },
+    "secretPatternScan": { "status": "PASS", "matches": 0 },
+    "productionDependencyAudit": { "status": "PASS", "vulnerabilities": 0 },
+    "fullDependencyAudit": { "status": "PASS", "vulnerabilities": 0 },
+    "productionBuild": {
+      "status": "PASS",
+      "nextVersion": "15.5.21",
+      "staticPagesGenerated": 120,
+      "staticPagesTotal": 120
+    }
+  },
+  "browserEvidence": {
+    "publicMatrix": {
+      "status": "PASS",
+      "passed": 189,
+      "failed": 0,
+      "skipped": 0,
+      "viewports": ["desktop", "tablet", "mobile"],
+      "jsonArtifact": "test-results/release-security-public-current-source-2026-08-31.json",
+      "jsonSha256": "839a5ccf097eb03859faa309b4db995964f0dbbe6060fc61045c48c425b39226",
+      "junitArtifact": "test-results/release-security-public-current-source-2026-08-31.xml",
+      "junitSha256": "0345917f23c6efb28f3b6d8e4fafaa6e4cba461c14da6a4a92ce73c414bec5b5",
+      "htmlArtifact": "test-results/release-security-public-current-source-html/index.html",
+      "htmlSha256": "f157ba88b753ddcb0174ee9370c97d6bc9459fac2d8cd869ddbbc1f3620658c8"
+    },
+    "affectedAuthenticated": {
+      "status": "PASS",
+      "passed": 20,
+      "failed": 0,
+      "skipped": 0,
+      "coverage": [
+        "seven-account authentication setup",
+        "local durable product-image workflow",
+        "email-marketing EN/RU/KG workspace and reload",
+        "email-marketing EN/RU/KG 200-percent reflow"
+      ],
+      "artifacts": [
+        {
+          "json": "test-results/release-security-auth-affected-2026-08-31.json",
+          "jsonSha256": "06f515964773405d082b237da87a4ece7ac3ebb65978fd0047e44285df0a6b42",
+          "junit": "test-results/release-security-auth-affected-2026-08-31.xml",
+          "junitSha256": "7d0aff6eeb8c4377f0996333e70c76cb5c66484401bcd70bd0072b9333c4a002",
+          "html": "test-results/release-security-auth-affected-html/index.html",
+          "htmlSha256": "2d287bed713cf7fab185c1bf879953f6e5796ccb0b7ab346ce352249abd6ad0e"
+        },
+        {
+          "json": "test-results/release-security-auth-email-reflow-2026-08-31.json",
+          "jsonSha256": "05f182094544a9a0ee23873f84d3f859881da337460cfb687de1c10efdc0d4b4",
+          "junit": "test-results/release-security-auth-email-reflow-2026-08-31.xml",
+          "junitSha256": "1ad2a97925f5e4fb1026b226518951fabd497a09631466cea9b4891f4278be6e",
+          "html": "test-results/release-security-auth-email-reflow-html/index.html",
+          "htmlSha256": "354e58d58a64717dd2dc9cde5e7b4684259367b0de62fdc97e893de0ce6d26cd"
+        }
+      ]
+    },
+    "retainedCompleteAuthenticatedMatrix": {
+      "status": "PASS",
+      "passed": 762,
+      "failed": 0,
+      "skipped": 0,
+      "evidence": "docs/production-readiness/evidence/release-final-authenticated-clean-2026-08-31.json",
+      "reconciliation": "The later security-only image and preview changes were covered by the affected browser shards and exact current-source targeted tests; POS, money, stock, migration and tenant paths were unchanged."
+    }
+  },
+  "readiness": {
+    "officialPercent": 95.6,
+    "applicationOwnedPercent": 97.2,
+    "execution": "225/230",
+    "executionPercent": 97.8,
+    "verifiedPass": "209/230",
+    "verifiedPassPercent": 90.9,
+    "criticalWorkflowVerified": "64/67",
+    "criticalWorkflowVerifiedPercent": 95.5,
+    "outcomes": { "PASS": 209, "PARTIAL": 16, "FAIL": 0, "BLOCKED": 5 },
+    "defects": { "BLOCKER": 0, "CRITICAL": 0, "HIGH": 0, "MEDIUM": 6, "LOW": 2 }
+  },
+  "pendingRemoteGates": {
+    "codeQl": "A new GitHub scan must close alerts 29, 31 and 32 on the PR merge ref.",
+    "ci": "A new full CI run is required for source checkpoint 2f5f7bf.",
+    "vercelPreview": "The prior Preview failed before build because DATABASE_URL is not configured in the Vercel Preview environment.",
+    "productionBackupOrPitr": "Must be confirmed before merge or production migration."
+  },
+  "providerRestrictions": [
+    "Fiscalization and KKM remain disabled.",
+    "Billing remains disabled.",
+    "Production email remains disabled.",
+    "Live integrations remain disabled."
+  ]
+}
