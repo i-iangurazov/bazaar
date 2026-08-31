@@ -1,5 +1,4 @@
 import { readFileSync } from "node:fs";
-import path from "node:path";
 
 import Papa from "papaparse";
 import { describe, expect, it } from "vitest";
@@ -13,12 +12,16 @@ type CanonicalAuditRow = {
   Authentication: string;
 };
 
-const auditInventoryPath = path.resolve(
-  "tmp/bazaar-audit-final-2026-08-31/route-matrix-canonical-116.csv",
+// Distilled from the retained 97,419-byte audit source with SHA-256
+// 08a7914f...f488a6. The committed projection contains only fields this
+// denominator-reconciliation test consumes.
+const auditInventoryUrl = new URL(
+  "../fixtures/production-readiness/route-matrix-canonical-116.csv",
+  import.meta.url,
 );
 
 const loadFrozenCanonicalAudit = () => {
-  const parsed = Papa.parse<CanonicalAuditRow>(readFileSync(auditInventoryPath, "utf8"), {
+  const parsed = Papa.parse<CanonicalAuditRow>(readFileSync(auditInventoryUrl, "utf8"), {
     header: true,
     skipEmptyLines: true,
   });
