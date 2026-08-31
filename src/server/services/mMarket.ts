@@ -2068,7 +2068,7 @@ export const updateMMarketConnection = async (input: {
       requestId: input.requestId,
     });
 
-    return saved;
+    return stripSensitiveIntegration(saved);
   });
 };
 
