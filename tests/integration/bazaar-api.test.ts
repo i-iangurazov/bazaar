@@ -33,9 +33,9 @@ import {
   createBazaarApiOrder,
   listBazaarApiProducts,
 } from "@/server/services/bazaarApi";
-import { adjustStock } from "@/server/services/inventory";
 import { cancelCustomerOrder } from "@/server/services/salesOrders";
 
+import { adjustStockWithExplicitPositiveCost as adjustStock } from "../helpers/d009Fixtures";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
@@ -262,6 +262,16 @@ describeDb("bazaar api integration", () => {
       where: { id: product.id },
       data: { basePriceKgs: 750 },
     });
+    await adjustStock({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 2,
+      reason: "valued stock for order status compatibility",
+      idempotencyKey: "bazaar-api-status-valued-stock",
+      requestId: "bazaar-api-status-valued-stock",
+    });
 
     const headers = {
       authorization: `Bearer ${token}`,
@@ -461,10 +471,13 @@ describeDb("bazaar api integration", () => {
     expect(firstPage.pagination.nextCursor).toEqual(expect.any(String));
 
     const secondPageResponse = await listBazaarApiOrdersGet(
-      new Request(`http://localhost/api/bazaar/v1/orders?limit=1&cursor=${firstPage.pagination.nextCursor}`, {
-        method: "GET",
-        headers: { authorization: `Bearer ${token}` },
-      }),
+      new Request(
+        `http://localhost/api/bazaar/v1/orders?limit=1&cursor=${firstPage.pagination.nextCursor}`,
+        {
+          method: "GET",
+          headers: { authorization: `Bearer ${token}` },
+        },
+      ),
     );
     const secondPage = await secondPageResponse.json();
     expect(secondPage.data).toHaveLength(1);
@@ -656,11 +669,16 @@ describeDb("bazaar api integration", () => {
     });
 
     const stockAfterCreate = await prisma.inventorySnapshot.findMany({
-      where: { storeId: { in: [store.id, otherStore.id] }, productId: { in: [product.id, secondProduct.id] } },
+      where: {
+        storeId: { in: [store.id, otherStore.id] },
+        productId: { in: [product.id, secondProduct.id] },
+      },
       orderBy: [{ storeId: "asc" }, { productId: "asc" }],
     });
     const onHand = (storeId: string, productId: string) =>
-      stockAfterCreate.find((snapshot) => snapshot.storeId === storeId && snapshot.productId === productId)?.onHand;
+      stockAfterCreate.find(
+        (snapshot) => snapshot.storeId === storeId && snapshot.productId === productId,
+      )?.onHand;
     expect(onHand(store.id, product.id)).toBe(7);
     expect(onHand(store.id, secondProduct.id)).toBe(6);
     expect(onHand(otherStore.id, product.id)).toBe(20);

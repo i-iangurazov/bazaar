@@ -1027,11 +1027,19 @@ test.describe("targeted public accessibility contracts", () => {
     await expect(page).toHaveTitle(new RegExp(escapeRegExp(messages.privacy.metaTitle), "u"));
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(messages.privacy.title);
     await expectMeaningfulHeadingOutline(page, messages.privacy.title);
+    await testInfo.attach(`PUBLIC-001-privacy-${testInfo.project.name}`, {
+      body: await page.screenshot({ fullPage: true }),
+      contentType: "image/png",
+    });
 
     await activateFooterLink("/legal");
     await expect(page).toHaveTitle(new RegExp(escapeRegExp(messages.legal.metaTitle), "u"));
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(messages.legal.title);
     await expectMeaningfulHeadingOutline(page, messages.legal.title);
+    await testInfo.attach(`PUBLIC-001-legal-${testInfo.project.name}`, {
+      body: await page.screenshot({ fullPage: true }),
+      contentType: "image/png",
+    });
 
     expect(externalRequests, "footer keyboard checks must stay local").toEqual([]);
   });

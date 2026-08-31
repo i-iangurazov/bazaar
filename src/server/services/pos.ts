@@ -3774,15 +3774,6 @@ export const editCompletedPosSale = async (input: {
             oldCostTotalKgs === null || desiredCostTotalKgs === null
               ? null
               : roundMoney(oldCostTotalKgs - desiredCostTotalKgs);
-          if (inventoryValueDeltaKgs !== null) {
-            await applyValuedProductCostDelta(tx, {
-              organizationId: input.organizationId,
-              productId: movementLine.productId,
-              variantId: movementLine.variantId,
-              quantityDelta: stockDelta,
-              valueDeltaKgs: inventoryValueDeltaKgs,
-            });
-          }
           const desiredCostLine = desiredLineByKey.get(key);
           const oldCostLine = sale.lines.find(
             (line) => lineAggregateKey(line.productId, line.variantKey) === key,
@@ -3806,6 +3797,15 @@ export const editCompletedPosSale = async (input: {
             actorId: input.actorId,
             organizationId: input.organizationId,
           });
+          if (inventoryValueDeltaKgs !== null) {
+            await applyValuedProductCostDelta(tx, {
+              organizationId: input.organizationId,
+              productId: movementLine.productId,
+              variantId: movementLine.variantId,
+              quantityDelta: stockDelta,
+              valueDeltaKgs: inventoryValueDeltaKgs,
+            });
+          }
           changedProducts.set(key, {
             storeId: sale.storeId,
             productId: movementLine.productId,

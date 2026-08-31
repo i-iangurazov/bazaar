@@ -146,6 +146,8 @@ const AdminMetricsPage = () => {
   const inventory = data?.inventory;
   const summary = inventory?.summary;
   const pagination = inventory?.products.pagination;
+  const categoryLabel = (value: string) =>
+    value === "Без категории" ? t("table.uncategorized") : value;
 
   const warningLabels = useMemo(
     () =>
@@ -279,7 +281,7 @@ const AdminMetricsPage = () => {
                 <SelectItem value={allValue}>{t("filters.allCategories")}</SelectItem>
                 {data?.filterOptions.categories.map((item) => (
                   <SelectItem key={item} value={item}>
-                    {item}
+                    {categoryLabel(item)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -572,7 +574,9 @@ const AdminMetricsPage = () => {
                     {inventory.categorySummaries.length ? (
                       inventory.categorySummaries.map((item) => (
                         <TableRow key={item.category}>
-                          <TableCell className="font-medium">{item.category}</TableCell>
+                          <TableCell className="font-medium">
+                            {categoryLabel(item.category)}
+                          </TableCell>
                           <TableCell>{formatInteger(item.productCount)}</TableCell>
                           <TableCell>{formatQty(item.totalStockQty)}</TableCell>
                           <TableCell>{formatMoney(item.costValueKgs)}</TableCell>
@@ -709,7 +713,7 @@ const AdminMetricsPage = () => {
                             </div>
                           </TableCell>
                           <TableCell>{product.storeName}</TableCell>
-                          <TableCell>{product.category}</TableCell>
+                          <TableCell>{categoryLabel(product.category)}</TableCell>
                           <TableCell>
                             <span
                               className={product.stockQty < 0 ? "font-semibold text-danger" : ""}

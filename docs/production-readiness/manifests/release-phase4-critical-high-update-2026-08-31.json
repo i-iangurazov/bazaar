@@ -1,0 +1,225 @@
+{
+  "schemaVersion": 1,
+  "timestamp": "2026-08-31T09:07:32.000Z",
+  "requirements": [
+    {
+      "id": "BZR-REQ-0051",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Exact persisted weighted-cost cases round to KGS 80.46 and KGS 80.90 only after weighting; the retained browser case reconciles the displayed value, receipt value, database basis, ledger, and product CSV.",
+      "statusJustification": "The required decimal behavior was executed successfully in the complete deterministic suite and the retained BZR-PRD-001 browser case, with no contradictory numeric result in the authenticated matrix.",
+      "verificationTimestampSource": "Playwright JSON case completed during the 2026-08-31T08:35:37Z authenticated run",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-matrix.json",
+          "description": "Retained Playwright JSON records BZR-PRD-001 weighted cost UI, receipt value, and product CSV reconcile as expected/passed with embedded screenshot evidence. The overall matrix also records unrelated failures and is not claimed as green."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-full-final.xml",
+          "description": "Final deterministic JUnit records 313 suites and 1,688 tests passed with zero failures, errors, or skips, including exact 80.46/80.90 and D-009 lifecycle cases."
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Passed 313 suites and 1,688 tests against the isolated PostgreSQL database"
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:db:deterministic",
+          "pnpm exec playwright test --config=playwright.authenticated.production.config.ts --grep BZR-PRD-001"
+        ],
+        "tests": [
+          "tests/e2e/authenticated/authenticated-acceptance-cost-reports.spec.ts",
+          "tests/integration/product-cost-accounting-policies.test.ts",
+          "tests/integration/product-cost-product-paths.test.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0060",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "The precise cost basis agrees across stock snapshots, valued movements, product UI, receipt UI, persisted database values, report consumers, and product CSV for the retained weighted-cost cases.",
+      "statusJustification": "The deterministic consumer suite and exact browser reconciliation both completed successfully; authenticated localization failures do not contradict the accounting values.",
+      "verificationTimestampSource": "Playwright JSON case completed during the 2026-08-31T08:35:37Z authenticated run",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-matrix.json",
+          "description": "BZR-PRD-001 browser case passed and retained exact UI, database, movement, receipt, and CSV reconciliation evidence."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-full-final.xml",
+          "description": "Complete deterministic suite passed all cost, inventory, POS, order, report, export, depletion/restart, and historical-COGS cases."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:db:deterministic",
+          "pnpm exec playwright test --config=playwright.authenticated.production.config.ts --grep BZR-PRD-001"
+        ],
+        "tests": [
+          "tests/e2e/authenticated/authenticated-acceptance-cost-reports.spec.ts",
+          "tests/integration/product-cost-accounting-policies.test.ts",
+          "tests/integration/reports.test.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0084",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "An isolated posted write-off appears immediately and after reload in the correct store/date scope; movement history, UI totals, inventory value, CSV, and XLSX reconcile exactly.",
+      "statusJustification": "The exact REPORTS-001 browser acceptance completed successfully and its machine-readable result is retained without a contradictory report-value failure.",
+      "verificationTimestampSource": "Playwright JSON case completed during the 2026-08-31T08:35:37Z authenticated run",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-matrix.json",
+          "description": "REPORTS-001 posted write-off persists, stays store-scoped, and reconciles CSV/XLSX is recorded as expected/passed with embedded screenshot evidence."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-full-final.xml",
+          "description": "Complete deterministic report and inventory suites passed with zero failures."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:db:deterministic",
+          "pnpm exec playwright test --config=playwright.authenticated.production.config.ts --grep REPORTS-001"
+        ],
+        "tests": [
+          "tests/e2e/authenticated/authenticated-acceptance-cost-reports.spec.ts",
+          "tests/integration/reports.test.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0085",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "The retained weighted-cost and write-off cases reconcile UI pages, persisted values, movement history, CSV, and XLSX totals.",
+      "statusJustification": "Both exact cross-surface browser reconciliations passed, supported by the complete deterministic suite and without a contradictory money or stock result.",
+      "verificationTimestampSource": "Playwright JSON cases completed during the 2026-08-31T08:35:37Z authenticated run",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-matrix.json",
+          "description": "Both BZR-PRD-001 and REPORTS-001 exact cross-surface reconciliation cases are expected/passed in the retained result."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-full-final.xml",
+          "description": "Complete deterministic suite passed 1,688 tests with zero failures, errors, or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:db:deterministic",
+          "pnpm exec playwright test --config=playwright.authenticated.production.config.ts --grep BZR-PRD-001|REPORTS-001"
+        ],
+        "tests": [
+          "tests/e2e/authenticated/authenticated-acceptance-cost-reports.spec.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0166",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "The browser-created audit write-off reconciles by store, date, quantity, value, movement history, report UI, CSV, and XLSX before and after reload.",
+      "statusJustification": "The requirement's exact audit-transaction comparison was executed successfully in the retained REPORTS-001 acceptance case.",
+      "verificationTimestampSource": "Playwright JSON case completed during the 2026-08-31T08:35:37Z authenticated run",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-matrix.json",
+          "description": "REPORTS-001 exact audit transaction and export reconciliation is expected/passed."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec playwright test --config=playwright.authenticated.production.config.ts --grep REPORTS-001"
+        ],
+        "tests": [
+          "tests/e2e/authenticated/authenticated-acceptance-cost-reports.spec.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0169",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Product cost CSV and write-off CSV/XLSX values and totals reconcile to the exact persisted UI/database/ledger cases.",
+      "statusJustification": "Both required export-value reconciliation cases completed successfully and their exact machine-readable results are retained.",
+      "verificationTimestampSource": "Playwright JSON cases completed during the 2026-08-31T08:35:37Z authenticated run",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-matrix.json",
+          "description": "BZR-PRD-001 product CSV and REPORTS-001 CSV/XLSX reconciliation cases are both expected/passed."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec playwright test --config=playwright.authenticated.production.config.ts --grep BZR-PRD-001|REPORTS-001"
+        ],
+        "tests": [
+          "tests/e2e/authenticated/authenticated-acceptance-cost-reports.spec.ts"
+        ],
+        "manualProcedure": null
+      }
+    }
+  ],
+  "defects": [
+    {
+      "id": "BZR-PRD-001",
+      "currentStatus": "RESOLVED",
+      "resolutionEvidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-matrix.json",
+          "description": "Exact BZR-PRD-001 browser reconciliation passed with embedded screenshot evidence; unrelated matrix failures remain explicitly recorded."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-full-final.xml",
+          "description": "Complete D-009 and cost lifecycle passed within the 1,688-test deterministic gate."
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Passed all 1,688 deterministic tests on an isolated database"
+        }
+      ]
+    },
+    {
+      "id": "REPORTS-001",
+      "currentStatus": "RESOLVED",
+      "resolutionEvidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-matrix.json",
+          "description": "Exact REPORTS-001 immediate/reload/store/date/movement/CSV/XLSX reconciliation passed with embedded screenshot evidence."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-full-final.xml",
+          "description": "Report classification and inventory integration suites passed in the complete deterministic gate."
+        }
+      ]
+    }
+  ]
+}

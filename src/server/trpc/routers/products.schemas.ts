@@ -175,32 +175,59 @@ export const productStorePricingInputSchema = z.object({
   productId: z.string(),
 });
 
-export const createProductInputSchema = z.object({
-  idempotencyKey: z.string().min(8),
-  sku: z.preprocess(
-    (value) => (typeof value === "string" && value.trim().length === 0 ? undefined : value),
-    z.string().min(2).optional(),
-  ),
-  name: z.string().min(2),
-  storeId: z.string().optional(),
-  category: z.string().optional(),
-  categories: z.array(z.string()).optional(),
-  baseUnitId: z.string().min(1),
-  basePriceKgs: z.number().min(0).optional(),
-  purchasePriceKgs: z.number().min(0).optional(),
-  avgCostKgs: z.number().min(0).optional(),
-  initialOnHand: z.number().int().min(0).optional(),
-  minStock: z.number().int().min(0).optional(),
-  description: z.string().optional(),
-  photoUrl: z.string().min(1).optional(),
-  images: z.array(productImageInputSchema).optional(),
-  supplierId: z.string().optional(),
-  barcodes: z.array(z.string()).optional(),
-  isBundle: z.boolean().optional(),
-  bundleComponents: z.array(productBundleComponentInputSchema).optional(),
-  packs: z.array(productPackInputSchema).optional(),
-  variants: z.array(productVariantInputSchema).optional(),
-});
+export const createProductInputSchema = z
+  .object({
+    idempotencyKey: z.string().min(8),
+    sku: z.preprocess(
+      (value) => (typeof value === "string" && value.trim().length === 0 ? undefined : value),
+      z.string().min(2).optional(),
+    ),
+    name: z.string().min(2),
+    storeId: z.string().optional(),
+    category: z.string().optional(),
+    categories: z.array(z.string()).optional(),
+    baseUnitId: z.string().min(1),
+    basePriceKgs: z.number().min(0).optional(),
+    purchasePriceKgs: z.number().min(0).optional(),
+    avgCostKgs: z.number().min(0).optional(),
+    initialOnHand: z.number().int().min(0).optional(),
+    zeroCostConfirmed: z.boolean().optional(),
+    zeroCostReason: z.string().trim().min(3).max(500).optional(),
+    minStock: z.number().int().min(0).optional(),
+    description: z.string().optional(),
+    photoUrl: z.string().min(1).optional(),
+    images: z.array(productImageInputSchema).optional(),
+    supplierId: z.string().optional(),
+    barcodes: z.array(z.string()).optional(),
+    isBundle: z.boolean().optional(),
+    bundleComponents: z.array(productBundleComponentInputSchema).optional(),
+    packs: z.array(productPackInputSchema).optional(),
+    variants: z.array(productVariantInputSchema).optional(),
+  })
+  .superRefine((input, ctx) => {
+    const hasOpeningStock =
+      (input.initialOnHand ?? 0) > 0 ||
+      (input.variants ?? []).some((variant) => (variant.initialOnHand ?? 0) > 0);
+    const explicitUnitCost = input.avgCostKgs ?? input.purchasePriceKgs;
+    if (hasOpeningStock && explicitUnitCost === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["avgCostKgs"],
+        message: "openingStockUnitCostRequired",
+      });
+    }
+    if (
+      hasOpeningStock &&
+      explicitUnitCost === 0 &&
+      (!input.zeroCostConfirmed || !input.zeroCostReason?.trim())
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["zeroCostReason"],
+        message: "zeroCostConfirmationRequired",
+      });
+    }
+  });
 
 export const updateProductInputSchema = z.object({
   productId: z.string(),

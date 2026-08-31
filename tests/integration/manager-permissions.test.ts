@@ -135,6 +135,7 @@ describeDb("manager operational permissions", () => {
         name: "Manager Stock Product",
         baseUnitId: baseUnit.id,
         basePriceKgs: 100,
+        avgCostKgs: 10,
         initialOnHand: 5,
         categories: [],
       }),
@@ -144,6 +145,7 @@ describeDb("manager operational permissions", () => {
       storeId: store.id,
       productId: product.id,
       qtyDelta: 1,
+      unitCostKgs: 10,
       reason: "manual test adjustment",
       idempotencyKey: "manager-stock-adjust",
     });
@@ -200,6 +202,7 @@ describeDb("manager operational permissions", () => {
         storeId: store.id,
         productId: product.id,
         qtyReceived: 10,
+        unitCost: 10,
         idempotencyKey: "manager-direct-receive",
       }),
     ).resolves.toMatchObject({ onHand: 10 });

@@ -593,9 +593,7 @@ const ProductImageStudioPage = () => {
               </div>
             </div>
             {providerMissing ? (
-              <p className="bazaar-admin-notice mt-4 text-sm">
-                {t("overview.providerMissing")}
-              </p>
+              <p className="bazaar-admin-notice mt-4 text-sm">{t("overview.providerMissing")}</p>
             ) : null}
           </CardContent>
         </Card>
@@ -719,9 +717,7 @@ const ProductImageStudioPage = () => {
                 ) : null}
               </div>
 
-              <p className="bazaar-admin-notice text-sm">
-                {t("input.reviewNote")}
-              </p>
+              <p className="bazaar-admin-notice text-sm">{t("input.reviewNote")}</p>
             </CardContent>
           </Card>
 
@@ -972,7 +968,7 @@ const ProductImageStudioPage = () => {
             <p className="text-sm text-muted-foreground">{t("history.subtitle")}</p>
           </CardHeader>
           <CardContent>
-            <TableContainer className="bazaar-admin-table-shell">
+            <TableContainer className="bazaar-admin-table-shell bazaar-admin-table-scroll">
               <Table className="min-w-[860px]">
                 <TableHeader>
                   <TableRow>

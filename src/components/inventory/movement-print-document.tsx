@@ -140,6 +140,7 @@ export const MovementPrintDocument = ({ document, labels, locale }: MovementPrin
           min-height: 297mm;
           margin: 12px auto;
           padding: 14mm;
+          overflow-x: auto;
           color: #111827;
           background: #ffffff;
           box-shadow: 0 12px 34px rgba(15, 23, 42, 0.14);
@@ -386,6 +387,7 @@ export const MovementPrintDocument = ({ document, labels, locale }: MovementPrin
           .movement-print-page {
             min-height: auto !important;
             padding: 0 !important;
+            overflow: visible !important;
             background: #ffffff !important;
           }
 

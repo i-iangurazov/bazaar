@@ -4,8 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "@/server/db/prisma";
 import { registerJobForTests, runJob } from "@/server/jobs";
 import { resolveExportJobDownload } from "@/server/services/exports";
-import { adjustStock } from "@/server/services/inventory";
 import { createTestCaller } from "../helpers/context";
+import { adjustStockWithExplicitPositiveCost as adjustStock } from "../helpers/d009Fixtures";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
@@ -288,6 +288,7 @@ describeDb("B0 Agent 4 P0 runtime verification", () => {
           qtyDelta: 10,
           unitCostKgs: new Prisma.Decimal(5),
           lineTotalKgs: new Prisma.Decimal(50),
+          inventoryValueDeltaKgs: new Prisma.Decimal(50),
         },
         {
           storeId: store.id,
@@ -296,6 +297,7 @@ describeDb("B0 Agent 4 P0 runtime verification", () => {
           qtyDelta: -3,
           unitCostKgs: new Prisma.Decimal(6),
           lineTotalKgs: new Prisma.Decimal(-8),
+          inventoryValueDeltaKgs: new Prisma.Decimal(-8),
         },
       ],
     });

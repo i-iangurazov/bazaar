@@ -1,0 +1,1345 @@
+{
+  "schemaVersion": 1,
+  "timestamp": "2026-08-31T08:34:41.717Z",
+  "requirements": [
+    {
+      "id": "BZR-REQ-0022",
+      "currentStatus": "PARTIAL",
+      "currentExecuted": true,
+      "currentNotes": "Bundle assembly and precise component-value transfer pass idempotently in the isolated database; browser create and inspect remain unverified.",
+      "statusJustification": "Successful bundle service cases remove the blocked state, but the requirement remains PARTIAL because the rendered workflow was not exercised.",
+      "verificationTimestampSource": "Preserved release-deterministic-full-final JUnit completed 2026-08-31T08:25:43Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-full-final.xml",
+          "description": "Final deterministic JUnit: 313 suites and 1,688 tests passed with zero failures, errors, or skips; SHA-256 534815935b538376a98fb3768e93efe0b3bd7490c036f421599705b8a7849220"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Passed 313 suites and 1,688 tests with zero failures, errors, or skips against the allowlisted isolated PostgreSQL database"
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:db:deterministic"
+        ],
+        "tests": [
+          "tests/integration/bundles.test.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0025",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Duplicate SKU, barcode, normalized-name, import-conflict, and warning behavior all pass.",
+      "statusJustification": "The preserved tests exercise both rejection and warning outcomes required by this bounded requirement.",
+      "verificationTimestampSource": "Preserved release-deterministic-full-final JUnit completed 2026-08-31T08:25:43Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-full-final.xml",
+          "description": "Final deterministic JUnit: 313 suites and 1,688 tests passed with zero failures, errors, or skips; SHA-256 534815935b538376a98fb3768e93efe0b3bd7490c036f421599705b8a7849220"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Passed 313 suites and 1,688 tests with zero failures, errors, or skips against the allowlisted isolated PostgreSQL database"
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:db:deterministic"
+        ],
+        "tests": [
+          "tests/integration/products.test.ts",
+          "tests/integration/imports.test.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0026",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Import preview, apply, conflict handling, archive, rollback, and restoration pass.",
+      "statusJustification": "The full bounded import lifecycle and its terminal outcomes were executed successfully.",
+      "verificationTimestampSource": "Preserved release-deterministic-full-final JUnit completed 2026-08-31T08:25:43Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-full-final.xml",
+          "description": "Final deterministic JUnit: 313 suites and 1,688 tests passed with zero failures, errors, or skips; SHA-256 534815935b538376a98fb3768e93efe0b3bd7490c036f421599705b8a7849220"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Passed 313 suites and 1,688 tests with zero failures, errors, or skips against the allowlisted isolated PostgreSQL database"
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:db:deterministic"
+        ],
+        "tests": [
+          "tests/integration/imports.test.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0027",
+      "currentStatus": "PARTIAL",
+      "currentExecuted": true,
+      "currentNotes": "Product media processing, save, and invalid-upload rejection pass; browser display lifecycle remains unverified.",
+      "statusJustification": "Backend media handling is verified, but browser display/edit acceptance is broader than the retained evidence.",
+      "verificationTimestampSource": "Preserved release-deterministic-full-final JUnit completed 2026-08-31T08:25:43Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-full-final.xml",
+          "description": "Final deterministic JUnit: 313 suites and 1,688 tests passed with zero failures, errors, or skips; SHA-256 534815935b538376a98fb3768e93efe0b3bd7490c036f421599705b8a7849220"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Passed 313 suites and 1,688 tests with zero failures, errors, or skips against the allowlisted isolated PostgreSQL database"
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:db:deterministic"
+        ],
+        "tests": [
+          "tests/integration/product-image-studio.test.ts",
+          "tests/unit/product-image-upload.test.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0032",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Stock count creation, scan, exact application, movement creation, snapshot update, and idempotency pass.",
+      "statusJustification": "The bounded stock-count workflow and its persisted result were executed successfully.",
+      "verificationTimestampSource": "Preserved release-deterministic-full-final JUnit completed 2026-08-31T08:25:43Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-full-final.xml",
+          "description": "Final deterministic JUnit: 313 suites and 1,688 tests passed with zero failures, errors, or skips; SHA-256 534815935b538376a98fb3768e93efe0b3bd7490c036f421599705b8a7849220"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Passed 313 suites and 1,688 tests with zero failures, errors, or skips against the allowlisted isolated PostgreSQL database"
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:db:deterministic"
+        ],
+        "tests": [
+          "tests/integration/stock-counts.test.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0033",
+      "currentStatus": "PARTIAL",
+      "currentExecuted": true,
+      "currentNotes": "Paired transfer movements, both store snapshots, signed valued legs, and balanced print totals pass; full browser/export breadth remains.",
+      "statusJustification": "The original transfer-detail failure is corrected in service and rendered-component evidence, but complete browser/export acceptance is pending.",
+      "verificationTimestampSource": "Preserved release-deterministic-full-final JUnit completed 2026-08-31T08:25:43Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-full-final.xml",
+          "description": "Final deterministic JUnit: 313 suites and 1,688 tests passed with zero failures, errors, or skips; SHA-256 534815935b538376a98fb3768e93efe0b3bd7490c036f421599705b8a7849220"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Passed 313 suites and 1,688 tests with zero failures, errors, or skips against the allowlisted isolated PostgreSQL database"
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:db:deterministic"
+        ],
+        "tests": [
+          "tests/integration/inventory.test.ts",
+          "tests/unit/movement-print-document.test.tsx"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0039",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Customer normalized creation, inspection, scoped CRUD, import/deduplication, and isolation pass.",
+      "statusJustification": "The preserved database suite exercises the bounded customer master-data lifecycle.",
+      "verificationTimestampSource": "Preserved release-deterministic-full-final JUnit completed 2026-08-31T08:25:43Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-full-final.xml",
+          "description": "Final deterministic JUnit: 313 suites and 1,688 tests passed with zero failures, errors, or skips; SHA-256 534815935b538376a98fb3768e93efe0b3bd7490c036f421599705b8a7849220"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Passed 313 suites and 1,688 tests with zero failures, errors, or skips against the allowlisted isolated PostgreSQL database"
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:db:deterministic"
+        ],
+        "tests": [
+          "tests/integration/customers.test.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0057",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Initial store stock, barcode propagation, scanner persistence, POS lookup, and store isolation pass.",
+      "statusJustification": "Successful persisted lookup cases cover the bounded barcode/stock requirement.",
+      "verificationTimestampSource": "Preserved release-deterministic-full-final JUnit completed 2026-08-31T08:25:43Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-full-final.xml",
+          "description": "Final deterministic JUnit: 313 suites and 1,688 tests passed with zero failures, errors, or skips; SHA-256 534815935b538376a98fb3768e93efe0b3bd7490c036f421599705b8a7849220"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Passed 313 suites and 1,688 tests with zero failures, errors, or skips against the allowlisted isolated PostgreSQL database"
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:db:deterministic"
+        ],
+        "tests": [
+          "tests/integration/products.test.ts",
+          "tests/integration/store-isolation.test.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0062",
+      "currentStatus": "PARTIAL",
+      "currentExecuted": true,
+      "currentNotes": "Paired signed transfer legs and balanced rendered print totals pass; full browser detail/print/export breadth remains.",
+      "statusJustification": "The known omission is corrected in bounded evidence, while the broader cross-surface wording remains only partial.",
+      "verificationTimestampSource": "Preserved release-deterministic-full-final JUnit completed 2026-08-31T08:25:43Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-full-final.xml",
+          "description": "Final deterministic JUnit: 313 suites and 1,688 tests passed with zero failures, errors, or skips; SHA-256 534815935b538376a98fb3768e93efe0b3bd7490c036f421599705b8a7849220"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Passed 313 suites and 1,688 tests with zero failures, errors, or skips against the allowlisted isolated PostgreSQL database"
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:db:deterministic"
+        ],
+        "tests": [
+          "tests/integration/inventory.test.ts",
+          "tests/unit/movement-print-document.test.tsx"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0067",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Expected-versus-counted snapshots, signed movement, precise value, and idempotent application pass.",
+      "statusJustification": "The complete bounded count-application result is persisted and independently asserted.",
+      "verificationTimestampSource": "Preserved release-deterministic-full-final JUnit completed 2026-08-31T08:25:43Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-full-final.xml",
+          "description": "Final deterministic JUnit: 313 suites and 1,688 tests passed with zero failures, errors, or skips; SHA-256 534815935b538376a98fb3768e93efe0b3bd7490c036f421599705b8a7849220"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Passed 313 suites and 1,688 tests with zero failures, errors, or skips against the allowlisted isolated PostgreSQL database"
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:db:deterministic"
+        ],
+        "tests": [
+          "tests/integration/stock-counts.test.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0069",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Partial and final purchase-order receipts, over-receive rejection, and invalid transitions pass.",
+      "statusJustification": "All terminal states required by this bounded PO receipt-status requirement were exercised.",
+      "verificationTimestampSource": "Preserved release-deterministic-full-final JUnit completed 2026-08-31T08:25:43Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-full-final.xml",
+          "description": "Final deterministic JUnit: 313 suites and 1,688 tests passed with zero failures, errors, or skips; SHA-256 534815935b538376a98fb3768e93efe0b3bd7490c036f421599705b8a7849220"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Passed 313 suites and 1,688 tests with zero failures, errors, or skips against the allowlisted isolated PostgreSQL database"
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:db:deterministic"
+        ],
+        "tests": [
+          "tests/integration/purchase-orders.test.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0071",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Zero-line orders are rejected before record or sequence allocation.",
+      "statusJustification": "The exact invalid order boundary is executed and has no persistent side effect; ORDERS-001 browser acceptance remains separately open.",
+      "verificationTimestampSource": "Preserved release-deterministic-full-final JUnit completed 2026-08-31T08:25:43Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-full-final.xml",
+          "description": "Final deterministic JUnit: 313 suites and 1,688 tests passed with zero failures, errors, or skips; SHA-256 534815935b538376a98fb3768e93efe0b3bd7490c036f421599705b8a7849220"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Passed 313 suites and 1,688 tests with zero failures, errors, or skips against the allowlisted isolated PostgreSQL database"
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:db:deterministic"
+        ],
+        "tests": [
+          "tests/integration/sales-orders.test.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0072",
+      "currentStatus": "PARTIAL",
+      "currentExecuted": true,
+      "currentNotes": "Draft creation with lines and frozen price/total snapshots passes; rendered add/remove/re-total lifecycle remains.",
+      "statusJustification": "Backend draft-line behavior is verified but the broader rendered interaction remains partial.",
+      "verificationTimestampSource": "Preserved release-deterministic-full-final JUnit completed 2026-08-31T08:25:43Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-full-final.xml",
+          "description": "Final deterministic JUnit: 313 suites and 1,688 tests passed with zero failures, errors, or skips; SHA-256 534815935b538376a98fb3768e93efe0b3bd7490c036f421599705b8a7849220"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Passed 313 suites and 1,688 tests with zero failures, errors, or skips against the allowlisted isolated PostgreSQL database"
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:db:deterministic"
+        ],
+        "tests": [
+          "tests/integration/sales-orders.test.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0075",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Active StorePrice discounts are applied and frozen on POS lines with payment boundaries preserved.",
+      "statusJustification": "The exact pricing/discount behavior is executed in the complete POS integration suite.",
+      "verificationTimestampSource": "Preserved release-deterministic-full-final JUnit completed 2026-08-31T08:25:43Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-full-final.xml",
+          "description": "Final deterministic JUnit: 313 suites and 1,688 tests passed with zero failures, errors, or skips; SHA-256 534815935b538376a98fb3768e93efe0b3bd7490c036f421599705b8a7849220"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Passed 313 suites and 1,688 tests with zero failures, errors, or skips against the allowlisted isolated PostgreSQL database"
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:db:deterministic"
+        ],
+        "tests": [
+          "tests/integration/pos.test.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0076",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Existing-line increments and concurrent multi-product draft totals reconcile.",
+      "statusJustification": "The POS cart quantity and total synchronization behavior is directly asserted.",
+      "verificationTimestampSource": "Preserved release-deterministic-full-final JUnit completed 2026-08-31T08:25:43Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-full-final.xml",
+          "description": "Final deterministic JUnit: 313 suites and 1,688 tests passed with zero failures, errors, or skips; SHA-256 534815935b538376a98fb3768e93efe0b3bd7490c036f421599705b8a7849220"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Passed 313 suites and 1,688 tests with zero failures, errors, or skips against the allowlisted isolated PostgreSQL database"
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:db:deterministic"
+        ],
+        "tests": [
+          "tests/integration/pos.test.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0077",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Exact split and transfer payments complete without false mismatch.",
+      "statusJustification": "The bounded split-payment terminal outcome passes with exact totals.",
+      "verificationTimestampSource": "Preserved release-deterministic-full-final JUnit completed 2026-08-31T08:25:43Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-full-final.xml",
+          "description": "Final deterministic JUnit: 313 suites and 1,688 tests passed with zero failures, errors, or skips; SHA-256 534815935b538376a98fb3768e93efe0b3bd7490c036f421599705b8a7849220"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Passed 313 suites and 1,688 tests with zero failures, errors, or skips against the allowlisted isolated PostgreSQL database"
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:db:deterministic"
+        ],
+        "tests": [
+          "tests/integration/pos.test.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0078",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Completed sales are idempotent with one inventory and payment effect and reconciled receipt/history.",
+      "statusJustification": "The complete bounded sale finalization and single-effect requirement is directly asserted.",
+      "verificationTimestampSource": "Preserved release-deterministic-full-final JUnit completed 2026-08-31T08:25:43Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-full-final.xml",
+          "description": "Final deterministic JUnit: 313 suites and 1,688 tests passed with zero failures, errors, or skips; SHA-256 534815935b538376a98fb3768e93efe0b3bd7490c036f421599705b8a7849220"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Passed 313 suites and 1,688 tests with zero failures, errors, or skips against the allowlisted isolated PostgreSQL database"
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:db:deterministic"
+        ],
+        "tests": [
+          "tests/integration/pos.test.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0079",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Returns are idempotent, restore inventory, refund correctly, and restore the original frozen cost value.",
+      "statusJustification": "The sale-return lifecycle and frozen COGS reversal are directly asserted.",
+      "verificationTimestampSource": "Preserved release-deterministic-full-final JUnit completed 2026-08-31T08:25:43Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-full-final.xml",
+          "description": "Final deterministic JUnit: 313 suites and 1,688 tests passed with zero failures, errors, or skips; SHA-256 534815935b538376a98fb3768e93efe0b3bd7490c036f421599705b8a7849220"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Passed 313 suites and 1,688 tests with zero failures, errors, or skips against the allowlisted isolated PostgreSQL database"
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:db:deterministic"
+        ],
+        "tests": [
+          "tests/integration/pos.test.ts",
+          "tests/integration/product-cost-sales-returns.test.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0080",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Discounted debt sales and later settlement into the active shift pass.",
+      "statusJustification": "The bounded debt creation and settlement lifecycle is persisted and reconciled.",
+      "verificationTimestampSource": "Preserved release-deterministic-full-final JUnit completed 2026-08-31T08:25:43Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-full-final.xml",
+          "description": "Final deterministic JUnit: 313 suites and 1,688 tests passed with zero failures, errors, or skips; SHA-256 534815935b538376a98fb3768e93efe0b3bd7490c036f421599705b8a7849220"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Passed 313 suites and 1,688 tests with zero failures, errors, or skips against the allowlisted isolated PostgreSQL database"
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:db:deterministic"
+        ],
+        "tests": [
+          "tests/integration/pos.test.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0081",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Cash movements, negative-drawer rejection, and persisted drawer/currency reconciliation pass.",
+      "statusJustification": "The money boundary and no-invalid-side-effect behavior are directly asserted.",
+      "verificationTimestampSource": "Preserved release-deterministic-full-final JUnit completed 2026-08-31T08:25:43Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-full-final.xml",
+          "description": "Final deterministic JUnit: 313 suites and 1,688 tests passed with zero failures, errors, or skips; SHA-256 534815935b538376a98fb3768e93efe0b3bd7490c036f421599705b8a7849220"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Passed 313 suites and 1,688 tests with zero failures, errors, or skips against the allowlisted isolated PostgreSQL database"
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:db:deterministic"
+        ],
+        "tests": [
+          "tests/integration/pos.test.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0082",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "One-open-shift enforcement, held-sale close guard, counted discrepancy, and payment breakdown pass.",
+      "statusJustification": "The complete bounded shift lifecycle is exercised successfully.",
+      "verificationTimestampSource": "Preserved release-deterministic-full-final JUnit completed 2026-08-31T08:25:43Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-full-final.xml",
+          "description": "Final deterministic JUnit: 313 suites and 1,688 tests passed with zero failures, errors, or skips; SHA-256 534815935b538376a98fb3768e93efe0b3bd7490c036f421599705b8a7849220"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Passed 313 suites and 1,688 tests with zero failures, errors, or skips against the allowlisted isolated PostgreSQL database"
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:db:deterministic"
+        ],
+        "tests": [
+          "tests/integration/pos.test.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0084",
+      "currentStatus": "PARTIAL",
+      "currentExecuted": true,
+      "currentNotes": "Posted write-offs and corrections reconcile in report services and sale totals net returns; browser reload and exact exports remain.",
+      "statusJustification": "Database reporting removes the original absolute failure, but REPORTS-001 cross-surface acceptance is still pending.",
+      "verificationTimestampSource": "Preserved release-deterministic-full-final JUnit completed 2026-08-31T08:25:43Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-full-final.xml",
+          "description": "Final deterministic JUnit: 313 suites and 1,688 tests passed with zero failures, errors, or skips; SHA-256 534815935b538376a98fb3768e93efe0b3bd7490c036f421599705b8a7849220"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Passed 313 suites and 1,688 tests with zero failures, errors, or skips against the allowlisted isolated PostgreSQL database"
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:db:deterministic"
+        ],
+        "tests": [
+          "tests/integration/reports.test.ts",
+          "tests/integration/analytics.test.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0123",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Operation requests commit one effect, replay the same result, and reject changed payloads; POS/order/PO duplicate cases pass.",
+      "statusJustification": "The cross-service idempotency boundary is directly exercised with persisted cardinality checks.",
+      "verificationTimestampSource": "Preserved release-deterministic-full-final JUnit completed 2026-08-31T08:25:43Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-full-final.xml",
+          "description": "Final deterministic JUnit: 313 suites and 1,688 tests passed with zero failures, errors, or skips; SHA-256 534815935b538376a98fb3768e93efe0b3bd7490c036f421599705b8a7849220"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Passed 313 suites and 1,688 tests with zero failures, errors, or skips against the allowlisted isolated PostgreSQL database"
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:db:deterministic"
+        ],
+        "tests": [
+          "tests/integration/operation-requests.test.ts",
+          "tests/integration/pos.test.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0124",
+      "currentStatus": "PARTIAL",
+      "currentExecuted": true,
+      "currentNotes": "Backend optimistic concurrency and stale-operation claims reject stale writes; user-visible recovery remains unverified.",
+      "statusJustification": "The blocked backend boundary is now verified, while browser stale-editor recovery is broader.",
+      "verificationTimestampSource": "Preserved release-deterministic-full-final JUnit completed 2026-08-31T08:25:43Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-full-final.xml",
+          "description": "Final deterministic JUnit: 313 suites and 1,688 tests passed with zero failures, errors, or skips; SHA-256 534815935b538376a98fb3768e93efe0b3bd7490c036f421599705b8a7849220"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Passed 313 suites and 1,688 tests with zero failures, errors, or skips against the allowlisted isolated PostgreSQL database"
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:db:deterministic"
+        ],
+        "tests": [
+          "tests/integration/products.test.ts",
+          "tests/integration/operation-requests.test.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0130",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Inventory document listing stays bounded and stable with 5,000 documents.",
+      "statusJustification": "The named large-data service performance requirement was executed successfully; rendered table performance remains separate.",
+      "verificationTimestampSource": "Preserved release-deterministic-full-final JUnit completed 2026-08-31T08:25:43Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-full-final.xml",
+          "description": "Final deterministic JUnit: 313 suites and 1,688 tests passed with zero failures, errors, or skips; SHA-256 534815935b538376a98fb3768e93efe0b3bd7490c036f421599705b8a7849220"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Passed 313 suites and 1,688 tests with zero failures, errors, or skips against the allowlisted isolated PostgreSQL database"
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:db:deterministic"
+        ],
+        "tests": [
+          "tests/integration/inventory-large-document-performance.test.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0133",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Forced cost mismatches, PO cancellation failures, invalid drafts, and operation timeouts roll back atomically.",
+      "statusJustification": "The irrecoverable partial-write boundaries are directly asserted across money and stock transactions.",
+      "verificationTimestampSource": "Preserved release-deterministic-full-final JUnit completed 2026-08-31T08:25:43Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-full-final.xml",
+          "description": "Final deterministic JUnit: 313 suites and 1,688 tests passed with zero failures, errors, or skips; SHA-256 534815935b538376a98fb3768e93efe0b3bd7490c036f421599705b8a7849220"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Passed 313 suites and 1,688 tests with zero failures, errors, or skips against the allowlisted isolated PostgreSQL database"
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:db:deterministic"
+        ],
+        "tests": [
+          "tests/integration/hardening-agent2-b2-cost.test.ts",
+          "tests/integration/pos.test.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0149",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Rapid duplicate POS, order, PO, inventory, and operation requests produce one effect.",
+      "statusJustification": "The cross-workflow accidental-double-submit backend requirement is directly executed.",
+      "verificationTimestampSource": "Preserved release-deterministic-full-final JUnit completed 2026-08-31T08:25:43Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-full-final.xml",
+          "description": "Final deterministic JUnit: 313 suites and 1,688 tests passed with zero failures, errors, or skips; SHA-256 534815935b538376a98fb3768e93efe0b3bd7490c036f421599705b8a7849220"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Passed 313 suites and 1,688 tests with zero failures, errors, or skips against the allowlisted isolated PostgreSQL database"
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:db:deterministic"
+        ],
+        "tests": [
+          "tests/integration/operation-requests.test.ts",
+          "tests/integration/pos.test.ts",
+          "tests/integration/sales-orders.test.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0166",
+      "currentStatus": "PARTIAL",
+      "currentExecuted": true,
+      "currentNotes": "Created database transactions reconcile through reports and analytics; exact UI/CSV/XLSX comparison remains.",
+      "statusJustification": "Successful report-service evidence removes the absolute failure but not the broader cross-surface requirement.",
+      "verificationTimestampSource": "Preserved release-deterministic-full-final JUnit completed 2026-08-31T08:25:43Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-full-final.xml",
+          "description": "Final deterministic JUnit: 313 suites and 1,688 tests passed with zero failures, errors, or skips; SHA-256 534815935b538376a98fb3768e93efe0b3bd7490c036f421599705b8a7849220"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Passed 313 suites and 1,688 tests with zero failures, errors, or skips against the allowlisted isolated PostgreSQL database"
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:db:deterministic"
+        ],
+        "tests": [
+          "tests/integration/reports.test.ts",
+          "tests/integration/analytics.test.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0188",
+      "currentStatus": "PARTIAL",
+      "currentExecuted": true,
+      "currentNotes": "Scoped invitations and role boundaries pass, including cross-organization and wrong-store rejection; browser/email lifecycle remains.",
+      "statusJustification": "The backend workflow is now executed but external delivery and complete browser acceptance are outstanding.",
+      "verificationTimestampSource": "Preserved release-deterministic-full-final JUnit completed 2026-08-31T08:25:43Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-full-final.xml",
+          "description": "Final deterministic JUnit: 313 suites and 1,688 tests passed with zero failures, errors, or skips; SHA-256 534815935b538376a98fb3768e93efe0b3bd7490c036f421599705b8a7849220"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Passed 313 suites and 1,688 tests with zero failures, errors, or skips against the allowlisted isolated PostgreSQL database"
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:db:deterministic"
+        ],
+        "tests": [
+          "tests/integration/tenancy.test.ts",
+          "tests/integration/users.test.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0209",
+      "currentStatus": "PARTIAL",
+      "currentExecuted": true,
+      "currentNotes": "Localized report currency/timestamps and export/print source contracts pass; rendered RU/KG/EN report/print/download breadth remains.",
+      "statusJustification": "Successful deterministic localization evidence removes the blocked state without claiming unexecuted rendered breadth.",
+      "verificationTimestampSource": "Preserved release-deterministic-full-final JUnit completed 2026-08-31T08:25:43Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-full-final.xml",
+          "description": "Final deterministic JUnit: 313 suites and 1,688 tests passed with zero failures, errors, or skips; SHA-256 534815935b538376a98fb3768e93efe0b3bd7490c036f421599705b8a7849220"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Passed 313 suites and 1,688 tests with zero failures, errors, or skips against the allowlisted isolated PostgreSQL database"
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:db:deterministic"
+        ],
+        "tests": [
+          "tests/unit/i18n-format.test.ts",
+          "tests/unit/movement-print-document.test.tsx"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0013",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Landing footer privacy and legal controls open first-party /privacy and /legal routes by keyboard in RU, EN, and KG across desktop, tablet, and mobile; no external request occurs.",
+      "statusJustification": "The complete current-source production-mode matrix directly satisfies the bounded navigation requirement and embeds screenshots for all six route/viewport-locale cases.",
+      "verificationTimestampSource": "Preserved production-mode public Playwright JSON/JUnit completed 2026-08-31T08:31:30Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-public-matrix.json",
+          "description": "Production-mode public Playwright JSON: 189 expected, zero unexpected, zero skipped, with embedded PUBLIC-001 screenshots"
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-public-matrix.xml",
+          "description": "Production-mode public Playwright JUnit: 189 tests passed across desktop, tablet, and mobile"
+        },
+        {
+          "type": "command",
+          "command": "PUBLIC_E2E_EXPECT_PRODUCTION=1 E2E_AUTH_DATABASE_URL=<isolated-loopback-db> E2E_AUTH_REDIS_URL=<isolated-loopback-redis> pnpm exec playwright test --config=playwright.public.config.ts --reporter=line,junit,json,html",
+          "exitCode": 0,
+          "summary": "Passed the complete production-mode public matrix: 189/189 with zero failures or skips"
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:e2e:public in production mode"
+        ],
+        "tests": [
+          "tests/e2e/public-routes.spec.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0196",
+      "currentStatus": "PARTIAL",
+      "currentExecuted": true,
+      "currentNotes": "Previously failing public contrast samples now meet measured WCAG AA ratios in production-mode browsers; authenticated application-wide contrast remains unverified.",
+      "statusJustification": "The original public failures are corrected, so FAIL advances to PARTIAL; the requirement remains broader than the public lane.",
+      "verificationTimestampSource": "Preserved production-mode public Playwright JSON/JUnit completed 2026-08-31T08:31:30Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-public-matrix.json",
+          "description": "Production-mode public Playwright JSON: 189 expected, zero unexpected, zero skipped, with embedded PUBLIC-001 screenshots"
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-public-matrix.xml",
+          "description": "Production-mode public Playwright JUnit: 189 tests passed across desktop, tablet, and mobile"
+        },
+        {
+          "type": "command",
+          "command": "PUBLIC_E2E_EXPECT_PRODUCTION=1 E2E_AUTH_DATABASE_URL=<isolated-loopback-db> E2E_AUTH_REDIS_URL=<isolated-loopback-redis> pnpm exec playwright test --config=playwright.public.config.ts --reporter=line,junit,json,html",
+          "exitCode": 0,
+          "summary": "Passed the complete production-mode public matrix: 189/189 with zero failures or skips"
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:e2e:public in production mode"
+        ],
+        "tests": [
+          "tests/e2e/public-routes.spec.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0199",
+      "currentStatus": "PARTIAL",
+      "currentExecuted": true,
+      "currentNotes": "Formal 200% Chrome zoom/reflow emulation passes landing, signup, Guide, long localized content, keyboard reachability, focus, and clipping checks at all three viewport projects.",
+      "statusJustification": "The public zoom boundary is now executed, but authenticated role-specific 200% breadth remains pending.",
+      "verificationTimestampSource": "Preserved production-mode public Playwright JSON/JUnit completed 2026-08-31T08:31:30Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-public-matrix.json",
+          "description": "Production-mode public Playwright JSON: 189 expected, zero unexpected, zero skipped, with embedded PUBLIC-001 screenshots"
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-public-matrix.xml",
+          "description": "Production-mode public Playwright JUnit: 189 tests passed across desktop, tablet, and mobile"
+        },
+        {
+          "type": "command",
+          "command": "PUBLIC_E2E_EXPECT_PRODUCTION=1 E2E_AUTH_DATABASE_URL=<isolated-loopback-db> E2E_AUTH_REDIS_URL=<isolated-loopback-redis> pnpm exec playwright test --config=playwright.public.config.ts --reporter=line,junit,json,html",
+          "exitCode": 0,
+          "summary": "Passed the complete production-mode public matrix: 189/189 with zero failures or skips"
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:e2e:public in production mode"
+        ],
+        "tests": [
+          "tests/e2e/public-routes.spec.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0222",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Production sitemap is valid XML and includes /legal, /privacy, and current Guide routes.",
+      "statusJustification": "The complete current-source production resource check directly verifies the formerly omitted privacy route and sitemap validity.",
+      "verificationTimestampSource": "Preserved production-mode public Playwright JSON/JUnit completed 2026-08-31T08:31:30Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-public-matrix.json",
+          "description": "Production-mode public Playwright JSON: 189 expected, zero unexpected, zero skipped, with embedded PUBLIC-001 screenshots"
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-public-matrix.xml",
+          "description": "Production-mode public Playwright JUnit: 189 tests passed across desktop, tablet, and mobile"
+        },
+        {
+          "type": "command",
+          "command": "PUBLIC_E2E_EXPECT_PRODUCTION=1 E2E_AUTH_DATABASE_URL=<isolated-loopback-db> E2E_AUTH_REDIS_URL=<isolated-loopback-redis> pnpm exec playwright test --config=playwright.public.config.ts --reporter=line,junit,json,html",
+          "exitCode": 0,
+          "summary": "Passed the complete production-mode public matrix: 189/189 with zero failures or skips"
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:e2e:public in production mode"
+        ],
+        "tests": [
+          "tests/e2e/public-routes.spec.ts"
+        ],
+        "manualProcedure": null
+      }
+    }
+  ],
+  "defects": [
+    {
+      "id": "PUBLIC-001",
+      "currentStatus": "RESOLVED",
+      "resolutionEvidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-public-matrix.json",
+          "description": "The current production-mode public matrix proves /privacy and /legal footer navigation, keyboard activation, RU/EN/KG locale parity, desktop/tablet/mobile behavior, first-party-only requests, metadata/H1, sitemap inclusion, and embeds six screenshots. Production-mode public Playwright JSON: 189 expected, zero unexpected, zero skipped, with embedded PUBLIC-001 screenshots"
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-public-matrix.xml",
+          "description": "The current production-mode public matrix proves /privacy and /legal footer navigation, keyboard activation, RU/EN/KG locale parity, desktop/tablet/mobile behavior, first-party-only requests, metadata/H1, sitemap inclusion, and embeds six screenshots. Production-mode public Playwright JUnit: 189 tests passed across desktop, tablet, and mobile"
+        },
+        {
+          "type": "command",
+          "command": "PUBLIC_E2E_EXPECT_PRODUCTION=1 E2E_AUTH_DATABASE_URL=<isolated-loopback-db> E2E_AUTH_REDIS_URL=<isolated-loopback-redis> pnpm exec playwright test --config=playwright.public.config.ts --reporter=line,junit,json,html",
+          "exitCode": 0,
+          "summary": "Passed the complete production-mode public matrix: 189/189 with zero failures or skips"
+        }
+      ]
+    },
+    {
+      "id": "PUBLIC-004",
+      "currentStatus": "RESOLVED",
+      "resolutionEvidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-public-matrix.json",
+          "description": "The Guide search test proves both Command+K and Control+K focus the search field and its focus border meets the required 3:1 contrast. Production-mode public Playwright JSON: 189 expected, zero unexpected, zero skipped, with embedded PUBLIC-001 screenshots"
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-public-matrix.xml",
+          "description": "The Guide search test proves both Command+K and Control+K focus the search field and its focus border meets the required 3:1 contrast. Production-mode public Playwright JUnit: 189 tests passed across desktop, tablet, and mobile"
+        },
+        {
+          "type": "command",
+          "command": "PUBLIC_E2E_EXPECT_PRODUCTION=1 E2E_AUTH_DATABASE_URL=<isolated-loopback-db> E2E_AUTH_REDIS_URL=<isolated-loopback-redis> pnpm exec playwright test --config=playwright.public.config.ts --reporter=line,junit,json,html",
+          "exitCode": 0,
+          "summary": "Passed the complete production-mode public matrix: 189/189 with zero failures or skips"
+        }
+      ]
+    },
+    {
+      "id": "PUBLIC-005",
+      "currentStatus": "RESOLVED",
+      "resolutionEvidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-public-matrix.json",
+          "description": "Production-browser invalid reset, business-registration, invite, and verification tokens render non-actionable announced recovery states; deterministic token lifecycle tests enforce malformed, unknown, expired, wrong-purpose, reused, and concurrent consumption boundaries. Production-mode public Playwright JSON: 189 expected, zero unexpected, zero skipped, with embedded PUBLIC-001 screenshots"
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-public-matrix.xml",
+          "description": "Production-browser invalid reset, business-registration, invite, and verification tokens render non-actionable announced recovery states; deterministic token lifecycle tests enforce malformed, unknown, expired, wrong-purpose, reused, and concurrent consumption boundaries. Production-mode public Playwright JUnit: 189 tests passed across desktop, tablet, and mobile"
+        },
+        {
+          "type": "command",
+          "command": "PUBLIC_E2E_EXPECT_PRODUCTION=1 E2E_AUTH_DATABASE_URL=<isolated-loopback-db> E2E_AUTH_REDIS_URL=<isolated-loopback-redis> pnpm exec playwright test --config=playwright.public.config.ts --reporter=line,junit,json,html",
+          "exitCode": 0,
+          "summary": "Passed the complete production-mode public matrix: 189/189 with zero failures or skips"
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-full-final.xml",
+          "description": "Production-browser invalid reset, business-registration, invite, and verification tokens render non-actionable announced recovery states; deterministic token lifecycle tests enforce malformed, unknown, expired, wrong-purpose, reused, and concurrent consumption boundaries. Final deterministic JUnit: 313 suites and 1,688 tests passed with zero failures, errors, or skips; SHA-256 534815935b538376a98fb3768e93efe0b3bd7490c036f421599705b8a7849220"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Passed 313 suites and 1,688 tests with zero failures, errors, or skips against the allowlisted isolated PostgreSQL database"
+        }
+      ]
+    },
+    {
+      "id": "PUBLIC-006",
+      "currentStatus": "RESOLVED",
+      "resolutionEvidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-public-matrix.json",
+          "description": "Production-browser signup, login, and invite forms expose stable accessible names, aria-invalid, resolvable aria-describedby targets, alert roles, and polite announcements. Production-mode public Playwright JSON: 189 expected, zero unexpected, zero skipped, with embedded PUBLIC-001 screenshots"
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-public-matrix.xml",
+          "description": "Production-browser signup, login, and invite forms expose stable accessible names, aria-invalid, resolvable aria-describedby targets, alert roles, and polite announcements. Production-mode public Playwright JUnit: 189 tests passed across desktop, tablet, and mobile"
+        },
+        {
+          "type": "command",
+          "command": "PUBLIC_E2E_EXPECT_PRODUCTION=1 E2E_AUTH_DATABASE_URL=<isolated-loopback-db> E2E_AUTH_REDIS_URL=<isolated-loopback-redis> pnpm exec playwright test --config=playwright.public.config.ts --reporter=line,junit,json,html",
+          "exitCode": 0,
+          "summary": "Passed the complete production-mode public matrix: 189/189 with zero failures or skips"
+        }
+      ]
+    },
+    {
+      "id": "PUBLIC-007",
+      "currentStatus": "RESOLVED",
+      "resolutionEvidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-public-matrix.json",
+          "description": "Production-browser auth and error routes expose localized route-specific metadata, document language, meaningful H1, and valid heading outlines in RU, EN, and KG. Production-mode public Playwright JSON: 189 expected, zero unexpected, zero skipped, with embedded PUBLIC-001 screenshots"
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-public-matrix.xml",
+          "description": "Production-browser auth and error routes expose localized route-specific metadata, document language, meaningful H1, and valid heading outlines in RU, EN, and KG. Production-mode public Playwright JUnit: 189 tests passed across desktop, tablet, and mobile"
+        },
+        {
+          "type": "command",
+          "command": "PUBLIC_E2E_EXPECT_PRODUCTION=1 E2E_AUTH_DATABASE_URL=<isolated-loopback-db> E2E_AUTH_REDIS_URL=<isolated-loopback-redis> pnpm exec playwright test --config=playwright.public.config.ts --reporter=line,junit,json,html",
+          "exitCode": 0,
+          "summary": "Passed the complete production-mode public matrix: 189/189 with zero failures or skips"
+        }
+      ]
+    },
+    {
+      "id": "PUBLIC-010",
+      "currentStatus": "RESOLVED",
+      "resolutionEvidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-public-matrix.json",
+          "description": "Every missing-catalog case returns an actual HTTP 404 document with a localized terminal state, title, H1, no external request, and no unexpected console/page error across all three viewport projects. Production-mode public Playwright JSON: 189 expected, zero unexpected, zero skipped, with embedded PUBLIC-001 screenshots"
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-public-matrix.xml",
+          "description": "Every missing-catalog case returns an actual HTTP 404 document with a localized terminal state, title, H1, no external request, and no unexpected console/page error across all three viewport projects. Production-mode public Playwright JUnit: 189 tests passed across desktop, tablet, and mobile"
+        },
+        {
+          "type": "command",
+          "command": "PUBLIC_E2E_EXPECT_PRODUCTION=1 E2E_AUTH_DATABASE_URL=<isolated-loopback-db> E2E_AUTH_REDIS_URL=<isolated-loopback-redis> pnpm exec playwright test --config=playwright.public.config.ts --reporter=line,junit,json,html",
+          "exitCode": 0,
+          "summary": "Passed the complete production-mode public matrix: 189/189 with zero failures or skips"
+        }
+      ]
+    },
+    {
+      "id": "PUBLIC-013",
+      "currentStatus": "RESOLVED",
+      "resolutionEvidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-public-matrix.json",
+          "description": "Production-resource checks prove /favicon.ico returns 200 with ICO content, public cache policy, validator, valid container header, and nontrivial payload across all projects. Production-mode public Playwright JSON: 189 expected, zero unexpected, zero skipped, with embedded PUBLIC-001 screenshots"
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-public-matrix.xml",
+          "description": "Production-resource checks prove /favicon.ico returns 200 with ICO content, public cache policy, validator, valid container header, and nontrivial payload across all projects. Production-mode public Playwright JUnit: 189 tests passed across desktop, tablet, and mobile"
+        },
+        {
+          "type": "command",
+          "command": "PUBLIC_E2E_EXPECT_PRODUCTION=1 E2E_AUTH_DATABASE_URL=<isolated-loopback-db> E2E_AUTH_REDIS_URL=<isolated-loopback-redis> pnpm exec playwright test --config=playwright.public.config.ts --reporter=line,junit,json,html",
+          "exitCode": 0,
+          "summary": "Passed the complete production-mode public matrix: 189/189 with zero failures or skips"
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-full-final.xml",
+          "description": "Production-resource checks prove /favicon.ico returns 200 with ICO content, public cache policy, validator, valid container header, and nontrivial payload across all projects. Final deterministic JUnit: 313 suites and 1,688 tests passed with zero failures, errors, or skips; SHA-256 534815935b538376a98fb3768e93efe0b3bd7490c036f421599705b8a7849220"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Passed 313 suites and 1,688 tests with zero failures, errors, or skips against the allowlisted isolated PostgreSQL database"
+        }
+      ]
+    }
+  ],
+  "supportingMetrics": {
+    "value": {
+      "routes": {
+        "exact": {
+          "PASS": 25,
+          "PARTIAL": 97,
+          "FAIL": 10,
+          "BLOCKED": 0,
+          "total": 132
+        },
+        "canonical": {
+          "PASS": 15,
+          "PARTIAL": 91,
+          "FAIL": 10,
+          "BLOCKED": 0,
+          "total": 116
+        }
+      },
+      "workflows": {
+        "total": 85,
+        "executed": 63,
+        "outcomes": {
+          "PASS": 24,
+          "PARTIAL": 37,
+          "FAIL": 2,
+          "BLOCKED": 22
+        }
+      },
+      "roles": {
+        "credentialed": 6,
+        "expected": 6,
+        "credentialedRoleNames": [
+          "ADMIN",
+          "MANAGER",
+          "STAFF",
+          "CASHIER",
+          "ORGANIZATION_OWNER",
+          "PLATFORM_OWNER"
+        ],
+        "blockedRoleNames": [],
+        "lowerRoleBoundaryAssertions": {
+          "passed": 225,
+          "total": 225
+        },
+        "crossTenantIsolationVerified": false
+      },
+      "responsive": {
+        "desktopExactForms": {
+          "executed": 132,
+          "total": 132
+        },
+        "tabletExactForms": {
+          "executed": 123,
+          "total": 132
+        },
+        "mobileExactForms": {
+          "executed": 123,
+          "total": 132
+        },
+        "publicViewportChecks": {
+          "executed": 189,
+          "total": 189
+        },
+        "adminViewportChecks": {
+          "executed": 210,
+          "total": 210
+        }
+      },
+      "localization": {
+        "supportedLocales": [
+          "ru",
+          "kg",
+          "en"
+        ],
+        "compatibilityPrefixes": [
+          "ru",
+          "kg",
+          "en",
+          "ky"
+        ],
+        "representativePrefixAssertions": {
+          "passed": 12,
+          "total": 12
+        },
+        "fullRouteLocaleCrossProductVerified": false
+      }
+    },
+    "evidence": [
+      {
+        "type": "file",
+        "path": "test-results/release-public-matrix.json",
+        "description": "Production-mode public Playwright JSON: 189 expected, zero unexpected, zero skipped, with embedded PUBLIC-001 screenshots"
+      },
+      {
+        "type": "file",
+        "path": "test-results/release-public-matrix.xml",
+        "description": "Production-mode public Playwright JUnit: 189 tests passed across desktop, tablet, and mobile"
+      },
+      {
+        "type": "command",
+        "command": "PUBLIC_E2E_EXPECT_PRODUCTION=1 E2E_AUTH_DATABASE_URL=<isolated-loopback-db> E2E_AUTH_REDIS_URL=<isolated-loopback-redis> pnpm exec playwright test --config=playwright.public.config.ts --reporter=line,junit,json,html",
+        "exitCode": 0,
+        "summary": "Passed the complete production-mode public matrix: 189/189 with zero failures or skips"
+      }
+    ]
+  }
+}

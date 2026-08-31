@@ -11,7 +11,7 @@ describeDb("store clone inventory valuation", () => {
     await resetDatabase();
   });
 
-  it("copies valued stock at precise WAC while leaving unvalued and zero stock unchanged", async () => {
+  it("rejects an unvalued source atomically, then copies only valued positive stock", async () => {
     const { org, store, product, supplier, baseUnit, adminUser } = await seedBase({
       plan: "BUSINESS",
     });
@@ -82,6 +82,38 @@ describeDb("store clone inventory valuation", () => {
       ],
     });
 
+    await expect(
+      createStore({
+        organizationId: org.id,
+        actorId: adminUser.id,
+        requestId: "store-clone-reject-unvalued-inventory",
+        name: "Rejected Unvalued Clone",
+        code: "REJECTED-UNVALUED-CLONE",
+        allowNegativeStock: false,
+        trackExpiryLots: false,
+        cloneFromStoreId: store.id,
+        copyInventory: true,
+      }),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "positiveStockUnitCostRequired",
+    });
+    await expect(
+      prisma.store.findUnique({
+        where: { organizationId_code: { organizationId: org.id, code: "REJECTED-UNVALUED-CLONE" } },
+      }),
+    ).resolves.toBeNull();
+
+    await prisma.inventorySnapshot.delete({
+      where: {
+        storeId_productId_variantKey: {
+          storeId: store.id,
+          productId: unvaluedProduct.id,
+          variantKey: "BASE",
+        },
+      },
+    });
+
     const cloned = await createStore({
       organizationId: org.id,
       actorId: adminUser.id,
@@ -136,10 +168,10 @@ describeDb("store clone inventory valuation", () => {
     );
 
     expect(cloned.cloneSummary).toMatchObject({
-      inventorySnapshots: 3,
-      stockMovements: 2,
+      inventorySnapshots: 2,
+      stockMovements: 1,
     });
-    expect(snapshots).toHaveLength(3);
+    expect(snapshots).toHaveLength(2);
     expect(valuedCost).toMatchObject({ costBasisQty: 6 });
     expect(Number(valuedCost.avgCostKgs)).toBe(3.33);
     expect(Number(valuedCost.costBasisValueKgs)).toBe(20);
@@ -152,10 +184,7 @@ describeDb("store clone inventory valuation", () => {
     expect(Number(valuedMovement?.unitCostKgs)).toBe(3.33);
     expect(Number(valuedMovement?.inventoryValueDeltaKgs)).toBe(10);
 
-    const unvaluedMovement = movementByProductId.get(unvaluedProduct.id);
-    expect(unvaluedMovement?.qtyDelta).toBe(2);
-    expect(unvaluedMovement?.unitCostKgs).toBeNull();
-    expect(unvaluedMovement?.inventoryValueDeltaKgs).toBeNull();
+    expect(movementByProductId.has(unvaluedProduct.id)).toBe(false);
     expect(movementByProductId.has(zeroStockProduct.id)).toBe(false);
   });
 });

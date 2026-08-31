@@ -11,12 +11,12 @@ import {
   revokeBazaarApiKey,
 } from "@/server/services/bazaarApi";
 import { createCustomerOrderDraft } from "@/server/services/salesOrders";
-import { adjustStock } from "@/server/services/inventory";
 import { archiveProduct } from "@/server/services/products";
 import { createPurchaseOrder } from "@/server/services/purchaseOrders";
 import { upsertStorePrice } from "@/server/services/storePrices";
 
 import { createTestCaller } from "../helpers/context";
+import { adjustStockWithExplicitPositiveCost as adjustStock } from "../helpers/d009Fixtures";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;

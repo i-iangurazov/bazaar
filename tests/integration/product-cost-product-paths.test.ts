@@ -19,7 +19,7 @@ describeDb("product-service cost paths", () => {
     await resetDatabase();
   });
 
-  it("values initial variant stock from the explicit base cost without valuing costless stock", async () => {
+  it("values initial variant stock and atomically rejects opening stock without an explicit cost", async () => {
     const { org, store, adminUser, baseUnit } = await seedBase({ plan: "BUSINESS" });
     const valued = await createProduct({
       organizationId: org.id,
@@ -63,35 +63,31 @@ describeDb("product-service cost paths", () => {
       expect(Number(movement?.inventoryValueDeltaKgs)).toBeCloseTo(expectedValue, 6);
     }
 
-    const costless = await createProduct({
-      organizationId: org.id,
-      actorId: adminUser.id,
-      requestId: "product-cost-variant-initial-costless",
-      sku: "COST-VARIANT-COSTLESS",
-      name: "Costless variant",
-      baseUnitId: baseUnit.id,
-      storeId: store.id,
-      variants: [{ name: "Only", initialOnHand: 3 }],
+    await expect(
+      createProduct({
+        organizationId: org.id,
+        actorId: adminUser.id,
+        requestId: "product-cost-variant-initial-costless",
+        sku: "COST-VARIANT-COSTLESS",
+        name: "Costless variant",
+        baseUnitId: baseUnit.id,
+        storeId: store.id,
+        variants: [{ name: "Only", initialOnHand: 3 }],
+      }),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "openingStockUnitCostRequired",
     });
-    const costlessVariant = await prisma.productVariant.findFirstOrThrow({
-      where: { productId: costless.id },
-    });
-    const [costlessCost, costlessMovement] = await Promise.all([
-      prisma.productCost.findUnique({
+    await expect(
+      prisma.product.findUnique({
         where: {
-          organizationId_productId_variantKey: {
+          organizationId_sku: {
             organizationId: org.id,
-            productId: costless.id,
-            variantKey: costlessVariant.id,
+            sku: "COST-VARIANT-COSTLESS",
           },
         },
       }),
-      prisma.stockMovement.findFirstOrThrow({
-        where: { productId: costless.id, variantId: costlessVariant.id },
-      }),
-    ]);
-    expect(costlessCost).toBeNull();
-    expect(costlessMovement.inventoryValueDeltaKgs).toBeNull();
+    ).resolves.toBeNull();
   });
 
   it("keeps import add and set movements signed and reconciled to the product cost basis", async () => {
@@ -176,34 +172,33 @@ describeDb("product-service cost paths", () => {
       { quantity: 10, valueKgs: 123.4 },
     ]);
 
-    await importProducts({
-      organizationId: org.id,
-      actorId: adminUser.id,
-      requestId: "product-cost-import-costless",
-      storeId: store.id,
-      stockBehavior: "set",
-      rows: [
-        {
-          sku: "COST-IMPORT-COSTLESS",
-          name: "Costless import",
-          unit: baseUnit.code,
-          stockQty: 3,
-        },
-      ],
-    });
-    const costless = await prisma.product.findUniqueOrThrow({
-      where: {
-        organizationId_sku: { organizationId: org.id, sku: "COST-IMPORT-COSTLESS" },
-      },
-    });
-    const [costlessCost, costlessMovement] = await Promise.all([
-      prisma.productCost.findUnique({ where: baseCostKey(org.id, costless.id) }),
-      prisma.stockMovement.findFirstOrThrow({
-        where: { productId: costless.id, referenceType: "IMPORT" },
+    await expect(
+      importProducts({
+        organizationId: org.id,
+        actorId: adminUser.id,
+        requestId: "product-cost-import-costless",
+        storeId: store.id,
+        stockBehavior: "set",
+        rows: [
+          {
+            sku: "COST-IMPORT-COSTLESS",
+            name: "Costless import",
+            unit: baseUnit.code,
+            stockQty: 3,
+          },
+        ],
       }),
-    ]);
-    expect(costlessCost).toBeNull();
-    expect(costlessMovement.inventoryValueDeltaKgs).toBeNull();
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "positiveStockUnitCostRequired",
+    });
+    await expect(
+      prisma.product.findUnique({
+        where: {
+          organizationId_sku: { organizationId: org.id, sku: "COST-IMPORT-COSTLESS" },
+        },
+      }),
+    ).resolves.toBeNull();
   });
 
   it("bases duplicated costs on copied snapshots and retains only display cost without inventory", async () => {

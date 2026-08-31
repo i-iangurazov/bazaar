@@ -69,6 +69,8 @@ export type CreateProductInput = {
   purchasePriceKgs?: number | null;
   avgCostKgs?: number | null;
   initialOnHand?: number | null;
+  zeroCostConfirmed?: boolean;
+  zeroCostReason?: string | null;
   minStock?: number | null;
   description?: string | null;
   photoUrl?: string | null;
@@ -881,6 +883,8 @@ const upsertBaseProductCost = async (
     productId: string;
     avgCostKgs: number;
     costBasisQty?: number;
+    zeroCostConfirmed?: boolean;
+    zeroCostReason?: string | null;
   },
 ) => {
   const existing = await tx.productCost.findUnique({
@@ -911,6 +915,8 @@ const upsertBaseProductCost = async (
     productId: input.productId,
     quantity: input.costBasisQty ?? existing?.costBasisQty ?? 0,
     unitCost: input.avgCostKgs,
+    zeroCostConfirmed: input.zeroCostConfirmed,
+    zeroCostReason: input.zeroCostReason,
   });
 };
 
@@ -1552,6 +1558,8 @@ const applyInitialVariantInventory = async (
     store?: { id: string; allowNegativeStock: boolean } | null;
     productId: string;
     initialUnitCostKgs?: number | null;
+    zeroCostConfirmed?: boolean;
+    zeroCostReason?: string | null;
     variants?: Array<{ id: string; initialOnHand?: number | null }>;
   },
 ) => {
@@ -1587,48 +1595,38 @@ const applyInitialVariantInventory = async (
     if (initialOnHand <= 0) {
       continue;
     }
+    if (input.initialUnitCostKgs === null || input.initialUnitCostKgs === undefined) {
+      throw new AppError("openingStockUnitCostRequired", "BAD_REQUEST", 400);
+    }
     const inventoryValueDelta =
       input.initialUnitCostKgs === null || input.initialUnitCostKgs === undefined
         ? null
         : new Prisma.Decimal(input.initialUnitCostKgs.toString()).mul(initialOnHand);
-    await tx.inventorySnapshot.update({
-      where: {
-        storeId_productId_variantKey: {
-          storeId: input.store.id,
-          productId: input.productId,
-          variantKey: variant.id,
-        },
-      },
-      data: {
-        onHand: { increment: initialOnHand },
-        allowNegativeStock: input.store.allowNegativeStock,
-      },
+    await applyStockMovement(tx, {
+      storeId: input.store.id,
+      productId: input.productId,
+      variantId: variant.id,
+      type: StockMovementType.ADJUSTMENT,
+      qtyDelta: initialOnHand,
+      referenceType: "ProductVariant",
+      referenceId: variant.id,
+      unitCostKgs: input.initialUnitCostKgs,
+      lineTotalKgs: Number(inventoryValueDelta),
+      inventoryValueDeltaKgs: Number(inventoryValueDelta),
+      actorId: input.actorId,
+      organizationId: input.organizationId,
+      zeroCostConfirmed: input.zeroCostConfirmed,
+      zeroCostReason: input.zeroCostReason,
     });
-    await tx.stockMovement.create({
-      data: {
-        storeId: input.store.id,
-        productId: input.productId,
-        variantId: variant.id,
-        type: StockMovementType.ADJUSTMENT,
-        qtyDelta: initialOnHand,
-        referenceType: "ProductVariant",
-        referenceId: variant.id,
-        note: "Initial variant stock",
-        unitCostKgs: input.initialUnitCostKgs ?? undefined,
-        lineTotalKgs: inventoryValueDelta ?? undefined,
-        inventoryValueDeltaKgs: inventoryValueDelta ?? undefined,
-        createdById: input.actorId,
-      },
+    await setProductCostBasis(tx, {
+      organizationId: input.organizationId,
+      productId: input.productId,
+      variantId: variant.id,
+      quantity: initialOnHand,
+      unitCost: input.initialUnitCostKgs,
+      zeroCostConfirmed: input.zeroCostConfirmed,
+      zeroCostReason: input.zeroCostReason,
     });
-    if (input.initialUnitCostKgs !== null && input.initialUnitCostKgs !== undefined) {
-      await setProductCostBasis(tx, {
-        organizationId: input.organizationId,
-        productId: input.productId,
-        variantId: variant.id,
-        quantity: initialOnHand,
-        unitCost: input.initialUnitCostKgs,
-      });
-    }
   }
 };
 
@@ -1649,6 +1647,8 @@ const applyInitialInventorySettings = async (
     productId: string;
     initialOnHand?: number | null;
     initialUnitCostKgs?: number | null;
+    zeroCostConfirmed?: boolean;
+    zeroCostReason?: string | null;
     minStock?: number | null;
   },
 ) => {
@@ -1671,39 +1671,24 @@ const applyInitialInventorySettings = async (
   }
 
   if (initialOnHand && initialOnHand > 0) {
-    await tx.inventorySnapshot.update({
-      where: {
-        storeId_productId_variantKey: {
-          storeId: input.store.id,
-          productId: input.productId,
-          variantKey: "BASE",
-        },
-      },
-      data: {
-        onHand: { increment: initialOnHand },
-        allowNegativeStock: input.store.allowNegativeStock,
-      },
-    });
-    await tx.stockMovement.create({
-      data: {
-        storeId: input.store.id,
-        productId: input.productId,
-        type: StockMovementType.ADJUSTMENT,
-        qtyDelta: initialOnHand,
-        referenceType: "Product",
-        referenceId: input.productId,
-        note: "Initial stock",
-        unitCostKgs: input.initialUnitCostKgs ?? undefined,
-        lineTotalKgs:
-          input.initialUnitCostKgs === null || input.initialUnitCostKgs === undefined
-            ? undefined
-            : initialOnHand * input.initialUnitCostKgs,
-        inventoryValueDeltaKgs:
-          input.initialUnitCostKgs === null || input.initialUnitCostKgs === undefined
-            ? undefined
-            : initialOnHand * input.initialUnitCostKgs,
-        createdById: input.actorId,
-      },
+    if (input.initialUnitCostKgs === null || input.initialUnitCostKgs === undefined) {
+      throw new AppError("openingStockUnitCostRequired", "BAD_REQUEST", 400);
+    }
+    const inventoryValueDeltaKgs = initialOnHand * input.initialUnitCostKgs;
+    await applyStockMovement(tx, {
+      storeId: input.store.id,
+      productId: input.productId,
+      type: StockMovementType.ADJUSTMENT,
+      qtyDelta: initialOnHand,
+      referenceType: "Product",
+      referenceId: input.productId,
+      unitCostKgs: input.initialUnitCostKgs,
+      lineTotalKgs: inventoryValueDeltaKgs,
+      inventoryValueDeltaKgs,
+      actorId: input.actorId,
+      organizationId: input.organizationId,
+      zeroCostConfirmed: input.zeroCostConfirmed,
+      zeroCostReason: input.zeroCostReason,
     });
   }
 
@@ -1868,6 +1853,22 @@ export const createProduct = async (input: CreateProductInput) => {
       : input.purchasePriceKgs !== undefined && input.purchasePriceKgs !== null
         ? input.purchasePriceKgs
         : undefined;
+  const requestedOpeningStock =
+    Math.max(Math.trunc(input.initialOnHand ?? 0), 0) +
+    (input.variants ?? []).reduce(
+      (total, variant) => total + Math.max(Math.trunc(variant.initialOnHand ?? 0), 0),
+      0,
+    );
+  if (requestedOpeningStock > 0 && resolvedBaseCost === undefined) {
+    throw new AppError("openingStockUnitCostRequired", "BAD_REQUEST", 400);
+  }
+  if (
+    requestedOpeningStock > 0 &&
+    resolvedBaseCost === 0 &&
+    (!input.zeroCostConfirmed || !input.zeroCostReason?.trim())
+  ) {
+    throw new AppError("zeroCostConfirmationRequired", "BAD_REQUEST", 400);
+  }
 
   const requestedSku = input.sku?.trim();
   const shouldGenerateSku = !requestedSku;
@@ -1989,6 +1990,8 @@ export const createProduct = async (input: CreateProductInput) => {
         productId: product.id,
         initialOnHand: input.initialOnHand,
         initialUnitCostKgs: resolvedBaseCost,
+        zeroCostConfirmed: input.zeroCostConfirmed,
+        zeroCostReason: input.zeroCostReason,
         minStock: input.minStock,
       });
       await applyInitialVariantInventory(tx, {
@@ -1997,6 +2000,8 @@ export const createProduct = async (input: CreateProductInput) => {
         store: assignmentStores[0] ?? null,
         productId: product.id,
         initialUnitCostKgs: resolvedBaseCost,
+        zeroCostConfirmed: input.zeroCostConfirmed,
+        zeroCostReason: input.zeroCostReason,
         variants: createdVariants.map((variant, index) => ({
           id: variant.id,
           initialOnHand: input.variants?.[index]?.initialOnHand,
@@ -2018,6 +2023,8 @@ export const createProduct = async (input: CreateProductInput) => {
           productId: product.id,
           avgCostKgs: resolvedBaseCost,
           costBasisQty: Math.max(Math.trunc(input.initialOnHand ?? 0), 0),
+          zeroCostConfirmed: input.zeroCostConfirmed,
+          zeroCostReason: input.zeroCostReason,
         });
       }
 
@@ -2973,6 +2980,9 @@ export const duplicateProduct = async (input: {
         if (snapshot.onHand < 0 && sourceCost) {
           throw new AppError("valuedNegativeStockDepletionBlocked", "CONFLICT", 409);
         }
+        if (snapshot.onHand > 0 && !sourceCost) {
+          throw new AppError("positiveStockUnitCostRequired", "BAD_REQUEST", 400);
+        }
         await tx.inventorySnapshot.update({
           where: {
             storeId_productId_variantKey: {
@@ -2986,6 +2996,12 @@ export const duplicateProduct = async (input: {
         copiedInventoryRows += 1;
         if (snapshot.onHand !== 0) {
           const sourceUnitCost = sourceCost ? resolveSourceUnitCost(sourceCost) : null;
+          if (snapshot.onHand > 0 && (!sourceUnitCost || sourceUnitCost.lte(0))) {
+            throw new AppError("positiveStockUnitCostRequired", "BAD_REQUEST", 400);
+          }
+          if (snapshot.onHand < 0 && sourceUnitCost === null) {
+            throw new AppError("stockMovementValueRequired", "BAD_REQUEST", 400);
+          }
           const inventoryValueDelta = sourceUnitCost?.mul(snapshot.onHand) ?? null;
           await tx.stockMovement.create({
             data: {

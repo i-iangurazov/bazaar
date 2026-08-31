@@ -3542,15 +3542,15 @@ const ProductsPage = () => {
             onChange={(event) => setSearch(event.target.value)}
           />
           {canManageProducts ? (
-            <Link
-              href={newProductHref}
-              aria-label={t("newProduct")}
-              onClick={persistProductsReturnState}
-            >
-              <Button type="button" size="icon" className="h-11 w-11">
+            <Button asChild type="button" size="icon" className="h-11 w-11">
+              <Link
+                href={newProductHref}
+                aria-label={t("newProduct")}
+                onClick={persistProductsReturnState}
+              >
                 <AddIcon className="h-5 w-5" aria-hidden />
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           ) : null}
         </div>
         <Select

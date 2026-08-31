@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import {
@@ -142,6 +143,8 @@ export const InventoryReceivingPage = ({
   const [supplierName, setSupplierName] = useState("");
   const [referenceNumber, setReferenceNumber] = useState("");
   const [note, setNote] = useState("");
+  const [zeroCostConfirmed, setZeroCostConfirmed] = useState(false);
+  const [zeroCostReason, setZeroCostReason] = useState("");
   const [search, setSearch] = useState("");
   const [lines, setLines] = useState<ReceivingLine[]>([]);
   const [restoredDraftKey, setRestoredDraftKey] = useState("");
@@ -724,6 +727,9 @@ export const InventoryReceivingPage = ({
   );
   const invalidQuantity = lineMetrics.some((metric) => !metric.quantityValid);
   const invalidUnitCost = lineMetrics.some((metric) => !metric.unitCostValid);
+  const hasZeroCostLine = lineMetrics.some(
+    (metric) => metric.quantityValid && metric.unitCostValid && metric.unitCost === 0,
+  );
   const summary = useMemo(
     () => ({
       products: lines.length,
@@ -743,7 +749,11 @@ export const InventoryReceivingPage = ({
         ? t("receivingValidationInvalidQuantity")
         : invalidUnitCost
           ? t("receivingValidationInvalidUnitCost")
-          : "";
+          : hasZeroCostLine && isEditMode
+            ? t("zeroCostEditUnsupported")
+            : hasZeroCostLine && (!zeroCostConfirmed || !zeroCostReason.trim())
+              ? t("zeroCostConfirmationRequired")
+              : "";
 
   const postMutation = trpc.inventory.postStockReceiving.useMutation({
     onSuccess: async (result) => {
@@ -842,6 +852,8 @@ export const InventoryReceivingPage = ({
       supplierName: supplierName.trim() || undefined,
       referenceNumber: referenceNumber.trim() || undefined,
       note: note.trim() || undefined,
+      zeroCostConfirmed: hasZeroCostLine ? zeroCostConfirmed : undefined,
+      zeroCostReason: hasZeroCostLine ? zeroCostReason.trim() : undefined,
       lines: normalizedLines,
       idempotencyKey: crypto.randomUUID(),
     });
@@ -1029,6 +1041,36 @@ export const InventoryReceivingPage = ({
                 rows={3}
               />
             </div>
+            {hasZeroCostLine && !isEditMode ? (
+              <div className="space-y-3 rounded-xl border border-warning/40 bg-warning/10 p-3 lg:col-span-2">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <Label htmlFor="receiving-zero-cost-confirmed">
+                      {t("zeroCostConfirmationLabel")}
+                    </Label>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {t("zeroCostConfirmationHelp")}
+                    </p>
+                  </div>
+                  <Switch
+                    id="receiving-zero-cost-confirmed"
+                    checked={zeroCostConfirmed}
+                    onCheckedChange={setZeroCostConfirmed}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="receiving-zero-cost-reason">{t("zeroCostReasonLabel")}</Label>
+                  <Textarea
+                    id="receiving-zero-cost-reason"
+                    value={zeroCostReason}
+                    onChange={(event) => setZeroCostReason(event.target.value)}
+                    placeholder={t("zeroCostReasonPlaceholder")}
+                    rows={2}
+                    disabled={!zeroCostConfirmed}
+                  />
+                </div>
+              </div>
+            ) : null}
           </div>
         </section>
 

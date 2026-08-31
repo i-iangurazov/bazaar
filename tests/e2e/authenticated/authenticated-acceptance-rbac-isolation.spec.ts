@@ -1222,24 +1222,30 @@ test("BZR-REQ-0113/BZR-REQ-0186 keeps operational store switches isolated throug
     };
 
     await page.goto(
-      `/inventory/movements?storeId=${authenticatedE2EIds.primaryStore}&tour=rbac-store`,
+      `/inventory/movements?storeId=${authenticatedE2EIds.primaryStore}&audit=rbac-store`,
       { waitUntil: "domcontentloaded" },
     );
     await expect(page.getByRole("heading", { level: 1, name: "Product Movement" })).toBeVisible();
     const movementTable = page.getByRole("table");
     await expect(
-      movementTable.getByText("QA-BAZAAR Primary Store", { exact: true }).first(),
+      movementTable
+        .locator("span:visible")
+        .filter({ hasText: /^QA-BAZAAR Primary Store$/ })
+        .first(),
     ).toBeVisible();
     await expect(movementTable.getByText("QA-BAZAAR Secondary Store", { exact: true })).toHaveCount(
       0,
     );
-    const movementStore = page.getByRole("combobox").first();
+    const movementStore = page.getByRole("combobox", { name: "Store", exact: true });
     await chooseOption(movementStore, "QA-BAZAAR Secondary Store");
     await expect
       .poll(() => new URL(page.url()).searchParams.get("storeId"))
       .toBe(authenticatedE2EIds.secondaryStore);
     await expect(
-      movementTable.getByText("QA-BAZAAR Secondary Store", { exact: true }).first(),
+      movementTable
+        .locator("span:visible")
+        .filter({ hasText: /^QA-BAZAAR Secondary Store$/ })
+        .first(),
     ).toBeVisible();
     await expect(movementTable.getByText("QA-BAZAAR Primary Store", { exact: true })).toHaveCount(
       0,
@@ -1249,7 +1255,11 @@ test("BZR-REQ-0113/BZR-REQ-0186 keeps operational store switches isolated throug
       .poll(() => new URL(page.url()).searchParams.get("storeId"))
       .toBe(authenticatedE2EIds.secondaryStore);
     await expect(
-      page.getByRole("table").getByText("QA-BAZAAR Secondary Store", { exact: true }).first(),
+      page
+        .getByRole("table")
+        .locator("span:visible")
+        .filter({ hasText: /^QA-BAZAAR Secondary Store$/ })
+        .first(),
     ).toBeVisible();
     await roundTripThroughDashboard(
       "/inventory/movements",
@@ -1257,7 +1267,7 @@ test("BZR-REQ-0113/BZR-REQ-0186 keeps operational store switches isolated throug
     );
     observedStates.inventory = page.url();
 
-    await page.goto(`/sales/orders?storeId=${authenticatedE2EIds.primaryStore}&tour=rbac-store`, {
+    await page.goto(`/sales/orders?storeId=${authenticatedE2EIds.primaryStore}&audit=rbac-store`, {
       waitUntil: "domcontentloaded",
     });
     await expect(page.getByRole("heading", { level: 1, name: "Customer orders" })).toBeVisible();
@@ -1276,12 +1286,15 @@ test("BZR-REQ-0113/BZR-REQ-0186 keeps operational store switches isolated throug
     );
     observedStates.orders = page.url();
 
-    await page.goto(`/pos?registerId=${authenticatedE2EIds.primaryRegister}&tour=rbac-store`, {
+    await page.goto(`/pos?registerId=${authenticatedE2EIds.primaryRegister}&audit=rbac-store`, {
       waitUntil: "domcontentloaded",
     });
     await expect(page.getByRole("heading", { level: 1, name: "POS" })).toBeVisible();
     await expect(
-      page.getByText(/QA-BAZAAR Primary Store · QA-BAZAAR Register/).first(),
+      page
+        .getByText(/QA-BAZAAR Primary Store · QA-BAZAAR Register/)
+        .filter({ visible: true })
+        .first(),
     ).toBeVisible();
     await chooseOption(
       page.getByRole("combobox", { name: "Register" }).first(),
@@ -1291,20 +1304,28 @@ test("BZR-REQ-0113/BZR-REQ-0186 keeps operational store switches isolated throug
       .poll(() => new URL(page.url()).searchParams.get("registerId"))
       .toBe(authenticatedE2EIds.secondaryRegister);
     await expect(
-      page.getByText(/QA-BAZAAR Secondary Store · QA-BAZAAR Secondary Register/).first(),
+      page
+        .getByText(/QA-BAZAAR Secondary Store · QA-BAZAAR Secondary Register/)
+        .filter({ visible: true })
+        .first(),
     ).toBeVisible();
-    await expect(page.getByText("Shift closed", { exact: true }).first()).toBeVisible();
+    await expect(
+      page.getByText("Shift closed", { exact: true }).filter({ visible: true }).first(),
+    ).toBeVisible();
     await page.reload({ waitUntil: "domcontentloaded" });
     await expect
       .poll(() => new URL(page.url()).searchParams.get("registerId"))
       .toBe(authenticatedE2EIds.secondaryRegister);
     await expect(
-      page.getByText(/QA-BAZAAR Secondary Store · QA-BAZAAR Secondary Register/).first(),
+      page
+        .getByText(/QA-BAZAAR Secondary Store · QA-BAZAAR Secondary Register/)
+        .filter({ visible: true })
+        .first(),
     ).toBeVisible();
     await roundTripThroughDashboard("/pos", `registerId=${authenticatedE2EIds.secondaryRegister}`);
     observedStates.pos = page.url();
 
-    await page.goto(`/reports?storeId=${authenticatedE2EIds.primaryStore}&tour=rbac-store`, {
+    await page.goto(`/reports?storeId=${authenticatedE2EIds.primaryStore}&audit=rbac-store`, {
       waitUntil: "domcontentloaded",
     });
     await expect(page.getByRole("heading", { level: 1, name: "Reports" })).toBeVisible();
@@ -1321,7 +1342,7 @@ test("BZR-REQ-0113/BZR-REQ-0186 keeps operational store switches isolated throug
     await expect
       .poll(() => new URL(page.url()).searchParams.get("storeId"))
       .toBe(authenticatedE2EIds.secondaryStore);
-    expect(new URL(page.url()).searchParams.get("tour")).toBe("rbac-store");
+    expect(new URL(page.url()).searchParams.get("audit")).toBe("rbac-store");
     await expect(shrinkageCard.getByText("No shrinkage.", { exact: true })).toBeVisible();
     await page.goBack({ waitUntil: "domcontentloaded" });
     await expect
@@ -1340,11 +1361,11 @@ test("BZR-REQ-0113/BZR-REQ-0186 keeps operational store switches isolated throug
       .poll(() => new URL(page.url()).searchParams.get("storeId"))
       .toBe(authenticatedE2EIds.secondaryStore);
 
-    await page.goto(`/reports?tour=rbac-store&storeId=${authenticatedE2EIds.secondTenantStore}`, {
+    await page.goto(`/reports?audit=rbac-store&storeId=${authenticatedE2EIds.secondTenantStore}`, {
       waitUntil: "domcontentloaded",
     });
     await expect.poll(() => new URL(page.url()).searchParams.has("storeId")).toBe(false);
-    expect(new URL(page.url()).searchParams.get("tour")).toBe("rbac-store");
+    expect(new URL(page.url()).searchParams.get("audit")).toBe("rbac-store");
     await expect(page.getByRole("heading", { level: 1, name: "Reports" })).toBeVisible();
     observedStates.reports = page.url();
 

@@ -209,7 +209,7 @@ test.afterEach(async ({ pageAudit }, testInfo) => {
 test("BZR-PRD-001 weighted cost UI, receipt value, and product CSV reconcile", async ({
   page,
   pageAudit,
-}) => {
+}, testInfo) => {
   for (const fixture of authenticatedAccountingFixture.weightedCostCases) {
     await gotoReadOnly(page, pageAudit, `/products/${fixture.productId}`);
     await assertWeightedCostProduct(page, fixture);
@@ -244,12 +244,16 @@ test("BZR-PRD-001 weighted cost UI, receipt value, and product CSV reconcile", a
 
   await assertNoRootOverflow(page);
   assertCleanPageAudit(pageAudit);
+  await testInfo.attach("BZR-PRD-001-products-and-export", {
+    body: await page.screenshot({ fullPage: true }),
+    contentType: "image/png",
+  });
 });
 
 test("REPORTS-001 posted write-off persists, stays store-scoped, and reconciles CSV/XLSX", async ({
   page,
   pageAudit,
-}) => {
+}, testInfo) => {
   const fixture = authenticatedAccountingFixture.shrinkage;
   await gotoReadOnly(page, pageAudit, "/reports");
   await setShrinkageScope(page, authenticatedAccountingFixture.storeName);
@@ -304,4 +308,8 @@ test("REPORTS-001 posted write-off persists, stays store-scoped, and reconciles 
 
   await assertNoRootOverflow(page);
   assertCleanPageAudit(pageAudit);
+  await testInfo.attach("REPORTS-001-shrinkage-and-exports", {
+    body: await page.screenshot({ fullPage: true }),
+    contentType: "image/png",
+  });
 });

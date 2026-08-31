@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   arrangeClothingCategoriesWithAi,
   bulkUpdateProductCategory,
-  createProduct,
   importProducts,
   updateProduct,
 } from "@/server/services/products";
@@ -11,8 +10,11 @@ import { computeEan13CheckDigit } from "@/server/services/barcodes";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 import { prisma } from "@/server/db/prisma";
 import { createTestCaller } from "../helpers/context";
-import { adjustStock } from "@/server/services/inventory";
 import { parseCsvTextRows } from "@/lib/fileExport";
+import {
+  adjustStockWithExplicitPositiveCost as adjustStock,
+  createProductWithExplicitOpeningCost as createProduct,
+} from "../helpers/d009Fixtures";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
 
@@ -1849,6 +1851,7 @@ describeDb("products", () => {
       name: "Delete History Product",
       baseUnitId: baseUnit.id,
       storeId: store.id,
+      avgCostKgs: 10,
       initialOnHand: 1,
     });
 

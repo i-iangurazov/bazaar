@@ -718,7 +718,7 @@ export const InventoryTransfersPage = ({
   }
 
   return (
-    <div className="overflow-x-hidden pb-[15rem] md:pb-0">
+    <div className="min-w-0 overflow-x-hidden pb-[15rem] md:pb-0">
       <PageHeader
         title={pageTitle}
         subtitle={pageSubtitle}
@@ -733,7 +733,7 @@ export const InventoryTransfersPage = ({
         actionClassName="hidden md:flex"
       />
 
-      <div className="space-y-6">
+      <div className="min-w-0 space-y-6">
         <section className="bazaar-doc-surface p-4">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h3 className="text-base font-semibold text-foreground">{t("transferDetailsTitle")}</h3>
@@ -788,8 +788,8 @@ export const InventoryTransfersPage = ({
           </div>
         </section>
 
-        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-          <section className="bazaar-doc-surface p-4">
+        <div className="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+          <section className="bazaar-doc-surface min-w-0 p-4">
             <div className="mb-4 flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
               <h3 className="text-base font-semibold text-foreground">
                 {t("transferSearchTitle")}
@@ -818,7 +818,7 @@ export const InventoryTransfersPage = ({
                 autoComplete="off"
               />
             </div>
-            <div className="bazaar-doc-search-list">
+            <div className="bazaar-doc-search-list min-w-0 max-w-full">
               {searchQuery.isFetching ? (
                 <div className="flex items-center gap-2 px-3 py-3 text-sm text-muted-foreground">
                   <Spinner className="h-4 w-4" />

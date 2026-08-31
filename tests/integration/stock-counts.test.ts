@@ -34,6 +34,7 @@ describeDb("stock counts", () => {
       storeId: store.id,
       productId: product.id,
       qtyDelta: 5,
+      unitCostKgs: 10,
       reason: "Seed stock",
       actorId: adminUser.id,
       organizationId: org.id,

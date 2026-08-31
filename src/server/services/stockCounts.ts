@@ -1,12 +1,19 @@
 import { randomUUID } from "node:crypto";
-import type { Prisma } from "@prisma/client";
-import { OperationRequestPrincipalType, StockCountStatus, StockMovementType } from "@prisma/client";
+import {
+  OperationRequestPrincipalType,
+  Prisma,
+  StockCountStatus,
+  StockMovementType,
+} from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
 import { withIdempotency } from "@/server/services/idempotency";
 import { applyStockMovement } from "@/server/services/inventory";
-import { applyCurrentProductCostQuantityDelta } from "@/server/services/productCost";
+import {
+  applyCurrentProductCostQuantityDelta,
+  applyValuedProductCostDelta,
+} from "@/server/services/productCost";
 import { writeAuditLog } from "@/server/services/audit";
 import { eventBus } from "@/server/events/eventBus";
 import { toJson } from "@/server/services/json";
@@ -318,6 +325,10 @@ export const applyStockCount = async (input: {
   organizationId: string;
   requestId: string;
   idempotencyKey: string;
+  lineValuations?: Record<
+    string,
+    { unitCostKgs: number; zeroCostConfirmed?: boolean; zeroCostReason?: string | null }
+  >;
 }) => {
   const { result, storeId, touched } = await prisma.$transaction(async (tx) => {
     const { result } = await withIdempotency(
@@ -363,12 +374,41 @@ export const applyStockCount = async (input: {
           }
 
           const before = snapshot ?? null;
-          const valuation = await applyCurrentProductCostQuantityDelta(tx, {
-            organizationId: input.organizationId,
-            productId: line.productId,
-            variantId: line.variantId,
-            quantityDelta: deltaQty,
-          });
+          const explicitValuation = deltaQty > 0 ? input.lineValuations?.[line.id] : undefined;
+          let valuation: { unitCostKgs: number; inventoryValueDeltaKgs: number } | null;
+          if (explicitValuation) {
+            if (
+              !Number.isFinite(explicitValuation.unitCostKgs) ||
+              explicitValuation.unitCostKgs < 0
+            ) {
+              throw new AppError("unitCostInvalid", "BAD_REQUEST", 400);
+            }
+            const inventoryValueDeltaKgs = Number(
+              new Prisma.Decimal(explicitValuation.unitCostKgs.toString())
+                .mul(deltaQty)
+                .toDecimalPlaces(6, Prisma.Decimal.ROUND_HALF_UP),
+            );
+            await applyValuedProductCostDelta(tx, {
+              organizationId: input.organizationId,
+              productId: line.productId,
+              variantId: line.variantId,
+              quantityDelta: deltaQty,
+              valueDeltaKgs: inventoryValueDeltaKgs,
+              zeroCostConfirmed: explicitValuation.zeroCostConfirmed,
+              zeroCostReason: explicitValuation.zeroCostReason,
+            });
+            valuation = {
+              unitCostKgs: explicitValuation.unitCostKgs,
+              inventoryValueDeltaKgs,
+            };
+          } else {
+            valuation = await applyCurrentProductCostQuantityDelta(tx, {
+              organizationId: input.organizationId,
+              productId: line.productId,
+              variantId: line.variantId,
+              quantityDelta: deltaQty,
+            });
+          }
           const movement = await applyStockMovement(tx, {
             storeId: count.storeId,
             productId: line.productId,
@@ -381,6 +421,8 @@ export const applyStockCount = async (input: {
             referenceType: "STOCK_COUNT",
             referenceId: count.id,
             note: `stockCount:${count.code}`,
+            zeroCostConfirmed: explicitValuation?.zeroCostConfirmed,
+            zeroCostReason: explicitValuation?.zeroCostReason,
             actorId: input.actorId,
             organizationId: input.organizationId,
           });

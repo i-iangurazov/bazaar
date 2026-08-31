@@ -127,7 +127,9 @@ describe("integration source structure", () => {
     expect(emailService).toContain("productButtonUrls?.[input.product.id]");
     expect(emailDeliveryService).toContain("ready: hasProvider");
     expect(emailService).toContain("processEmailAutomationTrigger");
-    expect(imageStudioPage).toContain('<TableContainer className="bazaar-admin-table-shell">');
+    expect(imageStudioPage).toContain(
+      '<TableContainer className="bazaar-admin-table-shell bazaar-admin-table-scroll">',
+    );
     expect(imageStudioPage).toContain('className="min-w-[860px]"');
     expect(imageStudioPage).toContain("activeJobFromList");
     expect(imageStudioPage).toContain("previewIsWorking");

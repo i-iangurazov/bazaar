@@ -103,6 +103,8 @@ export type ProductFormValues = {
   purchasePriceKgs?: number;
   avgCostKgs?: number;
   initialOnHand?: number;
+  zeroCostConfirmed?: boolean;
+  zeroCostReason?: string;
   minStock?: number;
   description?: string;
   photoUrl?: string;
@@ -743,6 +745,8 @@ export const ProductForm = ({
         purchasePriceKgs: optionalPrice,
         avgCostKgs: optionalPrice,
         initialOnHand: optionalStockQty,
+        zeroCostConfirmed: z.boolean().optional(),
+        zeroCostReason: z.string().trim().max(500).optional(),
         minStock: optionalStockQty,
         description: z.string().optional(),
         photoUrl: z
@@ -804,6 +808,30 @@ export const ProductForm = ({
           .optional(),
       })
       .superRefine((values, context) => {
+        if (!productId) {
+          const hasOpeningStock =
+            (values.initialOnHand ?? 0) > 0 ||
+            values.variants.some((variant) => (variant.initialOnHand ?? 0) > 0);
+          const explicitUnitCost = values.avgCostKgs ?? values.purchasePriceKgs;
+          if (hasOpeningStock && explicitUnitCost === undefined) {
+            context.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: t("openingStockUnitCostRequired"),
+              path: ["avgCostKgs"],
+            });
+          }
+          if (
+            hasOpeningStock &&
+            explicitUnitCost === 0 &&
+            (!values.zeroCostConfirmed || !values.zeroCostReason?.trim())
+          ) {
+            context.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: t("zeroCostConfirmationRequired"),
+              path: ["avgCostKgs"],
+            });
+          }
+        }
         const normalizedSku = values.sku.trim();
         if (enableSku) {
           if (productId) {
@@ -880,6 +908,8 @@ export const ProductForm = ({
       purchasePriceKgs: displayMoneyFromKgs(initialValues.purchasePriceKgs),
       avgCostKgs: displayMoneyFromKgs(initialValues.avgCostKgs),
       initialOnHand: initialValues.initialOnHand,
+      zeroCostConfirmed: initialValues.zeroCostConfirmed ?? false,
+      zeroCostReason: initialValues.zeroCostReason ?? "",
       minStock: initialValues.minStock,
       description: initialValues.description ?? "",
       photoUrl: initialValues.photoUrl ?? "",
@@ -3281,6 +3311,8 @@ export const ProductForm = ({
       purchasePriceKgs: submitMoneyToKgs(values.purchasePriceKgs),
       avgCostKgs: submitMoneyToKgs(values.avgCostKgs),
       initialOnHand: values.initialOnHand,
+      zeroCostConfirmed: values.zeroCostConfirmed,
+      zeroCostReason: values.zeroCostReason?.trim() || undefined,
       minStock: values.minStock,
       description: values.description?.trim() || undefined,
       photoUrl: resolvedPhotoUrl,

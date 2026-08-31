@@ -5002,6 +5002,7 @@ const PosSellPage = () => {
               className="h-8 shrink-0 gap-1.5 px-2 text-xs"
               onClick={() => setReceiptJournalOpen(true)}
               disabled={!journalStoreId}
+              aria-label={t("sell.receiptJournal")}
               data-testid="pos-receipt-journal-open"
             >
               <SalesOrdersIcon className="h-3.5 w-3.5" aria-hidden />
@@ -6642,6 +6643,7 @@ const PosSellPage = () => {
                 }
               }}
               placeholder={t("sell.mobile.commentPlaceholder")}
+              aria-label={t("sell.mobile.commentPlaceholder")}
               className="min-w-0 flex-1 border-0 bg-transparent text-[15px] text-foreground shadow-none outline-none ring-0 placeholder:text-muted-foreground focus:outline-none focus:ring-0 focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background"
             />
           </label>

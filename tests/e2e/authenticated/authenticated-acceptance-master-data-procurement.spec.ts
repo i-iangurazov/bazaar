@@ -61,9 +61,18 @@ const assertSingleMutation = async (
 const productSearch = (page: Page) =>
   page
     .locator(
-      "input[placeholder='Search by SKU or name'], input[placeholder='Search by name, SKU, or barcode']",
+      "input[placeholder='Search by SKU or name']:visible, input[placeholder='Search by name, SKU, or barcode']:visible",
     )
     .first();
+
+const readyProductSearch = async (page: Page) => {
+  await page.waitForLoadState("load");
+  await expect(page.getByRole("link", { name: "Edit" }).first()).toBeVisible();
+  const search = productSearch(page);
+  await expect(search).toBeVisible();
+  await expect(search).toBeEditable();
+  return search;
+};
 
 const selectPurchaseOrderSupplier = async (page: Page) => {
   const storeTrigger = page.getByRole("combobox").first();
@@ -706,8 +715,10 @@ test("@master-data mobile product lookup, create and edit persist", async ({
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await gotoDirect(page, "/products");
-  await productSearch(page).fill(fixture.cancelProduct.sku);
-  await expect(page.getByText(fixture.cancelProduct.name, { exact: true })).toBeVisible();
+  await (await readyProductSearch(page)).fill(fixture.cancelProduct.sku);
+  await expect(
+    page.getByText(fixture.cancelProduct.name, { exact: true }).filter({ visible: true }),
+  ).toBeVisible();
 
   const suffix = `${Date.now()}-${test.info().workerIndex}`;
   const sku = `${authenticatedE2ESeedPrefix}-MOBILE-${suffix}`;
@@ -717,6 +728,7 @@ test("@master-data mobile product lookup, create and edit persist", async ({
   await page.getByLabel("SKU").fill(sku);
   await page.getByLabel("Name").fill(name);
   await page.getByLabel("Sale price").fill("175");
+  await page.getByLabel("Cost").fill("50");
   await page.getByLabel("Initial stock").fill("2");
   await rapidClick(page.getByRole("button", { name: "Products save" }).first());
   await assertSingleMutation(mutationAudit, "products.create");
@@ -727,8 +739,8 @@ test("@master-data mobile product lookup, create and edit persist", async ({
     select: { id: true, name: true },
   });
   expect(product).toEqual({ id: expect.any(String), name });
-  await productSearch(page).fill(sku);
-  await expect(page.getByText(name, { exact: true })).toBeVisible();
+  await (await readyProductSearch(page)).fill(sku);
+  await expect(page.getByText(name, { exact: true }).filter({ visible: true })).toBeVisible();
   await page.getByRole("link", { name: "Edit" }).click();
   await assertPathname(page, `/products/${product!.id}`);
   await page.getByLabel("Name").fill(updatedName);
@@ -742,14 +754,19 @@ test("@master-data mobile product lookup, create and edit persist", async ({
     }),
   ).toEqual({ name: updatedName, sku });
 
-  await productSearch(page).fill(sku);
-  await expect(page.getByText(updatedName, { exact: true })).toBeVisible();
+  await (await readyProductSearch(page)).fill(sku);
+  await expect(
+    page.getByText(updatedName, { exact: true }).filter({ visible: true }),
+  ).toBeVisible();
   await page.getByRole("link", { name: "Edit" }).click();
+  await assertPathname(page, `/products/${product!.id}`);
   await page.reload({ waitUntil: "domcontentloaded" });
   await expect(page.getByRole("heading", { level: 1 })).toContainText(updatedName);
   await page.getByRole("link", { name: "Back" }).click();
   await assertPathname(page, "/products");
-  await expect(page.getByText(updatedName, { exact: true })).toBeVisible();
+  await expect(
+    page.getByText(updatedName, { exact: true }).filter({ visible: true }),
+  ).toBeVisible();
   assertCleanMutationAudit(mutationAudit);
 });
 

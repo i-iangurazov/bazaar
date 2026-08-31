@@ -2,17 +2,14 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { prisma } from "@/server/db/prisma";
 import { createProduct } from "@/server/services/products";
-import {
-  adjustStock,
-  editStockMovementDocument,
-  postStockWriteOff,
-} from "@/server/services/inventory";
+import { editStockMovementDocument, postStockWriteOff } from "@/server/services/inventory";
 import {
   getShrinkageReport,
   getSlowMoversReport,
   getStockoutsReport,
 } from "@/server/services/reports";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
+import { adjustStockWithExplicitPositiveCost as adjustStock } from "../helpers/d009Fixtures";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
 

@@ -25,7 +25,7 @@ describeDb("purchase orders", () => {
       organizationId: org.id,
       storeId: store.id,
       supplierId: supplier.id,
-      lines: [{ productId: product.id, qtyOrdered: 5 }],
+      lines: [{ productId: product.id, qtyOrdered: 5, unitCost: 10 }],
       actorId: adminUser.id,
       requestId: "req-po-create",
       submit: true,
@@ -197,7 +197,10 @@ describeDb("purchase orders", () => {
     });
 
     await expect(
-      caller.purchaseOrders.receive({ purchaseOrderId: approved.id, idempotencyKey: "idem-po-rbac" }),
+      caller.purchaseOrders.receive({
+        purchaseOrderId: approved.id,
+        idempotencyKey: "idem-po-rbac",
+      }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 

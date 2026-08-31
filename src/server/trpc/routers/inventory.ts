@@ -1208,6 +1208,9 @@ export const inventoryRouter = router({
           .number()
           .int()
           .refine((value) => value !== 0, "nonZeroAdjustment"),
+        unitCostKgs: z.number().min(0, "unitCostInvalid").optional().nullable(),
+        zeroCostConfirmed: z.boolean().optional(),
+        zeroCostReason: z.string().trim().min(3).max(500).optional(),
         unitId: z.string().optional(),
         packId: z.string().optional(),
         reason: z.string().min(3),
@@ -1223,6 +1226,9 @@ export const inventoryRouter = router({
           productId: input.productId,
           variantId: input.variantId,
           qtyDelta: input.qtyDelta,
+          unitCostKgs: input.unitCostKgs,
+          zeroCostConfirmed: input.zeroCostConfirmed,
+          zeroCostReason: input.zeroCostReason,
           unitId: input.unitId,
           packId: input.packId,
           reason: input.reason,
@@ -1277,6 +1283,8 @@ export const inventoryRouter = router({
         unitId: z.string().optional(),
         packId: z.string().optional(),
         unitCost: z.number().min(0).optional().nullable(),
+        zeroCostConfirmed: z.boolean().optional(),
+        zeroCostReason: z.string().trim().min(3).max(500).optional(),
         expiryDate: z.string().optional(),
         note: z.string().optional(),
         idempotencyKey: z.string().min(8),
@@ -1293,6 +1301,8 @@ export const inventoryRouter = router({
           unitId: input.unitId,
           packId: input.packId,
           unitCost: input.unitCost ?? undefined,
+          zeroCostConfirmed: input.zeroCostConfirmed,
+          zeroCostReason: input.zeroCostReason,
           expiryDate: input.expiryDate ? new Date(input.expiryDate) : undefined,
           note: input.note,
           actorId: ctx.user.id,
@@ -1314,6 +1324,8 @@ export const inventoryRouter = router({
         supplierName: z.string().trim().max(160).optional(),
         note: z.string().trim().max(1_000).optional(),
         referenceNumber: z.string().trim().max(80).optional(),
+        zeroCostConfirmed: z.boolean().optional(),
+        zeroCostReason: z.string().trim().min(3).max(500).optional(),
         lines: z
           .array(
             z.object({
@@ -1337,6 +1349,8 @@ export const inventoryRouter = router({
           supplierName: input.supplierName,
           note: input.note,
           referenceNumber: input.referenceNumber,
+          zeroCostConfirmed: input.zeroCostConfirmed,
+          zeroCostReason: input.zeroCostReason,
           lines: input.lines,
           actorId: ctx.user.id,
           organizationId: ctx.user.organizationId,

@@ -654,7 +654,7 @@ const CustomerDatabasePage = () => {
         empty={emptyState}
         getKey={(customer) => customer.id}
         renderDesktop={(items) => (
-          <TableContainer className="bazaar-admin-table-shell">
+          <TableContainer className="bazaar-admin-table-shell bazaar-admin-table-scroll">
             <Table className="min-w-[920px]">
               <TableHeader>
                 <TableRow>

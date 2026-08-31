@@ -7,6 +7,8 @@ import {
   editStockMovementDocument,
   postStockReceiving,
   postStockWriteOff,
+  receiveStock,
+  ZERO_COST_REASON_MARKER,
 } from "@/server/services/inventory";
 import { setProductCostBasis } from "@/server/services/productCost";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
@@ -61,9 +63,170 @@ const readAccountingState = async (input: {
   };
 };
 
-describeDb("D-010 and D-011 conservative accounting policies", () => {
+describeDb("D-009, D-010, and D-011 conservative accounting policies", () => {
   beforeEach(async () => {
     await resetDatabase();
+  });
+
+  it("fails closed for unpriced positive stock while preserving precise inheritance and audited zero cost", async () => {
+    const { org, store, product, supplier, adminUser, baseUnit } = await seedBase({
+      plan: "BUSINESS",
+    });
+    const stateInput = {
+      organizationId: org.id,
+      productId: product.id,
+      storeIds: [store.id],
+      actorId: adminUser.id,
+    };
+    const before = await readAccountingState(stateInput);
+
+    await expect(
+      adjustStock({
+        storeId: store.id,
+        productId: product.id,
+        qtyDelta: 2,
+        reason: "Missing cost must fail",
+        actorId: adminUser.id,
+        organizationId: org.id,
+        requestId: "d009-unpriced-adjustment",
+        idempotencyKey: "d009-unpriced-adjustment",
+      }),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "positiveStockUnitCostRequired",
+    });
+    await expect(
+      receiveStock({
+        storeId: store.id,
+        productId: product.id,
+        qtyReceived: 2,
+        note: "Missing receipt cost must fail",
+        actorId: adminUser.id,
+        organizationId: org.id,
+        requestId: "d009-unpriced-receipt",
+        idempotencyKey: "d009-unpriced-receipt",
+      }),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "positiveStockUnitCostRequired",
+    });
+    expect(await readAccountingState(stateInput)).toEqual(before);
+
+    await adjustStock({
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 3,
+      unitCostKgs: 12.345678,
+      reason: "Explicit initial value",
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "d009-explicit-adjustment",
+      idempotencyKey: "d009-explicit-adjustment",
+    });
+    await adjustStock({
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 2,
+      reason: "Inherit precise WAC",
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "d009-inherited-adjustment",
+      idempotencyKey: "d009-inherited-adjustment",
+    });
+    const [valuedCost, inheritedMovement] = await Promise.all([
+      prisma.productCost.findUniqueOrThrow({ where: costKey(org.id, product.id) }),
+      prisma.stockMovement.findFirstOrThrow({
+        where: { productId: product.id, note: "Inherit precise WAC" },
+      }),
+    ]);
+    expect({
+      quantity: valuedCost.costBasisQty,
+      valueKgs: Number(valuedCost.costBasisValueKgs),
+      avgCostKgs: Number(valuedCost.avgCostKgs),
+    }).toEqual({ quantity: 5, valueKgs: 61.72839, avgCostKgs: 12.35 });
+    expect({
+      unitCostKgs: Number(inheritedMovement.unitCostKgs),
+      inventoryValueDeltaKgs: Number(inheritedMovement.inventoryValueDeltaKgs),
+    }).toEqual({ unitCostKgs: 12.35, inventoryValueDeltaKgs: 24.691356 });
+
+    const zeroProduct = await prisma.product.create({
+      data: {
+        organizationId: org.id,
+        supplierId: supplier.id,
+        sku: "D009-ZERO-COST",
+        name: "Deliberate zero-cost stock",
+        unit: baseUnit.code,
+        baseUnitId: baseUnit.id,
+      },
+    });
+    const zeroInput = {
+      storeId: store.id,
+      productId: zeroProduct.id,
+      qtyDelta: 2,
+      unitCostKgs: 0,
+      reason: "Approved free samples",
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "d009-zero-cost",
+      idempotencyKey: "d009-zero-cost",
+    };
+    await expect(adjustStock(zeroInput)).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "zeroCostConfirmationRequired",
+    });
+    await adjustStock({
+      ...zeroInput,
+      zeroCostConfirmed: true,
+      zeroCostReason: "Supplier samples supplied at no charge",
+    });
+    const [zeroSnapshot, zeroCost, zeroMovement] = await Promise.all([
+      prisma.inventorySnapshot.findUniqueOrThrow({
+        where: {
+          storeId_productId_variantKey: {
+            storeId: store.id,
+            productId: zeroProduct.id,
+            variantKey: "BASE",
+          },
+        },
+      }),
+      prisma.productCost.findUniqueOrThrow({ where: costKey(org.id, zeroProduct.id) }),
+      prisma.stockMovement.findFirstOrThrow({ where: { productId: zeroProduct.id } }),
+    ]);
+    expect({
+      onHand: zeroSnapshot.onHand,
+      quantity: zeroCost.costBasisQty,
+      valueKgs: Number(zeroCost.costBasisValueKgs),
+      avgCostKgs: Number(zeroCost.avgCostKgs),
+    }).toEqual({ onHand: 2, quantity: 2, valueKgs: 0, avgCostKgs: 0 });
+    expect(zeroMovement.note).toContain(
+      `${ZERO_COST_REASON_MARKER} Supplier samples supplied at no charge`,
+    );
+    await expect(
+      adjustStock({
+        storeId: store.id,
+        productId: zeroProduct.id,
+        qtyDelta: 1,
+        reason: "Zero basis cannot be inherited",
+        actorId: adminUser.id,
+        organizationId: org.id,
+        requestId: "d009-zero-basis-inheritance",
+        idempotencyKey: "d009-zero-basis-inheritance",
+      }),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "positiveStockUnitCostRequired",
+    });
+    await expect(
+      prisma.inventorySnapshot.findUniqueOrThrow({
+        where: {
+          storeId_productId_variantKey: {
+            storeId: store.id,
+            productId: zeroProduct.id,
+            variantKey: "BASE",
+          },
+        },
+      }),
+    ).resolves.toMatchObject({ onHand: 2 });
   });
 
   it("rejects valued store depletion below zero and rolls back the organization basis", async () => {

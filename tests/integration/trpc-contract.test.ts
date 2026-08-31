@@ -39,6 +39,7 @@ describeDb("tRPC contract smoke", () => {
       storeId: store.id,
       productId: product.id,
       qtyReceived: 10,
+      unitCost: 10,
       idempotencyKey: "idem-core-receive",
     });
 
@@ -79,7 +80,7 @@ describeDb("tRPC contract smoke", () => {
       idempotencyKey: "trpc-contract-po-create",
       storeId: store.id,
       supplierId: supplier.id,
-      lines: [{ productId: product.id, qtyOrdered: 4 }],
+      lines: [{ productId: product.id, qtyOrdered: 4, unitCost: 10 }],
       submit: false,
     });
 

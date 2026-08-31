@@ -379,7 +379,7 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
             <CardHeader className="bazaar-admin-section-header px-4 py-3 sm:px-5">
               <CardTitle className="text-base">{t("filtersTitle")}</CardTitle>
             </CardHeader>
-            <CardContent className="bazaar-admin-toolbar m-4 grid gap-3 sm:m-5 md:grid-cols-[minmax(180px,1.2fr)_minmax(150px,0.9fr)_140px_140px_minmax(230px,1fr)]">
+            <CardContent className="bazaar-admin-toolbar m-4 grid gap-3 sm:m-5 sm:grid-cols-2 xl:grid-cols-[minmax(180px,1.2fr)_minmax(150px,0.9fr)_140px_140px_minmax(230px,1fr)]">
               <Select
                 value={storeId || "all"}
                 onValueChange={(value) => setStoreId(value === "all" ? "" : value)}

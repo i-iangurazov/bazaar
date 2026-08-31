@@ -163,6 +163,7 @@ test("@inventory-mutations product create and edit settle once and remain naviga
   await page.getByLabel("SKU").fill(sku);
   await page.getByLabel("Name").fill(originalName);
   await page.getByLabel("Sale price").fill("175");
+  await page.getByLabel("Cost").fill("50");
   await page.getByLabel("Initial stock").fill("7");
   await rapidClick(page.getByRole("button", { name: "Products save" }).first());
 

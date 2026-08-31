@@ -1,6 +1,8 @@
+BEGIN;
+
 -- Keep signed inventory-cost value separate from document totals and sales revenue.
 ALTER TABLE "StockMovement"
-ADD COLUMN "inventoryValueDeltaKgs" DECIMAL(18,6);
+ADD COLUMN IF NOT EXISTS "inventoryValueDeltaKgs" DECIMAL(18,6);
 
 -- Only backfill movement families whose historical line total has unambiguous cost meaning.
 UPDATE "StockMovement"
@@ -20,12 +22,11 @@ SET "inventoryValueDeltaKgs" = CASE
     THEN SIGN("qtyDelta") * ABS("lineTotalKgs")
   ELSE NULL
 END
-WHERE "inventoryValueDeltaKgs" IS NULL;
+WHERE "inventoryValueDeltaKgs" IS NULL
+  AND ("qtyDelta" = 0 OR "lineTotalKgs" IS NOT NULL);
 
-ALTER TABLE "StockMovement"
-ADD CONSTRAINT "StockMovement_inventoryValueDelta_sign_check"
-CHECK (
-  "inventoryValueDeltaKgs" IS NULL
-  OR "qtyDelta" = 0
-  OR SIGN("inventoryValueDeltaKgs") = SIGN("qtyDelta")
-);
+-- The final fail-closed constraint is installed by the following migration.
+-- Keeping it out of this transitional step avoids rejecting historical explicit
+-- zero-cost rows before D-009's audit-reason rule is available.
+
+COMMIT;

@@ -11,9 +11,9 @@ import {
 import { prisma } from "@/server/db/prisma";
 import { runJob } from "@/server/jobs";
 import { CUSTOMER_ORDER_FOLLOW_UP_JOB_NAME } from "@/server/jobs/customerOrderFollowUps";
-import { adjustStock } from "@/server/services/inventory";
 
 import { createTestCaller } from "../helpers/context";
+import { adjustStockWithExplicitPositiveCost as adjustStock } from "../helpers/d009Fixtures";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;

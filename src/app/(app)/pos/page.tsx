@@ -172,9 +172,9 @@ const PosEntryPage = () => {
               <Badge variant={openShift ? "success" : "warning"}>
                 {openShift ? t("entry.shiftOpen") : t("entry.shiftClosed")}
               </Badge>
-              <h2 className="mt-3 text-xl font-semibold text-foreground">
+              <h1 className="mt-3 text-xl font-semibold text-foreground">
                 {openShift ? t("entry.readyToSell") : t("entry.openShiftTitle")}
-              </h2>
+              </h1>
               <p className="mt-1 text-sm text-muted-foreground">
                 {selectedRegister
                   ? `${selectedRegister.store.name} · ${selectedRegister.name} (${selectedRegister.code})`

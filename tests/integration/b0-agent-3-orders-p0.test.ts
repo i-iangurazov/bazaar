@@ -23,7 +23,6 @@ import {
   getBazaarApiOrder,
   listBazaarApiOrders,
 } from "@/server/services/bazaarApi";
-import { adjustStock } from "@/server/services/inventory";
 import {
   bulkCancelPurchaseOrders,
   createPurchaseOrder,
@@ -39,6 +38,7 @@ import {
 } from "@/server/services/salesOrders";
 
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
+import { adjustStockWithExplicitPositiveCost as adjustStock } from "../helpers/d009Fixtures";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
 

@@ -3,18 +3,34 @@ import { StockMovementType } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
 import {
-  adjustStock,
+  adjustStock as adjustStockService,
   bulkSetOnHand,
   postStockReceiving,
   postStockWriteOff,
-  receiveStock,
+  receiveStock as receiveStockService,
   recomputeInventorySnapshots,
   transferStock,
+  type ReceiveStockInput,
+  type StockAdjustmentInput,
 } from "@/server/services/inventory";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 import { createTestCaller } from "../helpers/context";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
+
+// Existing service tests intentionally seed positive inventory. Keep those fixtures
+// explicit about value now that D-009 correctly rejects unpriced positive stock.
+const adjustStock = (input: StockAdjustmentInput) =>
+  adjustStockService({
+    ...input,
+    ...(input.qtyDelta > 0 && input.unitCostKgs == null ? { unitCostKgs: 10 } : {}),
+  });
+
+const receiveStock = (input: ReceiveStockInput) =>
+  receiveStockService({
+    ...input,
+    ...(input.unitCost == null ? { unitCost: 10 } : {}),
+  });
 
 const assertSnapshotMatchesLedger = async (storeId: string, productId: string) => {
   const total = await prisma.stockMovement.aggregate({
@@ -687,6 +703,7 @@ describeDb("inventory service", () => {
         storeId,
         productId: product.id,
         qtyDelta: 20,
+        unitCostKgs: 4,
         reason: "store correction fixture",
         actorId: adminUser.id,
         organizationId: org.id,
@@ -778,8 +795,8 @@ describeDb("inventory service", () => {
       basisValueKgs: Number(productCost.costBasisValueKgs),
     }).toEqual({
       avgCostKgs: 4,
-      basis: 2,
-      basisValueKgs: 8,
+      basis: 42,
+      basisValueKgs: 168,
     });
 
     await expect(
@@ -1101,24 +1118,13 @@ describeDb("inventory service", () => {
   it("bulk set-on-hand can correct selected rows to negative stock", async () => {
     const { org, store, product, adminUser } = await seedBase();
 
-    await adjustStock({
-      storeId: store.id,
-      productId: product.id,
-      qtyDelta: 3,
-      reason: "Seed stock",
-      actorId: adminUser.id,
-      organizationId: org.id,
-      requestId: "req-bulk-negative-seed",
-      idempotencyKey: "idem-bulk-negative-seed",
-    });
-
-    const snapshot = await prisma.inventorySnapshot.findUniqueOrThrow({
-      where: {
-        storeId_productId_variantKey: {
-          storeId: store.id,
-          productId: product.id,
-          variantKey: "BASE",
-        },
+    const snapshot = await prisma.inventorySnapshot.create({
+      data: {
+        storeId: store.id,
+        productId: product.id,
+        variantKey: "BASE",
+        onHand: 0,
+        onOrder: 0,
       },
     });
 
@@ -1366,8 +1372,8 @@ describeDb("inventory service", () => {
       reason: "test transfer edit",
       destinationStoreId: storeC.id,
       lines: [
-        { productId: product.id, quantity: 4, unitCostKgs: 0 },
-        { productId: addedProduct.id, quantity: 3, unitCostKgs: 0 },
+        { productId: product.id, quantity: 4, unitCostKgs: 10 },
+        { productId: addedProduct.id, quantity: 3, unitCostKgs: 10 },
       ],
       idempotencyKey: "transfer-edit-save-1",
     });
@@ -1753,7 +1759,7 @@ describeDb("inventory service", () => {
     expect(document?.lines.some((line) => line.productId === product.id)).toBe(false);
   });
 
-  it("allows write-off quantity above stock and records negative stock", async () => {
+  it("rejects a valued write-off below zero without side effects", async () => {
     const { org, store, product, adminUser } = await seedBase();
 
     await adjustStock({
@@ -1767,28 +1773,39 @@ describeDb("inventory service", () => {
       idempotencyKey: "idem-write-off-over-seed",
     });
 
-    const result = await postStockWriteOff({
-      storeId: store.id,
-      reason: "Потеря",
-      lines: [{ productId: product.id, qty: 3 }],
-      actorId: adminUser.id,
-      organizationId: org.id,
-      requestId: "req-write-off-over",
-      idempotencyKey: "idem-write-off-over",
+    await expect(
+      postStockWriteOff({
+        storeId: store.id,
+        reason: "Потеря",
+        lines: [{ productId: product.id, qty: 3 }],
+        actorId: adminUser.id,
+        organizationId: org.id,
+        requestId: "req-write-off-over",
+        idempotencyKey: "idem-write-off-over",
+      }),
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "valuedNegativeStockDepletionBlocked",
     });
 
-    expect(result.lines[0]?.onHand).toBe(-1);
-
-    const snapshot = await prisma.inventorySnapshot.findUnique({
-      where: {
-        storeId_productId_variantKey: {
-          storeId: store.id,
-          productId: product.id,
-          variantKey: "BASE",
+    const [snapshot, writeOffMovements, idempotencyRows] = await Promise.all([
+      prisma.inventorySnapshot.findUnique({
+        where: {
+          storeId_productId_variantKey: {
+            storeId: store.id,
+            productId: product.id,
+            variantKey: "BASE",
+          },
         },
-      },
-    });
-    expect(snapshot?.onHand).toBe(-1);
+      }),
+      prisma.stockMovement.count({
+        where: { productId: product.id, type: StockMovementType.WRITE_OFF },
+      }),
+      prisma.idempotencyKey.count({ where: { key: "idem-write-off-over" } }),
+    ]);
+    expect(snapshot?.onHand).toBe(2);
+    expect(writeOffMovements).toBe(0);
+    expect(idempotencyRows).toBe(0);
   });
 
   it("assigns the product to the destination store when transferring stock", async () => {
@@ -1840,7 +1857,7 @@ describeDb("inventory service", () => {
     expect(destinationAssignment?.assignedById).toBe(adminUser.id);
   });
 
-  it("allows transfer quantity above available source stock", async () => {
+  it("rejects a valued transfer below zero without side effects", async () => {
     const { org, store, product, adminUser } = await seedBase();
     const storeB = await prisma.store.create({
       data: {
@@ -1868,31 +1885,55 @@ describeDb("inventory service", () => {
       idempotencyKey: "idem-transfer-over-seed",
     });
 
-    const result = await transferStock({
-      fromStoreId: store.id,
-      toStoreId: storeB.id,
-      productId: product.id,
-      qty: 4,
-      note: "Move more than available",
-      actorId: adminUser.id,
-      organizationId: org.id,
-      requestId: "req-transfer-over",
-      idempotencyKey: "idem-transfer-over",
+    await expect(
+      transferStock({
+        fromStoreId: store.id,
+        toStoreId: storeB.id,
+        productId: product.id,
+        qty: 4,
+        note: "Move more than available",
+        actorId: adminUser.id,
+        organizationId: org.id,
+        requestId: "req-transfer-over",
+        idempotencyKey: "idem-transfer-over",
+      }),
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "valuedNegativeStockDepletionBlocked",
     });
 
-    expect(result.lines[0]?.outOnHand).toBe(-1);
-    expect(result.lines[0]?.inOnHand).toBe(4);
-
-    const snapshot = await prisma.inventorySnapshot.findUnique({
-      where: {
-        storeId_productId_variantKey: {
-          storeId: store.id,
-          productId: product.id,
-          variantKey: "BASE",
-        },
-      },
-    });
-    expect(snapshot?.onHand).toBe(-1);
+    const [sourceSnapshot, destinationSnapshot, transferMovements, idempotencyRows] =
+      await Promise.all([
+        prisma.inventorySnapshot.findUnique({
+          where: {
+            storeId_productId_variantKey: {
+              storeId: store.id,
+              productId: product.id,
+              variantKey: "BASE",
+            },
+          },
+        }),
+        prisma.inventorySnapshot.findUnique({
+          where: {
+            storeId_productId_variantKey: {
+              storeId: storeB.id,
+              productId: product.id,
+              variantKey: "BASE",
+            },
+          },
+        }),
+        prisma.stockMovement.count({
+          where: {
+            productId: product.id,
+            type: { in: [StockMovementType.TRANSFER_OUT, StockMovementType.TRANSFER_IN] },
+          },
+        }),
+        prisma.idempotencyKey.count({ where: { key: "idem-transfer-over" } }),
+      ]);
+    expect(sourceSnapshot?.onHand).toBe(3);
+    expect(destinationSnapshot?.onHand ?? 0).toBe(0);
+    expect(transferMovements).toBe(0);
+    expect(idempotencyRows).toBe(0);
   });
 
   it("treats transfer idempotency keys as replay safe", async () => {

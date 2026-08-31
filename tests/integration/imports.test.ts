@@ -333,7 +333,7 @@ describeDb("import batches", () => {
       organizationId: org.id,
       storeId: store.id,
       supplierId: supplier.id,
-      lines: [{ productId: product.id, qtyOrdered: 4 }],
+      lines: [{ productId: product.id, qtyOrdered: 4, unitCost: 10 }],
       actorId: adminUser.id,
       requestId: "req-import-po-create",
       submit: true,

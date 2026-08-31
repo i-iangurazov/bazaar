@@ -43,6 +43,9 @@ export type StockAdjustmentInput = {
   productId: string;
   variantId?: string | null;
   qtyDelta: number;
+  unitCostKgs?: number | null;
+  zeroCostConfirmed?: boolean;
+  zeroCostReason?: string | null;
   unitId?: string | null;
   packId?: string | null;
   reason: string;
@@ -99,6 +102,38 @@ export type ApplyStockMovementInput = {
   organizationId?: string;
   allowNegativeStock?: boolean;
   movementDate?: Date | null;
+  zeroCostConfirmed?: boolean;
+  zeroCostReason?: string | null;
+};
+
+export const ZERO_COST_REASON_MARKER = "[ZERO_COST_REASON]";
+
+const resolveAuditedMovementNote = (input: ApplyStockMovementInput) => {
+  const value = input.inventoryValueDeltaKgs;
+  if (input.qtyDelta === 0) {
+    return input.note ?? undefined;
+  }
+  if (value === null || value === undefined) {
+    if (input.qtyDelta > 0) {
+      throw new AppError("positiveStockUnitCostRequired", "BAD_REQUEST", 400);
+    }
+    return input.note ?? undefined;
+  }
+  if (!Number.isFinite(value)) {
+    throw new AppError("stockMovementValueRequired", "BAD_REQUEST", 400);
+  }
+  if ((input.qtyDelta > 0 && value < 0) || (input.qtyDelta < 0 && value > 0)) {
+    throw new AppError("productCostContributionMismatch", "CONFLICT", 409);
+  }
+  if (input.qtyDelta > 0 && value === 0) {
+    const reason = input.zeroCostReason?.trim();
+    if (!input.zeroCostConfirmed || !reason) {
+      throw new AppError("zeroCostConfirmationRequired", "BAD_REQUEST", 400);
+    }
+    const baseNote = input.note?.trim();
+    return [baseNote || null, `${ZERO_COST_REASON_MARKER} ${reason}`].filter(Boolean).join(" • ");
+  }
+  return input.note ?? undefined;
 };
 
 const resolveVariantKey = (variantId?: string | null) => variantId ?? "BASE";
@@ -107,6 +142,7 @@ export const applyStockMovement = async (
   tx: Prisma.TransactionClient,
   input: ApplyStockMovementInput,
 ): Promise<{ snapshot: InventorySnapshot; movementId: string }> => {
+  const auditedNote = resolveAuditedMovementNote(input);
   const store = await tx.store.findUnique({ where: { id: input.storeId } });
   if (!store) {
     throw new AppError("storeNotFound", "NOT_FOUND", 404);
@@ -224,7 +260,7 @@ export const applyStockMovement = async (
       inventoryValueDeltaKgs: input.inventoryValueDeltaKgs ?? undefined,
       referenceType: input.referenceType,
       referenceId: input.referenceId,
-      note: input.note ?? undefined,
+      note: auditedNote,
       createdById: input.actorId ?? undefined,
       createdAt: input.movementDate ?? undefined,
     },
@@ -278,12 +314,34 @@ export const adjustStock = async (input: StockAdjustmentInput): Promise<StockAdj
           },
         });
 
-        const valuation = await applyCurrentProductCostQuantityDelta(tx, {
-          organizationId: input.organizationId,
-          productId: input.productId,
-          variantId: input.variantId,
-          quantityDelta: qtyDelta,
-        });
+        let valuation: { unitCostKgs: number; inventoryValueDeltaKgs: number } | null;
+        if (qtyDelta > 0 && input.unitCostKgs !== null && input.unitCostKgs !== undefined) {
+          if (!Number.isFinite(input.unitCostKgs) || input.unitCostKgs < 0) {
+            throw new AppError("unitCostInvalid", "BAD_REQUEST", 400);
+          }
+          const inventoryValueDeltaKgs = Number(
+            new Prisma.Decimal(input.unitCostKgs.toString())
+              .mul(qtyDelta)
+              .toDecimalPlaces(6, Prisma.Decimal.ROUND_HALF_UP),
+          );
+          await applyValuedProductCostDelta(tx, {
+            organizationId: input.organizationId,
+            productId: input.productId,
+            variantId: input.variantId,
+            quantityDelta: qtyDelta,
+            valueDeltaKgs: inventoryValueDeltaKgs,
+            zeroCostConfirmed: input.zeroCostConfirmed,
+            zeroCostReason: input.zeroCostReason,
+          });
+          valuation = { unitCostKgs: input.unitCostKgs, inventoryValueDeltaKgs };
+        } else {
+          valuation = await applyCurrentProductCostQuantityDelta(tx, {
+            organizationId: input.organizationId,
+            productId: input.productId,
+            variantId: input.variantId,
+            quantityDelta: qtyDelta,
+          });
+        }
         const { snapshot, movementId } = await applyStockMovement(tx, {
           storeId: input.storeId,
           productId: input.productId,
@@ -294,6 +352,8 @@ export const adjustStock = async (input: StockAdjustmentInput): Promise<StockAdj
           lineTotalKgs: valuation?.inventoryValueDeltaKgs,
           inventoryValueDeltaKgs: valuation?.inventoryValueDeltaKgs,
           note: input.reason,
+          zeroCostConfirmed: input.zeroCostConfirmed,
+          zeroCostReason: input.zeroCostReason,
           actorId: input.actorId,
           organizationId: input.organizationId,
           allowNegativeStock: true,
@@ -530,6 +590,8 @@ export type ReceiveStockInput = {
   unitId?: string | null;
   packId?: string | null;
   unitCost?: number | null;
+  zeroCostConfirmed?: boolean;
+  zeroCostReason?: string | null;
   expiryDate?: Date | null;
   note?: string | null;
   actorId: string;
@@ -569,11 +631,10 @@ export const receiveStock = async (input: ReceiveStockInput): Promise<StockAdjus
           packId: input.packId,
           mode: "receiving",
         });
-        if (
-          input.unitCost !== null &&
-          input.unitCost !== undefined &&
-          (!Number.isFinite(input.unitCost) || input.unitCost < 0)
-        ) {
+        if (input.unitCost === null || input.unitCost === undefined) {
+          throw new AppError("positiveStockUnitCostRequired", "BAD_REQUEST", 400);
+        }
+        if (!Number.isFinite(input.unitCost) || input.unitCost < 0) {
           throw new AppError("unitCostInvalid", "BAD_REQUEST", 400);
         }
 
@@ -587,33 +648,29 @@ export const receiveStock = async (input: ReceiveStockInput): Promise<StockAdjus
           },
         });
 
-        if (input.unitCost !== null && input.unitCost !== undefined) {
-          await updateProductCost(tx, {
-            organizationId: input.organizationId,
-            productId: input.productId,
-            variantId: input.variantId,
-            qtyReceived,
-            unitCost: input.unitCost,
-          });
-        }
+        await updateProductCost(tx, {
+          organizationId: input.organizationId,
+          productId: input.productId,
+          variantId: input.variantId,
+          qtyReceived,
+          unitCost: input.unitCost,
+          zeroCostConfirmed: input.zeroCostConfirmed,
+          zeroCostReason: input.zeroCostReason,
+        });
 
-        const inventoryValueDeltaKgs =
-          input.unitCost === null || input.unitCost === undefined
-            ? undefined
-            : qtyReceived * input.unitCost;
+        const inventoryValueDeltaKgs = qtyReceived * input.unitCost;
         const { snapshot, movementId } = await applyStockMovement(tx, {
           storeId: input.storeId,
           productId: input.productId,
           variantId: input.variantId,
           qtyDelta: qtyReceived,
           type: StockMovementType.RECEIVE,
-          unitCostKgs: input.unitCost ?? undefined,
-          lineTotalKgs:
-            input.unitCost === null || input.unitCost === undefined
-              ? undefined
-              : qtyReceived * input.unitCost,
+          unitCostKgs: input.unitCost,
+          lineTotalKgs: qtyReceived * input.unitCost,
           inventoryValueDeltaKgs,
           note: input.note ?? undefined,
+          zeroCostConfirmed: input.zeroCostConfirmed,
+          zeroCostReason: input.zeroCostReason,
           actorId: input.actorId,
           organizationId: input.organizationId,
           allowNegativeStock: true,
@@ -695,6 +752,8 @@ export type StockReceivingInput = {
   supplierName?: string | null;
   note?: string | null;
   referenceNumber?: string | null;
+  zeroCostConfirmed?: boolean;
+  zeroCostReason?: string | null;
   lines: StockReceivingLineInput[];
   actorId: string;
   organizationId: string;
@@ -764,10 +823,8 @@ const buildReceivingMovementNote = (input: {
   note?: string | null;
 }) =>
   [
-    input.referenceNumber?.trim()
-      ? `Оприходование ${input.referenceNumber.trim()}`
-      : "Оприходование",
-    input.supplierName?.trim() ? `Поставщик: ${input.supplierName.trim()}` : null,
+    input.referenceNumber?.trim() || null,
+    input.supplierName?.trim() || null,
     input.note?.trim() ? input.note.trim() : null,
   ]
     .filter(Boolean)
@@ -815,6 +872,12 @@ export const postStockReceiving = async (
           unitCost: line.unitCost,
         }));
         const lineKeys = new Set<string>();
+        if (
+          normalizedLines.some((line) => line.unitCost === 0) &&
+          (!input.zeroCostConfirmed || !input.zeroCostReason?.trim())
+        ) {
+          throw new AppError("zeroCostConfirmationRequired", "BAD_REQUEST", 400);
+        }
         for (const line of normalizedLines) {
           const key = `${line.productId}:${line.variantKey}`;
           if (lineKeys.has(key)) {
@@ -891,6 +954,8 @@ export const postStockReceiving = async (
             variantId: line.variantId,
             qtyReceived: line.quantity,
             unitCost: line.unitCost,
+            zeroCostConfirmed: input.zeroCostConfirmed,
+            zeroCostReason: input.zeroCostReason,
           });
 
           const inventoryValueDeltaKgs = line.quantity * line.unitCost;
@@ -907,6 +972,8 @@ export const postStockReceiving = async (
             lineTotalKgs: line.quantity * line.unitCost,
             inventoryValueDeltaKgs,
             note: movementNote,
+            zeroCostConfirmed: input.zeroCostConfirmed,
+            zeroCostReason: input.zeroCostReason,
             actorId: input.actorId,
             organizationId: input.organizationId,
             movementDate: input.date ?? null,

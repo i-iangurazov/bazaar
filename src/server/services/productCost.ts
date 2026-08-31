@@ -10,6 +10,11 @@ type ProductCostScope = {
   variantId?: string | null;
 };
 
+export type ZeroCostAuthorization = {
+  zeroCostConfirmed?: boolean;
+  zeroCostReason?: string | null;
+};
+
 export type ProductCostBasis = {
   avgCostKgs: Prisma.Decimal;
   costBasisQty: number;
@@ -66,6 +71,12 @@ const decimal = (value: number | Prisma.Decimal) => new Prisma.Decimal(value.toS
 
 const normalizeBasisValue = (value: Prisma.Decimal) =>
   value.toDecimalPlaces(BASIS_VALUE_SCALE, COST_ROUNDING);
+
+const assertDeliberateZeroCost = (input: ZeroCostAuthorization) => {
+  if (!input.zeroCostConfirmed || !input.zeroCostReason?.trim()) {
+    throw new AppError("zeroCostConfirmationRequired", "BAD_REQUEST", 400);
+  }
+};
 
 const projectAverageCost = (basisValue: Prisma.Decimal, quantity: number) =>
   quantity > 0
@@ -271,7 +282,7 @@ export const setProductCostBasis = async (
     quantity: number;
     unitCost: number | Prisma.Decimal;
     lastReceiptAt?: Date | null;
-  },
+  } & ZeroCostAuthorization,
 ) => {
   if (!Number.isInteger(input.quantity) || input.quantity < 0) {
     throw new AppError("invalidDocumentQuantity", "BAD_REQUEST", 400);
@@ -279,6 +290,9 @@ export const setProductCostBasis = async (
   const unitCost = decimal(input.unitCost);
   if (!unitCost.isFinite() || unitCost.lt(0)) {
     throw new AppError("unitCostInvalid", "BAD_REQUEST", 400);
+  }
+  if (input.quantity > 0 && unitCost.equals(0)) {
+    assertDeliberateZeroCost(input);
   }
 
   await lockProductCostScope(tx, input);
@@ -376,7 +390,7 @@ export const applyValuedProductCostDelta = async (
     quantityDelta: number;
     valueDeltaKgs: number | Prisma.Decimal;
     lastReceiptAt?: Date | null;
-  },
+  } & ZeroCostAuthorization,
 ) => {
   if (!Number.isInteger(input.quantityDelta)) {
     throw new AppError("invalidDocumentQuantity", "BAD_REQUEST", 400);
@@ -390,6 +404,9 @@ export const applyValuedProductCostDelta = async (
     (input.quantityDelta < 0 && valueDelta.gt(0))
   ) {
     throw new AppError("productCostContributionMismatch", "CONFLICT", 409);
+  }
+  if (input.quantityDelta > 0 && valueDelta.equals(0)) {
+    assertDeliberateZeroCost(input);
   }
   if (input.quantityDelta === 0 && valueDelta.equals(0)) {
     return null;
@@ -478,7 +495,11 @@ export const resolveCurrentProductCostValuation = async (
     return null;
   }
 
-  const preciseUnitCost = resolveStoredBasisValue(existing).div(existing.costBasisQty);
+  const storedBasisValue = resolveStoredBasisValue(existing);
+  if (storedBasisValue.lte(0)) {
+    return null;
+  }
+  const preciseUnitCost = storedBasisValue.div(existing.costBasisQty);
   return {
     unitCostKgs: Number(preciseUnitCost.toDecimalPlaces(AVERAGE_COST_SCALE, COST_ROUNDING)),
     totalValueKgs: Number(normalizeBasisValue(preciseUnitCost.mul(input.quantity))),
@@ -510,11 +531,17 @@ export const applyCurrentProductCostQuantityDelta = async (
     },
   });
   if (!existing || existing.costBasisQty <= 0) {
+    if (input.quantityDelta > 0) {
+      throw new AppError("positiveStockUnitCostRequired", "BAD_REQUEST", 400);
+    }
     return null;
   }
 
   const previousQuantity = existing.costBasisQty;
   const previousBasisValue = resolveStoredBasisValue(existing);
+  if (input.quantityDelta > 0 && previousBasisValue.lte(0)) {
+    throw new AppError("positiveStockUnitCostRequired", "BAD_REQUEST", 400);
+  }
   const nextQuantity = previousQuantity + input.quantityDelta;
   if (nextQuantity < 0) {
     throw new AppError("valuedNegativeStockDepletionBlocked", "CONFLICT", 409);
@@ -550,7 +577,7 @@ export const updateProductCost = async (
   input: ProductCostScope & {
     qtyReceived: number;
     unitCost: number;
-  },
+  } & ZeroCostAuthorization,
 ) => {
   if (input.qtyReceived <= 0) {
     return null;
@@ -569,6 +596,8 @@ export const updateProductCost = async (
     quantityDelta: input.qtyReceived,
     valueDeltaKgs: normalizeBasisValue(decimal(input.unitCost).mul(input.qtyReceived)),
     lastReceiptAt: new Date(),
+    zeroCostConfirmed: input.zeroCostConfirmed,
+    zeroCostReason: input.zeroCostReason,
   });
 };
 
