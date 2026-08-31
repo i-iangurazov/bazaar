@@ -529,7 +529,7 @@ const BazaarApiDocsPage = () => (
             {endpoints.map((endpoint) => {
               const Icon = endpoint.icon;
               return (
-                <div key={endpoint.path} className="rounded-md border border-slate-200 bg-white p-5">
+                <div key={`${endpoint.method}:${endpoint.path}`} className="rounded-md border border-slate-200 bg-white p-5">
                   <Icon className="h-6 w-6 text-blue-700" aria-hidden />
                   <div className="mt-4 flex items-center gap-2">
                     <MethodBadge method={endpoint.method} />
@@ -774,8 +774,14 @@ curl -X GET "${baseUrl}/orders/MARKET-10001" \\
               <div>
                 <h3 className="font-semibold text-slate-950">Публичная ссылка</h3>
                 <p className="mt-1 text-sm leading-6 text-slate-600">
-                  После деплоя документация будет доступна по адресу{" "}
-                  <code>/developers/bazaar-api</code> на вашем домене.
+                  Актуальная документация опубликована по адресу{" "}
+                  <Link
+                    href="https://www.bazaar.kg/developers/bazaar-api"
+                    className="font-medium text-blue-700 underline underline-offset-2"
+                  >
+                    www.bazaar.kg/developers/bazaar-api
+                  </Link>
+                  .
                 </p>
               </div>
             </div>

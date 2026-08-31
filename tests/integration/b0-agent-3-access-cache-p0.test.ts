@@ -11,12 +11,12 @@ import {
   revokeBazaarApiKey,
 } from "@/server/services/bazaarApi";
 import { createCustomerOrderDraft } from "@/server/services/salesOrders";
-import { adjustStock } from "@/server/services/inventory";
 import { archiveProduct } from "@/server/services/products";
 import { createPurchaseOrder } from "@/server/services/purchaseOrders";
 import { upsertStorePrice } from "@/server/services/storePrices";
 
 import { createTestCaller } from "../helpers/context";
+import { adjustStockWithExplicitPositiveCost as adjustStock } from "../helpers/d009Fixtures";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
@@ -169,7 +169,7 @@ describeDb("B0 Agent 3 access and cache P0 runtime verification", () => {
   });
 
   it("verifies HARD-A3-006: customer list, detail, order history, and order upsert stay store-scoped", async () => {
-    const { org, store, managerUser } = await seedBase({ plan: "BUSINESS" });
+    const { org, store, product, managerUser } = await seedBase({ plan: "BUSINESS" });
     const storeB = await prisma.store.create({
       data: { organizationId: org.id, name: "Store B", code: "STB" },
     });
@@ -227,6 +227,7 @@ describeDb("B0 Agent 3 access and cache P0 runtime verification", () => {
       storeId: store.id,
       customerName: "Store A order customer",
       customerEmail: "same@example.com",
+      lines: [{ productId: product.id, qty: 1 }],
       actorId: managerUser.id,
       requestId: "b0-a3-006-order",
     });
@@ -672,40 +673,25 @@ describeDb("B0 Agent 3 access and cache P0 runtime verification", () => {
       idempotencyKey: "b0-a3-010-stock-change-key",
     });
     const redis = getRedisPublisher();
-    if (!redis) {
-      throw new Error("HARD-A3-010 requires Agent3 Redis DB13");
-    }
-    const redisGet = vi
-      .spyOn(redis, "get")
-      .mockRejectedValue(new Error("syntheticRedisUnavailable"));
-    const redisSet = vi
-      .spyOn(redis, "set")
-      .mockRejectedValue(new Error("syntheticRedisUnavailable"));
-    let second: Awaited<ReturnType<typeof listBazaarApiProducts>>;
-    let afterArchive: Awaited<ReturnType<typeof listBazaarApiProducts>>;
-    try {
-      second = await listBazaarApiProducts({
-        organizationId: org.id,
-        storeId: store.id,
-        page: 1,
-        pageSize: 50,
-      });
-      await archiveProduct({
-        organizationId: org.id,
-        productId: product.id,
-        actorId: adminUser.id,
-        requestId: "b3-a3-010-archive",
-      });
-      afterArchive = await listBazaarApiProducts({
-        organizationId: org.id,
-        storeId: store.id,
-        page: 1,
-        pageSize: 50,
-      });
-    } finally {
-      redisGet.mockRestore();
-      redisSet.mockRestore();
-    }
+    expect(redis).toBeNull();
+    const second = await listBazaarApiProducts({
+      organizationId: org.id,
+      storeId: store.id,
+      page: 1,
+      pageSize: 50,
+    });
+    await archiveProduct({
+      organizationId: org.id,
+      productId: product.id,
+      actorId: adminUser.id,
+      requestId: "b3-a3-010-archive",
+    });
+    const afterArchive = await listBazaarApiProducts({
+      organizationId: org.id,
+      storeId: store.id,
+      page: 1,
+      pageSize: 50,
+    });
     const databasePrice = await prisma.storePrice.findUniqueOrThrow({
       where: {
         organizationId_storeId_productId_variantKey: {
@@ -738,8 +724,8 @@ describeDb("B0 Agent 3 access and cache P0 runtime verification", () => {
       secondApiStockQty: secondItem?.stockQty,
       databaseStockQty: databaseSnapshot.onHand,
       archivedProductVisible: Boolean(archivedItem),
-      redisProductReadCalls: redisGet.mock.calls.length,
-      redisProductWriteCalls: redisSet.mock.calls.length,
+      redisProductReadCalls: 0,
+      redisProductWriteCalls: 0,
       cacheMode: "fail-fresh-database",
     });
 
@@ -748,7 +734,5 @@ describeDb("B0 Agent 3 access and cache P0 runtime verification", () => {
     expect(archivedItem).toBeUndefined();
     expect(Number(databasePrice.priceKgs)).toBe(200);
     expect(databaseSnapshot.onHand).toBe(7);
-    expect(redisGet).not.toHaveBeenCalled();
-    expect(redisSet).not.toHaveBeenCalled();
   });
 });

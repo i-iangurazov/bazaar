@@ -1,4 +1,4 @@
-import { toIntlLocale } from "@/lib/locales";
+import { normalizeLocale, toIntlLocale } from "@/lib/locales";
 
 export const supportedCurrencyCodes = ["KGS", "USD", "GBP"] as const;
 
@@ -80,11 +80,32 @@ export const formatCurrencyAmount = (
       : defaultFractionDigits);
 
   if (minimumFractionDigits > maximumFractionDigits) {
-    if (options?.maximumFractionDigits !== undefined && options.minimumFractionDigits === undefined) {
+    if (
+      options?.maximumFractionDigits !== undefined &&
+      options.minimumFractionDigits === undefined
+    ) {
       minimumFractionDigits = maximumFractionDigits;
     } else {
       maximumFractionDigits = minimumFractionDigits;
     }
+  }
+
+  if (normalizeLocale(locale) === "kg" && currencyCode === "KGS") {
+    const numericOptions: Intl.NumberFormatOptions = {
+      ...options,
+      style: "decimal",
+      minimumFractionDigits,
+      maximumFractionDigits,
+    };
+    delete numericOptions.currency;
+    delete numericOptions.currencyDisplay;
+    delete numericOptions.currencySign;
+    // Keep the product locale contract stable across Node and Chromium ICU builds.
+    const formattedAmount = new Intl.NumberFormat("ky-KG", numericOptions)
+      .formatToParts(amount)
+      .map((part) => (part.type === "decimal" ? "," : part.value))
+      .join("");
+    return `${formattedAmount}\u00a0сом`;
   }
 
   return new Intl.NumberFormat(toIntlLocale(locale), {

@@ -40,6 +40,11 @@ import {
   serializeProductPricing,
 } from "@/server/services/products/serializers";
 import { getEffectiveProductPrice } from "@/server/services/effectiveProductPrice";
+import {
+  productCostBasisSelect,
+  resolveProductCostDisplayUnit,
+  resolveProductCostDisplayUnitNumber,
+} from "@/server/services/productCost";
 
 type PrismaDbClient = PrismaClient | Prisma.TransactionClient;
 
@@ -635,8 +640,14 @@ const buildProductSqlSortExpression = ({
                 AND price."discountPercentage" IS NOT NULL
                 AND price."discountPercentage" > 0
                 AND price."discountPercentage" < 100
-                AND (price."discountStartsAt" IS NULL OR price."discountStartsAt" <= ${pricingTime})
-                AND (price."discountEndsAt" IS NULL OR ${pricingTime} < price."discountEndsAt")
+                AND (
+                  price."discountStartsAt" IS NULL
+                  OR price."discountStartsAt" <= (${pricingTime} AT TIME ZONE 'UTC')
+                )
+                AND (
+                  price."discountEndsAt" IS NULL
+                  OR (${pricingTime} AT TIME ZONE 'UTC') < price."discountEndsAt"
+                )
               THEN ROUND(price."priceKgs" * (100 - price."discountPercentage") / 100, 2)
               ELSE price."priceKgs"
             END
@@ -650,7 +661,14 @@ const buildProductSqlSortExpression = ({
         : Prisma.sql`p."basePriceKgs"`;
     case "avgCost":
       return Prisma.sql`(
-        SELECT cost."avgCostKgs"
+        SELECT CASE
+          WHEN cost."preciseCostBasisQty" > 0
+            AND cost."costBasisValueKgs" IS NOT NULL
+            AND cost."valuationLegacyUpdatedAt" IS NOT NULL
+            AND cost."updatedAt" <= cost."valuationLegacyUpdatedAt"
+            THEN ROUND(cost."costBasisValueKgs" / cost."preciseCostBasisQty", 2)
+          ELSE cost."avgCostKgs"
+        END
         FROM "ProductCost" cost
         WHERE cost."organizationId" = ${organizationId}
           AND cost."productId" = p.id
@@ -1267,7 +1285,7 @@ export const listProducts = async ({
           },
           select: {
             productId: true,
-            avgCostKgs: true,
+            ...productCostBasisSelect,
           },
         }),
         prisma.purchaseOrderLine.findMany({
@@ -1332,7 +1350,7 @@ export const listProducts = async ({
   }
 
   const avgCostByProductId = new Map(
-    baseCosts.map((cost) => [cost.productId, Number(cost.avgCostKgs)]),
+    baseCosts.map((cost) => [cost.productId, resolveProductCostDisplayUnitNumber(cost)]),
   );
   const purchasePriceByProductId = new Map(
     latestPurchaseLines.map((line) => [line.productId, Number(line.unitCost)]),
@@ -1610,7 +1628,7 @@ export const getProductById = async ({
           variantKey: "BASE",
         },
       },
-      select: { avgCostKgs: true },
+      select: productCostBasisSelect,
     }),
     prisma.purchaseOrderLine.findFirst({
       where: {
@@ -1656,7 +1674,7 @@ export const getProductById = async ({
     });
   }
 
-  const avgCostKgs = decimalToNumber(baseCost?.avgCostKgs);
+  const avgCostKgs = baseCost ? resolveProductCostDisplayUnitNumber(baseCost) : null;
   const purchasePriceKgs =
     latestPurchaseLine?.unitCost !== null && latestPurchaseLine?.unitCost !== undefined
       ? Number(latestPurchaseLine.unitCost)
@@ -1739,14 +1757,14 @@ export const getProductPricing = async ({
           variantKey: "BASE",
         },
       },
-      select: { avgCostKgs: true },
+      select: productCostBasisSelect,
     }),
   ]);
 
   return serializeProductPricing({
     basePriceKgs: product.basePriceKgs,
     effectivePriceKgs: storePrice?.priceKgs ?? product.basePriceKgs,
-    avgCostKgs: cost?.avgCostKgs ?? null,
+    avgCostKgs: cost ? resolveProductCostDisplayUnit(cost) : null,
     priceOverridden: Boolean(storePrice),
   });
 };
@@ -1841,7 +1859,7 @@ export const getProductStorePricing = async ({
             variantKey: "BASE",
           },
         },
-        select: { avgCostKgs: true },
+        select: productCostBasisSelect,
       }),
       prisma.inventorySnapshot.findMany({
         where: {
@@ -1918,7 +1936,7 @@ export const getProductStorePricing = async ({
 
   return {
     basePriceKgs: basePrice,
-    avgCostKgs: decimalToNumber(cost?.avgCostKgs),
+    avgCostKgs: cost ? resolveProductCostDisplayUnitNumber(cost) : null,
     stores: stores.map((store) => {
       const override = overrideByStore.get(store.id);
       const effective = override ?? basePrice;
@@ -2025,7 +2043,7 @@ export const exportProductsCsv = async ({
           },
           select: {
             productId: true,
-            avgCostKgs: true,
+            ...productCostBasisSelect,
           },
         }),
         prisma.purchaseOrderLine.findMany({
@@ -2075,7 +2093,7 @@ export const exportProductsCsv = async ({
     : [[], [], [], []];
 
   const avgCostByProductId = new Map(
-    baseCosts.map((cost) => [cost.productId, decimalToNumber(cost.avgCostKgs)]),
+    baseCosts.map((cost) => [cost.productId, resolveProductCostDisplayUnitNumber(cost)]),
   );
   const purchasePriceByProductId = new Map(
     latestPurchaseLines.map((line) => [line.productId, Number(line.unitCost)]),

@@ -33,6 +33,12 @@ const HelpLayout = async ({ children }: { children: React.ReactNode }) => {
           <nav aria-label="Bazaar Guide footer">
             <Link href="/help">Guide</Link>
             <Link href="/developers/bazaar-api">API</Link>
+            <Link href="/privacy">
+              {localize({ ru: "Конфиденциальность", kg: "Купуялык", en: "Privacy" }, locale)}
+            </Link>
+            <Link href="/legal">
+              {localize({ ru: "Правовая информация", kg: "Укуктук маалымат", en: "Legal" }, locale)}
+            </Link>
             <Link href="mailto:support@bazaar.kg">
               {localize({ ru: "Поддержка", kg: "Колдоо", en: "Support" }, locale)}
             </Link>

@@ -453,7 +453,11 @@ const DashboardPage = () => {
           {dashboardQuery.data?.stores.length ? (
             <div className="mt-4">
               <Select value={storeId ?? ""} onValueChange={setRequestedStoreId}>
-                <SelectTrigger data-tour="dashboard-mobile-store-filter" className="min-h-11">
+                <SelectTrigger
+                  data-tour="dashboard-mobile-store-filter"
+                  aria-label={tCommon("selectStore")}
+                  className="min-h-11"
+                >
                   <SelectValue placeholder={tCommon("selectStore")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -587,7 +591,11 @@ const DashboardPage = () => {
             dashboardQuery.data?.stores.length ? (
               <div className="w-full sm:w-72">
                 <Select value={storeId ?? ""} onValueChange={setRequestedStoreId}>
-                  <SelectTrigger data-tour="dashboard-store-filter" className="h-11 bg-card">
+                  <SelectTrigger
+                    data-tour="dashboard-store-filter"
+                    aria-label={tCommon("selectStore")}
+                    className="h-11 bg-card"
+                  >
                     <SelectValue placeholder={tCommon("selectStore")} />
                   </SelectTrigger>
                   <SelectContent>

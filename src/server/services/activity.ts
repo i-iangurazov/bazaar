@@ -12,7 +12,7 @@ export type ActivityItem = {
   createdAt: Date;
   actor: ActivityActor | null;
   summaryKey?: string;
-  summaryValues?: Record<string, string | number | boolean | null>;
+  summaryValues?: Record<string, string | number>;
 };
 
 type AuditLogWithActor = AuditLog & { actor: ActivityActor | null };
@@ -143,7 +143,7 @@ export const enrichRecentActivity = async (
 
   return logs.map((log) => {
     let summaryKey: string | undefined;
-    let summaryValues: Record<string, string | number | boolean | null> | undefined;
+    let summaryValues: Record<string, string | number> | undefined;
 
     switch (log.action) {
       case "INVENTORY_ADJUST": {
@@ -239,7 +239,7 @@ export const enrichRecentActivity = async (
         summaryKey = "summary.storePolicyUpdate";
         summaryValues = {
           storeName: extractName(log) ?? "",
-          allowNegativeStock: extractAllowNegativeStock(log) ?? false,
+          allowNegativeStock: String(extractAllowNegativeStock(log) ?? false),
         };
         break;
       }

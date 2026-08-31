@@ -191,7 +191,7 @@ const StockCountsPage = () => {
                   setPage(1);
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger aria-label={tCommon("selectStore")}>
                   <SelectValue placeholder={tCommon("selectStore")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -211,7 +211,7 @@ const StockCountsPage = () => {
                   setPage(1);
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger aria-label={t("statusAll")}>
                   <SelectValue placeholder={t("statusAll")} />
                 </SelectTrigger>
                 <SelectContent>

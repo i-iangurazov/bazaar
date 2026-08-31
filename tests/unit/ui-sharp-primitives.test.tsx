@@ -472,6 +472,11 @@ describe("soft-rounded UI primitives", () => {
         (row) => row.querySelector("td")?.textContent,
       );
 
+    expect(
+      container
+        .querySelector('[data-component="data-table"]')
+        ?.classList.contains("[contain:layout]"),
+    ).toBe(true);
     expect(container.textContent).not.toContain("[object Object]");
     expect(rowNames()).toEqual(["Beta", "Alpha"]);
     fireEvent.click(screen.getByRole("button", { name: "Name" }));

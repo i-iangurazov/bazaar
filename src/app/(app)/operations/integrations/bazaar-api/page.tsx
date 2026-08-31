@@ -102,7 +102,7 @@ const BazaarApiSettingsPage = () => {
               onValueChange={setStoreId}
               disabled={storesQuery.isLoading || !stores.length}
             >
-              <SelectTrigger>
+              <SelectTrigger aria-label={t("storeTitle")}>
                 <SelectValue placeholder={t("storePlaceholder")} />
               </SelectTrigger>
               <SelectContent>

@@ -6,14 +6,19 @@ import { useEffect, useRef, useState } from "react";
 
 import styles from "./marketing.module.css";
 
-const links = [
-  { href: "#platform", label: "Продукт" },
-  { href: "#pos", label: "Возможности" },
-  { href: "#commerce", label: "Интеграции" },
-  { href: "#pricing", label: "Тарифы" },
-];
+export type MarketingNavCopy = {
+  homeLabel: string;
+  navigationLabel: string;
+  mobileNavigationLabel: string;
+  openMenuLabel: string;
+  closeMenuLabel: string;
+  signIn: string;
+  startFree: string;
+  signInWorkspace: string;
+  links: Array<{ href: string; label: string }>;
+};
 
-export const MarketingNav = () => {
+export const MarketingNav = ({ copy }: { copy: MarketingNavCopy }) => {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
@@ -54,27 +59,27 @@ export const MarketingNav = () => {
   return (
     <header className={`${styles.nav} ${scrolled ? styles.navScrolled : ""}`}>
       <div className={styles.navInner}>
-        <Link href="/" className={styles.brand} aria-label="Bazaar — на главную">
+        <Link href="/" className={styles.brand} aria-label={copy.homeLabel}>
           <Image src="/brand/icon.png" width={34} height={34} alt="" priority />
           <span>BAZAAR</span>
         </Link>
-        <nav className={styles.desktopNav} aria-label="Основная навигация">
-          {links.map((link) => (
+        <nav className={styles.desktopNav} aria-label={copy.navigationLabel}>
+          {copy.links.map((link) => (
             <a key={link.href} href={link.href}>
               {link.label}
             </a>
           ))}
         </nav>
         <div className={styles.navActions}>
-          <Link href="/login">Войти</Link>
+          <Link href="/login">{copy.signIn}</Link>
           <Link className={styles.navCta} href="/signup">
-            Начать бесплатно
+            {copy.startFree}
           </Link>
           <button
             ref={menuButtonRef}
             type="button"
             className={styles.menuButton}
-            aria-label={open ? "Закрыть меню" : "Открыть меню"}
+            aria-label={open ? copy.closeMenuLabel : copy.openMenuLabel}
             aria-expanded={open}
             aria-controls="marketing-mobile-navigation"
             onClick={() => setOpen((current) => !current)}
@@ -86,18 +91,18 @@ export const MarketingNav = () => {
       </div>
       {open ? (
         <div ref={mobileNavRef} id="marketing-mobile-navigation" className={styles.mobileNav}>
-          <nav aria-label="Мобильная навигация">
-            {links.map((link) => (
+          <nav aria-label={copy.mobileNavigationLabel}>
+            {copy.links.map((link) => (
               <a key={link.href} href={link.href} onClick={() => setOpen(false)}>
                 {link.label}
               </a>
             ))}
           </nav>
           <Link href="/login" onClick={() => setOpen(false)}>
-            Войти в Bazaar
+            {copy.signInWorkspace}
           </Link>
           <Link href="/signup" className={styles.mobileNavCta} onClick={() => setOpen(false)}>
-            Начать бесплатно
+            {copy.startFree}
           </Link>
         </div>
       ) : null}

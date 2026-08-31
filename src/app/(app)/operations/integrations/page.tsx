@@ -205,6 +205,68 @@ const IntegrationsPage = () => {
       : productImageStudioOverviewQuery.data?.status === "ERROR"
         ? t("productImageStudio.status.error")
         : t("productImageStudio.status.notConfigured");
+
+  const withQueryStatus = (
+    query: { error: unknown; isLoading: boolean },
+    status: string,
+    statusVariant: BadgeVariant,
+  ) => {
+    if (query.isLoading) {
+      return { status: t("status.loading"), statusVariant: "muted" as const };
+    }
+    if (query.error) {
+      return { status: t("status.unavailable"), statusVariant: "danger" as const };
+    }
+    return { status, statusVariant };
+  };
+
+  const queryDetail = (
+    query: { error: unknown; isLoading: boolean },
+    configured: boolean,
+    configuredDetail?: ReactNode,
+  ) => {
+    if (query.isLoading) return t("state.loading");
+    if (query.error) return t("state.loadError");
+    if (configuredDetail) return configuredDetail;
+    return configured ? t("state.configured") : t("state.notConfigured");
+  };
+
+  const catalogTileStatus = withQueryStatus(
+    storesQuery,
+    t(`status.${statusLabelKey}`),
+    summaryStatus === "PUBLISHED" ? "success" : summaryStatus === "DRAFT" ? "warning" : "muted",
+  );
+  const apiKeysState = {
+    error: storesQuery.error ?? apiKeysQuery.error,
+    isLoading: storesQuery.isLoading || (Boolean(defaultStoreId) && apiKeysQuery.isLoading),
+  };
+  const apiTileStatus = withQueryStatus(
+    apiKeysState,
+    activeApiKeyCount > 0 ? t("status.ready") : t("status.notConfigured"),
+    activeApiKeyCount > 0 ? "success" : "muted",
+  );
+  const emailTileStatus = withQueryStatus(
+    emailMarketingOverviewQuery,
+    emailMarketingOverviewQuery.data?.status === "READY"
+      ? t("emailMarketing.status.ready")
+      : t("emailMarketing.status.notConfigured"),
+    emailMarketingOverviewQuery.data?.status === "READY" ? "success" : "muted",
+  );
+  const mMarketTileStatus = withQueryStatus(
+    mMarketOverviewQuery,
+    mMarketStatus,
+    mMarketStatusVariant,
+  );
+  const bakaiStoreTileStatus = withQueryStatus(
+    bakaiStoreOverviewQuery,
+    bakaiStoreStatus,
+    bakaiStoreStatusVariant,
+  );
+  const oMarketTileStatus = withQueryStatus(
+    oMarketOverviewQuery,
+    oMarketStatus,
+    oMarketStatusVariant,
+  );
   return (
     <div className="space-y-6">
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
@@ -213,19 +275,15 @@ const IntegrationsPage = () => {
         <IntegrationTile
           title={t("bazaarCatalog.title")}
           description={t("bazaarCatalog.description")}
-          status={t(`status.${statusLabelKey}`)}
-          statusVariant={
-            summaryStatus === "PUBLISHED"
-              ? "success"
-              : summaryStatus === "DRAFT"
-                ? "warning"
-                : "muted"
-          }
-          detail={
+          status={catalogTileStatus.status}
+          statusVariant={catalogTileStatus.statusVariant}
+          detail={queryDetail(
+            storesQuery,
+            summaryStatus !== "NOT_CONFIGURED",
             publishedEntry?.storeName
               ? t("bazaarCatalog.publishedStore", { store: publishedEntry.storeName })
-              : null
-          }
+              : undefined,
+          )}
           actions={
             <>
               <ActionLink href={settingsHref}>
@@ -252,9 +310,13 @@ const IntegrationsPage = () => {
         <IntegrationTile
           title={t("bazaarApi.title")}
           description={t("bazaarApi.description")}
-          status={activeApiKeyCount > 0 ? t("status.ready") : t("status.notConfigured")}
-          statusVariant={activeApiKeyCount > 0 ? "success" : "muted"}
-          detail={t("bazaarApi.activeKeys", { count: activeApiKeyCount })}
+          status={apiTileStatus.status}
+          statusVariant={apiTileStatus.statusVariant}
+          detail={queryDetail(
+            apiKeysState,
+            activeApiKeyCount > 0,
+            defaultStoreId ? t("bazaarApi.activeKeys", { count: activeApiKeyCount }) : undefined,
+          )}
           actions={
             <ActionLink href={apiSettingsHref}>
               <Button>{t("bazaarApi.manageKeys")}</Button>
@@ -266,17 +328,17 @@ const IntegrationsPage = () => {
           <IntegrationTile
             title={t("emailMarketing.title")}
             description={t("emailMarketing.description")}
-            status={
-              emailMarketingOverviewQuery.data?.status === "READY"
-                ? t("emailMarketing.status.ready")
-                : t("emailMarketing.status.notConfigured")
-            }
-            statusVariant={
-              emailMarketingOverviewQuery.data?.status === "READY" ? "success" : "muted"
-            }
-            detail={t("emailMarketing.reachable", {
-              count: emailMarketingOverviewQuery.data?.reachableCustomers ?? 0,
-            })}
+            status={emailTileStatus.status}
+            statusVariant={emailTileStatus.statusVariant}
+            detail={queryDetail(
+              emailMarketingOverviewQuery,
+              emailMarketingOverviewQuery.data?.status === "READY",
+              emailMarketingOverviewQuery.data
+                ? t("emailMarketing.reachable", {
+                    count: emailMarketingOverviewQuery.data.reachableCustomers,
+                  })
+                : undefined,
+            )}
             actions={
               <ActionLink href="/operations/integrations/email-marketing">
                 <Button>{t("emailMarketing.open")}</Button>
@@ -288,8 +350,9 @@ const IntegrationsPage = () => {
         <IntegrationTile
           title={t("mMarket.title")}
           description={t("mMarket.description")}
-          status={mMarketStatus}
-          statusVariant={mMarketStatusVariant}
+          status={mMarketTileStatus.status}
+          statusVariant={mMarketTileStatus.statusVariant}
+          detail={queryDetail(mMarketOverviewQuery, Boolean(mMarketOverviewQuery.data?.configured))}
           actions={
             <>
               <ActionLink href="/operations/integrations/m-market">
@@ -307,8 +370,12 @@ const IntegrationsPage = () => {
         <IntegrationTile
           title={t("bakaiStore.title")}
           description={t("bakaiStore.description")}
-          status={bakaiStoreStatus}
-          statusVariant={bakaiStoreStatusVariant}
+          status={bakaiStoreTileStatus.status}
+          statusVariant={bakaiStoreTileStatus.statusVariant}
+          detail={queryDetail(
+            bakaiStoreOverviewQuery,
+            Boolean(bakaiStoreOverviewQuery.data?.configured),
+          )}
           actions={
             <>
               <ActionLink href="/operations/integrations/bakai-store">
@@ -326,9 +393,11 @@ const IntegrationsPage = () => {
         <IntegrationTile
           title={t("oMarket.title")}
           description={t("oMarket.description")}
-          status={oMarketStatus}
-          statusVariant={oMarketStatusVariant}
-          detail={
+          status={oMarketTileStatus.status}
+          statusVariant={oMarketTileStatus.statusVariant}
+          detail={queryDetail(
+            oMarketOverviewQuery,
+            Boolean(oMarketOverviewQuery.data?.configured),
             oMarketOverviewQuery.data?.lastSyncAt
               ? t("oMarket.lastSync", {
                   date: new Intl.DateTimeFormat(undefined, {
@@ -336,8 +405,8 @@ const IntegrationsPage = () => {
                     timeStyle: "short",
                   }).format(new Date(oMarketOverviewQuery.data.lastSyncAt)),
                 })
-              : null
-          }
+              : undefined,
+          )}
           actions={
             <>
               <ActionLink href="/operations/integrations/o-market">

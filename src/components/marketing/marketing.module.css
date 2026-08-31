@@ -1290,7 +1290,7 @@
 .footerBrand p {
   max-width: 280px;
   margin: 20px 0 0;
-  color: rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.52);
   font-size: 13px;
   line-height: 1.65;
 }
@@ -1311,7 +1311,7 @@
   font-weight: 650;
 }
 .footerLinks a {
-  color: rgba(255, 255, 255, 0.44);
+  color: rgba(255, 255, 255, 0.52);
   font-size: 12px;
   text-decoration: none;
   transition: color 160ms ease;
@@ -1325,7 +1325,7 @@
   grid-column: 1 / -1;
   justify-content: space-between;
   border-top: 1px solid var(--line-dark);
-  color: rgba(255, 255, 255, 0.32);
+  color: rgba(255, 255, 255, 0.46);
   font-size: 11px;
 }
 

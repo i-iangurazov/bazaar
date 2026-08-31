@@ -210,7 +210,7 @@ const MMarketSettingsPage = () => {
     },
   );
   const revealTokenQuery = trpc.mMarket.revealToken.useQuery(undefined, {
-    enabled: canEdit && Boolean(settingsQuery.data?.integration.hasToken),
+    enabled: false,
     refetchOnWindowFocus: false,
     retry: false,
     onError: (error) => {
@@ -221,10 +221,11 @@ const MMarketSettingsPage = () => {
   const saveConnectionMutation = trpc.mMarket.saveConnection.useMutation({
     onSuccess: async (_result, variables) => {
       setPreflightFresh(false);
-      if (variables.clearToken) {
+      if (variables.clearToken || variables.apiToken) {
         setApiToken("");
+        setShowApiToken(false);
       }
-      await Promise.all([settingsQuery.refetch(), jobsQuery.refetch(), revealTokenQuery.refetch()]);
+      await Promise.all([settingsQuery.refetch(), jobsQuery.refetch()]);
       toast({ variant: "success", description: t("connection.saved") });
     },
     onError: (error) => {
@@ -321,8 +322,7 @@ const MMarketSettingsPage = () => {
     { jobId: descriptionGenerationJobId ?? "" },
     {
       enabled: Boolean(descriptionGenerationJobId),
-      refetchInterval: (job) =>
-        isDescriptionGenerationJobRunning(job?.status) ? 2_000 : false,
+      refetchInterval: (job) => (isDescriptionGenerationJobRunning(job?.status) ? 2_000 : false),
       onSuccess: async (job) => {
         if (!isDescriptionGenerationJobRunning(job.status)) {
           await Promise.all([preflightQuery.refetch(), productsQuery.refetch()]);
@@ -432,20 +432,6 @@ const MMarketSettingsPage = () => {
     }
     setEnvironment(integration.environment);
   }, [settingsQuery.data?.integration]);
-
-  useEffect(() => {
-    if (!canEdit) {
-      return;
-    }
-    if (!settingsQuery.data?.integration.hasToken) {
-      setApiToken("");
-      return;
-    }
-    const token = revealTokenQuery.data?.apiToken;
-    if (typeof token === "string") {
-      setApiToken(token);
-    }
-  }, [canEdit, revealTokenQuery.data?.apiToken, settingsQuery.data?.integration.hasToken]);
 
   useEffect(() => {
     if (!settingsQuery.data?.stores) {
@@ -852,8 +838,29 @@ const MMarketSettingsPage = () => {
     });
   };
 
-  const handleClearToken = () => {
+  const revealSavedToken = async () => {
+    if (!canEdit || !settingsQuery.data?.integration.hasToken) {
+      return;
+    }
+    const result = await revealTokenQuery.refetch();
+    if (result.error) {
+      toast({ variant: "error", description: translateError(tErrors, result.error) });
+      return;
+    }
+    setApiToken(result.data?.apiToken ?? "");
+    setShowApiToken(true);
+  };
+
+  const handleClearToken = async () => {
     if (!canEdit) {
+      return;
+    }
+    const confirmed = await confirm({
+      description: t("connection.clearTokenWarning"),
+      confirmLabel: t("connection.clearToken"),
+      confirmVariant: "danger",
+    });
+    if (!confirmed) {
       return;
     }
     setShowApiToken(false);
@@ -1176,20 +1183,18 @@ const MMarketSettingsPage = () => {
     });
   }, [preflightData?.failedProducts, filterIssue, filterSku]);
 
-  const exportDisabledReason =
-    !activeStoreMapped
-      ? t("storeScope.mappingRequired")
-      : !preflightFresh || !preflightData
+  const exportDisabledReason = !activeStoreMapped
+    ? t("storeScope.mappingRequired")
+    : !preflightFresh || !preflightData
       ? t("export.disabledNeedPreflight")
       : !preflightData.canExport
         ? t("export.disabledFailed")
         : effectiveCooldownSeconds > 0
           ? t("export.disabledCooldown", { countdown: formatCountdown(effectiveCooldownSeconds) })
           : "";
-  const exportReadyDisabledReason =
-    !activeStoreMapped
-      ? t("storeScope.mappingRequired")
-      : !preflightFresh || !preflightData
+  const exportReadyDisabledReason = !activeStoreMapped
+    ? t("storeScope.mappingRequired")
+    : !preflightFresh || !preflightData
       ? t("export.disabledNeedPreflight")
       : readyProductsCount === 0
         ? t("export.disabledNoReadyProducts")
@@ -1221,7 +1226,7 @@ const MMarketSettingsPage = () => {
                 onValueChange={(value) => setEnvironment(value as MMarketEnvironment)}
                 disabled={!canEdit}
               >
-                <SelectTrigger>
+                <SelectTrigger aria-label={t("connection.environment")}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1236,7 +1241,17 @@ const MMarketSettingsPage = () => {
               <div className="grid grid-cols-2 items-center gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
                 <PasswordInput
                   visible={showApiToken}
-                  onVisibleChange={setShowApiToken}
+                  onVisibleChange={(nextVisible) => {
+                    if (!nextVisible) {
+                      setShowApiToken(false);
+                      return;
+                    }
+                    if (settingsQuery.data?.integration.hasToken && !apiToken) {
+                      void revealSavedToken();
+                      return;
+                    }
+                    setShowApiToken(true);
+                  }}
                   value={apiToken}
                   onChange={(event) => setApiToken(event.target.value)}
                   placeholder={
@@ -1323,32 +1338,32 @@ const MMarketSettingsPage = () => {
           <div className="bazaar-admin-table-shell">
             <div className="bazaar-admin-table-scroll">
               <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t("branches.columns.store")}</TableHead>
-                  <TableHead>{t("branches.columns.branch")}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {(settingsQuery.data?.stores ?? []).map((row) => (
-                  <TableRow key={row.storeId}>
-                    <TableCell className="font-medium">{row.storeName}</TableCell>
-                    <TableCell>
-                      <Input
-                        value={branchMappings[row.storeId] ?? ""}
-                        onChange={(event) =>
-                          setBranchMappings((prev) => ({
-                            ...prev,
-                            [row.storeId]: event.target.value,
-                          }))
-                        }
-                        placeholder={t("branches.branchPlaceholder")}
-                        disabled={!canEdit}
-                      />
-                    </TableCell>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t("branches.columns.store")}</TableHead>
+                    <TableHead>{t("branches.columns.branch")}</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
+                </TableHeader>
+                <TableBody>
+                  {(settingsQuery.data?.stores ?? []).map((row) => (
+                    <TableRow key={row.storeId}>
+                      <TableCell className="font-medium">{row.storeName}</TableCell>
+                      <TableCell>
+                        <Input
+                          value={branchMappings[row.storeId] ?? ""}
+                          onChange={(event) =>
+                            setBranchMappings((prev) => ({
+                              ...prev,
+                              [row.storeId]: event.target.value,
+                            }))
+                          }
+                          placeholder={t("branches.branchPlaceholder")}
+                          disabled={!canEdit}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
               </Table>
             </div>
           </div>
@@ -1380,7 +1395,7 @@ const MMarketSettingsPage = () => {
                 onValueChange={setActiveStoreId}
                 disabled={!canEdit && !canView}
               >
-                <SelectTrigger>
+                <SelectTrigger aria-label={t("storeScope.bazaarStore")}>
                   <SelectValue placeholder={tCommon("selectStore")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -1433,7 +1448,7 @@ const MMarketSettingsPage = () => {
                 setProductSelectionFilter(value as "all" | "included" | "excluded")
               }
             >
-              <SelectTrigger>
+              <SelectTrigger aria-label={tCommon("filters")}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1567,9 +1582,7 @@ const MMarketSettingsPage = () => {
               {tCommon("loading")}
             </div>
           ) : productsQuery.error ? (
-            <div className="bazaar-admin-error">
-              {translateError(tErrors, productsQuery.error)}
-            </div>
+            <div className="bazaar-admin-error">{translateError(tErrors, productsQuery.error)}</div>
           ) : (
             <ResponsiveDataList
               items={productItems}
@@ -1588,101 +1601,104 @@ const MMarketSettingsPage = () => {
                   <div className="bazaar-admin-table-shell">
                     <div className="bazaar-admin-table-scroll">
                       <Table>
-                      <TableHeader>
-                        <TableRow>
-                          {canEdit ? (
-                            <TableHead className="w-10">
-                              <input
-                                type="checkbox"
-                                className="h-4 w-4 rounded-md border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                                checked={allProductsSelectedOnPage}
-                                onChange={toggleSelectAllProductsOnPage}
-                                aria-label={t("productsSelection.selectAll")}
-                              />
-                            </TableHead>
-                          ) : null}
-                          <TableHead>{t("productsSelection.columns.sku")}</TableHead>
-                          <TableHead className="w-16">
-                            {t("productsSelection.columns.image")}
-                          </TableHead>
-                          <TableHead>{t("productsSelection.columns.name")}</TableHead>
-                          <TableHead>{t("productsSelection.columns.category")}</TableHead>
-                          <TableHead>{t("productsSelection.columns.exportPrice")}</TableHead>
-                          <TableHead>{t("productsSelection.columns.onHand")}</TableHead>
-                          <TableHead>{t("productsSelection.columns.status")}</TableHead>
-                          {canEdit ? (
-                            <TableHead>{t("productsSelection.columns.actions")}</TableHead>
-                          ) : null}
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {visibleItems.map((product) => (
-                          <TableRow key={product.id}>
+                        <TableHeader>
+                          <TableRow>
                             {canEdit ? (
-                              <TableCell>
+                              <TableHead className="w-10">
                                 <input
                                   type="checkbox"
                                   className="h-4 w-4 rounded-md border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                                  checked={selectedProductIds.has(product.id)}
-                                  onChange={() => toggleProductSelection(product.id)}
-                                  aria-label={t("productsSelection.selectProduct", {
-                                    name: product.name,
-                                  })}
+                                  checked={allProductsSelectedOnPage}
+                                  onChange={toggleSelectAllProductsOnPage}
+                                  aria-label={t("productsSelection.selectAll")}
                                 />
-                              </TableCell>
+                              </TableHead>
                             ) : null}
-                            <TableCell className="font-mono text-xs">{product.sku}</TableCell>
-                            <TableCell>
-                              <ProductImageThumb imageUrl={product.imageUrl} name={product.name} />
-                            </TableCell>
-                            <TableCell className="font-medium">{product.name}</TableCell>
-                            <TableCell>{product.category ?? "-"}</TableCell>
-                            <TableCell>
-                              {product.exportPriceKgs === null
-                                ? "-"
-                                : formatKgsMoney(
-                                    product.exportPriceKgs,
-                                    locale,
-                                    baseAccountingCurrency,
-                                  )}
-                            </TableCell>
-                            <TableCell>{product.onHandQty}</TableCell>
-                            <TableCell>
-                              <div className="space-y-1">
-                                <Badge variant={productStatusBadgeVariant(product.exportStatus)}>
-                                  {product.included
-                                    ? t("productsSelection.statusIncluded")
-                                    : t("productsSelection.statusExcluded")}
-                                </Badge>
-                                {product.lastExportedAt ? (
-                                  <p className="text-xs text-muted-foreground">
-                                    {t("productsSelection.lastExportedAt", {
-                                      date: formatDateTime(product.lastExportedAt, locale),
-                                    })}
-                                  </p>
-                                ) : null}
-                              </div>
-                            </TableCell>
+                            <TableHead>{t("productsSelection.columns.sku")}</TableHead>
+                            <TableHead className="w-16">
+                              {t("productsSelection.columns.image")}
+                            </TableHead>
+                            <TableHead>{t("productsSelection.columns.name")}</TableHead>
+                            <TableHead>{t("productsSelection.columns.category")}</TableHead>
+                            <TableHead>{t("productsSelection.columns.exportPrice")}</TableHead>
+                            <TableHead>{t("productsSelection.columns.onHand")}</TableHead>
+                            <TableHead>{t("productsSelection.columns.status")}</TableHead>
                             {canEdit ? (
-                              <TableCell>
-                                <Button
-                                  type="button"
-                                  variant={product.included ? "outline" : "secondary"}
-                                  size="sm"
-                                  onClick={() =>
-                                    handleUpdateProducts(!product.included, [product.id])
-                                  }
-                                  disabled={updateProductsMutation.isLoading}
-                                >
-                                  {product.included
-                                    ? t("productsSelection.rowExclude")
-                                    : t("productsSelection.rowInclude")}
-                                </Button>
-                              </TableCell>
+                              <TableHead>{t("productsSelection.columns.actions")}</TableHead>
                             ) : null}
                           </TableRow>
-                        ))}
-                      </TableBody>
+                        </TableHeader>
+                        <TableBody>
+                          {visibleItems.map((product) => (
+                            <TableRow key={product.id}>
+                              {canEdit ? (
+                                <TableCell>
+                                  <input
+                                    type="checkbox"
+                                    className="h-4 w-4 rounded-md border-border bg-background text-primary accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                    checked={selectedProductIds.has(product.id)}
+                                    onChange={() => toggleProductSelection(product.id)}
+                                    aria-label={t("productsSelection.selectProduct", {
+                                      name: product.name,
+                                    })}
+                                  />
+                                </TableCell>
+                              ) : null}
+                              <TableCell className="font-mono text-xs">{product.sku}</TableCell>
+                              <TableCell>
+                                <ProductImageThumb
+                                  imageUrl={product.imageUrl}
+                                  name={product.name}
+                                />
+                              </TableCell>
+                              <TableCell className="font-medium">{product.name}</TableCell>
+                              <TableCell>{product.category ?? "-"}</TableCell>
+                              <TableCell>
+                                {product.exportPriceKgs === null
+                                  ? "-"
+                                  : formatKgsMoney(
+                                      product.exportPriceKgs,
+                                      locale,
+                                      baseAccountingCurrency,
+                                    )}
+                              </TableCell>
+                              <TableCell>{product.onHandQty}</TableCell>
+                              <TableCell>
+                                <div className="space-y-1">
+                                  <Badge variant={productStatusBadgeVariant(product.exportStatus)}>
+                                    {product.included
+                                      ? t("productsSelection.statusIncluded")
+                                      : t("productsSelection.statusExcluded")}
+                                  </Badge>
+                                  {product.lastExportedAt ? (
+                                    <p className="text-xs text-muted-foreground">
+                                      {t("productsSelection.lastExportedAt", {
+                                        date: formatDateTime(product.lastExportedAt, locale),
+                                      })}
+                                    </p>
+                                  ) : null}
+                                </div>
+                              </TableCell>
+                              {canEdit ? (
+                                <TableCell>
+                                  <Button
+                                    type="button"
+                                    variant={product.included ? "outline" : "secondary"}
+                                    size="sm"
+                                    onClick={() =>
+                                      handleUpdateProducts(!product.included, [product.id])
+                                    }
+                                    disabled={updateProductsMutation.isLoading}
+                                  >
+                                    {product.included
+                                      ? t("productsSelection.rowExclude")
+                                      : t("productsSelection.rowInclude")}
+                                  </Button>
+                                </TableCell>
+                              ) : null}
+                            </TableRow>
+                          ))}
+                        </TableBody>
                       </Table>
                     </div>
                   </div>
@@ -1956,7 +1972,7 @@ const MMarketSettingsPage = () => {
                   placeholder={t("preflight.filters.search")}
                 />
                 <Select value={filterIssue} onValueChange={setFilterIssue}>
-                  <SelectTrigger>
+                  <SelectTrigger aria-label={t("preflight.filters.issue")}>
                     <SelectValue placeholder={t("preflight.filters.issue")} />
                   </SelectTrigger>
                   <SelectContent>
@@ -1974,31 +1990,29 @@ const MMarketSettingsPage = () => {
                 <div className="bazaar-admin-table-shell">
                   <div className="bazaar-admin-table-scroll">
                     <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>{t("preflight.table.sku")}</TableHead>
-                        <TableHead>{t("preflight.table.name")}</TableHead>
-                        <TableHead>{t("preflight.table.issues")}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredFailedProducts.map((row) => (
-                        <TableRow key={`${row.sku}-${row.name}`}>
-                          <TableCell className="font-mono text-xs">{row.sku || "-"}</TableCell>
-                          <TableCell>{row.name || "-"}</TableCell>
-                          <TableCell className="text-sm text-muted-foreground">
-                            {row.issues.map((issue) => t(`issues.${issue}`)).join(", ")}
-                          </TableCell>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>{t("preflight.table.sku")}</TableHead>
+                          <TableHead>{t("preflight.table.name")}</TableHead>
+                          <TableHead>{t("preflight.table.issues")}</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredFailedProducts.map((row) => (
+                          <TableRow key={`${row.sku}-${row.name}`}>
+                            <TableCell className="font-mono text-xs">{row.sku || "-"}</TableCell>
+                            <TableCell>{row.name || "-"}</TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {row.issues.map((issue) => t(`issues.${issue}`)).join(", ")}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
                     </Table>
                   </div>
                 </div>
               ) : (
-                <div className="bazaar-admin-empty min-h-[7rem]">
-                  {t("preflight.table.empty")}
-                </div>
+                <div className="bazaar-admin-empty min-h-[7rem]">{t("preflight.table.empty")}</div>
               )}
             </div>
           ) : null}
@@ -2074,75 +2088,71 @@ const MMarketSettingsPage = () => {
                 {tCommon("loading")}
               </div>
             ) : jobsQuery.error ? (
-              <div className="bazaar-admin-error">
-                {translateError(tErrors, jobsQuery.error)}
-              </div>
+              <div className="bazaar-admin-error">{translateError(tErrors, jobsQuery.error)}</div>
             ) : jobsQuery.data?.length ? (
               <div className="bazaar-admin-table-shell">
                 <div className="bazaar-admin-table-scroll">
                   <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t("history.columns.createdAt")}</TableHead>
-                      <TableHead>{t("history.columns.status")}</TableHead>
-                      <TableHead>{t("history.columns.summary")}</TableHead>
-                      <TableHead>{t("history.columns.actions")}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {jobsQuery.data.map((job) => {
-                      const stats =
-                        job.payloadStatsJson &&
-                        typeof job.payloadStatsJson === "object" &&
-                        !Array.isArray(job.payloadStatsJson)
-                          ? (job.payloadStatsJson as Record<string, unknown>)
-                          : {};
-                      const productCount =
-                        typeof stats.productCount === "number" ? stats.productCount : 0;
-                      const storeName =
-                        typeof stats.storeName === "string" && stats.storeName.trim()
-                          ? stats.storeName
-                          : job.storeId || "-";
-                      const summaryText = t("history.summary", { products: productCount });
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{t("history.columns.createdAt")}</TableHead>
+                        <TableHead>{t("history.columns.status")}</TableHead>
+                        <TableHead>{t("history.columns.summary")}</TableHead>
+                        <TableHead>{t("history.columns.actions")}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {jobsQuery.data.map((job) => {
+                        const stats =
+                          job.payloadStatsJson &&
+                          typeof job.payloadStatsJson === "object" &&
+                          !Array.isArray(job.payloadStatsJson)
+                            ? (job.payloadStatsJson as Record<string, unknown>)
+                            : {};
+                        const productCount =
+                          typeof stats.productCount === "number" ? stats.productCount : 0;
+                        const storeName =
+                          typeof stats.storeName === "string" && stats.storeName.trim()
+                            ? stats.storeName
+                            : job.storeId || "-";
+                        const summaryText = t("history.summary", { products: productCount });
 
-                      return (
-                        <TableRow key={job.id}>
-                          <TableCell className="text-xs text-muted-foreground">
-                            {formatDateTime(job.createdAt, locale)}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={statusBadgeVariant(job.status)}>
-                              {t(`history.status.${job.status}`)}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground">
-                            {`${summaryText} - ${storeName}`}
-                          </TableCell>
-                          <TableCell>
-                            {job.errorReportJson ? (
-                              <a
-                                className="text-xs font-medium text-primary underline-offset-2 hover:underline"
-                                href={`/api/m-market/jobs/${job.id}/error-report`}
-                              >
-                                {t("history.downloadError")}
-                              </a>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">
-                                {t("history.noError")}
-                              </span>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
+                        return (
+                          <TableRow key={job.id}>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {formatDateTime(job.createdAt, locale)}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={statusBadgeVariant(job.status)}>
+                                {t(`history.status.${job.status}`)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {`${summaryText} - ${storeName}`}
+                            </TableCell>
+                            <TableCell>
+                              {job.errorReportJson ? (
+                                <a
+                                  className="text-xs font-medium text-primary underline-offset-2 hover:underline"
+                                  href={`/api/m-market/jobs/${job.id}/error-report`}
+                                >
+                                  {t("history.downloadError")}
+                                </a>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">
+                                  {t("history.noError")}
+                                </span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
                   </Table>
                 </div>
               </div>
             ) : (
-              <div className="bazaar-admin-empty min-h-[8rem]">
-                {t("history.empty")}
-              </div>
+              <div className="bazaar-admin-empty min-h-[8rem]">{t("history.empty")}</div>
             )}
           </div>
         </CardContent>
@@ -2248,9 +2258,7 @@ const MMarketSettingsPage = () => {
             </div>
 
             {bulkProgress.errorMessage ? (
-              <div className="bazaar-admin-error">
-                {bulkProgress.errorMessage}
-              </div>
+              <div className="bazaar-admin-error">{bulkProgress.errorMessage}</div>
             ) : null}
 
             {bulkProgress.kind === "specs" && bulkProgress.items.length ? (

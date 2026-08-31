@@ -494,6 +494,8 @@ export const rollbackImportBatch = async (input: {
               unitCostKgs: unitCostKgs ?? undefined,
               lineTotalKgs:
                 receivedLineTotalKgs === null ? undefined : -receivedLineTotalKgs,
+              inventoryValueDeltaKgs:
+                receivedLineTotalKgs === null ? undefined : -receivedLineTotalKgs,
               referenceType: "IMPORT_ROLLBACK",
               referenceId: po.id,
               note: "importRollback",

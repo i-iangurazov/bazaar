@@ -99,6 +99,22 @@ export const HelpGuidePage = ({
                 </div>
               </div>
               <p>{localize(item.body, locale)}</p>
+              {item.guidance ? (
+                <dl className={styles.stepGuidance}>
+                  <div>
+                    <dt>{ui.exactLocation}</dt>
+                    <dd>{localize(item.guidance.location, locale)}</dd>
+                  </div>
+                  <div>
+                    <dt>{ui.controlToUse}</dt>
+                    <dd>{localize(item.guidance.control, locale)}</dd>
+                  </div>
+                  <div>
+                    <dt>{ui.expectedResult}</dt>
+                    <dd>{localize(item.guidance.result, locale)}</dd>
+                  </div>
+                </dl>
+              ) : null}
               {item.checklist?.length ? (
                 <ul className={styles.visualChecklist}>
                   {item.checklist.map((check, checkIndex) => (

@@ -3,6 +3,10 @@ import type { Logger } from "pino";
 
 import { logProfileSection } from "@/server/profiling/perf";
 import { decimalToNumber } from "@/server/services/products/serializers";
+import {
+  productCostBasisSelect,
+  resolveCurrentProductCostUnitNumber,
+} from "@/server/services/productCost";
 import type { ProductDuplicateMatch } from "@/server/services/products/diagnostics";
 import {
   productImportMatchIsBlocking,
@@ -469,9 +473,12 @@ export const previewProductImport = async ({
             variantKey: "BASE",
           },
         },
-        select: { avgCostKgs: true },
+        select: productCostBasisSelect,
       });
-      existingBaseCostByProductId.set(productId, cost ? decimalToNumber(cost.avgCostKgs) : null);
+      existingBaseCostByProductId.set(
+        productId,
+        cost ? resolveCurrentProductCostUnitNumber(cost) : null,
+      );
     }
     if (matchingStoreId && !existingMinStockByProductId.has(productId)) {
       const policy = await prisma.reorderPolicy.findUnique({

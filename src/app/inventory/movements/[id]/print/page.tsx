@@ -12,9 +12,11 @@ import { prisma } from "@/server/db/prisma";
 import { getServerAuthToken } from "@/server/auth/token";
 import { getProductMovementDocument } from "@/server/services/productMovements";
 
+type MovementPrintSearchParams = Record<string, string | string[] | undefined>;
+
 type PageProps = {
-  params: { id: string };
-  searchParams?: Record<string, string | string[] | undefined>;
+  params: Promise<{ id: string }>;
+  searchParams: Promise<MovementPrintSearchParams>;
 };
 
 const safeDecodeURIComponent = (value: string) => {
@@ -25,18 +27,19 @@ const safeDecodeURIComponent = (value: string) => {
   }
 };
 
-const getSearchParam = (searchParams: PageProps["searchParams"], key: string) => {
-  const value = searchParams?.[key];
+const getSearchParam = (searchParams: MovementPrintSearchParams, key: string) => {
+  const value = searchParams[key];
   return Array.isArray(value) ? value[0] : value;
 };
 
 const MovementPrintPage = async ({ params, searchParams }: PageProps) => {
+  const [{ id }, resolvedSearchParams] = await Promise.all([params, searchParams]);
   const token = await getServerAuthToken();
   if (!token?.sub || !token.organizationId) {
     redirect("/login");
   }
 
-  const documentKey = safeDecodeURIComponent(params.id);
+  const documentKey = safeDecodeURIComponent(id);
   const document = await getProductMovementDocument(
     prisma,
     {
@@ -86,6 +89,7 @@ const MovementPrintPage = async ({ params, searchParams }: PageProps) => {
     reason: t("reason"),
     comment: t("comment"),
     product: tCommon("product"),
+    store: tCommon("store"),
     skuBarcode: t("printSkuBarcode"),
     unit: t("printUnit"),
     quantity: t("quantity"),
@@ -105,16 +109,18 @@ const MovementPrintPage = async ({ params, searchParams }: PageProps) => {
     statusLabel: document.status ? t(`status.${document.status}`) : tCommon("notAvailable"),
     title,
   };
-  const returnTo = resolveSafeReturnTo(getSearchParam(searchParams, "returnTo"));
-  const detailHref = `/inventory/movements/${encodeURIComponent(document.id)}?${new URLSearchParams({
-    from: "movements",
-    returnTo,
-  }).toString()}`;
+  const returnTo = resolveSafeReturnTo(getSearchParam(resolvedSearchParams, "returnTo"));
+  const detailHref = `/inventory/movements/${encodeURIComponent(document.id)}?${new URLSearchParams(
+    {
+      from: "movements",
+      returnTo,
+    },
+  ).toString()}`;
 
   return (
     <main className="movement-print-page min-h-screen bg-slate-100 py-1 print:bg-white">
       <MovementPrintToolbar
-        autoPrint={getSearchParam(searchParams, "auto") === "1"}
+        autoPrint={getSearchParam(resolvedSearchParams, "auto") === "1"}
         backHref={detailHref}
         labels={{
           backToDetails: t("backToDetails"),

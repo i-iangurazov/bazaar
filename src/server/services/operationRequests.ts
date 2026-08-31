@@ -19,6 +19,8 @@ export const OPERATION_BAZAAR_API_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
 const DEFAULT_LEASE_DURATION_MS = 60_000;
 const MIN_LEASE_DURATION_MS = 1_000;
 const MAX_LEASE_DURATION_MS = 15 * 60 * 1000;
+const ACTIVE_REQUEST_REPLAY_WAIT_MS = 2_000;
+const ACTIVE_REQUEST_REPLAY_POLL_MS = 25;
 const MAX_RETENTION_MS = 365 * 24 * 60 * 60 * 1000;
 export const OPERATION_TRANSACTION_MAX_WAIT_MIN_MS = 1_000;
 export const OPERATION_TRANSACTION_MAX_WAIT_MAX_MS = 30_000;
@@ -121,6 +123,10 @@ type OperationExecutionClaim<TResponse extends Prisma.InputJsonObject> =
   | {
       kind: "replay";
       result: OperationRequestResult<TResponse>;
+    }
+  | {
+      kind: "pending";
+      operationRequestId: string;
     };
 
 class SafeOperationFailure extends AppError {
@@ -180,6 +186,8 @@ export const fingerprintOperationRequest = (input: {
   storeId: string | null;
   payload: OperationPayload;
 }) =>
+  // Collision-resistant request identity for idempotent replay. This is not a
+  // password verifier and never replaces encryption/redaction of secret fields.
   createHash("sha256")
     .update(
       canonicalizeJsonValue(
@@ -531,7 +539,7 @@ const claimOperationRequest = async <TResponse extends Prisma.InputJsonObject>(
         throw new AppError("operationRequestReconciliationRequired", "CONFLICT", 409);
       }
       if (row.leaseExpiresAt && row.leaseExpiresAt > reevaluatedAt) {
-        throw new AppError("requestInProgress", "CONFLICT", 409);
+        return { kind: "pending", operationRequestId: row.id };
       }
       mayTakeExpiredLease = true;
     }
@@ -564,6 +572,30 @@ const claimOperationRequest = async <TResponse extends Prisma.InputJsonObject>(
     });
     return { kind: "execute", operationRequestId: row.id, leaseToken: nextLeaseToken };
   });
+};
+
+const waitForOperationRequestReplay = async <TResponse extends Prisma.InputJsonObject>(
+  input: ValidatedOperationInput,
+  operationRequestId: string,
+): Promise<OperationRequestResult<TResponse> | null> => {
+  const deadline = Date.now() + Math.min(ACTIVE_REQUEST_REPLAY_WAIT_MS, input.leaseDurationMs);
+
+  while (Date.now() < deadline) {
+    const row = await prisma.operationRequest.findUnique({ where: { id: operationRequestId } });
+    if (!row) {
+      throw new AppError("operationRequestUnavailable", "CONFLICT", 409);
+    }
+    assertRequestIdentity(row, input);
+    if (row.status === OperationRequestStatus.COMPLETED) {
+      return resultFromCompletedRow<TResponse>(row, input.allowedResponsePaths, true);
+    }
+    if (row.status !== OperationRequestStatus.PROCESSING) {
+      return null;
+    }
+    await new Promise((resolve) => setTimeout(resolve, ACTIVE_REQUEST_REPLAY_POLL_MS));
+  }
+
+  return null;
 };
 
 const safeFailureDecision = (
@@ -652,7 +684,18 @@ export const runOperationRequest = async <TResponse extends Prisma.InputJsonObje
   handler: (tx: Prisma.TransactionClient) => Promise<OperationHandlerResult<TResponse>>,
 ): Promise<OperationRequestResult<TResponse>> => {
   const request = validateOperationInput(input);
-  const claim = await claimOperationRequest<TResponse>(request);
+  let claim = await claimOperationRequest<TResponse>(request);
+  if (claim.kind === "pending") {
+    const replay = await waitForOperationRequestReplay<TResponse>(
+      request,
+      claim.operationRequestId,
+    );
+    if (replay) return replay;
+    claim = await claimOperationRequest<TResponse>(request);
+    if (claim.kind === "pending") {
+      throw new AppError("requestInProgress", "CONFLICT", 409);
+    }
+  }
   if (claim.kind === "replay") return claim.result;
 
   try {

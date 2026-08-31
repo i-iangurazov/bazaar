@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "timestamp": "2026-08-31T15:43:00.000Z",
+  "requirements": [
+    {
+      "id": "BZR-REQ-0079",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Returns remain idempotent and restore stock/frozen cost correctly. The added payment-correction acceptance proves CASHIER can correct an eligible completed receipt while stock, quantity, COGS, stock movements, and the original completion timestamp remain unchanged; fiscalized receipts reject direct mutation.",
+      "statusJustification": "The production complaint is represented as additional money-integrity acceptance under the immutable POS requirement group; both the service boundary and production-mode CASHIER journey pass.",
+      "verificationTimestampSource": "POS payment-correction qualification generated 2026-08-31T13:15:08Z and retained in the final authenticated matrix",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/release-pos-payment-correction-2026-08-31.json",
+          "description": "Cash/transfer correction, stock/COGS invariants, fiscal boundary, role boundary, idempotency, timestamps, reports, and audit all PASS."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-final-authenticated-2026-08-31.json",
+          "description": "The exact POS payment-correction identity passed in the retained final authenticated run."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec playwright test --config=playwright.authenticated.config.ts tests/e2e/authenticated/authenticated-acceptance-pos-operations.spec.ts"
+        ],
+        "tests": ["tests/e2e/authenticated/authenticated-acceptance-pos-operations.spec.ts"],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0080",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Debt balances remain reconciled. Payment correction additionally proves cash-to-transfer, transfer-to-cash, and split-payment tenders preserve payment sum equal to sale total and remain durable after refresh and relogin.",
+      "statusJustification": "The additional tender-integrity scenarios passed at service and production-browser boundaries without duplicate sale, user, receipt, or correction records.",
+      "verificationTimestampSource": "POS payment-correction qualification generated 2026-08-31T13:15:08Z and retained in the final authenticated matrix",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/release-pos-payment-correction-2026-08-31.json",
+          "description": "All payment-method and total-reconciliation acceptance fields are PASS."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec playwright test --config=playwright.authenticated.config.ts tests/e2e/authenticated/authenticated-acceptance-pos-operations.spec.ts"
+        ],
+        "tests": ["tests/e2e/authenticated/authenticated-acceptance-pos-operations.spec.ts"],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0081",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Cash pay-in/pay-out remains reconciled. Payment correction changes the receipt tender and derived cash reporting exactly once without fabricating a second drawer movement, reselling stock, or reversing COGS; receipt details, reports, CSV, and XLSX agree.",
+      "statusJustification": "The service test and production-mode browser journey prove the cash-integrity boundary and exact-one correction semantics.",
+      "verificationTimestampSource": "POS payment-correction qualification generated 2026-08-31T13:15:08Z and retained in the final authenticated matrix",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/release-pos-payment-correction-2026-08-31.json",
+          "description": "Cash ledger/report/export and exact-one mutation/audit acceptance fields are PASS."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec playwright test --config=playwright.authenticated.config.ts tests/e2e/authenticated/authenticated-acceptance-pos-operations.spec.ts"
+        ],
+        "tests": ["tests/e2e/authenticated/authenticated-acceptance-pos-operations.spec.ts"],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0082",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Shift opening/closing reconciliation remains correct. Eligible open-shift payment correction adjusts expected cash exactly once; a closed-shift receipt exposes the precise SHIFT_CLOSED reason. CASHIER is authorized and STAFF receives 403.",
+      "statusJustification": "The exact production complaint fixtures S-006065 and S-006072 pass across desktop and the 390x844 client viewport, refresh, relogin, and rapid double submit.",
+      "verificationTimestampSource": "POS payment-correction qualification generated 2026-08-31T13:15:08Z and retained in the final authenticated matrix",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/release-pos-payment-correction-2026-08-31.json",
+          "description": "CASHIER/STAFF, open/closed shift, expected-cash, refresh/relogin, viewport, and idempotency acceptance fields are PASS."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec playwright test --config=playwright.authenticated.config.ts tests/e2e/authenticated/authenticated-acceptance-pos-operations.spec.ts"
+        ],
+        "tests": ["tests/e2e/authenticated/authenticated-acceptance-pos-operations.spec.ts"],
+        "manualProcedure": null
+      }
+    }
+  ],
+  "defects": []
+}

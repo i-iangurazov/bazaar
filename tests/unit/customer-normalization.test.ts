@@ -5,13 +5,23 @@ import {
   normalizeCustomerPhone,
 } from "@/server/services/customers";
 import {
+  isValidOptionalCustomerEmail,
   isValidOptionalCustomerAddress,
   isValidOptionalCustomerPhone,
+  normalizeCustomerContactEmail,
   normalizeCustomerContactAddress,
   normalizeCustomerContactPhone,
 } from "@/lib/customerContact";
 
 describe("customer normalization", () => {
+  it("normalizes valid email addresses and rejects malformed or oversized values", () => {
+    expect(normalizeCustomerContactEmail("  User@Example.COM  ")).toBe("user@example.com");
+    expect(isValidOptionalCustomerEmail(null)).toBe(true);
+    expect(isValidOptionalCustomerEmail("person@example.com")).toBe(true);
+    expect(isValidOptionalCustomerEmail("missing-domain@")).toBe(false);
+    expect(isValidOptionalCustomerEmail(`${"a".repeat(245)}@example.com`)).toBe(false);
+  });
+
   it("removes spreadsheet text markers from phone numbers", () => {
     expect(normalizeCustomerPhone("'+447444415829")).toBe("+447444415829");
     expect(normalizeCustomerPhone("’+447444415829")).toBe("+447444415829");

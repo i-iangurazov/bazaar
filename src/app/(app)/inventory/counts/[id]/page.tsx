@@ -8,6 +8,7 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
+import { DynamicResourceTerminalState } from "@/components/dynamic-resource-terminal-state";
 import { PageHeader } from "@/components/page-header";
 import { HelpLink } from "@/components/help-link";
 import { ScanInput } from "@/components/ScanInput";
@@ -55,6 +56,7 @@ import {
 } from "@/components/icons";
 import { useToast } from "@/components/ui/toast";
 import { downloadTableFile, type DownloadFormat } from "@/lib/fileExport";
+import { normalizeDynamicRouteId } from "@/lib/dynamicRouteId";
 import { formatDateTime, formatNumber } from "@/lib/i18nFormat";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
@@ -71,7 +73,7 @@ const statusVariants: Record<string, "default" | "warning" | "success" | "danger
 
 const StockCountDetailPage = () => {
   const params = useParams();
-  const countId = typeof params?.id === "string" ? params.id : "";
+  const countId = normalizeDynamicRouteId(params?.id) ?? "";
   const t = useTranslations("stockCounts");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
@@ -87,7 +89,7 @@ const StockCountDetailPage = () => {
 
   const countQuery = trpc.stockCounts.get.useQuery(
     { stockCountId: countId },
-    { enabled: Boolean(countId) },
+    { enabled: Boolean(countId), retry: false },
   );
 
   type CountData = NonNullable<typeof countQuery.data>;
@@ -95,9 +97,14 @@ const StockCountDetailPage = () => {
 
   const count = countQuery.data;
   const scanInputRef = useRef<HTMLInputElement | null>(null);
+  const setQtyInFlightRef = useRef(false);
+  const applyActionPendingRef = useRef(false);
   const [scanMode, setScanMode] = useState(true);
   const [editingLine, setEditingLine] = useState<CountLine | null>(null);
   const [exportFormat, setExportFormat] = useState<DownloadFormat>("csv");
+  const [lineValuations, setLineValuations] = useState<
+    Record<string, { unitCostInput: string; zeroCostConfirmed: boolean; zeroCostReason: string }>
+  >({});
   const [movementTarget, setMovementTarget] = useState<{
     productId: string;
     variantId?: string | null;
@@ -157,6 +164,9 @@ const StockCountDetailPage = () => {
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
+    onSettled: () => {
+      setQtyInFlightRef.current = false;
+    },
   });
 
   const removeLineMutation = trpc.stockCounts.removeLine.useMutation({
@@ -175,6 +185,9 @@ const StockCountDetailPage = () => {
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+    onSettled: () => {
+      applyActionPendingRef.current = false;
     },
   });
 
@@ -272,6 +285,15 @@ const StockCountDetailPage = () => {
     }
   };
 
+  if (!countId) {
+    return (
+      <DynamicResourceTerminalState
+        title={t("detailTitle")}
+        message={tErrors("stockCountNotFound")}
+      />
+    );
+  }
+
   if (countQuery.isLoading) {
     return (
       <div>
@@ -294,6 +316,23 @@ const StockCountDetailPage = () => {
           </CardContent>
         </Card>
       </div>
+    );
+  }
+
+  if (countQuery.error) {
+    const message =
+      countQuery.error.data?.code === "NOT_FOUND"
+        ? tErrors("stockCountNotFound")
+        : translateError(tErrors, countQuery.error);
+    return <DynamicResourceTerminalState title={t("detailTitle")} message={message} />;
+  }
+
+  if (!count) {
+    return (
+      <DynamicResourceTerminalState
+        title={t("detailTitle")}
+        message={tErrors("stockCountNotFound")}
+      />
     );
   }
 
@@ -336,20 +375,34 @@ const StockCountDetailPage = () => {
                 className="w-full sm:w-auto"
                 disabled={!count || isLocked || applyMutation.isLoading}
                 onClick={async () => {
-                  if (!count) {
+                  if (!count || applyActionPendingRef.current) {
                     return;
                   }
+                  applyActionPendingRef.current = true;
                   if (
                     !(await confirm({
                       description: t("confirmApply", { count: summary.varianceLines }),
                       confirmVariant: "danger",
                     }))
                   ) {
+                    applyActionPendingRef.current = false;
                     return;
                   }
                   applyMutation.mutate({
                     stockCountId: count.id,
                     idempotencyKey: crypto.randomUUID(),
+                    lineValuations: Object.fromEntries(
+                      Object.entries(lineValuations)
+                        .filter(([, value]) => value.unitCostInput.trim() !== "")
+                        .map(([lineId, value]) => [
+                          lineId,
+                          {
+                            unitCostKgs: Number(value.unitCostInput.replace(",", ".")),
+                            zeroCostConfirmed: value.zeroCostConfirmed,
+                            zeroCostReason: value.zeroCostReason.trim() || undefined,
+                          },
+                        ]),
+                    ),
                   });
                 }}
               >
@@ -364,10 +417,6 @@ const StockCountDetailPage = () => {
           </div>
         }
       />
-
-      {countQuery.error ? (
-        <p className="mb-4 text-sm text-danger">{translateError(tErrors, countQuery.error)}</p>
-      ) : null}
 
       <Card className="mb-6 overflow-hidden">
         <CardHeader>
@@ -389,7 +438,7 @@ const StockCountDetailPage = () => {
               <p className="mt-2 text-xs text-muted-foreground">{t("scanHint")}</p>
             </div>
             <div className="flex items-center gap-3">
-              <Switch checked={scanMode} onCheckedChange={setScanMode} />
+              <Switch checked={scanMode} onCheckedChange={setScanMode} aria-label={t("scanMode")} />
               <span className="text-sm text-muted-foreground">{t("scanMode")}</span>
             </div>
           </div>
@@ -632,6 +681,78 @@ const StockCountDetailPage = () => {
         </Card>
       </div>
 
+      {!isLocked && overageLines.length ? (
+        <Card className="mt-6 overflow-hidden">
+          <CardHeader>
+            <CardTitle>{t("overageValuationTitle")}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">{t("overageValuationHint")}</p>
+            {overageLines.map((line) => {
+              const valuation = lineValuations[line.id] ?? {
+                unitCostInput: "",
+                zeroCostConfirmed: false,
+                zeroCostReason: "",
+              };
+              const setValuation = (patch: Partial<typeof valuation>) =>
+                setLineValuations((current) => ({
+                  ...current,
+                  [line.id]: { ...valuation, ...patch },
+                }));
+              return (
+                <div key={line.id} className="rounded-xl border border-border/65 p-3">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">
+                        {line.product.name}
+                        {line.variant?.name ? ` • ${line.variant.name}` : ""}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        +{formatNumber(line.deltaQty, locale)}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium" htmlFor={`count-cost-${line.id}`}>
+                        {t("explicitUnitCost")}
+                      </label>
+                      <Input
+                        id={`count-cost-${line.id}`}
+                        value={valuation.unitCostInput}
+                        onChange={(event) => setValuation({ unitCostInput: event.target.value })}
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        step="0.01"
+                        placeholder={t("inheritCostPlaceholder")}
+                      />
+                    </div>
+                  </div>
+                  {Number(valuation.unitCostInput) === 0 && valuation.unitCostInput.trim() ? (
+                    <div className="mt-3 space-y-3 rounded-lg border border-warning/40 bg-warning/10 p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm">{t("zeroCostConfirmationLabel")}</span>
+                        <Switch
+                          checked={valuation.zeroCostConfirmed}
+                          onCheckedChange={(checked) =>
+                            setValuation({ zeroCostConfirmed: checked })
+                          }
+                        />
+                      </div>
+                      <Input
+                        value={valuation.zeroCostReason}
+                        onChange={(event) => setValuation({ zeroCostReason: event.target.value })}
+                        placeholder={t("zeroCostReasonPlaceholder")}
+                        disabled={!valuation.zeroCostConfirmed}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      ) : null}
+
       {count?.status === "APPLIED" ? (
         <div className="mt-6 grid gap-4 lg:grid-cols-2">
           <Card className="overflow-hidden">
@@ -719,9 +840,10 @@ const StockCountDetailPage = () => {
           <form
             className="space-y-4"
             onSubmit={editForm.handleSubmit((values) => {
-              if (!editingLine) {
+              if (!editingLine || setQtyInFlightRef.current) {
                 return;
               }
+              setQtyInFlightRef.current = true;
               setQtyMutation.mutate({ lineId: editingLine.id, countedQty: values.countedQty });
             })}
           >

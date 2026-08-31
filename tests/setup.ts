@@ -4,6 +4,10 @@ import {
   assertDatabaseTestExecutionPolicy,
   assertSafeTestDatabaseReset,
 } from "./helpers/testDatabaseSafety";
+import {
+  configureTestRuntimeEnvironment,
+  installTestNetworkGuard,
+} from "./helpers/testRuntimeIsolation";
 
 if (typeof globalThis.File === "undefined") {
   globalThis.File = File as unknown as typeof globalThis.File;
@@ -19,5 +23,5 @@ if (shouldRunDbTests) {
   assertSafeTestDatabaseReset();
 }
 
-process.env.NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET ?? "test-secret";
-process.env.IMAGE_STORAGE_PROVIDER = "local";
+configureTestRuntimeEnvironment(process.env);
+installTestNetworkGuard(process.env);

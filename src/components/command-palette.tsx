@@ -204,7 +204,7 @@ export const CommandPalette = ({
         label: t("actions.stockReceive"),
         keywords: [t("keywords.inventory"), t("keywords.receive"), t("keywords.document")],
         sublabel: null,
-        href: "/inventory?action=receive",
+        href: "/inventory/receiving",
         icon: ReceiveIcon,
         group: "actions",
         category: "documents",

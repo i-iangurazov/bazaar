@@ -46,6 +46,7 @@ import {
 } from "@/components/icons";
 import { ScanInput } from "@/components/ScanInput";
 import { ContextualHelpButton } from "@/components/help/ContextualHelpButton";
+import { PosPaymentCorrectionModal } from "@/components/pos/payment-correction-modal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -579,6 +580,7 @@ const PosSellPage = () => {
   const [journalDetailSaleId, setJournalDetailSaleId] = useState<string | null>(null);
   const [journalReturnSaleId, setJournalReturnSaleId] = useState<string | null>(null);
   const [journalEditSaleId, setJournalEditSaleId] = useState<string | null>(null);
+  const [paymentCorrectionSaleId, setPaymentCorrectionSaleId] = useState<string | null>(null);
   const [journalReturnQtyByLine, setJournalReturnQtyByLine] = useState<Record<string, string>>({});
   const [journalRefundMethod, setJournalRefundMethod] = useState<PosPaymentMethod>(
     PosPaymentMethod.CASH,
@@ -710,12 +712,11 @@ const PosSellPage = () => {
       return;
     }
     receiptEditDeepLinkRef.current = deepLinkKey;
-    completedSaleEditHydratedRef.current = null;
-    completedSaleEditIdempotencyKeyRef.current = createIdempotencyKey();
     setReceiptJournalOpen(false);
     setJournalDetailSaleId(null);
     setJournalReturnSaleId(null);
-    setJournalEditSaleId(receiptId);
+    setJournalEditSaleId(null);
+    setPaymentCorrectionSaleId(receiptId);
   }, [searchParams]);
 
   useEffect(() => {
@@ -1586,7 +1587,8 @@ const PosSellPage = () => {
     const deepLinkedEditSaleId = receiptEditDeepLinkRef.current?.startsWith("edit:")
       ? receiptEditDeepLinkRef.current.slice("edit:".length)
       : null;
-    setJournalEditSaleId(deepLinkedEditSaleId);
+    setJournalEditSaleId(null);
+    setPaymentCorrectionSaleId(deepLinkedEditSaleId);
     completedSaleEditHydratedRef.current = null;
     completedSaleEditIdempotencyKeyRef.current = null;
     setOptimisticSaleLines(null);
@@ -4013,24 +4015,10 @@ const PosSellPage = () => {
                   return;
                 }
                 if (isCompletedReceipt) {
-                  void trpcUtils.pos.sales.get.invalidate({ saleId: saleItem.id });
-                  clearActiveDraftCache();
-                  setLastCompletedSale(null);
-                  setAutoReceiptStatus("idle");
-                  setOptimisticSaleLines(null);
-                  clearCartRuntimeSyncState();
-                  setLineInputDrafts({});
-                  setPayments([createDefaultPosPaymentDraft()]);
-                  setDiscountDraft("");
-                  setSelectedCustomer(null);
-                  setMobileComment("");
-                  paymentAutoFillRef.current = { saleId: null, totalKgs: null };
-                  completedSaleEditHydratedRef.current = null;
-                  completedSaleEditIdempotencyKeyRef.current = createIdempotencyKey();
                   setJournalDetailSaleId(null);
                   setJournalReturnSaleId(null);
-                  setJournalEditSaleId(saleItem.id);
-                  setSaleId(saleItem.id);
+                  setJournalEditSaleId(null);
+                  setPaymentCorrectionSaleId(saleItem.id);
                   setReceiptJournalOpen(false);
                   return;
                 }
@@ -4057,12 +4045,26 @@ const PosSellPage = () => {
                 setSaleId(saleItem.id);
                 setReceiptJournalOpen(false);
               }}
-              disabled={!isDraftReceipt && !isCompletedReceipt}
+              disabled={
+                (!isDraftReceipt && !isCompletedReceipt) ||
+                (isCompletedReceipt && !saleItem.paymentCorrectionEligibility.eligible)
+              }
+              aria-describedby={
+                isCompletedReceipt ? `journal-payment-correction-reason-${saleItem.id}` : undefined
+              }
             >
               <EditIcon className="h-3.5 w-3.5" aria-hidden />
-              {t("sell.editReceipt")}
+              {isCompletedReceipt ? t("sell.paymentCorrection.title") : t("sell.editReceipt")}
             </Button>
           )}
+          {isCompletedReceipt && !saleItem.paymentCorrectionEligibility.eligible ? (
+            <span
+              id={`journal-payment-correction-reason-${saleItem.id}`}
+              className="max-w-64 text-xs text-muted-foreground"
+            >
+              {t(`sell.paymentCorrection.reasons.${saleItem.paymentCorrectionEligibility.reason}`)}
+            </span>
+          ) : null}
           <Button
             type="button"
             variant="secondary"
@@ -4311,7 +4313,9 @@ const PosSellPage = () => {
                               ) : null}
                             </div>
                           </TableCell>
-                          <TableCell>{formatDateTime(saleItem.createdAt, locale)}</TableCell>
+                          <TableCell>
+                            {formatDateTime(saleItem.completedAt ?? saleItem.createdAt, locale)}
+                          </TableCell>
                           <TableCell>
                             {saleItem.customerName ||
                               saleItem.customerPhone ||
@@ -4369,7 +4373,7 @@ const PosSellPage = () => {
                         <div className="min-w-0">
                           <p className="font-semibold text-foreground">{saleItem.number}</p>
                           <p className="text-xs text-muted-foreground">
-                            {formatDateTime(saleItem.createdAt, locale)}
+                            {formatDateTime(saleItem.completedAt ?? saleItem.createdAt, locale)}
                           </p>
                         </div>
                         <p className="shrink-0 text-sm font-semibold">
@@ -4491,7 +4495,10 @@ const PosSellPage = () => {
               <p className="text-xs uppercase text-muted-foreground">{t("history.store")}</p>
               <p className="mt-1 font-medium">{journalSelectedSale.store.name}</p>
               <p className="text-sm text-muted-foreground">
-                {formatDateTime(journalSelectedSale.createdAt, locale)}
+                {formatDateTime(
+                  journalSelectedSale.completedAt ?? journalSelectedSale.createdAt,
+                  locale,
+                )}
               </p>
             </div>
           </div>
@@ -4795,6 +4802,7 @@ const PosSellPage = () => {
         </Button>
 
         <div className="flex min-h-16 flex-1 items-center gap-3 bg-card px-4">
+          <h1 className="shrink-0 text-base font-semibold text-foreground">{t("sell.title")}</h1>
           <SearchIcon className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
           <ScanInput
             ref={lineSearchInputRef}
@@ -4809,7 +4817,7 @@ const PosSellPage = () => {
             showDropdown={false}
             disabled={!hasOpenShift}
             className="w-full"
-            inputClassName="h-12 border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-0"
+            inputClassName="h-12 border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background"
           />
         </div>
 
@@ -5001,6 +5009,7 @@ const PosSellPage = () => {
               className="h-8 shrink-0 gap-1.5 px-2 text-xs"
               onClick={() => setReceiptJournalOpen(true)}
               disabled={!journalStoreId}
+              aria-label={t("sell.receiptJournal")}
               data-testid="pos-receipt-journal-open"
             >
               <SalesOrdersIcon className="h-3.5 w-3.5" aria-hidden />
@@ -5468,7 +5477,7 @@ const PosSellPage = () => {
                                         }
                                         onFocus={(event) => event.currentTarget.select()}
                                         onBlur={() => handleQtyBlur(line)}
-                                        className="h-8 w-11 rounded-md border-y-0 px-1 text-center text-sm shadow-none focus-visible:ring-0"
+                                        className="h-8 w-11 rounded-md border-y-0 px-1 text-center text-sm shadow-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background"
                                         inputMode="numeric"
                                         disabled={
                                           cancelDraftMutation.isLoading ||
@@ -5989,7 +5998,9 @@ const PosSellPage = () => {
           null)
         : null;
       const documentDate = new Date(
-        (isCompletedSaleEdit ? journalSelectedSale?.createdAt : sale?.createdAt) ?? Date.now(),
+        (isCompletedSaleEdit
+          ? (journalSelectedSale?.completedAt ?? journalSelectedSale?.createdAt)
+          : sale?.createdAt) ?? Date.now(),
       );
       const documentDateLabel = new Intl.DateTimeFormat(locale, {
         day: "numeric",
@@ -6641,7 +6652,8 @@ const PosSellPage = () => {
                 }
               }}
               placeholder={t("sell.mobile.commentPlaceholder")}
-              className="min-w-0 flex-1 border-0 bg-transparent text-[15px] text-foreground shadow-none outline-none ring-0 placeholder:text-muted-foreground focus:outline-none focus:ring-0 focus-visible:ring-0"
+              aria-label={t("sell.mobile.commentPlaceholder")}
+              className="min-w-0 flex-1 border-0 bg-transparent text-[15px] text-foreground shadow-none outline-none ring-0 placeholder:text-muted-foreground focus:outline-none focus:ring-0 focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background"
             />
           </label>
         </section>
@@ -6668,7 +6680,6 @@ const PosSellPage = () => {
                 type="button"
                 className="min-h-[48px] w-full rounded-[12px] bg-primary px-3 text-[15px] font-semibold text-primary-foreground shadow-[0_12px_28px_rgba(64,156,255,0.24)]"
                 onClick={() => setMobileSaleTab("payment")}
-                aria-label={t("sell.openCart")}
               >
                 {t("sell.mobile.goToPayment")}
               </button>
@@ -6847,7 +6858,10 @@ const PosSellPage = () => {
                               )
                             }
                           >
-                            <SelectTrigger className="h-11 border-border bg-card text-foreground">
+                            <SelectTrigger
+                              className="h-11 border-border bg-card text-foreground"
+                              aria-label={t("sell.paymentMethod")}
+                            >
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -7003,7 +7017,7 @@ const PosSellPage = () => {
                 showDropdown={false}
                 disabled={!hasOpenShift}
                 className="min-w-0 flex-1"
-                inputClassName="h-10 border-0 bg-transparent px-0 text-[15px] text-foreground shadow-none placeholder:text-muted-foreground focus-visible:ring-0"
+                inputClassName="h-10 border-0 bg-transparent px-0 text-[15px] text-foreground shadow-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background"
               />
             </div>
 
@@ -7195,7 +7209,7 @@ const PosSellPage = () => {
                   showDropdown={false}
                   disabled={!hasOpenShift}
                   className="w-full"
-                  inputClassName="h-10 border-0 bg-transparent px-0 text-center text-[14px] text-foreground shadow-none placeholder:text-muted-foreground focus-visible:ring-0"
+                  inputClassName="h-10 border-0 bg-transparent px-0 text-center text-[14px] text-foreground shadow-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background"
                 />
               </div>
             </section>
@@ -7568,7 +7582,7 @@ const PosSellPage = () => {
               showDropdown={false}
               disabled={!hasOpenShift}
               className="min-w-0 flex-1"
-              inputClassName="h-11 border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-0"
+              inputClassName="h-11 border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background"
             />
           </div>
         </header>
@@ -8087,7 +8101,7 @@ const PosSellPage = () => {
                                         }
                                         onFocus={(event) => event.currentTarget.select()}
                                         onBlur={() => handleQtyBlur(line)}
-                                        className="h-11 w-11 rounded-md border-y-0 px-1 text-center shadow-none focus-visible:ring-0"
+                                        className="h-11 w-11 rounded-md border-y-0 px-1 text-center shadow-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background"
                                         inputMode="numeric"
                                         disabled={
                                           cancelDraftMutation.isLoading ||
@@ -8421,7 +8435,27 @@ const PosSellPage = () => {
     return <div className="min-h-screen bg-background" />;
   }
 
-  return isPhoneScreen ? MobilePosView() : DesktopPosSaleView();
+  return (
+    <>
+      {isPhoneScreen ? MobilePosView() : DesktopPosSaleView()}
+      <PosPaymentCorrectionModal
+        saleId={paymentCorrectionSaleId}
+        onOpenChange={(open) => {
+          if (open) {
+            return;
+          }
+          setPaymentCorrectionSaleId(null);
+          if (searchParams.get("mode") === "edit") {
+            const nextParams = new URLSearchParams(searchParams.toString());
+            nextParams.delete("mode");
+            nextParams.delete("receiptId");
+            router.replace(`/pos/sell${nextParams.size ? `?${nextParams.toString()}` : ""}`);
+          }
+        }}
+        onCorrected={() => journalSalesQuery.refetch().then(() => undefined)}
+      />
+    </>
+  );
 };
 
 export default PosSellPage;

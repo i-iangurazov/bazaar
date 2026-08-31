@@ -172,7 +172,7 @@ const StoreGroupsPage = () => {
             <div className="space-y-2">
               <Label>{t("sourceStore")}</Label>
               <Select value={sourceStoreId} onValueChange={handleSourceChange}>
-                <SelectTrigger>
+                <SelectTrigger aria-label={t("sourceStore")}>
                   <SelectValue placeholder={t("sourceStorePlaceholder")} />
                 </SelectTrigger>
                 <SelectContent>

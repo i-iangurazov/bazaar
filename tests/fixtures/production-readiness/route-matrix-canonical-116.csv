@@ -1,0 +1,117 @@
+ID,Route/pattern,Authentication
+CAN-001,/,PUBLIC / signed out
+CAN-002,/privacy,PUBLIC / signed out
+CAN-003,/developers/bazaar-api,PUBLIC / signed out
+CAN-004,/login,PUBLIC / signed out
+CAN-005,/signup,PUBLIC / signed out
+CAN-006,/invite,PUBLIC / signed out
+CAN-007,/invite/{token},PUBLIC / signed out
+CAN-008,/reset,PUBLIC / signed out
+CAN-009,/reset/{token},PUBLIC / signed out
+CAN-010,/verify/{token},PUBLIC / signed out
+CAN-011,/register-business/{token},PUBLIC / signed out
+CAN-012,/c/{catalog-slug},PUBLIC / signed out
+CAN-013,/help,PUBLIC / signed out
+CAN-014,/help/getting-started,PUBLIC / signed out
+CAN-015,/help/pos,PUBLIC / signed out
+CAN-016,/help/products,PUBLIC / signed out
+CAN-017,/help/inventory,PUBLIC / signed out
+CAN-018,/help/orders,PUBLIC / signed out
+CAN-019,/help/reports,PUBLIC / signed out
+CAN-020,/help/integrations,PUBLIC / signed out
+CAN-021,/help/settings,PUBLIC / signed out
+CAN-022,/help/getting-started/choose-store,PUBLIC / signed out
+CAN-023,/help/products/add-product,PUBLIC / signed out
+CAN-024,/help/products/edit-product,PUBLIC / signed out
+CAN-025,/help/products/import-products,PUBLIC / signed out
+CAN-026,/help/inventory/receiving,PUBLIC / signed out
+CAN-027,/help/inventory/transfer,PUBLIC / signed out
+CAN-028,/help/inventory/write-off,PUBLIC / signed out
+CAN-029,/help/inventory/inventory-count,PUBLIC / signed out
+CAN-030,/help/pos/open-shift,PUBLIC / signed out
+CAN-031,/help/pos/make-sale,PUBLIC / signed out
+CAN-032,/help/pos/apply-discount,PUBLIC / signed out
+CAN-033,/help/pos/split-payment,PUBLIC / signed out
+CAN-034,/help/pos/hold-receipt,PUBLIC / signed out
+CAN-035,/help/pos/resume-receipt,PUBLIC / signed out
+CAN-036,/help/pos/return-sale,PUBLIC / signed out
+CAN-037,/help/pos/close-shift,PUBLIC / signed out
+CAN-038,/help/settings/add-employee,PUBLIC / signed out
+CAN-039,/help/reports/analytics-basics,PUBLIC / signed out
+CAN-040,/help/reports/export-reports,PUBLIC / signed out
+CAN-041,/help/integrations/connect-marketplace,PUBLIC / signed out
+CAN-042,/pos,Authenticated / restricted
+CAN-043,/pos/debts,Authenticated / restricted
+CAN-044,/pos/history,Authenticated / restricted
+CAN-045,/pos/kkm,Authenticated / restricted
+CAN-046,/pos/receipts,Authenticated / restricted
+CAN-047,/pos/registers,Authenticated / restricted
+CAN-048,/pos/sell,Authenticated / restricted
+CAN-049,/pos/shifts,Authenticated / restricted
+CAN-050,/cash,Authenticated / restricted
+CAN-051,/finance/income,Authenticated / restricted
+CAN-052,/finance/expense,Authenticated / restricted
+CAN-053,/orders,Authenticated / restricted
+CAN-054,/sales/orders,Authenticated / restricted
+CAN-055,/sales/orders/new,Authenticated / restricted
+CAN-056,/sales/orders/metrics,Authenticated / restricted
+CAN-057,/settings/profile,Authenticated / restricted
+CAN-058,/help/compliance,Authenticated / restricted
+CAN-059,/products,Authenticated / restricted
+CAN-060,/settings/printing,Authenticated / restricted
+CAN-061,/products/new,Authenticated / restricted
+CAN-062,/dashboard,Authenticated / restricted
+CAN-063,/customers,Authenticated / restricted
+CAN-064,/customers/new,Authenticated / restricted
+CAN-065,/inventory,Authenticated / restricted
+CAN-066,/inventory/counts,Authenticated / restricted
+CAN-067,/inventory/counts/new,Authenticated / restricted
+CAN-068,/inventory/movements,Authenticated / restricted
+CAN-069,/inventory/receiving,Authenticated / restricted
+CAN-070,/inventory/transfers,Authenticated / restricted
+CAN-071,/inventory/write-offs,Authenticated / restricted
+CAN-072,/purchase-orders,Authenticated / restricted
+CAN-073,/purchase-orders/new,Authenticated / restricted
+CAN-074,/suppliers,Authenticated / restricted
+CAN-075,/suppliers/new,Authenticated / restricted
+CAN-076,/stores,Authenticated / restricted
+CAN-077,/stores/new,Authenticated / restricted
+CAN-078,/reports,Authenticated / restricted
+CAN-079,/reports/analytics,Authenticated / restricted
+CAN-080,/reports/close,Authenticated / restricted
+CAN-081,/reports/exports,Authenticated / restricted
+CAN-082,/reports/receipts,Authenticated / restricted
+CAN-083,/operations/integrations,Authenticated / restricted
+CAN-084,/operations/integrations/bakai-store,Authenticated / restricted
+CAN-085,/operations/integrations/bazaar-api,Authenticated / restricted
+CAN-086,/operations/integrations/bazaar-catalog,Authenticated / restricted
+CAN-087,/operations/integrations/email-marketing,Authenticated / restricted
+CAN-088,/operations/integrations/m-market,Authenticated / restricted
+CAN-089,/operations/integrations/o-market,Authenticated / restricted
+CAN-090,/operations/integrations/product-image-studio,Authenticated / restricted
+CAN-091,/settings/attributes,Authenticated / restricted
+CAN-092,/settings/categories,Authenticated / restricted
+CAN-093,/settings/import,Authenticated / restricted
+CAN-094,/settings/units,Authenticated / restricted
+CAN-095,/admin/jobs,Authenticated / restricted
+CAN-096,/admin/metrics,Authenticated / restricted
+CAN-097,/admin/support,Authenticated / restricted
+CAN-098,/billing,Authenticated / restricted
+CAN-099,/onboarding,Authenticated / restricted
+CAN-100,/settings/store-groups,Authenticated / restricted
+CAN-101,/settings/users,Authenticated / restricted
+CAN-102,/settings/whats-new,Authenticated / restricted
+CAN-103,/dev/scanner-test,Expected production 404
+CAN-104,/platform,Authenticated / restricted
+CAN-105,/settings/diagnostics,Authenticated / restricted
+CAN-106,/sales/orders/{id},Authenticated / restricted
+CAN-107,/products/{id},Authenticated / restricted
+CAN-108,/inventory/counts/{id},Authenticated / restricted
+CAN-109,/inventory/movements/{id},Authenticated / restricted
+CAN-110,/inventory/movements/{id}/print,Authenticated / restricted
+CAN-111,/inventory/receiving/{id}/edit,Authenticated / restricted
+CAN-112,/inventory/transfers/{id}/edit,Authenticated / restricted
+CAN-113,/inventory/write-offs/{id}/edit,Authenticated / restricted
+CAN-114,/purchase-orders/{id},Authenticated / restricted
+CAN-115,/stores/{id}/compliance,Authenticated / restricted
+CAN-116,/stores/{id}/hardware,Authenticated / restricted

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { z } from "zod";
@@ -31,6 +31,7 @@ const ResetRequestPage = () => {
   const tErrors = useTranslations("errors");
   const { toast } = useToast();
   const [sent, setSent] = useState(false);
+  const submitInFlightRef = useRef(false);
 
   const schema = useMemo(
     () =>
@@ -53,7 +54,16 @@ const ResetRequestPage = () => {
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
+    onSettled: () => {
+      submitInFlightRef.current = false;
+    },
   });
+
+  const submitRequest = (values: z.infer<typeof schema>) => {
+    if (submitInFlightRef.current) return;
+    submitInFlightRef.current = true;
+    requestMutation.mutate(values);
+  };
 
   return (
     <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-4 px-4 py-8 sm:py-12">
@@ -62,16 +72,14 @@ const ResetRequestPage = () => {
       </div>
       <Card>
         <CardHeader>
-          <CardTitle>{t("title")}</CardTitle>
+          <CardTitle as="h1">{t("title")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           {sent ? (
             <p className="text-sm text-muted-foreground">{t("requestSent")}</p>
           ) : (
             <Form {...form}>
-              <form
-                onSubmit={form.handleSubmit((values) => requestMutation.mutate(values))}
-              >
+              <form noValidate aria-live="polite" onSubmit={form.handleSubmit(submitRequest)}>
                 <FormStack>
                   <FormField
                     control={form.control}
@@ -94,7 +102,7 @@ const ResetRequestPage = () => {
               </form>
             </Form>
           )}
-          <Link href="/login" className="text-sm font-semibold text-primary hover:text-primary/80">
+          <Link href="/login" className="text-sm font-semibold text-primary hover:text-primary/90">
             {t("backToLogin")}
           </Link>
         </CardContent>

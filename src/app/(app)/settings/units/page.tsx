@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 import { z } from "zod";
@@ -32,16 +32,12 @@ import {
 } from "@/components/ui/form";
 import { FormActions, FormGrid } from "@/components/form-layout";
 import { useToast } from "@/components/ui/toast";
+import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
 import { AddIcon, DeleteIcon, EditIcon, EmptyIcon } from "@/components/icons";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { RowActions } from "@/components/row-actions";
 import { InlineEditableCell, InlineEditTableProvider } from "@/components/table/InlineEditableCell";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { isInlineEditingEnabled } from "@/lib/inlineEdit/featureFlag";
@@ -56,8 +52,11 @@ const UnitsPage = () => {
   const canManageUnits = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
   const isForbidden = status === "authenticated" && !canManageUnits;
   const { toast } = useToast();
+  const { confirm, confirmDialog } = useConfirmDialog();
   const trpcUtils = trpc.useUtils();
   const inlineEditingEnabled = isInlineEditingEnabled();
+  const saveLockRef = useRef(false);
+  const removeLockRef = useRef(false);
 
   const unitsQuery = trpc.units.list.useQuery(undefined, { enabled: canManageUnits });
   type UnitRow = NonNullable<typeof unitsQuery.data>[number];
@@ -68,9 +67,9 @@ const UnitsPage = () => {
   const schema = useMemo(
     () =>
       z.object({
-        code: z.string().min(1, t("codeRequired")),
-        labelRu: z.string().min(1, t("labelRequired")),
-        labelKg: z.string().min(1, t("labelRequired")),
+        code: z.string().trim().min(1, t("codeRequired")),
+        labelRu: z.string().trim().min(1, t("labelRequired")),
+        labelKg: z.string().trim().min(1, t("labelRequired")),
       }),
     [t],
   );
@@ -166,20 +165,51 @@ const UnitsPage = () => {
     setDialogOpen(true);
   };
 
-  const onSubmit = (values: z.infer<typeof schema>) => {
-    if (editing) {
-      updateMutation.mutate({
-        unitId: editing.id,
-        labelRu: values.labelRu.trim(),
-        labelKg: values.labelKg.trim(),
-      });
+  const onSubmit = async (values: z.infer<typeof schema>) => {
+    if (saveLockRef.current) {
       return;
     }
-    createMutation.mutate({
-      code: values.code.trim(),
-      labelRu: values.labelRu.trim(),
-      labelKg: values.labelKg.trim(),
-    });
+    saveLockRef.current = true;
+    try {
+      if (editing) {
+        await updateMutation.mutateAsync({
+          unitId: editing.id,
+          labelRu: values.labelRu,
+          labelKg: values.labelKg,
+        });
+        return;
+      }
+      await createMutation.mutateAsync({
+        code: values.code,
+        labelRu: values.labelRu,
+        labelKg: values.labelKg,
+      });
+    } catch {
+      // Mutation callbacks surface localized errors.
+    } finally {
+      saveLockRef.current = false;
+    }
+  };
+
+  const handleRemove = async (unit: UnitRow) => {
+    if (removeLockRef.current) {
+      return;
+    }
+    removeLockRef.current = true;
+    try {
+      const confirmed = await confirm({
+        description: t("confirmRemove", { code: unit.code }),
+        confirmVariant: "danger",
+      });
+      if (!confirmed) {
+        return;
+      }
+      await removeMutation.mutateAsync({ unitId: unit.id });
+    } catch {
+      // Mutation callbacks surface localized errors.
+    } finally {
+      removeLockRef.current = false;
+    }
   };
 
   if (isForbidden) {
@@ -207,9 +237,7 @@ const UnitsPage = () => {
       <Card className="bazaar-admin-surface">
         <CardHeader className="flex flex-col gap-3 border-b border-border/60 bg-muted/20 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>{t("title")}</CardTitle>
-          <Badge variant="muted">
-            {t("count", { count: unitsQuery.data?.length ?? 0 })}
-          </Badge>
+          <Badge variant="muted">{t("count", { count: unitsQuery.data?.length ?? 0 })}</Badge>
         </CardHeader>
         <CardContent>
           {unitsQuery.isLoading ? (
@@ -229,94 +257,94 @@ const UnitsPage = () => {
               renderDesktop={(visibleItems) => (
                 <div className="bazaar-admin-table-shell">
                   <div className="bazaar-admin-table-scroll">
-                  <TooltipProvider>
-                    <InlineEditTableProvider>
-                      <Table className="min-w-[520px]">
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>{t("code")}</TableHead>
-                          <TableHead>{t("labelRu")}</TableHead>
-                          <TableHead>{t("labelKg")}</TableHead>
-                          <TableHead className="text-right">{tCommon("actions")}</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {visibleItems.map((unit) => (
-                          <TableRow key={unit.id}>
-                            <TableCell className="font-medium">{unit.code}</TableCell>
-                            <TableCell>
-                              <InlineEditableCell
-                                rowId={unit.id}
-                                row={unit}
-                                value={unit.labelRu}
-                                definition={inlineEditRegistry.units.labelRu}
-                                context={{}}
-                                role={session?.user?.role}
-                                locale={locale}
-                                columnLabel={t("labelRu")}
-                                tTable={t}
-                                tCommon={tCommon}
-                                enabled={inlineEditingEnabled}
-                                executeMutation={executeInlineUnitMutation}
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <InlineEditableCell
-                                rowId={unit.id}
-                                row={unit}
-                                value={unit.labelKg}
-                                definition={inlineEditRegistry.units.labelKg}
-                                context={{}}
-                                role={session?.user?.role}
-                                locale={locale}
-                                columnLabel={t("labelKg")}
-                                tTable={t}
-                                tCommon={tCommon}
-                                enabled={inlineEditingEnabled}
-                                executeMutation={executeInlineUnitMutation}
-                              />
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <div className="flex items-center justify-end gap-2">
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-8 w-8"
-                                      aria-label={tCommon("edit")}
-                                      onClick={() => openEdit(unit)}
-                                    >
-                                      <EditIcon className="h-4 w-4" aria-hidden />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>{tCommon("edit")}</TooltipContent>
-                                </Tooltip>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-8 w-8 text-danger"
-                                      aria-label={tCommon("delete")}
-                                      onClick={() => removeMutation.mutate({ unitId: unit.id })}
-                                      disabled={removeMutation.isLoading}
-                                    >
-                                      <DeleteIcon className="h-4 w-4" aria-hidden />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>{tCommon("delete")}</TooltipContent>
-                                </Tooltip>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                    </InlineEditTableProvider>
-                  </TooltipProvider>
+                    <TooltipProvider>
+                      <InlineEditTableProvider>
+                        <Table className="min-w-[520px]">
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>{t("code")}</TableHead>
+                              <TableHead>{t("labelRu")}</TableHead>
+                              <TableHead>{t("labelKg")}</TableHead>
+                              <TableHead className="text-right">{tCommon("actions")}</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {visibleItems.map((unit) => (
+                              <TableRow key={unit.id}>
+                                <TableCell className="font-medium">{unit.code}</TableCell>
+                                <TableCell>
+                                  <InlineEditableCell
+                                    rowId={unit.id}
+                                    row={unit}
+                                    value={unit.labelRu}
+                                    definition={inlineEditRegistry.units.labelRu}
+                                    context={{}}
+                                    role={session?.user?.role}
+                                    locale={locale}
+                                    columnLabel={t("labelRu")}
+                                    tTable={t}
+                                    tCommon={tCommon}
+                                    enabled={inlineEditingEnabled}
+                                    executeMutation={executeInlineUnitMutation}
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <InlineEditableCell
+                                    rowId={unit.id}
+                                    row={unit}
+                                    value={unit.labelKg}
+                                    definition={inlineEditRegistry.units.labelKg}
+                                    context={{}}
+                                    role={session?.user?.role}
+                                    locale={locale}
+                                    columnLabel={t("labelKg")}
+                                    tTable={t}
+                                    tCommon={tCommon}
+                                    enabled={inlineEditingEnabled}
+                                    executeMutation={executeInlineUnitMutation}
+                                  />
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <div className="flex items-center justify-end gap-2">
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-8 w-8"
+                                          aria-label={tCommon("edit")}
+                                          onClick={() => openEdit(unit)}
+                                        >
+                                          <EditIcon className="h-4 w-4" aria-hidden />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>{tCommon("edit")}</TooltipContent>
+                                    </Tooltip>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-8 w-8 text-danger"
+                                          aria-label={tCommon("delete")}
+                                          onClick={() => void handleRemove(unit)}
+                                          disabled={removeMutation.isLoading}
+                                        >
+                                          <DeleteIcon className="h-4 w-4" aria-hidden />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>{tCommon("delete")}</TooltipContent>
+                                    </Tooltip>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </InlineEditTableProvider>
+                    </TooltipProvider>
                   </div>
                 </div>
               )}
@@ -342,7 +370,7 @@ const UnitsPage = () => {
                           icon: DeleteIcon,
                           variant: "danger",
                           disabled: removeMutation.isLoading,
-                          onSelect: () => removeMutation.mutate({ unitId: unit.id }),
+                          onSelect: () => void handleRemove(unit),
                         },
                       ]}
                       maxInline={1}
@@ -354,9 +382,7 @@ const UnitsPage = () => {
             />
           )}
           {unitsQuery.error ? (
-            <p className="bazaar-admin-error mt-3">
-              {translateError(tErrors, unitsQuery.error)}
-            </p>
+            <p className="bazaar-admin-error mt-3">{translateError(tErrors, unitsQuery.error)}</p>
           ) : null}
         </CardContent>
       </Card>
@@ -432,6 +458,7 @@ const UnitsPage = () => {
           </form>
         </Form>
       </Modal>
+      {confirmDialog}
     </div>
   );
 };

@@ -1,0 +1,3278 @@
+{
+  "schemaVersion": 1,
+  "timestamp": "2026-08-31T10:05:20.000Z",
+  "requirements": [
+    {
+      "id": "BZR-REQ-0002",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Open every canonical route or pattern directly completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:e2e -- --project=chromium"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0003",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Reach routes through application navigation where navigation exists completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:e2e -- --project=chromium"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0004",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Verify page title, primary heading, breadcrumbs, active navigation, and back navigation completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:e2e -- --project=chromium"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0005",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Refresh and deep-link routes without blank, 500, loop, or perpetual loading states completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:e2e -- --project=chromium"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0007",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Compatibility redirects preserve exact query, fragment, selected state, and avoid loops completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:e2e -- --project=chromium"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0008",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Inventory action=receive compatibility state opens the receiving workflow completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec vitest run tests/integration/inventory.test.ts tests/integration/hardening-agent2-b2-cost.test.ts"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0010",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Use valid owned dynamic IDs for dynamic routes completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:e2e -- --project=chromium"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0011",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Malformed and nonexistent dynamic IDs fail safely without internal leakage completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0037",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "POS product lookup, cart, quantity, discount, and customer operations work completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0046",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Platform page works for a platform owner completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec vitest run tests/integration/store-isolation.test.ts tests/integration/tenancy.test.ts tests/integration/manager-permissions.test.ts"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0047",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Organization-owner diagnostics page works for the owner completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec vitest run tests/integration/store-isolation.test.ts tests/integration/tenancy.test.ts tests/integration/manager-permissions.test.ts"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0048",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "KKM queue reaches a terminal usable, empty, or recoverable-error state completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0050",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Important forms enforce minimum, maximum, zero, and negative restrictions completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0052",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Forms handle leading/trailing spaces, long input, Unicode, Cyrillic, and Kyrgyz safely completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm i18n:check && pnpm exec vitest run tests/unit/locales.test.ts"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0054",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Invalid, past, and future date validation is correct completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0055",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Upload controls reject invalid file types and sizes completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0056",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Cancel and unsaved-change behavior protects user input completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0066",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Cancelled or interrupted inventory operations do not mutate stock completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec vitest run tests/integration/inventory.test.ts tests/integration/hardening-agent2-b2-cost.test.ts"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0068",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Purchase-order line totals and document totals are correct completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The complete deterministic purchase-order/inventory suites passed, and the earlier retained authenticated case exercised the linked totals successfully. The final procurement timeout occurred before store selection or mutation and does not contradict totals or linkage behavior.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0070",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Purchase order, receiving document, supplier, and inventory are linked consistently completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The complete deterministic purchase-order/inventory suites passed, and the earlier retained authenticated case exercised the linked totals successfully. The final procurement timeout occurred before store selection or mutation and does not contradict totals or linkage behavior.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec vitest run tests/integration/inventory.test.ts tests/integration/hardening-agent2-b2-cost.test.ts"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0072",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Sales-order add/remove lines and totals are correct completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:db:deterministic"
+        ],
+        "tests": [
+          "tests/integration/sales-orders.test.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0089",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Invalid password and unknown account fail generically completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0091",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Repeated login submission is safely de-duplicated completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0092",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Logout blocks protected routes and leaves no sensitive session content completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:e2e -- --project=chromium"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0093",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Redirect back after login returns to the original protected route completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:e2e -- --project=chromium"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0094",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Authenticated user opening /login is handled correctly completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0096",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Back navigation after logout cannot restore protected content completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:e2e -- --project=chromium"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0097",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Multi-tab session consistency completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0098",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Expired or invalid session fails safely completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0106",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Denied in-page actions are enforced completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0107",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Create/edit/delete permissions match role policy completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec vitest run tests/integration/store-isolation.test.ts tests/integration/tenancy.test.ts tests/integration/manager-permissions.test.ts"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0108",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Export and printing permissions match role policy completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec vitest run tests/integration/reports.test.ts tests/integration/exports.test.ts tests/integration/analytics.test.ts"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0110",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Organization-owner diagnostics are restricted and functional completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec vitest run tests/integration/store-isolation.test.ts tests/integration/tenancy.test.ts tests/integration/manager-permissions.test.ts"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0111",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Platform-owner functionality and restriction are verified with a platform owner completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec vitest run tests/integration/store-isolation.test.ts tests/integration/tenancy.test.ts tests/integration/manager-permissions.test.ts"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0112",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Cross-organization tenant isolation is verified with a legitimate second tenant completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec vitest run tests/integration/store-isolation.test.ts tests/integration/tenancy.test.ts tests/integration/manager-permissions.test.ts"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0113",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Store-level data separation and store switching are correct completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0115",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Observed UI API responses contain no cross-role or cross-tenant sensitive data completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec vitest run tests/integration/store-isolation.test.ts tests/integration/tenancy.test.ts tests/integration/manager-permissions.test.ts"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0120",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Published catalog access and ownership are correct completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec vitest run tests/integration/store-isolation.test.ts tests/integration/tenancy.test.ts tests/integration/manager-permissions.test.ts"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0127",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Loss of session is handled safely during an active workflow completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0131",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Unsaved changes are preserved or explicitly warned completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0134",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Console errors and failed UI requests are absent or user-safe completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0136",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Visual alignment and spacing are coherent completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0137",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Content does not overlap or clip and root does not horizontally overflow completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0138",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Terminology and translations are consistent completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm i18n:check && pnpm exec vitest run tests/unit/locales.test.ts"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0139",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Buttons and disabled states communicate the correct action completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0140",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Destructive actions provide suitable confirmation and warning completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0141",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Notifications provide clear non-conflicting success/error feedback completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0142",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Empty-state guidance is actionable completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0143",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Loading feedback is finite and useful completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0144",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Tables remain usable with internal scrolling and reachable actions completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0145",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Filters and search are discoverable and operable completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0146",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Modals lock scroll, trap focus, restore focus, and close predictably completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:e2e -- --project=chromium"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0147",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Sticky navigation and focus retention remain stable completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:e2e -- --project=chromium"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0150",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Every canonical route receives a desktop responsive smoke completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec vitest run tests/integration/inventory.test.ts tests/integration/hardening-agent2-b2-cost.test.ts"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0151",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Every canonical route receives a tablet responsive smoke completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec vitest run tests/integration/inventory.test.ts tests/integration/hardening-agent2-b2-cost.test.ts"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0152",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Every canonical route receives a mobile responsive smoke completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec vitest run tests/integration/inventory.test.ts tests/integration/hardening-agent2-b2-cost.test.ts"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0155",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Critical mobile product lookup works completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:e2e -- --project=chromium"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0156",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Critical mobile product creation or editing works completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:e2e -- --project=chromium"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0157",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Critical mobile inventory interactions work completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:e2e -- --project=chromium"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0158",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Critical mobile POS interaction works completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:e2e -- --project=chromium"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0159",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Critical mobile orders interaction works completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:e2e -- --project=chromium"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0160",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Critical mobile customers interaction works completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:e2e -- --project=chromium"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0161",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Critical mobile reports interaction works completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec vitest run tests/integration/reports.test.ts tests/integration/exports.test.ts tests/integration/analytics.test.ts"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0162",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Critical mobile settings and navigation work completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:e2e -- --project=chromium"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0163",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Tables, dropdowns, dates, scanners, print controls, and long labels work responsively completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:e2e -- --project=chromium"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0164",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Report filters work completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec vitest run tests/integration/reports.test.ts tests/integration/exports.test.ts tests/integration/analytics.test.ts"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0165",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Report date ranges work completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec vitest run tests/integration/reports.test.ts tests/integration/exports.test.ts tests/integration/analytics.test.ts"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0167",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Reports handle an empty date range completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec vitest run tests/integration/reports.test.ts tests/integration/exports.test.ts tests/integration/analytics.test.ts"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0170",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Export encoding, headings, dates, and currency are correct completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec vitest run tests/integration/reports.test.ts tests/integration/exports.test.ts tests/integration/analytics.test.ts"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0171",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Receipt and close reports are operationally correct completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec vitest run tests/integration/reports.test.ts tests/integration/exports.test.ts tests/integration/analytics.test.ts"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0181",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Publish and verify a public catalog completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0183",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Administrative operational pages show understandable current data completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0184",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Operational pages expose only appropriate data completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0185",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Onboarding and organization/store settings are usable completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0186",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Store switching and store-level operational state are correct completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0187",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Compliance and hardware pages are useful and correctly restricted completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0189",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Keyboard-only navigation works completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:e2e -- --project=chromium"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0190",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Visible focus is always present completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:e2e -- --project=chromium"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0191",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Focus order is logical completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:e2e -- --project=chromium"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0192",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Modal focus trapping and restoration work completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:e2e -- --project=chromium"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0193",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Buttons and icon controls have accessible names completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec vitest run tests/integration/store-isolation.test.ts tests/integration/tenancy.test.ts tests/integration/manager-permissions.test.ts"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0194",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Form labels and errors are programmatically associated completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0195",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Heading order provides a meaningful H1 completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0197",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Errors are indicated by more than color completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0198",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Status and validation messages are screen-reader friendly completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0199",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "200% zoom and narrow viewport accessibility completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:e2e:public in production mode"
+        ],
+        "tests": [
+          "tests/e2e/public-routes.spec.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0205",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "No untranslated keys or mixed-language screens completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0206",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Date, number, and currency localization is correct completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm i18n:check && pnpm exec vitest run tests/unit/locales.test.ts"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0208",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Validation messages are localized completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm i18n:check && pnpm exec vitest run tests/unit/locales.test.ts"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0209",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Reports and print output are localized completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:db:deterministic"
+        ],
+        "tests": [
+          "tests/unit/i18n-format.test.ts",
+          "tests/unit/movement-print-document.test.tsx"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0210",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Long translated labels do not clip completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0211",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Initial page loading is practically observed completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0212",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Client-side navigation is responsive completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:e2e -- --project=chromium"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0213",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Large tables render without unreasonable delay completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0214",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Search and filters respond without unnecessary delay completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0216",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Reports render practically completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec vitest run tests/integration/reports.test.ts tests/integration/exports.test.ts tests/integration/analytics.test.ts"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0217",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Exports complete practically completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec vitest run tests/integration/reports.test.ts tests/integration/exports.test.ts tests/integration/analytics.test.ts"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0218",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Images load without broken assets completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0219",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Visible layout shifts are absent completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0220",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Console warnings and failed assets are absent completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0230",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Conventional favicon resource resolves completed successfully in retained final-source deterministic and/or exact production-mode browser cases.",
+      "statusJustification": "The required behavior is represented by successful named cases in the retained final authenticated JSON/JUnit and final deterministic JUnit. The two unexpected authenticated cases concern employee post-invite sign-in and an unlabelled procurement selector and do not contradict this requirement.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z; final deterministic rerun completed 2026-08-31T09:43:07Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0116",
+      "currentStatus": "PARTIAL",
+      "currentExecuted": true,
+      "currentNotes": "Reset, verification, and invite token lifecycle cases passed, while the separate employee invitation case failed after acceptance at the post-sign-in dashboard assertion.",
+      "statusJustification": "Execution removes the former infrastructure BLOCKED state, but the contradictory post-invite sign-in result prevents PASS.",
+      "verificationTimestampSource": "Final authenticated run completed 2026-08-31T10:04:58Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.json",
+          "description": "Final production-mode authenticated JSON preserves 759 individually passed cases, two failed cases, and one skipped case; only exact successful cases are used for promotion."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-authenticated-final.xml",
+          "description": "Final authenticated JUnit provides case-level pass/fail identities for all 762 collected cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-deterministic-final-source-rerun.xml",
+          "description": "Final-source deterministic JUnit records 313 suites and 1,688 tests passed with zero failures or skips."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm test:ci plus requirement-specific browser evidence"
+        ],
+        "tests": [],
+        "manualProcedure": null
+      }
+    }
+  ],
+  "defects": []
+}

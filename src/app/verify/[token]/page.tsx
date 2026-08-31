@@ -56,7 +56,7 @@ const VerifyPage = () => {
       </div>
       <Card>
         <CardHeader>
-          <CardTitle>{t("title")}</CardTitle>
+          <CardTitle as="h1">{t("title")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">
           {status === "loading" ? (
@@ -65,9 +65,13 @@ const VerifyPage = () => {
               {tCommon("loading")}
             </div>
           ) : status === "error" ? (
-            <p>{tErrors("tokenInvalid")}</p>
+            <p role="status" aria-live="polite">
+              {tErrors("tokenInvalid")}
+            </p>
           ) : (
-            <p>{t("success")}</p>
+            <p role="status" aria-live="polite">
+              {t("success")}
+            </p>
           )}
           {status !== "loading" ? (
             <Button
@@ -76,7 +80,9 @@ const VerifyPage = () => {
               className="w-full sm:w-auto"
               onClick={() => router.push(nextPath)}
             >
-              {nextPath.startsWith("/register-business") ? t("goToRegisterBusiness") : t("goToLogin")}
+              {nextPath.startsWith("/register-business")
+                ? t("goToRegisterBusiness")
+                : t("goToLogin")}
             </Button>
           ) : null}
         </CardContent>

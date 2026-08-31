@@ -241,7 +241,7 @@ const runEmailCheck = async (input: {
   const provider = getEmailProvider();
   try {
     assertEmailConfigured();
-  } catch (error) {
+  } catch {
     return { status: "warning", code: "emailNotConfigured", details: { provider } };
   }
 
@@ -268,7 +268,7 @@ const runEmailCheck = async (input: {
       code: "emailTestSent",
       details: { provider, testSent: true },
     };
-  } catch (error) {
+  } catch {
     return {
       status: "error",
       code: "emailTestFailed",

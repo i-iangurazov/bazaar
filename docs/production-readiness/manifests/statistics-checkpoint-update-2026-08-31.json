@@ -1,0 +1,618 @@
+{
+  "schemaVersion": 1,
+  "timestamp": "2026-08-31T07:05:14.000Z",
+  "requirements": [
+    {
+      "id": "BZR-REQ-0018",
+      "currentStatus": "PARTIAL",
+      "currentExecuted": true,
+      "currentNotes": "Orders and Customers Guide content, search, route catalog and earlier rendered public coverage prove that the formerly empty areas are now populated. The current public inventory and related source changed after the retained browser pass, and production UI/role parity is not preserved as final-source evidence.",
+      "statusJustification": "The original FAIL can advance to PARTIAL because named content/search regressions passed and the historical public matrix rendered the Guide. PASS is withheld because the retained browser pass predates current relevant source and the acceptance requires current production UI and applicable-role verification.",
+      "verificationTimestampSource": "Statistics checkpoint reconciliation of preserved focused evidence and the existing 1,673-test exact result",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/statistics-checkpoint-evidence-2026-08-31.json",
+          "description": "Frozen-source statistics checkpoint, retained result identities, and fail-closed scoring decisions"
+        },
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/provisional-non-browser-evidence-2026-08-31.md",
+          "description": "Provisional evidence cutoff, exact completed commands, results, and exclusions"
+        },
+        {
+          "type": "file",
+          "path": "tests/unit/help-route-catalog.test.ts",
+          "description": "Verifies populated category and article routes plus app-owned Orders and Customers destinations"
+        },
+        {
+          "type": "file",
+          "path": "tests/unit/help-guide-search.test.ts",
+          "description": "Verifies multilingual Orders and Customers discovery terms"
+        },
+        {
+          "type": "file",
+          "path": "src/content/help/orders-customers.ts",
+          "description": "Localized actionable Orders and Customers guide content"
+        },
+        {
+          "type": "command",
+          "command": "pnpm exec vitest run",
+          "exitCode": 0,
+          "summary": "Deterministic non-DB run passed 197 files and 1,010 tests; count is provisional because newer tests were added later"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Existing exact session result: 312 files and 1,673 tests passed; used as corroboration, not as an unmapped blanket promotion"
+        }
+      ]
+    },
+    {
+      "id": "BZR-REQ-0040",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "The isolated PostgreSQL repair lane repeatedly created structurally valid customer orders and authenticated sales drafts using an active product and positive quantity; persisted orders contained their intended line and proceeded through service lifecycle operations.",
+      "statusJustification": "The narrow requirement asks whether a valid line-bearing order can be created. Focused DB tests prove that positive path. Zero-line rejection remains separately scored by BZR-REQ-0071 and ORDERS-001 and is not inferred here.",
+      "verificationTimestampSource": "Statistics checkpoint reconciliation of preserved focused evidence and the existing 1,673-test exact result",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/statistics-checkpoint-evidence-2026-08-31.json",
+          "description": "Frozen-source statistics checkpoint, retained result identities, and fail-closed scoring decisions"
+        },
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/provisional-non-browser-evidence-2026-08-31.md",
+          "description": "Provisional evidence cutoff, exact completed commands, results, and exclusions"
+        },
+        {
+          "type": "file",
+          "path": "tests/integration/b0-agent-3-orders-p0.test.ts",
+          "description": "Creates valid API and authenticated customer orders with active products and positive quantities"
+        },
+        {
+          "type": "command",
+          "command": "NODE_ENV=test RUN_DB_TESTS=1 ALLOW_TEST_DB_RESET=1 EXPECTED_TEST_DB_NAME=bazaar_hardening_agent4_platform DATABASE_TEST_URL=<isolated-loopback-test-db> DATABASE_URL=<isolated-loopback-test-db> pnpm exec vitest run tests/integration/b0-agent-3-access-cache-p0.test.ts tests/integration/b0-agent-3-orders-p0.test.ts tests/integration/catalog-discounts.test.ts tests/integration/product-cost-initial-stock.test.ts",
+          "exitCode": 0,
+          "summary": "Focused isolated PostgreSQL repair set passed 4 files and 18 tests"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Existing exact session result: 312 files and 1,673 tests passed; used as corroboration, not as an unmapped blanket promotion"
+        }
+      ]
+    },
+    {
+      "id": "BZR-REQ-0059",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Two persisted weighted-cost regressions pass. The exact audit case produces KGS 80.46 for 5 units at 80.25 plus 2 at 81.00, while the master case produces KGS 80.90 for 5 at 80.20 plus 10 at 81.25; rounding occurs after weighting.",
+      "statusJustification": "Both the audit formula and an independent master case reconcile cost-basis quantity, inventory snapshot, movement value, receiving on-hand, and persisted average cost. Broader consumers are scored separately.",
+      "verificationTimestampSource": "Statistics checkpoint reconciliation of preserved focused evidence and the existing 1,673-test exact result",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/statistics-checkpoint-evidence-2026-08-31.json",
+          "description": "Frozen-source statistics checkpoint, retained result identities, and fail-closed scoring decisions"
+        },
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/provisional-non-browser-evidence-2026-08-31.md",
+          "description": "Provisional evidence cutoff, exact completed commands, results, and exclusions"
+        },
+        {
+          "type": "file",
+          "path": "tests/integration/product-cost-initial-stock.test.ts",
+          "description": "Persists and reconciles the exact audit and master weighted-average cases"
+        },
+        {
+          "type": "command",
+          "command": "NODE_ENV=test RUN_DB_TESTS=1 ALLOW_TEST_DB_RESET=1 EXPECTED_TEST_DB_NAME=bazaar_hardening_agent4_platform DATABASE_TEST_URL=<isolated-loopback-test-db> DATABASE_URL=<isolated-loopback-test-db> pnpm exec vitest run tests/integration/product-cost-initial-stock.test.ts",
+          "exitCode": 0,
+          "summary": "Focused weighted-cost regression passed 1 file and 2 tests, including the exact audit result KGS 80.46"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Existing exact session result: 312 files and 1,673 tests passed; used as corroboration, not as an unmapped blanket promotion"
+        }
+      ]
+    },
+    {
+      "id": "BZR-REQ-0060",
+      "currentStatus": "PARTIAL",
+      "currentExecuted": true,
+      "currentNotes": "The corrected persisted basis now agrees across inventory snapshot, valued movements, product list, product detail, product pricing, store pricing, and product CSV for both weighted-cost cases. Margin/profit reports and every remaining purchase-cost consumer still await the full repaired DB/report lane.",
+      "statusJustification": "Focused evidence conclusively removes the original all-consumer FAIL for core inventory and product read models, but the requirement is broader than the completed lane; PARTIAL preserves the unverified report and profit boundaries.",
+      "verificationTimestampSource": "Statistics checkpoint reconciliation of preserved focused evidence and the existing 1,673-test exact result",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/statistics-checkpoint-evidence-2026-08-31.json",
+          "description": "Frozen-source statistics checkpoint, retained result identities, and fail-closed scoring decisions"
+        },
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/provisional-non-browser-evidence-2026-08-31.md",
+          "description": "Provisional evidence cutoff, exact completed commands, results, and exclusions"
+        },
+        {
+          "type": "file",
+          "path": "tests/integration/product-cost-initial-stock.test.ts",
+          "description": "Reconciles persisted cost through snapshot, movement, product read models, store pricing, and CSV"
+        },
+        {
+          "type": "command",
+          "command": "NODE_ENV=test RUN_DB_TESTS=1 ALLOW_TEST_DB_RESET=1 EXPECTED_TEST_DB_NAME=bazaar_hardening_agent4_platform DATABASE_TEST_URL=<isolated-loopback-test-db> DATABASE_URL=<isolated-loopback-test-db> pnpm exec vitest run tests/integration/product-cost-initial-stock.test.ts",
+          "exitCode": 0,
+          "summary": "Focused weighted-cost regression passed 1 file and 2 tests; full profit/report consumer coverage remains pending"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Existing exact session result: 312 files and 1,673 tests passed; used as corroboration, not as an unmapped blanket promotion"
+        }
+      ]
+    },
+    {
+      "id": "BZR-REQ-0074",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "An isolated completed customer order changed stock from 10 to 9 exactly once: API creation applied the intended -1 effect, READY and COMPLETE transitions left stock at 9, and exactly one SALE movement with quantity -1 existed for the order.",
+      "statusJustification": "The focused DB regression directly asserts the completed order's intended single inventory effect, including the persisted snapshot and movement cardinality.",
+      "verificationTimestampSource": "Statistics checkpoint reconciliation of preserved focused evidence and the existing 1,673-test exact result",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/statistics-checkpoint-evidence-2026-08-31.json",
+          "description": "Frozen-source statistics checkpoint, retained result identities, and fail-closed scoring decisions"
+        },
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/provisional-non-browser-evidence-2026-08-31.md",
+          "description": "Provisional evidence cutoff, exact completed commands, results, and exclusions"
+        },
+        {
+          "type": "file",
+          "path": "tests/integration/b0-agent-3-orders-p0.test.ts",
+          "description": "HARD-A3-001 asserts one stock effect through customer-order completion"
+        },
+        {
+          "type": "command",
+          "command": "NODE_ENV=test RUN_DB_TESTS=1 ALLOW_TEST_DB_RESET=1 EXPECTED_TEST_DB_NAME=bazaar_hardening_agent4_platform DATABASE_TEST_URL=<isolated-loopback-test-db> DATABASE_URL=<isolated-loopback-test-db> pnpm exec vitest run tests/integration/b0-agent-3-access-cache-p0.test.ts tests/integration/b0-agent-3-orders-p0.test.ts tests/integration/catalog-discounts.test.ts tests/integration/product-cost-initial-stock.test.ts",
+          "exitCode": 0,
+          "summary": "Focused isolated PostgreSQL repair set passed 4 files and 18 tests"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Existing exact session result: 312 files and 1,673 tests passed; used as corroboration, not as an unmapped blanket promotion"
+        }
+      ]
+    },
+    {
+      "id": "BZR-REQ-0085",
+      "currentStatus": "PARTIAL",
+      "currentExecuted": true,
+      "currentNotes": "For the two focused cost cases, persisted basis, movement-derived value, product list/detail/pricing/store-pricing values, and product CSV agree, including the corrected audit value KGS 80.46. Broad UI pages, reports, and every export total still await final DB and browser reconciliation.",
+      "statusJustification": "The original demonstrated cross-surface cost mismatch is corrected in focused data/read/export paths, supporting PARTIAL. The all-UI/all-export wording is broader than the completed non-browser evidence and cannot pass yet.",
+      "verificationTimestampSource": "Statistics checkpoint reconciliation of preserved focused evidence and the existing 1,673-test exact result",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/statistics-checkpoint-evidence-2026-08-31.json",
+          "description": "Frozen-source statistics checkpoint, retained result identities, and fail-closed scoring decisions"
+        },
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/provisional-non-browser-evidence-2026-08-31.md",
+          "description": "Provisional evidence cutoff, exact completed commands, results, and exclusions"
+        },
+        {
+          "type": "file",
+          "path": "tests/integration/product-cost-initial-stock.test.ts",
+          "description": "Reconciles product read models, movement-derived value, and product CSV for two cost cases"
+        },
+        {
+          "type": "command",
+          "command": "NODE_ENV=test RUN_DB_TESTS=1 ALLOW_TEST_DB_RESET=1 EXPECTED_TEST_DB_NAME=bazaar_hardening_agent4_platform DATABASE_TEST_URL=<isolated-loopback-test-db> DATABASE_URL=<isolated-loopback-test-db> pnpm exec vitest run tests/integration/product-cost-initial-stock.test.ts",
+          "exitCode": 0,
+          "summary": "Focused weighted-cost regression passed 1 file and 2 tests; broader UI/report/export reconciliation remains pending"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Existing exact session result: 312 files and 1,673 tests passed; used as corroboration, not as an unmapped blanket promotion"
+        }
+      ]
+    },
+    {
+      "id": "BZR-REQ-0112",
+      "currentStatus": "PARTIAL",
+      "currentExecuted": true,
+      "currentNotes": "Isolated DB tests created legitimate second-organization records and rejected cross-organization customer, purchase-order, supplier, API-key, product, and integration access without side effects. The final authenticated direct-URL and UI/API matrix is still pending.",
+      "statusJustification": "The former BLOCKED reason—no second tenant—no longer applies to backend/service isolation. PARTIAL is conservative because the completed evidence does not replace the still-running authenticated browser matrix.",
+      "verificationTimestampSource": "Statistics checkpoint reconciliation of preserved focused evidence and the existing 1,673-test exact result",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/statistics-checkpoint-evidence-2026-08-31.json",
+          "description": "Frozen-source statistics checkpoint, retained result identities, and fail-closed scoring decisions"
+        },
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/provisional-non-browser-evidence-2026-08-31.md",
+          "description": "Provisional evidence cutoff, exact completed commands, results, and exclusions"
+        },
+        {
+          "type": "file",
+          "path": "tests/integration/b0-agent-3-access-cache-p0.test.ts",
+          "description": "Creates second organizations and asserts customer, PO, supplier, integration, and API-key isolation"
+        },
+        {
+          "type": "file",
+          "path": "tests/integration/b0-agent-3-orders-p0.test.ts",
+          "description": "Rejects cross-organization products and preserves authorized-order side effects"
+        },
+        {
+          "type": "command",
+          "command": "NODE_ENV=test RUN_DB_TESTS=1 ALLOW_TEST_DB_RESET=1 EXPECTED_TEST_DB_NAME=bazaar_hardening_agent4_platform DATABASE_TEST_URL=<isolated-loopback-test-db> DATABASE_URL=<isolated-loopback-test-db> pnpm exec vitest run tests/integration/b0-agent-3-access-cache-p0.test.ts tests/integration/b0-agent-3-orders-p0.test.ts tests/integration/catalog-discounts.test.ts tests/integration/product-cost-initial-stock.test.ts",
+          "exitCode": 0,
+          "summary": "Focused isolated PostgreSQL repair set passed 4 files and 18 tests; authenticated browser tenant matrix remains pending"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Existing exact session result: 312 files and 1,673 tests passed; used as corroboration, not as an unmapped blanket promotion"
+        }
+      ]
+    },
+    {
+      "id": "BZR-REQ-0169",
+      "currentStatus": "PARTIAL",
+      "currentExecuted": true,
+      "currentNotes": "The product CSV now exports correct average-cost and purchase-price values for both focused weighted-cost cases, including KGS 80.46 for the original audit case. Other export types and aggregate totals were not included in the completed focused DB lane.",
+      "statusJustification": "The originally failing product-cost export values are corrected and persisted, supporting PARTIAL. The plural wording covers more exports and totals than the two completed product-CSV cases, so PASS is deferred.",
+      "verificationTimestampSource": "Statistics checkpoint reconciliation of preserved focused evidence and the existing 1,673-test exact result",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/statistics-checkpoint-evidence-2026-08-31.json",
+          "description": "Frozen-source statistics checkpoint, retained result identities, and fail-closed scoring decisions"
+        },
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/provisional-non-browser-evidence-2026-08-31.md",
+          "description": "Provisional evidence cutoff, exact completed commands, results, and exclusions"
+        },
+        {
+          "type": "file",
+          "path": "tests/integration/product-cost-initial-stock.test.ts",
+          "description": "Parses product CSV and asserts average-cost and purchase-price fields for both weighted cases"
+        },
+        {
+          "type": "command",
+          "command": "NODE_ENV=test RUN_DB_TESTS=1 ALLOW_TEST_DB_RESET=1 EXPECTED_TEST_DB_NAME=bazaar_hardening_agent4_platform DATABASE_TEST_URL=<isolated-loopback-test-db> DATABASE_URL=<isolated-loopback-test-db> pnpm exec vitest run tests/integration/product-cost-initial-stock.test.ts",
+          "exitCode": 0,
+          "summary": "Focused weighted-cost regression passed 1 file and 2 tests; non-product exports and aggregate totals remain pending"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Existing exact session result: 312 files and 1,673 tests passed; used as corroboration, not as an unmapped blanket promotion"
+        }
+      ]
+    },
+    {
+      "id": "BZR-REQ-0194",
+      "currentStatus": "PARTIAL",
+      "currentExecuted": true,
+      "currentNotes": "Audited signup, invite, token-invite, and business-registration forms now expose label/control associations, aria-invalid, aria-describedby, alert roles, polite announcements, and stable select names. The shared FormControl regression references only rendered description/error IDs. A complete authenticated-form browser inventory remains pending.",
+      "statusJustification": "The specific public-form defect is source- and DOM-regression complete, but the tracker requirement is application-wide. PARTIAL preserves the unverified authenticated-form and runtime breadth.",
+      "verificationTimestampSource": "Statistics checkpoint reconciliation of preserved focused evidence and the existing 1,673-test exact result",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/statistics-checkpoint-evidence-2026-08-31.json",
+          "description": "Frozen-source statistics checkpoint, retained result identities, and fail-closed scoring decisions"
+        },
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/provisional-non-browser-evidence-2026-08-31.md",
+          "description": "Provisional evidence cutoff, exact completed commands, results, and exclusions"
+        },
+        {
+          "type": "file",
+          "path": "tests/unit/form-control-accessibility.test.tsx",
+          "description": "DOM regression for rendered descriptions, errors, aria-invalid, and aria-describedby references"
+        },
+        {
+          "type": "file",
+          "path": "tests/unit/public-auth-accessibility.test.ts",
+          "description": "Audits public-form labels, errors, select names, status roles, and live regions"
+        },
+        {
+          "type": "command",
+          "command": "pnpm exec vitest run tests/unit/form-control-accessibility.test.tsx tests/unit/public-auth-accessibility.test.ts tests/unit/public-legal-routes.test.ts tests/unit/marketing-landing-localization.test.ts tests/unit/marketing-landing-source.test.ts tests/unit/landing-theme-source.test.ts tests/unit/public-catalog-accessibility.test.tsx",
+          "exitCode": 0,
+          "summary": "Named public form/auth/legal/landing/catalog source run passed 7 files and 34 tests"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Existing exact session result: 312 files and 1,673 tests passed; used as corroboration, not as an unmapped blanket promotion"
+        }
+      ]
+    },
+    {
+      "id": "BZR-REQ-0195",
+      "currentStatus": "PARTIAL",
+      "currentExecuted": true,
+      "currentNotes": "All audited login, signup, invite, reset, verify, and business-registration routes now provide localized route metadata and a primary H1. The missing-catalog state has localized metadata and H1 source coverage. Full runtime heading-order coverage for every authenticated route remains pending.",
+      "statusJustification": "The specific public auth/error defect is source-regression complete, but the broad application heading-order requirement still needs the final browser route matrix; PARTIAL is the conservative outcome.",
+      "verificationTimestampSource": "Statistics checkpoint reconciliation of preserved focused evidence and the existing 1,673-test exact result",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/statistics-checkpoint-evidence-2026-08-31.json",
+          "description": "Frozen-source statistics checkpoint, retained result identities, and fail-closed scoring decisions"
+        },
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/provisional-non-browser-evidence-2026-08-31.md",
+          "description": "Provisional evidence cutoff, exact completed commands, results, and exclusions"
+        },
+        {
+          "type": "file",
+          "path": "tests/unit/public-auth-accessibility.test.ts",
+          "description": "Audits localized route metadata, primary auth headings, and catalog not-found heading source"
+        },
+        {
+          "type": "file",
+          "path": "tests/unit/page-header-accessibility.test.tsx",
+          "description": "Verifies the shared authenticated PageHeader exposes its title as level-one heading"
+        },
+        {
+          "type": "command",
+          "command": "pnpm exec vitest run tests/unit/form-control-accessibility.test.tsx tests/unit/public-auth-accessibility.test.ts tests/unit/public-legal-routes.test.ts tests/unit/marketing-landing-localization.test.ts tests/unit/marketing-landing-source.test.ts tests/unit/landing-theme-source.test.ts tests/unit/public-catalog-accessibility.test.tsx",
+          "exitCode": 0,
+          "summary": "Named public form/auth/legal/landing/catalog source run passed 7 files and 34 tests; full browser heading-order coverage remains pending"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Existing exact session result: 312 files and 1,673 tests passed; used as corroboration, not as an unmapped blanket promotion"
+        }
+      ]
+    },
+    {
+      "id": "BZR-REQ-0207",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Locale-aware Guide counts pass Russian forms for 1, 2, 5, 11, 21, and 24, plus stable Kyrgyz and English singular/plural labels. The repository localization integrity check also passes.",
+      "statusJustification": "Dedicated plural regressions exercise the known Russian failure and representative Russian plural categories, while KG/EN assertions and the green i18n catalog check cover the supported locales.",
+      "verificationTimestampSource": "Statistics checkpoint reconciliation of preserved focused evidence and the existing 1,673-test exact result",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/statistics-checkpoint-evidence-2026-08-31.json",
+          "description": "Frozen-source statistics checkpoint, retained result identities, and fail-closed scoring decisions"
+        },
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/provisional-non-browser-evidence-2026-08-31.md",
+          "description": "Provisional evidence cutoff, exact completed commands, results, and exclusions"
+        },
+        {
+          "type": "file",
+          "path": "tests/unit/help-pluralization.test.ts",
+          "description": "Exercises Russian plural categories and stable Kyrgyz/English guide labels"
+        },
+        {
+          "type": "command",
+          "command": "pnpm i18n:check",
+          "exitCode": 0,
+          "summary": "Localization message integrity check passed"
+        },
+        {
+          "type": "command",
+          "command": "pnpm exec vitest run",
+          "exitCode": 0,
+          "summary": "Deterministic non-DB run passed 197 files and 1,010 tests, including the locale-aware plural regression"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Existing exact session result: 312 files and 1,673 tests passed; used as corroboration, not as an unmapped blanket promotion"
+        }
+      ]
+    }
+  ],
+  "defects": [
+    {
+      "id": "PUBLIC-014",
+      "currentStatus": "RESOLVED",
+      "resolutionEvidence": [
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/statistics-checkpoint-evidence-2026-08-31.json",
+          "description": "Frozen-source statistics checkpoint, retained result identities, and fail-closed scoring decisions"
+        },
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/provisional-non-browser-evidence-2026-08-31.md",
+          "description": "Provisional evidence ledger and conservative defect-closure boundaries"
+        },
+        {
+          "type": "file",
+          "path": "tests/unit/help-pluralization.test.ts",
+          "description": "Covers the Russian singular failure, Russian plural categories, and KG/EN labels"
+        },
+        {
+          "type": "command",
+          "command": "pnpm i18n:check",
+          "exitCode": 0,
+          "summary": "Localization message integrity check passed"
+        },
+        {
+          "type": "command",
+          "command": "pnpm exec vitest run",
+          "exitCode": 0,
+          "summary": "Deterministic non-DB run passed 197 files and 1,010 tests, including pluralization regressions"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Existing exact session result: 312 files and 1,673 tests passed; used as corroboration, not as an unmapped blanket promotion"
+        }
+      ]
+    },
+    {
+      "id": "AUTH-A11Y-001",
+      "currentStatus": "RESOLVED",
+      "resolutionEvidence": [
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/statistics-checkpoint-evidence-2026-08-31.json",
+          "description": "Frozen-source statistics checkpoint, retained result identities, and fail-closed scoring decisions"
+        },
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/provisional-non-browser-evidence-2026-08-31.md",
+          "description": "Provisional evidence ledger and conservative defect-closure boundaries"
+        },
+        {
+          "type": "file",
+          "path": "tests/unit/modal-description.test.tsx",
+          "description": "Asserts dialog title/description association and absence of Radix warnings, including explicit no-description opt-out"
+        },
+        {
+          "type": "command",
+          "command": "pnpm exec vitest run",
+          "exitCode": 0,
+          "summary": "Deterministic non-DB run passed 197 files and 1,010 tests, including modal description regressions"
+        },
+        {
+          "type": "command",
+          "command": "pnpm test:db:deterministic",
+          "exitCode": 0,
+          "summary": "Existing exact session result: 312 files and 1,673 tests passed; used as corroboration, not as an unmapped blanket promotion"
+        }
+      ]
+    }
+  ],
+  "supportingMetrics": {
+    "value": {
+      "routes": {
+        "exact": {
+          "PASS": 25,
+          "PARTIAL": 97,
+          "FAIL": 10,
+          "BLOCKED": 0,
+          "total": 132
+        },
+        "canonical": {
+          "PASS": 15,
+          "PARTIAL": 91,
+          "FAIL": 10,
+          "BLOCKED": 0,
+          "total": 116
+        }
+      },
+      "workflows": {
+        "total": 85,
+        "executed": 63,
+        "outcomes": {
+          "PASS": 24,
+          "PARTIAL": 37,
+          "FAIL": 2,
+          "BLOCKED": 22
+        }
+      },
+      "roles": {
+        "credentialed": 6,
+        "expected": 6,
+        "credentialedRoleNames": [
+          "ADMIN",
+          "MANAGER",
+          "STAFF",
+          "CASHIER",
+          "ORGANIZATION_OWNER",
+          "PLATFORM_OWNER"
+        ],
+        "blockedRoleNames": [],
+        "lowerRoleBoundaryAssertions": {
+          "passed": 225,
+          "total": 225
+        },
+        "crossTenantIsolationVerified": false
+      },
+      "responsive": {
+        "desktopExactForms": {
+          "executed": 132,
+          "total": 132
+        },
+        "tabletExactForms": {
+          "executed": 123,
+          "total": 132
+        },
+        "mobileExactForms": {
+          "executed": 123,
+          "total": 132
+        },
+        "publicViewportChecks": {
+          "executed": 153,
+          "total": 153
+        },
+        "adminViewportChecks": {
+          "executed": 210,
+          "total": 210
+        }
+      },
+      "localization": {
+        "supportedLocales": [
+          "ru",
+          "kg",
+          "en"
+        ],
+        "compatibilityPrefixes": [
+          "ru",
+          "kg",
+          "en",
+          "ky"
+        ],
+        "representativePrefixAssertions": {
+          "passed": 12,
+          "total": 12
+        },
+        "fullRouteLocaleCrossProductVerified": false
+      }
+    },
+    "evidence": [
+      {
+        "type": "file",
+        "path": "docs/production-readiness/evidence/statistics-checkpoint-evidence-2026-08-31.json",
+        "description": "Frozen-source statistics checkpoint, retained result identities, and fail-closed scoring decisions"
+      },
+      {
+        "type": "file",
+        "path": "docs/production-readiness/evidence/provisional-non-browser-evidence-2026-08-31.md",
+        "description": "Exact focused PostgreSQL and named deterministic command ledger"
+      }
+    ]
+  }
+}

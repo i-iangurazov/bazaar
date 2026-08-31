@@ -70,8 +70,12 @@ const resolveReceiptPdfAction = (request: Request) => {
   return "download";
 };
 
-export const GET = async (request: Request, { params }: { params: { id: string } }) => {
-  const localeCookie = cookies().get("NEXT_LOCALE")?.value;
+export const GET = async (
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) => {
+  const [{ id }, cookieStore] = await Promise.all([params, cookies()]);
+  const localeCookie = cookieStore.get("NEXT_LOCALE")?.value;
   const locale = normalizeLocale(localeCookie) ?? defaultLocale;
 
   let messages: MessageTree | undefined;
@@ -105,7 +109,7 @@ export const GET = async (request: Request, { params }: { params: { id: string }
   try {
     const job = await buildReceiptPrintPayload({
       organizationId: token.organizationId as string,
-      saleId: params.id,
+      saleId: id,
       user,
       locale: toIntlLocale(locale),
       variant,

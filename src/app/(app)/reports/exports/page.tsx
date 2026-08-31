@@ -333,7 +333,7 @@ const ExportsPage = () => {
             <FormGrid className="lg:grid-cols-5">
               <Field label={t("storeLabel")}>
                 <Select value={storeId} onValueChange={setStoreId}>
-                  <SelectTrigger>
+                  <SelectTrigger aria-label={t("storeLabel")}>
                     <SelectValue placeholder={tCommon("selectStore")} />
                   </SelectTrigger>
                   <SelectContent>
@@ -347,7 +347,7 @@ const ExportsPage = () => {
               </Field>
               <Field label={t("typeLabel")} className="lg:col-span-2">
                 <Select value={exportType} onValueChange={(value) => selectExportType(value as ExportType)}>
-                  <SelectTrigger>
+                  <SelectTrigger aria-label={t("typeLabel")}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -361,7 +361,7 @@ const ExportsPage = () => {
               </Field>
               <Field label={t("formatLabel")}>
                 <Select value={format} onValueChange={(value) => setFormat(value as ExportFileFormat)}>
-                  <SelectTrigger>
+                  <SelectTrigger aria-label={t("formatLabel")}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -373,6 +373,7 @@ const ExportsPage = () => {
               <Field label={t("periodStart")}>
                 <Input
                   type="date"
+                  aria-label={t("periodStart")}
                   value={periodStart}
                   onChange={(event) => handlePeriodDateChange("start", event.target.value)}
                 />
@@ -380,6 +381,7 @@ const ExportsPage = () => {
               <Field label={t("periodEnd")}>
                 <Input
                   type="date"
+                  aria-label={t("periodEnd")}
                   value={periodEnd}
                   onChange={(event) => handlePeriodDateChange("end", event.target.value)}
                 />

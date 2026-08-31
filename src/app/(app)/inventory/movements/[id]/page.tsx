@@ -31,6 +31,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrencyKGS, formatDateTime, formatNumber } from "@/lib/i18nFormat";
 import { formatMovementNote } from "@/lib/i18n/movementNote";
 import { getStockMovementLabel } from "@/lib/i18n/status";
+import {
+  getMovementDocumentAmountKgs,
+  getMovementDocumentLineValueKgs,
+  hasMovementDocumentLineValues,
+} from "@/lib/inventory/movementDocumentValue";
 import { resolveSafeReturnTo } from "@/lib/safeReturnTo";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
@@ -76,6 +81,8 @@ const ProductMovementDocumentPage = () => {
   const returnTo = resolveSafeReturnTo(searchParams.get("returnTo"));
   const detailReturnParams = new URLSearchParams({ from: "movements", returnTo });
   const sourceDocumentMissing = searchParams.get("source") === "missing";
+  const showMoneyColumns = document ? hasMovementDocumentLineValues(document.lines) : false;
+  const reconciledDocumentAmount = document ? getMovementDocumentAmountKgs(document) : null;
   const bareCurrentDetailUrl = document
     ? `/inventory/movements/${encodeURIComponent(document.id)}`
     : "";
@@ -257,7 +264,7 @@ const ProductMovementDocumentPage = () => {
                 <div>
                   <dt className="text-muted-foreground">{t("amount")}</dt>
                   <dd className="font-medium text-foreground">
-                    {formatMoney(document.totalAmount)}
+                    {formatMoney(reconciledDocumentAmount)}
                   </dd>
                 </div>
                 <div>
@@ -287,13 +294,19 @@ const ProductMovementDocumentPage = () => {
                 paginationKey="product-movement-document-lines"
                 renderDesktop={(visibleItems) => (
                   <div className="overflow-x-auto">
-                    <Table className="min-w-[900px]">
+                    <Table className={showMoneyColumns ? "min-w-[1120px]" : "min-w-[900px]"}>
                       <TableHeader>
                         <TableRow>
                           <TableHead>{tCommon("product")}</TableHead>
                           <TableHead>{t("store")}</TableHead>
                           <TableHead>{t("documentMovementType")}</TableHead>
                           <TableHead className="text-right">{t("quantity")}</TableHead>
+                          {showMoneyColumns ? (
+                            <>
+                              <TableHead className="text-right">{t("unitCost")}</TableHead>
+                              <TableHead className="text-right">{t("lineValue")}</TableHead>
+                            </>
+                          ) : null}
                           <TableHead>{t("date")}</TableHead>
                           <TableHead>{t("author")}</TableHead>
                           <TableHead>{t("comment")}</TableHead>
@@ -326,6 +339,24 @@ const ProductMovementDocumentPage = () => {
                             <TableCell className="text-right">
                               {formatNumber(line.qtyDelta, locale)}
                             </TableCell>
+                            {showMoneyColumns ? (
+                              <>
+                                <TableCell
+                                  className="whitespace-nowrap text-right tabular-nums"
+                                  data-movement-unit-cost
+                                >
+                                  {formatMoney(line.unitCostKgs)}
+                                </TableCell>
+                                <TableCell
+                                  className="whitespace-nowrap text-right tabular-nums"
+                                  data-movement-line-value
+                                >
+                                  {formatMoney(
+                                    getMovementDocumentLineValueKgs(document.documentType, line),
+                                  )}
+                                </TableCell>
+                              </>
+                            ) : null}
                             <TableCell>{formatDateTime(line.createdAt, locale)}</TableCell>
                             <TableCell>
                               {line.authorName || line.authorEmail || tCommon("notAvailable")}
@@ -368,6 +399,30 @@ const ProductMovementDocumentPage = () => {
                           {formatNumber(line.qtyDelta, locale)}
                         </p>
                       </div>
+                      {showMoneyColumns ? (
+                        <>
+                          <div>
+                            <p>{t("unitCost")}</p>
+                            <p
+                              className="font-medium tabular-nums text-foreground"
+                              data-movement-unit-cost
+                            >
+                              {formatMoney(line.unitCostKgs)}
+                            </p>
+                          </div>
+                          <div>
+                            <p>{t("lineValue")}</p>
+                            <p
+                              className="font-medium tabular-nums text-foreground"
+                              data-movement-line-value
+                            >
+                              {formatMoney(
+                                getMovementDocumentLineValueKgs(document.documentType, line),
+                              )}
+                            </p>
+                          </div>
+                        </>
+                      ) : null}
                       <div>
                         <p>{t("date")}</p>
                         <p className="font-medium text-foreground">

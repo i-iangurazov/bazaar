@@ -2,13 +2,14 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { ArrowRightIcon, CheckIcon, SearchIcon } from "@/components/icons";
 import type { HelpHomeData } from "@/content/help/home-data";
 import { searchHelpDocuments } from "@/content/help/search-core";
 import type { HelpLocale } from "@/content/help/types";
-import { localize, localizedUi } from "@/content/help/ui";
+import { formatGuideCount, localize, localizedUi } from "@/content/help/ui";
 import { HelpIcon } from "./HelpIcon";
 import { trackHelpEvent } from "./help-analytics";
 import styles from "./help.module.css";
@@ -32,6 +33,19 @@ export const HelpHome = ({ locale, data }: { locale: HelpLocale; data: HelpHomeD
     } catch {
       setCompleted(new Set());
     }
+  }, []);
+
+  useEffect(() => {
+    const focusSearch = (event: KeyboardEvent) => {
+      if (event.altKey || (!event.metaKey && !event.ctrlKey) || event.key.toLowerCase() !== "k") {
+        return;
+      }
+      event.preventDefault();
+      searchRef.current?.focus();
+    };
+
+    window.addEventListener("keydown", focusSearch);
+    return () => window.removeEventListener("keydown", focusSearch);
   }, []);
 
   useEffect(() => {
@@ -105,7 +119,7 @@ export const HelpHome = ({ locale, data }: { locale: HelpLocale; data: HelpHomeD
               role="combobox"
               autoComplete="off"
             />
-            <kbd>⌘ K</kbd>
+            <kbd aria-hidden>⌘/Ctrl K</kbd>
           </div>
           {query ? (
             <div
@@ -363,9 +377,7 @@ export const HelpHome = ({ locale, data }: { locale: HelpLocale; data: HelpHomeD
                 <span>
                   <strong>{category.title}</strong>
                   <small>{category.description}</small>
-                  <em>
-                    {category.count} {ui.guideCount}
-                  </em>
+                  <em>{formatGuideCount(category.count, locale)}</em>
                 </span>
                 <ArrowRightIcon aria-hidden />
               </Link>

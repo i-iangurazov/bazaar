@@ -140,4 +140,15 @@ describe("conservative app shell navigation source", () => {
     expect(posStandaloneBlock).not.toContain("<MobileAppShell");
     expect(posStandaloneBlock).not.toContain("<SidebarProvider");
   });
+
+  it("exposes route-specific document titles and semantic current-page navigation", () => {
+    expect(source).toContain('document.querySelectorAll("h1")');
+    expect(source).toContain("candidate.getClientRects().length > 0");
+    expect(source).toContain('heading?.innerText.replace(/\\s+/g, " ").trim()');
+    expect(source).toContain('const nextTitle = [headingText, appName].join(" | ")');
+    expect(source).toContain("if (document.title !== nextTitle)");
+    expect(source).toContain("observer.observe(document.head");
+    expect(source).toContain('aria-current={isChildActive ? "page" : undefined}');
+    expect(source).toContain('aria-current={isActive ? "page" : undefined}');
+  });
 });

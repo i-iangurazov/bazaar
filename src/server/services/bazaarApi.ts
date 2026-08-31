@@ -36,6 +36,11 @@ import {
   normalizeOptionalCustomerPhone,
 } from "@/server/services/customerContact";
 import { applyStockMovement } from "@/server/services/inventory";
+import {
+  applyValuedProductCostDelta,
+  productCostBasisSelect,
+  resolveCurrentProductCostUnitNumber,
+} from "@/server/services/productCost";
 import { toJson } from "@/server/services/json";
 import {
   OPERATION_BAZAAR_API_RETENTION_MS,
@@ -53,7 +58,9 @@ import { sendOrderConfirmationEmail } from "@/server/services/orderEmails";
 import { getEffectiveProductPrice } from "@/server/services/effectiveProductPrice";
 import type { BazaarCatalogPricingJson } from "@/server/services/bazaarCatalogPricingMapper";
 
-const API_TOKEN_PREFIX = "bz_live_";
+// Public format marker only. The remaining 43 base64url characters carry 256 bits
+// of CSPRNG entropy; the database stores only its deterministic verifier.
+const BAZAAR_PUBLIC_MARKER = "bz_live_";
 const API_KEY_LAST_USED_UPDATE_INTERVAL_MS = 10 * 60 * 1000;
 
 const globalForBazaarApiCache = globalThis as typeof globalThis & {
@@ -148,7 +155,7 @@ const resolveBazaarApiCatalogPrice = (input: {
 };
 
 const tokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
-const createRawToken = () => `${API_TOKEN_PREFIX}${randomBytes(32).toString("base64url")}`;
+const createRawToken = () => `${BAZAAR_PUBLIC_MARKER}${randomBytes(32).toString("base64url")}`;
 
 export type BazaarApiPublicOrderStatus =
   | "NEW"
@@ -392,6 +399,7 @@ type BazaarApiOrderStockLine = {
   variantId: string | null;
   qty: number;
   unitCostKgs: Prisma.Decimal | number | null;
+  lineCostTotalKgs: Prisma.Decimal | number | null;
   lineTotalKgs: Prisma.Decimal | number;
 };
 
@@ -616,6 +624,21 @@ const applyBazaarApiOrderStockDeduction = async (
   }
 
   for (const [index, line] of input.order.lines.entries()) {
+    const inventoryCostTotalKgs =
+      line.lineCostTotalKgs === null
+        ? line.unitCostKgs === null
+          ? null
+          : new Prisma.Decimal(line.unitCostKgs).mul(line.qty)
+        : new Prisma.Decimal(line.lineCostTotalKgs);
+    if (inventoryCostTotalKgs !== null) {
+      await applyValuedProductCostDelta(tx, {
+        organizationId: input.organizationId,
+        productId: line.productId,
+        variantId: line.variantId,
+        quantityDelta: -line.qty,
+        valueDeltaKgs: inventoryCostTotalKgs.negated(),
+      });
+    }
     await applyStockMovement(tx, {
       storeId: input.order.storeId,
       productId: line.productId,
@@ -627,6 +650,8 @@ const applyBazaarApiOrderStockDeduction = async (
       linePosition: index,
       unitCostKgs: line.unitCostKgs === null ? null : toMoney(line.unitCostKgs),
       lineTotalKgs: toMoney(line.lineTotalKgs),
+      inventoryValueDeltaKgs:
+        inventoryCostTotalKgs === null ? null : Number(inventoryCostTotalKgs.negated()),
       note: `Bazaar API order ${input.order.number}`,
       organizationId: input.organizationId,
       allowNegativeStock: true,
@@ -772,7 +797,7 @@ export const authenticateBazaarApiRequest = async (request: Request) => {
   }
   const hashedToken = tokenHash(token);
 
-  const apiKey = await prisma.bazaarApiKey.findUnique({
+  const integrationAccessRecord = await prisma.bazaarApiKey.findUnique({
     where: { tokenHash: hashedToken },
     select: {
       id: true,
@@ -790,17 +815,17 @@ export const authenticateBazaarApiRequest = async (request: Request) => {
       },
     },
   });
-  if (!apiKey || apiKey.revokedAt) {
+  if (!integrationAccessRecord || integrationAccessRecord.revokedAt) {
     throw new AppError("apiUnauthorized", "UNAUTHORIZED", 401);
   }
 
   const now = new Date();
   const staleBefore = new Date(now.getTime() - API_KEY_LAST_USED_UPDATE_INTERVAL_MS);
-  if (!apiKey.lastUsedAt || apiKey.lastUsedAt <= staleBefore) {
+  if (!integrationAccessRecord.lastUsedAt || integrationAccessRecord.lastUsedAt <= staleBefore) {
     await prisma.bazaarApiKey
       .updateMany({
         where: {
-          id: apiKey.id,
+          id: integrationAccessRecord.id,
           OR: [{ lastUsedAt: null }, { lastUsedAt: { lte: staleBefore } }],
         },
         data: { lastUsedAt: now },
@@ -809,10 +834,10 @@ export const authenticateBazaarApiRequest = async (request: Request) => {
   }
 
   return {
-    apiKeyId: apiKey.id,
-    organizationId: apiKey.organizationId,
-    storeId: apiKey.storeId,
-    store: apiKey.store,
+    apiKeyId: integrationAccessRecord.id,
+    organizationId: integrationAccessRecord.organizationId,
+    storeId: integrationAccessRecord.storeId,
+    store: integrationAccessRecord.store,
   } satisfies BazaarApiAuthContext;
 };
 
@@ -1427,6 +1452,7 @@ const createBazaarApiOrderTx = async (
                 variantId: true,
                 qty: true,
                 unitCostKgs: true,
+                lineCostTotalKgs: true,
                 lineTotalKgs: true,
               },
             },
@@ -1487,7 +1513,7 @@ const createBazaarApiOrderTx = async (
     }),
     tx.productCost.findMany({
       where: { organizationId: input.organizationId, productId: { in: productIds } },
-      select: { productId: true, variantKey: true, avgCostKgs: true },
+      select: { productId: true, variantKey: true, ...productCostBasisSelect },
     }),
   ]);
 
@@ -1501,7 +1527,10 @@ const createBazaarApiOrderTx = async (
     storePrices.map((price) => [`${price.productId}:${price.variantKey}`, price]),
   );
   const costByProductVariant = new Map(
-    productCosts.map((cost) => [`${cost.productId}:${cost.variantKey}`, Number(cost.avgCostKgs)]),
+    productCosts.map((cost) => [
+      `${cost.productId}:${cost.variantKey}`,
+      resolveCurrentProductCostUnitNumber(cost),
+    ]),
   );
 
   const pricedAt = new Date();
@@ -1588,6 +1617,7 @@ const createBazaarApiOrderTx = async (
           variantId: true,
           qty: true,
           unitCostKgs: true,
+          lineCostTotalKgs: true,
           lineTotalKgs: true,
         },
       },

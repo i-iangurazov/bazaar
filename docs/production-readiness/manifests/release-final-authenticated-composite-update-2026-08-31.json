@@ -1,0 +1,516 @@
+{
+  "schemaVersion": 1,
+  "timestamp": "2026-08-31T15:36:00.000Z",
+  "requirements": [
+    {
+      "id": "BZR-REQ-0009",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Retained production-mode cases exercise loading, empty, success, validation, permission, terminal-error, and retry/recovery states across public and authenticated surfaces; every current authenticated case identity has retained PASS evidence.",
+      "statusJustification": "The complete matrix plus exact correction shards cover every required state family without a remaining contradictory case.",
+      "verificationTimestampSource": "Final exact-case reconciliation generated 2026-08-31T15:34:41Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/release-final-authenticated-reconciliation-2026-08-31.json",
+          "description": "Hash-pinned reconciliation of all 762 current authenticated case identities."
+        }
+      ],
+      "validation": {
+        "commands": ["pnpm exec playwright test --config=playwright.authenticated.config.ts"],
+        "tests": [
+          "tests/e2e/authenticated/authenticated-acceptance-breadth.spec.ts",
+          "tests/e2e/authenticated/authenticated-acceptance-form-reliability.spec.ts",
+          "tests/e2e/authenticated/authenticated-routes.spec.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0022",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Bundle create, view, edit, refresh, and single assembly reconcile physical quantity, precise component value, balanced movements, and one audit event.",
+      "statusJustification": "The formerly failing exact bundle identity passed after correcting its stale legacy-cost oracle; runtime valuation behavior was unchanged and reconciled to the database.",
+      "verificationTimestampSource": "Preserved affected-case Playwright JSON completed 2026-08-31",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-final-authenticated-affected-2026-08-31.json",
+          "description": "Exact advanced-products bundle case PASS; SHA-256 7b4e64327f1bd6f79f948e646483be10655b928512ee46c7e9cda219cfa2ea05."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec playwright test --config=playwright.authenticated.config.ts tests/e2e/authenticated/authenticated-acceptance-advanced-products.spec.ts"
+        ],
+        "tests": ["tests/e2e/authenticated/authenticated-acceptance-advanced-products.spec.ts"],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0023",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Category, unit, and attribute create, validation, trim/dedupe, edit, reload, delete/archive/restore, and usage guards pass with database assertions.",
+      "statusJustification": "The clean procurement/master-data shard completes the required lifecycle for all three setting families.",
+      "verificationTimestampSource": "Preserved final procurement shard completed 2026-08-31",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-final-authenticated-procurement-shard-final-2026-08-31.json",
+          "description": "Clean 14/14 master-data/procurement shard; SHA-256 ce8573ad0ec36c11f677f2fa3647cecda9e51ac5668cf50c1d77ed761c0fc828."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec playwright test --config=playwright.authenticated.config.ts tests/e2e/authenticated/authenticated-acceptance-master-data-procurement.spec.ts"
+        ],
+        "tests": [
+          "tests/e2e/authenticated/authenticated-acceptance-master-data-procurement.spec.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0024",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Product SKU search, category filtering, name sorting, pagination, reload, and browser Back state reconcile with seeded database rows.",
+      "statusJustification": "The clean master-data shard exercises the complete required list-state lifecycle.",
+      "verificationTimestampSource": "Preserved final procurement shard completed 2026-08-31",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-final-authenticated-procurement-shard-final-2026-08-31.json",
+          "description": "Product list/category-state case PASS in the clean 14/14 shard."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec playwright test --config=playwright.authenticated.config.ts tests/e2e/authenticated/authenticated-acceptance-master-data-procurement.spec.ts"
+        ],
+        "tests": [
+          "tests/e2e/authenticated/authenticated-acceptance-master-data-procurement.spec.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0027",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Invalid image type/size rejection, local upload, decoded visible preview, navigation persistence, removal, and database/file reconciliation pass.",
+      "statusJustification": "The exact product-image lifecycle case completed successfully in the affected-case rerun.",
+      "verificationTimestampSource": "Preserved affected-case Playwright JSON completed 2026-08-31",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-final-authenticated-affected-2026-08-31.json",
+          "description": "Exact advanced-products image-validation case PASS."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec playwright test --config=playwright.authenticated.config.ts tests/e2e/authenticated/authenticated-acceptance-advanced-products.spec.ts"
+        ],
+        "tests": ["tests/e2e/authenticated/authenticated-acceptance-advanced-products.spec.ts"],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0035",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Supplier validation, cancel safety, create, edit, search, persistence, and refresh all pass with database reconciliation.",
+      "statusJustification": "The clean procurement/master-data shard completes the supplier lifecycle required by this row.",
+      "verificationTimestampSource": "Preserved final procurement shard completed 2026-08-31",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-final-authenticated-procurement-shard-final-2026-08-31.json",
+          "description": "Supplier lifecycle case PASS in the clean 14/14 shard."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec playwright test --config=playwright.authenticated.config.ts tests/e2e/authenticated/authenticated-acceptance-master-data-procurement.spec.ts"
+        ],
+        "tests": [
+          "tests/e2e/authenticated/authenticated-acceptance-master-data-procurement.spec.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0036",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Purchase-order draft validation/edit/PDF/Back/cancel and submitted approve/receive/supplier/movement/inventory linkage all pass without duplicate records.",
+      "statusJustification": "The clean 14/14 shard supersedes the stale draft oracle and executes the previously skipped submitted lifecycle.",
+      "verificationTimestampSource": "Preserved final procurement shard completed 2026-08-31",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-final-authenticated-procurement-shard-final-2026-08-31.json",
+          "description": "Both draft and submitted PO exact cases PASS."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec playwright test --config=playwright.authenticated.config.ts tests/e2e/authenticated/authenticated-acceptance-master-data-procurement.spec.ts"
+        ],
+        "tests": [
+          "tests/e2e/authenticated/authenticated-acceptance-master-data-procurement.spec.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0049",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Important auth, customer, supplier, product/master-data, inventory, and procurement forms reject missing or invalid required values without committing mutations.",
+      "statusJustification": "Retained full and correction artifacts cover the important form families named by the release inventory with no contradictory result.",
+      "verificationTimestampSource": "Final exact-case reconciliation generated 2026-08-31T15:34:41Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/release-final-authenticated-reconciliation-2026-08-31.json",
+          "description": "All current authenticated validation case identities have retained PASS evidence."
+        }
+      ],
+      "validation": {
+        "commands": ["pnpm exec playwright test --config=playwright.authenticated.config.ts"],
+        "tests": [
+          "tests/e2e/authenticated/authenticated-acceptance-form-reliability.spec.ts",
+          "tests/e2e/authenticated/authenticated-acceptance-auth-lifecycle.spec.ts",
+          "tests/e2e/authenticated/authenticated-acceptance-master-data-procurement.spec.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0053",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Malformed email, incomplete international phone, complete Kyrgyz phone, trimmed supplier contact values, and length boundaries pass.",
+      "statusJustification": "Exact retained customer and supplier validation cases exercise both email and phone formatting boundaries.",
+      "verificationTimestampSource": "Preserved full authenticated JSON completed 2026-08-31",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-final-authenticated-2026-08-31.json",
+          "description": "Customer and supplier contact validation cases PASS; SHA-256 0fb2cefcf1b8f48fd347a0b07761222e5bf86a5ae6952d8e007fa3fc5fc43ff3."
+        }
+      ],
+      "validation": {
+        "commands": ["pnpm exec playwright test --config=playwright.authenticated.config.ts"],
+        "tests": [
+          "tests/e2e/authenticated/authenticated-acceptance-auth-lifecycle.spec.ts",
+          "tests/e2e/authenticated/authenticated-acceptance-master-data-procurement.spec.ts",
+          "tests/e2e/authenticated/authenticated-acceptance-mobile-actions.spec.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0062",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Transfer browser detail and print show both signed store legs; print quantity/value totals balance to zero, the database ledger has exactly two legs, and reload remains coherent.",
+      "statusJustification": "The exact transfer-detail/print case and mutation reconciliation satisfy the two-leg acceptance boundary.",
+      "verificationTimestampSource": "Final exact-case reconciliation generated 2026-08-31T15:34:41Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/release-final-authenticated-reconciliation-2026-08-31.json",
+          "description": "Retained full and affected artifacts cover transfer mutation, detail, print, reload, and ledger balance."
+        }
+      ],
+      "validation": {
+        "commands": ["pnpm exec playwright test --config=playwright.authenticated.config.ts"],
+        "tests": ["tests/e2e/authenticated/authenticated-acceptance-inventory-mutations.spec.ts"],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0073",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "A valid customer order preserves customer and totals through DRAFT, CONFIRMED, READY, and COMPLETED; canceled orders remain terminal and expose no invalid mutable actions.",
+      "statusJustification": "The exact mobile order lifecycle and canceled-order boundary both passed with persisted relationship checks.",
+      "verificationTimestampSource": "Preserved full authenticated JSON completed 2026-08-31",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-final-authenticated-2026-08-31.json",
+          "description": "Sales-order lifecycle and canceled terminal-state cases PASS."
+        }
+      ],
+      "validation": {
+        "commands": ["pnpm exec playwright test --config=playwright.authenticated.config.ts"],
+        "tests": ["tests/e2e/authenticated/authenticated-acceptance-sales-orders.spec.ts"],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0119",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Open and invite-only signup behavior passes. An isolated production-mode browser case creates the QA user, owner organization/store and verification token, consumes registration once, and makes the completed link non-actionable. Real email delivery remains BZR-REQ-0118.",
+      "statusJustification": "The retained lifecycle evidence performs real local persistence and rollback/idempotency checks; it does not claim external inbox delivery.",
+      "verificationTimestampSource": "Preserved full authenticated JSON completed 2026-08-31",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-final-authenticated-2026-08-31.json",
+          "description": "Open signup and business-registration lifecycle case PASS."
+        }
+      ],
+      "validation": {
+        "commands": ["pnpm exec playwright test --config=playwright.authenticated.config.ts"],
+        "tests": ["tests/e2e/authenticated/authenticated-acceptance-auth-lifecycle.spec.ts"],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0122",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Critical receiving, transfer, write-off, stock-count, sales-order, procurement, and POS correction state remains coherent across reload, Back, and relogin boundaries.",
+      "statusJustification": "Full and exact correction shards cover the critical multi-step refresh families without a remaining contradictory case.",
+      "verificationTimestampSource": "Final exact-case reconciliation generated 2026-08-31T15:34:41Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/release-final-authenticated-reconciliation-2026-08-31.json",
+          "description": "Hash-pinned retained case reconciliation including inventory and procurement correction shards."
+        }
+      ],
+      "validation": {
+        "commands": ["pnpm exec playwright test --config=playwright.authenticated.config.ts"],
+        "tests": [
+          "tests/e2e/authenticated/authenticated-acceptance-inventory-mutations.spec.ts",
+          "tests/e2e/authenticated/authenticated-acceptance-master-data-procurement.spec.ts",
+          "tests/e2e/authenticated/authenticated-acceptance-pos-operations.spec.ts"
+        ],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0124",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Two-browser stale product write returns 409, preserves the winning revision, creates no extra audit mutation, and recovers after reload.",
+      "statusJustification": "The exact stale-editor browser identity passed in the affected-case run.",
+      "verificationTimestampSource": "Preserved affected-case Playwright JSON completed 2026-08-31",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-final-authenticated-affected-2026-08-31.json",
+          "description": "Exact stale-editor case PASS."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec playwright test --config=playwright.authenticated.config.ts tests/e2e/authenticated/authenticated-acceptance-advanced-products.spec.ts"
+        ],
+        "tests": ["tests/e2e/authenticated/authenticated-acceptance-advanced-products.spec.ts"],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0128",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "A controlled 503 renders a retry state rather than false empty data; retry restores real customer data and clears the error without mutation.",
+      "statusJustification": "The exact BZR-REQ-0128/0129 failure-and-recovery browser case passed in production mode.",
+      "verificationTimestampSource": "Preserved full authenticated JSON completed 2026-08-31",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-final-authenticated-2026-08-31.json",
+          "description": "Customer read failure, retry, and recovery case PASS."
+        }
+      ],
+      "validation": {
+        "commands": ["pnpm exec playwright test --config=playwright.authenticated.config.ts"],
+        "tests": ["tests/e2e/authenticated/authenticated-acceptance-form-reliability.spec.ts"],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0174",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "M-Market, Bakai Store, and O!Market reject invalid credential/configuration inputs without persisting changes or echoing submitted secrets.",
+      "statusJustification": "The changed combined integration case passed on the final production build and reconciled state before and after each invalid call.",
+      "verificationTimestampSource": "Preserved integration-disconnect shard completed 2026-08-31T15:33:30.530Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-final-authenticated-integration-disconnect-green-2026-08-31.json",
+          "description": "Clean 11/11 operations/settings shard; SHA-256 0d2a855edd863b2e2280eddd33b9f6354b103c667ca45984ba3f9dece905e3cc."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec playwright test --config=playwright.authenticated.config.ts tests/e2e/authenticated/authenticated-acceptance-operations-settings.spec.ts --project=authenticated-acceptance-admin"
+        ],
+        "tests": ["tests/e2e/authenticated/authenticated-acceptance-operations-settings.spec.ts"],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0175",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Credential responses remain masked: no raw token, encrypted token value, internal apiTokenEncrypted field, or reveal-token request appears in the production-mode browser flow.",
+      "statusJustification": "The final combined integration case validates all three settings payloads and the successful M-Market save/disconnect response boundary.",
+      "verificationTimestampSource": "Preserved integration-disconnect shard completed 2026-08-31T15:33:30.530Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-final-authenticated-integration-disconnect-green-2026-08-31.json",
+          "description": "Clean integration credential-masking and disconnect case PASS."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec playwright test --config=playwright.authenticated.config.ts tests/e2e/authenticated/authenticated-acceptance-operations-settings.spec.ts --project=authenticated-acceptance-admin"
+        ],
+        "tests": ["tests/e2e/authenticated/authenticated-acceptance-operations-settings.spec.ts"],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0176",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "The integrations overview and M-Market configuration page render the saved connection state, empty credential field, and explicit setup/mapping guidance without external provider access.",
+      "statusJustification": "The production-mode combined integration browser case verifies the locally owned state and guidance boundary; live provider connectivity remains separately blocked by BZR-REQ-0180.",
+      "verificationTimestampSource": "Preserved integration-disconnect shard completed 2026-08-31T15:33:30.530Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-final-authenticated-integration-disconnect-green-2026-08-31.json",
+          "description": "Clean integration overview/setup-guidance case PASS."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec playwright test --config=playwright.authenticated.config.ts tests/e2e/authenticated/authenticated-acceptance-operations-settings.spec.ts --project=authenticated-acceptance-admin"
+        ],
+        "tests": ["tests/e2e/authenticated/authenticated-acceptance-operations-settings.spec.ts"],
+        "manualProcedure": null
+      }
+    },
+    {
+      "id": "BZR-REQ-0177",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "A reversible local synthetic-token browser case renders the exact disconnect consequence, proves cancel performs zero mutations, confirm performs one mutation, clears the token, retains mappings/data, and exposes no credential material.",
+      "statusJustification": "Disconnect is a locally owned credential-clear boundary and was exercised without any live provider side effect on the final production build; the fixture restores the original database row.",
+      "verificationTimestampSource": "Preserved integration-disconnect shard completed 2026-08-31T15:33:30.530Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/release-final-authenticated-reconciliation-2026-08-31.json",
+          "description": "Hash-pinned 11/11 final operations/settings shard and exact disconnect behavior."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-final-authenticated-integration-disconnect-green-2026-08-31-junit.xml",
+          "description": "JUnit SHA-256 30020869463cc756345cd0ff559f7218c5f52f2b7cd3f48201286c3800cd68a4."
+        }
+      ],
+      "validation": {
+        "commands": [
+          "pnpm exec playwright test --config=playwright.authenticated.config.ts tests/e2e/authenticated/authenticated-acceptance-operations-settings.spec.ts --project=authenticated-acceptance-admin"
+        ],
+        "tests": ["tests/e2e/authenticated/authenticated-acceptance-operations-settings.spec.ts"],
+        "manualProcedure": null
+      }
+    }
+  ],
+  "defects": [
+    {
+      "id": "DYNAMIC-001",
+      "currentStatus": "RESOLVED",
+      "resolutionEvidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-final-authenticated-2026-08-31.json",
+          "description": "Owned, foreign, malformed, and missing authenticated dynamic-ID terminal states pass in the retained full matrix."
+        }
+      ]
+    },
+    {
+      "id": "INVENTORY-001",
+      "currentStatus": "RESOLVED",
+      "resolutionEvidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-final-authenticated-2026-08-31.json",
+          "description": "Transfer detail and print show exactly two balanced signed legs after reload."
+        }
+      ]
+    },
+    {
+      "id": "ORDERS-001",
+      "currentStatus": "RESOLVED",
+      "resolutionEvidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-final-authenticated-2026-08-31.json",
+          "description": "Zero-line order submission is rejected and the valid customer-order lifecycle persists correct lines and totals."
+        }
+      ]
+    },
+    {
+      "id": "ORDERS-002",
+      "currentStatus": "RESOLVED",
+      "resolutionEvidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-final-authenticated-2026-08-31.json",
+          "description": "Canceled order is terminal and exposes no tracking or confirmation mutation."
+        }
+      ]
+    },
+    {
+      "id": "LAYOUT-001",
+      "currentStatus": "RESOLVED",
+      "resolutionEvidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-final-authenticated-2026-08-31.json",
+          "description": "Inventory movement responsive cases pass without root-document overflow at retained desktop/tablet/mobile widths."
+        }
+      ]
+    },
+    {
+      "id": "LAYOUT-002",
+      "currentStatus": "RESOLVED",
+      "resolutionEvidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-final-authenticated-2026-08-31.json",
+          "description": "Receipt/register responsive cases pass at the retained 1024px tablet boundary without root-document overflow."
+        }
+      ]
+    },
+    {
+      "id": "COMPAT-001",
+      "currentStatus": "RESOLVED",
+      "resolutionEvidence": [
+        {
+          "type": "file",
+          "path": "test-results/release-final-authenticated-2026-08-31.json",
+          "description": "Inventory receiving compatibility route and mutation cases complete on the final route inventory without the removed action-query failure."
+        }
+      ]
+    }
+  ]
+}

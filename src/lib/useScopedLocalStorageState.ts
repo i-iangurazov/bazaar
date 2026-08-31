@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 
 export const buildScopedStorageKey = ({
   prefix,
@@ -33,12 +40,20 @@ export const useScopedLocalStorageState = <T>({
   isReady: boolean;
   hasStoredValue: boolean;
 } => {
-  const [value, setValue] = useState<T>(defaultValue);
+  const [value, setValueState] = useState<T>(defaultValue);
   const [isReady, setIsReady] = useState(false);
   const [hasStoredValue, setHasStoredValue] = useState(false);
+  const [hydratedStorageKey, setHydratedStorageKey] = useState<string | null>(null);
   const defaultValueRef = useRef(defaultValue);
   const parseRef = useRef(parse);
   const serializeRef = useRef(serialize);
+  const previousStorageKeyRef = useRef<string | null | undefined>(undefined);
+  const hasPendingLocalChangeRef = useRef(false);
+
+  const setValue = useCallback<Dispatch<SetStateAction<T>>>((nextValue) => {
+    hasPendingLocalChangeRef.current = true;
+    setValueState(nextValue);
+  }, []);
 
   useEffect(() => {
     defaultValueRef.current = defaultValue;
@@ -54,9 +69,12 @@ export const useScopedLocalStorageState = <T>({
 
   useEffect(() => {
     if (!storageKey) {
-      setValue(defaultValueRef.current);
+      setValueState(defaultValueRef.current);
       setIsReady(true);
       setHasStoredValue(false);
+      setHydratedStorageKey(null);
+      previousStorageKeyRef.current = null;
+      hasPendingLocalChangeRef.current = false;
       return;
     }
 
@@ -73,21 +91,31 @@ export const useScopedLocalStorageState = <T>({
       nextHasStoredValue = false;
     }
 
-    setValue(nextValue);
-    setHasStoredValue(nextHasStoredValue);
+    const preservePendingUnscopedChange =
+      previousStorageKeyRef.current === null && hasPendingLocalChangeRef.current;
+    if (!preservePendingUnscopedChange) {
+      setValueState(nextValue);
+    }
+    setHasStoredValue(preservePendingUnscopedChange ? false : nextHasStoredValue);
     setIsReady(true);
+    setHydratedStorageKey(storageKey);
+    previousStorageKeyRef.current = storageKey;
+    hasPendingLocalChangeRef.current = false;
   }, [storageKey]);
 
   useEffect(() => {
-    if (!storageKey || !isReady) {
+    if (!storageKey || !isReady || hydratedStorageKey !== storageKey) {
       return;
     }
     try {
       window.localStorage.setItem(storageKey, serializeRef.current(value));
+      hasPendingLocalChangeRef.current = false;
     } catch {
       // ignore storage errors
     }
-  }, [isReady, storageKey, value]);
+  }, [hydratedStorageKey, isReady, storageKey, value]);
 
-  return { value, setValue, isReady, hasStoredValue };
+  const isResolvedScopeReady = isReady && (!storageKey || hydratedStorageKey === storageKey);
+
+  return { value, setValue, isReady: isResolvedScopeReady, hasStoredValue };
 };

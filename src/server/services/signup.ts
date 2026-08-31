@@ -33,10 +33,7 @@ const ensureSignupOpen = () => {
   }
 };
 
-export const requestAccess = async (input: {
-  email: string;
-  orgName?: string | null;
-}) => {
+export const requestAccess = async (input: { email: string; orgName?: string | null }) => {
   const existing = await prisma.accessRequest.findFirst({
     where: { email: input.email },
   });
@@ -61,7 +58,11 @@ export const createSignup = async (input: {
   ensureSignupOpen();
   const verificationRequired = isEmailVerificationRequired();
 
-  const createRegistrationNextPath = async (userId: string, email: string, organizationId?: string | null) => {
+  const createRegistrationNextPath = async (
+    userId: string,
+    email: string,
+    organizationId?: string | null,
+  ) => {
     const registration = await createAuthToken({
       userId,
       email,
@@ -106,7 +107,11 @@ export const createSignup = async (input: {
           });
 
     if (!updatedUser.organizationId || hasStore === 0) {
-      const nextPath = await createRegistrationNextPath(updatedUser.id, updatedUser.email, updatedUser.organizationId);
+      const nextPath = await createRegistrationNextPath(
+        updatedUser.id,
+        updatedUser.email,
+        updatedUser.organizationId,
+      );
       return { sent: true, nextPath };
     }
 
@@ -171,13 +176,12 @@ export const registerBusinessFromToken = async (input: {
   phone?: string | null;
   requestId: string;
 }) => {
-  const token = await consumeAuthToken({ purpose: "REGISTRATION", token: input.token });
-  if (!token.userId) {
-    throw new AppError("tokenInvalid", "NOT_FOUND", 404);
-  }
-  const userId = token.userId;
-
   return prisma.$transaction(async (tx) => {
+    const token = await consumeAuthToken({ purpose: "REGISTRATION", token: input.token }, tx);
+    if (!token.userId) {
+      throw new AppError("tokenInvalid", "NOT_FOUND", 404);
+    }
+    const userId = token.userId;
     const user = await tx.user.findUnique({ where: { id: userId } });
     if (!user) {
       throw new AppError("userNotFound", "NOT_FOUND", 404);
@@ -208,7 +212,8 @@ export const registerBusinessFromToken = async (input: {
       }
       await assertWithinLimits({ organizationId, kind: "stores" });
     } else {
-      const trialDays = Number.isFinite(DEFAULT_TRIAL_DAYS) && DEFAULT_TRIAL_DAYS > 0 ? DEFAULT_TRIAL_DAYS : 14;
+      const trialDays =
+        Number.isFinite(DEFAULT_TRIAL_DAYS) && DEFAULT_TRIAL_DAYS > 0 ? DEFAULT_TRIAL_DAYS : 14;
       const trialEndsAt = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000);
       const createdOrg = await tx.organization.create({
         data: {

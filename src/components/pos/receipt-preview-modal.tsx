@@ -53,8 +53,8 @@ export const ReceiptPreviewModal = ({ saleId, open, onOpenChange }: ReceiptPrevi
     .map((method) => ({
       method,
       amount:
-        sale?.payments
-          .filter((payment) => payment.method === method && !payment.isRefund)
+        sale?.effectivePayments
+          .filter((payment) => payment.method === method)
           .reduce((sum, payment) => sum + Number(payment.amountKgs ?? 0), 0) ?? 0,
     }))
     .filter((payment) => payment.amount > 0);

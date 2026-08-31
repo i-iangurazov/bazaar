@@ -225,7 +225,10 @@ export const ImportDryRunPreview = ({
             )
           }
         >
-          <SelectTrigger className="h-8 min-w-[150px] text-xs">
+          <SelectTrigger
+            className="h-8 min-w-[150px] text-xs"
+            aria-label={t("dryRunPossibleDuplicateDecision")}
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

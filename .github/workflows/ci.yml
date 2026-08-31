@@ -56,6 +56,7 @@ jobs:
           POSTGRES_USER: inventory
           POSTGRES_PASSWORD: inventory
           POSTGRES_DB: bazaar_hardening_ci
+          POSTGRES_INITDB_ARGS: --locale-provider=icu --icu-locale=und
         ports:
           - 5432:5432
         options: >-
@@ -161,6 +162,7 @@ jobs:
           POSTGRES_USER: inventory
           POSTGRES_PASSWORD: inventory
           POSTGRES_DB: inventory
+          POSTGRES_INITDB_ARGS: --locale-provider=icu --icu-locale=und
         ports:
           - 5432:5432
         options: >-

@@ -2,13 +2,14 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { prisma } from "@/server/db/prisma";
 import { createProduct } from "@/server/services/products";
-import { adjustStock } from "@/server/services/inventory";
+import { editStockMovementDocument, postStockWriteOff } from "@/server/services/inventory";
 import {
   getShrinkageReport,
   getSlowMoversReport,
   getStockoutsReport,
 } from "@/server/services/reports";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
+import { adjustStockWithExplicitPositiveCost as adjustStock } from "../helpers/d009Fixtures";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
 
@@ -132,6 +133,82 @@ describeDb("reports", () => {
       page: 99,
       pageSize: 10,
     });
+  });
+
+  it("reports posted write-offs with cost details and nets document corrections", async () => {
+    const { org, store, adminUser, baseUnit } = await seedBase({ plan: "BUSINESS" });
+    const product = await createProduct({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "req-report-write-off-product",
+      idempotencyKey: "idem-report-write-off-product",
+      sku: "SKU-REPORT-WRITE-OFF",
+      name: "Report Write-off Product",
+      baseUnitId: baseUnit.id,
+      storeId: store.id,
+      initialOnHand: 10,
+      avgCostKgs: 12.345,
+    });
+    const occurredAt = new Date();
+    const writeOff = await postStockWriteOff({
+      storeId: store.id,
+      date: occurredAt,
+      reason: "Порча",
+      comment: "Damaged packaging",
+      lines: [{ productId: product.id, qty: 4 }],
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "req-report-write-off",
+      idempotencyKey: "idem-report-write-off",
+    });
+
+    await editStockMovementDocument({
+      documentType: "WRITE_OFF",
+      referenceType: "WRITE_OFF",
+      referenceId: writeOff.writeOffId,
+      lines: [{ productId: product.id, quantity: 2 }],
+      reason: "Corrected damaged quantity",
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "req-report-write-off-edit",
+      idempotencyKey: "idem-report-write-off-edit",
+    });
+
+    await prisma.stockMovement.create({
+      data: {
+        storeId: store.id,
+        productId: product.id,
+        type: "ADJUSTMENT",
+        qtyDelta: -9,
+        referenceType: "BUNDLE_ASSEMBLY",
+        referenceId: "report-bundle-assembly",
+        note: "bundleAssemble:test",
+        createdById: adminUser.id,
+      },
+    });
+
+    const report = await getShrinkageReport({
+      organizationId: org.id,
+      storeId: store.id,
+      from: new Date(occurredAt.getTime() - 60_000),
+      to: new Date(Date.now() + 60_000),
+    });
+    const row = report.items.find((item) => item.documentId === writeOff.writeOffId);
+
+    expect(row).toMatchObject({
+      documentType: "WRITE_OFF",
+      storeId: store.id,
+      productId: product.id,
+      userId: adminUser.id,
+      reason: "Порча",
+      totalQty: 2,
+      movementCount: 2,
+    });
+    expect(row?.totalValueKgs).toBeCloseTo(24.7, 6);
+    expect(row?.occurredAt.getTime()).toBe(occurredAt.getTime());
+    expect(row?.movementIds).toHaveLength(2);
+    expect(row?.movementIds).toContain(row?.latestMovementId);
+    expect(report.items.some((item) => item.documentId === "report-bundle-assembly")).toBe(false);
   });
 
   it("bounds report rows with deterministic server pagination", async () => {

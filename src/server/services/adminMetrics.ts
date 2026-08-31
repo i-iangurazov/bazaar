@@ -213,7 +213,14 @@ const buildBaseCte = (input: NormalizedAdminMetricsInput) => {
         COALESCE(NULLIF(TRIM(product.category), ''), ${uncategorizedLabel}) AS category_name,
         variant.name AS variant_name,
         variant.sku AS variant_sku,
-        cost."avgCostKgs" AS cost_price_kgs,
+        CASE
+          WHEN cost."preciseCostBasisQty" > 0
+            AND cost."costBasisValueKgs" IS NOT NULL
+            AND cost."valuationLegacyUpdatedAt" IS NOT NULL
+            AND cost."updatedAt" <= cost."valuationLegacyUpdatedAt"
+            THEN cost."costBasisValueKgs" / cost."preciseCostBasisQty"
+          ELSE cost."avgCostKgs"
+        END AS cost_price_kgs,
         COALESCE(price."priceKgs", product."basePriceKgs") AS sale_price_kgs,
         COALESCE(policy."minStock", 0) AS min_stock,
         EXISTS (
@@ -250,10 +257,18 @@ const buildBaseCte = (input: NormalizedAdminMetricsInput) => {
         AND product."organizationId" = ${input.organizationId}
       LEFT JOIN "ProductVariant" variant
         ON variant.id = snapshot."variantId"
-      LEFT JOIN "ProductCost" cost
-        ON cost."organizationId" = ${input.organizationId}
-        AND cost."productId" = snapshot."productId"
-        AND cost."variantKey" = snapshot."variantKey"
+      LEFT JOIN LATERAL (
+        SELECT product_cost.*
+        FROM "ProductCost" product_cost
+        WHERE product_cost."organizationId" = ${input.organizationId}
+          AND product_cost."productId" = snapshot."productId"
+          AND product_cost."variantKey" IN (snapshot."variantKey", 'BASE')
+        ORDER BY CASE
+          WHEN product_cost."variantKey" = snapshot."variantKey" THEN 0
+          ELSE 1
+        END
+        LIMIT 1
+      ) cost ON true
       LEFT JOIN "StorePrice" price
         ON price."organizationId" = ${input.organizationId}
         AND price."storeId" = snapshot."storeId"
@@ -511,7 +526,10 @@ export const calculateInventoryValuation = (
   );
 };
 
-const addCalculatedMargin = (totals: InventoryValuationTotals, rows: InventoryValuationCalculationRow[]) => {
+const addCalculatedMargin = (
+  totals: InventoryValuationTotals,
+  rows: InventoryValuationCalculationRow[],
+) => {
   const profitRetailValueKgs = rows.reduce((sum, row) => {
     if (row.costPriceKgs === null || row.salePriceKgs === null) {
       return sum;
@@ -522,13 +540,14 @@ const addCalculatedMargin = (totals: InventoryValuationTotals, rows: InventoryVa
   return {
     ...totals,
     potentialMarginPercent:
-      profitRetailValueKgs !== 0 ? (totals.potentialGrossProfitKgs / profitRetailValueKgs) * 100 : null,
+      profitRetailValueKgs !== 0
+        ? (totals.potentialGrossProfitKgs / profitRetailValueKgs) * 100
+        : null,
   };
 };
 
-export const calculateInventoryValuationWithMargin = (
-  rows: InventoryValuationCalculationRow[],
-) => addCalculatedMargin(calculateInventoryValuation(rows), rows);
+export const calculateInventoryValuationWithMargin = (rows: InventoryValuationCalculationRow[]) =>
+  addCalculatedMargin(calculateInventoryValuation(rows), rows);
 
 export const getAdminMetrics = async (input: AdminMetricsInput) => {
   const normalized = normalizeInput(input);
@@ -549,13 +568,13 @@ export const getAdminMetrics = async (input: AdminMetricsInput) => {
     productRows,
     salesRows,
   ] = await Promise.all([
-      prisma.store.findMany({
-        where: { organizationId: normalized.organizationId },
-        orderBy: { name: "asc" },
-        select: { id: true, name: true },
-      }),
+    prisma.store.findMany({
+      where: { organizationId: normalized.organizationId },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
 
-      prisma.$queryRaw<CategoryOptionRow[]>`
+    prisma.$queryRaw<CategoryOptionRow[]>`
         SELECT DISTINCT category
         FROM (
           SELECT COALESCE(NULLIF(TRIM(product.category), ''), ${uncategorizedLabel}) AS category
@@ -573,13 +592,13 @@ export const getAdminMetrics = async (input: AdminMetricsInput) => {
         ORDER BY category ASC
       `,
 
-      prisma.$queryRaw<SummaryRow[]>(Prisma.sql`
+    prisma.$queryRaw<SummaryRow[]>(Prisma.sql`
         ${baseCte}
         SELECT ${summaryProjectionSql}
         FROM base
       `),
 
-      prisma.$queryRaw<StoreSummaryRow[]>(Prisma.sql`
+    prisma.$queryRaw<StoreSummaryRow[]>(Prisma.sql`
         ${baseCte}
         SELECT
           store_id,
@@ -590,7 +609,7 @@ export const getAdminMetrics = async (input: AdminMetricsInput) => {
         ORDER BY retail_value_kgs DESC NULLS LAST, store_name ASC
       `),
 
-      prisma.$queryRaw<CategorySummaryRow[]>(Prisma.sql`
+    prisma.$queryRaw<CategorySummaryRow[]>(Prisma.sql`
         ${baseCte}
         SELECT
           category_name,
@@ -600,14 +619,14 @@ export const getAdminMetrics = async (input: AdminMetricsInput) => {
         ORDER BY retail_value_kgs DESC NULLS LAST, category_name ASC
       `),
 
-      prisma.$queryRaw<ProductCountRow[]>(Prisma.sql`
+    prisma.$queryRaw<ProductCountRow[]>(Prisma.sql`
         ${baseCte}
         SELECT COUNT(*)::integer AS total_count
         FROM base
         ${warningWhere}
       `),
 
-      prisma.$queryRaw<ProductTableRow[]>(Prisma.sql`
+    prisma.$queryRaw<ProductTableRow[]>(Prisma.sql`
         ${baseCte}
         SELECT
           snapshot_id,
@@ -650,7 +669,7 @@ export const getAdminMetrics = async (input: AdminMetricsInput) => {
         OFFSET ${offset}
       `),
 
-      prisma.$queryRaw<SalesPeriodRow[]>(Prisma.sql`
+    prisma.$queryRaw<SalesPeriodRow[]>(Prisma.sql`
         SELECT
           COUNT(DISTINCT orders.id)::integer AS orders,
           COALESCE(SUM(lines."lineTotalKgs"), 0)::numeric AS revenue_kgs,
@@ -660,10 +679,10 @@ export const getAdminMetrics = async (input: AdminMetricsInput) => {
         LEFT JOIN "CustomerOrderLine" lines ON lines."customerOrderId" = orders.id
         WHERE orders."organizationId" = ${normalized.organizationId}
           AND orders.status = 'COMPLETED'
-          AND orders."createdAt" >= ${thirtyDaysAgo}
+          AND COALESCE(orders."completedAt", orders."createdAt") >= ${thirtyDaysAgo}
           AND (${selectedStoreId}::text IS NULL OR orders."storeId" = ${selectedStoreId})
       `),
-    ]);
+  ]);
 
   const summary = mapTotals(summaryRows[0]);
   const totalProducts = toNumber(productCountRows[0]?.total_count);
@@ -689,7 +708,9 @@ export const getAdminMetrics = async (input: AdminMetricsInput) => {
     },
     filterOptions: {
       stores,
-      categories: categoryOptions.map((row) => row.category).filter((category): category is string => Boolean(category)),
+      categories: categoryOptions
+        .map((row) => row.category)
+        .filter((category): category is string => Boolean(category)),
     },
     inventory: {
       summary,

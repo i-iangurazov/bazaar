@@ -29,7 +29,7 @@ const PrivacyPage = async () => {
         </p>
         <h1 className="mt-3 text-4xl font-bold tracking-tight sm:text-5xl">{t("title")}</h1>
         <p className="mt-5 max-w-2xl text-lg leading-8 text-slate-300">{t("intro")}</p>
-        <p className="mt-3 text-sm text-slate-500">{t("updated")}</p>
+        <p className="mt-3 text-sm text-slate-400">{t("updated")}</p>
 
         <div className="mt-12 space-y-9">
           {sections.map((section) => (
@@ -45,7 +45,7 @@ const PrivacyPage = async () => {
           <p className="mt-2 leading-7 text-slate-300">{t("supportBody")}</p>
           <Link
             href="/help"
-            className="mt-4 inline-flex min-h-11 items-center rounded-xl bg-sky-500 px-5 font-semibold text-white outline-none hover:bg-sky-400 focus-visible:ring-2 focus-visible:ring-sky-300"
+            className="mt-4 inline-flex min-h-11 items-center rounded-xl bg-sky-700 px-5 font-semibold text-white outline-none hover:bg-sky-800 focus-visible:ring-2 focus-visible:ring-sky-300"
           >
             {t("supportAction")}
           </Link>

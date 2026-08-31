@@ -19,13 +19,13 @@ describeDb("purchase orders", () => {
   });
 
   it("receives purchase orders idempotently with partial receipts", async () => {
-    const { org, store, supplier, product, adminUser, baseUnit } = await seedBase();
+    const { org, store, supplier, product, adminUser } = await seedBase();
 
     const po = await createPurchaseOrder({
       organizationId: org.id,
       storeId: store.id,
       supplierId: supplier.id,
-      lines: [{ productId: product.id, qtyOrdered: 5 }],
+      lines: [{ productId: product.id, qtyOrdered: 5, unitCost: 10 }],
       actorId: adminUser.id,
       requestId: "req-po-create",
       submit: true,
@@ -104,7 +104,7 @@ describeDb("purchase orders", () => {
   });
 
   it("blocks over-receive by default", async () => {
-    const { org, store, supplier, product, adminUser, baseUnit } = await seedBase();
+    const { org, store, supplier, product, adminUser } = await seedBase();
 
     const po = await createPurchaseOrder({
       organizationId: org.id,
@@ -136,7 +136,7 @@ describeDb("purchase orders", () => {
   });
 
   it("rejects invalid state transitions", async () => {
-    const { org, store, supplier, product, adminUser, baseUnit } = await seedBase();
+    const { org, store, supplier, product, adminUser } = await seedBase();
 
     const po = await prisma.purchaseOrder.create({
       data: {
@@ -197,7 +197,10 @@ describeDb("purchase orders", () => {
     });
 
     await expect(
-      caller.purchaseOrders.receive({ purchaseOrderId: approved.id, idempotencyKey: "idem-po-rbac" }),
+      caller.purchaseOrders.receive({
+        purchaseOrderId: approved.id,
+        idempotencyKey: "idem-po-rbac",
+      }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 

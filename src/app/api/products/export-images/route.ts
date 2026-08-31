@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 
@@ -9,6 +9,10 @@ import { exportProductImagesData } from "@/server/services/products/read";
 import type { StoreAccessUser } from "@/server/services/storeAccess";
 import { storeZipFile } from "@/lib/imageExportStore";
 import { ImageExportZipWriter } from "@/server/services/imageExportZip";
+import {
+  downloadRemoteImage,
+  readManagedLocalProductImage,
+} from "@/server/services/productImageStorage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,26 +26,12 @@ const mimeToExt: Record<string, string> = {
   "image/avif": ".avif",
 };
 
-const extToMime: Record<string, string> = {
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".png": "image/png",
-  ".gif": "image/gif",
-  ".webp": "image/webp",
-  ".svg": "image/svg+xml",
-  ".avif": "image/avif",
-};
-
 const resolvePositiveByteLimit = (value: string | undefined, fallback: number) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
 };
 
-const maxImageBytes = resolvePositiveByteLimit(process.env.PRODUCT_IMAGE_MAX_BYTES, 5 * 1024 * 1024);
-const maxZipBytes = resolvePositiveByteLimit(
-  process.env.IMAGE_EXPORT_MAX_BYTES,
-  512 * 1024 * 1024,
-);
+const maxZipBytes = resolvePositiveByteLimit(process.env.IMAGE_EXPORT_MAX_BYTES, 512 * 1024 * 1024);
 
 const getExtension = (contentType: string, url: string): string => {
   const mime = contentType.split(";")[0]?.trim() ?? "";
@@ -55,51 +45,12 @@ const sanitizeFolderName = (name: string) =>
 
 const fetchImageBuffer = async (
   url: string,
-  appOrigin: string,
+  organizationId: string,
 ): Promise<{ buffer: Buffer; contentType: string } | null> => {
   if (url.startsWith("/uploads/")) {
-    const filePath = join(process.cwd(), "public", url);
-    try {
-      const file = await stat(filePath);
-      if (file.size < 1 || file.size > maxImageBytes) {
-        return null;
-      }
-      const buffer = await readFile(filePath);
-      const ext = url.split("?")[0].match(/\.\w{2,5}$/)?.[0] ?? "";
-      return { buffer, contentType: extToMime[ext] ?? "image/jpeg" };
-    } catch {
-      return null;
-    }
+    return readManagedLocalProductImage({ url, organizationId });
   }
-  const absoluteUrl = url.startsWith("http") ? url : `${appOrigin}${url}`;
-  const response = await fetch(absoluteUrl, { signal: AbortSignal.timeout(15_000) });
-  if (!response.ok) return null;
-  const contentLength = Number(response.headers.get("Content-Length"));
-  if (Number.isFinite(contentLength) && contentLength > maxImageBytes) {
-    return null;
-  }
-  if (!response.body) {
-    return null;
-  }
-  const chunks: Buffer[] = [];
-  let byteLength = 0;
-  const reader = response.body.getReader();
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    byteLength += value.byteLength;
-    if (byteLength > maxImageBytes) {
-      await reader.cancel();
-      return null;
-    }
-    chunks.push(Buffer.from(value));
-  }
-  const buffer = Buffer.concat(chunks, byteLength);
-  if (!buffer.length) {
-    return null;
-  }
-  const contentType = response.headers.get("Content-Type") ?? "";
-  return { buffer, contentType };
+  return downloadRemoteImage(url);
 };
 
 export type ExportImagesEvent =
@@ -113,7 +64,7 @@ export const GET = async (request: Request) => {
   const token = await getServerAuthToken();
   if (!token) return new Response("Unauthorized", { status: 401 });
 
-  const { searchParams, origin: appOrigin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
   const storeId = searchParams.get("storeId") ?? undefined;
   const storeName = searchParams.get("storeName") ?? "products";
 
@@ -126,8 +77,7 @@ export const GET = async (request: Request) => {
   };
 
   const encoder = new TextEncoder();
-  const send = (data: ExportImagesEvent) =>
-    encoder.encode(`data: ${JSON.stringify(data)}\n\n`);
+  const send = (data: ExportImagesEvent) => encoder.encode(`data: ${JSON.stringify(data)}\n\n`);
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -158,7 +108,7 @@ export const GET = async (request: Request) => {
           for (let j = 0; j < product.images.length; j++) {
             const imageUrl = product.images[j]!;
             try {
-              const result = await fetchImageBuffer(imageUrl, appOrigin);
+              const result = await fetchImageBuffer(imageUrl, user.organizationId);
               if (result) {
                 const ext = getExtension(result.contentType, imageUrl);
                 await zip.addFile(`${folder}/image-${j + 1}${ext}`, result.buffer);
@@ -182,15 +132,10 @@ export const GET = async (request: Request) => {
         const date = new Date().toISOString().slice(0, 10);
         const filename = `images-${safeStoreName}-${date}.zip`;
 
-        await storeZipFile(
-          downloadToken,
-          archivePath,
-          filename,
-          {
-            userId: user.id,
-            organizationId: user.organizationId,
-          },
-        );
+        await storeZipFile(downloadToken, archivePath, filename, {
+          userId: user.id,
+          organizationId: user.organizationId,
+        });
 
         controller.enqueue(send({ type: "ready", token: downloadToken, filename }));
       } catch (err) {

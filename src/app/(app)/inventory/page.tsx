@@ -350,7 +350,7 @@ const InventoryPage = () => {
   const tErrors = useTranslations("errors");
   const tPrinting = useTranslations("printingSettings");
   const locale = useLocale();
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   const role = session?.user?.role;
   const canManage = role === "ADMIN" || role === "MANAGER";
   const isAdmin = role === "ADMIN";
@@ -617,17 +617,37 @@ const InventoryPage = () => {
 
   const adjustSchema = useMemo(
     () =>
-      z.object({
-        productId: z.string().min(1, t("productRequired")),
-        variantId: z.string().optional().nullable(),
-        qtyDelta: z.coerce
-          .number()
-          .int()
-          .refine((value) => value !== 0, t("qtyNonZero")),
-        unitSelection: z.string().min(1, t("unitRequired")),
-        reason: z.string().trim().min(3, t("reasonRequired")),
-        expiryDate: z.string().optional(),
-      }),
+      z
+        .object({
+          productId: z.string().min(1, t("productRequired")),
+          variantId: z.string().optional().nullable(),
+          qtyDelta: z.coerce
+            .number()
+            .int()
+            .refine((value) => value !== 0, t("qtyNonZero")),
+          unitCostKgs: z.preprocess(
+            (value) => (value === "" || value === null ? undefined : value),
+            z.coerce.number().min(0, t("unitCostInvalid")).optional(),
+          ),
+          zeroCostConfirmed: z.boolean().optional(),
+          zeroCostReason: z.string().trim().max(500).optional(),
+          unitSelection: z.string().min(1, t("unitRequired")),
+          reason: z.string().trim().min(3, t("reasonRequired")),
+          expiryDate: z.string().optional(),
+        })
+        .superRefine((values, context) => {
+          if (
+            values.qtyDelta > 0 &&
+            values.unitCostKgs === 0 &&
+            (!values.zeroCostConfirmed || !values.zeroCostReason?.trim())
+          ) {
+            context.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["zeroCostReason"],
+              message: t("zeroCostConfirmationRequired"),
+            });
+          }
+        }),
     [t],
   );
 
@@ -748,6 +768,9 @@ const InventoryPage = () => {
       productId: "",
       variantId: null,
       qtyDelta: 0,
+      unitCostKgs: undefined,
+      zeroCostConfirmed: false,
+      zeroCostReason: "",
       unitSelection: "BASE",
       reason: "",
       expiryDate: "",
@@ -1213,10 +1236,10 @@ const InventoryPage = () => {
   );
 
   useEffect(() => {
-    if (!storeId && storesQuery.data?.[0]) {
+    if (inventoryTableStorageKey && inventoryTableStateReady && !storeId && storesQuery.data?.[0]) {
       setStoreId(storesQuery.data[0].id);
     }
-  }, [setStoreId, storeId, storesQuery.data]);
+  }, [inventoryTableStateReady, inventoryTableStorageKey, setStoreId, storeId, storesQuery.data]);
 
   useEffect(() => {
     if (!inventoryTableStateReady || !inventorySavedViewsReady || hasStoredInventoryTableState) {
@@ -1330,6 +1353,7 @@ const InventoryPage = () => {
   const adjustVariantId = adjustForm.watch("variantId");
   const adjustUnitSelection = adjustForm.watch("unitSelection");
   const adjustQty = adjustForm.watch("qtyDelta");
+  const adjustUnitCost = adjustForm.watch("unitCostKgs");
   const transferProductId = transferForm.watch("productId");
   const transferVariantId = transferForm.watch("variantId");
   const transferUnitSelection = transferForm.watch("unitSelection");
@@ -1713,7 +1737,13 @@ const InventoryPage = () => {
       return;
     }
 
-    const isStockAction = action === "adjust" || action === "transfer";
+    // SessionProvider resolves the client session after hydration. Do not consume a
+    // privileged compatibility action while its role is still unknown.
+    if (sessionStatus === "loading") {
+      return;
+    }
+
+    const isStockAction = action === "adjust" || action === "transfer" || action === "receive";
     const isManagedAction = isStockAction || action === "minStock";
     if ((isStockAction && !canManageStock) || (isManagedAction && !canManage)) {
       const nextParams = new URLSearchParams(searchParams.toString());
@@ -1723,16 +1753,22 @@ const InventoryPage = () => {
       return;
     }
 
-    if (!storeId && !(storesQuery.data?.length ?? 0)) {
+    if (action === "receive") {
+      const nextParams = new URLSearchParams(searchParams.toString());
+      nextParams.delete("action");
+      const nextQuery = nextParams.toString();
+      router.replace(nextQuery ? `/inventory/receiving?${nextQuery}` : "/inventory/receiving", {
+        scroll: false,
+      });
+      return;
+    }
+
+    if (!storeId && (storesQuery.isLoading || (storesQuery.data?.length ?? 0) > 0)) {
       return;
     }
 
     if (action === "transfer") {
-      const nextParams = new URLSearchParams(searchParams.toString());
-      nextParams.delete("action");
-      const nextQuery = nextParams.toString();
-      router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
-      router.push(buildTransferHref());
+      router.replace(buildTransferHref(), { scroll: false });
       return;
     }
 
@@ -1752,8 +1788,10 @@ const InventoryPage = () => {
     pathname,
     router,
     searchParams,
+    sessionStatus,
     storeId,
     storesQuery.data,
+    storesQuery.isLoading,
   ]);
 
   const openMovements = (item: InventoryRow) => {
@@ -1821,17 +1859,24 @@ const InventoryPage = () => {
         ];
   };
 
+  const adjustInFlightRef = useRef(false);
   const adjustMutation = trpc.inventory.adjust.useMutation({
     onSuccess: () => {
       inventoryQuery.refetch();
       void trpcUtils.inventory.searchProducts.invalidate();
       adjustForm.setValue("qtyDelta", 0);
+      adjustForm.setValue("unitCostKgs", undefined);
+      adjustForm.setValue("zeroCostConfirmed", false);
+      adjustForm.setValue("zeroCostReason", "");
       adjustForm.setValue("reason", "");
       toast({ variant: "success", description: t("adjustSuccess") });
       setActiveDialog(null);
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+    onSettled: () => {
+      adjustInFlightRef.current = false;
     },
   });
 
@@ -1854,8 +1899,7 @@ const InventoryPage = () => {
     };
     const signature = JSON.stringify(payload);
     const current = bulkOnHandOperationRef.current;
-    const idempotencyKey =
-      current?.signature === signature ? current.key : crypto.randomUUID();
+    const idempotencyKey = current?.signature === signature ? current.key : crypto.randomUUID();
     bulkOnHandOperationRef.current = { signature, key: idempotencyKey };
     setBulkOnHandProgress({ processed: 0, total });
 
@@ -2191,7 +2235,7 @@ const InventoryPage = () => {
           <div className="hidden md:contents">
             <div className="w-full sm:max-w-xs">
               <Select value={storeId} onValueChange={(value) => setStoreId(value)}>
-                <SelectTrigger>
+                <SelectTrigger aria-label={tCommon("selectStore")}>
                   <SelectValue placeholder={tCommon("selectStore")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -2226,7 +2270,7 @@ const InventoryPage = () => {
       <section data-mobile-inventory-toolbar className="mb-4 space-y-3 md:hidden">
         <div className="space-y-3 rounded-xl border border-border bg-card p-3 shadow-sm">
           <Select value={storeId} onValueChange={(value) => setStoreId(value)}>
-            <SelectTrigger className="min-h-11">
+            <SelectTrigger aria-label={tCommon("selectStore")} className="min-h-11">
               <SelectValue placeholder={tCommon("selectStore")} />
             </SelectTrigger>
             <SelectContent>
@@ -2406,7 +2450,7 @@ const InventoryPage = () => {
                   }
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger aria-label={t("expiryWindow")}>
                   <SelectValue placeholder={t("expiryWindow")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -3264,7 +3308,7 @@ const InventoryPage = () => {
                               );
                             }}
                           >
-                            <SelectTrigger>
+                            <SelectTrigger aria-label={t("assignSupplier")}>
                               <SelectValue placeholder={t("assignSupplier")} />
                             </SelectTrigger>
                             <SelectContent>
@@ -3369,7 +3413,7 @@ const InventoryPage = () => {
                     <FormLabel>{t("template")}</FormLabel>
                     <FormControl>
                       <Select value={field.value} onValueChange={field.onChange}>
-                        <SelectTrigger>
+                        <SelectTrigger aria-label={t("template")}>
                           <SelectValue placeholder={t("template")} />
                         </SelectTrigger>
                         <SelectContent>
@@ -3394,7 +3438,7 @@ const InventoryPage = () => {
                         value={field.value || "all"}
                         onValueChange={(value) => field.onChange(value === "all" ? "" : value)}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger aria-label={tCommon("store")}>
                           <SelectValue placeholder={tCommon("selectStore")} />
                         </SelectTrigger>
                         <SelectContent>
@@ -3767,14 +3811,18 @@ const InventoryPage = () => {
           <form
             className="space-y-4"
             onSubmit={adjustForm.handleSubmit((values) => {
-              if (!storeId) {
+              if (!storeId || adjustInFlightRef.current) {
                 return;
               }
+              adjustInFlightRef.current = true;
               adjustMutation.mutate({
                 storeId,
                 productId: values.productId,
                 variantId: values.variantId ?? undefined,
                 qtyDelta: values.qtyDelta,
+                unitCostKgs: values.unitCostKgs,
+                zeroCostConfirmed: values.zeroCostConfirmed,
+                zeroCostReason: values.zeroCostReason?.trim() || undefined,
                 unitId: values.unitSelection === "BASE" ? adjustProduct?.baseUnitId : undefined,
                 packId: values.unitSelection !== "BASE" ? values.unitSelection : undefined,
                 reason: values.reason,
@@ -3870,7 +3918,7 @@ const InventoryPage = () => {
                       disabled={!adjustProduct}
                     >
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger aria-label={t("unit")}>
                           <SelectValue placeholder={t("unitPlaceholder")} />
                         </SelectTrigger>
                       </FormControl>
@@ -3886,6 +3934,62 @@ const InventoryPage = () => {
                   </FormItem>
                 )}
               />
+              {Number(adjustQty) > 0 ? (
+                <FormField
+                  control={adjustForm.control}
+                  name="unitCostKgs"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t("explicitUnitCost")}</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          value={field.value ?? ""}
+                          type="number"
+                          inputMode="decimal"
+                          min={0}
+                          step="0.01"
+                          placeholder={t("explicitUnitCostPlaceholder")}
+                        />
+                      </FormControl>
+                      <FormDescription>{t("explicitUnitCostHint")}</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              ) : null}
+              {Number(adjustQty) > 0 && adjustUnitCost === 0 ? (
+                <div className="space-y-3 rounded-xl border border-warning/40 bg-warning/10 p-3 md:col-span-2">
+                  <FormField
+                    control={adjustForm.control}
+                    name="zeroCostConfirmed"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center justify-between gap-4">
+                        <div>
+                          <FormLabel>{t("zeroCostConfirmationLabel")}</FormLabel>
+                          <FormDescription>{t("zeroCostConfirmationHelp")}</FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch checked={field.value} onCheckedChange={field.onChange} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={adjustForm.control}
+                    name="zeroCostReason"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t("zeroCostReasonLabel")}</FormLabel>
+                        <FormControl>
+                          <Textarea {...field} placeholder={t("zeroCostReasonPlaceholder")} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              ) : null}
               {trackExpiryLots ? (
                 <FormField
                   control={adjustForm.control}
@@ -3980,7 +4084,7 @@ const InventoryPage = () => {
                     <FormLabel>{t("fromStore")}</FormLabel>
                     <Select value={field.value} onValueChange={field.onChange} disabled>
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger aria-label={t("fromStore")}>
                           <SelectValue placeholder={tCommon("selectStore")} />
                         </SelectTrigger>
                       </FormControl>
@@ -4004,7 +4108,7 @@ const InventoryPage = () => {
                     <FormLabel>{t("toStore")}</FormLabel>
                     <Select value={field.value} onValueChange={field.onChange}>
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger aria-label={t("toStore")}>
                           <SelectValue placeholder={tCommon("selectStore")} />
                         </SelectTrigger>
                       </FormControl>
@@ -4106,7 +4210,7 @@ const InventoryPage = () => {
                       disabled={!transferProduct}
                     >
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger aria-label={t("unit")}>
                           <SelectValue placeholder={t("unitPlaceholder")} />
                         </SelectTrigger>
                       </FormControl>
@@ -4237,7 +4341,7 @@ const InventoryPage = () => {
                       disabled={minStockApplyToAll || !minStockOptions.length}
                     >
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger aria-label={tCommon("product")}>
                           <SelectValue
                             placeholder={
                               minStockApplyToAll

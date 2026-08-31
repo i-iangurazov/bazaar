@@ -127,7 +127,7 @@ const CategorySettingsPage = () => {
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">{t("store")}</label>
               <Select value={storeId} onValueChange={setStoreId} disabled={storesQuery.isLoading}>
-                <SelectTrigger>
+                <SelectTrigger aria-label={t("store")}>
                   <SelectValue placeholder={t("storePlaceholder")} />
                 </SelectTrigger>
                 <SelectContent>

@@ -752,7 +752,7 @@ const ProductMovementsPage = () => {
             value={storeId}
             onValueChange={(value) => setFilterParam("storeId", value === allValue ? null : value)}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label={t("store")}>
               <SelectValue placeholder={t("allStores")} />
             </SelectTrigger>
             <SelectContent>
@@ -771,7 +771,7 @@ const ProductMovementsPage = () => {
             value={type}
             onValueChange={(value) => setFilterParam("type", value === allValue ? null : value)}
           >
-            <SelectTrigger data-testid="movement-type-filter">
+            <SelectTrigger aria-label={t("documentType")} data-testid="movement-type-filter">
               <SelectValue placeholder={t("allTypes")} />
             </SelectTrigger>
             <SelectContent>
@@ -790,7 +790,7 @@ const ProductMovementsPage = () => {
             value={status}
             onValueChange={(value) => setFilterParam("status", value === allValue ? null : value)}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label={t("statusLabel")}>
               <SelectValue placeholder={t("allStatuses")} />
             </SelectTrigger>
             <SelectContent>
@@ -845,7 +845,7 @@ const ProductMovementsPage = () => {
                   setFilterParam("paymentStatus", value === allValue ? null : value);
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger aria-label={t("paymentStatus")}>
                   <SelectValue placeholder={t("allPayments")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -866,7 +866,7 @@ const ProductMovementsPage = () => {
                   setFilterParam("archiveMode", value === "ACTIVE" ? null : value);
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger aria-label={t("archiveFilter")}>
                   <SelectValue placeholder={archiveModeLabel("ACTIVE")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -886,7 +886,7 @@ const ProductMovementsPage = () => {
                   setFilterParam("orderStatus", value === allValue ? null : value);
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger aria-label={t("orderStatus")}>
                   <SelectValue placeholder={t("allOrderStatuses")} />
                 </SelectTrigger>
                 <SelectContent>

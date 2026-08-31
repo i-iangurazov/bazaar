@@ -1,6 +1,14 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -46,6 +54,9 @@ export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
   const pathname = usePathname();
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const timersRef = useRef(new Map<string, number>());
+  const signatureIdsRef = useRef(new Map<string, string>());
+  const idSignaturesRef = useRef(new Map<string, string>());
+  const idVariantsRef = useRef(new Map<string, ToastVariant | undefined>());
   const isPosCashierRoute = pathname === "/pos/sell" || pathname.endsWith("/pos/sell");
 
   const remove = useCallback((id: string) => {
@@ -55,11 +66,45 @@ export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
       window.clearTimeout(timer);
       timersRef.current.delete(id);
     }
+    const signature = idSignaturesRef.current.get(id);
+    if (signature && signatureIdsRef.current.get(signature) === id) {
+      signatureIdsRef.current.delete(signature);
+    }
+    idSignaturesRef.current.delete(id);
+    idVariantsRef.current.delete(id);
   }, []);
+
+  useEffect(() => {
+    for (const [id, variant] of idVariantsRef.current) {
+      if (variant !== "success") remove(id);
+    }
+  }, [pathname, remove]);
+  useEffect(
+    () => () => {
+      for (const timer of timersRef.current.values()) window.clearTimeout(timer);
+      timersRef.current.clear();
+      signatureIdsRef.current.clear();
+      idSignaturesRef.current.clear();
+      idVariantsRef.current.clear();
+    },
+    [],
+  );
 
   const push = useCallback(
     (toast: ToastInput) => {
+      const signature = JSON.stringify([
+        toast.title ?? "",
+        toast.description,
+        toast.actionLabel ?? "",
+        toast.actionHref ?? "",
+      ]);
+      const duplicateId = signatureIdsRef.current.get(signature);
+      if (duplicateId) remove(duplicateId);
+
       const id = generateId();
+      signatureIdsRef.current.set(signature, id);
+      idSignaturesRef.current.set(id, signature);
+      idVariantsRef.current.set(id, toast.variant);
       setToasts((prev) => [...prev, { id, ...toast }]);
       const timer = window.setTimeout(() => remove(id), 5000);
       timersRef.current.set(id, timer);
@@ -74,6 +119,7 @@ export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
       {children}
       {toasts.length ? (
         <div
+          data-toast-region
           className={cn(
             "fixed left-4 right-4 z-[1100] flex flex-col gap-3 sm:w-96",
             isPosCashierRoute
@@ -87,6 +133,7 @@ export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
               <div
                 key={toast.id}
                 role={toast.variant === "error" ? "alert" : "status"}
+                aria-atomic="true"
                 className={cn(
                   "rounded-md border bg-card p-4 shadow-lg",
                   toast.variant === "error"

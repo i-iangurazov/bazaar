@@ -2,14 +2,15 @@ import { notFound } from "next/navigation";
 
 import { normalizeLocale } from "@/lib/locales";
 
-const LocaleLayout = ({
+const LocaleLayout = async ({
   children,
   params,
 }: {
   children: React.ReactNode;
-  params: { locale: string };
+  params: Promise<{ locale: string }>;
 }) => {
-  if (!normalizeLocale(params.locale)) {
+  const { locale } = await params;
+  if (!normalizeLocale(locale)) {
     notFound();
   }
 

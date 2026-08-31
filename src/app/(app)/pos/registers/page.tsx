@@ -235,7 +235,9 @@ const PosRegistersPage = () => {
     register.openShift?.openedBy?.name ?? t("registers.unassigned");
 
   const renderLastUsed = (register: RegisterRow) =>
-    register.lastActivityAt ? formatDateTime(register.lastActivityAt, locale) : tCommon("notAvailable");
+    register.lastActivityAt
+      ? formatDateTime(register.lastActivityAt, locale)
+      : tCommon("notAvailable");
 
   const renderActions = (register: RegisterRow) => {
     if (!canManage) {
@@ -311,16 +313,22 @@ const PosRegistersPage = () => {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <p className="text-sm font-medium">{t("registers.name")}</p>
+                <label htmlFor="register-create-name" className="text-sm font-medium">
+                  {t("registers.name")}
+                </label>
                 <Input
+                  id="register-create-name"
                   value={createName}
                   onChange={(event) => setCreateName(event.target.value)}
                   maxLength={120}
                 />
               </div>
               <div className="space-y-1.5">
-                <p className="text-sm font-medium">{t("registers.code")}</p>
+                <label htmlFor="register-create-code" className="text-sm font-medium">
+                  {t("registers.code")}
+                </label>
                 <Input
+                  id="register-create-code"
                   value={createCode}
                   onChange={(event) => setCreateCode(event.target.value)}
                   maxLength={32}
@@ -389,52 +397,66 @@ const PosRegistersPage = () => {
 
           <div className="bazaar-admin-table-shell hidden md:block">
             <div className="bazaar-admin-table-scroll">
-            <table className="w-full min-w-[980px] border-separate border-spacing-0 text-left text-sm">
-              <thead>
-                <tr className="text-xs uppercase tracking-wide text-muted-foreground">
-                  <th className="border-b border-border px-3 py-2 font-medium">{t("registers.name")}</th>
-                  <th className="border-b border-border px-3 py-2 font-medium">{tCommon("store")}</th>
-                  <th className="border-b border-border px-3 py-2 font-medium">{tCommon("status")}</th>
-                  <th className="border-b border-border px-3 py-2 font-medium">
-                    {t("registers.currentUser")}
-                  </th>
-                  <th className="border-b border-border px-3 py-2 font-medium">{t("registers.device")}</th>
-                  <th className="border-b border-border px-3 py-2 font-medium">{t("registers.createdAt")}</th>
-                  <th className="border-b border-border px-3 py-2 font-medium">{t("registers.lastUsed")}</th>
-                  <th className="border-b border-border px-3 py-2 text-right font-medium">
-                    {tCommon("actions")}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleRegisters.map((register) => (
-                  <tr key={register.id} className="align-top">
-                    <td className="border-b border-border px-3 py-3">
-                      <div className="font-semibold text-foreground">{register.name}</div>
-                      <div className="text-xs text-muted-foreground">{register.code}</div>
-                    </td>
-                    <td className="border-b border-border px-3 py-3">
-                      <div className="text-foreground">{register.store.name}</div>
-                      <div className="text-xs text-muted-foreground">{register.store.code}</div>
-                    </td>
-                    <td className="border-b border-border px-3 py-3">{renderStatus(register)}</td>
-                    <td className="border-b border-border px-3 py-3 text-muted-foreground">
-                      {renderCurrentUser(register)}
-                    </td>
-                    <td className="border-b border-border px-3 py-3 text-muted-foreground">
-                      {t("registers.notTracked")}
-                    </td>
-                    <td className="border-b border-border px-3 py-3 text-muted-foreground">
-                      {formatDateTime(register.createdAt, locale)}
-                    </td>
-                    <td className="border-b border-border px-3 py-3 text-muted-foreground">
-                      {renderLastUsed(register)}
-                    </td>
-                    <td className="border-b border-border px-3 py-3 text-right">{renderActions(register)}</td>
+              <table className="w-full min-w-[980px] border-separate border-spacing-0 text-left text-sm">
+                <thead>
+                  <tr className="text-xs uppercase tracking-wide text-muted-foreground">
+                    <th className="border-b border-border px-3 py-2 font-medium">
+                      {t("registers.name")}
+                    </th>
+                    <th className="border-b border-border px-3 py-2 font-medium">
+                      {tCommon("store")}
+                    </th>
+                    <th className="border-b border-border px-3 py-2 font-medium">
+                      {tCommon("status")}
+                    </th>
+                    <th className="border-b border-border px-3 py-2 font-medium">
+                      {t("registers.currentUser")}
+                    </th>
+                    <th className="border-b border-border px-3 py-2 font-medium">
+                      {t("registers.device")}
+                    </th>
+                    <th className="border-b border-border px-3 py-2 font-medium">
+                      {t("registers.createdAt")}
+                    </th>
+                    <th className="border-b border-border px-3 py-2 font-medium">
+                      {t("registers.lastUsed")}
+                    </th>
+                    <th className="border-b border-border px-3 py-2 text-right font-medium">
+                      {tCommon("actions")}
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {visibleRegisters.map((register) => (
+                    <tr key={register.id} className="align-top">
+                      <td className="border-b border-border px-3 py-3">
+                        <div className="font-semibold text-foreground">{register.name}</div>
+                        <div className="text-xs text-muted-foreground">{register.code}</div>
+                      </td>
+                      <td className="border-b border-border px-3 py-3">
+                        <div className="text-foreground">{register.store.name}</div>
+                        <div className="text-xs text-muted-foreground">{register.store.code}</div>
+                      </td>
+                      <td className="border-b border-border px-3 py-3">{renderStatus(register)}</td>
+                      <td className="border-b border-border px-3 py-3 text-muted-foreground">
+                        {renderCurrentUser(register)}
+                      </td>
+                      <td className="border-b border-border px-3 py-3 text-muted-foreground">
+                        {t("registers.notTracked")}
+                      </td>
+                      <td className="border-b border-border px-3 py-3 text-muted-foreground">
+                        {formatDateTime(register.createdAt, locale)}
+                      </td>
+                      <td className="border-b border-border px-3 py-3 text-muted-foreground">
+                        {renderLastUsed(register)}
+                      </td>
+                      <td className="border-b border-border px-3 py-3 text-right">
+                        {renderActions(register)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
 
@@ -460,7 +482,9 @@ const PosRegistersPage = () => {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <dt className="text-xs text-muted-foreground">{t("registers.createdAt")}</dt>
-                      <dd className="text-foreground">{formatDateTime(register.createdAt, locale)}</dd>
+                      <dd className="text-foreground">
+                        {formatDateTime(register.createdAt, locale)}
+                      </dd>
                     </div>
                     <div>
                       <dt className="text-xs text-muted-foreground">{t("registers.lastUsed")}</dt>
@@ -473,7 +497,11 @@ const PosRegistersPage = () => {
                     <Button variant="secondary" size="sm" onClick={() => openEditDialog(register)}>
                       {tCommon("edit")}
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => handleToggleActive(register)}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleToggleActive(register)}
+                    >
                       {register.isActive ? t("registers.deactivate") : t("registers.activate")}
                     </Button>
                     <Button variant="outline" size="sm" onClick={() => handleDelete(register)}>
@@ -506,12 +534,26 @@ const PosRegistersPage = () => {
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <p className="text-sm font-medium">{t("registers.name")}</p>
-              <Input value={editName} onChange={(event) => setEditName(event.target.value)} maxLength={120} />
+              <label htmlFor="register-edit-name" className="text-sm font-medium">
+                {t("registers.name")}
+              </label>
+              <Input
+                id="register-edit-name"
+                value={editName}
+                onChange={(event) => setEditName(event.target.value)}
+                maxLength={120}
+              />
             </div>
             <div className="space-y-1.5">
-              <p className="text-sm font-medium">{t("registers.code")}</p>
-              <Input value={editCode} onChange={(event) => setEditCode(event.target.value)} maxLength={32} />
+              <label htmlFor="register-edit-code" className="text-sm font-medium">
+                {t("registers.code")}
+              </label>
+              <Input
+                id="register-edit-code"
+                value={editCode}
+                onChange={(event) => setEditCode(event.target.value)}
+                maxLength={32}
+              />
             </div>
             <div className="space-y-1.5">
               <p className="text-sm font-medium">{tCommon("store")}</p>
@@ -532,12 +574,17 @@ const PosRegistersPage = () => {
                 </SelectContent>
               </Select>
               {editingRegister?.hasHistory ? (
-                <p className="text-xs text-muted-foreground">{t("registers.storeLockedByHistory")}</p>
+                <p className="text-xs text-muted-foreground">
+                  {t("registers.storeLockedByHistory")}
+                </p>
               ) : null}
             </div>
             <div className="space-y-1.5">
               <p className="text-sm font-medium">{tCommon("status")}</p>
-              <Select value={editIsActive ? "active" : "inactive"} onValueChange={(value) => setEditIsActive(value === "active")}>
+              <Select
+                value={editIsActive ? "active" : "inactive"}
+                onValueChange={(value) => setEditIsActive(value === "active")}
+              >
                 <SelectTrigger aria-label={tCommon("status")}>
                   <SelectValue />
                 </SelectTrigger>

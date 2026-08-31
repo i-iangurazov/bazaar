@@ -37,11 +37,13 @@ const InviteEntryPage = () => {
       </div>
       <Card>
         <CardHeader>
-          <CardTitle>{t("entryTitle")}</CardTitle>
+          <CardTitle as="h1">{t("entryTitle")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">{t("entrySubtitle")}</p>
           <form
+            noValidate
+            aria-live="polite"
             onSubmit={(event) => {
               event.preventDefault();
               const token = resolveToken(input);
@@ -59,15 +61,28 @@ const InviteEntryPage = () => {
                 <Input
                   id="invite-token"
                   value={input}
-                  onChange={(event) => setInput(event.target.value)}
+                  aria-invalid={Boolean(error)}
+                  aria-describedby={error ? "invite-token-error" : "invite-token-hint"}
+                  onChange={(event) => {
+                    setInput(event.target.value);
+                    if (error) {
+                      setError(null);
+                    }
+                  }}
                   placeholder={t("entryPlaceholder")}
                 />
               </div>
-              {error ? <p className="text-xs font-medium text-danger">{error}</p> : null}
+              {error ? (
+                <p id="invite-token-error" className="text-xs font-medium text-danger" role="alert">
+                  {error}
+                </p>
+              ) : null}
               <Button type="submit" className="w-full">
                 {t("entrySubmit")}
               </Button>
-              <p className="text-xs text-muted-foreground">{t("entryHint")}</p>
+              <p id="invite-token-hint" className="text-xs text-muted-foreground">
+                {t("entryHint")}
+              </p>
             </FormStack>
           </form>
         </CardContent>

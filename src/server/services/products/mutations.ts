@@ -87,6 +87,7 @@ export const updateProductMutation = async ({
   try {
     return await updateProduct({
       productId: input.productId,
+      expectedUpdatedAt: input.expectedUpdatedAt,
       organizationId: ctx.organizationId,
       actorId: ctx.actorId,
       requestId: ctx.requestId,
@@ -166,17 +167,6 @@ export const inlineUpdateProductMutation = async ({
       throw new TRPCError({ code: "NOT_FOUND", message: "productNotFound" });
     }
 
-    const existingCost = await prisma.productCost.findUnique({
-      where: {
-        organizationId_productId_variantKey: {
-          organizationId,
-          productId: existing.id,
-          variantKey: "BASE",
-        },
-      },
-      select: { avgCostKgs: true },
-    });
-
     return await updateProduct({
       productId: existing.id,
       organizationId,
@@ -191,10 +181,9 @@ export const inlineUpdateProductMutation = async ({
         patch.basePriceKgs !== undefined
           ? patch.basePriceKgs
           : decimalToNumber(existing.basePriceKgs),
-      avgCostKgs:
-        patch.avgCostKgs !== undefined
-          ? patch.avgCostKgs
-          : decimalToNumber(existingCost?.avgCostKgs),
+      // Omitting an unchanged cost is significant: updateProduct must preserve the
+      // existing precise basis instead of re-basing it from the rounded projection.
+      avgCostKgs: patch.avgCostKgs,
       description: existing.description,
       photoUrl: existing.photoUrl,
       supplierId: existing.supplierId,

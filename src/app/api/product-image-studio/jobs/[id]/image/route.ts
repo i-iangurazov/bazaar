@@ -7,9 +7,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type RouteParams = {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 };
 
 const normalizeImageMimeType = (value: string) => value.toLowerCase().split(";")[0]?.trim() ?? "";
@@ -51,6 +51,7 @@ const resolveManagedSourceUrl = (rawSourceUrl: string, requestUrl: URL) => {
 };
 
 export const GET = async (request: Request, { params }: RouteParams) => {
+  const { id } = await params;
   const token = await getServerAuthToken();
   if (!token?.organizationId) {
     return new Response(null, { status: 401 });
@@ -78,7 +79,7 @@ export const GET = async (request: Request, { params }: RouteParams) => {
 
   const job = await prisma.productImageStudioJob.findFirst({
     where: {
-      id: params.id,
+      id,
       organizationId: String(token.organizationId),
     },
     select: {

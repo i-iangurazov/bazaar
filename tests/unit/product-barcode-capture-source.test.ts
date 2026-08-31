@@ -13,17 +13,19 @@ describe("product barcode capture source", () => {
     expect(source).toContain("normalizeScanValue");
     expect(source).toContain("const minimumProductBarcodeLength = 4");
     expect(source).toContain("const handleBarcodeInputKeyDown");
-    expect(source).toContain("event.key !== \"Enter\"");
+    expect(source).toContain('event.key !== "Enter"');
     expect(source).toContain("event.preventDefault()");
     expect(source).toContain("onKeyDown={handleBarcodeInputKeyDown}");
     expect(source).toContain("barcodeTooShort");
   });
 
-  it("runs barcode conflict diagnostics during quick create too", async () => {
+  it("runs exact SKU and barcode conflict diagnostics during quick create too", async () => {
     const source = await readSource("src/components/product-form.tsx");
 
     expect(source).toContain("compactCreate");
-    expect(source).toContain("? deferredDuplicateDiagnosticsInput.barcodes.length > 0");
+    expect(source).toContain("deferredDuplicateDiagnosticsInput.sku.length >= 2");
+    expect(source).toContain("|| deferredDuplicateDiagnosticsInput.barcodes.length > 0");
+    expect(source).toContain("duplicateExactSkuTitle");
     expect(source).toContain("duplicateExactBarcodesTitle");
     expect(source).toContain("href={`/products/${match.id}`}");
   });
@@ -31,7 +33,7 @@ describe("product barcode capture source", () => {
   it("preloads scanned unknown barcodes into new product create", async () => {
     const source = await readSource("src/app/(app)/products/new/page.tsx");
 
-    expect(source).toContain("searchParams?.get(\"barcode\")");
+    expect(source).toContain('searchParams?.get("barcode")');
     expect(source).toContain("barcodes: enableBarcode && barcode ? [barcode] : []");
   });
 });

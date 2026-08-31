@@ -9,6 +9,10 @@ export const contextualHelpRoutes = [
   { match: /^\/pos\/history(?:\/|$)/, guideId: "pos/return-sale" },
   { match: /^\/pos\/shifts(?:\/|$)/, guideId: "pos/close-shift" },
   { match: /^\/pos(?:\/|$)/, guideId: "pos/open-shift" },
+  { match: /^\/sales\/orders\/new(?:\/|$)/, guideId: "orders/create-order" },
+  { match: /^\/sales\/orders(?:\/|$)/, guideId: "orders/process-order" },
+  { match: /^\/customers\/new(?:\/|$)/, guideId: "customers/add-customer" },
+  { match: /^\/customers(?:\/|$)/, guideId: "customers/review-history" },
   { match: /^\/settings\/users(?:\/|$)/, guideId: "settings/add-employee" },
   { match: /^\/stores(?:\/|$)/, guideId: "getting-started/choose-store" },
   { match: /^\/reports\/analytics(?:\/|$)/, guideId: "reports/analytics-basics" },
@@ -126,6 +130,46 @@ const contextualHelpSummaries: Record<string, ContextualHelpSummary> = {
       t("Посчитайте наличные", "Накталай акчаны санаңыз", "Count cash"),
       t("Сверьте расхождение", "Айырманы текшериңиз", "Review the variance"),
       t("Закройте смену", "Сменаны жабыңыз", "Close the shift"),
+    ],
+  },
+  "orders/create-order": {
+    title: t("Новый заказ клиента", "Жаңы кардар буйрутмасы", "New customer order"),
+    steps: [
+      t("Проверьте магазин", "Дүкөндү текшериңиз", "Verify the store"),
+      t("Укажите клиента", "Кардарды көрсөтүңүз", "Enter the customer"),
+      t(
+        "Добавьте товары и количество",
+        "Товарларды жана санын кошуңуз",
+        "Add products and quantities",
+      ),
+      t("Создайте черновик", "Черновик түзүңүз", "Create the draft"),
+    ],
+  },
+  "orders/process-order": {
+    title: t("Обработка заказа", "Буйрутманы иштетүү", "Process an order"),
+    steps: [
+      t("Найдите и проверьте заказ", "Буйрутманы таап, текшериңиз", "Find and review the order"),
+      t("Подтвердите состав", "Курамын ырастаңыз", "Confirm its contents"),
+      t("Отметьте готовность", "Даяр экенин белгилеңиз", "Mark it ready"),
+      t("Завершите после выдачи", "Бергенден кийин аяктаңыз", "Complete it after handoff"),
+    ],
+  },
+  "customers/add-customer": {
+    title: t("Новый клиент", "Жаңы кардар", "New customer"),
+    steps: [
+      t("Выберите магазин", "Дүкөндү тандаңыз", "Choose the store"),
+      t("Введите имя", "Атын киргизиңиз", "Enter the name"),
+      t("Добавьте email или телефон", "Email же телефон кошуңуз", "Add an email or phone"),
+      t("Создайте клиента", "Кардарды түзүңүз", "Create the customer"),
+    ],
+  },
+  "customers/review-history": {
+    title: t("История клиента", "Кардардын тарыхы", "Customer history"),
+    steps: [
+      t("Выберите магазин", "Дүкөндү тандаңыз", "Choose the store"),
+      t("Найдите клиента", "Кардарды табыңыз", "Find the customer"),
+      t("Откройте продажи", "Сатууларды ачыңыз", "Open Sales"),
+      t("Проверьте последние чеки", "Акыркы чектерди текшериңиз", "Review recent receipts"),
     ],
   },
   "settings/add-employee": {

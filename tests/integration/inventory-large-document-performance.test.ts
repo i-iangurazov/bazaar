@@ -26,6 +26,7 @@ describeDb("large inventory document journals", () => {
         linePosition: 0,
         unitCostKgs: 10,
         lineTotalKgs: 10,
+        inventoryValueDeltaKgs: 10,
         referenceType: "STOCK_RECEIVING",
         referenceId: `large-receiving-${String(index).padStart(5, "0")}`,
         note: `Large receiving ${index}`,

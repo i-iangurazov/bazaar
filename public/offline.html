@@ -20,6 +20,12 @@
         color: #111827;
       }
 
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
       body {
         margin: 0;
         min-height: 100dvh;
@@ -55,30 +61,14 @@
         color: #64748b;
         line-height: 1.55;
       }
-
-      .translations {
-        display: grid;
-        gap: 16px;
-      }
     </style>
+    <script src="/offline.js" defer></script>
   </head>
   <body>
     <main>
       <img src="/icons/icon-192.png" alt="" />
-      <div class="translations">
-        <section lang="en">
-          <h1>You are offline</h1>
-          <p>Connect to the internet to continue using Bazaar.</p>
-        </section>
-        <section lang="ru">
-          <h1>Нет подключения</h1>
-          <p>Подключитесь к интернету, чтобы продолжить работу в Bazaar.</p>
-        </section>
-        <section lang="kg">
-          <h1>Интернет жок</h1>
-          <p>Bazaar менен иштөөнү улантуу үчүн интернетке туташыңыз.</p>
-        </section>
-      </div>
+      <h1 id="offline-title">You are offline</h1>
+      <p id="offline-description">Connect to the internet to continue using Bazaar.</p>
     </main>
   </body>
 </html>

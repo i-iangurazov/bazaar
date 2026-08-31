@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -45,6 +45,13 @@ import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { isInlineEditingEnabled } from "@/lib/inlineEdit/featureFlag";
 import { inlineEditRegistry, type InlineMutationOperation } from "@/lib/inlineEdit/registry";
+import {
+  normalizeSupplierMutationInput,
+  SUPPLIER_EMAIL_MAX_LENGTH,
+  SUPPLIER_NAME_MAX_LENGTH,
+  SUPPLIER_NOTES_MAX_LENGTH,
+  SUPPLIER_PHONE_MAX_LENGTH,
+} from "@/lib/supplierForm";
 
 const SuppliersPage = () => {
   const t = useTranslations("suppliers");
@@ -78,13 +85,24 @@ const SuppliersPage = () => {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const submissionInFlightRef = useRef(false);
   const schema = useMemo(
     () =>
       z.object({
-        name: z.string().min(1, t("nameRequired")),
-        email: z.string().email(t("emailInvalid")).optional().or(z.literal("")),
-        phone: z.string().optional(),
-        notes: z.string().optional(),
+        name: z
+          .string()
+          .trim()
+          .min(2, t("nameMinLength"))
+          .max(SUPPLIER_NAME_MAX_LENGTH, t("nameTooLong")),
+        email: z
+          .string()
+          .trim()
+          .max(SUPPLIER_EMAIL_MAX_LENGTH, t("emailTooLong"))
+          .email(t("emailInvalid"))
+          .optional()
+          .or(z.string().trim().length(0)),
+        phone: z.string().max(SUPPLIER_PHONE_MAX_LENGTH, t("phoneTooLong")).optional(),
+        notes: z.string().max(SUPPLIER_NOTES_MAX_LENGTH, t("notesTooLong")).optional(),
       }),
     [t],
   );
@@ -98,6 +116,29 @@ const SuppliersPage = () => {
       notes: "",
     },
   });
+  const formIsDirty = formOpen && form.formState.isDirty;
+
+  useEffect(() => {
+    if (!formIsDirty) {
+      return;
+    }
+    const preventUnsavedRefresh = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", preventUnsavedRefresh);
+    return () => window.removeEventListener("beforeunload", preventUnsavedRefresh);
+  }, [formIsDirty]);
+
+  const closeSupplierForm = useCallback(() => {
+    if (formIsDirty && !window.confirm(tCommon("unsavedChangesConfirm"))) {
+      return false;
+    }
+    setEditingId(null);
+    form.reset();
+    setFormOpen(false);
+    return true;
+  }, [form, formIsDirty, tCommon]);
 
   const createMutation = trpc.suppliers.create.useMutation({
     onSuccess: () => {
@@ -108,6 +149,9 @@ const SuppliersPage = () => {
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+    onSettled: () => {
+      submissionInFlightRef.current = false;
     },
   });
 
@@ -121,6 +165,9 @@ const SuppliersPage = () => {
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+    onSettled: () => {
+      submissionInFlightRef.current = false;
     },
   });
   const inlineUpdateMutation = trpc.suppliers.update.useMutation();
@@ -234,22 +281,19 @@ const SuppliersPage = () => {
   }, [canManage, form, pathname, router, searchParams]);
 
   const handleSubmit = (values: z.infer<typeof schema>) => {
+    if (submissionInFlightRef.current) {
+      return;
+    }
+    submissionInFlightRef.current = true;
+    const input = normalizeSupplierMutationInput(values);
     if (editingId) {
       updateMutation.mutate({
         supplierId: editingId,
-        name: values.name,
-        email: values.email,
-        phone: values.phone,
-        notes: values.notes,
+        ...input,
       });
       return;
     }
-    createMutation.mutate({
-      name: values.name,
-      email: values.email,
-      phone: values.phone,
-      notes: values.notes,
-    });
+    createMutation.mutate(input);
   };
 
   const selectedSuppliers = useMemo(
@@ -345,18 +389,18 @@ const SuppliersPage = () => {
         <Modal
           open={formOpen}
           onOpenChange={(open) => {
-            setFormOpen(open);
-            if (!open) {
-              setEditingId(null);
-              form.reset();
+            if (open) {
+              setFormOpen(true);
+              return;
             }
+            closeSupplierForm();
           }}
           title={editingId ? t("editSupplier") : t("newSupplier")}
           className="rounded-xl"
           bodyClassName="p-4 sm:p-6"
         >
           <Form {...form}>
-            <form className="space-y-4" onSubmit={form.handleSubmit(handleSubmit)}>
+            <form className="space-y-4" noValidate onSubmit={form.handleSubmit(handleSubmit)}>
               <FormGrid>
                 <FormField
                   control={form.control}
@@ -365,7 +409,11 @@ const SuppliersPage = () => {
                     <FormItem>
                       <FormLabel>{t("name")}</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder={t("namePlaceholder")} />
+                        <Input
+                          {...field}
+                          maxLength={SUPPLIER_NAME_MAX_LENGTH}
+                          placeholder={t("namePlaceholder")}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -378,7 +426,12 @@ const SuppliersPage = () => {
                     <FormItem>
                       <FormLabel>{t("email")}</FormLabel>
                       <FormControl>
-                        <Input {...field} type="email" placeholder={t("emailPlaceholder")} />
+                        <Input
+                          {...field}
+                          type="email"
+                          maxLength={SUPPLIER_EMAIL_MAX_LENGTH}
+                          placeholder={t("emailPlaceholder")}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -391,7 +444,11 @@ const SuppliersPage = () => {
                     <FormItem>
                       <FormLabel>{t("phone")}</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder={t("phonePlaceholder")} />
+                        <Input
+                          {...field}
+                          maxLength={SUPPLIER_PHONE_MAX_LENGTH}
+                          placeholder={t("phonePlaceholder")}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -404,7 +461,12 @@ const SuppliersPage = () => {
                     <FormItem className="md:col-span-2">
                       <FormLabel>{t("notes")}</FormLabel>
                       <FormControl>
-                        <Textarea {...field} rows={3} placeholder={t("notesPlaceholder")} />
+                        <Textarea
+                          {...field}
+                          rows={3}
+                          maxLength={SUPPLIER_NOTES_MAX_LENGTH}
+                          placeholder={t("notesPlaceholder")}
+                        />
                       </FormControl>
                       <FormDescription>{t("notesHint")}</FormDescription>
                       <FormMessage />
@@ -435,7 +497,7 @@ const SuppliersPage = () => {
                   variant="ghost"
                   className="w-full sm:w-auto"
                   type="button"
-                  onClick={() => setFormOpen(false)}
+                  onClick={closeSupplierForm}
                 >
                   {tCommon("cancel")}
                 </Button>

@@ -200,7 +200,10 @@ export const ResponsiveDataList = <T,>({
                   }
                 }}
               >
-                <SelectTrigger className="h-10 sm:h-8">
+                <SelectTrigger
+                  className="h-10 sm:h-8"
+                  aria-label={tCommon("pagination.rowsPerPage")}
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

@@ -41,6 +41,9 @@ describe("middleware route protection", () => {
     "/c/public-store",
     "/help",
     "/help/products/add-product",
+    "/developers/bazaar-api",
+    "/legal",
+    "/privacy",
   ])("keeps public route public: %s", async (path) => {
     const response = await middleware(requestFor(path));
 
@@ -48,6 +51,46 @@ describe("middleware route protection", () => {
     expect(response.headers.get("location")).toBeNull();
     expect(mockGetToken).not.toHaveBeenCalled();
   });
+
+  it.each([
+    {
+      prefix: "ru",
+      path: "/help/pos/make-sale?step=2",
+      expectedLocale: "ru",
+    },
+    {
+      prefix: "kg",
+      path: "/products/owned-product?tab=history",
+      expectedLocale: "kg",
+    },
+    {
+      prefix: "en",
+      path: "/orders?status=READY",
+      expectedLocale: "en",
+    },
+    {
+      prefix: "ky",
+      path: "/inventory?action=receive",
+      expectedLocale: "kg",
+    },
+    {
+      prefix: "ru",
+      path: "/c/public-store?category=featured",
+      expectedLocale: "ru",
+    },
+  ])(
+    "normalizes /$prefix compatibility paths and preserves query state for $path",
+    async ({ prefix, path, expectedLocale }) => {
+      const response = await middleware(requestFor(`/${prefix}${path}`));
+      const location = new URL(response.headers.get("location") ?? "");
+      const expected = new URL(`https://bazaar.test${path}`);
+
+      expect(location.pathname).toBe(expected.pathname);
+      expect(location.search).toBe(expected.search);
+      expect(response.cookies.get("NEXT_LOCALE")?.value).toBe(expectedLocale);
+      expect(mockGetToken).not.toHaveBeenCalled();
+    },
+  );
 
   it.each([
     {

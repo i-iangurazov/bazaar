@@ -251,6 +251,10 @@ describe("product movement journal source", () => {
     expect(printDocumentSource).toContain("movement-print-signature-row");
     expect(printDocumentSource).toContain("getPrintableLines");
     expect(printDocumentSource).toContain('line.movementType === "TRANSFER_OUT"');
+    expect(printDocumentSource).toContain('line.movementType === "TRANSFER_IN"');
+    expect(printDocumentSource).toContain("line.storeName");
+    expect(printDocumentSource).toContain("getPrintableLineTotal");
+    expect(printDocumentSource).not.toContain("const outgoing");
     expect(printDocumentSource).toContain('"WOF"');
     expect(printDocumentSource).toContain("labels.writtenOffBy");
     expect(printDocumentSource).not.toContain("sort(");

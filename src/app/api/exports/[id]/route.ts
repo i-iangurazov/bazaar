@@ -8,9 +8,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type RouteParams = {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 };
 
 const textResponse = (message: string, status: number) =>
@@ -29,6 +29,7 @@ const buildContentDisposition = (fileName: string) => {
 };
 
 export const GET = async (_request: Request, { params }: RouteParams) => {
+  const { id } = await params;
   const token = await getServerAuthToken();
   if (!token?.sub || !token.organizationId) {
     return textResponse("unauthorized", 401);
@@ -37,7 +38,7 @@ export const GET = async (_request: Request, { params }: RouteParams) => {
   try {
     const download = await resolveExportJobDownload({
       organizationId: String(token.organizationId),
-      jobId: params.id,
+      jobId: id,
       user: {
         id: token.sub,
         organizationId: String(token.organizationId),

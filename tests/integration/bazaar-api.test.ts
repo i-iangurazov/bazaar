@@ -33,9 +33,9 @@ import {
   createBazaarApiOrder,
   listBazaarApiProducts,
 } from "@/server/services/bazaarApi";
-import { adjustStock } from "@/server/services/inventory";
 import { cancelCustomerOrder } from "@/server/services/salesOrders";
 
+import { adjustStockWithExplicitPositiveCost as adjustStock } from "../helpers/d009Fixtures";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
@@ -262,6 +262,16 @@ describeDb("bazaar api integration", () => {
       where: { id: product.id },
       data: { basePriceKgs: 750 },
     });
+    await adjustStock({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 2,
+      reason: "valued stock for order status compatibility",
+      idempotencyKey: "bazaar-api-status-valued-stock",
+      requestId: "bazaar-api-status-valued-stock",
+    });
 
     const headers = {
       authorization: `Bearer ${token}`,
@@ -295,7 +305,7 @@ describeDb("bazaar api integration", () => {
         method: "GET",
         headers: { authorization: `Bearer ${token}` },
       }),
-      { params: { id: createPayload.order.id } },
+      { params: Promise.resolve({ id: createPayload.order.id }) },
     );
     const getByIdPayload = await getByIdResponse.json();
 
@@ -344,7 +354,7 @@ describeDb("bazaar api integration", () => {
         method: "GET",
         headers: { authorization: `Bearer ${token}` },
       }),
-      { params: { id: createPayload.order.number } },
+      { params: Promise.resolve({ id: createPayload.order.number }) },
     );
     await expect(getByNumberResponse.json()).resolves.toMatchObject({
       order: { id: createPayload.order.id, status: "CONFIRMED" },
@@ -355,7 +365,7 @@ describeDb("bazaar api integration", () => {
         method: "GET",
         headers: { authorization: `Bearer ${token}` },
       }),
-      { params: { id: "EXT-STATUS-1" } },
+      { params: Promise.resolve({ id: "EXT-STATUS-1" }) },
     );
     await expect(getByExternalIdResponse.json()).resolves.toMatchObject({
       order: { id: createPayload.order.id, externalOrderId: "EXT-STATUS-1" },
@@ -412,7 +422,7 @@ describeDb("bazaar api integration", () => {
         method: "GET",
         headers: { authorization: `Bearer ${token}` },
       }),
-      { params: { id: createPayload.order.id } },
+      { params: Promise.resolve({ id: createPayload.order.id }) },
     );
     await expect(cancelledResponse.json()).resolves.toMatchObject({
       order: {
@@ -461,10 +471,13 @@ describeDb("bazaar api integration", () => {
     expect(firstPage.pagination.nextCursor).toEqual(expect.any(String));
 
     const secondPageResponse = await listBazaarApiOrdersGet(
-      new Request(`http://localhost/api/bazaar/v1/orders?limit=1&cursor=${firstPage.pagination.nextCursor}`, {
-        method: "GET",
-        headers: { authorization: `Bearer ${token}` },
-      }),
+      new Request(
+        `http://localhost/api/bazaar/v1/orders?limit=1&cursor=${firstPage.pagination.nextCursor}`,
+        {
+          method: "GET",
+          headers: { authorization: `Bearer ${token}` },
+        },
+      ),
     );
     const secondPage = await secondPageResponse.json();
     expect(secondPage.data).toHaveLength(1);
@@ -545,7 +558,7 @@ describeDb("bazaar api integration", () => {
         method: "GET",
         headers: { authorization: `Bearer ${primaryToken}` },
       }),
-      { params: { id: order.id } },
+      { params: Promise.resolve({ id: order.id }) },
     );
     expect(positiveResponse.status).toBe(200);
     await expect(positiveResponse.json()).resolves.toMatchObject({ order: { id: order.id } });
@@ -562,7 +575,7 @@ describeDb("bazaar api integration", () => {
             method: "GET",
             headers: { authorization: `Bearer ${token}` },
           }),
-          { params: { id: identifier } },
+          { params: Promise.resolve({ id: identifier }) },
         ),
       ),
     );
@@ -656,11 +669,16 @@ describeDb("bazaar api integration", () => {
     });
 
     const stockAfterCreate = await prisma.inventorySnapshot.findMany({
-      where: { storeId: { in: [store.id, otherStore.id] }, productId: { in: [product.id, secondProduct.id] } },
+      where: {
+        storeId: { in: [store.id, otherStore.id] },
+        productId: { in: [product.id, secondProduct.id] },
+      },
       orderBy: [{ storeId: "asc" }, { productId: "asc" }],
     });
     const onHand = (storeId: string, productId: string) =>
-      stockAfterCreate.find((snapshot) => snapshot.storeId === storeId && snapshot.productId === productId)?.onHand;
+      stockAfterCreate.find(
+        (snapshot) => snapshot.storeId === storeId && snapshot.productId === productId,
+      )?.onHand;
     expect(onHand(store.id, product.id)).toBe(7);
     expect(onHand(store.id, secondProduct.id)).toBe(6);
     expect(onHand(otherStore.id, product.id)).toBe(20);
@@ -780,6 +798,14 @@ describeDb("bazaar api integration", () => {
         method: "POST",
         headers: { authorization: `Bearer ${token}` },
       });
+
+    const storedVerifier = await prisma.bazaarApiKey.findUniqueOrThrow({
+      where: { id: apiKey.id },
+      select: { tokenHash: true },
+    });
+    expect(token).toMatch(/^bz_live_[A-Za-z0-9_-]{43}$/);
+    expect(storedVerifier.tokenHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(storedVerifier.tokenHash).not.toContain(token);
 
     await authenticateBazaarApiRequest(request());
     const first = await prisma.bazaarApiKey.findUniqueOrThrow({

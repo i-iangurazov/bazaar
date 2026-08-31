@@ -5,73 +5,31 @@ import { useRef, useState } from "react";
 
 import styles from "./marketing.module.css";
 
-const features = [
-  {
-    id: "cashier",
-    label: "Касса",
-    eyebrow: "POS / Checkout",
-    title: "Продажа без лишних экранов",
-    body: "Каталог, текущий чек, скидка, клиент и оплата находятся в одном рабочем контексте.",
-    details: ["Штрихкод и поиск", "Разделённая оплата", "Отложить и продолжить"],
-    image: "/marketing/captures/pos-desktop-wide.webp",
-    alt: "Интерфейс кассы Bazaar",
-  },
-  {
-    id: "inventory",
-    label: "Запасы",
-    eyebrow: "Inventory / Movement",
-    title: "Остаток с понятным происхождением",
-    body: "Каждое изменение связано с продажей, поставкой, перемещением, списанием или пересчётом.",
-    details: ["По магазинам", "По вариантам", "С полной историей"],
-    image: "/marketing/captures/movements-wide.webp",
-    alt: "Журнал движения товаров Bazaar",
-  },
-  {
-    id: "products",
-    label: "Товары",
-    eyebrow: "Products / Catalog",
-    title: "Каталог, готовый к любому каналу",
-    body: "Цены, варианты, штрихкоды, фото и доступность по магазинам управляются централизованно.",
-    details: ["Варианты и опции", "Цены и скидки", "Импорт и bulk-действия"],
-    image: "/marketing/captures/products-wide.webp",
-    alt: "Каталог товаров Bazaar",
-  },
-  {
-    id: "customers",
-    label: "Клиенты",
-    eyebrow: "Customers / Retention",
-    title: "Покупатель остаётся частью истории",
-    body: "Контакты, заказы и маркетинговая доступность собраны в одной клиентской базе.",
-    details: ["История заказов", "Сегменты", "Email Marketing"],
-    image: "/marketing/captures/dashboard-wide.webp",
-    alt: "Рабочая панель Bazaar с данными магазина",
-  },
-  {
-    id: "commerce",
-    label: "Commerce",
-    eyebrow: "Channels / API",
-    title: "Один источник данных для всех каналов",
-    body: "Bazaar API и маркетплейсы получают актуальные товары, цены и остатки из одной системы.",
-    details: ["Bazaar API", "M-Market и Bakai", "O! Market"],
-    image: "/marketing/captures/integrations-wide.webp",
-    alt: "Интеграции Bazaar",
-  },
-  {
-    id: "analytics",
-    label: "Аналитика",
-    eyebrow: "Analytics / Decisions",
-    title: "Цифры, связанные с операциями",
-    body: "Продажи, себестоимость, маржа и запасы рассчитываются из реальных движений бизнеса.",
-    details: ["Выручка", "Валовая прибыль", "Топ товаров"],
-    image: "/marketing/captures/dashboard-wide.webp",
-    alt: "Аналитика Bazaar",
-  },
-] as const;
+export type MarketingFeature = {
+  id: string;
+  label: string;
+  eyebrow: string;
+  title: string;
+  body: string;
+  details: string[];
+  image: string;
+  alt: string;
+};
 
-export const FeatureShowcase = () => {
-  const [activeId, setActiveId] = useState<(typeof features)[number]["id"]>("cashier");
+export const FeatureShowcase = ({
+  features,
+  tabListLabel,
+}: {
+  features: MarketingFeature[];
+  tabListLabel: string;
+}) => {
+  const [activeId, setActiveId] = useState(features[0]?.id ?? "");
   const buttonRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const active = features.find((feature) => feature.id === activeId) ?? features[0];
+
+  if (!active) {
+    return null;
+  }
 
   const moveFocus = (currentIndex: number, direction: number) => {
     const nextIndex = (currentIndex + direction + features.length) % features.length;
@@ -83,7 +41,7 @@ export const FeatureShowcase = () => {
 
   return (
     <div className={styles.featureShowcase} data-reveal>
-      <div className={styles.featureTabs} role="tablist" aria-label="Возможности Bazaar">
+      <div className={styles.featureTabs} role="tablist" aria-label={tabListLabel}>
         {features.map((feature, index) => (
           <button
             key={feature.id}

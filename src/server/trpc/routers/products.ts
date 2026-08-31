@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 
-import { adminProcedure, managerProcedure, protectedProcedure, rateLimit, router } from "@/server/trpc/trpc";
+import { adminProcedure, managerProcedure, printingProcedure, protectedProcedure, rateLimit, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
 import {
   archiveProductMutation,
@@ -471,7 +471,7 @@ export const productsRouter = router({
       });
     }),
 
-  exportCsv: protectedProcedure.input(exportProductsInputSchema).query(({ ctx, input }) =>
+  exportCsv: printingProcedure.input(exportProductsInputSchema).query(({ ctx, input }) =>
     exportProductsCsv({
       prisma: ctx.prisma,
       organizationId: ctx.user.organizationId,

@@ -10,6 +10,7 @@ import { StatusBar, Style } from "@capacitor/status-bar";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
@@ -293,7 +294,7 @@ export const NativeRuntime = () => {
               </Button>
             ) : (
               <Button className="mt-5" asChild>
-                <a href="/help">{t("contactSupport")}</a>
+                <Link href="/help">{t("contactSupport")}</Link>
               </Button>
             )}
           </div>

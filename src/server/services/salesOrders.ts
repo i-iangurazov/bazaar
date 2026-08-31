@@ -13,6 +13,11 @@ import { prisma } from "@/server/db/prisma";
 import { writeAuditLog } from "@/server/services/audit";
 import { AppError } from "@/server/services/errors";
 import { applyStockMovement } from "@/server/services/inventory";
+import {
+  applyValuedProductCostDelta,
+  productCostBasisSelect,
+  resolveCurrentProductCostUnitNumber,
+} from "@/server/services/productCost";
 import { withIdempotency } from "@/server/services/idempotency";
 import { toJson } from "@/server/services/json";
 import { eventBus } from "@/server/events/eventBus";
@@ -103,6 +108,21 @@ const restoreCustomerOrderStockOnCancel = async (
   });
 
   for (const movement of saleMovements) {
+    const inventoryValueDeltaKgs =
+      movement.inventoryValueDeltaKgs === null
+        ? movement.unitCostKgs === null
+          ? null
+          : movement.unitCostKgs.mul(Math.abs(movement.qtyDelta))
+        : movement.inventoryValueDeltaKgs.abs();
+    if (inventoryValueDeltaKgs !== null) {
+      await applyValuedProductCostDelta(tx, {
+        organizationId: input.organizationId,
+        productId: movement.productId,
+        variantId: movement.variantId,
+        quantityDelta: Math.abs(movement.qtyDelta),
+        valueDeltaKgs: inventoryValueDeltaKgs,
+      });
+    }
     await applyStockMovement(tx, {
       storeId: input.order.storeId,
       productId: movement.productId,
@@ -114,6 +134,8 @@ const restoreCustomerOrderStockOnCancel = async (
       linePosition: movement.linePosition,
       unitCostKgs: movement.unitCostKgs === null ? null : toMoney(movement.unitCostKgs),
       lineTotalKgs: toMoney(movement.lineTotalKgs),
+      inventoryValueDeltaKgs:
+        inventoryValueDeltaKgs === null ? null : Number(inventoryValueDeltaKgs),
       note: `Cancellation ${input.order.number}`,
       actorId: input.actorId,
       organizationId: input.organizationId,
@@ -268,10 +290,10 @@ const resolveUnitCost = async (input: {
           variantKey,
         },
       },
-      select: { avgCostKgs: true },
+      select: productCostBasisSelect,
     });
-    if (direct?.avgCostKgs) {
-      return Number(direct.avgCostKgs);
+    if (direct) {
+      return resolveCurrentProductCostUnitNumber(direct);
     }
     if (variantKey !== "BASE") {
       const fallback = await tx.productCost.findUnique({
@@ -282,9 +304,9 @@ const resolveUnitCost = async (input: {
             variantKey: "BASE",
           },
         },
-        select: { avgCostKgs: true },
+        select: productCostBasisSelect,
       });
-      return fallback?.avgCostKgs ? Number(fallback.avgCostKgs) : null;
+      return fallback ? resolveCurrentProductCostUnitNumber(fallback) : null;
     }
     return null;
   }
@@ -312,10 +334,10 @@ const resolveUnitCost = async (input: {
           variantKey,
         },
       },
-      select: { avgCostKgs: true },
+      select: productCostBasisSelect,
     });
     const fallback =
-      !direct?.avgCostKgs && variantKey !== "BASE"
+      !direct && variantKey !== "BASE"
         ? await tx.productCost.findUnique({
             where: {
               organizationId_productId_variantKey: {
@@ -324,14 +346,14 @@ const resolveUnitCost = async (input: {
                 variantKey: "BASE",
               },
             },
-            select: { avgCostKgs: true },
+            select: productCostBasisSelect,
           })
         : null;
-    const componentCost = direct?.avgCostKgs ?? fallback?.avgCostKgs;
+    const componentCost = direct ?? fallback;
     if (!componentCost) {
       return null;
     }
-    total += Number(componentCost) * component.qty;
+    total += resolveCurrentProductCostUnitNumber(componentCost) * component.qty;
   }
 
   return roundMoney(total);
@@ -681,6 +703,9 @@ const createCustomerOrderDraftTx = async (
   tx: Prisma.TransactionClient,
   input: CreateCustomerOrderDraftInput,
 ) => {
+  if (!input.lines?.length) {
+    throw new AppError("salesOrderEmpty", "BAD_REQUEST", 400);
+  }
   const customerPhone = normalizeOptionalCustomerPhone(input.customerPhone);
   const customerAddress = normalizeOptionalCustomerAddress(input.customerAddress);
   const actor = await tx.user.findFirst({
@@ -741,7 +766,7 @@ const createCustomerOrderDraftTx = async (
     customerAddress,
   });
 
-  if (input.lines?.length) {
+  if (input.lines.length) {
     const existingKeys = new Set<string>();
 
     for (const lineInput of input.lines) {
@@ -991,6 +1016,9 @@ export const updateCustomerOrderTracking = async (input: {
     if (before.isPosSale) {
       throw new AppError("salesOrderNotFound", "NOT_FOUND", 404);
     }
+    if (before.status === CustomerOrderStatus.CANCELED) {
+      throw new AppError("salesOrderNotEditable", "CONFLICT", 409);
+    }
 
     const nextTrackingNumber = normalizeOptionalText(input.trackingNumber);
     const nextTrackingCarrier = normalizeOptionalText(input.trackingCarrier);
@@ -1043,6 +1071,21 @@ export const sendCustomerOrderEmail = async (input: {
   type: CustomerOrderEmailType;
   actorId: string;
 }) => {
+  const order = await prisma.customerOrder.findFirst({
+    where: {
+      id: input.customerOrderId,
+      organizationId: input.organizationId,
+      isPosSale: false,
+    },
+    select: { status: true },
+  });
+  if (!order) {
+    throw new AppError("salesOrderNotFound", "NOT_FOUND", 404);
+  }
+  if (order.status === CustomerOrderStatus.CANCELED) {
+    throw new AppError("salesOrderNotEditable", "CONFLICT", 409);
+  }
+
   if (input.type === CustomerOrderEmailType.CONFIRMATION) {
     return sendOrderConfirmationEmail({
       organizationId: input.organizationId,
@@ -1495,6 +1538,18 @@ export const completeCustomerOrder = async (input: {
 
         if (!apiStockAlreadyApplied) {
           for (const line of order.lines) {
+            const frozenCostTotalKgs =
+              line.lineCostTotalKgs ??
+              (line.unitCostKgs === null ? null : line.unitCostKgs.mul(line.qty));
+            if (frozenCostTotalKgs !== null) {
+              await applyValuedProductCostDelta(tx, {
+                organizationId: input.organizationId,
+                productId: line.productId,
+                variantId: line.variantId,
+                quantityDelta: -line.qty,
+                valueDeltaKgs: frozenCostTotalKgs.negated(),
+              });
+            }
             await applyStockMovement(tx, {
               storeId: order.storeId,
               productId: line.productId,
@@ -1503,6 +1558,9 @@ export const completeCustomerOrder = async (input: {
               type: StockMovementType.SALE,
               referenceType: "CustomerOrder",
               referenceId: order.id,
+              unitCostKgs: line.unitCostKgs === null ? null : Number(line.unitCostKgs),
+              inventoryValueDeltaKgs:
+                frozenCostTotalKgs === null ? null : Number(frozenCostTotalKgs.negated()),
               note: order.number,
               actorId: input.actorId,
               organizationId: input.organizationId,

@@ -36,6 +36,24 @@ describe("currency helpers", () => {
     ).not.toMatch(/[,.]00/);
   });
 
+  it("formats Kyrgyz KGS deterministically with a localized number and som label", () => {
+    expect(formatCurrencyAmount(160.92, "kg", "KGS")).toBe("160,92\u00a0сом");
+    expect(formatCurrencyAmount(160.92, "ky", "KGS")).toBe("160,92\u00a0сом");
+    expect(
+      formatCurrencyAmount(8750, "kg", "KGS", {
+        maximumFractionDigits: 0,
+        useGrouping: false,
+      }),
+    ).toBe("8750\u00a0сом");
+  });
+
+  it("keeps non-Kyrgyz and non-KGS currency formatting on Intl currency semantics", () => {
+    expect(formatCurrencyAmount(160.92, "en", "KGS")).toMatch(/KGS\s*160\.92/);
+    expect(formatCurrencyAmount(160.92, "ru", "KGS")).not.toContain("сом");
+    expect(formatCurrencyAmount(160.92, "kg", "USD")).not.toContain("сом");
+    expect(formatCurrencyAmount(160.92, "kg", "GBP")).not.toContain("сом");
+  });
+
   it("converts prices between KGS storage values and selected currencies", () => {
     expect(convertFromKgs(895, 89.5, "USD")).toBe(10);
     expect(convertToKgs(10, 89.5, "USD")).toBe(895);

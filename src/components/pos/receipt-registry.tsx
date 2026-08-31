@@ -239,7 +239,11 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
     const currencySource = currencySourceWithFallback(receipt, receipt.store);
     return [
       receipt.number,
-      receipt.createdAt ? new Date(receipt.createdAt).toISOString() : "",
+      receipt.completedAt
+        ? new Date(receipt.completedAt).toISOString()
+        : receipt.createdAt
+          ? new Date(receipt.createdAt).toISOString()
+          : "",
       receipt.store.code,
       receipt.store.name,
       receipt.register?.code ?? "",
@@ -276,7 +280,7 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
         fileNameBase: `receipts-registry-${businessDateKey(new Date())}`,
         header: [
           "receiptNumber",
-          "createdAtIso",
+          "completedAtIso",
           "storeCode",
           "storeName",
           "registerCode",
@@ -379,7 +383,7 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
             <CardHeader className="bazaar-admin-section-header px-4 py-3 sm:px-5">
               <CardTitle className="text-base">{t("filtersTitle")}</CardTitle>
             </CardHeader>
-            <CardContent className="bazaar-admin-toolbar m-4 grid gap-3 sm:m-5 md:grid-cols-[minmax(180px,1.2fr)_minmax(150px,0.9fr)_140px_140px_minmax(230px,1fr)]">
+            <CardContent className="bazaar-admin-toolbar m-4 grid gap-3 sm:m-5 sm:grid-cols-2 xl:grid-cols-[minmax(180px,1.2fr)_minmax(150px,0.9fr)_140px_140px_minmax(230px,1fr)]">
               <Select
                 value={storeId || "all"}
                 onValueChange={(value) => setStoreId(value === "all" ? "" : value)}
@@ -548,7 +552,7 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
                                   </div>
                                 </TableCell>
                                 <TableCell className="px-4 py-3 align-top text-xs text-muted-foreground">
-                                  {formatDateTime(item.createdAt, locale)}
+                                  {formatDateTime(item.completedAt ?? item.createdAt, locale)}
                                 </TableCell>
                                 <TableCell className="px-4 py-3 align-top">
                                   <div className="text-sm text-foreground">{item.store.name}</div>
@@ -689,7 +693,7 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
                         </Badge>
                       </div>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        {formatDateTime(item.createdAt, locale)}
+                        {formatDateTime(item.completedAt ?? item.createdAt, locale)}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {item.store.name} ({item.store.code})

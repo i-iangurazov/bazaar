@@ -59,10 +59,10 @@ vi.mock("@/server/kkm/registry", () => ({
 }));
 
 import { prisma } from "@/server/db/prisma";
-import { adjustStock } from "@/server/services/inventory";
 import { processAdapterFiscalReceipt, runKkmRetryJob } from "@/server/services/kkmConnector";
 
 import { createTestCaller } from "../helpers/context";
+import { adjustStockWithExplicitPositiveCost as adjustStock } from "../helpers/d009Fixtures";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;

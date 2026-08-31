@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CustomerSource } from "@prisma/client";
 import { useLocale, useTranslations } from "next-intl";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -40,6 +40,10 @@ import {
 } from "@/lib/customerExport";
 import { formatStoreMoney } from "@/lib/currencyDisplay";
 import {
+  CUSTOMER_ADDRESS_MAX_LENGTH,
+  CUSTOMER_EMAIL_MAX_LENGTH,
+  CUSTOMER_PHONE_MAX_LENGTH,
+  isValidOptionalCustomerEmail,
   isValidOptionalCustomerAddress,
   isValidOptionalCustomerPhone,
 } from "@/lib/customerContact";
@@ -113,6 +117,28 @@ const CustomerDatabasePage = () => {
   const [selectedExportColumns, setSelectedExportColumns] = useState<CustomerExportColumnKey[]>([
     ...CUSTOMER_EXPORT_COLUMN_KEYS,
   ]);
+  const formSubmitInFlightRef = useRef(false);
+  const initialFormRef = useRef<CustomerFormState>(emptyForm);
+
+  const formIsDirty =
+    formOpen &&
+    (form.id !== initialFormRef.current.id ||
+      form.name !== initialFormRef.current.name ||
+      form.email !== initialFormRef.current.email ||
+      form.phone !== initialFormRef.current.phone ||
+      form.address !== initialFormRef.current.address);
+
+  useEffect(() => {
+    if (!formIsDirty) {
+      return;
+    }
+    const preventUnsavedRefresh = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", preventUnsavedRefresh);
+    return () => window.removeEventListener("beforeunload", preventUnsavedRefresh);
+  }, [formIsDirty]);
 
   const updateListParams = useCallback(
     (updates: Record<string, string | number | null>) => {
@@ -146,6 +172,7 @@ const CustomerDatabasePage = () => {
 
   useEffect(() => {
     if (searchParams.get("add") === "1") {
+      initialFormRef.current = emptyForm;
       setForm(emptyForm);
       setFormOpen(true);
     }
@@ -192,6 +219,9 @@ const CustomerDatabasePage = () => {
       toast({ variant: "success", description: t("messages.created") });
     },
     onError: (error) => toast({ variant: "error", description: translateError(tErrors, error) }),
+    onSettled: () => {
+      formSubmitInFlightRef.current = false;
+    },
   });
 
   const updateMutation = trpc.customers.update.useMutation({
@@ -202,6 +232,9 @@ const CustomerDatabasePage = () => {
       toast({ variant: "success", description: t("messages.updated") });
     },
     onError: (error) => toast({ variant: "error", description: translateError(tErrors, error) }),
+    onSettled: () => {
+      formSubmitInFlightRef.current = false;
+    },
   });
 
   const deleteMutation = trpc.customers.delete.useMutation({
@@ -228,52 +261,72 @@ const CustomerDatabasePage = () => {
     [selectedExportColumns],
   );
   const formErrors = useMemo(() => {
-    const errors: string[] = [];
+    const errors: Array<{ id: string; message: string }> = [];
     const persistedCustomer = form.id
       ? (customers.find((customer) => customer.id === form.id) ??
         (customerDetail?.customer.id === form.id ? customerDetail.customer : null))
       : null;
     if (!form.name.trim()) {
-      errors.push(t("validation.nameRequired"));
+      errors.push({ id: "customer-name-error", message: t("validation.nameRequired") });
     }
     if (!form.email.trim() && !form.phone.trim()) {
-      errors.push(t("validation.contactRequired"));
+      errors.push({ id: "customer-contact-error", message: t("validation.contactRequired") });
+    }
+    if (!isValidOptionalCustomerEmail(form.email)) {
+      errors.push({ id: "customer-email-error", message: tErrors("customerEmailInvalid") });
     }
     if (
       !isValidOptionalCustomerPhone(form.phone) &&
       form.phone.trim() !== (persistedCustomer?.phone?.trim() ?? "")
     ) {
-      errors.push(tErrors("customerPhoneInvalid"));
+      errors.push({ id: "customer-phone-error", message: tErrors("customerPhoneInvalid") });
     }
     if (
       !isValidOptionalCustomerAddress(form.address) &&
       form.address.trim() !== (persistedCustomer?.address?.trim() ?? "")
     ) {
-      errors.push(tErrors("customerAddressInvalid"));
+      errors.push({
+        id: "customer-address-error",
+        message: tErrors("customerAddressInvalid"),
+      });
     }
     return errors;
   }, [customerDetail, customers, form, t, tErrors]);
 
   const openAdd = () => {
+    initialFormRef.current = emptyForm;
     setForm(emptyForm);
     setFormOpen(true);
   };
 
   const openEdit = (customer: (typeof customers)[number]) => {
-    setForm({
+    const nextForm = {
       id: customer.id,
       name: customer.name ?? "",
       email: customer.email ?? "",
       phone: customer.phone ?? "",
       address: customer.address ?? "",
-    });
+    };
+    initialFormRef.current = nextForm;
+    setForm(nextForm);
     setFormOpen(true);
   };
 
+  const requestFormClose = () => {
+    if (formIsDirty && !window.confirm(tCommon("unsavedChangesConfirm"))) {
+      return false;
+    }
+    initialFormRef.current = emptyForm;
+    setForm(emptyForm);
+    setFormOpen(false);
+    return true;
+  };
+
   const handleSubmit = () => {
-    if (!storeId || formErrors.length) {
+    if (formSubmitInFlightRef.current || !storeId || formErrors.length) {
       return;
     }
+    formSubmitInFlightRef.current = true;
     if (form.id) {
       updateMutation.mutate({
         customerId: form.id,
@@ -356,7 +409,23 @@ const CustomerDatabasePage = () => {
 
   const formatCustomerMoney = (value: number) => formatStoreMoney(value, locale, selectedStore);
 
-  const emptyState = (
+  const emptyState = customersQuery.error ? (
+    <Card className="bazaar-admin-surface">
+      <CardContent className="bazaar-admin-error flex flex-wrap items-center justify-between gap-3">
+        <span>{translateError(tErrors, customersQuery.error)}</span>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          disabled={customersQuery.isFetching}
+          onClick={() => void customersQuery.refetch()}
+        >
+          {customersQuery.isFetching ? <Spinner className="h-4 w-4" /> : null}
+          {tCommon("tryAgain")}
+        </Button>
+      </CardContent>
+    </Card>
+  ) : (
     <Card className="bazaar-admin-surface">
       <CardContent className="bazaar-admin-empty">{t("empty")}</CardContent>
     </Card>
@@ -476,7 +545,7 @@ const CustomerDatabasePage = () => {
               setFilter("storeId", value);
             }}
           >
-            <SelectTrigger className="min-h-11">
+            <SelectTrigger className="min-h-11" aria-label={t("filters.store")}>
               <SelectValue placeholder={t("filters.storePlaceholder")} />
             </SelectTrigger>
             <SelectContent>
@@ -572,14 +641,6 @@ const CustomerDatabasePage = () => {
         </Card>
       ) : null}
 
-      {customersQuery.error ? (
-        <Card className="bazaar-admin-surface">
-          <CardContent className="bazaar-admin-error">
-            {translateError(tErrors, customersQuery.error)}
-          </CardContent>
-        </Card>
-      ) : null}
-
       <ResponsiveDataList
         key={`customers-${pageSize}`}
         items={customers}
@@ -593,7 +654,7 @@ const CustomerDatabasePage = () => {
         empty={emptyState}
         getKey={(customer) => customer.id}
         renderDesktop={(items) => (
-          <TableContainer className="bazaar-admin-table-shell">
+          <TableContainer className="bazaar-admin-table-shell bazaar-admin-table-scroll">
             <Table className="min-w-[920px]">
               <TableHeader>
                 <TableRow>
@@ -649,7 +710,25 @@ const CustomerDatabasePage = () => {
                       colSpan={7}
                       className="py-10 text-center text-sm text-muted-foreground"
                     >
-                      {customersQuery.isLoading ? tCommon("loading") : t("empty")}
+                      {customersQuery.isLoading ? (
+                        tCommon("loading")
+                      ) : customersQuery.error ? (
+                        <span className="inline-flex flex-wrap items-center justify-center gap-3">
+                          <span>{translateError(tErrors, customersQuery.error)}</span>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            disabled={customersQuery.isFetching}
+                            onClick={() => void customersQuery.refetch()}
+                          >
+                            {customersQuery.isFetching ? <Spinner className="h-4 w-4" /> : null}
+                            {tCommon("tryAgain")}
+                          </Button>
+                        </span>
+                      ) : (
+                        t("empty")
+                      )}
                     </TableCell>
                   </TableRow>
                 )}
@@ -986,7 +1065,13 @@ const CustomerDatabasePage = () => {
 
       <Modal
         open={formOpen}
-        onOpenChange={setFormOpen}
+        onOpenChange={(open) => {
+          if (open) {
+            setFormOpen(true);
+            return;
+          }
+          requestFormClose();
+        }}
         title={form.id ? t("modal.editTitle") : t("modal.addTitle")}
         subtitle={t("modal.subtitle")}
         className="max-w-2xl"
@@ -997,6 +1082,13 @@ const CustomerDatabasePage = () => {
             <Label htmlFor="customer-name">{t("fields.name")}</Label>
             <Input
               id="customer-name"
+              maxLength={180}
+              aria-invalid={formErrors.some((error) => error.id === "customer-name-error")}
+              aria-describedby={
+                formErrors.some((error) => error.id === "customer-name-error")
+                  ? "customer-name-error"
+                  : undefined
+              }
               value={form.name}
               onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
             />
@@ -1007,6 +1099,16 @@ const CustomerDatabasePage = () => {
               <Input
                 id="customer-email"
                 type="email"
+                maxLength={CUSTOMER_EMAIL_MAX_LENGTH}
+                aria-invalid={formErrors.some(
+                  (error) =>
+                    error.id === "customer-contact-error" || error.id === "customer-email-error",
+                )}
+                aria-describedby={
+                  ["customer-contact-error", "customer-email-error"]
+                    .filter((id) => formErrors.some((error) => error.id === id))
+                    .join(" ") || undefined
+                }
                 value={form.email}
                 onChange={(event) =>
                   setForm((current) => ({ ...current, email: event.target.value }))
@@ -1020,6 +1122,16 @@ const CustomerDatabasePage = () => {
                 type="tel"
                 inputMode="tel"
                 autoComplete="tel"
+                maxLength={CUSTOMER_PHONE_MAX_LENGTH}
+                aria-invalid={formErrors.some(
+                  (error) =>
+                    error.id === "customer-contact-error" || error.id === "customer-phone-error",
+                )}
+                aria-describedby={
+                  ["customer-contact-error", "customer-phone-error"]
+                    .filter((id) => formErrors.some((error) => error.id === id))
+                    .join(" ") || undefined
+                }
                 value={form.phone}
                 onChange={(event) =>
                   setForm((current) => ({ ...current, phone: event.target.value }))
@@ -1031,6 +1143,13 @@ const CustomerDatabasePage = () => {
             <Label htmlFor="customer-address">{t("fields.address")}</Label>
             <Textarea
               id="customer-address"
+              maxLength={CUSTOMER_ADDRESS_MAX_LENGTH}
+              aria-invalid={formErrors.some((error) => error.id === "customer-address-error")}
+              aria-describedby={
+                formErrors.some((error) => error.id === "customer-address-error")
+                  ? "customer-address-error"
+                  : undefined
+              }
               value={form.address}
               onChange={(event) =>
                 setForm((current) => ({ ...current, address: event.target.value }))
@@ -1039,14 +1158,16 @@ const CustomerDatabasePage = () => {
             />
           </div>
           {formErrors.length ? (
-            <div className="bazaar-admin-error">
+            <div className="bazaar-admin-error" role="alert" aria-live="assertive">
               {formErrors.map((error) => (
-                <p key={error}>{error}</p>
+                <p id={error.id} key={error.id}>
+                  {error.message}
+                </p>
               ))}
             </div>
           ) : null}
           <ModalFooter>
-            <Button type="button" variant="secondary" onClick={() => setFormOpen(false)}>
+            <Button type="button" variant="secondary" onClick={requestFormClose}>
               {tCommon("cancel")}
             </Button>
             <Button

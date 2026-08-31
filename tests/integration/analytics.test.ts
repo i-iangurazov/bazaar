@@ -30,6 +30,17 @@ describeDb("analytics", () => {
       },
     });
 
+    await prisma.productCost.create({
+      data: {
+        organizationId: store.organizationId,
+        productId: product.id,
+        variantKey: "BASE",
+        avgCostKgs: new Prisma.Decimal(40),
+        costBasisQty: 10,
+        costBasisValueKgs: new Prisma.Decimal(400),
+      },
+    });
+
     await prisma.stockMovement.create({
       data: {
         storeId: store.id,

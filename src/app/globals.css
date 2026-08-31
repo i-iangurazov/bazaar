@@ -33,7 +33,8 @@
 
   /* muted = quieter text + surfaces */
   --muted: 220 24% 95%;
-  --muted-foreground: 215 16% 47%;
+  /* 4.71:1 against the darker secondary surface; AA-safe for normal text. */
+  --muted-foreground: 215 16% 43%;
 
   --accent: 220 22% 95%;
   --accent-foreground: 222 47% 11%;

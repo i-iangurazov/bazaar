@@ -45,6 +45,10 @@ import {
   resolveAccessibleStoreIds,
 } from "@/server/services/storeAccess";
 import { WRITE_OFF_REASONS } from "@/lib/inventory/writeOff";
+import {
+  productCostBasisSelect,
+  resolveCurrentProductCostUnitNumber,
+} from "@/server/services/productCost";
 
 const inventoryStockFilterSchema = z.enum(["all", "lowStock", "outOfStock", "negativeStock"]);
 const inventorySortKeySchema = z.enum([
@@ -381,7 +385,7 @@ const inventoryProductSelect = (storeId: string, organizationId: string) =>
     },
     productCosts: {
       where: { organizationId },
-      select: { variantKey: true, avgCostKgs: true },
+      select: { variantKey: true, ...productCostBasisSelect },
     },
     storePrices: {
       where: { organizationId, storeId },
@@ -450,7 +454,11 @@ export const inventoryRouter = router({
     const sortDirection = input.sortDirection;
     const useFullSort = fullSortInventoryKeys.has(sortKey);
     const storeAccessStartedAt = Date.now();
-    await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+    try {
+      await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+    } catch (error) {
+      throw toTRPCError(error);
+    }
     logProfileSection({
       logger: ctx.logger,
       scope: "inventory.list",
@@ -625,7 +633,11 @@ export const inventoryRouter = router({
   }),
 
   listIds: protectedProcedure.input(inventoryListIdsInputSchema).query(async ({ ctx, input }) => {
-    await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+    try {
+      await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+    } catch (error) {
+      throw toTRPCError(error);
+    }
 
     if (input.stockFilter === "lowStock") {
       const rows = await ctx.prisma.$queryRaw<Array<{ id: string }>>(
@@ -651,7 +663,11 @@ export const inventoryRouter = router({
   searchProducts: protectedProcedure
     .input(inventoryProductSearchInputSchema)
     .query(async ({ ctx, input }) => {
-      await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+      try {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+      } catch (error) {
+        throw toTRPCError(error);
+      }
 
       const searchTokens = normalizeInventorySearchTokens(input.search);
       const limit = input.limit ?? 25;
@@ -740,7 +756,7 @@ export const inventoryRouter = router({
             product: resultProduct,
             variant,
             primaryBarcode: resultProduct.barcodes[0]?.value ?? null,
-            unitCostKgs: cost ? Number(cost.avgCostKgs) : null,
+            unitCostKgs: cost ? resolveCurrentProductCostUnitNumber(cost) : null,
             priceKgs: price
               ? Number(price.priceKgs)
               : resultProduct.basePriceKgs
@@ -780,7 +796,11 @@ export const inventoryRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
-      await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+      try {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+      } catch (error) {
+        throw toTRPCError(error);
+      }
 
       const product = await ctx.prisma.product.findUnique({ where: { id: input.productId } });
       if (!product || product.organizationId !== ctx.user.organizationId) {
@@ -837,193 +857,200 @@ export const inventoryRouter = router({
   editableProductMovementDocument: protectedProcedure
     .input(z.object({ documentKey: z.string().min(1).max(300) }))
     .query(async ({ ctx, input }) => {
-      const decoded = decodeProductMovementDocumentKey(input.documentKey);
-      if (!decoded) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "productMovementDocumentInvalid" });
-      }
-
-      if (decoded.documentType === "SALE" && decoded.documentReferenceType === "CustomerOrder") {
-        const sale = await getPosSale({
-          organizationId: ctx.user.organizationId,
-          saleId: decoded.documentReferenceId,
-          user: ctx.user,
-        });
-        if (!sale) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "productMovementDocumentNotFound" });
+      try {
+        const decoded = decodeProductMovementDocumentKey(input.documentKey);
+        if (!decoded) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "productMovementDocumentInvalid" });
         }
-        return {
-          documentType: decoded.documentType,
-          referenceType: decoded.documentReferenceType,
-          referenceId: decoded.documentReferenceId,
-          documentNumber: sale.number,
-          storeId: sale.storeId,
-          customerName: sale.customerName,
-          customerEmail: sale.customerEmail,
-          customerPhone: sale.customerPhone,
-          customerAddress: sale.customerAddress,
-          notes: sale.notes,
-          lines: sale.lines.map((line) => ({
-            lineId: line.id,
-            customerOrderLineId: null as string | null,
-            productId: line.productId,
-            variantId: line.variantId ?? null,
-            productName: line.product.name,
-            variantName: line.variant?.name ?? null,
-            quantity: line.qty,
-            unitPriceKgs: line.unitPriceKgs,
-            unitCostKgs: line.unitCostKgs,
-          })),
-        };
-      }
 
-      if (decoded.documentType === "RETURN" && decoded.documentReferenceType === "SaleReturn") {
-        const saleReturn = await getSaleReturn({
-          organizationId: ctx.user.organizationId,
-          saleReturnId: decoded.documentReferenceId,
-        });
-        if (!saleReturn) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "productMovementDocumentNotFound" });
-        }
-        await assertUserCanAccessStore(ctx.prisma, ctx.user, saleReturn.storeId);
-        return {
-          documentType: decoded.documentType,
-          referenceType: decoded.documentReferenceType,
-          referenceId: decoded.documentReferenceId,
-          documentNumber: saleReturn.number,
-          storeId: saleReturn.storeId,
-          customerName: saleReturn.originalSale.customerName,
-          customerEmail: null as string | null,
-          customerPhone: saleReturn.originalSale.customerPhone,
-          customerAddress: null as string | null,
-          notes: saleReturn.notes,
-          returnableLines: saleReturn.originalSale.lines.map((line) => ({
-            customerOrderLineId: line.id,
-            productId: line.productId,
-            variantId: line.variantId ?? null,
-            productName: line.product.name,
-            variantName: null as string | null,
-            quantity: line.qty,
-            unitPriceKgs: Number(line.unitPriceKgs),
-            unitCostKgs: line.unitCostKgs === null ? null : Number(line.unitCostKgs),
-          })),
-          lines: saleReturn.lines.map((line) => ({
-            lineId: line.id,
-            customerOrderLineId: line.customerOrderLineId,
-            productId: line.productId,
-            variantId: line.variantId ?? null,
-            productName: line.product.name,
-            variantName: null as string | null,
-            quantity: line.qty,
-            unitPriceKgs: line.unitPriceKgs,
-            unitCostKgs: line.unitCostKgs,
-          })),
-        };
-      }
-
-      if (
-        decoded.documentType !== "STOCK_RECEIVING" &&
-        decoded.documentType !== "TRANSFER" &&
-        decoded.documentType !== "WRITE_OFF"
-      ) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "productMovementDocumentUnsupported" });
-      }
-
-      const document = await getProductMovementDocument(ctx.prisma, ctx.user, input.documentKey);
-      if (!document) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "productMovementDocumentNotFound" });
-      }
-
-      const aggregates = new Map<
-        string,
-        {
-          productId: string;
-          variantId: string | null;
-          productName: string;
-          variantName: string | null;
-          quantityDelta: number;
-          lineTotalKgs: number;
-          hasLineTotal: boolean;
-          unitCostKgs: number | null;
-          storeId: string;
-        }
-      >();
-      document.lines.forEach((line) => {
-        if (decoded.documentType === "TRANSFER" && line.movementType !== "TRANSFER_OUT") {
-          return;
-        }
-        const variantKey = line.variantId ?? "BASE";
-        const key = `${line.productId}:${variantKey}`;
-        const existing = aggregates.get(key);
-        if (existing) {
-          existing.quantityDelta += line.qtyDelta;
-          if (line.lineTotalKgs !== null) {
-            existing.lineTotalKgs += line.lineTotalKgs;
-            existing.hasLineTotal = true;
+        if (decoded.documentType === "SALE" && decoded.documentReferenceType === "CustomerOrder") {
+          const sale = await getPosSale({
+            organizationId: ctx.user.organizationId,
+            saleId: decoded.documentReferenceId,
+            user: ctx.user,
+          });
+          if (!sale) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "productMovementDocumentNotFound" });
           }
-          if (line.unitCostKgs !== null) {
-            existing.unitCostKgs = line.unitCostKgs;
-          }
-          return;
-        }
-        aggregates.set(key, {
-          productId: line.productId,
-          variantId: line.variantId,
-          productName: line.productName,
-          variantName: line.variantName,
-          quantityDelta: line.qtyDelta,
-          lineTotalKgs: line.lineTotalKgs ?? 0,
-          hasLineTotal: line.lineTotalKgs !== null,
-          unitCostKgs: line.unitCostKgs,
-          storeId: line.storeId,
-        });
-      });
-      const sourceStoreId =
-        decoded.documentType === "TRANSFER"
-          ? (document.sourceStoreId ??
-            document.lines.find((line) => line.movementType === "TRANSFER_OUT")?.storeId ??
-            "")
-          : (aggregates.values().next().value?.storeId ?? "");
-      const destinationStoreId =
-        decoded.documentType === "TRANSFER" ? (document.destinationStoreId ?? null) : null;
-
-      return {
-        documentType: decoded.documentType,
-        referenceType: decoded.documentReferenceType,
-        referenceId: decoded.documentReferenceId,
-        documentNumber: document.documentNumber,
-        storeId: sourceStoreId,
-        sourceStoreId,
-        destinationStoreId,
-        customerName: null as string | null,
-        customerEmail: null as string | null,
-        customerPhone: null as string | null,
-        customerAddress: null as string | null,
-        notes: document.comment,
-        reason: document.reason,
-        lines: Array.from(aggregates.values())
-          .map((line) => {
-            const quantity =
-              decoded.documentType === "STOCK_RECEIVING"
-                ? line.quantityDelta
-                : Math.abs(line.quantityDelta);
-            const lineTotalKgs = line.hasLineTotal ? line.lineTotalKgs : null;
-            return {
-              lineId: null as string | null,
+          return {
+            documentType: decoded.documentType,
+            referenceType: decoded.documentReferenceType,
+            referenceId: decoded.documentReferenceId,
+            documentNumber: sale.number,
+            storeId: sale.storeId,
+            customerName: sale.customerName,
+            customerEmail: sale.customerEmail,
+            customerPhone: sale.customerPhone,
+            customerAddress: sale.customerAddress,
+            notes: sale.notes,
+            lines: sale.lines.map((line) => ({
+              lineId: line.id,
               customerOrderLineId: null as string | null,
               productId: line.productId,
-              variantId: line.variantId,
-              productName: line.productName,
-              variantName: line.variantName,
-              quantity,
-              unitPriceKgs: null as number | null,
-              unitCostKgs:
-                lineTotalKgs !== null && quantity > 0
-                  ? Math.round((lineTotalKgs / quantity) * 100) / 100
-                  : line.unitCostKgs,
-            };
-          })
-          .filter((line) => line.quantity > 0),
-      };
+              variantId: line.variantId ?? null,
+              productName: line.product.name,
+              variantName: line.variant?.name ?? null,
+              quantity: line.qty,
+              unitPriceKgs: line.unitPriceKgs,
+              unitCostKgs: line.unitCostKgs,
+            })),
+          };
+        }
+
+        if (decoded.documentType === "RETURN" && decoded.documentReferenceType === "SaleReturn") {
+          const saleReturn = await getSaleReturn({
+            organizationId: ctx.user.organizationId,
+            saleReturnId: decoded.documentReferenceId,
+          });
+          if (!saleReturn) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "productMovementDocumentNotFound" });
+          }
+          await assertUserCanAccessStore(ctx.prisma, ctx.user, saleReturn.storeId);
+          return {
+            documentType: decoded.documentType,
+            referenceType: decoded.documentReferenceType,
+            referenceId: decoded.documentReferenceId,
+            documentNumber: saleReturn.number,
+            storeId: saleReturn.storeId,
+            customerName: saleReturn.originalSale.customerName,
+            customerEmail: null as string | null,
+            customerPhone: saleReturn.originalSale.customerPhone,
+            customerAddress: null as string | null,
+            notes: saleReturn.notes,
+            returnableLines: saleReturn.originalSale.lines.map((line) => ({
+              customerOrderLineId: line.id,
+              productId: line.productId,
+              variantId: line.variantId ?? null,
+              productName: line.product.name,
+              variantName: null as string | null,
+              quantity: line.qty,
+              unitPriceKgs: Number(line.unitPriceKgs),
+              unitCostKgs: line.unitCostKgs === null ? null : Number(line.unitCostKgs),
+            })),
+            lines: saleReturn.lines.map((line) => ({
+              lineId: line.id,
+              customerOrderLineId: line.customerOrderLineId,
+              productId: line.productId,
+              variantId: line.variantId ?? null,
+              productName: line.product.name,
+              variantName: null as string | null,
+              quantity: line.qty,
+              unitPriceKgs: line.unitPriceKgs,
+              unitCostKgs: line.unitCostKgs,
+            })),
+          };
+        }
+
+        if (
+          decoded.documentType !== "STOCK_RECEIVING" &&
+          decoded.documentType !== "TRANSFER" &&
+          decoded.documentType !== "WRITE_OFF"
+        ) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "productMovementDocumentUnsupported",
+          });
+        }
+
+        const document = await getProductMovementDocument(ctx.prisma, ctx.user, input.documentKey);
+        if (!document) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "productMovementDocumentNotFound" });
+        }
+
+        const aggregates = new Map<
+          string,
+          {
+            productId: string;
+            variantId: string | null;
+            productName: string;
+            variantName: string | null;
+            quantityDelta: number;
+            lineTotalKgs: number;
+            hasLineTotal: boolean;
+            unitCostKgs: number | null;
+            storeId: string;
+          }
+        >();
+        document.lines.forEach((line) => {
+          if (decoded.documentType === "TRANSFER" && line.movementType !== "TRANSFER_OUT") {
+            return;
+          }
+          const variantKey = line.variantId ?? "BASE";
+          const key = `${line.productId}:${variantKey}`;
+          const existing = aggregates.get(key);
+          if (existing) {
+            existing.quantityDelta += line.qtyDelta;
+            if (line.lineTotalKgs !== null) {
+              existing.lineTotalKgs += line.lineTotalKgs;
+              existing.hasLineTotal = true;
+            }
+            if (line.unitCostKgs !== null) {
+              existing.unitCostKgs = line.unitCostKgs;
+            }
+            return;
+          }
+          aggregates.set(key, {
+            productId: line.productId,
+            variantId: line.variantId,
+            productName: line.productName,
+            variantName: line.variantName,
+            quantityDelta: line.qtyDelta,
+            lineTotalKgs: line.lineTotalKgs ?? 0,
+            hasLineTotal: line.lineTotalKgs !== null,
+            unitCostKgs: line.unitCostKgs,
+            storeId: line.storeId,
+          });
+        });
+        const sourceStoreId =
+          decoded.documentType === "TRANSFER"
+            ? (document.sourceStoreId ??
+              document.lines.find((line) => line.movementType === "TRANSFER_OUT")?.storeId ??
+              "")
+            : (aggregates.values().next().value?.storeId ?? "");
+        const destinationStoreId =
+          decoded.documentType === "TRANSFER" ? (document.destinationStoreId ?? null) : null;
+
+        return {
+          documentType: decoded.documentType,
+          referenceType: decoded.documentReferenceType,
+          referenceId: decoded.documentReferenceId,
+          documentNumber: document.documentNumber,
+          storeId: sourceStoreId,
+          sourceStoreId,
+          destinationStoreId,
+          customerName: null as string | null,
+          customerEmail: null as string | null,
+          customerPhone: null as string | null,
+          customerAddress: null as string | null,
+          notes: document.comment,
+          reason: document.reason,
+          lines: Array.from(aggregates.values())
+            .map((line) => {
+              const quantity =
+                decoded.documentType === "STOCK_RECEIVING"
+                  ? line.quantityDelta
+                  : Math.abs(line.quantityDelta);
+              const lineTotalKgs = line.hasLineTotal ? line.lineTotalKgs : null;
+              return {
+                lineId: null as string | null,
+                customerOrderLineId: null as string | null,
+                productId: line.productId,
+                variantId: line.variantId,
+                productName: line.productName,
+                variantName: line.variantName,
+                quantity,
+                unitPriceKgs: null as number | null,
+                unitCostKgs:
+                  lineTotalKgs !== null && quantity > 0
+                    ? Math.round((lineTotalKgs / quantity) * 100) / 100
+                    : line.unitCostKgs,
+              };
+            })
+            .filter((line) => line.quantity > 0),
+        };
+      } catch (error) {
+        throw toTRPCError(error);
+      }
     }),
 
   editProductMovementDocument: managerProcedure
@@ -1181,6 +1208,9 @@ export const inventoryRouter = router({
           .number()
           .int()
           .refine((value) => value !== 0, "nonZeroAdjustment"),
+        unitCostKgs: z.number().min(0, "unitCostInvalid").optional().nullable(),
+        zeroCostConfirmed: z.boolean().optional(),
+        zeroCostReason: z.string().trim().min(3).max(500).optional(),
         unitId: z.string().optional(),
         packId: z.string().optional(),
         reason: z.string().min(3),
@@ -1196,6 +1226,9 @@ export const inventoryRouter = router({
           productId: input.productId,
           variantId: input.variantId,
           qtyDelta: input.qtyDelta,
+          unitCostKgs: input.unitCostKgs,
+          zeroCostConfirmed: input.zeroCostConfirmed,
+          zeroCostReason: input.zeroCostReason,
           unitId: input.unitId,
           packId: input.packId,
           reason: input.reason,
@@ -1250,6 +1283,8 @@ export const inventoryRouter = router({
         unitId: z.string().optional(),
         packId: z.string().optional(),
         unitCost: z.number().min(0).optional().nullable(),
+        zeroCostConfirmed: z.boolean().optional(),
+        zeroCostReason: z.string().trim().min(3).max(500).optional(),
         expiryDate: z.string().optional(),
         note: z.string().optional(),
         idempotencyKey: z.string().min(8),
@@ -1266,6 +1301,8 @@ export const inventoryRouter = router({
           unitId: input.unitId,
           packId: input.packId,
           unitCost: input.unitCost ?? undefined,
+          zeroCostConfirmed: input.zeroCostConfirmed,
+          zeroCostReason: input.zeroCostReason,
           expiryDate: input.expiryDate ? new Date(input.expiryDate) : undefined,
           note: input.note,
           actorId: ctx.user.id,
@@ -1287,6 +1324,8 @@ export const inventoryRouter = router({
         supplierName: z.string().trim().max(160).optional(),
         note: z.string().trim().max(1_000).optional(),
         referenceNumber: z.string().trim().max(80).optional(),
+        zeroCostConfirmed: z.boolean().optional(),
+        zeroCostReason: z.string().trim().min(3).max(500).optional(),
         lines: z
           .array(
             z.object({
@@ -1310,6 +1349,8 @@ export const inventoryRouter = router({
           supplierName: input.supplierName,
           note: input.note,
           referenceNumber: input.referenceNumber,
+          zeroCostConfirmed: input.zeroCostConfirmed,
+          zeroCostReason: input.zeroCostReason,
           lines: input.lines,
           actorId: ctx.user.id,
           organizationId: ctx.user.organizationId,

@@ -6,6 +6,7 @@ import React from "react";
 import { act, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type * as ToastModule from "@/components/ui/toast";
 import { PwaInstallButton } from "@/components/pwa-install-button";
 import {
   type BeforeInstallPromptEvent,
@@ -42,8 +43,7 @@ vi.mock("next-intl", () => ({
 }));
 
 vi.mock("@/components/ui/toast", async () => {
-  const actual =
-    await vi.importActual<typeof import("@/components/ui/toast")>("@/components/ui/toast");
+  const actual = await vi.importActual<typeof ToastModule>("@/components/ui/toast");
   return {
     ...actual,
     useToast: () => ({ toast: vi.fn() }),

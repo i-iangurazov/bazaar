@@ -3,7 +3,7 @@ import qzTray from "qz-tray";
 export type QzTrayBinding = {
   receiptPrinterName: string;
   labelPrinterName: string;
-  certificateProvisioned: boolean;
+  trustAcknowledged: boolean;
 };
 
 export type QzTrustStatus =
@@ -26,10 +26,7 @@ export type QzSigningStatus = {
 type QzTray = {
   security?: {
     setCertificatePromise?: (
-      promise: (
-        resolve: (certificate: string) => void,
-        reject: (reason?: unknown) => void,
-      ) => void,
+      promise: (resolve: (certificate: string) => void, reject: (reason?: unknown) => void) => void,
     ) => void;
     setSignatureAlgorithm?: (algorithm: string) => void;
     setSignaturePromise?: (
@@ -62,21 +59,24 @@ export const qzTrayBindingKey = (storeId: string) => `bazaar:printing:qz-tray:${
 
 export const getQzTrayBinding = (storeId: string): QzTrayBinding => {
   if (typeof window === "undefined") {
-    return { receiptPrinterName: "", labelPrinterName: "", certificateProvisioned: false };
+    return { receiptPrinterName: "", labelPrinterName: "", trustAcknowledged: false };
   }
   const raw = window.localStorage.getItem(qzTrayBindingKey(storeId));
   if (!raw) {
-    return { receiptPrinterName: "", labelPrinterName: "", certificateProvisioned: false };
+    return { receiptPrinterName: "", labelPrinterName: "", trustAcknowledged: false };
   }
   try {
-    const parsed = JSON.parse(raw) as Partial<QzTrayBinding>;
+    const parsed = JSON.parse(raw) as Partial<QzTrayBinding> & {
+      certificateProvisioned?: unknown;
+    };
     return {
       receiptPrinterName: parsed.receiptPrinterName?.trim() ?? "",
       labelPrinterName: parsed.labelPrinterName?.trim() ?? "",
-      certificateProvisioned: parsed.certificateProvisioned === true,
+      trustAcknowledged:
+        parsed.trustAcknowledged === true || parsed.certificateProvisioned === true,
     };
   } catch {
-    return { receiptPrinterName: "", labelPrinterName: "", certificateProvisioned: false };
+    return { receiptPrinterName: "", labelPrinterName: "", trustAcknowledged: false };
   }
 };
 
@@ -89,7 +89,7 @@ export const saveQzTrayBinding = (storeId: string, binding: QzTrayBinding) => {
     JSON.stringify({
       receiptPrinterName: binding.receiptPrinterName.trim(),
       labelPrinterName: binding.labelPrinterName.trim(),
-      certificateProvisioned: binding.certificateProvisioned,
+      trustAcknowledged: binding.trustAcknowledged,
     }),
   );
 };
@@ -278,7 +278,7 @@ export const printPdfBlobViaQzTray = async ({
     reader.onerror = () => reject(new Error("blobReadFailed"));
     reader.onload = () => {
       const result = typeof reader.result === "string" ? reader.result : "";
-      resolve(result.includes(",") ? result.split(",")[1] ?? "" : result);
+      resolve(result.includes(",") ? (result.split(",")[1] ?? "") : result);
     };
     reader.readAsDataURL(blob);
   });
@@ -299,7 +299,8 @@ export const qzTrayErrorMessageKey = (error: unknown) => {
   if (normalized.includes("qzcertificatekeymismatch")) return "qzCertificateMismatch";
   if (normalized.includes("qzcertificatemismatch")) return "qzCertificateMismatch";
   if (normalized.includes("qzcertificatemissing")) return "qzCertificateMissing";
-  if (normalized.includes("certificate") || normalized.includes("sign")) return "qzCertificateError";
+  if (normalized.includes("certificate") || normalized.includes("sign"))
+    return "qzCertificateError";
   if (normalized.includes("printer") && normalized.includes("not")) return "qzPrinterNotFound";
   if (normalized.includes("timeout")) return "qzTimeout";
   return "qzPrintFailed";

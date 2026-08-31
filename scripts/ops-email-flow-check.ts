@@ -2,7 +2,7 @@ import bcrypt from "bcryptjs";
 import { randomUUID } from "node:crypto";
 
 import { prisma } from "@/server/db/prisma";
-import { createAuthToken, consumeAuthToken } from "@/server/services/authTokens";
+import { createAuthToken } from "@/server/services/authTokens";
 import { createSignup, registerBusinessFromToken, sendEmailVerificationToken } from "@/server/services/signup";
 import { sendResetEmail, sendInviteEmail } from "@/server/services/email";
 

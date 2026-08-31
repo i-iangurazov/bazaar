@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 1,
+  "artifactKind": "FINAL_AUTHENTICATED_CLEAN_MATRIX",
+  "generatedAt": "2026-08-31T17:16:56.000Z",
+  "releaseBranch": "codex/bazaar-readiness-release-20260831",
+  "sourceCheckpoint": "69ab77b36211ad697d9486093ec680f615a99d9f",
+  "rescueCommit": "e04df7c322c0da46665aa764e113423223222390",
+  "productionRollbackPoint": "7db455397eb38e9bcaa09bda5acc951964df5ab2",
+  "productionDataUsed": false,
+  "externalProvidersEnabled": false,
+  "preflight": {
+    "freshDeterministicSeed": true,
+    "productionModeRuntime": true,
+    "staleBrowserProcesses": 0,
+    "isolatedPostgreSql": true,
+    "isolatedRedis": true,
+    "imageStorageProvider": "local",
+    "workers": 1,
+    "retries": 0,
+    "machineReadableReporters": ["json", "junit", "html"]
+  },
+  "environment": {
+    "baseUrl": "https://127.0.0.1:4174",
+    "database": "bazaar_hardening_agent4_platform",
+    "redis": "127.0.0.1:56379",
+    "seedFixture": "QA-BAZAAR",
+    "seedAccounts": 7
+  },
+  "command": "pnpm exec playwright test --config=playwright.authenticated.config.ts",
+  "result": {
+    "startedAt": "2026-08-31T16:56:28.165Z",
+    "completedAt": "2026-08-31T17:15:38.056Z",
+    "durationMs": 1149891.504,
+    "collected": 762,
+    "passed": 762,
+    "failed": 0,
+    "skipped": 0,
+    "timedOut": 0,
+    "flaky": 0,
+    "notRun": 0,
+    "cleanPass": true,
+    "singleUninterruptedRun": true
+  },
+  "projectTotals": {
+    "authenticated-setup": 7,
+    "role-admin": 81,
+    "role-manager": 81,
+    "role-staff": 81,
+    "role-cashier": 81,
+    "organization-owner": 1,
+    "platform-owner": 1,
+    "authenticated-dynamic": 44,
+    "authenticated-desktop": 81,
+    "authenticated-tablet": 81,
+    "authenticated-mobile": 81,
+    "authenticated-acceptance-admin": 142
+  },
+  "criticalRetainedCases": {
+    "posPaymentCorrection": {
+      "title": "BZR-REQ-0079/0080/0081/0082 POS operations and cashier payment corrections reconcile exactly once",
+      "status": "PASS",
+      "actorRole": "CASHIER",
+      "deniedRole": "STAFF",
+      "eligibleReceipt": "S-006065",
+      "ineligibleReceipt": "S-006072",
+      "paymentBefore": "CASH 4100",
+      "paymentAfter": "TRANSFER 4100",
+      "correctionMutationRequests": 1,
+      "auditEvents": 1,
+      "stockUnchanged": true,
+      "cogsUnchanged": true,
+      "refreshPassed": true,
+      "reloginPassed": true,
+      "doubleSubmitSafe": true,
+      "ineligibleReason": "SHIFT_CLOSED",
+      "supportingEvidence": "docs/production-readiness/evidence/release-pos-payment-correction-2026-08-31.json"
+    },
+    "employeeInvitation": {
+      "title": "employee invitation survives hydration, accepts once, signs in and enforces the assigned role",
+      "status": "PASS"
+    },
+    "procurementDraft": {
+      "title": "procurement draft validation, edit, PDF, list Back and cancel reconcile with DB",
+      "status": "PASS"
+    },
+    "procurementSubmitted": {
+      "title": "procurement submitted PO approves, receives and links supplier, movement and inventory",
+      "status": "PASS"
+    },
+    "integrationDisconnect": {
+      "title": "BZR-REQ-0174/BZR-REQ-0175/BZR-REQ-0176/BZR-REQ-0177/BZR-REQ-0179 keeps integration setup safe and useful",
+      "status": "PASS",
+      "externalSideEffect": false
+    }
+  },
+  "artifacts": [
+    {
+      "path": "test-results/release-final-authenticated-clean-2026-08-31.json",
+      "sha256": "03925209961cd688f0f17bfe602a0e6ca17f443d452f91f4dae606c3e4265725"
+    },
+    {
+      "path": "test-results/release-final-authenticated-clean-2026-08-31.xml",
+      "sha256": "04060e6de48691add3741a9e42174d74f39df182b13c69bfc5ba685f88a90ba5"
+    },
+    {
+      "path": "test-results/release-final-authenticated-clean-html/index.html",
+      "sha256": "bdeec7aad312715a584eb3052750a3df4245808a6b8141e95248c365fb418832"
+    }
+  ],
+  "trackerInterpretation": {
+    "requirementsRecalculated": 230,
+    "newStatusPromotions": 0,
+    "reason": "The prior tracker already granted exact-identity credit from retained composite evidence. This clean run replaces that composite release-gate uncertainty without inflating manual or provider-dependent requirements.",
+    "formalScreenReaderClaimed": false,
+    "providerEvidenceClaimed": false
+  }
+}

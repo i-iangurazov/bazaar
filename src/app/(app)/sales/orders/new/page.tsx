@@ -78,6 +78,7 @@ const NewSalesOrderPage = () => {
   const [pendingQty, setPendingQty] = useState("1");
   const [draftLines, setDraftLines] = useState<DraftLine[]>([]);
   const createAttemptRef = useRef<{ payload: string; idempotencyKey: string } | null>(null);
+  const createInFlightRef = useRef(false);
 
   useEffect(() => {
     if (!storeId && storesQuery.data?.[0]) {
@@ -124,7 +125,7 @@ const NewSalesOrderPage = () => {
         storeId,
       });
       unitPriceKgs = pricing.effectivePriceKgs;
-    } catch (error) {
+    } catch {
       toast({ variant: "error", description: tErrors("genericMessage") });
       return false;
     }
@@ -212,8 +213,16 @@ const NewSalesOrderPage = () => {
   };
 
   const handleCreate = async () => {
+    if (createInFlightRef.current) {
+      return;
+    }
     if (!storeId) {
       toast({ variant: "error", description: t("storeRequired") });
+      return;
+    }
+
+    if (!draftLines.length) {
+      toast({ variant: "error", description: t("noLines") });
       return;
     }
 
@@ -256,7 +265,12 @@ const NewSalesOrderPage = () => {
         : crypto.randomUUID();
     createAttemptRef.current = { payload: serializedPayload, idempotencyKey };
 
-    await createMutation.mutateAsync({ ...payload, idempotencyKey });
+    createInFlightRef.current = true;
+    try {
+      await createMutation.mutateAsync({ ...payload, idempotencyKey });
+    } finally {
+      createInFlightRef.current = false;
+    }
   };
 
   const orderTotalKgs = useMemo(
@@ -505,7 +519,7 @@ const NewSalesOrderPage = () => {
             <Button
               className="w-full sm:w-auto"
               onClick={() => void handleCreate()}
-              disabled={createMutation.isLoading}
+              disabled={createMutation.isLoading || draftLines.length === 0}
             >
               {createMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
               {t("create")}

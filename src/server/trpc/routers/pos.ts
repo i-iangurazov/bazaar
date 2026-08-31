@@ -30,6 +30,7 @@ import {
   closeRegisterShift,
   completePosSale,
   completeSaleReturn,
+  correctCompletedPosSalePayments,
   createPosRegister,
   createPosSaleDraft,
   createSaleReturnDraft,
@@ -569,6 +570,33 @@ export const posRouter = router({
             organizationId: ctx.user.organizationId,
             saleId: input.saleId,
             user: ctx.user,
+          });
+        } catch (error) {
+          throw toTRPCError(error);
+        }
+      }),
+
+    correctPayments: cashierProcedure
+      .use(rateLimit({ windowMs: 10_000, max: 10, prefix: "pos-sales-correct-payments" }))
+      .input(
+        z.object({
+          saleId: z.string().min(1),
+          payments: z.array(paymentSchema).min(1).max(4),
+          reason: z.string().trim().min(3).max(500),
+          idempotencyKey: z.string().min(8).max(256),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        try {
+          return await correctCompletedPosSalePayments({
+            organizationId: ctx.user.organizationId,
+            saleId: input.saleId,
+            payments: input.payments,
+            reason: input.reason,
+            actorId: ctx.user.id,
+            user: ctx.user,
+            requestId: ctx.requestId,
+            idempotencyKey: input.idempotencyKey,
           });
         } catch (error) {
           throw toTRPCError(error);

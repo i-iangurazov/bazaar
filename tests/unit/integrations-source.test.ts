@@ -47,7 +47,7 @@ describe("integration source structure", () => {
     expect(emailWorkspace).toContain("productSearch");
     expect(emailWorkspace).toContain("search: productSearch.trim() || null");
     expect(emailWorkspace).toContain("includeIds: selectedProductIdsForQuery");
-    expect(emailWorkspace).toContain("Название, SKU или штрихкод");
+    expect(emailWorkspace).toContain('tWorkspace("blockSettings.productSearchPlaceholder")');
     expect(emailWorkspace).toContain("trpc.emailMarketing.preview.useMutation");
     expect(emailWorkspace).toContain("trpc.emailMarketing.sendTest.useMutation");
     expect(emailWorkspace).toContain("trpc.emailMarketing.history.useQuery");
@@ -58,11 +58,11 @@ describe("integration source structure", () => {
     expect(emailWorkspace).toContain("trpc.emailMarketing.updateAutomation.useMutation");
     expect(emailWorkspace).toContain("effectiveSenderIdentityId");
     expect(emailWorkspace).toContain("primarySenderId");
-    expect(emailWorkspace).toContain("Последние добавленные товары показываются первыми.");
-    expect(emailWorkspace).toContain("Жирный");
-    expect(emailWorkspace).toContain("Размер текста");
+    expect(emailWorkspace).toContain('tWorkspace("blockSettings.latestProductsHint")');
+    expect(emailWorkspace).toContain('tWorkspace("blockSettings.bold")');
+    expect(emailWorkspace).toContain('tWorkspace("blockSettings.textSize")');
     expect(emailWorkspace).toContain("productButtonUrls");
-    expect(emailWorkspace).toContain("Ссылка кнопки товара");
+    expect(emailWorkspace).toContain('tWorkspace("blockSettings.productButtonLink")');
     expect(emailWorkspace).toContain("data-email-product-button-url");
     expect(emailWorkspace).toContain("DndContext");
     expect(emailWorkspace).toContain("SortableContext");
@@ -71,17 +71,20 @@ describe("integration source structure", () => {
     expect(emailWorkspace).toContain("const LogoFileInput");
     expect(emailWorkspace).toContain("applyDefaultBannerToCanvas");
     expect(emailWorkspace).toContain("onLogoUploadClick={() => logoInputRef.current?.click()}");
-    expect(emailWorkspace).toContain("Нужна прямая ссылка на файл изображения");
-    expect(emailWorkspace).toContain("Показывать описание");
-    expect(emailWorkspace).toContain("Расположение");
+    expect(emailWorkspace).toContain('tWorkspace("design.directImageWarning")');
+    expect(emailWorkspace).toContain('tWorkspace("blockSettings.showDescription")');
+    expect(emailWorkspace).toContain('tWorkspace("blockSettings.layout")');
     expect(emailWorkspace).toContain("AlignmentControl");
-    expect(emailWorkspace).toContain("Строка заказа");
-    expect(emailWorkspace).toContain("{{orderPreviousStatus}}");
-    expect(emailWorkspace).toContain("Bazaar KG");
+    expect(emailWorkspace).toContain('tWorkspace("blockSettings.orderLine")');
+    expect(emailWorkspace).toContain('tWorkspace("blockSettings.orderVariablesHint")');
+    expect(emailWorkspace).toContain('tWorkspace("senders.bazaarKg")');
     expect(emailWorkspace).not.toContain("Bazaar demo");
     expect(emailWorkspace).toContain("(min-width: 1280px) and (pointer: fine)");
-    expect(emailWorkspace).toContain("Редактор писем доступен только на компьютере");
+    expect(emailWorkspace).toContain('tWorkspace("builder.unavailableTitle")');
     expect(emailWorkspace).toContain("disabled={!builderAvailable}");
+    expect(emailWorkspace).toContain("resolved?.replace(/[<>'\"]/g");
+    expect(emailWorkspace).toContain("encodeURIComponent(character)");
+    expect(emailWorkspace).toContain("src={safeSrc ?? undefined}");
     expect(emailRouter).toContain("showDescription: z.boolean().optional()");
     expect(emailRouter).toContain('z.enum(["left", "center", "right"])');
     expect(emailRouter).toContain("bodyBold: z.boolean().optional()");
@@ -124,10 +127,12 @@ describe("integration source structure", () => {
     expect(emailService).toContain('{ createdAt: "desc" as const }');
     expect(emailService).toContain("font-size:${textFontSizePx[bodyFontSize]}px");
     expect(emailService).toContain("resolveProductButtonUrl");
-    expect(emailService).toContain('productButtonUrls?.[input.product.id]');
+    expect(emailService).toContain("productButtonUrls?.[input.product.id]");
     expect(emailDeliveryService).toContain("ready: hasProvider");
     expect(emailService).toContain("processEmailAutomationTrigger");
-    expect(imageStudioPage).toContain('<TableContainer className="bazaar-admin-table-shell">');
+    expect(imageStudioPage).toContain(
+      '<TableContainer className="bazaar-admin-table-shell bazaar-admin-table-scroll">',
+    );
     expect(imageStudioPage).toContain('className="min-w-[860px]"');
     expect(imageStudioPage).toContain("activeJobFromList");
     expect(imageStudioPage).toContain("previewIsWorking");
@@ -137,9 +142,7 @@ describe("integration source structure", () => {
 
   it("exposes O! Market integration with store scope, masked tokens, and per-product statuses", async () => {
     const integrationsPage = await readSource("src/app/(app)/operations/integrations/page.tsx");
-    const oMarketPage = await readSource(
-      "src/app/(app)/operations/integrations/o-market/page.tsx",
-    );
+    const oMarketPage = await readSource("src/app/(app)/operations/integrations/o-market/page.tsx");
     const oMarketRouter = await readSource("src/server/trpc/routers/oMarket.ts");
     const oMarketService = await readSource("src/server/services/oMarket.ts");
     const oMarketClient = await readSource("src/server/services/oMarketApiClient.ts");

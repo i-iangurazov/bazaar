@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -169,6 +169,7 @@ const UsersPage = () => {
       storeIds: [],
     },
   });
+  const inviteSubmitInFlightRef = useRef(false);
 
   const createMutation = trpc.users.create.useMutation({
     onSuccess: () => {
@@ -200,7 +201,19 @@ const UsersPage = () => {
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
+    onSettled: () => {
+      inviteSubmitInFlightRef.current = false;
+    },
   });
+
+  const handleInviteSubmit = (values: z.infer<typeof inviteSchema>) => {
+    if (inviteSubmitInFlightRef.current) return;
+    inviteSubmitInFlightRef.current = true;
+    inviteMutation.mutate({
+      ...values,
+      storeIds: values.role === "ADMIN" ? [] : values.storeIds,
+    });
+  };
 
   const handleCopyInvite = async () => {
     if (!inviteLink) {
@@ -717,12 +730,8 @@ const UsersPage = () => {
             <Form {...inviteForm}>
               <form
                 className="space-y-4"
-                onSubmit={inviteForm.handleSubmit((values) =>
-                  inviteMutation.mutate({
-                    ...values,
-                    storeIds: values.role === "ADMIN" ? [] : values.storeIds,
-                  }),
-                )}
+                onSubmit={inviteForm.handleSubmit(handleInviteSubmit)}
+                noValidate
               >
                 <FormGrid>
                   <FormField

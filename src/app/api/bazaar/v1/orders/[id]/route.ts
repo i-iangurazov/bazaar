@@ -5,9 +5,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type RouteParams = {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 };
 
 const errorBody = (message: string) => {
@@ -19,11 +19,12 @@ const errorBody = (message: string) => {
 
 export const GET = async (request: Request, { params }: RouteParams) => {
   try {
+    const { id } = await params;
     const auth = await authenticateBazaarApiRequest(request);
     const order = await getBazaarApiOrder({
       organizationId: auth.organizationId,
       storeId: auth.storeId,
-      identifier: params.id,
+      identifier: id,
     });
     return Response.json({ order }, { status: 200 });
   } catch (error) {

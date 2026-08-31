@@ -28,16 +28,14 @@ const isManagerOrAdmin = (role: unknown) => role === "ADMIN" || role === "MANAGE
 
 const resolveTemplateMimeType = (file: File) => {
   const normalized = file.type.toLowerCase().split(";")[0]?.trim() ?? "";
-  if (allowedTemplateMimeTypes.has(normalized)) {
-    return normalized;
-  }
   const fileName = file.name.toLowerCase();
-  for (const extension of allowedTemplateExtensions) {
-    if (fileName.endsWith(extension)) {
-      return normalized || "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-    }
+  if (![...allowedTemplateExtensions].some((extension) => fileName.endsWith(extension))) {
+    return null;
   }
-  return null;
+  if (normalized && !allowedTemplateMimeTypes.has(normalized)) {
+    return null;
+  }
+  return normalized || "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 };
 
 export const GET = async () => {

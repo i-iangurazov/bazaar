@@ -1,0 +1,156 @@
+{
+  "schemaVersion": 2,
+  "artifactKind": "MIXED_VERSION_MIGRATION_QUALIFICATION",
+  "generatedAt": "2026-08-31T14:39:12Z",
+  "releaseBranch": "codex/bazaar-readiness-release-20260831",
+  "sourceCheckpoint": "6bffdcdbd939950685d13cdff1d3351cb283a40b",
+  "rescueCommit": "e04df7c322c0da46665aa764e113423223222390",
+  "oldApplicationCommit": "7db455397eb38e9bcaa09bda5acc951964df5ab2",
+  "database": {
+    "engine": "PostgreSQL 16.11",
+    "hostClass": "isolated loopback",
+    "port": 55433,
+    "identity": "bazaar_hardening_agent3_commerce",
+    "localeProvider": "icu",
+    "icuLocale": "und",
+    "productionDataUsed": false
+  },
+  "oldApplicationOldSchema": {
+    "result": "PASS",
+    "migrations": 96,
+    "files": 5,
+    "tests": 129,
+    "passed": 129,
+    "failed": 0,
+    "skipped": 0,
+    "artifact": "test-results/release-expand-v3-old-before.json",
+    "artifactSha256": "17d7eedcab45fd0560ada8f2fa0a632688d73aa0be57e5ae1c2ace2b349cf683",
+    "junitArtifact": "test-results/release-expand-v3-old-before-junit.xml",
+    "junitSha256": "0a6ba22263e6be783058f55bc6131c497d58604ccb706ed50ae3aa414c2e169f"
+  },
+  "representativeOldFixture": {
+    "result": "PASS",
+    "fixtureTestPassed": 1,
+    "fixtureTestFailed": 0,
+    "artifact": "test-results/release-expand-v3-mixed-old-fixture.json",
+    "artifactSha256": "70654c9b8f19dbd8f52c2971d387c4665712eb115aabba4ba59b7cf12ea2299e",
+    "coverage": ["inventory", "POS sales", "returns", "orders", "payments", "reports"]
+  },
+  "releaseExpandMigrations": {
+    "result": "PASS",
+    "migrations": [
+      "20260831120000_product_cost_precise_basis_value",
+      "20260831121000_stock_movement_inventory_value",
+      "20260831121500_stock_movement_valuation_cursor_index",
+      "20260831122000_allow_zero_cost_stock_movement"
+    ],
+    "observedLocalApplyWallSeconds": 0.211857334,
+    "historicalDataUpdates": 0,
+    "historicalRowsPreservedWithNullLedgerWatermark": 7,
+    "historicalRowsPreservedWithNullInventoryValue": 7,
+    "cursorIndexReady": true,
+    "cursorIndexValid": true,
+    "ledgerDefault": "clock_timestamp() AT TIME ZONE UTC",
+    "compatibilityConstraintValidated": false,
+    "compatibilityConstraintPermitsNull": true,
+    "droppedColumns": 0,
+    "renamedColumns": 0,
+    "immediateNotNullColumns": 0,
+    "unboundedBackfillInDdl": false,
+    "triggerBridge": false
+  },
+  "oldApplicationExpandedSchema": {
+    "result": "PASS",
+    "files": 5,
+    "tests": 129,
+    "passed": 129,
+    "failed": 0,
+    "skipped": 0,
+    "artifact": "test-results/release-expand-v3-old-after.json",
+    "artifactSha256": "72fc30b8e008f860b1424a9c54dde7b528f16e29745d2b62e5c74af761ee954a",
+    "junitArtifact": "test-results/release-expand-v3-old-after-junit.xml",
+    "junitSha256": "acb2a06d4471149298d1406c7cc0dff0645bbd01a40df6bb83357455a9ad4b33"
+  },
+  "rollingDeploymentSequence": {
+    "result": "PASS",
+    "sequence": [
+      "old application write on expanded schema",
+      "new application dual-write",
+      "old application rollback write",
+      "new application redeploy and recovery write"
+    ],
+    "physicalQuantityAfterRecovery": 27,
+    "preciseBasisQuantityAfterRecovery": 27,
+    "preciseBasisValueKgsAfterRecovery": "286.000000",
+    "lateOldWriterMovementQuantity": 1,
+    "lateOldWriterMovementValueKgs": "14.000000",
+    "lateOldWriterMovementValuationCount": 1,
+    "baselineOldRowsDoubleValued": false,
+    "utcWatermarksMonotonic": true,
+    "applicationRollback": "PASS",
+    "applicationRedeployRecovery": "PASS"
+  },
+  "boundedOperationalBackfill": {
+    "result": "PASS",
+    "unitTestsPassed": 4,
+    "integrationTests": 4,
+    "integrationPassed": 4,
+    "integrationFailed": 0,
+    "integrationSkipped": 0,
+    "artifact": "test-results/release-expand-v3-backfill.json",
+    "artifactSha256": "f09ab85b3784a887a830b3af430d8d4b3886cd06716551b62c2bb495936ba682",
+    "junitArtifact": "test-results/release-expand-v3-backfill-junit.xml",
+    "junitSha256": "61d7ec598ea8fe805c47df43c90c6a00f4699c32b16bc78b5a63f0b82af1404e",
+    "dryRunReadOnly": true,
+    "writerDrainRequiredForWrite": true,
+    "stableCompositeCursor": true,
+    "interruptionResume": "PASS",
+    "idempotentReplay": "PASS",
+    "secondRunChangedRows": 0,
+    "cleanFixtureReconciliation": "PASS",
+    "ambiguousEvidenceDetection": "PASS",
+    "pairedTransferValidation": "PASS",
+    "postHighWaterWriterDetection": "PASS",
+    "operationalCliDryRun": {
+      "result": "PASS",
+      "changedRows": 0,
+      "unclassifiedMovements": 0,
+      "reviewMovements": 0,
+      "unreconciledCostScopes": 0,
+      "reviewCostScopes": 0
+    }
+  },
+  "newApplicationExpandedSchema": {
+    "result": "PASS",
+    "files": 5,
+    "tests": 134,
+    "passed": 134,
+    "failed": 0,
+    "skipped": 0,
+    "artifact": "test-results/release-expand-v3-new-reconciliation.json",
+    "artifactSha256": "60b0c77e228bf344c3b04f93475b5c4b59687385d73e49de18b3b3a0c6b1dc7f",
+    "junitArtifact": "test-results/release-expand-v3-new-reconciliation-junit.xml",
+    "junitSha256": "5aa5944a7247e0a9b406ea08fc85ebc13d131f23244c1be5570baae2fddc4319",
+    "coverage": ["products", "inventory", "POS and payment correction", "sales orders", "reports"]
+  },
+  "futureContract": {
+    "prepared": true,
+    "artifact": "docs/production-readiness/future-inventory-valuation-contract-2026-08-31.sql",
+    "inPrismaMigrationDirectory": false,
+    "deployInThisRelease": false,
+    "strictNullAndSignEnforcementDeferred": true
+  },
+  "remainingProductionUncertainty": [
+    "Production PITR or verified backup has not yet been confirmed.",
+    "Production table sizes and lock observations have not yet been measured.",
+    "The bounded write-mode backfill must not run until every old production writer is drained."
+  ],
+  "releaseDecision": {
+    "migrationCompatibilityGate": "PASS",
+    "completeAuthenticatedMatrixAuthorizedToStart": true,
+    "pushPermitted": false,
+    "mergePermitted": false,
+    "productionMigrationPermitted": false,
+    "reason": "Final browser matrix, deterministic release gates, CI, Preview, and production PITR confirmation are still required."
+  }
+}

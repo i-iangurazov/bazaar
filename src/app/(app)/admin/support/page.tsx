@@ -60,7 +60,7 @@ const AdminSupportPage = () => {
         });
         router.push("/dashboard");
         router.refresh();
-      } catch (error) {
+      } catch {
         toast({ variant: "error", description: tErrors("unexpectedError") });
       }
     },

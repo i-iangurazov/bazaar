@@ -77,24 +77,40 @@ export const publicAuthRouter = router({
     .input(z.object({ token: z.string().min(10) }))
     .mutation(async ({ ctx, input }) => {
       try {
-        const token = await consumeAuthToken({ purpose: "EMAIL_VERIFY", token: input.token });
-        if (!token.userId) {
-          throw new AppError("tokenInvalid", "NOT_FOUND", 404);
-        }
-        const user = await prisma.user.findUnique({ where: { id: token.userId } });
-        if (!user) {
-          throw new AppError("userNotFound", "NOT_FOUND", 404);
-        }
-        const updated = await prisma.user.update({
-          where: { id: user.id },
-          data: { emailVerifiedAt: new Date() },
-        });
+        const { updated, storeCount } = await prisma.$transaction(async (tx) => {
+          const token = await consumeAuthToken({ purpose: "EMAIL_VERIFY", token: input.token }, tx);
+          if (!token.userId) {
+            throw new AppError("tokenInvalid", "NOT_FOUND", 404);
+          }
+          const user = await tx.user.findUnique({ where: { id: token.userId } });
+          if (!user) {
+            throw new AppError("userNotFound", "NOT_FOUND", 404);
+          }
+          const updated = await tx.user.update({
+            where: { id: user.id },
+            data: { emailVerifiedAt: new Date() },
+          });
+          const storeCount = updated.organizationId
+            ? await tx.store.count({
+                where: { organizationId: updated.organizationId },
+              })
+            : 0;
 
-        const storeCount = updated.organizationId
-          ? await prisma.store.count({
-              where: { organizationId: updated.organizationId },
-            })
-          : 0;
+          if (updated.organizationId) {
+            await writeAuditLog(tx, {
+              organizationId: updated.organizationId,
+              actorId: updated.id,
+              action: "EMAIL_VERIFY",
+              entity: "User",
+              entityId: updated.id,
+              before: toJson(sanitizeUserAudit(user)),
+              after: toJson(updated),
+              requestId: ctx.requestId,
+            });
+          }
+
+          return { updated, storeCount };
+        });
 
         let nextPath = "/login";
         let registrationToken: string | null = null;
@@ -110,19 +126,6 @@ export const publicAuthRouter = router({
           });
           registrationToken = registration.raw;
           nextPath = `/register-business/${registration.raw}`;
-        }
-
-        if (updated.organizationId) {
-          await writeAuditLog(prisma, {
-            organizationId: updated.organizationId,
-            actorId: updated.id,
-            action: "EMAIL_VERIFY",
-            entity: "User",
-            entityId: updated.id,
-            before: toJson(sanitizeUserAudit(user)),
-            after: toJson(updated),
-            requestId: ctx.requestId,
-          });
         }
 
         return { verified: true, nextPath, registrationToken };
@@ -187,7 +190,7 @@ export const publicAuthRouter = router({
             if (error instanceof EmailVerificationDeliveryError) {
               ctx.logger.warn(
                 { error, email: user.email, userId: user.id },
-                "registration email verification delivery failed"
+                "registration email verification delivery failed",
               );
               return {
                 ...registration,
@@ -229,7 +232,10 @@ export const publicAuthRouter = router({
         try {
           await sendResetEmail({ email: user.email, resetLink });
         } catch (emailError) {
-          ctx.logger.warn({ emailError, email: user.email }, "password reset email delivery failed");
+          ctx.logger.warn(
+            { emailError, email: user.email },
+            "password reset email delivery failed",
+          );
         }
         return { sent: true };
       } catch (error) {
@@ -242,29 +248,34 @@ export const publicAuthRouter = router({
     .input(z.object({ token: z.string().min(10), password: z.string().min(8) }))
     .mutation(async ({ ctx, input }) => {
       try {
-        const token = await consumeAuthToken({ purpose: "PASSWORD_RESET", token: input.token });
-        const user = await prisma.user.findUnique({ where: { email: token.email } });
-        if (!user) {
-          throw new AppError("userNotFound", "NOT_FOUND", 404);
-        }
         const passwordHash = await bcrypt.hash(input.password, 10);
-        const updated = await prisma.user.update({
-          where: { id: user.id },
-          data: { passwordHash },
-        });
-
-        if (updated.organizationId) {
-          await writeAuditLog(prisma, {
-            organizationId: updated.organizationId,
-            actorId: updated.id,
-            action: "USER_PASSWORD_RESET",
-            entity: "User",
-            entityId: updated.id,
-            before: toJson(sanitizeUserAudit(user)),
-            after: toJson(updated),
-            requestId: ctx.requestId,
+        await prisma.$transaction(async (tx) => {
+          const token = await consumeAuthToken(
+            { purpose: "PASSWORD_RESET", token: input.token },
+            tx,
+          );
+          const user = await tx.user.findUnique({ where: { email: token.email } });
+          if (!user) {
+            throw new AppError("userNotFound", "NOT_FOUND", 404);
+          }
+          const updated = await tx.user.update({
+            where: { id: user.id },
+            data: { passwordHash },
           });
-        }
+
+          if (updated.organizationId) {
+            await writeAuditLog(tx, {
+              organizationId: updated.organizationId,
+              actorId: updated.id,
+              action: "USER_PASSWORD_RESET",
+              entity: "User",
+              entityId: updated.id,
+              before: toJson(sanitizeUserAudit(user)),
+              after: toJson(updated),
+              requestId: ctx.requestId,
+            });
+          }
+        });
 
         return { reset: true };
       } catch (error) {
@@ -329,7 +340,7 @@ export const publicAuthRouter = router({
           if (error instanceof EmailVerificationDeliveryError) {
             ctx.logger.warn(
               { error, email: user.email, userId: user.id },
-              "invite email verification delivery failed"
+              "invite email verification delivery failed",
             );
             return {
               user,

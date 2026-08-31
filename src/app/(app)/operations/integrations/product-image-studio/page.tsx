@@ -593,9 +593,7 @@ const ProductImageStudioPage = () => {
               </div>
             </div>
             {providerMissing ? (
-              <p className="bazaar-admin-notice mt-4 text-sm">
-                {t("overview.providerMissing")}
-              </p>
+              <p className="bazaar-admin-notice mt-4 text-sm">{t("overview.providerMissing")}</p>
             ) : null}
           </CardContent>
         </Card>
@@ -719,9 +717,7 @@ const ProductImageStudioPage = () => {
                 ) : null}
               </div>
 
-              <p className="bazaar-admin-notice text-sm">
-                {t("input.reviewNote")}
-              </p>
+              <p className="bazaar-admin-notice text-sm">{t("input.reviewNote")}</p>
             </CardContent>
           </Card>
 
@@ -740,7 +736,7 @@ const ProductImageStudioPage = () => {
                       setBackgroundMode(value as ProductImageStudioBackground)
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger aria-label={t("presets.backgroundLabel")}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -756,7 +752,7 @@ const ProductImageStudioPage = () => {
                 <div className="space-y-2">
                   <Label>{t("presets.outputLabel")}</Label>
                   <Select value={ProductImageStudioOutputFormat.SQUARE} disabled>
-                    <SelectTrigger>
+                    <SelectTrigger aria-label={t("presets.outputLabel")}>
                       <SelectValue placeholder={t("presets.output.square")} />
                     </SelectTrigger>
                     <SelectContent>
@@ -800,6 +796,7 @@ const ProductImageStudioPage = () => {
                     checked={softShadow}
                     onCheckedChange={setSoftShadow}
                     disabled={!canEdit}
+                    aria-label={t("presets.optional.softShadowTitle")}
                   />
                 </div>
                 <div className="flex items-center justify-between gap-4">
@@ -813,6 +810,7 @@ const ProductImageStudioPage = () => {
                     checked={tighterCrop}
                     onCheckedChange={setTighterCrop}
                     disabled={!canEdit}
+                    aria-label={t("presets.optional.tighterCropTitle")}
                   />
                 </div>
                 <div className="flex items-center justify-between gap-4">
@@ -826,6 +824,7 @@ const ProductImageStudioPage = () => {
                     checked={brighterPresentation}
                     onCheckedChange={setBrighterPresentation}
                     disabled={!canEdit}
+                    aria-label={t("presets.optional.brighterTitle")}
                   />
                 </div>
               </div>
@@ -921,6 +920,7 @@ const ProductImageStudioPage = () => {
                   checked={saveAsPrimary}
                   onCheckedChange={setSaveAsPrimary}
                   disabled={!canEdit}
+                  aria-label={t("preview.setAsPrimary")}
                 />
                 <span className="text-sm text-muted-foreground">{t("preview.setAsPrimary")}</span>
               </div>
@@ -968,7 +968,7 @@ const ProductImageStudioPage = () => {
             <p className="text-sm text-muted-foreground">{t("history.subtitle")}</p>
           </CardHeader>
           <CardContent>
-            <TableContainer className="bazaar-admin-table-shell">
+            <TableContainer className="bazaar-admin-table-shell bazaar-admin-table-scroll">
               <Table className="min-w-[860px]">
                 <TableHeader>
                   <TableRow>

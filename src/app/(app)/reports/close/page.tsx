@@ -121,7 +121,7 @@ const PeriodClosePage = () => {
           <FormGrid>
             <Field label={t("storeLabel")}>
               <Select value={storeId} onValueChange={setStoreId}>
-                <SelectTrigger>
+                <SelectTrigger aria-label={t("storeLabel")}>
                   <SelectValue placeholder={tCommon("selectStore")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -136,6 +136,7 @@ const PeriodClosePage = () => {
             <Field label={t("monthLabel")}>
               <Input
                 type="month"
+                aria-label={t("monthLabel")}
                 value={month}
                 onChange={(event) => setMonth(event.target.value)}
               />

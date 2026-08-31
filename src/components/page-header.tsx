@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import React, { type ReactNode } from "react";
 
 import { PageBreadcrumbs } from "@/components/page-breadcrumbs";
 import { cn } from "@/lib/utils";
@@ -35,16 +35,16 @@ export const PageHeader = ({
   actionClassName?: string;
   filtersClassName?: string;
 }) => (
-  <div className="relative mb-6 overflow-hidden rounded-xl border border-border/65 bg-card/95 p-4 shadow-[0_18px_45px_rgba(15,23,42,0.07)] ring-1 ring-foreground/[0.015] backdrop-blur md:p-5 dark:shadow-none">
+  <div className="relative mb-6 overflow-hidden rounded-xl border border-border/65 bg-card/95 p-4 shadow-[0_18px_45px_rgba(15,23,42,0.07)] ring-1 ring-foreground/[0.015] backdrop-blur dark:shadow-none md:p-5">
     <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-primary" />
     <div className="pointer-events-none absolute -right-16 -top-24 h-48 w-48 rounded-full bg-primary/10 blur-3xl" />
     <div className="relative space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <PageBreadcrumbs />
-          <h2 className="mt-2 text-2xl font-bold tracking-tight text-foreground md:text-3xl">
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-foreground md:text-3xl">
             {title}
-          </h2>
+          </h1>
           {subtitle ? (
             <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">{subtitle}</p>
           ) : null}

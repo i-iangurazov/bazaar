@@ -239,8 +239,12 @@ describe("pos entry navigation", () => {
 
     expect(pageSource).toContain('window.matchMedia("(max-width: 767px)")');
     expect(pageSource).toContain("const DesktopPosSaleView = () => (");
+    expect(pageSource).toContain(
+      '<h1 className="shrink-0 text-base font-semibold text-foreground">',
+    );
+    expect(pageSource).toContain('{t("sell.title")}');
     expect(pageSource).toContain("const MobilePosView = () => {");
-    expect(pageSource).toContain("return isPhoneScreen ? MobilePosView() : DesktopPosSaleView();");
+    expect(pageSource).toContain("{isPhoneScreen ? MobilePosView() : DesktopPosSaleView()}");
     expect(pageSource).toContain("const MobileCustomerSheet = () => {");
     expect(pageSource).toContain("{MobileCustomerSheet()}");
     expect(pageSource).not.toContain("<MobileCustomerSheet />");
@@ -272,7 +276,9 @@ describe("pos entry navigation", () => {
     expect(posRouterSource).toContain("cashiers: router({");
     expect(customerServiceSource).toContain("normalizeOptionalCustomerPhone(input.phone)");
     expect(customerServiceSource).toContain("ensureCustomerContact({ email, phone });");
-    expect(customerServiceSource).toContain("normalizeUpdatedCustomerPhone(input.phone, existing.phone)");
+    expect(customerServiceSource).toContain(
+      "normalizeUpdatedCustomerPhone(input.phone, existing.phone)",
+    );
   });
 
   it("keeps receipt journal returns tied to loaded receipt lines and blocks zero-quantity completion", async () => {
@@ -293,36 +299,31 @@ describe("pos entry navigation", () => {
     expect(ruMessages).toContain('"returnNotAvailable"');
   });
 
-  it("opens completed receipt corrections in the normal POS cart without draft mutations", async () => {
+  it("routes completed receipts to the dedicated cashier-safe payment correction workflow", async () => {
     const pageSource = await readSource("src/app/(app)/pos/sell/page.tsx");
+    const historySource = await readSource("src/app/(app)/pos/history/page.tsx");
+    const correctionModalSource = await readSource(
+      "src/components/pos/payment-correction-modal.tsx",
+    );
     const routerSource = await readSource("src/server/trpc/routers/pos.ts");
     const serviceSource = await readSource("src/server/services/pos.ts");
 
-    expect(pageSource).toContain("completedSaleEditHydratedRef");
-    expect(pageSource).toContain("receiptEditDeepLinkRef.current = null;");
-    expect(pageSource).toContain("const deepLinkedEditSaleId = receiptEditDeepLinkRef.current?.startsWith");
-    expect(pageSource).toContain("setJournalEditSaleId(deepLinkedEditSaleId);");
-    expect(pageSource).toContain("journalSaleDetailQuery.isFetching");
-    expect(pageSource).toContain(
-      "void trpcUtils.pos.sales.get.invalidate({ saleId: saleItem.id });",
-    );
-    expect(pageSource).toContain("setOptimisticSaleLines(");
-    expect(pageSource).toContain("serverLineId: line.id");
-    expect(pageSource).toContain("setSelectedCustomer(");
-    expect(pageSource).toContain("journalSelectedSale.discountKgs");
-    expect(pageSource).toContain('t("sell.editingReceipt"');
-    expect(pageSource).toContain("if (completedSaleEditIdRef.current)");
-    expect(pageSource).toContain("completedSaleEditIdRef.current === targetSaleId");
-    expect(pageSource).toContain("editCompletedSaleMutation.mutateAsync({");
-    expect(pageSource).toContain("completedSaleEditIdempotencyKeyRef.current");
-    expect(pageSource).toContain("clearCompletedSaleEditUi();");
-    expect(pageSource).toContain('t("sell.saveReceiptCorrection")');
-    expect(pageSource).not.toContain("const JournalEditReceiptModal");
-    expect(pageSource).not.toContain('data-testid="pos-receipt-edit-modal"');
-    expect(routerSource).toContain("discountKgs: z.number().min(0).optional()");
-    expect(serviceSource).toContain("requestedDiscountKgs");
-    expect(serviceSource).toContain("const stockDelta = oldQty - desiredQty;");
-    expect(serviceSource).toContain('route: "pos.sales.editCompleted"');
+    expect(pageSource).toContain("setPaymentCorrectionSaleId(saleItem.id);");
+    expect(pageSource).toContain("<PosPaymentCorrectionModal");
+    expect(pageSource).toContain("paymentCorrectionEligibility.eligible");
+    expect(pageSource).toContain("paymentCorrectionEligibility.reason");
+    expect(historySource).toContain("setPaymentCorrectionSaleId(sale.id)");
+    expect(historySource).toContain("<PosPaymentCorrectionModal");
+    expect(correctionModalSource).toContain('data-testid="pos-payment-correction-dialog"');
+    expect(correctionModalSource).toContain("aria-labelledby={methodLabelId}");
+    expect(correctionModalSource).toContain("submitInFlightRef.current");
+    expect(correctionModalSource).toContain("idempotencyKey: idempotencyKeyRef.current");
+    expect(routerSource).toContain("correctPayments: cashierProcedure");
+    expect(serviceSource).toContain("user.role === Role.CASHIER");
+    expect(serviceSource).toContain('route: "pos.sales.correctPayments"');
+    expect(serviceSource).toContain('action: "POS_PAYMENT_CORRECTION"');
+    expect(serviceSource).toContain('throw paymentCorrectionError("ROLE_REQUIRED")');
+    expect(serviceSource).toContain("saleReturnId: null");
   });
 
   it("keeps mobile quick-sale on theme tokens with images, customer selection, editable price, discount, and receipt actions", async () => {
@@ -430,7 +431,7 @@ describe("pos entry navigation", () => {
     expect(pageSource).toContain("open={mobileExitConfirmationOpen}");
     expect(pageSource).toContain('title={t("sell.mobile.exitTitle")}');
     expect(pageSource).toContain("onClick={requestMobileExit}");
-    expect(pageSource).toContain("return isPhoneScreen ? MobilePosView() : DesktopPosSaleView();");
+    expect(pageSource).toContain("{isPhoneScreen ? MobilePosView() : DesktopPosSaleView()}");
   });
 
   it("renders cashier products as readable rows with in-cart quantity controls", async () => {

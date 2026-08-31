@@ -185,7 +185,7 @@ export const AnalyticsCharts = ({
           </CardTitle>
           <div className="w-full sm:max-w-[180px]">
             <Select value={metric} onValueChange={(value) => onMetricChange(value as Metric)}>
-              <SelectTrigger>
+              <SelectTrigger aria-label={t("metricLabel")}>
                 <SelectValue placeholder={t("metricLabel")} />
               </SelectTrigger>
               <SelectContent>

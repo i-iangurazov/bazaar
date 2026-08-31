@@ -110,10 +110,7 @@ describeDb("Agent 2 B2 receiving cost verification", () => {
         movementRows,
         effective: {
           quantity: movementRows.reduce((sum, movement) => sum + movement.qtyDelta, 0),
-          totalValueKgs: movementRows.reduce(
-            (sum, movement) => sum + movement.lineTotalKgs,
-            0,
-          ),
+          totalValueKgs: movementRows.reduce((sum, movement) => sum + movement.lineTotalKgs, 0),
         },
         counts: { movements: movements.length, audits: auditCount, productCosts: costRowCount },
       };
@@ -205,7 +202,7 @@ describeDb("Agent 2 B2 receiving cost verification", () => {
     });
   });
 
-  it("HARD-A2-018 uses the exact valued stream across rounding-sensitive receipts and a second edit", async () => {
+  it("HARD-A2-018 locks a rounding-sensitive receipt after a later valued movement", async () => {
     const { org, store, product, adminUser } = await seedBase({ plan: "BUSINESS" });
     const otherStore = await prisma.store.create({
       data: { organizationId: org.id, name: "A2 Other Store", code: "A2-OTHER" },
@@ -236,32 +233,63 @@ describeDb("Agent 2 B2 receiving cost verification", () => {
       idempotencyKey: "hard-a2-018-round-second",
     });
     const documentKey = `STOCK_RECEIVING:STOCK_RECEIVING:${first.receivingId}`;
-    await caller.inventory.editProductMovementDocument({
-      documentKey,
-      lines: [{ productId: product.id, quantity: 4, unitCostKgs: 0.01 }],
-      idempotencyKey: "hard-a2-018-round-edit-1",
-    });
-    await caller.inventory.editProductMovementDocument({
-      documentKey,
-      lines: [{ productId: product.id, quantity: 2, unitCostKgs: 0.02 }],
-      idempotencyKey: "hard-a2-018-round-edit-2",
+    const before = await Promise.all([
+      prisma.stockMovement.count({ where: { productId: product.id } }),
+      prisma.auditLog.count({
+        where: { organizationId: org.id, action: "INVENTORY_DOCUMENT_EDIT" },
+      }),
+      prisma.idempotencyKey.count({ where: { key: "hard-a2-018-round-edit-1" } }),
+    ]);
+    await expect(
+      caller.inventory.editProductMovementDocument({
+        documentKey,
+        lines: [{ productId: product.id, quantity: 4, unitCostKgs: 0.01 }],
+        idempotencyKey: "hard-a2-018-round-edit-1",
+      }),
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "stockReceivingEditLockedAfterDownstreamMovement",
     });
 
-    const [cost, report] = await Promise.all([
+    const [cost, report, firstSnapshot, after] = await Promise.all([
       prisma.productCost.findUniqueOrThrow({ where: costKey(org.id, product.id) }),
       prisma.$transaction((tx) =>
         inspectProductCostMismatch(tx, { organizationId: org.id, productId: product.id }),
       ),
+      prisma.inventorySnapshot.findUniqueOrThrow({
+        where: {
+          storeId_productId_variantKey: {
+            storeId: store.id,
+            productId: product.id,
+            variantKey: "BASE",
+          },
+        },
+      }),
+      Promise.all([
+        prisma.stockMovement.count({ where: { productId: product.id } }),
+        prisma.auditLog.count({
+          where: { organizationId: org.id, action: "INVENTORY_DOCUMENT_EDIT" },
+        }),
+        prisma.idempotencyKey.count({ where: { key: "hard-a2-018-round-edit-1" } }),
+      ]),
     ]);
-    expect({ avg: Number(cost.avgCostKgs), basis: cost.costBasisQty }).toEqual({
-      avg: 0.02,
-      basis: 4,
+    expect({
+      avg: Number(cost.avgCostKgs),
+      basis: cost.costBasisQty,
+      basisValue: Number(cost.costBasisValueKgs),
+      firstStoreOnHand: firstSnapshot.onHand,
+    }).toEqual({
+      avg: 0.01,
+      basis: 5,
+      basisValue: 0.07,
+      firstStoreOnHand: 3,
     });
     expect(report).toMatchObject({
       status: "MATCH",
-      expected: { avgCostKgs: 0.02, costBasisQty: 4, totalValueKgs: 0.08 },
-      valuedMovementCount: 4,
+      expected: { avgCostKgs: 0.01, costBasisQty: 5, totalValueKgs: 0.07 },
+      valuedMovementCount: 2,
     });
+    expect(after).toEqual(before);
   });
 
   it("HARD-A2-018 keeps variant cost isolated while aggregating that variant across stores", async () => {
@@ -287,7 +315,7 @@ describeDb("Agent 2 B2 receiving cost verification", () => {
       organizationId: org.id,
       isOrgOwner: true,
     });
-    const first = await caller.inventory.postStockReceiving({
+    await caller.inventory.postStockReceiving({
       storeId: store.id,
       lines: [{ productId: product.id, variantId: variant.id, quantity: 2, unitCost: 3 }],
       idempotencyKey: "hard-a2-018-variant-first",
@@ -297,11 +325,6 @@ describeDb("Agent 2 B2 receiving cost verification", () => {
       lines: [{ productId: product.id, variantId: variant.id, quantity: 3, unitCost: 5 }],
       idempotencyKey: "hard-a2-018-variant-second",
     });
-    await caller.inventory.editProductMovementDocument({
-      documentKey: `STOCK_RECEIVING:STOCK_RECEIVING:${first.receivingId}`,
-      lines: [{ productId: product.id, variantId: variant.id, quantity: 1, unitCostKgs: 4 }],
-      idempotencyKey: "hard-a2-018-variant-edit",
-    });
 
     const [variantCost, baseCost] = await Promise.all([
       prisma.productCost.findUniqueOrThrow({
@@ -310,14 +333,22 @@ describeDb("Agent 2 B2 receiving cost verification", () => {
       prisma.productCost.findUnique({ where: costKey(org.id, product.id) }),
     ]);
     expect({ avg: Number(variantCost.avgCostKgs), basis: variantCost.costBasisQty }).toEqual({
-      avg: 4.75,
-      basis: 4,
+      avg: 4.2,
+      basis: 5,
     });
     expect(baseCost).toBeNull();
   });
 
   it("HARD-A2-018 preserves an external manual/import basis and reports the stream as indeterminate", async () => {
     const { org, store, product, adminUser } = await seedBase({ plan: "BUSINESS" });
+    await prisma.inventorySnapshot.create({
+      data: {
+        storeId: store.id,
+        productId: product.id,
+        variantKey: "BASE",
+        onHand: 1,
+      },
+    });
     await prisma.productCost.create({
       data: {
         organizationId: org.id,
@@ -351,9 +382,18 @@ describeDb("Agent 2 B2 receiving cost verification", () => {
         inspectProductCostMismatch(tx, { organizationId: org.id, productId: product.id }),
       ),
     ]);
-    expect({ avg: Number(cost.avgCostKgs), basis: cost.costBasisQty }).toEqual({
-      avg: 6.49,
-      basis: 8,
+    expect({
+      preciseAvg: Number(cost.preciseAvgCostKgs),
+      preciseBasis: cost.preciseCostBasisQty,
+      basisValue: Number(cost.costBasisValueKgs),
+      compatibilityAvg: Number(cost.avgCostKgs),
+      compatibilityBasis: cost.costBasisQty,
+    }).toEqual({
+      preciseAvg: 6.5,
+      preciseBasis: 8,
+      basisValue: 52,
+      compatibilityAvg: 6.49,
+      compatibilityBasis: 8,
     });
     expect(report).toMatchObject({
       status: "INDETERMINATE_UNVALUED_STREAM",
@@ -389,9 +429,20 @@ describeDb("Agent 2 B2 receiving cost verification", () => {
       lines: [{ productId: product.id, quantity: 7, unitCostKgs: 6 }],
       idempotencyKey: "hard-a2-018-detector-edit",
     });
+    const forcedMismatchAt = new Date();
     await prisma.productCost.update({
       where: costKey(org.id, product.id),
-      data: { avgCostKgs: 5, costBasisQty: 10 },
+      data: {
+        avgCostKgs: 5,
+        costBasisQty: 10,
+        preciseAvgCostKgs: 5,
+        preciseCostBasisQty: 10,
+        costBasisValueKgs: 50,
+        valuationStatus: "PRECISE",
+        valuationUpdatedAt: forcedMismatchAt,
+        valuationLegacyUpdatedAt: forcedMismatchAt,
+        updatedAt: forcedMismatchAt,
+      },
     });
 
     const report = await prisma.$transaction((tx) =>
@@ -436,9 +487,20 @@ describeDb("Agent 2 B2 receiving cost verification", () => {
       lines: [{ productId: product.id, quantity: 10, unitCost: 5 }],
       idempotencyKey: "hard-a2-018-mismatch-receive",
     });
+    const forcedMismatchAt = new Date();
     await prisma.productCost.update({
       where: costKey(org.id, product.id),
-      data: { avgCostKgs: 5, costBasisQty: 2 },
+      data: {
+        avgCostKgs: 5,
+        costBasisQty: 2,
+        preciseAvgCostKgs: 5,
+        preciseCostBasisQty: 2,
+        costBasisValueKgs: 10,
+        valuationStatus: "PRECISE",
+        valuationUpdatedAt: forcedMismatchAt,
+        valuationLegacyUpdatedAt: forcedMismatchAt,
+        updatedAt: forcedMismatchAt,
+      },
     });
     const before = await Promise.all([
       prisma.inventorySnapshot.findUniqueOrThrow({
@@ -490,7 +552,12 @@ describeDb("Agent 2 B2 receiving cost verification", () => {
         },
       }),
     ]);
-    expect({ onHand: after[0].onHand, movements: after[1], audits: after[2], idem: after[3] }).toEqual({
+    expect({
+      onHand: after[0].onHand,
+      movements: after[1],
+      audits: after[2],
+      idem: after[3],
+    }).toEqual({
       onHand: before[0].onHand,
       movements: before[1],
       audits: before[2],

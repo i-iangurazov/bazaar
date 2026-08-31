@@ -1,11 +1,14 @@
 import { execSync } from "node:child_process";
 import { PrismaClient, Prisma } from "@prisma/client";
 
+import { assertUnicodeCaseInsensitiveSearch } from "@/server/db/databaseCapabilities";
+
 import {
   assertDatabaseTestExecutionPolicy,
   assertSafeTestDatabaseReset,
   resolveConfiguredTestDatabaseUrl,
 } from "./helpers/testDatabaseSafety";
+import { configureTestRuntimeEnvironment } from "./helpers/testRuntimeIsolation";
 
 const ensureTestDatabase = async (databaseUrl: string, databaseName: string) => {
   const adminUrl = new URL(databaseUrl);
@@ -23,14 +26,25 @@ const ensureTestDatabase = async (databaseUrl: string, databaseName: string) => 
 };
 
 export default async function globalSetup() {
-  if (!assertDatabaseTestExecutionPolicy()) {
+  const shouldRunDbTests = assertDatabaseTestExecutionPolicy();
+  const databaseUrl = shouldRunDbTests ? resolveConfiguredTestDatabaseUrl() : null;
+  const databaseIdentity = databaseUrl ? assertSafeTestDatabaseReset({ databaseUrl }) : null;
+
+  configureTestRuntimeEnvironment(process.env);
+
+  if (!databaseUrl || !databaseIdentity) {
     return;
   }
-  const databaseUrl = resolveConfiguredTestDatabaseUrl();
 
   process.env.DATABASE_URL = databaseUrl;
-  const { databaseName } = assertSafeTestDatabaseReset({ databaseUrl });
-  await ensureTestDatabase(databaseUrl, databaseName);
+  await ensureTestDatabase(databaseUrl, databaseIdentity.databaseName);
+
+  const capabilityClient = new PrismaClient({ datasourceUrl: databaseUrl });
+  try {
+    await assertUnicodeCaseInsensitiveSearch(capabilityClient);
+  } finally {
+    await capabilityClient.$disconnect();
+  }
 
   try {
     execSync("pnpm prisma:migrate", {

@@ -31,6 +31,11 @@ import { processAdapterFiscalReceipt, queueFiscalReceipt } from "@/server/servic
 import { writeAuditLog } from "@/server/services/audit";
 import { AppError } from "@/server/services/errors";
 import { applyStockMovement } from "@/server/services/inventory";
+import {
+  applyValuedProductCostDelta,
+  productCostBasisSelect,
+  resolveCurrentProductCostUnitNumber,
+} from "@/server/services/productCost";
 import { withIdempotency } from "@/server/services/idempotency";
 import { toJson } from "@/server/services/json";
 import { sanitizeListImageUrl } from "@/server/services/products/serializers";
@@ -66,6 +71,9 @@ const canSupervisePos = (user: StoreAccessUser) =>
     user.role === Role.ADMIN ||
     user.role === Role.MANAGER,
   );
+
+const canCorrectCompletedPosPayment = (user: StoreAccessUser) =>
+  canSupervisePos(user) || user.role === Role.CASHIER;
 
 const assertCanManageSaleReturn = (user: StoreAccessUser, createdById: string) => {
   if (!canSupervisePos(user) && user.id !== createdById) {
@@ -577,10 +585,10 @@ const resolveUnitCost = async (input: {
           variantKey,
         },
       },
-      select: { avgCostKgs: true },
+      select: productCostBasisSelect,
     });
-    if (direct?.avgCostKgs) {
-      return Number(direct.avgCostKgs);
+    if (direct) {
+      return resolveCurrentProductCostUnitNumber(direct);
     }
     if (variantKey !== "BASE") {
       const fallback = await tx.productCost.findUnique({
@@ -591,9 +599,9 @@ const resolveUnitCost = async (input: {
             variantKey: "BASE",
           },
         },
-        select: { avgCostKgs: true },
+        select: productCostBasisSelect,
       });
-      return fallback?.avgCostKgs ? Number(fallback.avgCostKgs) : null;
+      return fallback ? resolveCurrentProductCostUnitNumber(fallback) : null;
     }
     return null;
   }
@@ -621,10 +629,10 @@ const resolveUnitCost = async (input: {
           variantKey,
         },
       },
-      select: { avgCostKgs: true },
+      select: productCostBasisSelect,
     });
     const fallback =
-      !direct?.avgCostKgs && variantKey !== "BASE"
+      !direct && variantKey !== "BASE"
         ? await tx.productCost.findUnique({
             where: {
               organizationId_productId_variantKey: {
@@ -633,15 +641,15 @@ const resolveUnitCost = async (input: {
                 variantKey: "BASE",
               },
             },
-            select: { avgCostKgs: true },
+            select: productCostBasisSelect,
           })
         : null;
 
-    const componentCost = direct?.avgCostKgs ?? fallback?.avgCostKgs;
+    const componentCost = direct ?? fallback;
     if (!componentCost) {
       return null;
     }
-    total += Number(componentCost) * component.qty;
+    total += resolveCurrentProductCostUnitNumber(componentCost) * component.qty;
   }
 
   return roundMoney(total);
@@ -851,6 +859,81 @@ const normalizePayments = (
   }
 
   return normalized;
+};
+
+export type PosPaymentCorrectionEligibilityReason =
+  | "ELIGIBLE"
+  | "ROLE_REQUIRED"
+  | "SALE_NOT_COMPLETED"
+  | "SHIFT_MISSING"
+  | "SHIFT_CLOSED"
+  | "REGISTER_INACTIVE"
+  | "FISCAL_CORRECTION_REQUIRED"
+  | "DEBT_SALE_UNSUPPORTED";
+
+type PosPaymentLedgerRow = {
+  id?: string;
+  method: PosPaymentMethod;
+  amountKgs: Prisma.Decimal | number;
+  providerRef?: string | null;
+  isRefund: boolean;
+  saleReturnId?: string | null;
+};
+
+const effectiveSalePaymentBreakdown = (payments: PosPaymentLedgerRow[]) => {
+  const amounts = new Map<PosPaymentMethod, number>(posPaymentMethods.map((method) => [method, 0]));
+
+  for (const payment of payments) {
+    // Return refunds belong to a separate legal document and do not change the
+    // original receipt's tender composition.
+    if (payment.saleReturnId) {
+      continue;
+    }
+    const signedAmount = payment.isRefund
+      ? -toMoney(payment.amountKgs)
+      : toMoney(payment.amountKgs);
+    amounts.set(payment.method, roundMoney((amounts.get(payment.method) ?? 0) + signedAmount));
+  }
+
+  return posPaymentMethods
+    .map((method) => ({ method, amountKgs: roundMoney(amounts.get(method) ?? 0) }))
+    .filter((payment) => payment.amountKgs > 0);
+};
+
+export const resolvePosPaymentCorrectionEligibility = (input: {
+  status: CustomerOrderStatus;
+  isDebt: boolean;
+  shiftId: string | null;
+  shiftStatus: RegisterShiftStatus | null;
+  registerActive: boolean | null;
+  kkmStatus: "NOT_SENT" | "SENT" | "FAILED";
+  fiscalReceiptCount: number;
+  user?: StoreAccessUser;
+}): { eligible: boolean; reason: PosPaymentCorrectionEligibilityReason } => {
+  if (!input.user || !canCorrectCompletedPosPayment(input.user)) {
+    return { eligible: false, reason: "ROLE_REQUIRED" };
+  }
+  if (input.status !== CustomerOrderStatus.COMPLETED) {
+    return { eligible: false, reason: "SALE_NOT_COMPLETED" };
+  }
+  if (!input.shiftId || input.shiftStatus === null) {
+    return { eligible: false, reason: "SHIFT_MISSING" };
+  }
+  if (input.shiftStatus !== RegisterShiftStatus.OPEN) {
+    return { eligible: false, reason: "SHIFT_CLOSED" };
+  }
+  if (input.registerActive === false) {
+    return { eligible: false, reason: "REGISTER_INACTIVE" };
+  }
+  // A queued/failed fiscal payload is also immutable here: retry reuses the
+  // snapshotted payload, so changing tender underneath it would be unsafe.
+  if (input.kkmStatus !== "NOT_SENT" || input.fiscalReceiptCount > 0) {
+    return { eligible: false, reason: "FISCAL_CORRECTION_REQUIRED" };
+  }
+  if (input.isDebt) {
+    return { eligible: false, reason: "DEBT_SALE_UNSUPPORTED" };
+  }
+  return { eligible: true, reason: "ELIGIBLE" };
 };
 
 const normalizeMarkingCodes = (codes: string[]) => {
@@ -1356,7 +1439,7 @@ const getPreviousClosedRegisterShift = async (input: {
       ...(input.registerId ? { registerId: input.registerId } : {}),
     },
     include: {
-      register: { select: { id: true, name: true, code: true } },
+      register: { select: { id: true, name: true, code: true, isActive: true } },
       store: {
         select: {
           id: true,
@@ -1572,7 +1655,7 @@ export const getCurrentRegisterShift = async (input: {
       status: RegisterShiftStatus.OPEN,
     },
     include: {
-      register: { select: { id: true, name: true, code: true } },
+      register: { select: { id: true, name: true, code: true, isActive: true } },
       store: {
         select: {
           id: true,
@@ -1725,7 +1808,7 @@ export const listRegisterShifts = async (input: {
     prisma.registerShift.findMany({
       where,
       include: {
-        register: { select: { id: true, name: true, code: true } },
+        register: { select: { id: true, name: true, code: true, isActive: true } },
         store: {
           select: {
             id: true,
@@ -3008,10 +3091,26 @@ export const listPosSales = async (input: {
       : {}),
     ...(input.dateFrom || input.dateTo
       ? {
-          createdAt: {
-            ...(input.dateFrom ? { gte: input.dateFrom } : {}),
-            ...(input.dateTo ? { lte: input.dateTo } : {}),
-          },
+          AND: [
+            {
+              OR: [
+                {
+                  status: CustomerOrderStatus.COMPLETED,
+                  completedAt: {
+                    ...(input.dateFrom ? { gte: input.dateFrom } : {}),
+                    ...(input.dateTo ? { lte: input.dateTo } : {}),
+                  },
+                },
+                {
+                  status: { not: CustomerOrderStatus.COMPLETED },
+                  createdAt: {
+                    ...(input.dateFrom ? { gte: input.dateFrom } : {}),
+                    ...(input.dateTo ? { lte: input.dateTo } : {}),
+                  },
+                },
+              ],
+            },
+          ],
         }
       : {}),
   };
@@ -3030,7 +3129,7 @@ export const listPosSales = async (input: {
             currencyRateKgsPerUnit: true,
           },
         },
-        register: { select: { id: true, name: true, code: true } },
+        register: { select: { id: true, name: true, code: true, isActive: true } },
         shift: {
           select: {
             id: true,
@@ -3048,10 +3147,12 @@ export const listPosSales = async (input: {
             currencyCode: true,
             currencyRateKgsPerUnit: true,
             isRefund: true,
+            saleReturnId: true,
             createdAt: true,
           },
           orderBy: { createdAt: "asc" },
         },
+        fiscalReceipts: { select: { id: true }, take: 1 },
         saleReturns: {
           where: { status: PosReturnStatus.COMPLETED },
           select: {
@@ -3061,30 +3162,50 @@ export const listPosSales = async (input: {
           },
         },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: [
+        { completedAt: { sort: "desc", nulls: "last" } },
+        { createdAt: "desc" },
+        { id: "desc" },
+      ],
       skip: (input.page - 1) * input.pageSize,
       take: input.pageSize,
     }),
   ]);
 
   return {
-    items: items.map((item) => ({
-      returnedTotalKgs: roundMoney(
-        item.saleReturns.reduce((sum, row) => sum + toMoney(row.totalKgs), 0),
-      ),
-      ...item,
-      cashier: item.createdBy,
-      isHeld: item.isHeld,
-      heldAt: item.heldAt,
-      shift: item.shift,
-      subtotalKgs: toMoney(item.subtotalKgs),
-      discountKgs: toMoney(item.discountKgs),
-      totalKgs: toMoney(item.totalKgs),
-      payments: item.payments.map((payment) => ({
-        ...payment,
-        amountKgs: toMoney(payment.amountKgs),
-      })),
-    })),
+    items: items.map((item) => {
+      const effectivePayments = effectiveSalePaymentBreakdown(item.payments);
+      return {
+        returnedTotalKgs: roundMoney(
+          item.saleReturns.reduce((sum, row) => sum + toMoney(row.totalKgs), 0),
+        ),
+        ...item,
+        cashier: item.createdBy,
+        isHeld: item.isHeld,
+        heldAt: item.heldAt,
+        occurredAt: item.completedAt ?? item.createdAt,
+        shift: item.shift,
+        subtotalKgs: toMoney(item.subtotalKgs),
+        discountKgs: toMoney(item.discountKgs),
+        totalKgs: toMoney(item.totalKgs),
+        payments: effectivePayments.map((payment) => ({
+          ...payment,
+          currencyCode: item.currencyCode,
+          currencyRateKgsPerUnit: item.currencyRateKgsPerUnit,
+          isRefund: false,
+        })),
+        paymentCorrectionEligibility: resolvePosPaymentCorrectionEligibility({
+          status: item.status,
+          isDebt: item.isDebt,
+          shiftId: item.shiftId,
+          shiftStatus: item.shift?.status ?? null,
+          registerActive: item.register?.isActive ?? null,
+          kkmStatus: item.kkmStatus,
+          fiscalReceiptCount: item.fiscalReceipts.length,
+          user: input.user,
+        }),
+      };
+    }),
     total,
     page: input.page,
     pageSize: input.pageSize,
@@ -3359,7 +3480,7 @@ export const getPosSale = async (input: {
           },
         },
       },
-      register: { select: { id: true, name: true, code: true } },
+      register: { select: { id: true, name: true, code: true, isActive: true } },
       createdBy: { select: { id: true, name: true, email: true } },
       shift: {
         select: {
@@ -3420,6 +3541,10 @@ export const getPosSale = async (input: {
       payments: {
         orderBy: { createdAt: "asc" },
       },
+      fiscalReceipts: {
+        select: { id: true, status: true, fiscalizedAt: true },
+        orderBy: { createdAt: "desc" },
+      },
       saleReturns: {
         include: {
           lines: true,
@@ -3436,9 +3561,40 @@ export const getPosSale = async (input: {
     await assertUserCanAccessStore(prisma, input.user, sale.storeId);
   }
 
+  const paymentCorrections = await prisma.auditLog.findMany({
+    where: {
+      organizationId: input.organizationId,
+      entity: "CustomerOrder",
+      entityId: sale.id,
+      action: "POS_PAYMENT_CORRECTION",
+    },
+    select: {
+      id: true,
+      before: true,
+      after: true,
+      createdAt: true,
+      actor: { select: { id: true, name: true, email: true } },
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+  });
+
+  const paymentCorrectionEligibility = resolvePosPaymentCorrectionEligibility({
+    status: sale.status,
+    isDebt: sale.isDebt,
+    shiftId: sale.shiftId,
+    shiftStatus: sale.shift?.status ?? null,
+    registerActive: sale.register?.isActive ?? null,
+    kkmStatus: sale.kkmStatus,
+    fiscalReceiptCount: sale.fiscalReceipts.length,
+    user: input.user,
+  });
+
   return {
     ...sale,
     cashier: sale.createdBy,
+    paymentCorrectionEligibility,
+    effectivePayments: effectiveSalePaymentBreakdown(sale.payments),
+    paymentCorrections,
     subtotalKgs: toMoney(sale.subtotalKgs),
     discountKgs: toMoney(sale.discountKgs),
     totalKgs: toMoney(sale.totalKgs),
@@ -3479,6 +3635,267 @@ export const getPosSale = async (input: {
       })),
     })),
   };
+};
+
+const paymentCorrectionError = (reason: PosPaymentCorrectionEligibilityReason) => {
+  switch (reason) {
+    case "ROLE_REQUIRED":
+      return new AppError("posPaymentCorrectionRoleRequired", "FORBIDDEN", 403);
+    case "SALE_NOT_COMPLETED":
+      return new AppError("posPaymentCorrectionSaleNotCompleted", "CONFLICT", 409);
+    case "SHIFT_MISSING":
+      return new AppError("posPaymentCorrectionShiftMissing", "CONFLICT", 409);
+    case "SHIFT_CLOSED":
+      return new AppError("posPaymentCorrectionShiftClosed", "CONFLICT", 409);
+    case "REGISTER_INACTIVE":
+      return new AppError("posPaymentCorrectionRegisterInactive", "CONFLICT", 409);
+    case "FISCAL_CORRECTION_REQUIRED":
+      return new AppError("posPaymentCorrectionFiscalized", "CONFLICT", 409);
+    case "DEBT_SALE_UNSUPPORTED":
+      return new AppError("posPaymentCorrectionDebtUnsupported", "CONFLICT", 409);
+    default:
+      return new AppError("posPaymentCorrectionUnavailable", "CONFLICT", 409);
+  }
+};
+
+export const correctCompletedPosSalePayments = async (input: {
+  organizationId: string;
+  saleId: string;
+  payments: Array<{ method: PosPaymentMethod; amountKgs: number; providerRef?: string | null }>;
+  reason: string;
+  actorId: string;
+  user: StoreAccessUser;
+  requestId: string;
+  idempotencyKey: string;
+}) => {
+  const reason = input.reason.trim().replace(/\s+/g, " ");
+  if (reason.length < 3) {
+    throw new AppError("posPaymentCorrectionReasonRequired", "BAD_REQUEST", 400);
+  }
+
+  const payments = normalizePayments(input.payments);
+  const seenMethods = new Set<PosPaymentMethod>();
+  for (const payment of payments) {
+    if (seenMethods.has(payment.method)) {
+      throw new AppError("posPaymentCorrectionDuplicateMethod", "BAD_REQUEST", 400);
+    }
+    seenMethods.add(payment.method);
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const { result: correction, replayed } = await withIdempotency(
+      tx,
+      {
+        key: input.idempotencyKey,
+        route: "pos.sales.correctPayments",
+        userId: input.actorId,
+        request: toJson({ saleId: input.saleId, payments, reason }),
+      },
+      async () => {
+        await lockCustomerOrderForUpdate(tx, input.saleId);
+
+        const sale = await tx.customerOrder.findFirst({
+          where: {
+            id: input.saleId,
+            organizationId: input.organizationId,
+            isPosSale: true,
+          },
+          include: {
+            store: {
+              select: {
+                id: true,
+                currencyCode: true,
+                currencyRateKgsPerUnit: true,
+              },
+            },
+            register: { select: { id: true, isActive: true } },
+            payments: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
+            fiscalReceipts: { select: { id: true }, take: 1 },
+          },
+        });
+
+        if (!sale) {
+          throw new AppError("posSaleNotFound", "NOT_FOUND", 404);
+        }
+        await assertUserCanAccessStore(tx, input.user, sale.storeId);
+        if (!canCorrectCompletedPosPayment(input.user)) {
+          throw paymentCorrectionError("ROLE_REQUIRED");
+        }
+        if (!sale.shiftId || !sale.registerId) {
+          throw paymentCorrectionError("SHIFT_MISSING");
+        }
+
+        await tx.$queryRaw`
+          SELECT id FROM "RegisterShift" WHERE id = ${sale.shiftId} FOR UPDATE
+        `;
+        const shift = await tx.registerShift.findUnique({
+          where: { id: sale.shiftId },
+          include: { register: { select: { id: true, isActive: true } } },
+        });
+        const eligibility = resolvePosPaymentCorrectionEligibility({
+          status: sale.status,
+          isDebt: sale.isDebt,
+          shiftId: sale.shiftId,
+          shiftStatus: shift?.status ?? null,
+          registerActive: shift?.register.isActive ?? sale.register?.isActive ?? null,
+          kkmStatus: sale.kkmStatus,
+          fiscalReceiptCount: sale.fiscalReceipts.length,
+          user: input.user,
+        });
+        if (!eligibility.eligible) {
+          throw paymentCorrectionError(eligibility.reason);
+        }
+        if (
+          !shift ||
+          shift.organizationId !== input.organizationId ||
+          shift.storeId !== sale.storeId ||
+          shift.registerId !== sale.registerId
+        ) {
+          throw paymentCorrectionError("SHIFT_MISSING");
+        }
+
+        const saleTotalMinorUnits = moneyToMinorUnits(toMoney(sale.totalKgs));
+        if (
+          saleTotalMinorUnits === null ||
+          sumPaymentMinorUnits(payments) !== saleTotalMinorUnits
+        ) {
+          throw new AppError("posPaymentCorrectionTotalMismatch", "BAD_REQUEST", 400);
+        }
+
+        const tenderRows = sale.payments.filter((payment) => !payment.saleReturnId);
+        const beforePayments = effectiveSalePaymentBreakdown(tenderRows);
+        const paymentAmount = (
+          rows: Array<{ method: PosPaymentMethod; amountKgs: number }>,
+          method: PosPaymentMethod,
+        ) => roundMoney(rows.find((row) => row.method === method)?.amountKgs ?? 0);
+        const unchanged = posPaymentMethods.every(
+          (method) => paymentAmount(beforePayments, method) === paymentAmount(payments, method),
+        );
+        if (unchanged) {
+          throw new AppError("posPaymentCorrectionUnchanged", "CONFLICT", 409);
+        }
+
+        const [databaseClock] = await tx.$queryRaw<Array<{ now: Date }>>`
+          SELECT CURRENT_TIMESTAMP AS "now"
+        `;
+        const correctedAt = databaseClock?.now ?? new Date();
+        const transactionCurrency = resolveCurrencySnapshot(
+          currencySourceWithFallback(sale, currencySourceWithFallback(shift, sale.store)),
+        );
+        const oldCashKgs = paymentAmount(beforePayments, PosPaymentMethod.CASH);
+        const newCashKgs = paymentAmount(payments, PosPaymentMethod.CASH);
+        const cashDeltaKgs = roundMoney(newCashKgs - oldCashKgs);
+
+        await tx.salePayment.deleteMany({
+          where: {
+            customerOrderId: sale.id,
+            saleReturnId: null,
+          },
+        });
+        await tx.salePayment.createMany({
+          data: payments.map((payment) => ({
+            organizationId: input.organizationId,
+            storeId: sale.storeId,
+            shiftId: shift.id,
+            customerOrderId: sale.id,
+            method: payment.method,
+            amountKgs: payment.amountKgs,
+            ...transactionCurrency,
+            providerRef: payment.providerRef,
+            isRefund: false,
+            createdAt: correctedAt,
+            createdById: input.actorId,
+          })),
+        });
+
+        const persistedPayments = await tx.salePayment.findMany({
+          where: { customerOrderId: sale.id, saleReturnId: null },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        });
+
+        if (shift.expectedCashKgs !== null && cashDeltaKgs !== 0) {
+          await tx.registerShift.update({
+            where: { id: shift.id },
+            data: {
+              expectedCashKgs: roundMoney(toMoney(shift.expectedCashKgs) + cashDeltaKgs),
+            },
+          });
+        }
+        await tx.customerOrder.update({
+          where: { id: sale.id },
+          data: { updatedById: input.actorId },
+        });
+
+        const serializeLedgerRow = (payment: (typeof tenderRows)[number]) => ({
+          id: payment.id,
+          shiftId: payment.shiftId,
+          method: payment.method,
+          amountKgs: toMoney(payment.amountKgs),
+          currencyCode: payment.currencyCode,
+          currencyRateKgsPerUnit:
+            payment.currencyRateKgsPerUnit === null
+              ? null
+              : toMoney(payment.currencyRateKgsPerUnit),
+          providerRef: payment.providerRef,
+          isRefund: payment.isRefund,
+          createdAt: payment.createdAt.toISOString(),
+          createdById: payment.createdById,
+        });
+        const afterPayments = persistedPayments.map(serializeLedgerRow);
+        await writeAuditLog(tx, {
+          organizationId: input.organizationId,
+          actorId: input.actorId,
+          action: "POS_PAYMENT_CORRECTION",
+          entity: "CustomerOrder",
+          entityId: sale.id,
+          before: toJson({
+            storeId: sale.storeId,
+            shiftId: shift.id,
+            saleNumber: sale.number,
+            payments: tenderRows.map(serializeLedgerRow),
+            effectivePayments: beforePayments,
+            cashKgs: oldCashKgs,
+            shiftExpectedCashKgs:
+              shift.expectedCashKgs === null ? null : toMoney(shift.expectedCashKgs),
+            completedAt: sale.completedAt?.toISOString() ?? null,
+          }),
+          after: toJson({
+            storeId: sale.storeId,
+            shiftId: shift.id,
+            saleNumber: sale.number,
+            payments: afterPayments,
+            effectivePayments: effectiveSalePaymentBreakdown(persistedPayments),
+            cashKgs: newCashKgs,
+            cashDeltaKgs,
+            shiftExpectedCashKgs:
+              shift.expectedCashKgs === null
+                ? null
+                : roundMoney(toMoney(shift.expectedCashKgs) + cashDeltaKgs),
+            reason,
+            idempotencyKey: input.idempotencyKey,
+            correctedById: input.actorId,
+            correctedAt: correctedAt.toISOString(),
+          }),
+          requestId: input.requestId,
+        });
+
+        return {
+          id: sale.id,
+          number: sale.number,
+          storeId: sale.storeId,
+          registerId: sale.registerId,
+          shiftId: shift.id,
+          payments: effectiveSalePaymentBreakdown(persistedPayments),
+          cashDeltaKgs,
+          correctedAt: correctedAt.toISOString(),
+        };
+      },
+    );
+
+    return { ...correction, replayed };
+  });
+
+  return result;
 };
 
 export const editCompletedPosSale = async (input: {
@@ -3576,6 +3993,7 @@ export const editCompletedPosSale = async (input: {
         );
 
         const existingLineIds = new Set(sale.lines.map((line) => line.id));
+        const oldLineById = new Map(sale.lines.map((line) => [line.id, line]));
         const requestedLineIds = new Set<string>();
         const normalizedLines: NormalizedPosReceiptEditLine[] = [];
         const desiredKeys = new Set<string>();
@@ -3612,13 +4030,21 @@ export const editCompletedPosSale = async (input: {
           }
           desiredKeys.add(key);
 
-          const unitCostKgs = await resolveUnitCost({
-            tx,
-            organizationId: input.organizationId,
-            productId: line.productId,
-            variantId: line.variantId ?? null,
-            isBundle: resolvedPrice.isBundle,
-          });
+          const existingLine = lineId ? oldLineById.get(lineId) : null;
+          const preservesExistingCost =
+            existingLine?.productId === line.productId &&
+            (existingLine.variantId ?? null) === (line.variantId ?? null);
+          const unitCostKgs = preservesExistingCost
+            ? existingLine.unitCostKgs === null
+              ? null
+              : toMoney(existingLine.unitCostKgs)
+            : await resolveUnitCost({
+                tx,
+                organizationId: input.organizationId,
+                productId: line.productId,
+                variantId: line.variantId ?? null,
+                isBundle: resolvedPrice.isBundle,
+              });
           normalizedLines.push({
             lineId,
             productId: line.productId,
@@ -3639,7 +4065,6 @@ export const editCompletedPosSale = async (input: {
             )
             .map((line) => line.id),
         );
-        const oldLineById = new Map(sale.lines.map((line) => [line.id, line]));
         for (const normalized of normalizedLines) {
           if (!normalized.lineId || !protectedLineIds.has(normalized.lineId)) {
             continue;
@@ -3712,6 +4137,30 @@ export const editCompletedPosSale = async (input: {
         for (const line of normalizedLines) {
           addLineAggregateQty(desiredAggregates, line);
         }
+        const oldCostByKey = new Map<string, number | null>();
+        for (const line of sale.lines) {
+          const key = lineAggregateKey(line.productId, line.variantKey);
+          const lineCost = line.lineCostTotalKgs === null ? null : toMoney(line.lineCostTotalKgs);
+          const previous = oldCostByKey.get(key);
+          oldCostByKey.set(
+            key,
+            lineCost === null || previous === null ? null : roundMoney((previous ?? 0) + lineCost),
+          );
+        }
+        const desiredCostByKey = new Map<string, number | null>();
+        const desiredLineByKey = new Map(
+          normalizedLines.map((line) => [lineAggregateKey(line.productId, line.variantKey), line]),
+        );
+        for (const line of normalizedLines) {
+          const key = lineAggregateKey(line.productId, line.variantKey);
+          const previous = desiredCostByKey.get(key);
+          desiredCostByKey.set(
+            key,
+            line.lineCostTotalKgs === null || previous === null
+              ? null
+              : roundMoney((previous ?? 0) + line.lineCostTotalKgs),
+          );
+        }
 
         const changedProducts = new Map<
           string,
@@ -3731,6 +4180,21 @@ export const editCompletedPosSale = async (input: {
           if (!movementLine) {
             continue;
           }
+          const oldCostTotalKgs = oldCostByKey.has(key) ? oldCostByKey.get(key)! : 0;
+          const desiredCostTotalKgs = desiredCostByKey.has(key) ? desiredCostByKey.get(key)! : 0;
+          const inventoryValueDeltaKgs =
+            oldCostTotalKgs === null || desiredCostTotalKgs === null
+              ? null
+              : roundMoney(oldCostTotalKgs - desiredCostTotalKgs);
+          const desiredCostLine = desiredLineByKey.get(key);
+          const oldCostLine = sale.lines.find(
+            (line) => lineAggregateKey(line.productId, line.variantKey) === key,
+          );
+          const movementUnitCostKgs =
+            desiredCostLine?.unitCostKgs ??
+            (oldCostLine?.unitCostKgs === null || oldCostLine?.unitCostKgs === undefined
+              ? null
+              : toMoney(oldCostLine.unitCostKgs));
           const movement = await applyStockMovement(tx, {
             storeId: sale.storeId,
             productId: movementLine.productId,
@@ -3739,10 +4203,22 @@ export const editCompletedPosSale = async (input: {
             type: StockMovementType.SALE,
             referenceType: "CustomerOrder",
             referenceId: sale.id,
+            unitCostKgs: movementUnitCostKgs,
+            inventoryValueDeltaKgs,
             note: input.reason?.trim() || `Редактирование чека ${sale.number}`,
             actorId: input.actorId,
             organizationId: input.organizationId,
           });
+          if (inventoryValueDeltaKgs !== null) {
+            await applyValuedProductCostDelta(tx, {
+              organizationId: input.organizationId,
+              productId: movementLine.productId,
+              variantId: movementLine.variantId,
+              quantityDelta: stockDelta,
+              valueDeltaKgs: inventoryValueDeltaKgs,
+              alreadyAppliedPhysicalQuantityDelta: stockDelta,
+            });
+          }
           changedProducts.set(key, {
             storeId: sale.storeId,
             productId: movementLine.productId,
@@ -4385,10 +4861,22 @@ export const listPosReceipts = async (input: {
     ...(input.statuses?.length ? { status: { in: input.statuses } } : {}),
     ...(input.dateFrom || input.dateTo
       ? {
-          createdAt: {
-            ...(input.dateFrom ? { gte: input.dateFrom } : {}),
-            ...(input.dateTo ? { lte: input.dateTo } : {}),
-          },
+          OR: [
+            {
+              status: CustomerOrderStatus.COMPLETED,
+              completedAt: {
+                ...(input.dateFrom ? { gte: input.dateFrom } : {}),
+                ...(input.dateTo ? { lte: input.dateTo } : {}),
+              },
+            },
+            {
+              status: { not: CustomerOrderStatus.COMPLETED },
+              createdAt: {
+                ...(input.dateFrom ? { gte: input.dateFrom } : {}),
+                ...(input.dateTo ? { lte: input.dateTo } : {}),
+              },
+            },
+          ],
         }
       : {}),
   };
@@ -4447,7 +4935,11 @@ export const listPosReceipts = async (input: {
           },
         },
       },
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      orderBy: [
+        { completedAt: { sort: "desc", nulls: "last" } },
+        { createdAt: "desc" },
+        { id: "desc" },
+      ],
       skip: (input.page - 1) * input.pageSize,
       take: input.pageSize,
     }),
@@ -4715,6 +5207,18 @@ export const completePosSale = async (input: {
           }
 
           for (const line of sale.lines) {
+            const frozenCostTotalKgs =
+              line.lineCostTotalKgs ??
+              (line.unitCostKgs === null ? null : line.unitCostKgs.mul(line.qty));
+            if (frozenCostTotalKgs !== null) {
+              await applyValuedProductCostDelta(tx, {
+                organizationId: input.organizationId,
+                productId: line.productId,
+                variantId: line.variantId,
+                quantityDelta: -line.qty,
+                valueDeltaKgs: frozenCostTotalKgs.negated(),
+              });
+            }
             await applyStockMovement(tx, {
               storeId: sale.storeId,
               productId: line.productId,
@@ -4723,6 +5227,9 @@ export const completePosSale = async (input: {
               type: StockMovementType.SALE,
               referenceType: "CustomerOrder",
               referenceId: sale.id,
+              unitCostKgs: line.unitCostKgs === null ? null : Number(line.unitCostKgs),
+              inventoryValueDeltaKgs:
+                frozenCostTotalKgs === null ? null : Number(frozenCostTotalKgs.negated()),
               note: sale.number,
               actorId: input.actorId,
               organizationId: input.organizationId,
@@ -5746,6 +6253,31 @@ export const editCompletedSaleReturn = async (input: {
         >();
         normalizedLines.forEach((line) => addLineAggregateQty(desiredAggregates, line));
 
+        const oldReturnCostByKey = new Map<string, number | null>();
+        for (const line of saleReturn.lines) {
+          const key = lineAggregateKey(line.productId, line.variantKey);
+          const lineCost = line.lineCostTotalKgs === null ? null : toMoney(line.lineCostTotalKgs);
+          const previous = oldReturnCostByKey.get(key);
+          oldReturnCostByKey.set(
+            key,
+            lineCost === null || previous === null ? null : roundMoney((previous ?? 0) + lineCost),
+          );
+        }
+        const desiredReturnCostByKey = new Map<string, number | null>();
+        const desiredReturnLineByKey = new Map(
+          normalizedLines.map((line) => [lineAggregateKey(line.productId, line.variantKey), line]),
+        );
+        for (const line of normalizedLines) {
+          const key = lineAggregateKey(line.productId, line.variantKey);
+          const previous = desiredReturnCostByKey.get(key);
+          desiredReturnCostByKey.set(
+            key,
+            line.lineCostTotalKgs === null || previous === null
+              ? null
+              : roundMoney((previous ?? 0) + line.lineCostTotalKgs),
+          );
+        }
+
         const changedProducts = new Map<
           string,
           { storeId: string; productId: string; variantId: string | null; onHand: number | null }
@@ -5762,6 +6294,32 @@ export const editCompletedSaleReturn = async (input: {
           if (!movementLine) {
             continue;
           }
+          const oldCostTotalKgs = oldReturnCostByKey.has(key) ? oldReturnCostByKey.get(key)! : 0;
+          const desiredCostTotalKgs = desiredReturnCostByKey.has(key)
+            ? desiredReturnCostByKey.get(key)!
+            : 0;
+          const inventoryValueDeltaKgs =
+            oldCostTotalKgs === null || desiredCostTotalKgs === null
+              ? null
+              : roundMoney(desiredCostTotalKgs - oldCostTotalKgs);
+          if (inventoryValueDeltaKgs !== null) {
+            await applyValuedProductCostDelta(tx, {
+              organizationId: input.organizationId,
+              productId: movementLine.productId,
+              variantId: movementLine.variantId,
+              quantityDelta: stockDelta,
+              valueDeltaKgs: inventoryValueDeltaKgs,
+            });
+          }
+          const desiredCostLine = desiredReturnLineByKey.get(key);
+          const oldCostLine = saleReturn.lines.find(
+            (line) => lineAggregateKey(line.productId, line.variantKey) === key,
+          );
+          const movementUnitCostKgs =
+            desiredCostLine?.unitCostKgs ??
+            (oldCostLine?.unitCostKgs === null || oldCostLine?.unitCostKgs === undefined
+              ? null
+              : toMoney(oldCostLine.unitCostKgs));
           const movement = await applyStockMovement(tx, {
             storeId: saleReturn.storeId,
             productId: movementLine.productId,
@@ -5770,6 +6328,8 @@ export const editCompletedSaleReturn = async (input: {
             type: StockMovementType.RETURN,
             referenceType: "SaleReturn",
             referenceId: saleReturn.id,
+            unitCostKgs: movementUnitCostKgs,
+            inventoryValueDeltaKgs,
             note: input.reason?.trim() || `Редактирование возврата ${saleReturn.number}`,
             actorId: input.actorId,
             organizationId: input.organizationId,
@@ -6137,6 +6697,18 @@ export const completeSaleReturn = async (input: {
         }
 
         for (const line of saleReturn.lines) {
+          const frozenCostTotalKgs =
+            line.lineCostTotalKgs ??
+            (line.unitCostKgs === null ? null : line.unitCostKgs.mul(line.qty));
+          if (frozenCostTotalKgs !== null) {
+            await applyValuedProductCostDelta(tx, {
+              organizationId: input.organizationId,
+              productId: line.productId,
+              variantId: line.variantId,
+              quantityDelta: line.qty,
+              valueDeltaKgs: frozenCostTotalKgs,
+            });
+          }
           await applyStockMovement(tx, {
             storeId: saleReturn.storeId,
             productId: line.productId,
@@ -6145,6 +6717,8 @@ export const completeSaleReturn = async (input: {
             type: StockMovementType.RETURN,
             referenceType: "SaleReturn",
             referenceId: saleReturn.id,
+            unitCostKgs: line.unitCostKgs === null ? null : Number(line.unitCostKgs),
+            inventoryValueDeltaKgs: frozenCostTotalKgs === null ? null : Number(frozenCostTotalKgs),
             note: saleReturn.number,
             actorId: input.actorId,
             organizationId: input.organizationId,
@@ -6243,58 +6817,108 @@ export const retryPosSaleKkm = async (input: {
   requestId: string;
   user: StoreAccessUser;
 }) => {
-  const sale = await prisma.customerOrder.findFirst({
-    where: {
-      id: input.saleId,
-      organizationId: input.organizationId,
-      isPosSale: true,
-      status: CustomerOrderStatus.COMPLETED,
-    },
-    include: {
-      lines: {
-        include: {
-          product: {
-            select: {
-              sku: true,
-              name: true,
+  const locked = await prisma.$transaction(async (tx) => {
+    await lockCustomerOrderForUpdate(tx, input.saleId);
+    const sale = await tx.customerOrder.findFirst({
+      where: {
+        id: input.saleId,
+        organizationId: input.organizationId,
+        isPosSale: true,
+        status: CustomerOrderStatus.COMPLETED,
+      },
+      include: {
+        lines: {
+          include: {
+            product: {
+              select: {
+                sku: true,
+                name: true,
+              },
             },
           },
         },
+        payments: {
+          where: { saleReturnId: null },
+          orderBy: { createdAt: "asc" },
+        },
+        fiscalReceipts: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: { id: true },
+        },
+        register: {
+          select: { id: true, isActive: true },
+        },
       },
-      payments: {
-        where: { isRefund: false },
-        orderBy: { createdAt: "asc" },
-      },
-      fiscalReceipts: {
-        orderBy: { createdAt: "desc" },
-        take: 1,
-        select: { id: true },
-      },
-      register: {
-        select: { id: true, isActive: true },
-      },
-    },
-  });
+    });
 
-  if (!sale) {
-    throw new AppError("posSaleNotFound", "NOT_FOUND", 404);
-  }
-  await assertUserCanAccessStore(prisma, input.user, sale.storeId);
-  if (!sale.register?.isActive) {
-    throw new AppError("posRegisterInactive", "CONFLICT", 409);
-  }
+    if (!sale) {
+      throw new AppError("posSaleNotFound", "NOT_FOUND", 404);
+    }
+    await assertUserCanAccessStore(tx, input.user, sale.storeId);
+    if (!sale.register?.isActive) {
+      throw new AppError("posRegisterInactive", "CONFLICT", 409);
+    }
 
-  const compliance = await prisma.storeComplianceProfile.findUnique({
-    where: { storeId: sale.storeId },
-    select: {
-      enableKkm: true,
-      kkmMode: true,
-      kkmProviderKey: true,
-    },
+    const compliance = await tx.storeComplianceProfile.findUnique({
+      where: { storeId: sale.storeId },
+      select: {
+        enableKkm: true,
+        kkmMode: true,
+        kkmProviderKey: true,
+      },
+    });
+    if (!compliance?.enableKkm || compliance.kkmMode !== "ADAPTER") {
+      throw new AppError("kkmNotConfigured", "BAD_REQUEST", 400);
+    }
+
+    const draft: FiscalReceiptDraft = {
+      storeId: sale.storeId,
+      receiptId: sale.number,
+      cashierName: input.actorId,
+      customerName: sale.customerName ?? undefined,
+      lines: sale.lines.map((line) => ({
+        sku: line.product.sku,
+        name: line.product.name,
+        qty: line.qty,
+        priceKgs: toMoney(line.unitPriceKgs),
+      })),
+      payments: effectiveSalePaymentBreakdown(sale.payments).map((payment) => ({
+        type: payment.method,
+        amountKgs: toMoney(payment.amountKgs),
+      })),
+      metadata: {
+        saleId: sale.id,
+        shiftId: sale.shiftId,
+        registerId: sale.registerId,
+        retriedBy: input.actorId,
+      },
+    };
+    const latestFiscalReceiptId = sale.fiscalReceipts[0]?.id;
+    if (sale.kkmStatus === "SENT") {
+      return { sale, fiscalReceiptId: latestFiscalReceiptId ?? null };
+    }
+    const fiscalReceiptId =
+      latestFiscalReceiptId ??
+      (
+        await queueFiscalReceipt({
+          tx,
+          organizationId: input.organizationId,
+          storeId: sale.storeId,
+          customerOrderId: sale.id,
+          idempotencyKey: `pos-sale-retry:${sale.id}`,
+          mode: KkmMode.ADAPTER,
+          providerKey: compliance.kkmProviderKey,
+          currencyCode: sale.currencyCode,
+          currencyRateKgsPerUnit: sale.currencyRateKgsPerUnit,
+          payload: draft,
+        })
+      ).id;
+
+    return { sale, fiscalReceiptId };
   });
-  if (!compliance?.enableKkm || compliance.kkmMode !== "ADAPTER") {
-    throw new AppError("kkmNotConfigured", "BAD_REQUEST", 400);
-  }
+  const { sale, fiscalReceiptId } = locked;
+
   if (sale.kkmStatus === "SENT") {
     return {
       saleId: sale.id,
@@ -6304,48 +6928,9 @@ export const retryPosSaleKkm = async (input: {
       retried: false,
     };
   }
-
-  const draft: FiscalReceiptDraft = {
-    storeId: sale.storeId,
-    receiptId: sale.number,
-    cashierName: input.actorId,
-    customerName: sale.customerName ?? undefined,
-    lines: sale.lines.map((line) => ({
-      sku: line.product.sku,
-      name: line.product.name,
-      qty: line.qty,
-      priceKgs: toMoney(line.unitPriceKgs),
-    })),
-    payments: sale.payments.map((payment) => ({
-      type: payment.method,
-      amountKgs: toMoney(payment.amountKgs),
-    })),
-    metadata: {
-      saleId: sale.id,
-      shiftId: sale.shiftId,
-      registerId: sale.registerId,
-      retriedBy: input.actorId,
-    },
-  };
-
-  const latestFiscalReceiptId = sale.fiscalReceipts[0]?.id;
-  const fiscalReceiptId =
-    latestFiscalReceiptId ??
-    (await prisma.$transaction(async (tx) => {
-      const receipt = await queueFiscalReceipt({
-        tx,
-        organizationId: input.organizationId,
-        storeId: sale.storeId,
-        customerOrderId: sale.id,
-        idempotencyKey: `pos-sale-retry:${sale.id}`,
-        mode: KkmMode.ADAPTER,
-        providerKey: compliance.kkmProviderKey,
-        currencyCode: sale.currencyCode,
-        currencyRateKgsPerUnit: sale.currencyRateKgsPerUnit,
-        payload: draft,
-      });
-      return receipt.id;
-    }));
+  if (!fiscalReceiptId) {
+    throw new AppError("posFiscalReceiptUnavailable", "CONFLICT", 409);
+  }
   const result = await processAdapterFiscalReceipt({
     receiptId: fiscalReceiptId,
     trigger: "manual",

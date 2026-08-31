@@ -26,6 +26,8 @@ type PhoneNumberInputProps = {
   onChange: (value: string) => void;
   disabled?: boolean;
   inputId?: string;
+  inputAriaInvalid?: boolean;
+  inputAriaDescribedBy?: string;
   placeholder?: string;
   countrySelectLabel: string;
 };
@@ -35,6 +37,8 @@ export const PhoneNumberInput = ({
   onChange,
   disabled,
   inputId,
+  inputAriaInvalid,
+  inputAriaDescribedBy,
   placeholder,
   countrySelectLabel,
 }: PhoneNumberInputProps) => {
@@ -76,11 +80,7 @@ export const PhoneNumberInput = ({
 
   return (
     <div className="grid gap-2 sm:grid-cols-[8.5rem_1fr]">
-      <Select
-        value={selectedCountryCode}
-        onValueChange={handleCountryChange}
-        disabled={disabled}
-      >
+      <Select value={selectedCountryCode} onValueChange={handleCountryChange} disabled={disabled}>
         <SelectTrigger aria-label={countrySelectLabel}>
           <SelectValue />
         </SelectTrigger>
@@ -94,6 +94,8 @@ export const PhoneNumberInput = ({
       </Select>
       <Input
         id={inputId}
+        aria-invalid={inputAriaInvalid}
+        aria-describedby={inputAriaDescribedBy}
         inputMode="tel"
         autoComplete="tel-national"
         value={nationalValue}

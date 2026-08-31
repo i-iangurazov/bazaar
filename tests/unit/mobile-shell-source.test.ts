@@ -13,6 +13,7 @@ const dashboardSource = readFileSync(
   "utf8",
 );
 const globalsSource = readFileSync(join(process.cwd(), "src/app/globals.css"), "utf8");
+const sidebarSource = readFileSync(join(process.cwd(), "src/components/ui/sidebar.tsx"), "utf8");
 
 describe("mobile app shell source", () => {
   it("defines the mobile shell building blocks", () => {
@@ -25,6 +26,11 @@ describe("mobile app shell source", () => {
     expect(mobileShellSource).toContain("export const MobileTaskCard");
     expect(mobileShellSource).toContain("env(safe-area-inset-bottom)");
     expect(mobileShellSource).toContain("md:hidden");
+  });
+
+  it("leaves the route content as the only page-level heading", () => {
+    expect(mobileShellSource).not.toContain("<h1");
+    expect(mobileShellSource).not.toContain("</h1>");
   });
 
   it("uses the below-768px mobile breakpoint", () => {
@@ -70,7 +76,19 @@ describe("mobile app shell source", () => {
     expect(bottomNavSource).toContain(
       "flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-[1.1rem]",
     );
-    expect(bottomNavSource).toContain("bg-primary text-primary-foreground shadow-lg shadow-primary/20");
+    expect(bottomNavSource).toContain(
+      "bg-primary text-primary-foreground shadow-lg shadow-primary/20",
+    );
+    expect(mobileShellSource).toContain('aria-current={item.active ? "page" : undefined}');
+    expect(mobileShellSource).toContain('aria-current={moreActive ? "page" : undefined}');
+  });
+
+  it("keeps wide tables inside the shell instead of expanding the document root", () => {
+    expect(mobileShellSource).not.toContain("md:contents");
+    expect(mobileShellSource).toContain("max-w-full");
+    expect(mobileShellSource).toContain("md:overflow-x-clip");
+    expect(sidebarSource).toContain("w-0 min-w-0 max-w-full flex-1");
+    expect(appShellSource).toContain("w-full min-w-0 max-w-full flex-1");
   });
 
   it("adds a mobile-only command center without replacing the desktop dashboard", () => {

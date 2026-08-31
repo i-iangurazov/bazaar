@@ -22,6 +22,8 @@ import {
   uploadProductImageBuffer,
 } from "@/server/services/productImageStorage";
 
+type SharpMetadata = Awaited<ReturnType<ReturnType<typeof sharp>["metadata"]>>;
+
 export const PRODUCT_IMAGE_STUDIO_JOB_NAME = "product-image-studio-process";
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
@@ -368,7 +370,7 @@ export const validateUploadedImage = async (input: {
     throw new AppError("imageTooLarge", "BAD_REQUEST", 400);
   }
 
-  let metadata: sharp.Metadata;
+  let metadata: SharpMetadata;
   try {
     metadata = await sharp(sourceImage.buffer).metadata();
   } catch {
@@ -651,7 +653,7 @@ const persistGeneratedImage = async (input: {
       mimeType: input.mimeType,
       bytes: input.buffer.length,
     };
-  } catch (error) {
+  } catch {
     throw new AppError("productImageStudioOutputPersistFailed", "INTERNAL_SERVER_ERROR", 500);
   }
 };

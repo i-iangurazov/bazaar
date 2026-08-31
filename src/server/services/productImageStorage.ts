@@ -1,8 +1,8 @@
 import { createHash, randomUUID } from "node:crypto";
 import { lookup } from "node:dns/promises";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import { isIP } from "node:net";
-import { extname, join } from "node:path";
+import { extname, join, resolve, sep } from "node:path";
 import { Readable } from "node:stream";
 import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 
@@ -109,6 +109,87 @@ const maxRemoteImageRedirects = 3;
 const remoteImageRedirectStatuses = new Set([301, 302, 303, 307, 308]);
 const remoteHostAllowCache = new Map<string, boolean>();
 
+export type RemoteImageFetchPolicy = {
+  allowedOrigin: string;
+  allowedPathPrefix: string;
+};
+
+const safeManagedRemotePathSegmentPattern = /^[A-Za-z0-9._-]+$/;
+
+const encodeManagedRemotePath = (pathname: string) => {
+  if (!pathname.startsWith("/") || pathname.includes("//")) {
+    return null;
+  }
+
+  const rawSegments = pathname.split("/");
+  const encodedSegments: string[] = [];
+  for (const [index, rawSegment] of rawSegments.entries()) {
+    if (!rawSegment) {
+      if (index === 0 || index === rawSegments.length - 1) {
+        encodedSegments.push("");
+        continue;
+      }
+      return null;
+    }
+
+    let segment: string;
+    try {
+      segment = decodeURIComponent(rawSegment);
+    } catch {
+      return null;
+    }
+    if (
+      segment === "." ||
+      segment === ".." ||
+      segment.includes("%") ||
+      !safeManagedRemotePathSegmentPattern.test(segment)
+    ) {
+      return null;
+    }
+    encodedSegments.push(encodeURIComponent(segment));
+  }
+
+  return encodedSegments.join("/");
+};
+
+const canonicalizeManagedRemoteTarget = (url: URL, policy: RemoteImageFetchPolicy) => {
+  let allowedOrigin: URL;
+  try {
+    allowedOrigin = new URL(policy.allowedOrigin);
+  } catch {
+    return null;
+  }
+  if (
+    (allowedOrigin.protocol !== "http:" && allowedOrigin.protocol !== "https:") ||
+    allowedOrigin.origin !== policy.allowedOrigin ||
+    allowedOrigin.pathname !== "/" ||
+    allowedOrigin.search ||
+    allowedOrigin.hash ||
+    allowedOrigin.username ||
+    allowedOrigin.password ||
+    url.origin !== allowedOrigin.origin ||
+    url.port ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash ||
+    !policy.allowedPathPrefix.startsWith("/") ||
+    !policy.allowedPathPrefix.endsWith("/")
+  ) {
+    return null;
+  }
+
+  const safePath = encodeManagedRemotePath(url.pathname);
+  if (!safePath || !safePath.startsWith(policy.allowedPathPrefix)) {
+    return null;
+  }
+
+  return {
+    fetchUrl: `${allowedOrigin.origin}${safePath}`,
+    hostname: allowedOrigin.hostname,
+  };
+};
+
 type ImageStorageProvider = "local" | "r2";
 
 type R2Config = {
@@ -183,7 +264,6 @@ const resolveStorageProvider = (): { provider: ImageStorageProvider; config: R2C
 
   if (!storageWarningShown) {
     storageWarningShown = true;
-    // eslint-disable-next-line no-console
     console.warn(
       `[image-storage] IMAGE_STORAGE_PROVIDER=r2 but configuration is incomplete (${missing.join(
         ", ",
@@ -200,7 +280,6 @@ const warnUploadFailure = (error: unknown) => {
   }
   uploadWarningShown = true;
   const message = error instanceof Error ? error.message : String(error);
-  // eslint-disable-next-line no-console
   console.warn(`[image-storage] upload failed; using source URL fallback (${message})`);
 };
 
@@ -796,7 +875,9 @@ const fetchAllowedRemoteImage = async (sourceUrl: string, signal: AbortSignal) =
     if (currentUrl.protocol !== "http:" && currentUrl.protocol !== "https:") {
       return null;
     }
-
+    if (currentUrl.port || currentUrl.username || currentUrl.password) {
+      return null;
+    }
     const hostAllowed = await isRemoteHostAllowed(currentUrl.hostname);
     if (!hostAllowed) {
       return null;
@@ -826,39 +907,156 @@ const fetchAllowedRemoteImage = async (sourceUrl: string, signal: AbortSignal) =
   return null;
 };
 
+const fetchAllowedManagedRemoteImage = async (
+  sourceUrl: string,
+  signal: AbortSignal,
+  policy: RemoteImageFetchPolicy,
+) => {
+  let currentSource = sourceUrl;
+
+  for (let redirectCount = 0; redirectCount <= maxRemoteImageRedirects; redirectCount += 1) {
+    let parsed: URL;
+    try {
+      parsed = new URL(currentSource);
+    } catch {
+      return null;
+    }
+
+    const target = canonicalizeManagedRemoteTarget(parsed, policy);
+    if (!target || !(await isRemoteHostAllowed(target.hostname))) {
+      return null;
+    }
+
+    const response = await fetch(target.fetchUrl, {
+      signal,
+      redirect: "manual",
+    });
+    if (!remoteImageRedirectStatuses.has(response.status)) {
+      return response;
+    }
+
+    const location = response.headers.get("location");
+    if (!location || redirectCount >= maxRemoteImageRedirects) {
+      return null;
+    }
+    try {
+      currentSource = new URL(location, target.fetchUrl).toString();
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+};
+
+const readDownloadedRemoteImage = async (response: Response | null) => {
+  if (!response?.ok) {
+    return null;
+  }
+
+  const contentType = safeImageMimeType(response.headers.get("content-type"));
+  if (!contentType) {
+    return null;
+  }
+
+  const contentLength = Number(response.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > maxImageBytes) {
+    return null;
+  }
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  if (!buffer.length || buffer.length > maxImageBytes) {
+    return null;
+  }
+
+  return { buffer, contentType };
+};
+
 export const downloadRemoteImage = async (url: string) => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), remoteImageFetchTimeoutMs);
 
   try {
-    const response = await fetchAllowedRemoteImage(url, controller.signal);
-    if (!response?.ok) {
-      return null;
-    }
-
-    const contentType = safeImageMimeType(response.headers.get("content-type"));
-    if (!contentType) {
-      return null;
-    }
-
-    const contentLength = Number(response.headers.get("content-length"));
-    if (Number.isFinite(contentLength) && contentLength > maxImageBytes) {
-      return null;
-    }
-
-    const buffer = Buffer.from(await response.arrayBuffer());
-    if (!buffer.length || buffer.length > maxImageBytes) {
-      return null;
-    }
-
-    return {
-      buffer,
-      contentType,
-    };
+    return await readDownloadedRemoteImage(await fetchAllowedRemoteImage(url, controller.signal));
   } catch {
     return null;
   } finally {
     clearTimeout(timeout);
+  }
+};
+
+export const downloadManagedRemoteImage = async (url: string, policy: RemoteImageFetchPolicy) => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), remoteImageFetchTimeoutMs);
+
+  try {
+    return await readDownloadedRemoteImage(
+      await fetchAllowedManagedRemoteImage(url, controller.signal, policy),
+    );
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+const localImageMimeTypes = new Map([
+  [".jpg", "image/jpeg"],
+  [".jpeg", "image/jpeg"],
+  [".png", "image/png"],
+  [".gif", "image/gif"],
+  [".webp", "image/webp"],
+  [".avif", "image/avif"],
+  [".heic", "image/heic"],
+  [".heif", "image/heif"],
+]);
+
+export const readManagedLocalProductImage = async (input: {
+  url: string;
+  organizationId: string;
+}) => {
+  let pathname: string;
+  try {
+    pathname = decodeURIComponent(new URL(input.url, "http://local.invalid").pathname);
+  } catch {
+    return null;
+  }
+
+  const normalizedOrganizationId = normalizeOrgPath(input.organizationId);
+  const allowedPrefixes = [
+    `/uploads/imported-products/${normalizedOrganizationId}/`,
+    `/uploads/product-images/${normalizedOrganizationId}/`,
+  ];
+  if (!allowedPrefixes.some((prefix) => pathname.startsWith(prefix))) {
+    return null;
+  }
+
+  const uploadsRoot = resolve(process.cwd(), "public", "uploads");
+  const candidatePath = resolve(process.cwd(), "public", `.${pathname}`);
+  if (!candidatePath.startsWith(`${uploadsRoot}${sep}`)) {
+    return null;
+  }
+
+  try {
+    const [realUploadsRoot, realCandidatePath] = await Promise.all([
+      realpath(uploadsRoot),
+      realpath(candidatePath),
+    ]);
+    if (!realCandidatePath.startsWith(`${realUploadsRoot}${sep}`)) {
+      return null;
+    }
+    const file = await stat(realCandidatePath);
+    if (!file.isFile() || file.size < 1 || file.size > maxImageBytes) {
+      return null;
+    }
+    const extension = extname(realCandidatePath).toLowerCase();
+    const contentType = extension ? localImageMimeTypes.get(extension) : "application/octet-stream";
+    if (!contentType) {
+      return null;
+    }
+    return { buffer: await readFile(realCandidatePath), contentType };
+  } catch {
+    return null;
   }
 };
 

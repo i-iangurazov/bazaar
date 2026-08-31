@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -10,7 +10,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { FormStack } from "@/components/form-layout";
@@ -26,17 +32,26 @@ const InvitePage = () => {
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const { toast } = useToast();
+  const submitInFlightRef = useRef(false);
   const [accepted, setAccepted] = useState(false);
   const [emailDeliveryFailed, setEmailDeliveryFailed] = useState(false);
+  const [emailVerificationRequired, setEmailVerificationRequired] = useState(true);
   const [formError, setFormError] = useState<string | null>(null);
-  const [values, setValues] = useState<{ name: string; password: string; preferredLocale: Locale }>({
-    name: "",
-    password: "",
-    preferredLocale: "ru",
-  });
-  const [fieldErrors, setFieldErrors] = useState<Partial<Record<"name" | "password" | "preferredLocale", string>>>({});
+  const [values, setValues] = useState<{ name: string; password: string; preferredLocale: Locale }>(
+    {
+      name: "",
+      password: "",
+      preferredLocale: "ru",
+    },
+  );
+  const [fieldErrors, setFieldErrors] = useState<
+    Partial<Record<"name" | "password" | "preferredLocale", string>>
+  >({});
 
-  const inviteQuery = trpc.publicAuth.inviteDetails.useQuery({ token }, { enabled: Boolean(token) });
+  const inviteQuery = trpc.publicAuth.inviteDetails.useQuery(
+    { token },
+    { enabled: Boolean(token) },
+  );
 
   const schema = z.object({
     name: z.string().min(2, t("nameRequired")),
@@ -53,6 +68,7 @@ const InvitePage = () => {
       });
       const deliveryFailed = result.verificationEmailSent === false;
       setEmailDeliveryFailed(deliveryFailed);
+      setEmailVerificationRequired(!result.user.emailVerifiedAt);
       setFormError(null);
       toast({
         variant: deliveryFailed ? "error" : "success",
@@ -65,6 +81,9 @@ const InvitePage = () => {
       setFormError(message);
       toast({ variant: "error", description: message });
     },
+    onSettled: () => {
+      submitInFlightRef.current = false;
+    },
   });
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -74,7 +93,10 @@ const InvitePage = () => {
       const nextErrors: Partial<Record<"name" | "password" | "preferredLocale", string>> = {};
       for (const issue of parsed.error.issues) {
         const key = issue.path[0];
-        if (typeof key === "string" && (key === "name" || key === "password" || key === "preferredLocale")) {
+        if (
+          typeof key === "string" &&
+          (key === "name" || key === "password" || key === "preferredLocale")
+        ) {
           nextErrors[key] = issue.message;
         }
       }
@@ -84,6 +106,8 @@ const InvitePage = () => {
     setFieldErrors({});
     setFormError(null);
     setEmailDeliveryFailed(false);
+    if (submitInFlightRef.current) return;
+    submitInFlightRef.current = true;
     acceptMutation.mutate({ token, ...parsed.data });
   };
 
@@ -95,11 +119,20 @@ const InvitePage = () => {
         </div>
         <Card>
           <CardHeader>
-            <CardTitle>{t("acceptedTitle")}</CardTitle>
+            <CardTitle as="h1">{t("acceptedTitle")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm text-muted-foreground">
-            <p>{emailDeliveryFailed ? t("acceptedEmailFailedHint") : t("acceptedHint")}</p>
-            <Link href="/login" className="text-sm font-semibold text-primary hover:text-primary/80">
+            <p>
+              {emailDeliveryFailed
+                ? t("acceptedEmailFailedHint")
+                : emailVerificationRequired
+                  ? t("acceptedHint")
+                  : t("accepted")}
+            </p>
+            <Link
+              href="/login"
+              className="text-sm font-semibold text-primary hover:text-primary/90"
+            >
               {t("goToLogin")}
             </Link>
           </CardContent>
@@ -115,7 +148,7 @@ const InvitePage = () => {
       </div>
       <Card>
         <CardHeader>
-          <CardTitle>{t("title")}</CardTitle>
+          <CardTitle as="h1">{t("title")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           {inviteQuery.isLoading ? (
@@ -125,13 +158,17 @@ const InvitePage = () => {
             </div>
           ) : inviteQuery.data ? (
             <>
-              {formError ? <p className="text-sm font-medium text-danger">{formError}</p> : null}
+              {formError ? (
+                <p className="text-sm font-medium text-danger" role="alert">
+                  {formError}
+                </p>
+              ) : null}
               <div className="rounded-md border border-border/70 bg-muted/30 p-3 text-sm text-muted-foreground">
                 <p>{t("inviteFor", { org: inviteQuery.data.organizationName })}</p>
                 <p>{t("inviteEmail", { email: inviteQuery.data.email })}</p>
                 <p>{t("inviteRole", { role: inviteQuery.data.role })}</p>
               </div>
-              <form onSubmit={handleSubmit}>
+              <form onSubmit={handleSubmit} noValidate aria-live="polite">
                 <FormStack>
                   <div className="space-y-1">
                     <label className="text-sm font-medium text-foreground" htmlFor="invite-name">
@@ -139,6 +176,9 @@ const InvitePage = () => {
                     </label>
                     <Input
                       id="invite-name"
+                      autoComplete="name"
+                      aria-invalid={Boolean(fieldErrors.name)}
+                      aria-describedby={fieldErrors.name ? "invite-name-error" : undefined}
                       placeholder={t("namePlaceholder")}
                       value={values.name}
                       onChange={(event) => {
@@ -149,14 +189,24 @@ const InvitePage = () => {
                         }
                       }}
                     />
-                    {fieldErrors.name ? <p className="text-xs font-medium text-danger">{fieldErrors.name}</p> : null}
+                    {fieldErrors.name ? (
+                      <p id="invite-name-error" className="text-xs font-medium text-danger">
+                        {fieldErrors.name}
+                      </p>
+                    ) : null}
                   </div>
                   <div className="space-y-1">
-                    <label className="text-sm font-medium text-foreground" htmlFor="invite-password">
+                    <label
+                      className="text-sm font-medium text-foreground"
+                      htmlFor="invite-password"
+                    >
                       {t("password")}
                     </label>
                     <PasswordInput
                       id="invite-password"
+                      autoComplete="new-password"
+                      aria-invalid={Boolean(fieldErrors.password)}
+                      aria-describedby={fieldErrors.password ? "invite-password-error" : undefined}
                       placeholder={t("passwordPlaceholder")}
                       value={values.password}
                       showLabel={tCommon("showPassword")}
@@ -170,11 +220,18 @@ const InvitePage = () => {
                       }}
                     />
                     {fieldErrors.password ? (
-                      <p className="text-xs font-medium text-danger">{fieldErrors.password}</p>
+                      <p id="invite-password-error" className="text-xs font-medium text-danger">
+                        {fieldErrors.password}
+                      </p>
                     ) : null}
                   </div>
                   <div className="space-y-1">
-                    <label className="text-sm font-medium text-foreground">{t("preferredLocale")}</label>
+                    <label
+                      className="text-sm font-medium text-foreground"
+                      htmlFor="invite-preferred-locale"
+                    >
+                      {t("preferredLocale")}
+                    </label>
                     <Select
                       value={values.preferredLocale}
                       onValueChange={(value) => {
@@ -184,7 +241,13 @@ const InvitePage = () => {
                         }
                       }}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger
+                        id="invite-preferred-locale"
+                        aria-invalid={Boolean(fieldErrors.preferredLocale)}
+                        aria-describedby={
+                          fieldErrors.preferredLocale ? "invite-preferred-locale-error" : undefined
+                        }
+                      >
                         <SelectValue placeholder={t("selectLocale")} />
                       </SelectTrigger>
                       <SelectContent>
@@ -196,7 +259,12 @@ const InvitePage = () => {
                       </SelectContent>
                     </Select>
                     {fieldErrors.preferredLocale ? (
-                      <p className="text-xs font-medium text-danger">{fieldErrors.preferredLocale}</p>
+                      <p
+                        id="invite-preferred-locale-error"
+                        className="text-xs font-medium text-danger"
+                      >
+                        {fieldErrors.preferredLocale}
+                      </p>
                     ) : null}
                   </div>
                   <Button type="submit" className="w-full" disabled={acceptMutation.isLoading}>
@@ -206,7 +274,23 @@ const InvitePage = () => {
               </form>
             </>
           ) : (
-            <p className="text-sm text-muted-foreground">{t("invalidInvite")}</p>
+            <div className="space-y-3" role="status" aria-live="polite">
+              <p className="text-sm text-muted-foreground">{t("invalidInvite")}</p>
+              <div className="flex flex-wrap gap-x-4 gap-y-2">
+                <Link
+                  href="/invite"
+                  className="text-sm font-semibold text-primary hover:text-primary/90"
+                >
+                  {t("tryAnotherInvite")}
+                </Link>
+                <Link
+                  href="/login"
+                  className="text-sm font-semibold text-primary hover:text-primary/90"
+                >
+                  {t("goToLogin")}
+                </Link>
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>

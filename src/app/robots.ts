@@ -26,7 +26,7 @@ const privateApplicationRoutes = [
 const robots = (): MetadataRoute.Robots => ({
   rules: {
     userAgent: "*",
-    allow: ["/", "/c/", "/developers/bazaar-api", "/help", "/signup"],
+    allow: ["/", "/c/", "/developers/bazaar-api", "/help", "/legal", "/privacy", "/signup"],
     disallow: privateApplicationRoutes,
   },
   sitemap: "https://www.bazaar.kg/sitemap.xml",

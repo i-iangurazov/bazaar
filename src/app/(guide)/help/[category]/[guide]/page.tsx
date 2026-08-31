@@ -4,7 +4,7 @@ import { getLocale } from "next-intl/server";
 
 import { HelpGuidePage } from "@/components/help/HelpGuidePage";
 import { getHelpGuide, helpGuides } from "@/content/help/catalog";
-import { localize } from "@/content/help/ui";
+import { helpUi, localize } from "@/content/help/ui";
 import { defaultLocale, normalizeLocale } from "@/lib/locales";
 
 export const generateStaticParams = () =>
@@ -13,9 +13,10 @@ export const generateStaticParams = () =>
 export const generateMetadata = async ({
   params,
 }: {
-  params: { category: string; guide: string };
+  params: Promise<{ category: string; guide: string }>;
 }): Promise<Metadata> => {
-  const item = getHelpGuide(params.category, params.guide);
+  const { category, guide } = await params;
+  const item = getHelpGuide(category, guide);
   if (!item) return {};
   const locale = normalizeLocale(await getLocale()) ?? defaultLocale;
   const title = `${localize(item.title, locale)} — Bazaar Guide`;
@@ -30,14 +31,15 @@ export const generateMetadata = async ({
   };
 };
 
-const GuidePage = ({
+const GuidePage = async ({
   params,
   searchParams,
 }: {
-  params: { category: string; guide: string };
-  searchParams: { from?: string };
+  params: Promise<{ category: string; guide: string }>;
+  searchParams: Promise<{ from?: string | string[] }>;
 }) => {
-  const item = getHelpGuide(params.category, params.guide);
+  const [{ category, guide }, resolvedSearchParams] = await Promise.all([params, searchParams]);
+  const item = getHelpGuide(category, guide);
   if (!item) notFound();
   const locale = defaultLocale;
   const url = `https://www.bazaar.kg/help/${item.category}/${item.slug}`;
@@ -48,17 +50,26 @@ const GuidePage = ({
     description: localize(item.summary, locale),
     totalTime: `PT${item.estimatedMinutes}M`,
     url,
-    step: item.steps.map((step, index) => ({
-      "@type": "HowToStep",
-      position: index + 1,
-      name: localize(step.title, locale),
-      text: localize(step.body, locale),
-      url: `${url}#step-${index + 1}`,
-    })),
+    step: item.steps.map((step, index) => {
+      const guidance = step.guidance
+        ? [
+            `${localize(helpUi.exactLocation, locale)}: ${localize(step.guidance.location, locale)}.`,
+            `${localize(helpUi.controlToUse, locale)}: ${localize(step.guidance.control, locale)}.`,
+            `${localize(helpUi.expectedResult, locale)}: ${localize(step.guidance.result, locale)}.`,
+          ]
+        : [];
+      return {
+        "@type": "HowToStep",
+        position: index + 1,
+        name: localize(step.title, locale),
+        text: [localize(step.body, locale), ...guidance].join(" "),
+        url: `${url}#step-${index + 1}`,
+      };
+    }),
   };
   const sourceRoute =
-    typeof searchParams.from === "string" && searchParams.from.startsWith("/")
-      ? searchParams.from.slice(0, 120)
+    typeof resolvedSearchParams.from === "string" && resolvedSearchParams.from.startsWith("/")
+      ? resolvedSearchParams.from.slice(0, 120)
       : undefined;
   return (
     <>

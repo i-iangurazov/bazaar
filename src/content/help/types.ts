@@ -10,6 +10,7 @@ export type HelpCategorySlug =
   | "products"
   | "inventory"
   | "orders"
+  | "customers"
   | "reports"
   | "integrations"
   | "settings";
@@ -32,9 +33,16 @@ export type HelpMedia = {
   annotations: HelpAnnotation[];
 };
 
+export type HelpStepGuidance = {
+  location: LocalizedText;
+  control: LocalizedText;
+  result: LocalizedText;
+};
+
 export type HelpStep = {
   title: LocalizedText;
   body: LocalizedText;
+  guidance?: HelpStepGuidance;
   checklist?: LocalizedText[];
   note?: LocalizedText;
   media?: HelpMedia;

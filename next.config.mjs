@@ -6,9 +6,7 @@ const withNextIntl = createNextIntlPlugin("./src/i18n.ts");
 const nextConfig = {
   reactStrictMode: true,
   output: "standalone",
-  experimental: {
-    serverComponentsExternalPackages: ["pdfkit", "heic-convert", "heic-decode", "libheif-js"],
-  },
+  serverExternalPackages: ["pdfkit", "heic-convert", "heic-decode", "libheif-js"],
 };
 
 export default withNextIntl(nextConfig);

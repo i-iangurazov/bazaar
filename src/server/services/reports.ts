@@ -1,5 +1,6 @@
 import { Prisma, StockMovementType } from "@prisma/client";
 
+import { parseWriteOffMovementNote } from "@/lib/inventory/writeOff";
 import { prisma } from "@/server/db/prisma";
 
 type ReportRangeInput = {
@@ -38,6 +39,10 @@ type SlowMoverRow = {
 };
 
 type ShrinkageRow = {
+  documentType: string;
+  documentId: string;
+  movementIds: string[];
+  latestMovementId: string;
   storeId: string;
   storeName: string;
   productId: string;
@@ -47,8 +52,16 @@ type ShrinkageRow = {
   variantName: string | null;
   userId: string | null;
   userName: string | null;
+  reason: string | null;
   totalQty: number;
+  totalValueKgs: number | null;
   movementCount: number;
+  occurredAt: Date;
+  updatedAt: Date;
+};
+
+type ShrinkageQueryRow = Omit<ShrinkageRow, "reason"> & {
+  reasonNote: string | null;
 };
 
 type ReportPage<T> = {
@@ -130,8 +143,8 @@ export const getStockoutsReport = async (
         AND snapshot."variantId" IS NOT DISTINCT FROM m."variantId"
       WHERE s."organizationId" = ${input.organizationId}
         ${storeScope}
-        AND m."createdAt" >= ${input.from}
-        AND m."createdAt" <= ${input.to}
+        AND m."createdAt" >= (${input.from} AT TIME ZONE 'UTC')
+        AND m."createdAt" <= (${input.to} AT TIME ZONE 'UTC')
     ), crossings AS (
       SELECT
         *,
@@ -208,7 +221,7 @@ export const getSlowMoversReport = async (
       INNER JOIN "Store" s ON s.id = m."storeId"
       WHERE s."organizationId" = ${input.organizationId}
         ${storeScope}
-        AND m."createdAt" <= ${input.to}
+        AND m."createdAt" <= (${input.to} AT TIME ZONE 'UTC')
       GROUP BY m."storeId", m."productId", m."variantId"
     ), candidates AS (
       SELECT
@@ -225,9 +238,11 @@ export const getSlowMoversReport = async (
         AND last_movements."variantId" IS NOT DISTINCT FROM snapshot."variantId"
       WHERE s."organizationId" = ${input.organizationId}
         ${storeScope}
+        -- Explicit write-offs and net-negative inventory corrections are losses.
+        -- Operational conversion/clone/rollback movements are not shrinkage.
         AND (
           last_movements."lastMovementAt" IS NULL
-          OR last_movements."lastMovementAt" < ${input.from}
+          OR last_movements."lastMovementAt" < (${input.from} AT TIME ZONE 'UTC')
         )
     ), totals AS (
       SELECT COUNT(*)::int AS "totalCount" FROM candidates
@@ -276,24 +291,115 @@ export const getShrinkageReport = async (
     return emptyPage(page, pageSize);
   }
   const offset = (page - 1) * pageSize;
-  const rows = await prisma.$queryRaw<Array<ShrinkageRow & CountedRow>>(Prisma.sql`
-    WITH grouped AS (
+  const rows = await prisma.$queryRaw<Array<ShrinkageQueryRow & CountedRow>>(Prisma.sql`
+    WITH classified_movements AS (
       SELECT
+        m.id,
         m."storeId",
         m."productId",
         m."variantId",
-        m."createdById" AS "userId",
-        ABS(SUM(m."qtyDelta"))::int AS "totalQty",
-        COUNT(*)::int AS "movementCount"
+        m."qtyDelta",
+        m."createdAt",
+        m."createdById",
+        m.note,
+        CASE
+          WHEN m.type = ${StockMovementType.WRITE_OFF}::"StockMovementType"
+            THEN COALESCE(m."referenceType", 'WRITE_OFF')
+          ELSE COALESCE(m."referenceType", 'ADJUSTMENT')
+        END AS "documentType",
+        COALESCE(m."referenceId", m.id) AS "documentId",
+        COALESCE(
+          m."inventoryValueDeltaKgs",
+          CASE
+            WHEN m."lineTotalKgs" IS NULL THEN NULL
+            WHEN m.type = ${StockMovementType.WRITE_OFF}::"StockMovementType" THEN
+              CASE
+                WHEN m."qtyDelta" < 0 THEN -ABS(m."lineTotalKgs")
+                WHEN m."qtyDelta" > 0 THEN ABS(m."lineTotalKgs")
+                ELSE 0
+              END
+            ELSE m."lineTotalKgs"
+          END
+        ) AS "inventoryValueDeltaKgs"
       FROM "StockMovement" m
       INNER JOIN "Store" s ON s.id = m."storeId"
       WHERE s."organizationId" = ${input.organizationId}
         ${storeScope}
-        AND m.type = ${StockMovementType.ADJUSTMENT}::"StockMovementType"
-        AND m."qtyDelta" < 0
-        AND m."createdAt" >= ${input.from}
-        AND m."createdAt" <= ${input.to}
-      GROUP BY m."storeId", m."productId", m."variantId", m."createdById"
+        AND (
+          m.type = ${StockMovementType.WRITE_OFF}::"StockMovementType"
+          OR (
+            m.type = ${StockMovementType.ADJUSTMENT}::"StockMovementType"
+            AND COALESCE(m."referenceType", '') NOT IN (
+              'BUNDLE_ASSEMBLY',
+              'IMPORT_ROLLBACK',
+              'Product',
+              'ProductVariant',
+              'PRODUCT_DUPLICATE',
+              'STOCK_DOCUMENT_ARCHIVE',
+              'STORE_CLONE'
+            )
+          )
+        )
+        -- Build each document's state as of the inclusive report end before netting edits.
+        AND m."createdAt" <= (${input.to} AT TIME ZONE 'UTC')
+    ), document_metadata AS (
+      SELECT
+        "documentType",
+        "documentId",
+        "productId",
+        "variantId",
+        (ARRAY_AGG("createdById" ORDER BY "createdAt" ASC, id ASC))[1] AS "userId",
+        (
+          ARRAY_AGG(
+            note
+            ORDER BY (note LIKE 'writeOff:%') DESC, "createdAt" ASC, id ASC
+          ) FILTER (WHERE note IS NOT NULL)
+        )[1] AS "reasonNote",
+        ARRAY_AGG(id ORDER BY "createdAt" ASC, id ASC) AS "movementIds",
+        COUNT(*)::int AS "movementCount",
+        MIN("createdAt") AS "occurredAt",
+        MAX("createdAt") AS "updatedAt"
+      FROM classified_movements
+      GROUP BY "documentType", "documentId", "productId", "variantId"
+    ), document_store_lines AS (
+      SELECT
+        "documentType",
+        "documentId",
+        "storeId",
+        "productId",
+        "variantId",
+        (ARRAY_AGG(id ORDER BY "createdAt" DESC, id DESC))[1] AS "latestMovementId",
+        ABS(SUM("qtyDelta"))::int AS "totalQty",
+        CASE
+          WHEN COUNT("inventoryValueDeltaKgs") = 0 THEN NULL
+          ELSE ABS(SUM(COALESCE("inventoryValueDeltaKgs", 0)))::double precision
+        END AS "totalValueKgs"
+      FROM classified_movements
+      GROUP BY "documentType", "documentId", "storeId", "productId", "variantId"
+      HAVING SUM("qtyDelta") < 0
+    ), grouped AS (
+      SELECT
+        lines."documentType",
+        lines."documentId",
+        metadata."movementIds",
+        lines."latestMovementId",
+        lines."storeId",
+        lines."productId",
+        lines."variantId",
+        metadata."userId",
+        metadata."reasonNote",
+        lines."totalQty",
+        lines."totalValueKgs",
+        metadata."movementCount",
+        metadata."occurredAt",
+        metadata."updatedAt"
+      FROM document_store_lines lines
+      INNER JOIN document_metadata metadata
+        ON metadata."documentType" = lines."documentType"
+        AND metadata."documentId" = lines."documentId"
+        AND metadata."productId" = lines."productId"
+        AND metadata."variantId" IS NOT DISTINCT FROM lines."variantId"
+      WHERE metadata."occurredAt" >= (${input.from} AT TIME ZONE 'UTC')
     ), totals AS (
       SELECT COUNT(*)::int AS "totalCount" FROM grouped
     )
@@ -304,6 +410,10 @@ export const getShrinkageReport = async (
     FROM totals
     LEFT JOIN LATERAL (
       SELECT
+        grouped."documentType",
+        grouped."documentId",
+        grouped."movementIds",
+        grouped."latestMovementId",
         grouped."storeId",
         s.name AS "storeName",
         grouped."productId",
@@ -313,26 +423,39 @@ export const getShrinkageReport = async (
         v.name AS "variantName",
         grouped."userId",
         COALESCE(u.name, u.email) AS "userName",
+        grouped."reasonNote",
         grouped."totalQty",
-        grouped."movementCount"
+        grouped."totalValueKgs",
+        grouped."movementCount",
+        grouped."occurredAt",
+        grouped."updatedAt"
       FROM grouped
       INNER JOIN "Store" s ON s.id = grouped."storeId"
       INNER JOIN "Product" p ON p.id = grouped."productId"
       LEFT JOIN "ProductVariant" v ON v.id = grouped."variantId"
       LEFT JOIN "User" u ON u.id = grouped."userId"
-      ORDER BY grouped."totalQty" DESC,
+      ORDER BY grouped."occurredAt" DESC,
         grouped."storeId" ASC,
         grouped."productId" ASC,
         grouped."variantId" ASC NULLS FIRST,
-        grouped."userId" ASC NULLS FIRST
+        grouped."documentType" ASC,
+        grouped."documentId" ASC
       LIMIT ${pageSize}
       OFFSET ${offset}
     ) page_rows ON true
-    ORDER BY page_rows."totalQty" DESC NULLS LAST,
+    ORDER BY page_rows."occurredAt" DESC NULLS LAST,
       page_rows."storeId" ASC,
       page_rows."productId" ASC,
       page_rows."variantId" ASC NULLS FIRST,
-      page_rows."userId" ASC NULLS FIRST
+      page_rows."documentType" ASC,
+      page_rows."documentId" ASC
   `);
-  return toPage(rows, page, pageSize);
+  const result = toPage(rows, page, pageSize);
+  return {
+    ...result,
+    items: result.items.map(({ reasonNote, ...row }) => ({
+      ...row,
+      reason: parseWriteOffMovementNote(reasonNote)?.reason ?? reasonNote,
+    })),
+  };
 };

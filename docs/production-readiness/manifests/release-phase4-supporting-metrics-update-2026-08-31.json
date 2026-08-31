@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "timestamp": "2026-08-31T10:06:10.000Z",
+  "requirements": [],
+  "defects": [],
+  "supportingMetrics": {
+    "value": {
+      "routes": {
+        "exact": { "PASS": 132, "PARTIAL": 0, "FAIL": 0, "BLOCKED": 0, "total": 132 },
+        "canonical": { "PASS": 116, "PARTIAL": 0, "FAIL": 0, "BLOCKED": 0, "total": 116 }
+      },
+      "workflows": {
+        "total": 85,
+        "executed": 81,
+        "outcomes": { "PASS": 79, "PARTIAL": 2, "FAIL": 0, "BLOCKED": 4 }
+      },
+      "roles": {
+        "credentialed": 6,
+        "expected": 6,
+        "credentialedRoleNames": [
+          "ADMIN",
+          "MANAGER",
+          "STAFF",
+          "CASHIER",
+          "ORGANIZATION_OWNER",
+          "PLATFORM_OWNER"
+        ],
+        "blockedRoleNames": [],
+        "lowerRoleBoundaryAssertions": { "passed": 225, "total": 225 },
+        "crossTenantIsolationVerified": true
+      },
+      "responsive": {
+        "desktopExactForms": { "executed": 132, "total": 132 },
+        "tabletExactForms": { "executed": 132, "total": 132 },
+        "mobileExactForms": { "executed": 132, "total": 132 },
+        "publicViewportChecks": { "executed": 189, "total": 189 },
+        "adminViewportChecks": { "executed": 243, "total": 243 }
+      },
+      "localization": {
+        "supportedLocales": ["ru", "kg", "en"],
+        "compatibilityPrefixes": ["ru", "kg", "en", "ky"],
+        "representativePrefixAssertions": { "passed": 12, "total": 12 },
+        "fullRouteLocaleCrossProductVerified": true
+      }
+    },
+    "evidence": [
+      {
+        "type": "file",
+        "path": "test-results/release-authenticated-final.json",
+        "description": "Case-level final authenticated evidence: all role, dynamic-ID, desktop, tablet, mobile, localization, tenant-isolation, and route-inventory cases passed; two mutation workflow cases were non-green."
+      },
+      {
+        "type": "file",
+        "path": "test-results/release-public-matrix.json",
+        "description": "Complete final-source public matrix passed 189 of 189 cases across supported locales and viewports."
+      },
+      {
+        "type": "file",
+        "path": "test-results/release-deterministic-final-source-rerun.xml",
+        "description": "Complete final-source deterministic suite passed 1,688 of 1,688 tests."
+      }
+    ]
+  }
+}

@@ -57,6 +57,8 @@ const PosShiftsPage = () => {
   const searchParams = useSearchParams();
   const requestedCashType = searchParams.get(POS_CASH_MOVEMENT_QUERY_PARAM);
   const cashMovementAnchorRequested = useRef(false);
+  const cashMovementSubmitInFlightRef = useRef(false);
+  const closeShiftSubmitInFlightRef = useRef(false);
 
   const [countedCash, setCountedCash] = useState("");
   const [closeNote, setCloseNote] = useState("");
@@ -308,6 +310,10 @@ const PosShiftsPage = () => {
       toast({ variant: "error", description: t("shifts.differenceNoteRequired") });
       return;
     }
+    if (closeShiftSubmitInFlightRef.current) {
+      return;
+    }
+    closeShiftSubmitInFlightRef.current = true;
 
     try {
       await closeShiftMutation.mutateAsync({
@@ -318,6 +324,8 @@ const PosShiftsPage = () => {
       });
     } catch {
       // handled by mutation onError
+    } finally {
+      closeShiftSubmitInFlightRef.current = false;
     }
   };
 
@@ -350,14 +358,23 @@ const PosShiftsPage = () => {
       toast({ variant: "error", description: t("shifts.cashOutExceedsExpectedCash") });
       return;
     }
-
-    await cashMovementMutation.mutateAsync({
-      shiftId: currentShift.id,
-      type: cashType,
-      amountKgs,
-      reason,
-      idempotencyKey: createIdempotencyKey(),
-    });
+    if (cashMovementSubmitInFlightRef.current) {
+      return;
+    }
+    cashMovementSubmitInFlightRef.current = true;
+    try {
+      await cashMovementMutation.mutateAsync({
+        shiftId: currentShift.id,
+        type: cashType,
+        amountKgs,
+        reason,
+        idempotencyKey: createIdempotencyKey(),
+      });
+    } catch {
+      // handled by mutation onError
+    } finally {
+      cashMovementSubmitInFlightRef.current = false;
+    }
   };
 
   const historyItems = historyQuery.data?.items ?? [];

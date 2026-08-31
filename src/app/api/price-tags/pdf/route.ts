@@ -12,6 +12,7 @@ import { buildPriceTagsPdf, type PriceTagLabel } from "@/server/services/priceTa
 import { selectPrimaryBarcodeValue } from "@/server/services/barcodes";
 import { AppError } from "@/server/services/errors";
 import { assertFeatureEnabled } from "@/server/services/planLimits";
+import { hasPermission } from "@/lib/roleAccess";
 import {
   assertUserCanAccessStore,
   resolveAccessibleStoreIds,
@@ -146,7 +147,8 @@ const createTranslator = (messages: MessageTree | undefined, namespace?: string)
 
 
 export const POST = async (request: Request) => {
-  const localeCookie = cookies().get("NEXT_LOCALE")?.value;
+  const cookieStore = await cookies();
+  const localeCookie = cookieStore.get("NEXT_LOCALE")?.value;
   const locale = normalizeLocale(localeCookie) ?? defaultLocale;
   let messages: MessageTree | undefined;
   try {
@@ -158,8 +160,18 @@ export const POST = async (request: Request) => {
   const tErrors = createTranslator(messages, "errors");
 
   const token = await getServerAuthToken();
-  if (!token) {
+  if (!token?.sub || !token.organizationId || !token.role) {
     return new Response(tErrors("unauthorized"), { status: 401 });
+  }
+  const user: StoreAccessUser = {
+    id: token.sub,
+    organizationId: token.organizationId as string,
+    role: token.role as string,
+    isOrgOwner: token.isOrgOwner as boolean | null,
+    isPlatformOwner: token.isPlatformOwner as boolean | null,
+  };
+  if (!hasPermission(user, "managePrinting")) {
+    return new Response(tErrors("forbidden"), { status: 403 });
   }
   try {
     await assertFeatureEnabled({
@@ -183,16 +195,6 @@ export const POST = async (request: Request) => {
   const template = parsed.data.template;
   const parsedItems = parsed.data.items as PriceTagItem[];
   const storeId = typeof parsed.data.storeId === "string" ? parsed.data.storeId : null;
-  if (!token.sub || !token.organizationId || !token.role) {
-    return new Response(tErrors("unauthorized"), { status: 401 });
-  }
-  const user: StoreAccessUser = {
-    id: token.sub,
-    organizationId: token.organizationId as string,
-    role: token.role as string,
-    isOrgOwner: token.isOrgOwner as boolean | null,
-    isPlatformOwner: token.isPlatformOwner as boolean | null,
-  };
   let accessibleStoreIds: string[];
   try {
     if (storeId) {

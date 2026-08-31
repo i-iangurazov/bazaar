@@ -8,7 +8,15 @@ import { useLocale, useTranslations } from "next-intl";
 
 import { PageHeader } from "@/components/page-header";
 import { QueryErrorState } from "@/components/query-error-state";
-import { CloseIcon, DownloadIcon, PrintIcon, ShareIcon, ViewIcon } from "@/components/icons";
+import {
+  CloseIcon,
+  DownloadIcon,
+  EditIcon,
+  PrintIcon,
+  ShareIcon,
+  ViewIcon,
+} from "@/components/icons";
+import { PosPaymentCorrectionModal } from "@/components/pos/payment-correction-modal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,11 +47,7 @@ import {
 } from "@/lib/posUrlFilters";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
-import {
-  businessDateKey,
-  businessDateOnlyEndUtc,
-  businessDateOnlyToUtc,
-} from "@/lib/timezone";
+import { businessDateKey, businessDateOnlyEndUtc, businessDateOnlyToUtc } from "@/lib/timezone";
 import { usePosRegisterSelection } from "@/lib/usePosRegisterSelection";
 
 const createIdempotencyKey = () => {
@@ -73,12 +77,7 @@ const PosHistoryPage = () => {
   const [dateFrom, setDateFrom] = useState(readPosDateParam(searchParams, "from", ""));
   const [dateTo, setDateTo] = useState(readPosDateParam(searchParams, "to", ""));
   const [statusFilter, setStatusFilter] = useState<CustomerOrderStatus | "ALL">(
-    readPosEnumParam(
-      searchParams,
-      "status",
-      historyStatusValues,
-      CustomerOrderStatus.COMPLETED,
-    ),
+    readPosEnumParam(searchParams, "status", historyStatusValues, CustomerOrderStatus.COMPLETED),
   );
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<PosPaymentMethod | "ALL">(
     readPosEnumParam(searchParams, "payment", historyPaymentValues, "ALL"),
@@ -98,8 +97,10 @@ const PosHistoryPage = () => {
   const [resumeConflictOpen, setResumeConflictOpen] = useState(false);
   const [detailSaleId, setDetailSaleId] = useState<string | null>(null);
   const [returnSaleId, setReturnSaleId] = useState<string | null>(null);
+  const [paymentCorrectionSaleId, setPaymentCorrectionSaleId] = useState<string | null>(null);
   const [returnQtyByLine, setReturnQtyByLine] = useState<Record<string, string>>({});
   const [refundMethod, setRefundMethod] = useState<PosPaymentMethod>(PosPaymentMethod.CASH);
+  const returnSubmitInFlightRef = useRef(false);
   const [receiptAction, setReceiptAction] = useState<{
     saleId: string;
     mode: "download" | "print" | "share";
@@ -216,8 +217,7 @@ const PosHistoryPage = () => {
       q: search.trim() || null,
       from: dateFrom || null,
       to: dateTo || null,
-      status:
-        statusFilter === CustomerOrderStatus.COMPLETED ? null : String(statusFilter),
+      status: statusFilter === CustomerOrderStatus.COMPLETED ? null : String(statusFilter),
       payment: paymentMethodFilter === "ALL" ? null : String(paymentMethodFilter),
       page: salesPage === 1 ? null : salesPage,
       returnsPage: returnsPage === 1 ? null : returnsPage,
@@ -362,9 +362,7 @@ const PosHistoryPage = () => {
 
   const mobileHistorySales = useMemo(
     () =>
-      isPhoneScreen === true &&
-      salesPage === 1 &&
-      statusFilter === CustomerOrderStatus.COMPLETED
+      isPhoneScreen === true && salesPage === 1 && statusFilter === CustomerOrderStatus.COMPLETED
         ? mergeMobilePosReceiptHistory(
             salesQuery.data?.items ?? [],
             heldSalesQuery.data?.items ?? [],
@@ -566,6 +564,10 @@ const PosHistoryPage = () => {
       toast({ variant: "error", description: t("history.returnQtyRequired") });
       return;
     }
+    if (returnSubmitInFlightRef.current) {
+      return;
+    }
+    returnSubmitInFlightRef.current = true;
 
     try {
       const draft = await createReturnMutation.mutateAsync({
@@ -607,6 +609,8 @@ const PosHistoryPage = () => {
       await Promise.all([salesQuery.refetch(), returnsQuery.refetch()]);
     } catch (error) {
       toast({ variant: "error", description: translateError(tErrors, error as never) });
+    } finally {
+      returnSubmitInFlightRef.current = false;
     }
   };
 
@@ -791,6 +795,8 @@ const PosHistoryPage = () => {
                 return (
                   <article
                     key={sale.id}
+                    data-testid="pos-history-sale"
+                    data-sale-id={sale.id}
                     className="rounded-md border border-border bg-card p-3 shadow-sm"
                   >
                     <button
@@ -808,8 +814,11 @@ const PosHistoryPage = () => {
                           <p className="truncate text-base font-semibold text-foreground">
                             {sale.number}
                           </p>
-                          <p className="mt-0.5 text-xs text-muted-foreground">
-                            {formatDateTime(sale.createdAt, locale)}
+                          <p
+                            className="mt-0.5 text-xs text-muted-foreground"
+                            data-testid="pos-history-occurred-at"
+                          >
+                            {formatDateTime(sale.occurredAt, locale)}
                           </p>
                         </div>
                         <p className="shrink-0 text-base font-semibold text-foreground">
@@ -879,7 +888,18 @@ const PosHistoryPage = () => {
                         </Button>
                         <Button
                           type="button"
+                          variant="secondary"
                           className="h-10"
+                          onClick={() => setPaymentCorrectionSaleId(sale.id)}
+                          disabled={!sale.paymentCorrectionEligibility.eligible}
+                          aria-describedby={`payment-correction-reason-${sale.id}`}
+                        >
+                          <EditIcon className="h-4 w-4" aria-hidden />
+                          {t("sell.paymentCorrection.title")}
+                        </Button>
+                        <Button
+                          type="button"
+                          className="col-span-2 h-10"
                           onClick={() => {
                             void handleReceiptPdf(sale.id, "print", "precheck");
                           }}
@@ -903,6 +923,16 @@ const PosHistoryPage = () => {
                         >
                           {t("history.return")}
                         </Button>
+                        {!sale.paymentCorrectionEligibility.eligible ? (
+                          <p
+                            id={`payment-correction-reason-${sale.id}`}
+                            className="col-span-2 text-xs text-muted-foreground"
+                          >
+                            {t(
+                              `sell.paymentCorrection.reasons.${sale.paymentCorrectionEligibility.reason}`,
+                            )}
+                          </p>
+                        ) : null}
                       </div>
                     )}
                   </article>
@@ -973,12 +1003,17 @@ const PosHistoryPage = () => {
             {(salesQuery.data?.items ?? []).map((sale) => (
               <div
                 key={sale.id}
+                data-testid="pos-history-sale"
+                data-sale-id={sale.id}
                 className="flex flex-col gap-3 rounded-md border border-border bg-card p-3 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div>
                   <p className="text-sm font-semibold text-foreground">{sale.number}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {formatDateTime(sale.createdAt, locale)}
+                  <p
+                    className="text-xs text-muted-foreground"
+                    data-testid="pos-history-occurred-at"
+                  >
+                    {formatDateTime(sale.occurredAt, locale)}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {sale.customerName ?? t("history.walkInCustomer")}
@@ -1025,6 +1060,27 @@ const PosHistoryPage = () => {
                   >
                     {t("history.return")}
                   </Button>
+                  <div className="max-w-64">
+                    <Button
+                      variant="secondary"
+                      onClick={() => setPaymentCorrectionSaleId(sale.id)}
+                      disabled={!sale.paymentCorrectionEligibility.eligible}
+                      aria-describedby={`desktop-payment-correction-reason-${sale.id}`}
+                    >
+                      <EditIcon className="h-4 w-4" aria-hidden />
+                      {t("sell.paymentCorrection.title")}
+                    </Button>
+                    {!sale.paymentCorrectionEligibility.eligible ? (
+                      <p
+                        id={`desktop-payment-correction-reason-${sale.id}`}
+                        className="mt-1 text-xs text-muted-foreground"
+                      >
+                        {t(
+                          `sell.paymentCorrection.reasons.${sale.paymentCorrectionEligibility.reason}`,
+                        )}
+                      </p>
+                    ) : null}
+                  </div>
                   <Button
                     variant="secondary"
                     onClick={() => {
@@ -1410,7 +1466,7 @@ const PosHistoryPage = () => {
                     <div>
                       <p className="text-muted-foreground">{t("history.dateTime")}</p>
                       <p className="font-medium text-foreground">
-                        {formatDateTime(detailSale.createdAt, locale)}
+                        {formatDateTime(detailSale.completedAt ?? detailSale.createdAt, locale)}
                       </p>
                     </div>
                   </div>
@@ -1494,9 +1550,9 @@ const PosHistoryPage = () => {
                     <h3 className="text-sm font-semibold text-foreground">
                       {t("history.paymentsTitle")}
                     </h3>
-                    {detailSale.payments.length ? (
-                      detailSale.payments.map((payment) => (
-                        <div key={payment.id} className="flex justify-between gap-3 text-sm">
+                    {detailSale.effectivePayments.length ? (
+                      detailSale.effectivePayments.map((payment) => (
+                        <div key={payment.method} className="flex justify-between gap-3 text-sm">
                           <span className="text-muted-foreground">
                             {paymentMethodLabel(payment.method)}
                           </span>
@@ -1697,6 +1753,14 @@ const PosHistoryPage = () => {
           </ModalFooter>
         </div>
       </Modal>
+      <PosPaymentCorrectionModal
+        saleId={paymentCorrectionSaleId}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPaymentCorrectionSaleId(null);
+          }
+        }}
+      />
     </div>
   );
 };

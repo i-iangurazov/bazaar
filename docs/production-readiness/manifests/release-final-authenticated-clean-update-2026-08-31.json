@@ -1,0 +1,207 @@
+{
+  "schemaVersion": 1,
+  "timestamp": "2026-08-31T17:16:56.000Z",
+  "requirements": [
+    {
+      "id": "BZR-REQ-0036",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Purchase-order draft validation/edit/PDF/Back/cancel and submitted approve/receive/supplier/movement/inventory linkage all pass without duplicate records, including the final uninterrupted production-mode matrix.",
+      "statusJustification": "Both procurement scenarios completed successfully in the clean 762-case run with no positional selector dependency or contradictory result.",
+      "verificationTimestampSource": "Single uninterrupted authenticated matrix completed 2026-08-31T17:15:38.056Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/release-final-authenticated-clean-2026-08-31.json",
+          "description": "Hash-pinned clean 762/762 production-mode matrix and named procurement cases."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-final-authenticated-clean-2026-08-31.json",
+          "description": "Both procurement case identities are expected/pass in the final clean JSON."
+        }
+      ]
+    },
+    {
+      "id": "BZR-REQ-0079",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Returns remain idempotent and restore stock/frozen cost correctly. The final clean matrix also proves CASHIER can correct an eligible completed receipt while stock, quantity, COGS, stock movements, and the original completion timestamp remain unchanged; fiscalized receipts reject direct mutation.",
+      "statusJustification": "The exact production complaint and the POS return boundary passed together in the single uninterrupted production-mode matrix.",
+      "verificationTimestampSource": "Single uninterrupted authenticated matrix completed 2026-08-31T17:15:38.056Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/release-final-authenticated-clean-2026-08-31.json",
+          "description": "Clean-matrix POS evidence records CASHIER authorization, stock/COGS invariants, idempotency, and the fiscal boundary."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-final-authenticated-clean-2026-08-31.json",
+          "description": "The exact POS payment-correction identity is expected/pass in the final 762/762 run."
+        }
+      ]
+    },
+    {
+      "id": "BZR-REQ-0080",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Debt balances remain reconciled. Payment correction additionally proves cash-to-transfer, transfer-to-cash, and split-payment tenders preserve payment sum equal to sale total and remain durable after refresh and relogin.",
+      "statusJustification": "Tender integrity and durable receipt history passed in the clean 762-case production-mode matrix without duplicate sale, receipt, user, or correction records.",
+      "verificationTimestampSource": "Single uninterrupted authenticated matrix completed 2026-08-31T17:15:38.056Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/release-final-authenticated-clean-2026-08-31.json",
+          "description": "Clean final matrix corroborates all payment-method and total-reconciliation acceptance fields."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-final-authenticated-clean-2026-08-31.json",
+          "description": "The POS operations and correction journey is expected/pass."
+        }
+      ]
+    },
+    {
+      "id": "BZR-REQ-0081",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Cash pay-in/pay-out remains reconciled. Payment correction changes the receipt tender and derived cash reporting exactly once without fabricating a second drawer movement, reselling stock, or reversing COGS; receipt details, reports, CSV, and XLSX agree.",
+      "statusJustification": "Cash ledger, shift totals, reports, exports, and audit exact-once semantics passed in the final uninterrupted production-mode browser journey.",
+      "verificationTimestampSource": "Single uninterrupted authenticated matrix completed 2026-08-31T17:15:38.056Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/release-final-authenticated-clean-2026-08-31.json",
+          "description": "Clean final matrix records one correction request, one audit event, and unchanged stock/COGS."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-final-authenticated-clean-2026-08-31.json",
+          "description": "The exact cash-integrity journey is expected/pass."
+        }
+      ]
+    },
+    {
+      "id": "BZR-REQ-0082",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Shift opening/closing reconciliation remains correct. Eligible open-shift payment correction adjusts expected cash exactly once; a closed-shift receipt exposes the precise SHIFT_CLOSED reason. CASHIER is authorized and STAFF receives 403.",
+      "statusJustification": "Fixtures S-006065 and S-006072 passed in the clean matrix across desktop/client viewport, refresh, relogin, and rapid double submit.",
+      "verificationTimestampSource": "Single uninterrupted authenticated matrix completed 2026-08-31T17:15:38.056Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/release-final-authenticated-clean-2026-08-31.json",
+          "description": "CASHIER/STAFF, open/closed shift, expected cash, refresh/relogin, viewport, and idempotency all pass."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-final-authenticated-clean-2026-08-31.json",
+          "description": "The final clean JSON retains the POS complaint journey as expected/pass."
+        }
+      ]
+    },
+    {
+      "id": "BZR-REQ-0116",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "The complete employee-invite token lifecycle passes: one scoped invite is created, accepted once, followed by a successful credential callback, role-bound dashboard access, and a durable refreshed session.",
+      "statusJustification": "The corrected invitation lifecycle passed again from the deterministic seed inside the clean 762-case matrix.",
+      "verificationTimestampSource": "Single uninterrupted authenticated matrix completed 2026-08-31T17:15:38.056Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/release-final-authenticated-clean-2026-08-31.json",
+          "description": "Clean-matrix evidence names the employee invitation journey."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-final-authenticated-clean-2026-08-31.json",
+          "description": "Employee invitation acceptance is expected/pass."
+        }
+      ]
+    },
+    {
+      "id": "BZR-REQ-0117",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Malformed, expired, and already-used employee invite tokens render the invalid-or-expired terminal state before exposing name, password, or acceptance controls; the valid invitation survives hydration and accepts once.",
+      "statusJustification": "Both the valid hydration path and invalid/reused terminal states passed in the clean production-mode matrix.",
+      "verificationTimestampSource": "Single uninterrupted authenticated matrix completed 2026-08-31T17:15:38.056Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/release-final-authenticated-clean-2026-08-31.json",
+          "description": "Clean final evidence retains the corrected invitation scenario without sleeps or forced DOM mutation."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-final-authenticated-clean-2026-08-31.json",
+          "description": "Invitation acceptance and token-state cases are expected/pass."
+        }
+      ]
+    },
+    {
+      "id": "BZR-REQ-0119",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "Open and invite-only signup behavior passes. An isolated production-mode browser case creates the QA user, owner organization/store and verification token, consumes registration once, and makes the completed link non-actionable. Real email delivery remains BZR-REQ-0118.",
+      "statusJustification": "The full local account-creation lifecycle passed in the clean matrix; no external inbox-delivery credit is claimed.",
+      "verificationTimestampSource": "Single uninterrupted authenticated matrix completed 2026-08-31T17:15:38.056Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/release-final-authenticated-clean-2026-08-31.json",
+          "description": "The clean final matrix explicitly includes open signup and business registration."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-final-authenticated-clean-2026-08-31.json",
+          "description": "The signup and business-registration lifecycle is expected/pass."
+        }
+      ]
+    },
+    {
+      "id": "BZR-REQ-0177",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "A reversible local synthetic-token browser case renders the exact disconnect consequence, proves cancel performs zero mutations, confirm performs one mutation, clears the token, retains mappings/data, and exposes no credential material.",
+      "statusJustification": "The locally owned disconnect boundary passed again in the clean matrix without a live provider side effect.",
+      "verificationTimestampSource": "Single uninterrupted authenticated matrix completed 2026-08-31T17:15:38.056Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/release-final-authenticated-clean-2026-08-31.json",
+          "description": "Clean final evidence identifies the reversible integration-disconnect case."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-final-authenticated-clean-2026-08-31.json",
+          "description": "The integration setup/disconnect journey is expected/pass."
+        }
+      ]
+    },
+    {
+      "id": "BZR-REQ-0188",
+      "currentStatus": "PASS",
+      "currentExecuted": true,
+      "currentNotes": "An admin creates exactly one store-scoped MANAGER invitation; the employee accepts it once, receives the intended organization, role, and store access, signs in, refreshes successfully, and remains denied the admin Users route.",
+      "statusJustification": "Invitation acceptance, callback, assigned-role dashboard, refresh, and duplicate prevention passed in the clean matrix.",
+      "verificationTimestampSource": "Single uninterrupted authenticated matrix completed 2026-08-31T17:15:38.056Z",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "docs/production-readiness/evidence/release-final-authenticated-clean-2026-08-31.json",
+          "description": "Clean-matrix evidence names the complete employee-role assignment lifecycle."
+        },
+        {
+          "type": "file",
+          "path": "test-results/release-final-authenticated-clean-2026-08-31.json",
+          "description": "The employee invitation acceptance journey is expected/pass."
+        }
+      ]
+    }
+  ],
+  "defects": []
+}

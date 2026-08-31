@@ -123,6 +123,7 @@ const NewProductPage = () => {
     },
   );
   const createOperationRef = useRef<{ signature: string; key: string } | null>(null);
+  const createInFlightRef = useRef(false);
 
   const createMutation = trpc.products.create.useMutation({
     onSuccess: async (product) => {
@@ -150,6 +151,9 @@ const NewProductPage = () => {
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+    onSettled: () => {
+      createInFlightRef.current = false;
     },
   });
 
@@ -441,6 +445,10 @@ const NewProductPage = () => {
               units={unitsQuery.data ?? []}
               onDirtyChange={setProductFormDirty}
               onSubmit={(values) => {
+                if (createInFlightRef.current) {
+                  return;
+                }
+                createInFlightRef.current = true;
                 const payload = {
                   ...values,
                   storeId: selectedStore.id,

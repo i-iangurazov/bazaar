@@ -33,6 +33,11 @@ import { sanitizeSpreadsheetValue, toCsv } from "@/server/services/csv";
 import { toJson } from "@/server/services/json";
 import { registerJob, runJob, type JobPayload } from "@/server/jobs";
 import { assertUserCanAccessStore, type StoreAccessUser } from "@/server/services/storeAccess";
+import {
+  productCostBasisSelect,
+  resolveCurrentProductCostUnitNumber,
+} from "@/server/services/productCost";
+import { resolveFrozenMovementCost } from "@/server/services/costReadModels";
 
 type ExportRequestInput = {
   organizationId: string;
@@ -606,10 +611,13 @@ const loadCostMap = async (organizationId: string, productIds: string[]) => {
   }
   const costs = await prisma.productCost.findMany({
     where: { organizationId, productId: { in: productIds } },
-    select: { productId: true, variantId: true, avgCostKgs: true },
+    select: { productId: true, variantId: true, ...productCostBasisSelect },
   });
   return new Map(
-    costs.map((cost) => [buildKey(cost.productId, cost.variantId), Number(cost.avgCostKgs)]),
+    costs.map((cost) => [
+      buildKey(cost.productId, cost.variantId),
+      resolveCurrentProductCostUnitNumber(cost),
+    ]),
   );
 };
 
@@ -893,7 +901,8 @@ const buildReceiptsRegistryRows = async (
       organizationId,
       storeId: store.id,
       isPosSale: true,
-      createdAt: { gte: periodStart, lte: periodEnd },
+      status: CustomerOrderStatus.COMPLETED,
+      completedAt: { gte: periodStart, lte: periodEnd },
     },
     include: {
       register: { select: { code: true, name: true } },
@@ -914,7 +923,7 @@ const buildReceiptsRegistryRows = async (
         },
       },
     },
-    orderBy: { createdAt: "desc" },
+    orderBy: { completedAt: "desc" },
   });
 
   return receipts.map((receipt) => {
@@ -944,7 +953,7 @@ const buildReceiptsRegistryRows = async (
       storeCode: store.code,
       storeName: store.name,
       receiptNumber: receipt.number,
-      createdAt: receipt.createdAt.toISOString(),
+      createdAt: (receipt.completedAt ?? receipt.createdAt).toISOString(),
       completedAt: receipt.completedAt ? receipt.completedAt.toISOString() : "",
       status: receipt.status,
       registerCode: receipt.register?.code ?? "",
@@ -1515,7 +1524,6 @@ const buildInventoryMovementsLedgerRows = async (
   const productIds = movements.map((movement) => movement.product.id);
   const flagsMap = await loadComplianceFlags(organizationId, productIds);
   const priceMap = await loadPriceMap(store.id, productIds);
-  const costMap = await loadCostMap(organizationId, productIds);
 
   return movements.map((movement) => {
     const flags = flagsMap.get(movement.product.id);
@@ -1523,8 +1531,7 @@ const buildInventoryMovementsLedgerRows = async (
     const override = priceMap.get(key) ?? priceMap.get(buildKey(movement.product.id, null));
     const basePrice = movement.product.basePriceKgs ? Number(movement.product.basePriceKgs) : null;
     const effectivePrice = override ?? basePrice;
-    const avgCost = costMap.get(key) ?? costMap.get(buildKey(movement.product.id, null)) ?? null;
-    const totalCost = avgCost !== null ? avgCost * Math.abs(movement.qtyDelta) : null;
+    const frozenCost = resolveFrozenMovementCost(movement);
     const barcode = movement.product.barcodes?.[0]?.value ?? "";
     const row: Record<string, unknown> = {
       orgId: organizationId,
@@ -1540,8 +1547,8 @@ const buildInventoryMovementsLedgerRows = async (
       barcode,
       qtyDelta: movement.qtyDelta,
       unit: movement.product.unit,
-      unitCostKgs: avgCost ?? "",
-      totalCostKgs: totalCost ?? "",
+      unitCostKgs: frozenCost.unitCostKgs ?? "",
+      totalCostKgs: frozenCost.totalCostKgs ?? "",
       effectivePriceKgs: effectivePrice ?? "",
       reason: movement.note ?? "",
       docType: movement.referenceType ?? "",

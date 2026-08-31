@@ -102,6 +102,8 @@ const segmentLabel = (
       return tBreadcrumbs("settings");
     case "printing":
       return tNav("printing");
+    case "store-groups":
+      return tNav("storeGroups");
     case "attributes":
       return tNav("attributes");
     case "categories":

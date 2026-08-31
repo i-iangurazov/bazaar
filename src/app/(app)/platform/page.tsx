@@ -502,7 +502,7 @@ const PlatformPage = () => {
                     )
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger aria-label={t("plan")}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -528,7 +528,7 @@ const PlatformPage = () => {
                     )
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger aria-label={t("subscriptionStatus")}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>

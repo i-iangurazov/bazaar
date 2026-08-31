@@ -104,7 +104,13 @@ const computeEventSeries = ({
   snapshots,
   thresholds,
 }: {
-  movements: { storeId: string; productId: string; variantId: string | null; qtyDelta: number; createdAt: Date }[];
+  movements: {
+    storeId: string;
+    productId: string;
+    variantId: string | null;
+    qtyDelta: number;
+    createdAt: Date;
+  }[];
   snapshots: { storeId: string; productId: string; variantId: string | null; onHand: number }[];
   thresholds: Map<string, number | null>;
 }) => {
@@ -116,7 +122,10 @@ const computeEventSeries = ({
 
   const snapshotMap = new Map<string, number>();
   snapshots.forEach((snapshot) => {
-    snapshotMap.set(buildKey(snapshot.storeId, snapshot.productId, snapshot.variantId ?? null), snapshot.onHand);
+    snapshotMap.set(
+      buildKey(snapshot.storeId, snapshot.productId, snapshot.variantId ?? null),
+      snapshot.onHand,
+    );
   });
 
   const stateMap = new Map<string, number>();
@@ -237,9 +246,7 @@ export const getTopProducts = async (input: {
 
   const from = new Date(Date.now() - input.rangeDays * 24 * 60 * 60 * 1000);
   const to = new Date();
-  const storeFilter = buildMovementStoreFilter(input);
-
-  const rows = await prisma.$queryRaw<
+  const historicalRows = await prisma.$queryRaw<
     Array<{
       productId: string;
       sku: string;
@@ -247,48 +254,122 @@ export const getTopProducts = async (input: {
       units: number;
       revenue: string | number | null;
       profit: string | number | null;
+      totalMissingCostLines: number;
     }>
   >(Prisma.sql`
-    SELECT m."productId" AS "productId",
-           p."sku" AS "sku",
-           p."name" AS "name",
-           SUM(ABS(m."qtyDelta"))::int AS units,
-           SUM(ABS(m."qtyDelta") * COALESCE(sp."priceKgs", p."basePriceKgs", 0)) AS revenue,
-           SUM(ABS(m."qtyDelta") * (COALESCE(sp."priceKgs", p."basePriceKgs", 0) - COALESCE(pc."avgCostKgs", 0))) AS profit
-    FROM "StockMovement" m
-    JOIN "Store" s ON s.id = m."storeId"
-    JOIN "Product" p ON p.id = m."productId"
-    LEFT JOIN "StorePrice" sp ON sp."organizationId" = s."organizationId"
-      AND sp."storeId" = m."storeId"
-      AND sp."productId" = m."productId"
-      AND sp."variantKey" = COALESCE(m."variantId", 'BASE')
-    LEFT JOIN "ProductCost" pc ON pc."organizationId" = s."organizationId"
-      AND pc."productId" = m."productId"
-      AND pc."variantKey" = COALESCE(m."variantId", 'BASE')
-    WHERE s."organizationId" = ${input.organizationId}
-      AND m."createdAt" >= ${from}
-      AND m."createdAt" <= ${to}
-      AND m."type" = 'SALE'
-      ${storeFilter}
-    GROUP BY m."productId", p."sku", p."name"
-    ORDER BY units DESC
+    WITH historical_activity AS (
+      SELECT
+        line."productId" AS "productId",
+        line.qty::numeric AS units,
+        line."lineTotalKgs"::numeric AS revenue,
+        line."lineCostTotalKgs"::numeric AS cost,
+        CASE WHEN line."lineCostTotalKgs" IS NULL THEN 1 ELSE 0 END AS "missingCostLines"
+      FROM "CustomerOrderLine" line
+      INNER JOIN "CustomerOrder" sale ON sale.id = line."customerOrderId"
+      WHERE sale."organizationId" = ${input.organizationId}
+        AND sale."storeId" IN (${Prisma.join(storeIds)})
+        AND sale.status = 'COMPLETED'
+        AND sale."completedAt" >= ${from}
+        AND sale."completedAt" <= ${to}
+
+      UNION ALL
+
+      SELECT
+        line."productId" AS "productId",
+        -line.qty::numeric AS units,
+        -line."lineTotalKgs"::numeric AS revenue,
+        -line."lineCostTotalKgs"::numeric AS cost,
+        CASE WHEN line."lineCostTotalKgs" IS NULL THEN 1 ELSE 0 END AS "missingCostLines"
+      FROM "SaleReturnLine" line
+      INNER JOIN "SaleReturn" sale_return ON sale_return.id = line."saleReturnId"
+      WHERE sale_return."organizationId" = ${input.organizationId}
+        AND sale_return."storeId" IN (${Prisma.join(storeIds)})
+        AND sale_return.status = 'COMPLETED'
+        AND sale_return."completedAt" >= ${from}
+        AND sale_return."completedAt" <= ${to}
+    ), grouped AS (
+      SELECT
+        activity."productId" AS "productId",
+        SUM(activity.units)::int AS units,
+        SUM(activity.revenue) AS revenue,
+        SUM(
+          CASE WHEN activity.cost IS NULL THEN NULL ELSE activity.revenue - activity.cost END
+        ) AS profit,
+        SUM(activity."missingCostLines")::int AS "missingCostLines"
+      FROM historical_activity activity
+      GROUP BY activity."productId"
+    )
+    SELECT
+      grouped."productId" AS "productId",
+      product.sku AS sku,
+      product.name AS name,
+      grouped.units,
+      grouped.revenue,
+      grouped.profit,
+      SUM(grouped."missingCostLines") OVER ()::int AS "totalMissingCostLines"
+    FROM grouped
+    INNER JOIN "Product" product ON product.id = grouped."productId"
+    ORDER BY CASE
+      WHEN ${input.metric} = 'profit' THEN grouped.profit
+      WHEN ${input.metric} = 'revenue' THEN grouped.revenue
+      ELSE grouped.units
+    END DESC NULLS LAST
     LIMIT 10
   `);
 
-  const hasCost = await prisma.productCost.count({
-    where: { organizationId: input.organizationId },
-  });
-  const canProfit = hasCost > 0;
+  const canProfit =
+    historicalRows.length > 0 && Number(historicalRows[0]?.totalMissingCostLines ?? 0) === 0;
+  let rows = historicalRows;
 
-  const items = rows.map((row) => {
-    const value =
-      input.metric === "profit"
-        ? Number(row.profit ?? 0)
-        : input.metric === "revenue"
-          ? Number(row.revenue ?? 0)
-          : Number(row.units ?? 0);
-    return { sku: row.sku, name: row.name, value };
-  });
+  // Some older installations contain movement-only sales without immutable order
+  // revenue/COGS lines. Units remain deterministic; money metrics intentionally do
+  // not fall back to today's prices or costs.
+  if (!rows.length && input.metric === "units") {
+    rows = await prisma.$queryRaw<
+      Array<{
+        productId: string;
+        sku: string;
+        name: string;
+        units: number;
+        revenue: null;
+        profit: null;
+        totalMissingCostLines: number;
+      }>
+    >(Prisma.sql`
+      SELECT
+        movement."productId" AS "productId",
+        product.sku AS sku,
+        product.name AS name,
+        SUM(ABS(movement."qtyDelta"))::int AS units,
+        NULL::numeric AS revenue,
+        NULL::numeric AS profit,
+        1::int AS "totalMissingCostLines"
+      FROM "StockMovement" movement
+      INNER JOIN "Store" store ON store.id = movement."storeId"
+      INNER JOIN "Product" product ON product.id = movement."productId"
+      WHERE store."organizationId" = ${input.organizationId}
+        AND movement."storeId" IN (${Prisma.join(storeIds)})
+        AND movement."createdAt" >= ${from}
+        AND movement."createdAt" <= ${to}
+        AND movement.type = 'SALE'
+      GROUP BY movement."productId", product.sku, product.name
+      ORDER BY units DESC
+      LIMIT 10
+    `);
+  }
+
+  const items =
+    input.metric === "profit" && !canProfit
+      ? []
+      : rows.map((row) => {
+          const value =
+            input.metric === "profit"
+              ? Number(row.profit ?? 0)
+              : input.metric === "revenue"
+                ? Number(row.revenue ?? 0)
+                : Number(row.units ?? 0);
+          return { sku: row.sku, name: row.name, value };
+        });
 
   const result = { items, canProfit };
   await cacheSet(cacheKey, result);
@@ -366,7 +447,10 @@ export const getStockoutsLowStockSeries = async (input: {
 
   const stockoutThresholds = new Map<string, number | null>();
   snapshots.forEach((snapshot) => {
-    stockoutThresholds.set(buildKey(snapshot.storeId, snapshot.productId, snapshot.variantId ?? null), 0);
+    stockoutThresholds.set(
+      buildKey(snapshot.storeId, snapshot.productId, snapshot.variantId ?? null),
+      0,
+    );
   });
   movements.forEach((movement) => {
     const key = buildKey(movement.storeId, movement.productId, movement.variantId ?? null);
@@ -409,13 +493,27 @@ export const getInventoryValue = async (input: {
     : Prisma.sql`AND s."storeId" IN (${Prisma.join(storeIds)})`;
 
   const valueRow = await prisma.$queryRaw<Array<{ total: string | number | null }>>(Prisma.sql`
-    SELECT SUM(s."onHand" * COALESCE(sp."priceKgs", p."basePriceKgs", 0)) AS total
+    SELECT SUM(
+      s."onHand" * CASE
+        WHEN cost."preciseCostBasisQty" > 0
+          AND cost."costBasisValueKgs" IS NOT NULL
+          AND cost."valuationLegacyUpdatedAt" IS NOT NULL
+          AND cost."updatedAt" <= cost."valuationLegacyUpdatedAt"
+          THEN cost."costBasisValueKgs" / cost."preciseCostBasisQty"
+        ELSE cost."avgCostKgs"
+      END
+    ) AS total
     FROM "InventorySnapshot" s
     JOIN "Store" st ON st.id = s."storeId"
-    JOIN "Product" p ON p.id = s."productId"
-    LEFT JOIN "StorePrice" sp ON sp."storeId" = s."storeId"
-      AND sp."productId" = s."productId"
-      AND sp."variantKey" = s."variantKey"
+    LEFT JOIN LATERAL (
+      SELECT product_cost.*
+      FROM "ProductCost" product_cost
+      WHERE product_cost."organizationId" = st."organizationId"
+        AND product_cost."productId" = s."productId"
+        AND product_cost."variantKey" IN (s."variantKey", 'BASE')
+      ORDER BY CASE WHEN product_cost."variantKey" = s."variantKey" THEN 0 ELSE 1 END
+      LIMIT 1
+    ) cost ON true
     WHERE st."organizationId" = ${input.organizationId}
       ${storeFilter}
   `);

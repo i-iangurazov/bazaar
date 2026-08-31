@@ -3,18 +3,34 @@ import { StockMovementType } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
 import {
-  adjustStock,
+  adjustStock as adjustStockService,
   bulkSetOnHand,
   postStockReceiving,
   postStockWriteOff,
-  receiveStock,
+  receiveStock as receiveStockService,
   recomputeInventorySnapshots,
   transferStock,
+  type ReceiveStockInput,
+  type StockAdjustmentInput,
 } from "@/server/services/inventory";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 import { createTestCaller } from "../helpers/context";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
+
+// Existing service tests intentionally seed positive inventory. Keep those fixtures
+// explicit about value now that D-009 correctly rejects unpriced positive stock.
+const adjustStock = (input: StockAdjustmentInput) =>
+  adjustStockService({
+    ...input,
+    ...(input.qtyDelta > 0 && input.unitCostKgs == null ? { unitCostKgs: 10 } : {}),
+  });
+
+const receiveStock = (input: ReceiveStockInput) =>
+  receiveStockService({
+    ...input,
+    ...(input.unitCost == null ? { unitCost: 10 } : {}),
+  });
 
 const assertSnapshotMatchesLedger = async (storeId: string, productId: string) => {
   const total = await prisma.stockMovement.aggregate({
@@ -317,7 +333,7 @@ describeDb("inventory service", () => {
     await assertSnapshotMatchesLedger(store.id, secondProduct.id);
   });
 
-  it("posts receiving when stock remains negative after a positive receipt", async () => {
+  it("keeps unvalued negative stock explicit and rejects valued recovery without side effects", async () => {
     const { org, store, product, adminUser } = await seedBase();
 
     await prisma.store.update({
@@ -339,27 +355,61 @@ describeDb("inventory service", () => {
       data: { allowNegativeStock: false },
     });
 
-    const result = await postStockReceiving({
-      storeId: store.id,
-      referenceNumber: "RCV-NEGATIVE-1",
-      lines: [{ productId: product.id, quantity: 25, unitCost: 10 }],
-      actorId: adminUser.id,
-      organizationId: org.id,
-      requestId: "req-receiving-negative-post",
-      idempotencyKey: "receiving-negative-post-1",
+    const before = await Promise.all([
+      prisma.stockMovement.count({ where: { storeId: store.id, productId: product.id } }),
+      prisma.auditLog.count({ where: { organizationId: org.id } }),
+      prisma.idempotencyKey.count(),
+    ]);
+    await expect(
+      postStockReceiving({
+        storeId: store.id,
+        referenceNumber: "RCV-NEGATIVE-1",
+        lines: [{ productId: product.id, quantity: 25, unitCost: 10 }],
+        actorId: adminUser.id,
+        organizationId: org.id,
+        requestId: "req-receiving-negative-post",
+        idempotencyKey: "receiving-negative-post-1",
+      }),
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "valuedNegativeStockRecoveryBlocked",
     });
 
-    expect(result.lines[0]?.onHand).toBe(-25);
-    const snapshot = await prisma.inventorySnapshot.findUnique({
-      where: {
-        storeId_productId_variantKey: {
-          storeId: store.id,
-          productId: product.id,
-          variantKey: "BASE",
+    const [snapshot, cost, setupMovement, after] = await Promise.all([
+      prisma.inventorySnapshot.findUnique({
+        where: {
+          storeId_productId_variantKey: {
+            storeId: store.id,
+            productId: product.id,
+            variantKey: "BASE",
+          },
         },
-      },
-    });
-    expect(snapshot?.onHand).toBe(-25);
+      }),
+      prisma.productCost.findUnique({
+        where: {
+          organizationId_productId_variantKey: {
+            organizationId: org.id,
+            productId: product.id,
+            variantKey: "BASE",
+          },
+        },
+      }),
+      prisma.stockMovement.findFirstOrThrow({
+        where: { storeId: store.id, productId: product.id },
+      }),
+      Promise.all([
+        prisma.stockMovement.count({ where: { storeId: store.id, productId: product.id } }),
+        prisma.auditLog.count({ where: { organizationId: org.id } }),
+        prisma.idempotencyKey.count(),
+      ]),
+    ]);
+    expect(snapshot?.onHand).toBe(-50);
+    expect(cost).toBeNull();
+    expect({
+      unitCostKgs: setupMovement.unitCostKgs,
+      inventoryValueDeltaKgs: setupMovement.inventoryValueDeltaKgs,
+    }).toEqual({ unitCostKgs: null, inventoryValueDeltaKgs: null });
+    expect(after).toEqual(before);
     await assertSnapshotMatchesLedger(store.id, product.id);
   });
 
@@ -653,6 +703,7 @@ describeDb("inventory service", () => {
         storeId,
         productId: product.id,
         qtyDelta: 20,
+        unitCostKgs: 4,
         reason: "store correction fixture",
         actorId: adminUser.id,
         organizationId: org.id,
@@ -738,12 +789,19 @@ describeDb("inventory service", () => {
         },
       },
     });
-    expect({ avgCostKgs: Number(productCost.avgCostKgs), basis: productCost.costBasisQty }).toEqual(
-      {
-        avgCostKgs: 4,
-        basis: 5,
-      },
-    );
+    expect({
+      avgCostKgs: Number(productCost.avgCostKgs),
+      legacyCompatibilityBasis: productCost.costBasisQty,
+      preciseBasis: productCost.preciseCostBasisQty,
+      basisValueKgs: Number(productCost.costBasisValueKgs),
+      valuationStatus: productCost.valuationStatus,
+    }).toEqual({
+      avgCostKgs: 4,
+      legacyCompatibilityBasis: 25,
+      preciseBasis: 42,
+      basisValueKgs: 168,
+      valuationStatus: "PRECISE",
+    });
 
     await expect(
       caller.inventory.productMovementDocument({ documentKey: receivingKey }),
@@ -1064,24 +1122,13 @@ describeDb("inventory service", () => {
   it("bulk set-on-hand can correct selected rows to negative stock", async () => {
     const { org, store, product, adminUser } = await seedBase();
 
-    await adjustStock({
-      storeId: store.id,
-      productId: product.id,
-      qtyDelta: 3,
-      reason: "Seed stock",
-      actorId: adminUser.id,
-      organizationId: org.id,
-      requestId: "req-bulk-negative-seed",
-      idempotencyKey: "idem-bulk-negative-seed",
-    });
-
-    const snapshot = await prisma.inventorySnapshot.findUniqueOrThrow({
-      where: {
-        storeId_productId_variantKey: {
-          storeId: store.id,
-          productId: product.id,
-          variantKey: "BASE",
-        },
+    const snapshot = await prisma.inventorySnapshot.create({
+      data: {
+        storeId: store.id,
+        productId: product.id,
+        variantKey: "BASE",
+        onHand: 0,
+        onOrder: 0,
       },
     });
 
@@ -1202,10 +1249,15 @@ describeDb("inventory service", () => {
     expect(document?.recipientName).toBe(storeB.name);
     expect(document?.sourceStoreId).toBe(store.id);
     expect(document?.destinationStoreId).toBe(storeB.id);
-    expect(document?.lines.map((line) => line.movementType)).toEqual(["TRANSFER_OUT"]);
+    expect(document?.lines.map((line) => line.movementType)).toEqual([
+      "TRANSFER_OUT",
+      "TRANSFER_IN",
+    ]);
     expect(document?.lines.map((line) => line.productDetailUrl)).toEqual([
       `/products/${product.id}?storeId=${encodeURIComponent(store.id)}`,
+      `/products/${product.id}?storeId=${encodeURIComponent(storeB.id)}`,
     ]);
+    expect(document?.lines.map((line) => line.qtyDelta)).toEqual([-5, 5]);
   });
 
   it("edits a transfer movement document with product replacement and store-safe stock deltas", async () => {
@@ -1324,8 +1376,8 @@ describeDb("inventory service", () => {
       reason: "test transfer edit",
       destinationStoreId: storeC.id,
       lines: [
-        { productId: product.id, quantity: 4, unitCostKgs: 0 },
-        { productId: addedProduct.id, quantity: 3, unitCostKgs: 0 },
+        { productId: product.id, quantity: 4, unitCostKgs: 10 },
+        { productId: addedProduct.id, quantity: 3, unitCostKgs: 10 },
       ],
       idempotencyKey: "transfer-edit-save-1",
     });
@@ -1365,11 +1417,25 @@ describeDb("inventory service", () => {
     expect(document?.totalQuantity).toBe(7);
     expect(document?.sourceStoreId).toBe(store.id);
     expect(document?.destinationStoreId).toBe(storeC.id);
-    expect(document?.lines.map((line) => line.productId)).toEqual([product.id, addedProduct.id]);
+    expect(document?.lines.map((line) => line.productId)).toEqual([
+      product.id,
+      product.id,
+      addedProduct.id,
+      addedProduct.id,
+    ]);
     expect(document?.lines.map((line) => line.movementType)).toEqual([
       "TRANSFER_OUT",
+      "TRANSFER_IN",
       "TRANSFER_OUT",
+      "TRANSFER_IN",
     ]);
+    expect(document?.lines.map((line) => line.storeId)).toEqual([
+      store.id,
+      storeC.id,
+      store.id,
+      storeC.id,
+    ]);
+    expect(document?.lines.reduce((sum, line) => sum + line.qtyDelta, 0)).toBe(0);
     expect(document?.lines.some((line) => line.productId === removedProduct.id)).toBe(false);
     await expect(
       caller.inventory.editProductMovementDocument({
@@ -1697,7 +1763,7 @@ describeDb("inventory service", () => {
     expect(document?.lines.some((line) => line.productId === product.id)).toBe(false);
   });
 
-  it("allows write-off quantity above stock and records negative stock", async () => {
+  it("rejects a valued write-off below zero without side effects", async () => {
     const { org, store, product, adminUser } = await seedBase();
 
     await adjustStock({
@@ -1711,28 +1777,39 @@ describeDb("inventory service", () => {
       idempotencyKey: "idem-write-off-over-seed",
     });
 
-    const result = await postStockWriteOff({
-      storeId: store.id,
-      reason: "Потеря",
-      lines: [{ productId: product.id, qty: 3 }],
-      actorId: adminUser.id,
-      organizationId: org.id,
-      requestId: "req-write-off-over",
-      idempotencyKey: "idem-write-off-over",
+    await expect(
+      postStockWriteOff({
+        storeId: store.id,
+        reason: "Потеря",
+        lines: [{ productId: product.id, qty: 3 }],
+        actorId: adminUser.id,
+        organizationId: org.id,
+        requestId: "req-write-off-over",
+        idempotencyKey: "idem-write-off-over",
+      }),
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "valuedNegativeStockDepletionBlocked",
     });
 
-    expect(result.lines[0]?.onHand).toBe(-1);
-
-    const snapshot = await prisma.inventorySnapshot.findUnique({
-      where: {
-        storeId_productId_variantKey: {
-          storeId: store.id,
-          productId: product.id,
-          variantKey: "BASE",
+    const [snapshot, writeOffMovements, idempotencyRows] = await Promise.all([
+      prisma.inventorySnapshot.findUnique({
+        where: {
+          storeId_productId_variantKey: {
+            storeId: store.id,
+            productId: product.id,
+            variantKey: "BASE",
+          },
         },
-      },
-    });
-    expect(snapshot?.onHand).toBe(-1);
+      }),
+      prisma.stockMovement.count({
+        where: { productId: product.id, type: StockMovementType.WRITE_OFF },
+      }),
+      prisma.idempotencyKey.count({ where: { key: "idem-write-off-over" } }),
+    ]);
+    expect(snapshot?.onHand).toBe(2);
+    expect(writeOffMovements).toBe(0);
+    expect(idempotencyRows).toBe(0);
   });
 
   it("assigns the product to the destination store when transferring stock", async () => {
@@ -1784,7 +1861,7 @@ describeDb("inventory service", () => {
     expect(destinationAssignment?.assignedById).toBe(adminUser.id);
   });
 
-  it("allows transfer quantity above available source stock", async () => {
+  it("rejects a valued transfer below zero without side effects", async () => {
     const { org, store, product, adminUser } = await seedBase();
     const storeB = await prisma.store.create({
       data: {
@@ -1812,31 +1889,55 @@ describeDb("inventory service", () => {
       idempotencyKey: "idem-transfer-over-seed",
     });
 
-    const result = await transferStock({
-      fromStoreId: store.id,
-      toStoreId: storeB.id,
-      productId: product.id,
-      qty: 4,
-      note: "Move more than available",
-      actorId: adminUser.id,
-      organizationId: org.id,
-      requestId: "req-transfer-over",
-      idempotencyKey: "idem-transfer-over",
+    await expect(
+      transferStock({
+        fromStoreId: store.id,
+        toStoreId: storeB.id,
+        productId: product.id,
+        qty: 4,
+        note: "Move more than available",
+        actorId: adminUser.id,
+        organizationId: org.id,
+        requestId: "req-transfer-over",
+        idempotencyKey: "idem-transfer-over",
+      }),
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "valuedNegativeStockDepletionBlocked",
     });
 
-    expect(result.lines[0]?.outOnHand).toBe(-1);
-    expect(result.lines[0]?.inOnHand).toBe(4);
-
-    const snapshot = await prisma.inventorySnapshot.findUnique({
-      where: {
-        storeId_productId_variantKey: {
-          storeId: store.id,
-          productId: product.id,
-          variantKey: "BASE",
-        },
-      },
-    });
-    expect(snapshot?.onHand).toBe(-1);
+    const [sourceSnapshot, destinationSnapshot, transferMovements, idempotencyRows] =
+      await Promise.all([
+        prisma.inventorySnapshot.findUnique({
+          where: {
+            storeId_productId_variantKey: {
+              storeId: store.id,
+              productId: product.id,
+              variantKey: "BASE",
+            },
+          },
+        }),
+        prisma.inventorySnapshot.findUnique({
+          where: {
+            storeId_productId_variantKey: {
+              storeId: storeB.id,
+              productId: product.id,
+              variantKey: "BASE",
+            },
+          },
+        }),
+        prisma.stockMovement.count({
+          where: {
+            productId: product.id,
+            type: { in: [StockMovementType.TRANSFER_OUT, StockMovementType.TRANSFER_IN] },
+          },
+        }),
+        prisma.idempotencyKey.count({ where: { key: "idem-transfer-over" } }),
+      ]);
+    expect(sourceSnapshot?.onHand).toBe(3);
+    expect(destinationSnapshot?.onHand ?? 0).toBe(0);
+    expect(transferMovements).toBe(0);
+    expect(idempotencyRows).toBe(0);
   });
 
   it("treats transfer idempotency keys as replay safe", async () => {
@@ -1975,6 +2076,159 @@ describeDb("inventory service", () => {
       },
     });
     expect(cost?.avgCostKgs ? Number(cost.avgCostKgs) : null).toBeCloseTo(6, 5);
+  });
+
+  it("reconciles old-writer receives across a rolling deployment without double-valuing baseline stock", async () => {
+    const { org, store, product, adminUser } = await seedBase();
+    const oldWriterReceive = async (quantity: number, unitCostKgs: number, referenceId: string) =>
+      prisma.$transaction(async (tx) => {
+        await tx.inventorySnapshot.upsert({
+          where: {
+            storeId_productId_variantKey: {
+              storeId: store.id,
+              productId: product.id,
+              variantKey: "BASE",
+            },
+          },
+          create: {
+            storeId: store.id,
+            productId: product.id,
+            variantKey: "BASE",
+            onHand: quantity,
+          },
+          update: { onHand: { increment: quantity } },
+        });
+        await tx.stockMovement.create({
+          data: {
+            storeId: store.id,
+            productId: product.id,
+            type: StockMovementType.RECEIVE,
+            qtyDelta: quantity,
+            unitCostKgs,
+            lineTotalKgs: quantity * unitCostKgs,
+            referenceType: "STOCK_RECEIVING",
+            referenceId,
+            createdById: adminUser.id,
+          },
+        });
+        const existing = await tx.productCost.findUnique({
+          where: {
+            organizationId_productId_variantKey: {
+              organizationId: org.id,
+              productId: product.id,
+              variantKey: "BASE",
+            },
+          },
+        });
+        const previousQuantity = existing?.costBasisQty ?? 0;
+        const nextQuantity = previousQuantity + quantity;
+        const nextAverage =
+          ((existing?.avgCostKgs.toNumber() ?? 0) * previousQuantity + unitCostKgs * quantity) /
+          nextQuantity;
+        await tx.productCost.upsert({
+          where: {
+            organizationId_productId_variantKey: {
+              organizationId: org.id,
+              productId: product.id,
+              variantKey: "BASE",
+            },
+          },
+          create: {
+            organizationId: org.id,
+            productId: product.id,
+            variantKey: "BASE",
+            avgCostKgs: nextAverage,
+            costBasisQty: nextQuantity,
+          },
+          update: {
+            avgCostKgs: nextAverage,
+            costBasisQty: nextQuantity,
+          },
+        });
+      });
+
+    await oldWriterReceive(2, 10, "rolling-old-baseline");
+    await receiveStock({
+      storeId: store.id,
+      productId: product.id,
+      qtyReceived: 3,
+      unitCost: 12,
+      note: "First new-version receive",
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "rolling-new-1",
+      idempotencyKey: "rolling-new-1",
+    });
+
+    const firstNewCost = await prisma.productCost.findUniqueOrThrow({
+      where: {
+        organizationId_productId_variantKey: {
+          organizationId: org.id,
+          productId: product.id,
+          variantKey: "BASE",
+        },
+      },
+    });
+    const baselineMovement = await prisma.stockMovement.findFirstOrThrow({
+      where: { referenceId: "rolling-old-baseline" },
+    });
+    expect(baselineMovement.ledgerRecordedAt?.getTime()).toBeLessThan(
+      firstNewCost.valuationUpdatedAt?.getTime() ?? 0,
+    );
+    expect({
+      quantity: firstNewCost.preciseCostBasisQty,
+      value: firstNewCost.costBasisValueKgs?.toNumber(),
+      status: firstNewCost.valuationStatus,
+    }).toEqual({ quantity: 5, value: 56, status: "LEGACY_PROJECTED" });
+
+    await oldWriterReceive(1, 14, "rolling-old-after-expand");
+    const rollingOldMovement = await prisma.stockMovement.findFirstOrThrow({
+      where: { referenceId: "rolling-old-after-expand" },
+    });
+    expect(rollingOldMovement.ledgerRecordedAt?.getTime()).toBeGreaterThanOrEqual(
+      firstNewCost.valuationUpdatedAt?.getTime() ?? 0,
+    );
+
+    await receiveStock({
+      storeId: store.id,
+      productId: product.id,
+      qtyReceived: 1,
+      unitCost: 16,
+      note: "New-version recovery receive",
+      actorId: adminUser.id,
+      organizationId: org.id,
+      requestId: "rolling-new-2",
+      idempotencyKey: "rolling-new-2",
+    });
+
+    const recoveredCost = await prisma.productCost.findUniqueOrThrow({
+      where: {
+        organizationId_productId_variantKey: {
+          organizationId: org.id,
+          productId: product.id,
+          variantKey: "BASE",
+        },
+      },
+    });
+    const movements = await prisma.stockMovement.findMany({
+      where: { productId: product.id },
+      orderBy: [{ ledgerRecordedAt: "asc" }, { id: "asc" }],
+    });
+    expect({
+      physicalQuantity: await prisma.inventorySnapshot
+        .aggregate({ where: { productId: product.id }, _sum: { onHand: true } })
+        .then((result) => result._sum.onHand),
+      preciseQuantity: recoveredCost.preciseCostBasisQty,
+      preciseValue: recoveredCost.costBasisValueKgs?.toNumber(),
+      values: movements.map((movement) => movement.inventoryValueDeltaKgs?.toNumber() ?? null),
+      statuses: movements.map((movement) => movement.inventoryValueStatus),
+    }).toEqual({
+      physicalQuantity: 7,
+      preciseQuantity: 7,
+      preciseValue: 86,
+      values: [null, 36, 14, 16],
+      statuses: [null, "PRECISE", "LEGACY_EVIDENCE", "PRECISE"],
+    });
   });
 
   it("tracks expiry lots when enabled", async () => {

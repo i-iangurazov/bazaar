@@ -146,7 +146,7 @@ export const MobileTopBar = ({
           {storeName ?? "BAZAAR"}
         </p>
         <div className="mt-0.5 flex min-w-0 items-center gap-2">
-          <h1 className="truncate text-base font-semibold text-foreground">{pageTitle}</h1>
+          <p className="truncate text-base font-semibold text-foreground">{pageTitle}</p>
           {statusLabel ? (
             <span className="shrink-0 rounded-md border border-success/30 bg-success/10 px-2 py-0.5 text-[11px] font-semibold text-success">
               {statusLabel}
@@ -291,6 +291,7 @@ export const MobileMoreMenu = ({
                 href={item.href}
                 prefetch={false}
                 onClick={onClose}
+                aria-current={item.active ? "page" : undefined}
                 className={cn(
                   "flex min-h-12 items-center gap-3 rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold no-underline shadow-sm transition hover:border-primary/40 hover:bg-accent hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
                   item.active &&
@@ -334,8 +335,10 @@ export const MobileMoreMenu = ({
 export const MobilePageContainer = ({ children, className }: MobilePageContainerProps) => (
   <div
     data-native-keyboard-aware
-    className={cn("min-w-0 overflow-x-hidden md:contents", className)}
-    style={{ paddingBottom: "calc(6rem + env(safe-area-inset-bottom))" }}
+    className={cn(
+      "min-w-0 max-w-full overflow-x-hidden pb-[calc(6rem+env(safe-area-inset-bottom))] md:w-full md:overflow-x-clip md:pb-0",
+      className,
+    )}
   >
     {children}
   </div>

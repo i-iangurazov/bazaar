@@ -426,7 +426,7 @@ const PrintingSettingsPage = () => {
   const [binding, setBinding] = useState<QzTrayBinding>({
     receiptPrinterName: "",
     labelPrinterName: "",
-    certificateProvisioned: false,
+    trustAcknowledged: false,
   });
   const [qzStatus, setQzStatus] = useState<QzTrayStatus>("idle");
   const [qzErrorKey, setQzErrorKey] = useState<string | null>(null);
@@ -442,10 +442,7 @@ const PrintingSettingsPage = () => {
     setStoreId(storesQuery.data[0].id);
   }, [storeId, storesQuery.data]);
 
-  const settingsQuery = trpc.stores.hardware.useQuery(
-    { storeId },
-    { enabled: Boolean(storeId) },
-  );
+  const settingsQuery = trpc.stores.hardware.useQuery({ storeId }, { enabled: Boolean(storeId) });
 
   useEffect(() => {
     if (!storeId) {
@@ -503,7 +500,9 @@ const PrintingSettingsPage = () => {
       receiptFooterText: settings.receiptFooterText,
       receiptPrinterModel: settings.receiptPrinterModel,
       labelPrinterModel: settings.labelPrinterModel,
-      labelTemplate: PRICE_TAG_TEMPLATES.includes(settings.labelTemplate as (typeof PRICE_TAG_TEMPLATES)[number])
+      labelTemplate: PRICE_TAG_TEMPLATES.includes(
+        settings.labelTemplate as (typeof PRICE_TAG_TEMPLATES)[number],
+      )
         ? (settings.labelTemplate as (typeof PRICE_TAG_TEMPLATES)[number])
         : ROLL_PRICE_TAG_TEMPLATE,
       labelPaperMode: settings.labelPaperMode as PrintingFormValues["labelPaperMode"],
@@ -584,7 +583,10 @@ const PrintingSettingsPage = () => {
     },
   });
 
-  const updateValue = <K extends keyof PrintingFormValues>(key: K, value: PrintingFormValues[K]) => {
+  const updateValue = <K extends keyof PrintingFormValues>(
+    key: K,
+    value: PrintingFormValues[K],
+  ) => {
     setValues((current) => ({ ...current, [key]: value }));
   };
 
@@ -598,32 +600,35 @@ const PrintingSettingsPage = () => {
     });
   };
 
-  const checkQzConnection = useCallback(async (options?: { silent?: boolean }) => {
-    setQzStatus("checking");
-    setQzErrorKey(null);
-    try {
-      setQzSigningStatus(await fetchQzSigningStatus());
-      await connectQzTray();
-      const printerRows = await listQzPrinters();
-      setPrinters(printerRows);
-      setQzSigningStatus(getQzSigningStatusSnapshot());
-      setQzTrustStatus(getQzTrustStatus());
-      setQzStatus("connected");
-      if (!options?.silent) {
-        toast({ variant: "success", description: t("qzConnected") });
+  const checkQzConnection = useCallback(
+    async (options?: { silent?: boolean }) => {
+      setQzStatus("checking");
+      setQzErrorKey(null);
+      try {
+        setQzSigningStatus(await fetchQzSigningStatus());
+        await connectQzTray();
+        const printerRows = await listQzPrinters();
+        setPrinters(printerRows);
+        setQzSigningStatus(getQzSigningStatusSnapshot());
+        setQzTrustStatus(getQzTrustStatus());
+        setQzStatus("connected");
+        if (!options?.silent) {
+          toast({ variant: "success", description: t("qzConnected") });
+        }
+      } catch (error) {
+        const key = qzTrayErrorMessageKey(error);
+        setQzErrorKey(key);
+        setQzSigningStatus(getQzSigningStatusSnapshot());
+        setQzTrustStatus(getQzTrustStatus());
+        setQzStatus("error");
+        setPrinters([]);
+        if (!options?.silent) {
+          toast({ variant: "error", description: t(key) });
+        }
       }
-    } catch (error) {
-      const key = qzTrayErrorMessageKey(error);
-      setQzErrorKey(key);
-      setQzSigningStatus(getQzSigningStatusSnapshot());
-      setQzTrustStatus(getQzTrustStatus());
-      setQzStatus("error");
-      setPrinters([]);
-      if (!options?.silent) {
-        toast({ variant: "error", description: t(key) });
-      }
-    }
-  }, [t, toast]);
+    },
+    [t, toast],
+  );
 
   useEffect(() => {
     if (!storeId || values.receiptPrintProvider !== "QZ_TRAY") {
@@ -762,11 +767,9 @@ const PrintingSettingsPage = () => {
   const printerOptions = useMemo(() => {
     return Array.from(
       new Set(
-        [
-          binding.receiptPrinterName.trim(),
-          binding.labelPrinterName.trim(),
-          ...printers,
-        ].filter(Boolean),
+        [binding.receiptPrinterName.trim(), binding.labelPrinterName.trim(), ...printers].filter(
+          Boolean,
+        ),
       ),
     );
   }, [binding.labelPrinterName, binding.receiptPrinterName, printers]);
@@ -784,9 +787,8 @@ const PrintingSettingsPage = () => {
     Boolean(binding.receiptPrinterName.trim()) &&
     receiptPrinterAvailable;
   const qzServerSigningReady = qzTrustStatus === "trusted";
-  const qzTerminalProvisioned = binding.certificateProvisioned;
-  const qzNeedsClientProvision =
-    qzConfigured && qzServerSigningReady && !qzTerminalProvisioned;
+  const qzTerminalProvisioned = binding.trustAcknowledged;
+  const qzNeedsClientProvision = qzConfigured && qzServerSigningReady && !qzTerminalProvisioned;
   const qzFullyReady = qzConfigured && qzServerSigningReady && qzTerminalProvisioned;
   const qzTrustMessageKey = qzTrustMessageKeyFor(qzTrustStatus);
   const qzTrustNoticeKey = qzTrustNoticeKeyFor(qzTrustStatus);
@@ -830,7 +832,7 @@ const PrintingSettingsPage = () => {
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">{tCommon("store")}</label>
               <Select value={storeId} onValueChange={setStoreId}>
-                <SelectTrigger className="h-11">
+                <SelectTrigger aria-label={tCommon("store")} className="h-11">
                   <SelectValue placeholder={tCommon("selectStore")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -856,9 +858,7 @@ const PrintingSettingsPage = () => {
           </div>
         ) : null}
         {settingsQuery.error ? (
-          <div className="bazaar-admin-error">
-            {translateError(tErrors, settingsQuery.error)}
-          </div>
+          <div className="bazaar-admin-error">{translateError(tErrors, settingsQuery.error)}</div>
         ) : null}
         {!selectedStore && !storesQuery.isLoading ? (
           <div className="bazaar-admin-empty min-h-[7rem]">
@@ -997,8 +997,8 @@ const PrintingSettingsPage = () => {
                   </span>
                 </span>
                 <Switch
-                  checked={binding.certificateProvisioned}
-                  onCheckedChange={(checked) => updateBinding({ certificateProvisioned: checked })}
+                  checked={binding.trustAcknowledged}
+                  onCheckedChange={(checked) => updateBinding({ trustAcknowledged: checked })}
                   disabled={!canEdit}
                   aria-label={t("qzClientProvisionConfirm")}
                 />
@@ -1018,7 +1018,7 @@ const PrintingSettingsPage = () => {
                   onValueChange={(value) => updateBinding({ receiptPrinterName: value })}
                   disabled={!canEdit || qzStatus !== "connected"}
                 >
-                  <SelectTrigger className="h-11">
+                  <SelectTrigger aria-label={t("receiptPrinter")} className="h-11">
                     <SelectValue placeholder={t("selectPrinter")} />
                   </SelectTrigger>
                   <SelectContent>
@@ -1045,7 +1045,7 @@ const PrintingSettingsPage = () => {
                   onValueChange={(value) => updateBinding({ labelPrinterName: value })}
                   disabled={!canEdit || qzStatus !== "connected"}
                 >
-                  <SelectTrigger className="h-11">
+                  <SelectTrigger aria-label={t("labelPrinter")} className="h-11">
                     <SelectValue placeholder={t("selectPrinter")} />
                   </SelectTrigger>
                   <SelectContent>
@@ -1077,10 +1077,12 @@ const PrintingSettingsPage = () => {
                 <label className="text-sm font-medium text-foreground">{t("paperSize")}</label>
                 <Select
                   value={values.receiptPaperSize}
-                  onValueChange={(value) => updateValue("receiptPaperSize", value as ReceiptPaperSize)}
+                  onValueChange={(value) =>
+                    updateValue("receiptPaperSize", value as ReceiptPaperSize)
+                  }
                   disabled={!canEdit}
                 >
-                  <SelectTrigger className="h-11">
+                  <SelectTrigger aria-label={t("paperSize")} className="h-11">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1092,14 +1094,16 @@ const PrintingSettingsPage = () => {
                 </Select>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                {([
-                  ["receiptShowProductName", "showProductName"],
-                  ["receiptShowProductSku", "showSku"],
-                  ["receiptShowProductBarcode", "showBarcodeText"],
-                  ["receiptShowDiscount", "showDiscount"],
-                  ["receiptShowPaymentMethod", "showPaymentMethod"],
-                  ["receiptShowChange", "showChange"],
-                ] as const).map(([key, label]) => (
+                {(
+                  [
+                    ["receiptShowProductName", "showProductName"],
+                    ["receiptShowProductSku", "showSku"],
+                    ["receiptShowProductBarcode", "showBarcodeText"],
+                    ["receiptShowDiscount", "showDiscount"],
+                    ["receiptShowPaymentMethod", "showPaymentMethod"],
+                    ["receiptShowChange", "showChange"],
+                  ] as const
+                ).map(([key, label]) => (
                   <ToggleRow
                     key={key}
                     label={t(label)}
@@ -1138,15 +1142,21 @@ const PrintingSettingsPage = () => {
                 <label className="text-sm font-medium text-foreground">{t("layoutOrder")}</label>
                 <Select
                   value={values.labelLayoutOrder}
-                  onValueChange={(value) => updateValue("labelLayoutOrder", value as LabelLayoutOrder)}
+                  onValueChange={(value) =>
+                    updateValue("labelLayoutOrder", value as LabelLayoutOrder)
+                  }
                   disabled={!canEdit}
                 >
-                  <SelectTrigger className="h-11">
+                  <SelectTrigger aria-label={t("layoutOrder")} className="h-11">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="NAME_BARCODE_PRICE">{t("layoutNameBarcodePrice")}</SelectItem>
-                    <SelectItem value="PRICE_NAME_BARCODE">{t("layoutPriceNameBarcode")}</SelectItem>
+                    <SelectItem value="NAME_BARCODE_PRICE">
+                      {t("layoutNameBarcodePrice")}
+                    </SelectItem>
+                    <SelectItem value="PRICE_NAME_BARCODE">
+                      {t("layoutPriceNameBarcode")}
+                    </SelectItem>
                     <SelectItem value="NAME_BARCODE">{t("layoutNameBarcode")}</SelectItem>
                     <SelectItem value="PRICE_BARCODE">{t("layoutPriceBarcode")}</SelectItem>
                     <SelectItem value="BARCODE_ONLY">{t("layoutBarcodeOnly")}</SelectItem>
@@ -1154,16 +1164,19 @@ const PrintingSettingsPage = () => {
                 </Select>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                {([
-                  ["labelWidthMm", "widthMm"],
-                  ["labelHeightMm", "heightMm"],
-                  ["labelBarcodeHeightMm", "barcodeHeight"],
-                  ["labelDefaultCopies", "labelDefaultCopies"],
-                ] as const).map(([key, label]) => (
+                {(
+                  [
+                    ["labelWidthMm", "widthMm"],
+                    ["labelHeightMm", "heightMm"],
+                    ["labelBarcodeHeightMm", "barcodeHeight"],
+                    ["labelDefaultCopies", "labelDefaultCopies"],
+                  ] as const
+                ).map(([key, label]) => (
                   <div key={key} className="space-y-1.5">
                     <label className="text-xs font-medium text-foreground">{t(label)}</label>
                     <Input
                       type="number"
+                      aria-label={t(label)}
                       value={values[key]}
                       onChange={(event) => updateValue(key, Number(event.target.value))}
                       disabled={!canEdit}
@@ -1172,12 +1185,14 @@ const PrintingSettingsPage = () => {
                 ))}
               </div>
               <div className="grid grid-cols-2 gap-2">
-                {([
-                  ["labelShowPrice", "showPrice"],
-                  ["labelShowProductName", "showProductName"],
-                  ["labelShowSku", "showSku"],
-                  ["labelShowBarcodeText", "showBarcodeText"],
-                ] as const).map(([key, label]) => (
+                {(
+                  [
+                    ["labelShowPrice", "showPrice"],
+                    ["labelShowProductName", "showProductName"],
+                    ["labelShowSku", "showSku"],
+                    ["labelShowBarcodeText", "showBarcodeText"],
+                  ] as const
+                ).map(([key, label]) => (
                   <ToggleRow
                     key={key}
                     label={t(label)}
@@ -1294,7 +1309,9 @@ const PrintingSettingsPage = () => {
               />
               <MobileStatusRow
                 label={t("clientTrustStatus")}
-                value={qzTerminalProvisioned ? t("qzClientProvisioned") : t("qzClientProvisionMissing")}
+                value={
+                  qzTerminalProvisioned ? t("qzClientProvisioned") : t("qzClientProvisionMissing")
+                }
                 ready={qzTerminalProvisioned}
               />
               <MobileStatusRow
@@ -1309,7 +1326,9 @@ const PrintingSettingsPage = () => {
                 type="button"
                 className="h-12 w-full"
                 onClick={handleSave}
-                disabled={!canEdit || !storeId || updateMutation.isLoading || settingsQuery.isLoading}
+                disabled={
+                  !canEdit || !storeId || updateMutation.isLoading || settingsQuery.isLoading
+                }
               >
                 {updateMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
                 {tCommon("save")}
@@ -1320,730 +1339,826 @@ const PrintingSettingsPage = () => {
       </section>
 
       <div className="hidden space-y-6 md:block">
-      <Card className="bazaar-admin-surface">
-        <CardHeader className="bazaar-admin-section-header">
-          <CardTitle>{t("storeScopeTitle")}</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">{tCommon("store")}</label>
-            <Select value={storeId} onValueChange={setStoreId}>
-              <SelectTrigger>
-                <SelectValue placeholder={tCommon("selectStore")} />
-              </SelectTrigger>
-              <SelectContent>
-                {(storesQuery.data ?? []).map((store) => (
-                  <SelectItem key={store.id} value={store.id}>
-                    {store.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">{t("deviceScopeHint")}</p>
+        <Card className="bazaar-admin-surface">
+          <CardHeader className="bazaar-admin-section-header">
+            <CardTitle>{t("storeScopeTitle")}</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">{tCommon("store")}</label>
+              <Select value={storeId} onValueChange={setStoreId}>
+                <SelectTrigger aria-label={tCommon("store")}>
+                  <SelectValue placeholder={tCommon("selectStore")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {(storesQuery.data ?? []).map((store) => (
+                    <SelectItem key={store.id} value={store.id}>
+                      {store.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">{t("deviceScopeHint")}</p>
+            </div>
+            <Button
+              type="button"
+              onClick={handleSave}
+              disabled={!canEdit || !storeId || updateMutation.isLoading || settingsQuery.isLoading}
+            >
+              {updateMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
+              {tCommon("save")}
+            </Button>
+          </CardContent>
+        </Card>
+
+        {!canEdit ? <p className="text-sm text-warning">{t("readOnly")}</p> : null}
+        {settingsQuery.isLoading ? (
+          <div className="bazaar-admin-empty min-h-[7rem]">
+            <Spinner className="h-4 w-4" />
+            {tCommon("loading")}
           </div>
-          <Button
-            type="button"
-            onClick={handleSave}
-            disabled={!canEdit || !storeId || updateMutation.isLoading || settingsQuery.isLoading}
-          >
-            {updateMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
-            {tCommon("save")}
-          </Button>
-        </CardContent>
-      </Card>
+        ) : null}
+        {settingsQuery.error ? (
+          <div className="bazaar-admin-error">{translateError(tErrors, settingsQuery.error)}</div>
+        ) : null}
+        {!selectedStore && !storesQuery.isLoading ? (
+          <div className="bazaar-admin-empty min-h-[7rem]">
+            <EmptyIcon className="h-4 w-4" aria-hidden />
+            {t("empty")}
+          </div>
+        ) : null}
 
-      {!canEdit ? <p className="text-sm text-warning">{t("readOnly")}</p> : null}
-      {settingsQuery.isLoading ? (
-        <div className="bazaar-admin-empty min-h-[7rem]">
-          <Spinner className="h-4 w-4" />
-          {tCommon("loading")}
-        </div>
-      ) : null}
-      {settingsQuery.error ? (
-        <div className="bazaar-admin-error">
-          {translateError(tErrors, settingsQuery.error)}
-        </div>
-      ) : null}
-      {!selectedStore && !storesQuery.isLoading ? (
-        <div className="bazaar-admin-empty min-h-[7rem]">
-          <EmptyIcon className="h-4 w-4" aria-hidden />
-          {t("empty")}
-        </div>
-      ) : null}
-
-      {selectedStore ? (
-        <>
-          <Card className="bazaar-admin-surface">
-            <CardHeader className="bazaar-admin-section-header">
-              <CardTitle>{t("statusTitle")}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div
-                className={`rounded-xl border p-4 ${
-                  qzFullyReady
-                    ? "border-success/40 bg-success/10 text-success"
-                    : values.receiptPrintProvider === "DISABLED"
-                      ? "border-border bg-secondary/30 text-muted-foreground"
-                      : qzStatus === "error"
-                        ? "border-danger/40 bg-danger/10 text-danger"
-                        : "border-warning/40 bg-warning/10 text-warning"
-                }`}
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <p className="text-sm font-semibold">
-                      {qzFullyReady
-                        ? t("autoPrintReady")
-                        : values.receiptPrintProvider === "DISABLED"
-                          ? t("autoPrintDisabled")
-                          : qzNeedsClientProvision
-                            ? t("autoPrintNeedsClientTrust")
-                          : qzConfigured
-                            ? t("autoPrintNeedsTrust")
-                            : t("autoPrintNeedsSetup")}
-                    </p>
-                    <p className="text-xs">
-                      {qzFullyReady
-                        ? t("autoPrintReadyHint")
-                        : values.receiptPrintProvider === "DISABLED"
+        {selectedStore ? (
+          <>
+            <Card className="bazaar-admin-surface">
+              <CardHeader className="bazaar-admin-section-header">
+                <CardTitle>{t("statusTitle")}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div
+                  className={`rounded-xl border p-4 ${
+                    qzFullyReady
+                      ? "border-success/40 bg-success/10 text-success"
+                      : values.receiptPrintProvider === "DISABLED"
+                        ? "border-border bg-secondary/30 text-muted-foreground"
+                        : qzStatus === "error"
+                          ? "border-danger/40 bg-danger/10 text-danger"
+                          : "border-warning/40 bg-warning/10 text-warning"
+                  }`}
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold">
+                        {qzFullyReady
+                          ? t("autoPrintReady")
+                          : values.receiptPrintProvider === "DISABLED"
+                            ? t("autoPrintDisabled")
+                            : qzNeedsClientProvision
+                              ? t("autoPrintNeedsClientTrust")
+                              : qzConfigured
+                                ? t("autoPrintNeedsTrust")
+                                : t("autoPrintNeedsSetup")}
+                      </p>
+                      <p className="text-xs">
+                        {qzFullyReady
+                          ? t("autoPrintReadyHint")
+                          : values.receiptPrintProvider === "DISABLED"
+                            ? t("providerDisabledHint")
+                            : qzNeedsClientProvision
+                              ? t("qzClientProvisionMissing")
+                              : qzConfigured
+                                ? t(qzTrustMessageKey)
+                                : t("autoPrintSetupRequired")}
+                      </p>
+                    </div>
+                    <span className="border-current/30 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs">
+                      {qzFullyReady ? (
+                        <StatusSuccessIcon className="h-4 w-4" aria-hidden />
+                      ) : (
+                        <StatusWarningIcon className="h-4 w-4" aria-hidden />
+                      )}
+                      {values.receiptPrintProvider === "QZ_TRAY"
+                        ? t("providerQz")
+                        : values.receiptPrintProvider === "KIOSK_SILENT_PRINT"
+                          ? t("providerKiosk")
+                          : t("providerDisabled")}
+                    </span>
+                  </div>
+                </div>
+                <div className="grid gap-3 md:grid-cols-3">
+                  {(["DISABLED", "QZ_TRAY", "KIOSK_SILENT_PRINT"] as const).map((provider) => (
+                    <button
+                      key={provider}
+                      type="button"
+                      className={`bazaar-admin-choice-card ${
+                        values.receiptPrintProvider === provider
+                          ? "bazaar-admin-choice-card-active"
+                          : ""
+                      }`}
+                      disabled={!canEdit}
+                      onClick={() => {
+                        updateValue("receiptPrintProvider", provider);
+                        updateValue("labelPrintProvider", provider);
+                        if (provider === "DISABLED") {
+                          updateValue("receiptAutoPrintEnabled", false);
+                        }
+                      }}
+                    >
+                      <span className="block text-sm font-semibold text-foreground">
+                        {provider === "DISABLED"
+                          ? t("providerDisabled")
+                          : provider === "QZ_TRAY"
+                            ? t("providerQz")
+                            : t("providerKiosk")}
+                      </span>
+                      <span className="mt-2 block text-xs text-muted-foreground">
+                        {provider === "DISABLED"
                           ? t("providerDisabledHint")
-                          : qzNeedsClientProvision
-                            ? t("qzClientProvisionMissing")
-                          : qzConfigured
-                            ? t(qzTrustMessageKey)
-                            : t("autoPrintSetupRequired")}
+                          : provider === "QZ_TRAY"
+                            ? t("providerQzHint")
+                            : t("providerKioskHint")}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                <div className="grid gap-3 md:grid-cols-4">
+                  <div className="bazaar-admin-info-tile text-sm">
+                    <p className="font-medium text-foreground">{t("connectionStatus")}</p>
+                    <p className="mt-1 text-muted-foreground">{qzStatusLabel}</p>
+                  </div>
+                  <div
+                    className={`rounded-xl border p-3 text-sm ${
+                      qzTrustStatus === "trusted"
+                        ? "border-success/30 bg-success/10"
+                        : "border-warning/40 bg-warning/10"
+                    }`}
+                  >
+                    <p className="font-medium text-foreground">{t("signingStatus")}</p>
+                    <p className="mt-1 text-muted-foreground">{t(qzTrustMessageKey)}</p>
+                  </div>
+                  <div
+                    className={`rounded-xl border p-3 text-sm ${
+                      qzTerminalProvisioned
+                        ? "border-success/30 bg-success/10"
+                        : "border-warning/40 bg-warning/10"
+                    }`}
+                  >
+                    <p className="font-medium text-foreground">{t("clientTrustStatus")}</p>
+                    <p className="mt-1 text-muted-foreground">
+                      {qzTerminalProvisioned
+                        ? t("qzClientProvisioned")
+                        : t("qzClientProvisionMissing")}
                     </p>
                   </div>
-                  <span className="inline-flex items-center gap-2 rounded-full border border-current/30 px-3 py-1 text-xs">
-                    {qzFullyReady ? (
+                  <div className="bazaar-admin-info-tile text-sm">
+                    <p className="font-medium text-foreground">{t("printerStatus")}</p>
+                    <p className="mt-1 text-muted-foreground">
+                      {hasSavedPrinters ? t("printersSaved") : t("printersNotSelected")}
+                    </p>
+                  </div>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                  <div className="bazaar-admin-info-tile text-sm">
+                    <p className="font-medium text-foreground">{t("qzCertificateLoadedLabel")}</p>
+                    <p className="mt-1 text-muted-foreground">
+                      {qzCertificateLoaded ? t("yes") : t("no")}
+                    </p>
+                  </div>
+                  <div className="bazaar-admin-info-tile text-sm">
+                    <p className="font-medium text-foreground">{t("qzSignatureConfiguredLabel")}</p>
+                    <p className="mt-1 text-muted-foreground">
+                      {qzSignatureConfigured ? t("yes") : t("no")}
+                    </p>
+                  </div>
+                  <div className="bazaar-admin-info-tile text-sm">
+                    <p className="font-medium text-foreground">{t("qzRequestValidityLabel")}</p>
+                    <p className="mt-1 text-muted-foreground">{t(qzRequestValidityKey)}</p>
+                  </div>
+                  <div className="bazaar-admin-info-tile text-sm">
+                    <p className="font-medium text-foreground">{t("qzLocalTrustLabel")}</p>
+                    <p className="mt-1 text-muted-foreground">{t(qzLocalTrustKey)}</p>
+                  </div>
+                  <div className="bazaar-admin-info-tile text-sm md:col-span-2 xl:col-span-1">
+                    <p className="font-medium text-foreground">{t("qzCertificateFingerprint")}</p>
+                    <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
+                      {qzFingerprint || t("qzCertificateFingerprintUnavailable")}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <span
+                    className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm ${
+                      qzStatus === "connected"
+                        ? "border-success/40 bg-success/10 text-success"
+                        : qzStatus === "error"
+                          ? "border-danger/40 bg-danger/10 text-danger"
+                          : "border-border bg-secondary/30 text-muted-foreground"
+                    }`}
+                  >
+                    {qzStatus === "connected" ? (
                       <StatusSuccessIcon className="h-4 w-4" aria-hidden />
                     ) : (
                       <StatusWarningIcon className="h-4 w-4" aria-hidden />
                     )}
-                    {values.receiptPrintProvider === "QZ_TRAY"
-                      ? t("providerQz")
-                      : values.receiptPrintProvider === "KIOSK_SILENT_PRINT"
-                        ? t("providerKiosk")
-                        : t("providerDisabled")}
+                    {qzStatusLabel}
                   </span>
-                </div>
-              </div>
-              <div className="grid gap-3 md:grid-cols-3">
-                {(["DISABLED", "QZ_TRAY", "KIOSK_SILENT_PRINT"] as const).map((provider) => (
-                  <button
-                    key={provider}
-                    type="button"
-                    className={`bazaar-admin-choice-card ${
-                      values.receiptPrintProvider === provider
-                        ? "bazaar-admin-choice-card-active"
-                        : ""
-                    }`}
-                    disabled={!canEdit}
-                    onClick={() => {
-                      updateValue("receiptPrintProvider", provider);
-                      updateValue("labelPrintProvider", provider);
-                      if (provider === "DISABLED") {
-                        updateValue("receiptAutoPrintEnabled", false);
-                      }
-                    }}
-                  >
-                    <span className="block text-sm font-semibold text-foreground">
-                      {provider === "DISABLED"
-                        ? t("providerDisabled")
-                        : provider === "QZ_TRAY"
-                          ? t("providerQz")
-                          : t("providerKiosk")}
-                    </span>
-                    <span className="mt-2 block text-xs text-muted-foreground">
-                      {provider === "DISABLED"
-                        ? t("providerDisabledHint")
-                        : provider === "QZ_TRAY"
-                          ? t("providerQzHint")
-                          : t("providerKioskHint")}
-                    </span>
-                  </button>
-                ))}
-              </div>
-              <div className="grid gap-3 md:grid-cols-4">
-                <div className="bazaar-admin-info-tile text-sm">
-                  <p className="font-medium text-foreground">{t("connectionStatus")}</p>
-                  <p className="mt-1 text-muted-foreground">{qzStatusLabel}</p>
-                </div>
-                <div
-                  className={`rounded-xl border p-3 text-sm ${
-                    qzTrustStatus === "trusted"
-                      ? "border-success/30 bg-success/10"
-                      : "border-warning/40 bg-warning/10"
-                  }`}
-                >
-                  <p className="font-medium text-foreground">{t("signingStatus")}</p>
-                  <p className="mt-1 text-muted-foreground">
-                    {t(qzTrustMessageKey)}
-                  </p>
-                </div>
-                <div
-                  className={`rounded-xl border p-3 text-sm ${
-                    qzTerminalProvisioned
-                      ? "border-success/30 bg-success/10"
-                      : "border-warning/40 bg-warning/10"
-                  }`}
-                >
-                  <p className="font-medium text-foreground">{t("clientTrustStatus")}</p>
-                  <p className="mt-1 text-muted-foreground">
-                    {qzTerminalProvisioned
-                      ? t("qzClientProvisioned")
-                      : t("qzClientProvisionMissing")}
-                  </p>
-                </div>
-                <div className="bazaar-admin-info-tile text-sm">
-                  <p className="font-medium text-foreground">{t("printerStatus")}</p>
-                  <p className="mt-1 text-muted-foreground">
-                    {hasSavedPrinters ? t("printersSaved") : t("printersNotSelected")}
-                  </p>
-                </div>
-              </div>
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-                <div className="bazaar-admin-info-tile text-sm">
-                  <p className="font-medium text-foreground">{t("qzCertificateLoadedLabel")}</p>
-                  <p className="mt-1 text-muted-foreground">
-                    {qzCertificateLoaded ? t("yes") : t("no")}
-                  </p>
-                </div>
-                <div className="bazaar-admin-info-tile text-sm">
-                  <p className="font-medium text-foreground">{t("qzSignatureConfiguredLabel")}</p>
-                  <p className="mt-1 text-muted-foreground">
-                    {qzSignatureConfigured ? t("yes") : t("no")}
-                  </p>
-                </div>
-                <div className="bazaar-admin-info-tile text-sm">
-                  <p className="font-medium text-foreground">{t("qzRequestValidityLabel")}</p>
-                  <p className="mt-1 text-muted-foreground">{t(qzRequestValidityKey)}</p>
-                </div>
-                <div className="bazaar-admin-info-tile text-sm">
-                  <p className="font-medium text-foreground">{t("qzLocalTrustLabel")}</p>
-                  <p className="mt-1 text-muted-foreground">{t(qzLocalTrustKey)}</p>
-                </div>
-                <div className="bazaar-admin-info-tile text-sm md:col-span-2 xl:col-span-1">
-                  <p className="font-medium text-foreground">{t("qzCertificateFingerprint")}</p>
-                  <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
-                    {qzFingerprint || t("qzCertificateFingerprintUnavailable")}
-                  </p>
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <span
-                  className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm ${
-                    qzStatus === "connected"
-                      ? "border-success/40 bg-success/10 text-success"
-                      : qzStatus === "error"
-                        ? "border-danger/40 bg-danger/10 text-danger"
-                        : "border-border bg-secondary/30 text-muted-foreground"
-                  }`}
-                >
-                  {qzStatus === "connected" ? (
-                    <StatusSuccessIcon className="h-4 w-4" aria-hidden />
-                  ) : (
-                    <StatusWarningIcon className="h-4 w-4" aria-hidden />
-                  )}
-                  {qzStatusLabel}
-                </span>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => void checkQzConnection()}
-                  disabled={qzStatus === "checking" || values.receiptPrintProvider !== "QZ_TRAY"}
-                >
-                  {qzStatus === "checking" ? <Spinner className="h-4 w-4" /> : null}
-                  {t("testConnection")}
-                </Button>
-              </div>
-              {values.receiptPrintProvider === "QZ_TRAY" && qzTrustStatus !== "trusted" ? (
-                <div className="bazaar-admin-status-tile-warning p-4 text-sm">
-                  {t(qzTrustNoticeKey)}
-                </div>
-              ) : null}
-              {values.receiptPrintProvider === "QZ_TRAY" &&
-              qzTrustStatus === "trusted" &&
-              !qzTerminalProvisioned ? (
-                <div className="bazaar-admin-status-tile-warning p-4 text-sm">
-                  {t("qzClientProvisionNotice")}
-                </div>
-              ) : null}
-              <div className="space-y-2 text-sm text-muted-foreground">
-                <p>{t("qzSetupIntro")}</p>
-                <ol className="list-decimal space-y-1 pl-5">
-                  <li>{t("qzStepInstall")}</li>
-                  <li>{t("qzStepInstallCertificate")}</li>
-                  <li>{t("qzStepRestart")}</li>
-                  <li>{t("qzStepCheck")}</li>
-                  <li>{t("qzStepTestPrint")}</li>
-                </ol>
-              </div>
-              {values.receiptPrintProvider === "QZ_TRAY" ? (
-                <div className="space-y-3 rounded-xl border border-border/65 bg-muted/25 p-4">
-                  <div className="flex flex-wrap items-center gap-3">
-                    {qzTrustStatus !== "certificate-missing" ? (
-                      <Button asChild type="button" variant="secondary">
-                        <a href="/api/qz/certificate" download="bazaar-qz-certificate.txt">
-                          {t("downloadQzCertificate")}
-                        </a>
-                      </Button>
-                    ) : null}
-                    <span className="text-xs text-muted-foreground">
-                      {t("downloadQzCertificateHint")}
-                    </span>
-                  </div>
-                  <label className="flex items-center justify-between gap-3 rounded-xl border border-border/65 bg-card p-3 text-sm">
-                    <span className="space-y-1">
-                      <span className="block font-medium text-foreground">
-                        {t("qzClientProvisionConfirm")}
-                      </span>
-                      <span className="block text-xs text-muted-foreground">
-                        {t("qzClientProvisionHint")}
-                      </span>
-                    </span>
-                    <Switch
-                      checked={binding.certificateProvisioned}
-                      onCheckedChange={(checked) =>
-                        updateBinding({ certificateProvisioned: checked })
-                      }
-                      disabled={!canEdit}
-                      aria-label={t("qzClientProvisionConfirm")}
-                    />
-                  </label>
-                </div>
-              ) : null}
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">{t("receiptPrinter")}</label>
-                  <Select
-                    value={binding.receiptPrinterName}
-                    onValueChange={(value) => updateBinding({ receiptPrinterName: value })}
-                    disabled={!canEdit || qzStatus !== "connected"}
-                  >
-                    <SelectTrigger><SelectValue placeholder={t("selectPrinter")} /></SelectTrigger>
-                    <SelectContent>
-                      {printerOptions.map((printer) => (
-                        <SelectItem key={printer} value={printer}>
-                          {printer}
-                          {printers.length > 0 && !printers.includes(printer)
-                            ? ` (${t("printerUnavailableShort")})`
-                            : ""}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    {binding.receiptPrinterName.trim()
-                      ? t("savedReceiptPrinter", { printer: binding.receiptPrinterName.trim() })
-                      : t("receiptPrinterNotSelected")}
-                  </p>
-                  {qzStatus === "connected" && !receiptPrinterAvailable ? (
-                    <p className="text-xs text-danger">{t("savedPrinterNotFound")}</p>
-                  ) : null}
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">{t("labelPrinter")}</label>
-                  <Select
-                    value={binding.labelPrinterName}
-                    onValueChange={(value) => updateBinding({ labelPrinterName: value })}
-                    disabled={!canEdit || qzStatus !== "connected"}
-                  >
-                    <SelectTrigger><SelectValue placeholder={t("selectPrinter")} /></SelectTrigger>
-                    <SelectContent>
-                      {printerOptions.map((printer) => (
-                        <SelectItem key={printer} value={printer}>
-                          {printer}
-                          {printers.length > 0 && !printers.includes(printer)
-                            ? ` (${t("printerUnavailableShort")})`
-                            : ""}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    {binding.labelPrinterName.trim()
-                      ? t("savedLabelPrinter", { printer: binding.labelPrinterName.trim() })
-                      : t("labelPrinterNotSelected")}
-                  </p>
-                  {qzStatus === "connected" && !labelPrinterAvailable ? (
-                    <p className="text-xs text-danger">{t("savedPrinterNotFound")}</p>
-                  ) : null}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
-            <Card className="bazaar-admin-surface">
-              <CardHeader className="bazaar-admin-section-header">
-                <CardTitle>{t("receiptTemplateTitle")}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-5">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">{t("receiptUsage")}</label>
-                    <Select
-                      value={values.receiptTemplateUsage}
-                      onValueChange={(value) => updateValue("receiptTemplateUsage", value as ReceiptUsage)}
-                      disabled={!canEdit}
-                    >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="BOTH">{t("usageBoth")}</SelectItem>
-                        <SelectItem value="PRINT">{t("usagePrint")}</SelectItem>
-                        <SelectItem value="EXPORT">{t("usageExport")}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <ToggleRow
-                    label={t("autoPrintReceipt")}
-                    checked={values.receiptAutoPrintEnabled}
-                    disabled={!canEdit || values.receiptPrintProvider === "DISABLED"}
-                    onChange={(checked) => updateValue("receiptAutoPrintEnabled", checked)}
-                  />
-                </div>
-                <div className="grid gap-4 md:grid-cols-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">{t("paperSize")}</label>
-                    <Select
-                      value={values.receiptPaperSize}
-                      onValueChange={(value) => updateValue("receiptPaperSize", value as ReceiptPaperSize)}
-                      disabled={!canEdit}
-                    >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="58MM">{t("paper58")}</SelectItem>
-                        <SelectItem value="80MM">{t("paper80")}</SelectItem>
-                        <SelectItem value="A4">A4</SelectItem>
-                        <SelectItem value="CUSTOM">{t("custom")}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">{t("widthMm")}</label>
-                    <Input
-                      type="number"
-                      value={values.receiptCustomWidthMm}
-                      onChange={(event) => updateValue("receiptCustomWidthMm", Number(event.target.value))}
-                      disabled={!canEdit || values.receiptPaperSize !== "CUSTOM"}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">{t("heightMm")}</label>
-                    <Input
-                      type="number"
-                      value={values.receiptCustomHeightMm}
-                      onChange={(event) => updateValue("receiptCustomHeightMm", Number(event.target.value))}
-                      disabled={!canEdit || values.receiptPaperSize !== "CUSTOM"}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">{t("fontSize")}</label>
-                    <Input
-                      type="number"
-                      step="0.1"
-                      value={values.receiptFontSize}
-                      onChange={(event) => updateValue("receiptFontSize", Number(event.target.value))}
-                      disabled={!canEdit}
-                    />
-                  </div>
-                </div>
-                <div className="grid gap-3 md:grid-cols-4">
-                  {([
-                    ["receiptMarginTopMm", "marginTop"],
-                    ["receiptMarginRightMm", "marginRight"],
-                    ["receiptMarginBottomMm", "marginBottom"],
-                    ["receiptMarginLeftMm", "marginLeft"],
-                  ] as const).map(([key, label]) => (
-                    <div key={key} className="space-y-2">
-                      <label className="text-sm font-medium text-foreground">{t(label)}</label>
-                      <Input
-                        type="number"
-                        step="0.5"
-                        value={values[key]}
-                        onChange={(event) => updateValue(key, Number(event.target.value))}
-                        disabled={!canEdit}
-                      />
-                    </div>
-                  ))}
-                </div>
-                <div className="grid gap-3 md:grid-cols-2">
-                  {([
-                    ["receiptShowStoreName", "showStoreName"],
-                    ["receiptShowStoreAddress", "showStoreAddress"],
-                    ["receiptShowStorePhone", "showStorePhone"],
-                    ["receiptShowLogo", "showLogo"],
-                    ["receiptShowCashierName", "showCashier"],
-                    ["receiptShowSaleNumber", "showSaleNumber"],
-                    ["receiptShowDateTime", "showDateTime"],
-                    ["receiptShowProductName", "showProductName"],
-                    ["receiptShowProductSku", "showSku"],
-                    ["receiptShowProductBarcode", "showBarcodeText"],
-                    ["receiptShowProductUnitPrice", "showUnitPrice"],
-                    ["receiptShowProductQuantity", "showQuantity"],
-                    ["receiptShowSubtotal", "showSubtotal"],
-                    ["receiptShowDiscount", "showDiscount"],
-                    ["receiptShowTotal", "showTotal"],
-                    ["receiptShowPaymentMethod", "showPaymentMethod"],
-                    ["receiptShowChange", "showChange"],
-                  ] as const).map(([key, label]) => (
-                    <ToggleRow
-                      key={key}
-                      label={t(label)}
-                      checked={values[key]}
-                      disabled={!canEdit}
-                      onChange={(checked) => updateValue(key, checked)}
-                    />
-                  ))}
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">{t("footerText")}</label>
-                  <Textarea
-                    value={values.receiptFooterText}
-                    onChange={(event) => updateValue("receiptFooterText", event.target.value)}
-                    rows={3}
-                    disabled={!canEdit}
-                  />
-                </div>
-                <div className="flex flex-wrap gap-2">
                   <Button
                     type="button"
                     variant="secondary"
-                    onClick={() => void handleTestPrint("receipt")}
-                    disabled={
-                      testAction !== null ||
-                      values.receiptPrintProvider !== "QZ_TRAY" ||
-                      qzStatus !== "connected"
-                    }
+                    onClick={() => void checkQzConnection()}
+                    disabled={qzStatus === "checking" || values.receiptPrintProvider !== "QZ_TRAY"}
                   >
-                    {testAction === "receipt" ? <Spinner className="h-4 w-4" /> : <PrintIcon className="h-4 w-4" />}
-                    {t("testReceiptPrint")}
+                    {qzStatus === "checking" ? <Spinner className="h-4 w-4" /> : null}
+                    {t("testConnection")}
                   </Button>
                 </div>
-              </CardContent>
-            </Card>
-            <Card className="bazaar-admin-surface">
-              <CardHeader className="bazaar-admin-section-header">
-                <CardTitle>{t("receiptPreview")}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="bazaar-admin-preview-frame overflow-auto">
-                  <div
-                    className="rounded-lg border border-border bg-white p-4 text-black shadow-sm"
-                    style={{ width: receiptPreviewWidth }}
-                  >
-                    <div className="text-center font-bold">{sample.receiptHeading}</div>
-                    {values.receiptShowStoreName ? <div>{sample.storeName}</div> : null}
-                    {values.receiptShowStoreAddress ? <div>{sample.storeAddress}</div> : null}
-                    {values.receiptShowStorePhone ? <div>{sample.storePhone}</div> : null}
-                    <hr className="my-2" />
-                    {values.receiptShowSaleNumber ? <div>{sample.receiptNumber}</div> : null}
-                    {values.receiptShowDateTime ? <div>{sample.receiptDateTime}</div> : null}
-                    {values.receiptShowCashierName ? <div>{sample.cashier}</div> : null}
-                    <hr className="my-2" />
-                    <div>
-                      {values.receiptShowProductName ? sample.productName : ""}
-                      {values.receiptShowProductSku ? ` ${sample.sku}` : ""}
-                    </div>
-                    {values.receiptShowProductBarcode ? <div>{sample.barcode}</div> : null}
-                    <div className="flex justify-between gap-3">
-                      <span>
-                        {values.receiptShowProductQuantity ? sample.quantity : ""}
-                        {values.receiptShowProductUnitPrice ? ` x ${sample.unitPrice}` : ""}
+                {values.receiptPrintProvider === "QZ_TRAY" && qzTrustStatus !== "trusted" ? (
+                  <div className="bazaar-admin-status-tile-warning p-4 text-sm">
+                    {t(qzTrustNoticeKey)}
+                  </div>
+                ) : null}
+                {values.receiptPrintProvider === "QZ_TRAY" &&
+                qzTrustStatus === "trusted" &&
+                !qzTerminalProvisioned ? (
+                  <div className="bazaar-admin-status-tile-warning p-4 text-sm">
+                    {t("qzClientProvisionNotice")}
+                  </div>
+                ) : null}
+                <div className="space-y-2 text-sm text-muted-foreground">
+                  <p>{t("qzSetupIntro")}</p>
+                  <ol className="list-decimal space-y-1 pl-5">
+                    <li>{t("qzStepInstall")}</li>
+                    <li>{t("qzStepInstallCertificate")}</li>
+                    <li>{t("qzStepRestart")}</li>
+                    <li>{t("qzStepCheck")}</li>
+                    <li>{t("qzStepTestPrint")}</li>
+                  </ol>
+                </div>
+                {values.receiptPrintProvider === "QZ_TRAY" ? (
+                  <div className="space-y-3 rounded-xl border border-border/65 bg-muted/25 p-4">
+                    <div className="flex flex-wrap items-center gap-3">
+                      {qzTrustStatus !== "certificate-missing" ? (
+                        <Button asChild type="button" variant="secondary">
+                          <a href="/api/qz/certificate" download="bazaar-qz-certificate.txt">
+                            {t("downloadQzCertificate")}
+                          </a>
+                        </Button>
+                      ) : null}
+                      <span className="text-xs text-muted-foreground">
+                        {t("downloadQzCertificateHint")}
                       </span>
-                      <span>{sample.lineTotal}</span>
                     </div>
-                    <hr className="my-2" />
-                    {values.receiptShowSubtotal ? <div className="flex justify-between"><span>{sample.subtotal}</span><span>{sample.lineTotal}</span></div> : null}
-                    {values.receiptShowDiscount ? <div className="flex justify-between"><span>{sample.discount}</span><span>{t("sampleDiscountAmount")}</span></div> : null}
-                    {values.receiptShowTotal ? <div className="flex justify-between font-bold"><span>{sample.total}</span><span>{sample.lineTotal}</span></div> : null}
-                    {values.receiptShowPaymentMethod ? <div className="flex justify-between"><span>{sample.paymentMethod}</span><span>{sample.paymentAmount}</span></div> : null}
-                    {values.receiptShowChange ? <div className="flex justify-between"><span>{sample.change}</span><span>{sample.changeAmount}</span></div> : null}
-                    {values.receiptFooterText ? <div className="mt-2 text-center">{values.receiptFooterText}</div> : null}
+                    <label className="flex items-center justify-between gap-3 rounded-xl border border-border/65 bg-card p-3 text-sm">
+                      <span className="space-y-1">
+                        <span className="block font-medium text-foreground">
+                          {t("qzClientProvisionConfirm")}
+                        </span>
+                        <span className="block text-xs text-muted-foreground">
+                          {t("qzClientProvisionHint")}
+                        </span>
+                      </span>
+                      <Switch
+                        checked={binding.trustAcknowledged}
+                        onCheckedChange={(checked) => updateBinding({ trustAcknowledged: checked })}
+                        disabled={!canEdit}
+                        aria-label={t("qzClientProvisionConfirm")}
+                      />
+                    </label>
+                  </div>
+                ) : null}
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">
+                      {t("receiptPrinter")}
+                    </label>
+                    <Select
+                      value={binding.receiptPrinterName}
+                      onValueChange={(value) => updateBinding({ receiptPrinterName: value })}
+                      disabled={!canEdit || qzStatus !== "connected"}
+                    >
+                      <SelectTrigger aria-label={t("receiptPrinter")}>
+                        <SelectValue placeholder={t("selectPrinter")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {printerOptions.map((printer) => (
+                          <SelectItem key={printer} value={printer}>
+                            {printer}
+                            {printers.length > 0 && !printers.includes(printer)
+                              ? ` (${t("printerUnavailableShort")})`
+                              : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      {binding.receiptPrinterName.trim()
+                        ? t("savedReceiptPrinter", { printer: binding.receiptPrinterName.trim() })
+                        : t("receiptPrinterNotSelected")}
+                    </p>
+                    {qzStatus === "connected" && !receiptPrinterAvailable ? (
+                      <p className="text-xs text-danger">{t("savedPrinterNotFound")}</p>
+                    ) : null}
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">
+                      {t("labelPrinter")}
+                    </label>
+                    <Select
+                      value={binding.labelPrinterName}
+                      onValueChange={(value) => updateBinding({ labelPrinterName: value })}
+                      disabled={!canEdit || qzStatus !== "connected"}
+                    >
+                      <SelectTrigger aria-label={t("labelPrinter")}>
+                        <SelectValue placeholder={t("selectPrinter")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {printerOptions.map((printer) => (
+                          <SelectItem key={printer} value={printer}>
+                            {printer}
+                            {printers.length > 0 && !printers.includes(printer)
+                              ? ` (${t("printerUnavailableShort")})`
+                              : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      {binding.labelPrinterName.trim()
+                        ? t("savedLabelPrinter", { printer: binding.labelPrinterName.trim() })
+                        : t("labelPrinterNotSelected")}
+                    </p>
+                    {qzStatus === "connected" && !labelPrinterAvailable ? (
+                      <p className="text-xs text-danger">{t("savedPrinterNotFound")}</p>
+                    ) : null}
                   </div>
                 </div>
               </CardContent>
             </Card>
-          </div>
 
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
-            <Card className="bazaar-admin-surface">
-              <CardHeader className="bazaar-admin-section-header">
-                <CardTitle>{t("barcodeTemplateTitle")}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-5">
-                <div className="grid gap-4 md:grid-cols-3">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">{t("barcodeType")}</label>
-                    <Select
-                      value={values.labelBarcodeType}
-                      onValueChange={(value) =>
-                        updateValue("labelBarcodeType", value as PrintingFormValues["labelBarcodeType"])
-                      }
-                      disabled={!canEdit}
-                    >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="auto">{t("barcodeAuto")}</SelectItem>
-                        <SelectItem value="ean13">{t("barcodeEan13")}</SelectItem>
-                        <SelectItem value="code128">{t("barcodeCode128")}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">{t("labelTemplate")}</label>
-                    <Select
-                      value={values.labelTemplate}
-                      onValueChange={(value) =>
-                        updateValue("labelTemplate", value as PrintingFormValues["labelTemplate"])
-                      }
-                      disabled={!canEdit}
-                    >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="xp365b-roll-58x40">{t("templateRoll")}</SelectItem>
-                        <SelectItem value="3x8">{t("templateA4ThreeByEight")}</SelectItem>
-                        <SelectItem value="2x5">{t("templateA4TwoByFive")}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  <p className="text-sm font-medium text-foreground">{t("layoutOrder")}</p>
-                  <div className="grid gap-3 md:grid-cols-5">
-                    {([
-                      ["NAME_BARCODE_PRICE", "layoutNameBarcodePrice"],
-                      ["PRICE_NAME_BARCODE", "layoutPriceNameBarcode"],
-                      ["NAME_BARCODE", "layoutNameBarcode"],
-                      ["PRICE_BARCODE", "layoutPriceBarcode"],
-                      ["BARCODE_ONLY", "layoutBarcodeOnly"],
-                    ] as const).map(([value, label]) => (
-                      <button
-                        key={value}
-                        type="button"
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+              <Card className="bazaar-admin-surface">
+                <CardHeader className="bazaar-admin-section-header">
+                  <CardTitle>{t("receiptTemplateTitle")}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">
+                        {t("receiptUsage")}
+                      </label>
+                      <Select
+                        value={values.receiptTemplateUsage}
+                        onValueChange={(value) =>
+                          updateValue("receiptTemplateUsage", value as ReceiptUsage)
+                        }
                         disabled={!canEdit}
-                        className={`bazaar-admin-choice-card space-y-2 text-xs ${
-                          values.labelLayoutOrder === value
-                            ? "bazaar-admin-choice-card-active"
-                            : ""
-                        }`}
-                        onClick={() => updateValue("labelLayoutOrder", value)}
                       >
-                        <span className="block font-medium text-foreground">{t(label)}</span>
-                        <span className="block rounded-lg border border-border bg-white p-2 text-center text-[10px] text-black">
-                          {value.includes("PRICE") && value.startsWith("PRICE") ? <b>{sample.price}</b> : null}
-                          {value.includes("NAME") ? <span className="block">{sample.productName}</span> : null}
-                          <span className="my-1 block h-5 bg-[repeating-linear-gradient(90deg,#000_0_2px,#fff_2px_4px,#000_4px_7px,#fff_7px_10px)]" />
-                          {value.includes("PRICE") && !value.startsWith("PRICE") ? <b>{sample.price}</b> : null}
-                        </span>
-                      </button>
-                    ))}
+                        <SelectTrigger aria-label={t("receiptUsage")}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="BOTH">{t("usageBoth")}</SelectItem>
+                          <SelectItem value="PRINT">{t("usagePrint")}</SelectItem>
+                          <SelectItem value="EXPORT">{t("usageExport")}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <ToggleRow
+                      label={t("autoPrintReceipt")}
+                      checked={values.receiptAutoPrintEnabled}
+                      disabled={!canEdit || values.receiptPrintProvider === "DISABLED"}
+                      onChange={(checked) => updateValue("receiptAutoPrintEnabled", checked)}
+                    />
                   </div>
-                </div>
-                <div className="grid gap-4 md:grid-cols-4">
-                  {([
-                    ["labelWidthMm", "widthMm", PRICE_TAG_ROLL_LIMITS.widthMm.step],
-                    ["labelHeightMm", "heightMm", PRICE_TAG_ROLL_LIMITS.heightMm.step],
-                    ["labelBarcodeHeightMm", "barcodeHeight", 0.5],
-                    ["labelFontSize", "fontSize", 0.5],
-                    ["labelRollGapMm", "labelRollGapMm", PRICE_TAG_ROLL_LIMITS.gapMm.step],
-                    ["labelRollXOffsetMm", "labelRollXOffsetMm", PRICE_TAG_ROLL_LIMITS.offsetMm.step],
-                    ["labelRollYOffsetMm", "labelRollYOffsetMm", PRICE_TAG_ROLL_LIMITS.offsetMm.step],
-                    ["labelDefaultCopies", "labelDefaultCopies", 1],
-                  ] as const).map(([key, label, step]) => (
-                    <div key={key} className="space-y-2">
-                      <label className="text-sm font-medium text-foreground">{t(label)}</label>
+                  <div className="grid gap-4 md:grid-cols-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">
+                        {t("paperSize")}
+                      </label>
+                      <Select
+                        value={values.receiptPaperSize}
+                        onValueChange={(value) =>
+                          updateValue("receiptPaperSize", value as ReceiptPaperSize)
+                        }
+                        disabled={!canEdit}
+                      >
+                        <SelectTrigger aria-label={t("paperSize")}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="58MM">{t("paper58")}</SelectItem>
+                          <SelectItem value="80MM">{t("paper80")}</SelectItem>
+                          <SelectItem value="A4">A4</SelectItem>
+                          <SelectItem value="CUSTOM">{t("custom")}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">{t("widthMm")}</label>
                       <Input
                         type="number"
-                        step={step}
-                        value={values[key]}
-                        onChange={(event) => updateValue(key, Number(event.target.value))}
+                        aria-label={t("widthMm")}
+                        value={values.receiptCustomWidthMm}
+                        onChange={(event) =>
+                          updateValue("receiptCustomWidthMm", Number(event.target.value))
+                        }
+                        disabled={!canEdit || values.receiptPaperSize !== "CUSTOM"}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">{t("heightMm")}</label>
+                      <Input
+                        type="number"
+                        aria-label={t("heightMm")}
+                        value={values.receiptCustomHeightMm}
+                        onChange={(event) =>
+                          updateValue("receiptCustomHeightMm", Number(event.target.value))
+                        }
+                        disabled={!canEdit || values.receiptPaperSize !== "CUSTOM"}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">{t("fontSize")}</label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        aria-label={t("fontSize")}
+                        value={values.receiptFontSize}
+                        onChange={(event) =>
+                          updateValue("receiptFontSize", Number(event.target.value))
+                        }
                         disabled={!canEdit}
                       />
                     </div>
-                  ))}
-                </div>
-                <div className="grid gap-3 md:grid-cols-2">
-                  {([
-                    ["labelShowPrice", "showPrice"],
-                    ["labelShowProductName", "showProductName"],
-                    ["labelShowSku", "showSku"],
-                    ["labelShowBarcodeText", "showBarcodeText"],
-                    ["labelShowCurrency", "showCurrency"],
-                    ["labelShowStoreName", "showStoreName"],
-                  ] as const).map(([key, label]) => (
-                    <ToggleRow
-                      key={key}
-                      label={t(label)}
-                      checked={values[key]}
-                      disabled={!canEdit}
-                      onChange={(checked) => updateValue(key, checked)}
-                    />
-                  ))}
-                </div>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => void handleTestPrint("barcode")}
-                  disabled={
-                    testAction !== null ||
-                    values.labelPrintProvider !== "QZ_TRAY" ||
-                    qzStatus !== "connected"
-                  }
-                >
-                  {testAction === "barcode" ? <Spinner className="h-4 w-4" /> : <PrintIcon className="h-4 w-4" />}
-                  {t("testBarcodePrint")}
-                </Button>
-              </CardContent>
-            </Card>
-            <Card className="bazaar-admin-surface">
-              <CardHeader className="bazaar-admin-section-header">
-                <CardTitle>{t("barcodePreview")}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div
-                  className="flex items-center justify-center rounded-lg border border-border bg-white p-3 text-center text-black shadow-sm"
-                  style={{ width: labelPreviewWidth, minHeight: labelPreviewHeight }}
-                >
-                  <div className="w-full">
-                    {barcodePreviewBlocks.map((block) => {
-                      if (block === "name" && values.labelShowProductName) {
-                        return <div key={block}>{sample.productName}</div>;
-                      }
-                      if (block === "price" && values.labelShowPrice) {
-                        return (
-                          <div key={block} className="text-lg font-bold">
-                            {sample.price}
-                          </div>
-                        );
-                      }
-                      if (block === "barcode") {
-                        return (
-                          <div key={block}>
-                            <div
-                              className="my-2 w-full"
-                              style={{
-                                height: Math.max(28, values.labelBarcodeHeightMm * 3),
-                                background:
-                                  "repeating-linear-gradient(90deg, #000 0 2px, #fff 2px 4px, #000 4px 7px, #fff 7px 10px)",
-                              }}
-                            />
-                            {values.labelShowBarcodeText ? <div>{sample.barcode}</div> : null}
-                          </div>
-                        );
-                      }
-                      return null;
-                    })}
-                    {values.labelShowSku ? <div>{sample.sku}</div> : null}
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </>
-      ) : null}
-    </div>
+                  <div className="grid gap-3 md:grid-cols-4">
+                    {(
+                      [
+                        ["receiptMarginTopMm", "marginTop"],
+                        ["receiptMarginRightMm", "marginRight"],
+                        ["receiptMarginBottomMm", "marginBottom"],
+                        ["receiptMarginLeftMm", "marginLeft"],
+                      ] as const
+                    ).map(([key, label]) => (
+                      <div key={key} className="space-y-2">
+                        <label className="text-sm font-medium text-foreground">{t(label)}</label>
+                        <Input
+                          type="number"
+                          step="0.5"
+                          aria-label={t(label)}
+                          value={values[key]}
+                          onChange={(event) => updateValue(key, Number(event.target.value))}
+                          disabled={!canEdit}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {(
+                      [
+                        ["receiptShowStoreName", "showStoreName"],
+                        ["receiptShowStoreAddress", "showStoreAddress"],
+                        ["receiptShowStorePhone", "showStorePhone"],
+                        ["receiptShowLogo", "showLogo"],
+                        ["receiptShowCashierName", "showCashier"],
+                        ["receiptShowSaleNumber", "showSaleNumber"],
+                        ["receiptShowDateTime", "showDateTime"],
+                        ["receiptShowProductName", "showProductName"],
+                        ["receiptShowProductSku", "showSku"],
+                        ["receiptShowProductBarcode", "showBarcodeText"],
+                        ["receiptShowProductUnitPrice", "showUnitPrice"],
+                        ["receiptShowProductQuantity", "showQuantity"],
+                        ["receiptShowSubtotal", "showSubtotal"],
+                        ["receiptShowDiscount", "showDiscount"],
+                        ["receiptShowTotal", "showTotal"],
+                        ["receiptShowPaymentMethod", "showPaymentMethod"],
+                        ["receiptShowChange", "showChange"],
+                      ] as const
+                    ).map(([key, label]) => (
+                      <ToggleRow
+                        key={key}
+                        label={t(label)}
+                        checked={values[key]}
+                        disabled={!canEdit}
+                        onChange={(checked) => updateValue(key, checked)}
+                      />
+                    ))}
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">{t("footerText")}</label>
+                    <Textarea
+                      aria-label={t("footerText")}
+                      value={values.receiptFooterText}
+                      onChange={(event) => updateValue("receiptFooterText", event.target.value)}
+                      rows={3}
+                      disabled={!canEdit}
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => void handleTestPrint("receipt")}
+                      disabled={
+                        testAction !== null ||
+                        values.receiptPrintProvider !== "QZ_TRAY" ||
+                        qzStatus !== "connected"
+                      }
+                    >
+                      {testAction === "receipt" ? (
+                        <Spinner className="h-4 w-4" />
+                      ) : (
+                        <PrintIcon className="h-4 w-4" />
+                      )}
+                      {t("testReceiptPrint")}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="bazaar-admin-surface">
+                <CardHeader className="bazaar-admin-section-header">
+                  <CardTitle>{t("receiptPreview")}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="bazaar-admin-preview-frame overflow-auto">
+                    <div
+                      className="rounded-lg border border-border bg-white p-4 text-black shadow-sm"
+                      style={{ width: receiptPreviewWidth }}
+                    >
+                      <div className="text-center font-bold">{sample.receiptHeading}</div>
+                      {values.receiptShowStoreName ? <div>{sample.storeName}</div> : null}
+                      {values.receiptShowStoreAddress ? <div>{sample.storeAddress}</div> : null}
+                      {values.receiptShowStorePhone ? <div>{sample.storePhone}</div> : null}
+                      <hr className="my-2" />
+                      {values.receiptShowSaleNumber ? <div>{sample.receiptNumber}</div> : null}
+                      {values.receiptShowDateTime ? <div>{sample.receiptDateTime}</div> : null}
+                      {values.receiptShowCashierName ? <div>{sample.cashier}</div> : null}
+                      <hr className="my-2" />
+                      <div>
+                        {values.receiptShowProductName ? sample.productName : ""}
+                        {values.receiptShowProductSku ? ` ${sample.sku}` : ""}
+                      </div>
+                      {values.receiptShowProductBarcode ? <div>{sample.barcode}</div> : null}
+                      <div className="flex justify-between gap-3">
+                        <span>
+                          {values.receiptShowProductQuantity ? sample.quantity : ""}
+                          {values.receiptShowProductUnitPrice ? ` x ${sample.unitPrice}` : ""}
+                        </span>
+                        <span>{sample.lineTotal}</span>
+                      </div>
+                      <hr className="my-2" />
+                      {values.receiptShowSubtotal ? (
+                        <div className="flex justify-between">
+                          <span>{sample.subtotal}</span>
+                          <span>{sample.lineTotal}</span>
+                        </div>
+                      ) : null}
+                      {values.receiptShowDiscount ? (
+                        <div className="flex justify-between">
+                          <span>{sample.discount}</span>
+                          <span>{t("sampleDiscountAmount")}</span>
+                        </div>
+                      ) : null}
+                      {values.receiptShowTotal ? (
+                        <div className="flex justify-between font-bold">
+                          <span>{sample.total}</span>
+                          <span>{sample.lineTotal}</span>
+                        </div>
+                      ) : null}
+                      {values.receiptShowPaymentMethod ? (
+                        <div className="flex justify-between">
+                          <span>{sample.paymentMethod}</span>
+                          <span>{sample.paymentAmount}</span>
+                        </div>
+                      ) : null}
+                      {values.receiptShowChange ? (
+                        <div className="flex justify-between">
+                          <span>{sample.change}</span>
+                          <span>{sample.changeAmount}</span>
+                        </div>
+                      ) : null}
+                      {values.receiptFooterText ? (
+                        <div className="mt-2 text-center">{values.receiptFooterText}</div>
+                      ) : null}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+              <Card className="bazaar-admin-surface">
+                <CardHeader className="bazaar-admin-section-header">
+                  <CardTitle>{t("barcodeTemplateTitle")}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">
+                        {t("barcodeType")}
+                      </label>
+                      <Select
+                        value={values.labelBarcodeType}
+                        onValueChange={(value) =>
+                          updateValue(
+                            "labelBarcodeType",
+                            value as PrintingFormValues["labelBarcodeType"],
+                          )
+                        }
+                        disabled={!canEdit}
+                      >
+                        <SelectTrigger aria-label={t("barcodeType")}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="auto">{t("barcodeAuto")}</SelectItem>
+                          <SelectItem value="ean13">{t("barcodeEan13")}</SelectItem>
+                          <SelectItem value="code128">{t("barcodeCode128")}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">
+                        {t("labelTemplate")}
+                      </label>
+                      <Select
+                        value={values.labelTemplate}
+                        onValueChange={(value) =>
+                          updateValue("labelTemplate", value as PrintingFormValues["labelTemplate"])
+                        }
+                        disabled={!canEdit}
+                      >
+                        <SelectTrigger aria-label={t("labelTemplate")}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="xp365b-roll-58x40">{t("templateRoll")}</SelectItem>
+                          <SelectItem value="3x8">{t("templateA4ThreeByEight")}</SelectItem>
+                          <SelectItem value="2x5">{t("templateA4TwoByFive")}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <p className="text-sm font-medium text-foreground">{t("layoutOrder")}</p>
+                    <div className="grid gap-3 md:grid-cols-5">
+                      {(
+                        [
+                          ["NAME_BARCODE_PRICE", "layoutNameBarcodePrice"],
+                          ["PRICE_NAME_BARCODE", "layoutPriceNameBarcode"],
+                          ["NAME_BARCODE", "layoutNameBarcode"],
+                          ["PRICE_BARCODE", "layoutPriceBarcode"],
+                          ["BARCODE_ONLY", "layoutBarcodeOnly"],
+                        ] as const
+                      ).map(([value, label]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          disabled={!canEdit}
+                          className={`bazaar-admin-choice-card space-y-2 text-xs ${
+                            values.labelLayoutOrder === value
+                              ? "bazaar-admin-choice-card-active"
+                              : ""
+                          }`}
+                          onClick={() => updateValue("labelLayoutOrder", value)}
+                        >
+                          <span className="block font-medium text-foreground">{t(label)}</span>
+                          <span className="block rounded-lg border border-border bg-white p-2 text-center text-[10px] text-black">
+                            {value.includes("PRICE") && value.startsWith("PRICE") ? (
+                              <b>{sample.price}</b>
+                            ) : null}
+                            {value.includes("NAME") ? (
+                              <span className="block">{sample.productName}</span>
+                            ) : null}
+                            <span className="my-1 block h-5 bg-[repeating-linear-gradient(90deg,#000_0_2px,#fff_2px_4px,#000_4px_7px,#fff_7px_10px)]" />
+                            {value.includes("PRICE") && !value.startsWith("PRICE") ? (
+                              <b>{sample.price}</b>
+                            ) : null}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-4">
+                    {(
+                      [
+                        ["labelWidthMm", "widthMm", PRICE_TAG_ROLL_LIMITS.widthMm.step],
+                        ["labelHeightMm", "heightMm", PRICE_TAG_ROLL_LIMITS.heightMm.step],
+                        ["labelBarcodeHeightMm", "barcodeHeight", 0.5],
+                        ["labelFontSize", "fontSize", 0.5],
+                        ["labelRollGapMm", "labelRollGapMm", PRICE_TAG_ROLL_LIMITS.gapMm.step],
+                        [
+                          "labelRollXOffsetMm",
+                          "labelRollXOffsetMm",
+                          PRICE_TAG_ROLL_LIMITS.offsetMm.step,
+                        ],
+                        [
+                          "labelRollYOffsetMm",
+                          "labelRollYOffsetMm",
+                          PRICE_TAG_ROLL_LIMITS.offsetMm.step,
+                        ],
+                        ["labelDefaultCopies", "labelDefaultCopies", 1],
+                      ] as const
+                    ).map(([key, label, step]) => (
+                      <div key={key} className="space-y-2">
+                        <label className="text-sm font-medium text-foreground">{t(label)}</label>
+                        <Input
+                          type="number"
+                          step={step}
+                          aria-label={t(label)}
+                          value={values[key]}
+                          onChange={(event) => updateValue(key, Number(event.target.value))}
+                          disabled={!canEdit}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {(
+                      [
+                        ["labelShowPrice", "showPrice"],
+                        ["labelShowProductName", "showProductName"],
+                        ["labelShowSku", "showSku"],
+                        ["labelShowBarcodeText", "showBarcodeText"],
+                        ["labelShowCurrency", "showCurrency"],
+                        ["labelShowStoreName", "showStoreName"],
+                      ] as const
+                    ).map(([key, label]) => (
+                      <ToggleRow
+                        key={key}
+                        label={t(label)}
+                        checked={values[key]}
+                        disabled={!canEdit}
+                        onChange={(checked) => updateValue(key, checked)}
+                      />
+                    ))}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => void handleTestPrint("barcode")}
+                    disabled={
+                      testAction !== null ||
+                      values.labelPrintProvider !== "QZ_TRAY" ||
+                      qzStatus !== "connected"
+                    }
+                  >
+                    {testAction === "barcode" ? (
+                      <Spinner className="h-4 w-4" />
+                    ) : (
+                      <PrintIcon className="h-4 w-4" />
+                    )}
+                    {t("testBarcodePrint")}
+                  </Button>
+                </CardContent>
+              </Card>
+              <Card className="bazaar-admin-surface">
+                <CardHeader className="bazaar-admin-section-header">
+                  <CardTitle>{t("barcodePreview")}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div
+                    className="flex items-center justify-center rounded-lg border border-border bg-white p-3 text-center text-black shadow-sm"
+                    style={{ width: labelPreviewWidth, minHeight: labelPreviewHeight }}
+                  >
+                    <div className="w-full">
+                      {barcodePreviewBlocks.map((block) => {
+                        if (block === "name" && values.labelShowProductName) {
+                          return <div key={block}>{sample.productName}</div>;
+                        }
+                        if (block === "price" && values.labelShowPrice) {
+                          return (
+                            <div key={block} className="text-lg font-bold">
+                              {sample.price}
+                            </div>
+                          );
+                        }
+                        if (block === "barcode") {
+                          return (
+                            <div key={block}>
+                              <div
+                                className="my-2 w-full"
+                                style={{
+                                  height: Math.max(28, values.labelBarcodeHeightMm * 3),
+                                  background:
+                                    "repeating-linear-gradient(90deg, #000 0 2px, #fff 2px 4px, #000 4px 7px, #fff 7px 10px)",
+                                }}
+                              />
+                              {values.labelShowBarcodeText ? <div>{sample.barcode}</div> : null}
+                            </div>
+                          );
+                        }
+                        return null;
+                      })}
+                      {values.labelShowSku ? <div>{sample.sku}</div> : null}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </>
+        ) : null}
+      </div>
     </div>
   );
 };

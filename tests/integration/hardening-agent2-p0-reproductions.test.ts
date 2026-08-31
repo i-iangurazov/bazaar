@@ -423,6 +423,7 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
         name: "Nested stock authorization probe",
         storeId: store.id,
         baseUnitId: baseUnit.id,
+        avgCostKgs: 10,
         initialOnHand: 0,
         variants: [
           {
@@ -446,6 +447,7 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
       name: "Admin nested stock probe",
       storeId: store.id,
       baseUnitId: baseUnit.id,
+      avgCostKgs: 10,
       variants: [{ name: "S", attributes: { size: "S" }, initialOnHand: 10 }],
     });
     const variant = await prisma.productVariant.findFirstOrThrow({
@@ -486,6 +488,7 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
       name: marker,
       storeId: store.id,
       baseUnitId: baseUnit.id,
+      avgCostKgs: 10,
       initialOnHand: 3,
     };
 
@@ -625,6 +628,7 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
           name: "Replay import product",
           unit: baseUnit.code,
           stockQty: 4,
+          avgCostKgs: 10,
         },
       ],
     };
@@ -814,6 +818,23 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
       const snapshot = await prisma.inventorySnapshot.create({
         data: { storeId: store.id, productId: product.id, variantKey: "BASE", onHand: index + 1 },
       });
+      const valuationTimestamp = new Date();
+      await prisma.productCost.create({
+        data: {
+          organizationId: org.id,
+          productId: product.id,
+          variantKey: "BASE",
+          avgCostKgs: 10,
+          costBasisQty: index + 1,
+          preciseAvgCostKgs: 10,
+          preciseCostBasisQty: index + 1,
+          costBasisValueKgs: (index + 1) * 10,
+          valuationStatus: "PRECISE",
+          valuationUpdatedAt: valuationTimestamp,
+          valuationLegacyUpdatedAt: valuationTimestamp,
+          updatedAt: valuationTimestamp,
+        },
+      });
       snapshotIds.push(snapshot.id);
     }
     const invalidEleventhId = randomUUID();
@@ -928,6 +949,39 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
         data: { storeId: store.id, productId: secondProduct.id, variantKey: "BASE", onHand: 9 },
       }),
     ]);
+    const valuationTimestamp = new Date();
+    await prisma.productCost.createMany({
+      data: [
+        {
+          organizationId: org.id,
+          productId: product.id,
+          variantKey: "BASE",
+          avgCostKgs: 10,
+          costBasisQty: 4,
+          preciseAvgCostKgs: 10,
+          preciseCostBasisQty: 4,
+          costBasisValueKgs: 40,
+          valuationStatus: "PRECISE",
+          valuationUpdatedAt: valuationTimestamp,
+          valuationLegacyUpdatedAt: valuationTimestamp,
+          updatedAt: valuationTimestamp,
+        },
+        {
+          organizationId: org.id,
+          productId: secondProduct.id,
+          variantKey: "BASE",
+          avgCostKgs: 10,
+          costBasisQty: 9,
+          preciseAvgCostKgs: 10,
+          preciseCostBasisQty: 9,
+          costBasisValueKgs: 90,
+          valuationStatus: "PRECISE",
+          valuationUpdatedAt: valuationTimestamp,
+          valuationLegacyUpdatedAt: valuationTimestamp,
+          updatedAt: valuationTimestamp,
+        },
+      ],
+    });
     const snapshotIds = snapshots.map((snapshot) => snapshot.id);
     const reason = `atomicity-mid-transaction-${randomUUID()}`;
     const idempotencyKey = `a2-007-mid-transaction-${randomUUID()}`;
@@ -1002,6 +1056,23 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
     const caller = callerFor(adminUser);
     const snapshotA = await prisma.inventorySnapshot.create({
       data: { storeId: store.id, productId: product.id, variantKey: "BASE", onHand: 2 },
+    });
+    const valuationTimestamp = new Date();
+    await prisma.productCost.create({
+      data: {
+        organizationId: org.id,
+        productId: product.id,
+        variantKey: "BASE",
+        avgCostKgs: 10,
+        costBasisQty: 2,
+        preciseAvgCostKgs: 10,
+        preciseCostBasisQty: 2,
+        costBasisValueKgs: 20,
+        valuationStatus: "PRECISE",
+        valuationUpdatedAt: valuationTimestamp,
+        valuationLegacyUpdatedAt: valuationTimestamp,
+        updatedAt: valuationTimestamp,
+      },
     });
     const idempotencyKey = `a2-007-scope-${randomUUID()}`;
     const reason = `scope-${randomUUID()}`;

@@ -1,18 +1,34 @@
+import { notFound } from "next/navigation";
+
 import { InventoryWriteOffsPage } from "@/components/inventory/write-off-workflow";
+import { normalizeDynamicRouteId } from "@/lib/dynamicRouteId";
+import { resolveProductMovementEditDocumentKey } from "@/lib/productMovementEditDocumentKey";
 import { resolveSafeReturnTo } from "@/lib/safeReturnTo";
 
 const getParam = (value?: string | string[]) => (Array.isArray(value) ? value[0] : value);
 
-const WriteOffEditPage = ({
+const WriteOffEditPage = async ({
   params,
   searchParams,
 }: {
-  params: { id: string };
-  searchParams?: Record<string, string | string[] | undefined>;
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) => {
-  const documentId = decodeURIComponent(params.id);
-  const documentKey = getParam(searchParams?.documentKey) ?? `WRITE_OFF:WRITE_OFF:${documentId}`;
-  const backHref = resolveSafeReturnTo(getParam(searchParams?.returnTo));
+  const [{ id }, resolvedSearchParams] = await Promise.all([params, searchParams]);
+  const documentId = normalizeDynamicRouteId(id);
+  if (!documentId) {
+    notFound();
+  }
+  const documentKey = resolveProductMovementEditDocumentKey({
+    routeId: documentId,
+    requestedDocumentKey: getParam(resolvedSearchParams.documentKey),
+    fallbackDocumentType: "WRITE_OFF",
+    fallbackReferenceType: "WRITE_OFF",
+  });
+  if (!documentKey) {
+    notFound();
+  }
+  const backHref = resolveSafeReturnTo(getParam(resolvedSearchParams.returnTo));
 
   return <InventoryWriteOffsPage editDocumentKey={documentKey} editBackHref={backHref} />;
 };

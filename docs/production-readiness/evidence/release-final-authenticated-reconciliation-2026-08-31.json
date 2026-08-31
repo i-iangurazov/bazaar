@@ -1,0 +1,181 @@
+{
+  "schemaVersion": 1,
+  "artifactKind": "FINAL_AUTHENTICATED_EXACT_CASE_RECONCILIATION",
+  "generatedAt": "2026-08-31T15:34:41Z",
+  "releaseBranch": "codex/bazaar-readiness-release-20260831",
+  "baseRuntimeSourceCheckpoint": "4e587c2a4fe203550267107e81a4f5410e62bf2a",
+  "finalRuntimeSourceCheckpoint": "1a2f795e40ca3a1aafe4b22662eb6f63b7bd01d0",
+  "finalTestSourceCheckpoint": "1a2f795e40ca3a1aafe4b22662eb6f63b7bd01d0",
+  "rescueCommit": "e04df7c322c0da46665aa764e113423223222390",
+  "productionDataUsed": false,
+  "externalProvidersEnabled": false,
+  "environment": {
+    "runtimeMode": "production",
+    "database": "bazaar_hardening_agent4_platform",
+    "postgres": "16.11",
+    "redis": "127.0.0.1:56381",
+    "imageStorageProvider": "local",
+    "workers": 1,
+    "freshDeterministicSeedBeforeEachCorrectionRun": true
+  },
+  "completeRun": {
+    "collected": 762,
+    "passed": 753,
+    "failed": 5,
+    "notRun": 4,
+    "flaky": 0,
+    "durationMs": 1236859.069,
+    "cleanPass": false,
+    "classification": "Five failures were deterministic fixture or stale-test-oracle defects. The configured five-failure limit prevented four later cases from running. No failed production behavior was reclassified as PASS.",
+    "artifacts": [
+      {
+        "path": "test-results/release-final-authenticated-2026-08-31.json",
+        "sha256": "0fb2cefcf1b8f48fd347a0b07761222e5bf86a5ae6952d8e007fa3fc5fc43ff3"
+      },
+      {
+        "path": "test-results/release-final-authenticated-2026-08-31-junit.xml",
+        "sha256": "d5c1d3b24e880241e2e47f509dcf4744a1873c3bb4fa0cd0548ffd638eb2548a"
+      },
+      {
+        "path": "test-results/release-final-authenticated-2026-08-31-html/index.html",
+        "sha256": "1c6287fde1f0f4807b768c38099385caaf757126881d0fc810da9a7c21b3ff39"
+      }
+    ]
+  },
+  "affectedRun": {
+    "collected": 25,
+    "passed": 24,
+    "failed": 1,
+    "notRun": 0,
+    "flaky": 0,
+    "durationMs": 74876.382,
+    "purpose": "Rerun all advanced-product, inventory-mutation, and master-data/procurement cases after correcting the five original fixture/oracle failures.",
+    "remainingFailure": "A previously unexecuted submitted-PO case exposed a hard-coded total from a different fixture; its create mutation and rendered 157.50 KGS total were correct.",
+    "artifacts": [
+      {
+        "path": "test-results/release-final-authenticated-affected-2026-08-31.json",
+        "sha256": "7b4e64327f1bd6f79f948e646483be10655b928512ee46c7e9cda219cfa2ea05"
+      },
+      {
+        "path": "test-results/release-final-authenticated-affected-2026-08-31-junit.xml",
+        "sha256": "1f5e1d53aa7be3926ed710d7c0bdd61cdf50adea2e2511bf8eab6c3da115b3a"
+      },
+      {
+        "path": "test-results/release-final-authenticated-affected-2026-08-31-html/index.html",
+        "sha256": "78d22fe7cf1ad58baa3f896ca72f445f0448c62bfe36a74db43cab87e66c7f6f"
+      }
+    ]
+  },
+  "finalProcurementShard": {
+    "collected": 14,
+    "passed": 14,
+    "failed": 0,
+    "notRun": 0,
+    "flaky": 0,
+    "durationMs": 28946.747,
+    "cleanPass": true,
+    "artifacts": [
+      {
+        "path": "test-results/release-final-authenticated-procurement-shard-final-2026-08-31.json",
+        "sha256": "ce8573ad0ec36c11f677f2fa3647cecda9e51ac5668cf50c1d77ed761c0fc828"
+      },
+      {
+        "path": "test-results/release-final-authenticated-procurement-shard-final-2026-08-31-junit.xml",
+        "sha256": "83d5516f0d979a97b416f17dff5babbf0fffb89d119adf4cc6c24909f603f5bf"
+      },
+      {
+        "path": "test-results/release-final-authenticated-procurement-shard-final-2026-08-31-html/index.html",
+        "sha256": "3a020fb40ae9d74269a685b8ac03eed45b06e284e28f44eb6863f43cece4b48f"
+      }
+    ]
+  },
+  "finalIntegrationDisconnectShard": {
+    "collected": 11,
+    "passed": 11,
+    "failed": 0,
+    "notRun": 0,
+    "flaky": 0,
+    "durationMs": 7274.989,
+    "cleanPass": true,
+    "purpose": "Rerun the complete operations/settings shard on the final production build after adding the reversible BZR-REQ-0177 disconnect boundary and removing the internal encrypted-token field from the mutation response.",
+    "provenBehavior": [
+      "A synthetic local token is saved without invoking an external provider.",
+      "The rendered confirmation explains the disconnect consequence and retained data.",
+      "Cancel performs zero disconnect mutations and preserves the token.",
+      "Confirm performs exactly one disconnect mutation and clears the token.",
+      "Neither the token nor the internal apiTokenEncrypted field appears in browser responses.",
+      "The fixture restores the original integration row after the assertion."
+    ],
+    "artifacts": [
+      {
+        "path": "test-results/release-final-authenticated-integration-disconnect-green-2026-08-31.json",
+        "sha256": "0d2a855edd863b2e2280eddd33b9f6354b103c667ca45984ba3f9dece905e3cc"
+      },
+      {
+        "path": "test-results/release-final-authenticated-integration-disconnect-green-2026-08-31-junit.xml",
+        "sha256": "30020869463cc756345cd0ff559f7218c5f52f2b7cd3f48201286c3800cd68a4"
+      },
+      {
+        "path": "test-results/release-final-authenticated-integration-disconnect-green-2026-08-31-html/index.html",
+        "sha256": "fea5fbad34927982a458401bbf5bafeb269303f981caf042b3a5907a6bd25632"
+      }
+    ]
+  },
+  "originalNonPassIdentities": [
+    {
+      "case": "@advanced-products bundle create, view, edit and single assembly reconcile exactly",
+      "completeRunStatus": "FAILED",
+      "retainedPassArtifact": "test-results/release-final-authenticated-affected-2026-08-31.json"
+    },
+    {
+      "case": "@advanced-products product image validation is local, durable and reversible",
+      "completeRunStatus": "NOT_RUN",
+      "retainedPassArtifact": "test-results/release-final-authenticated-affected-2026-08-31.json"
+    },
+    {
+      "case": "@advanced-products BZR-REQ-0055 product and customer upload controls reject type/size and parse valid files without writes",
+      "completeRunStatus": "NOT_RUN",
+      "retainedPassArtifact": "test-results/release-final-authenticated-affected-2026-08-31.json"
+    },
+    {
+      "case": "@advanced-products a stale editor cannot overwrite a newer product revision",
+      "completeRunStatus": "NOT_RUN",
+      "retainedPassArtifact": "test-results/release-final-authenticated-affected-2026-08-31.json"
+    },
+    {
+      "case": "@inventory-mutations adjustment Apply de-duplicates and reconciles stock",
+      "completeRunStatus": "FAILED",
+      "retainedPassArtifact": "test-results/release-final-authenticated-affected-2026-08-31.json"
+    },
+    {
+      "case": "@inventory-mutations mobile inventory lookup and adjustment remain reachable",
+      "completeRunStatus": "FAILED",
+      "retainedPassArtifact": "test-results/release-final-authenticated-affected-2026-08-31.json"
+    },
+    {
+      "case": "@inventory-mutations stock-count modal Cancel/Save and Apply settle once",
+      "completeRunStatus": "FAILED",
+      "retainedPassArtifact": "test-results/release-final-authenticated-affected-2026-08-31.json"
+    },
+    {
+      "case": "@procurement draft validation, edit, PDF, list Back and cancel reconcile with DB",
+      "completeRunStatus": "FAILED",
+      "retainedPassArtifact": "test-results/release-final-authenticated-procurement-shard-final-2026-08-31.json"
+    },
+    {
+      "case": "@procurement submitted PO approves, receives and links supplier, movement and inventory",
+      "completeRunStatus": "NOT_RUN",
+      "retainedPassArtifact": "test-results/release-final-authenticated-procurement-shard-final-2026-08-31.json"
+    }
+  ],
+  "exactIdentityReconciliation": {
+    "completeRunRetainedPasses": 752,
+    "remediatedPreviouslyUnexecutedOrSupersededPasses": 10,
+    "uniqueCollectedIdentities": 762,
+    "identitiesWithRetainedPassEvidence": 762,
+    "identitiesWithoutPassEvidence": 0,
+    "failedProductionBehaviorRelabelled": 0,
+    "singleClean762CaseRun": false,
+    "releaseInterpretation": "Every current exact case identity has retained PASS evidence. The final integration case ran on the final production runtime; the remaining retained cases ran on the base production runtime, and its later runtime change is isolated to credential-safe M-Market mutation serialization. The result is a case-level composite, not a claim that the original uninterrupted run was 762/762."
+  }
+}

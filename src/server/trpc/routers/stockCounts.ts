@@ -207,7 +207,21 @@ export const stockCountsRouter = router({
     }),
 
   applyCount: stockCountsManagerProcedure
-    .input(z.object({ stockCountId: z.string(), idempotencyKey: z.string().min(8) }))
+    .input(
+      z.object({
+        stockCountId: z.string(),
+        idempotencyKey: z.string().min(8),
+        lineValuations: z
+          .record(
+            z.object({
+              unitCostKgs: z.number().min(0, "unitCostInvalid"),
+              zeroCostConfirmed: z.boolean().optional(),
+              zeroCostReason: z.string().trim().min(3).max(500).optional(),
+            }),
+          )
+          .optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       try {
         const count = await ctx.prisma.stockCount.findFirst({
@@ -223,6 +237,7 @@ export const stockCountsRouter = router({
           organizationId: ctx.user.organizationId,
           requestId: ctx.requestId,
           idempotencyKey: input.idempotencyKey,
+          lineValuations: input.lineValuations,
         });
       } catch (error) {
         throw toTRPCError(error);

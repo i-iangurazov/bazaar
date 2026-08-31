@@ -66,6 +66,7 @@ describeDb("bazaar catalog integration", () => {
     const payload = await getPublicBazaarCatalog(saved.catalog.slug);
 
     expect(payload).not.toBeNull();
+    expect(saved.catalog.slug).toMatch(/^[abcdefghjkmnpqrstuvwxyz23456789]{12}$/);
     expect(payload?.slug).toBe(saved.catalog.slug);
     expect(payload?.storeId).toBe(store.id);
     expect(payload?.title).toBe("Прайс-лист магазина");

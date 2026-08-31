@@ -36,12 +36,10 @@ const run = async () => {
   await mkdir(outputDir, { recursive: true });
   const outputPath = join(outputDir, "price-tags-fixture.pdf");
   await writeFile(outputPath, pdf);
-  // eslint-disable-next-line no-console
   console.log(`Saved ${outputPath}`);
 };
 
 run().catch((error) => {
-  // eslint-disable-next-line no-console
   console.error(error);
   process.exit(1);
 });

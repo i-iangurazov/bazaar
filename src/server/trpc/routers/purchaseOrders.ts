@@ -2,6 +2,10 @@ import { Prisma, PurchaseOrderStatus } from "@prisma/client";
 import { z } from "zod";
 import type { PrismaClient } from "@prisma/client";
 
+import {
+  PURCHASE_ORDER_MAX_QUANTITY,
+  PURCHASE_ORDER_MAX_UNIT_COST,
+} from "@/lib/purchaseOrderMoney";
 import { managerProcedure, rateLimit, router } from "@/server/trpc/trpc";
 import {
   assertCommerceStoreAccess,
@@ -243,8 +247,8 @@ export const purchaseOrdersRouter = router({
             z.object({
               productId: z.string(),
               variantId: z.string().optional(),
-              qtyOrdered: z.number().int().positive(),
-              unitCost: z.number().optional(),
+              qtyOrdered: z.number().int().positive().max(PURCHASE_ORDER_MAX_QUANTITY),
+              unitCost: z.number().min(0).max(PURCHASE_ORDER_MAX_UNIT_COST).optional(),
               unitId: z.string().optional().nullable(),
               packId: z.string().optional().nullable(),
             }),
@@ -283,7 +287,7 @@ export const purchaseOrdersRouter = router({
             z.object({
               productId: z.string(),
               variantId: z.string().optional().nullable(),
-              qtyOrdered: z.number().int().positive(),
+              qtyOrdered: z.number().int().positive().max(PURCHASE_ORDER_MAX_QUANTITY),
               supplierId: z.string().optional().nullable(),
             }),
           )
@@ -349,7 +353,7 @@ export const purchaseOrdersRouter = router({
           .array(
             z.object({
               lineId: z.string(),
-              qtyReceived: z.number().int().positive(),
+              qtyReceived: z.number().int().positive().max(PURCHASE_ORDER_MAX_QUANTITY),
               unitId: z.string().optional().nullable(),
               packId: z.string().optional().nullable(),
             }),
@@ -418,8 +422,8 @@ export const purchaseOrdersRouter = router({
         purchaseOrderId: z.string(),
         productId: z.string(),
         variantId: z.string().optional().nullable(),
-        qtyOrdered: z.number().int().positive(),
-        unitCost: z.number().min(0).optional().nullable(),
+        qtyOrdered: z.number().int().positive().max(PURCHASE_ORDER_MAX_QUANTITY),
+        unitCost: z.number().min(0).max(PURCHASE_ORDER_MAX_UNIT_COST).optional().nullable(),
         unitId: z.string().optional().nullable(),
         packId: z.string().optional().nullable(),
       }),
@@ -448,8 +452,8 @@ export const purchaseOrdersRouter = router({
     .input(
       z.object({
         lineId: z.string(),
-        qtyOrdered: z.number().int().positive(),
-        unitCost: z.number().min(0).optional().nullable(),
+        qtyOrdered: z.number().int().positive().max(PURCHASE_ORDER_MAX_QUANTITY),
+        unitCost: z.number().min(0).max(PURCHASE_ORDER_MAX_UNIT_COST).optional().nullable(),
         unitId: z.string().optional().nullable(),
         packId: z.string().optional().nullable(),
       }),

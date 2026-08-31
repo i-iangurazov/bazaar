@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
@@ -12,7 +12,13 @@ import { FormStack } from "@/components/form-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { trpc } from "@/lib/trpc";
 import { useToast } from "@/components/ui/toast";
@@ -25,6 +31,7 @@ const RegisterBusinessPage = () => {
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const { toast } = useToast();
+  const submitInFlightRef = useRef(false);
   const [submitted, setSubmitted] = useState(false);
   const [needsEmailVerification, setNeedsEmailVerification] = useState(false);
   const [emailDeliveryFailed, setEmailDeliveryFailed] = useState(false);
@@ -49,7 +56,19 @@ const RegisterBusinessPage = () => {
     phone: "",
   });
   const [fieldErrors, setFieldErrors] = useState<
-    Partial<Record<"orgName" | "storeName" | "storeCode" | "legalEntityType" | "legalName" | "inn" | "address" | "phone", string>>
+    Partial<
+      Record<
+        | "orgName"
+        | "storeName"
+        | "storeCode"
+        | "legalEntityType"
+        | "legalName"
+        | "inn"
+        | "address"
+        | "phone",
+        string
+      >
+    >
   >({});
 
   const schema = z.object({
@@ -84,6 +103,9 @@ const RegisterBusinessPage = () => {
       setFormError(message);
       toast({ variant: "error", description: message });
     },
+    onSettled: () => {
+      submitInFlightRef.current = false;
+    },
   });
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -91,7 +113,17 @@ const RegisterBusinessPage = () => {
     const parsed = schema.safeParse(values);
     if (!parsed.success) {
       const nextErrors: Partial<
-        Record<"orgName" | "storeName" | "storeCode" | "legalEntityType" | "legalName" | "inn" | "address" | "phone", string>
+        Record<
+          | "orgName"
+          | "storeName"
+          | "storeCode"
+          | "legalEntityType"
+          | "legalName"
+          | "inn"
+          | "address"
+          | "phone",
+          string
+        >
       > = {};
       for (const issue of parsed.error.issues) {
         const key = issue.path[0];
@@ -115,6 +147,8 @@ const RegisterBusinessPage = () => {
     setFieldErrors({});
     setFormError(null);
     setEmailDeliveryFailed(false);
+    if (submitInFlightRef.current) return;
+    submitInFlightRef.current = true;
     mutation.mutate({ token, ...parsed.data });
   };
 
@@ -128,7 +162,7 @@ const RegisterBusinessPage = () => {
       </div>
       <Card>
         <CardHeader>
-          <CardTitle>{t("title")}</CardTitle>
+          <CardTitle as="h1">{t("title")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           {submitted ? (
@@ -140,20 +174,32 @@ const RegisterBusinessPage = () => {
                     : t("submittedVerify")
                   : t("submitted")}
               </p>
-              <Link href="/login" className="text-sm font-semibold text-primary hover:text-primary/80">
+              <Link
+                href="/login"
+                className="text-sm font-semibold text-primary hover:text-primary/90"
+              >
                 {t("goToLogin")}
               </Link>
             </div>
           ) : (
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit} noValidate aria-live="polite">
               <FormStack>
-                {formError ? <p className="text-sm font-medium text-danger">{formError}</p> : null}
+                {formError ? (
+                  <p className="text-sm font-medium text-danger" role="alert">
+                    {formError}
+                  </p>
+                ) : null}
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-foreground" htmlFor="register-org-name">
+                  <label
+                    className="text-sm font-medium text-foreground"
+                    htmlFor="register-org-name"
+                  >
                     {t("orgName")}
                   </label>
                   <Input
                     id="register-org-name"
+                    aria-invalid={Boolean(fieldErrors.orgName)}
+                    aria-describedby={fieldErrors.orgName ? "register-org-name-error" : undefined}
                     placeholder={t("orgPlaceholder")}
                     value={values.orgName}
                     onChange={(event) => {
@@ -164,14 +210,25 @@ const RegisterBusinessPage = () => {
                       }
                     }}
                   />
-                  {fieldErrors.orgName ? <p className="text-xs font-medium text-danger">{fieldErrors.orgName}</p> : null}
+                  {fieldErrors.orgName ? (
+                    <p id="register-org-name-error" className="text-xs font-medium text-danger">
+                      {fieldErrors.orgName}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-foreground" htmlFor="register-store-name">
+                  <label
+                    className="text-sm font-medium text-foreground"
+                    htmlFor="register-store-name"
+                  >
                     {t("storeName")}
                   </label>
                   <Input
                     id="register-store-name"
+                    aria-invalid={Boolean(fieldErrors.storeName)}
+                    aria-describedby={
+                      fieldErrors.storeName ? "register-store-name-error" : undefined
+                    }
                     placeholder={t("storePlaceholder")}
                     value={values.storeName}
                     onChange={(event) => {
@@ -183,15 +240,24 @@ const RegisterBusinessPage = () => {
                     }}
                   />
                   {fieldErrors.storeName ? (
-                    <p className="text-xs font-medium text-danger">{fieldErrors.storeName}</p>
+                    <p id="register-store-name-error" className="text-xs font-medium text-danger">
+                      {fieldErrors.storeName}
+                    </p>
                   ) : null}
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-foreground" htmlFor="register-store-code">
+                  <label
+                    className="text-sm font-medium text-foreground"
+                    htmlFor="register-store-code"
+                  >
                     {t("storeCode")}
                   </label>
                   <Input
                     id="register-store-code"
+                    aria-invalid={Boolean(fieldErrors.storeCode)}
+                    aria-describedby={
+                      fieldErrors.storeCode ? "register-store-code-error" : undefined
+                    }
                     placeholder={t("storeCodePlaceholder")}
                     value={values.storeCode}
                     onChange={(event) => {
@@ -203,21 +269,37 @@ const RegisterBusinessPage = () => {
                     }}
                   />
                   {fieldErrors.storeCode ? (
-                    <p className="text-xs font-medium text-danger">{fieldErrors.storeCode}</p>
+                    <p id="register-store-code-error" className="text-xs font-medium text-danger">
+                      {fieldErrors.storeCode}
+                    </p>
                   ) : null}
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-foreground">{t("legalEntityType")}</label>
+                  <label
+                    className="text-sm font-medium text-foreground"
+                    htmlFor="register-legal-entity-type"
+                  >
+                    {t("legalEntityType")}
+                  </label>
                   <Select
                     value={values.legalEntityType}
                     onValueChange={(value) => {
-                      setValues((prev) => ({ ...prev, legalEntityType: value as "IP" | "OSOO" | "AO" | "OTHER" }));
+                      setValues((prev) => ({
+                        ...prev,
+                        legalEntityType: value as "IP" | "OSOO" | "AO" | "OTHER",
+                      }));
                       if (fieldErrors.legalEntityType) {
                         setFieldErrors((prev) => ({ ...prev, legalEntityType: undefined }));
                       }
                     }}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger
+                      id="register-legal-entity-type"
+                      aria-invalid={Boolean(fieldErrors.legalEntityType)}
+                      aria-describedby={
+                        fieldErrors.legalEntityType ? "register-legal-entity-type-error" : undefined
+                      }
+                    >
                       <SelectValue placeholder={t("selectLegalEntityType")} />
                     </SelectTrigger>
                     <SelectContent>
@@ -228,15 +310,27 @@ const RegisterBusinessPage = () => {
                     </SelectContent>
                   </Select>
                   {fieldErrors.legalEntityType ? (
-                    <p className="text-xs font-medium text-danger">{fieldErrors.legalEntityType}</p>
+                    <p
+                      id="register-legal-entity-type-error"
+                      className="text-xs font-medium text-danger"
+                    >
+                      {fieldErrors.legalEntityType}
+                    </p>
                   ) : null}
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-foreground" htmlFor="register-legal-name">
+                  <label
+                    className="text-sm font-medium text-foreground"
+                    htmlFor="register-legal-name"
+                  >
                     {t("legalName")}
                   </label>
                   <Input
                     id="register-legal-name"
+                    aria-invalid={Boolean(fieldErrors.legalName)}
+                    aria-describedby={
+                      fieldErrors.legalName ? "register-legal-name-error" : undefined
+                    }
                     placeholder={t("legalNamePlaceholder")}
                     value={values.legalName ?? ""}
                     onChange={(event) => {
@@ -248,7 +342,9 @@ const RegisterBusinessPage = () => {
                     }}
                   />
                   {fieldErrors.legalName ? (
-                    <p className="text-xs font-medium text-danger">{fieldErrors.legalName}</p>
+                    <p id="register-legal-name-error" className="text-xs font-medium text-danger">
+                      {fieldErrors.legalName}
+                    </p>
                   ) : null}
                 </div>
                 <div className="space-y-1">
@@ -257,6 +353,8 @@ const RegisterBusinessPage = () => {
                   </label>
                   <Input
                     id="register-inn"
+                    aria-invalid={Boolean(fieldErrors.inn)}
+                    aria-describedby={fieldErrors.inn ? "register-inn-error" : undefined}
                     placeholder={t("innPlaceholder")}
                     value={values.inn ?? ""}
                     onChange={(event) => {
@@ -267,7 +365,11 @@ const RegisterBusinessPage = () => {
                       }
                     }}
                   />
-                  {fieldErrors.inn ? <p className="text-xs font-medium text-danger">{fieldErrors.inn}</p> : null}
+                  {fieldErrors.inn ? (
+                    <p id="register-inn-error" className="text-xs font-medium text-danger">
+                      {fieldErrors.inn}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="space-y-1">
                   <label className="text-sm font-medium text-foreground" htmlFor="register-phone">
@@ -275,6 +377,8 @@ const RegisterBusinessPage = () => {
                   </label>
                   <Input
                     id="register-phone"
+                    aria-invalid={Boolean(fieldErrors.phone)}
+                    aria-describedby={fieldErrors.phone ? "register-phone-error" : undefined}
                     placeholder={t("phonePlaceholder")}
                     value={values.phone ?? ""}
                     onChange={(event) => {
@@ -285,7 +389,11 @@ const RegisterBusinessPage = () => {
                       }
                     }}
                   />
-                  {fieldErrors.phone ? <p className="text-xs font-medium text-danger">{fieldErrors.phone}</p> : null}
+                  {fieldErrors.phone ? (
+                    <p id="register-phone-error" className="text-xs font-medium text-danger">
+                      {fieldErrors.phone}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="space-y-1">
                   <label className="text-sm font-medium text-foreground" htmlFor="register-address">
@@ -293,6 +401,8 @@ const RegisterBusinessPage = () => {
                   </label>
                   <Input
                     id="register-address"
+                    aria-invalid={Boolean(fieldErrors.address)}
+                    aria-describedby={fieldErrors.address ? "register-address-error" : undefined}
                     placeholder={t("addressPlaceholder")}
                     value={values.address ?? ""}
                     onChange={(event) => {
@@ -303,7 +413,11 @@ const RegisterBusinessPage = () => {
                       }
                     }}
                   />
-                  {fieldErrors.address ? <p className="text-xs font-medium text-danger">{fieldErrors.address}</p> : null}
+                  {fieldErrors.address ? (
+                    <p id="register-address-error" className="text-xs font-medium text-danger">
+                      {fieldErrors.address}
+                    </p>
+                  ) : null}
                 </div>
                 <Button type="submit" className="w-full" disabled={mutation.isLoading}>
                   {mutation.isLoading ? <Spinner className="h-4 w-4" /> : null}

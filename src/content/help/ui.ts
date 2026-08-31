@@ -52,6 +52,13 @@ export const helpUi = {
   backToHelp: text("Назад в Bazaar Guide", "Bazaar Guide'га кайтуу", "Back to Bazaar Guide"),
   onThisPage: text("В этой инструкции", "Бул нускамада", "In this guide"),
   step: text("Шаг", "Кадам", "Step"),
+  exactLocation: text("Где", "Кайда", "Where"),
+  controlToUse: text(
+    "Что нажать или заполнить",
+    "Эмнени басуу же толтуруу керек",
+    "Control to use",
+  ),
+  expectedResult: text("Как проверить", "Кантип текшерүү керек", "Success check"),
   zoomImage: text("Увеличить изображение", "Сүрөттү чоңойтуу", "Zoom image"),
   closeImage: text("Закрыть изображение", "Сүрөттү жабуу", "Close image"),
   imageHint: text("Нажмите, чтобы увеличить", "Чоңойтуу үчүн басыңыз", "Tap to zoom"),
@@ -92,6 +99,15 @@ export const helpUi = {
 } satisfies Record<string, LocalizedText>;
 
 export const localize = (value: LocalizedText, locale: HelpLocale) => value[locale] ?? value.ru;
+
+export const formatGuideCount = (count: number, locale: HelpLocale) => {
+  if (locale === "kg") return `${count} нускама`;
+  if (locale === "en") return `${count} ${count === 1 ? "guide" : "guides"}`;
+
+  const plural = new Intl.PluralRules("ru").select(count);
+  const unit = plural === "one" ? "инструкция" : plural === "few" ? "инструкции" : "инструкций";
+  return `${count} ${unit}`;
+};
 
 export const localizedUi = (locale: HelpLocale) =>
   Object.fromEntries(

@@ -35,8 +35,12 @@ export const CardHeader = ({ className, ...props }: HTMLAttributes<HTMLDivElemen
   />
 );
 
-export const CardTitle = ({ className, ...props }: HTMLAttributes<HTMLHeadingElement>) => (
-  <h3 className={cn("text-lg font-bold tracking-tight", className)} {...props} />
+export const CardTitle = ({
+  as: Heading = "h3",
+  className,
+  ...props
+}: HTMLAttributes<HTMLHeadingElement> & { as?: "h1" | "h2" | "h3" }) => (
+  <Heading className={cn("text-lg font-bold tracking-tight", className)} {...props} />
 );
 
 export const CardContent = ({ className, ...props }: HTMLAttributes<HTMLDivElement>) => (
