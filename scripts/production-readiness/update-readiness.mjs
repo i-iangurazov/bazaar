@@ -444,7 +444,7 @@ const isWithin = (parent, child) => {
   );
 };
 
-const assertRepoFile = async (relativePath, label) => {
+const assertRepoFile = async (relativePath, label, { requireExistingFile = true } = {}) => {
   assertNonEmptyString(relativePath, label, { singleLine: true });
   if (
     path.isAbsolute(relativePath) ||
@@ -454,6 +454,7 @@ const assertRepoFile = async (relativePath, label) => {
   ) {
     fail(`${label} must be a normalized repository-relative path`);
   }
+  if (!requireExistingFile) return;
   const repositoryRealPath = await realpath(REPOSITORY_ROOT);
   const candidate = path.resolve(REPOSITORY_ROOT, relativePath);
   let candidateRealPath;
@@ -479,7 +480,7 @@ const assertManifestLocation = async (manifestPath) => {
   }
 };
 
-const normalizeEvidence = async (value, label) => {
+const normalizeEvidence = async (value, label, { requireExistingFiles = true } = {}) => {
   assertPlainObject(value, label);
   if (value.type === "file") {
     assertObjectFields(
@@ -488,7 +489,9 @@ const normalizeEvidence = async (value, label) => {
       new Set(["type", "path", "description"]),
       label,
     );
-    await assertRepoFile(value.path, `${label}.path`);
+    await assertRepoFile(value.path, `${label}.path`, {
+      requireExistingFile: requireExistingFiles,
+    });
     assertNonEmptyString(value.description, `${label}.description`, { singleLine: true });
     return { type: "file", path: value.path, description: value.description };
   }
@@ -514,13 +517,15 @@ const normalizeEvidence = async (value, label) => {
   fail(`${label}.type must be either "file" or "command"`);
 };
 
-const normalizeEvidenceList = async (values, label) => {
+const normalizeEvidenceList = async (values, label, { requireExistingFiles = true } = {}) => {
   if (!Array.isArray(values) || values.length === 0) {
     fail(`${label} must be a non-empty evidence array`);
   }
   if (values.length > 100) fail(`${label} cannot contain more than 100 entries`);
   const normalized = await Promise.all(
-    values.map((value, index) => normalizeEvidence(value, `${label}[${index}]`)),
+    values.map((value, index) =>
+      normalizeEvidence(value, `${label}[${index}]`, { requireExistingFiles }),
+    ),
   );
   normalized.sort((left, right) => compareStrings(JSON.stringify(left), JSON.stringify(right)));
   const serialized = normalized.map((value) => JSON.stringify(value));
@@ -528,7 +533,11 @@ const normalizeEvidenceList = async (values, label) => {
   return normalized;
 };
 
-const normalizeStringArray = (values, label, { paths = false } = {}) => {
+const normalizeStringArray = (
+  values,
+  label,
+  { paths = false, requireExistingFiles = true } = {},
+) => {
   if (!Array.isArray(values)) fail(`${label} must be an array`);
   const normalized = values.map((value, index) => {
     assertNonEmptyString(value, `${label}[${index}]`, { singleLine: true });
@@ -539,7 +548,9 @@ const normalizeStringArray = (values, label, { paths = false } = {}) => {
   if (paths) {
     return Promise.all(
       normalized.map(async (value, index) => {
-        await assertRepoFile(value, `${label}[${index}]`);
+        await assertRepoFile(value, `${label}[${index}]`, {
+          requireExistingFile: requireExistingFiles,
+        });
         return value;
       }),
     );
@@ -547,10 +558,13 @@ const normalizeStringArray = (values, label, { paths = false } = {}) => {
   return normalized;
 };
 
-const normalizeValidation = async (value, label) => {
+const normalizeValidation = async (value, label, { requireExistingFiles = true } = {}) => {
   assertObjectFields(value, VALIDATION_FIELDS, VALIDATION_FIELDS, label);
   const commands = normalizeStringArray(value.commands, `${label}.commands`);
-  const tests = await normalizeStringArray(value.tests, `${label}.tests`, { paths: true });
+  const tests = await normalizeStringArray(value.tests, `${label}.tests`, {
+    paths: true,
+    requireExistingFiles,
+  });
   if (value.manualProcedure !== null) {
     assertNonEmptyString(value.manualProcedure, `${label}.manualProcedure`);
   }
@@ -562,7 +576,12 @@ const validateStoredEvidence = async (values, label, { allowEmpty = true } = {})
     fail(`${label} must be ${allowEmpty ? "an" : "a non-empty"} evidence array`);
   }
   if (values.length === 0) return [];
-  const normalized = await normalizeEvidenceList(values, label);
+  // Historical evidence may live in retained CI/audit storage rather than in a
+  // clean source checkout. Keep strict path-shape validation here; new manifest
+  // evidence is still required to exist when it is promoted.
+  const normalized = await normalizeEvidenceList(values, label, {
+    requireExistingFiles: false,
+  });
   if (!isDeepStrictEqual(values, normalized)) {
     fail(`${label} is not in canonical evidence order or shape`);
   }
@@ -696,7 +715,9 @@ const validateCurrentMutableState = async (tracker) => {
       requirement.lastVerificationTimestamp,
       `${requirement.id}.lastVerificationTimestamp`,
     );
-    await normalizeValidation(requirement.validation, `${requirement.id}.validation`);
+    await normalizeValidation(requirement.validation, `${requirement.id}.validation`, {
+      requireExistingFiles: false,
+    });
     await validateStoredEvidence(
       requirement.evidence.current,
       `${requirement.id}.evidence.current`,
