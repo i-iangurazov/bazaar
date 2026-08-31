@@ -239,7 +239,11 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
     const currencySource = currencySourceWithFallback(receipt, receipt.store);
     return [
       receipt.number,
-      receipt.createdAt ? new Date(receipt.createdAt).toISOString() : "",
+      receipt.completedAt
+        ? new Date(receipt.completedAt).toISOString()
+        : receipt.createdAt
+          ? new Date(receipt.createdAt).toISOString()
+          : "",
       receipt.store.code,
       receipt.store.name,
       receipt.register?.code ?? "",
@@ -276,7 +280,7 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
         fileNameBase: `receipts-registry-${businessDateKey(new Date())}`,
         header: [
           "receiptNumber",
-          "createdAtIso",
+          "completedAtIso",
           "storeCode",
           "storeName",
           "registerCode",
@@ -548,7 +552,7 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
                                   </div>
                                 </TableCell>
                                 <TableCell className="px-4 py-3 align-top text-xs text-muted-foreground">
-                                  {formatDateTime(item.createdAt, locale)}
+                                  {formatDateTime(item.completedAt ?? item.createdAt, locale)}
                                 </TableCell>
                                 <TableCell className="px-4 py-3 align-top">
                                   <div className="text-sm text-foreground">{item.store.name}</div>
@@ -689,7 +693,7 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
                         </Badge>
                       </div>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        {formatDateTime(item.createdAt, locale)}
+                        {formatDateTime(item.completedAt ?? item.createdAt, locale)}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {item.store.name} ({item.store.code})

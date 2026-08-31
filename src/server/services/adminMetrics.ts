@@ -680,7 +680,7 @@ export const getAdminMetrics = async (input: AdminMetricsInput) => {
         LEFT JOIN "CustomerOrderLine" lines ON lines."customerOrderId" = orders.id
         WHERE orders."organizationId" = ${normalized.organizationId}
           AND orders.status = 'COMPLETED'
-          AND orders."createdAt" >= ${thirtyDaysAgo}
+          AND COALESCE(orders."completedAt", orders."createdAt") >= ${thirtyDaysAgo}
           AND (${selectedStoreId}::text IS NULL OR orders."storeId" = ${selectedStoreId})
       `),
   ]);

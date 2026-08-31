@@ -1,7 +1,18 @@
-import { PrismaClient } from "@prisma/client";
-import type { Locator, Page } from "@playwright/test";
+import {
+  CustomerOrderStatus,
+  PosPaymentMethod,
+  PrismaClient,
+  RegisterShiftStatus,
+} from "@prisma/client";
+import type { Browser, BrowserContext, Locator, Page, TestInfo } from "@playwright/test";
 
-import { assertAuthenticatedE2EDatabaseUrl } from "./contract";
+import {
+  assertAuthenticatedE2EBaseUrl,
+  assertAuthenticatedE2EDatabaseUrl,
+  authenticatedE2EAccounts,
+  authenticatedE2EPassword,
+  authenticatedE2EStorageStatePath,
+} from "./contract";
 import { authenticatedPosOperationsFixture as fixture } from "./pos-operations-contract";
 import {
   assertCleanPosOperationsAudit,
@@ -44,7 +55,10 @@ const expectMutationTotal = async (
   expect(posOperationsMutationCount(audit, procedure)).toBe(total);
 };
 
-const installOwnedIdempotencyKeys = async (page: Page) => {
+const installOwnedIdempotencyKeys = async (
+  page: Page,
+  prefix: string = fixture.idempotencyKeyPrefix,
+) => {
   await page.addInitScript((prefix) => {
     let sequence = 0;
     const createOwnedKey = () => `${prefix}${Date.now()}-${++sequence}`;
@@ -59,7 +73,612 @@ const installOwnedIdempotencyKeys = async (page: Page) => {
         value: createOwnedKey,
       });
     }
-  }, fixture.idempotencyKeyPrefix);
+  }, prefix);
+};
+
+const seedPaymentCorrectionBrowserFixtures = async () => {
+  const paymentFixture = fixture.paymentCorrection;
+  const saleIds: string[] = [
+    paymentFixture.eligibleReceipt.id,
+    paymentFixture.ineligibleReceipt.id,
+  ];
+  const registerIds: string[] = [
+    paymentFixture.eligibleRegister.id,
+    paymentFixture.ineligibleRegister.id,
+  ];
+  const shiftIds: string[] = [paymentFixture.eligibleShiftId, paymentFixture.ineligibleShiftId];
+  const cashier = await prisma.user.findFirstOrThrow({
+    where: {
+      organizationId: fixture.organizationId,
+      email: authenticatedE2EAccounts.cashier.email,
+      role: "CASHIER",
+    },
+    select: { id: true },
+  });
+
+  const [existingSales, conflictingNumbers, existingRegisters, existingShifts] = await Promise.all([
+    prisma.customerOrder.findMany({
+      where: { id: { in: saleIds } },
+      select: { id: true, organizationId: true, storeId: true, number: true, isPosSale: true },
+    }),
+    prisma.customerOrder.findMany({
+      where: {
+        organizationId: fixture.organizationId,
+        number: {
+          in: [paymentFixture.eligibleReceipt.number, paymentFixture.ineligibleReceipt.number],
+        },
+      },
+      select: { id: true, number: true },
+    }),
+    prisma.posRegister.findMany({
+      where: {
+        OR: [
+          { id: { in: registerIds } },
+          {
+            storeId: fixture.storeId,
+            code: {
+              in: [paymentFixture.eligibleRegister.code, paymentFixture.ineligibleRegister.code],
+            },
+          },
+        ],
+      },
+      select: { id: true, organizationId: true, storeId: true, code: true },
+    }),
+    prisma.registerShift.findMany({
+      where: { OR: [{ id: { in: shiftIds } }, { registerId: { in: registerIds } }] },
+      select: { id: true, organizationId: true, storeId: true, registerId: true },
+    }),
+  ]);
+
+  for (const sale of [...existingSales, ...conflictingNumbers]) {
+    if (
+      !saleIds.includes(sale.id) ||
+      ("organizationId" in sale && sale.organizationId !== fixture.organizationId) ||
+      ("storeId" in sale && sale.storeId !== fixture.storeId) ||
+      ("isPosSale" in sale && !sale.isPosSale)
+    ) {
+      throw new Error(`Refusing to replace non-QA payment-correction receipt ${sale.id}.`);
+    }
+  }
+  for (const register of existingRegisters) {
+    if (
+      !registerIds.includes(register.id) ||
+      register.organizationId !== fixture.organizationId ||
+      register.storeId !== fixture.storeId
+    ) {
+      throw new Error(`Refusing to replace non-QA payment-correction register ${register.id}.`);
+    }
+  }
+  for (const shift of existingShifts) {
+    if (
+      !shiftIds.includes(shift.id) ||
+      shift.organizationId !== fixture.organizationId ||
+      shift.storeId !== fixture.storeId ||
+      !registerIds.includes(shift.registerId)
+    ) {
+      throw new Error(`Refusing to replace non-QA payment-correction shift ${shift.id}.`);
+    }
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.auditLog.deleteMany({
+      where: {
+        organizationId: fixture.organizationId,
+        entityId: { in: [...saleIds, ...shiftIds] },
+      },
+    });
+    await tx.idempotencyKey.deleteMany({
+      where: { key: { startsWith: paymentFixture.idempotencyKeyPrefix } },
+    });
+    await tx.customerOrder.deleteMany({ where: { id: { in: saleIds } } });
+    await tx.registerShift.deleteMany({ where: { id: { in: shiftIds } } });
+
+    await tx.posRegister.upsert({
+      where: { id: paymentFixture.eligibleRegister.id },
+      create: {
+        ...paymentFixture.eligibleRegister,
+        organizationId: fixture.organizationId,
+        storeId: fixture.storeId,
+        isActive: true,
+      },
+      update: {
+        organizationId: fixture.organizationId,
+        storeId: fixture.storeId,
+        name: paymentFixture.eligibleRegister.name,
+        code: paymentFixture.eligibleRegister.code,
+        isActive: true,
+      },
+    });
+    await tx.posRegister.upsert({
+      where: { id: paymentFixture.ineligibleRegister.id },
+      create: {
+        ...paymentFixture.ineligibleRegister,
+        organizationId: fixture.organizationId,
+        storeId: fixture.storeId,
+        isActive: true,
+      },
+      update: {
+        organizationId: fixture.organizationId,
+        storeId: fixture.storeId,
+        name: paymentFixture.ineligibleRegister.name,
+        code: paymentFixture.ineligibleRegister.code,
+        isActive: true,
+      },
+    });
+
+    const openedAt = new Date("2026-08-31T02:00:00.000Z");
+    await tx.registerShift.create({
+      data: {
+        id: paymentFixture.eligibleShiftId,
+        organizationId: fixture.organizationId,
+        storeId: fixture.storeId,
+        registerId: paymentFixture.eligibleRegister.id,
+        status: RegisterShiftStatus.OPEN,
+        openedAt,
+        openedById: cashier.id,
+        openingCashKgs: 0,
+        expectedCashKgs: paymentFixture.eligibleReceipt.totalKgs,
+        currencyCode: "KGS",
+        currencyRateKgsPerUnit: 1,
+        notes: "QA-BAZAAR eligible payment-correction fixture",
+      },
+    });
+    await tx.registerShift.create({
+      data: {
+        id: paymentFixture.ineligibleShiftId,
+        organizationId: fixture.organizationId,
+        storeId: fixture.storeId,
+        registerId: paymentFixture.ineligibleRegister.id,
+        status: RegisterShiftStatus.CLOSED,
+        openedAt,
+        openedById: cashier.id,
+        closedAt: new Date("2026-08-31T05:30:00.000Z"),
+        closedById: cashier.id,
+        openingCashKgs: 0,
+        expectedCashKgs: paymentFixture.ineligibleReceipt.totalKgs,
+        closingCashCountedKgs: paymentFixture.ineligibleReceipt.totalKgs,
+        currencyCode: "KGS",
+        currencyRateKgsPerUnit: 1,
+        notes: "QA-BAZAAR ineligible payment-correction fixture",
+      },
+    });
+
+    const createReceipt = async (input: {
+      receipt: typeof paymentFixture.eligibleReceipt | typeof paymentFixture.ineligibleReceipt;
+      registerId: string;
+      shiftId: string;
+    }) => {
+      await tx.customerOrder.create({
+        data: {
+          id: input.receipt.id,
+          organizationId: fixture.organizationId,
+          storeId: fixture.storeId,
+          registerId: input.registerId,
+          shiftId: input.shiftId,
+          number: input.receipt.number,
+          status: CustomerOrderStatus.COMPLETED,
+          isPosSale: true,
+          customerName: `${authenticatedE2EAccounts.cashier.name} fixture customer`,
+          subtotalKgs: input.receipt.totalKgs,
+          discountKgs: 0,
+          totalKgs: input.receipt.totalKgs,
+          currencyCode: "KGS",
+          currencyRateKgsPerUnit: 1,
+          completedAt: new Date(input.receipt.completedAt),
+          createdAt: new Date(input.receipt.createdAt),
+          createdById: cashier.id,
+          updatedById: cashier.id,
+          lines: {
+            create: {
+              id: input.receipt.lineId,
+              productId: fixture.product.id,
+              variantId: null,
+              variantKey: fixture.variantKey,
+              qty: 1,
+              baseUnitPriceKgs: input.receipt.totalKgs,
+              unitPriceKgs: input.receipt.totalKgs,
+              lineTotalKgs: input.receipt.totalKgs,
+              unitCostKgs: fixture.product.unitCostKgs,
+              lineCostTotalKgs: fixture.product.unitCostKgs,
+            },
+          },
+          payments: {
+            create: {
+              id: input.receipt.paymentId,
+              organizationId: fixture.organizationId,
+              storeId: fixture.storeId,
+              shiftId: input.shiftId,
+              method: PosPaymentMethod.CASH,
+              amountKgs: input.receipt.totalKgs,
+              currencyCode: "KGS",
+              currencyRateKgsPerUnit: 1,
+              isRefund: false,
+              createdAt: new Date(input.receipt.completedAt),
+              createdById: cashier.id,
+            },
+          },
+        },
+      });
+    };
+
+    await createReceipt({
+      receipt: paymentFixture.eligibleReceipt,
+      registerId: paymentFixture.eligibleRegister.id,
+      shiftId: paymentFixture.eligibleShiftId,
+    });
+    await createReceipt({
+      receipt: paymentFixture.ineligibleReceipt,
+      registerId: paymentFixture.ineligibleRegister.id,
+      shiftId: paymentFixture.ineligibleShiftId,
+    });
+  });
+};
+
+type CashierPaymentBrowserAudit = {
+  consoleErrors: string[];
+  pageErrors: string[];
+  externalRequests: string[];
+  correctionMutationRequests: string[];
+};
+
+const installCashierPaymentBrowserAudit = async (page: Page, baseOrigin: string) => {
+  const audit: CashierPaymentBrowserAudit = {
+    consoleErrors: [],
+    pageErrors: [],
+    externalRequests: [],
+    correctionMutationRequests: [],
+  };
+  page.on("console", (message) => {
+    if (message.type() === "error") audit.consoleErrors.push(message.text());
+  });
+  page.on("pageerror", (error) => audit.pageErrors.push(error.message));
+  await page.route("**/*", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if ((url.protocol === "http:" || url.protocol === "https:") && url.origin !== baseOrigin) {
+      audit.externalRequests.push(`${request.method()} ${request.url()}`);
+      await route.abort("blockedbyclient");
+      return;
+    }
+    if (
+      request.method() === "POST" &&
+      decodeURIComponent(url.pathname).includes("pos.sales.correctPayments")
+    ) {
+      audit.correctionMutationRequests.push(request.url());
+    }
+    if (request.method() === "POST" && url.pathname === "/api/help/events") {
+      await route.fulfill({ status: 204, body: "" });
+      return;
+    }
+    await route.continue();
+  });
+  return audit;
+};
+
+const createCashierBrowserContext = async (
+  browser: Browser,
+  baseOrigin: string,
+  storageState?: string,
+) =>
+  browser.newContext({
+    baseURL: baseOrigin,
+    storageState,
+    ignoreHTTPSErrors: true,
+    locale: "en-US",
+    viewport: desktopViewport,
+    serviceWorkers: "block",
+    colorScheme: "light",
+    reducedMotion: "reduce",
+  });
+
+const authenticateCashierContext = async (context: BrowserContext, baseOrigin: string) => {
+  const csrfResponse = await context.request.get(`${baseOrigin}/api/auth/csrf`, {
+    failOnStatusCode: true,
+  });
+  const csrf = (await csrfResponse.json()) as { csrfToken?: unknown };
+  expect(typeof csrf.csrfToken).toBe("string");
+  const callback = await context.request.post(`${baseOrigin}/api/auth/callback/credentials`, {
+    form: {
+      csrfToken: String(csrf.csrfToken),
+      email: authenticatedE2EAccounts.cashier.email,
+      password: authenticatedE2EPassword,
+      callbackUrl: `${baseOrigin}/pos/history`,
+      json: "true",
+    },
+    failOnStatusCode: false,
+    maxRedirects: 0,
+  });
+  expect([200, 302, 303]).toContain(callback.status());
+  await expect
+    .poll(async () => {
+      const response = await context.request.get(`${baseOrigin}/api/auth/session`);
+      if (!response.ok()) return null;
+      const session = (await response.json()) as { user?: { email?: string; role?: string } };
+      return session.user ?? null;
+    })
+    .toMatchObject({ email: authenticatedE2EAccounts.cashier.email, role: "CASHIER" });
+};
+
+const paymentCorrectionSale = (page: Page, saleId: string) =>
+  page.locator(`[data-testid="pos-history-sale"][data-sale-id="${saleId}"]:visible`);
+
+const runCashierPaymentCorrectionJourney = async (input: {
+  browser: Browser;
+  baseOrigin: string;
+  testInfo: TestInfo;
+}) => {
+  const paymentFixture = fixture.paymentCorrection;
+  const eligibleId = paymentFixture.eligibleReceipt.id;
+  const cashier = await prisma.user.findFirstOrThrow({
+    where: {
+      organizationId: fixture.organizationId,
+      email: authenticatedE2EAccounts.cashier.email,
+      role: "CASHIER",
+    },
+    select: { id: true },
+  });
+  const [saleBefore, snapshotBefore, costBefore, stockMovementsBefore, cashMovementsBefore] =
+    await Promise.all([
+      prisma.customerOrder.findUniqueOrThrow({
+        where: { id: eligibleId },
+        include: { lines: true, payments: true },
+      }),
+      prisma.inventorySnapshot.findUniqueOrThrow({
+        where: {
+          storeId_productId_variantKey: {
+            storeId: fixture.storeId,
+            productId: fixture.product.id,
+            variantKey: fixture.variantKey,
+          },
+        },
+      }),
+      prisma.productCost.findUniqueOrThrow({
+        where: {
+          organizationId_productId_variantKey: {
+            organizationId: fixture.organizationId,
+            productId: fixture.product.id,
+            variantKey: fixture.variantKey,
+          },
+        },
+      }),
+      prisma.stockMovement.findMany({
+        where: { storeId: fixture.storeId, productId: fixture.product.id },
+        orderBy: { id: "asc" },
+      }),
+      prisma.cashDrawerMovement.findMany({
+        where: { shiftId: paymentFixture.eligibleShiftId },
+        orderBy: { id: "asc" },
+      }),
+    ]);
+
+  const primaryContext = await createCashierBrowserContext(
+    input.browser,
+    input.baseOrigin,
+    authenticatedE2EStorageStatePath("cashier"),
+  );
+  const primaryPage = await primaryContext.newPage();
+  await installOwnedIdempotencyKeys(primaryPage, paymentFixture.idempotencyKeyPrefix);
+  const primaryAudit = await installCashierPaymentBrowserAudit(primaryPage, input.baseOrigin);
+  let historyCompletedAt = "";
+  try {
+    await primaryPage.setViewportSize(desktopViewport);
+    await gotoDirect(
+      primaryPage,
+      `/pos/history?registerId=${encodeURIComponent(paymentFixture.eligibleRegister.id)}`,
+    );
+    await expect(primaryPage.getByRole("heading", { level: 1, name: "History" })).toBeVisible();
+    const eligibleSale = paymentCorrectionSale(primaryPage, eligibleId);
+    await expect(eligibleSale).toContainText(paymentFixture.eligibleReceipt.number);
+    await expect(eligibleSale).toContainText("4,100.00");
+    historyCompletedAt =
+      (await eligibleSale.getByTestId("pos-history-occurred-at").textContent())?.trim() ?? "";
+    expect(historyCompletedAt).not.toBe("");
+
+    await eligibleSale.getByRole("button", { name: "Correct payment", exact: true }).click();
+    const correctionDialog = primaryPage.getByRole("dialog", { name: "Correct payment" });
+    await expect(correctionDialog).toBeVisible();
+    await expect(correctionDialog).toContainText(paymentFixture.eligibleReceipt.number);
+    await expect(correctionDialog.getByTestId("pos-payment-correction-completed-at")).toHaveText(
+      historyCompletedAt,
+    );
+    const paymentMethod = correctionDialog.getByRole("combobox", {
+      name: "Payment method 1",
+      exact: true,
+    });
+    await expect(paymentMethod).toContainText("Cash");
+    await paymentMethod.click();
+    await primaryPage.getByRole("option", { name: "Transfer", exact: true }).click();
+    await expect(paymentMethod).toContainText("Transfer");
+    await expect(
+      correctionDialog.getByRole("textbox", { name: "Payment amount 1", exact: true }),
+    ).toHaveValue(/4[\s,]?100/);
+    await correctionDialog
+      .getByRole("textbox", { name: "Correction reason", exact: true })
+      .fill(paymentFixture.reason);
+    await rapidClick(
+      correctionDialog.getByRole("button", { name: "Apply payment correction", exact: true }),
+    );
+    await expect(primaryPage.getByText("Payment correction saved.", { exact: true })).toBeVisible();
+    await expect(correctionDialog).toBeHidden();
+    await expect.poll(() => primaryAudit.correctionMutationRequests.length).toBe(1);
+    await expect
+      .poll(() =>
+        prisma.auditLog.count({
+          where: {
+            action: "POS_PAYMENT_CORRECTION",
+            entity: "CustomerOrder",
+            entityId: eligibleId,
+          },
+        }),
+      )
+      .toBe(1);
+
+    await primaryPage.setViewportSize(mobileViewport);
+    await primaryPage.reload({ waitUntil: "domcontentloaded" });
+    const refreshedSale = paymentCorrectionSale(primaryPage, eligibleId);
+    await expect(refreshedSale).toContainText(paymentFixture.eligibleReceipt.number);
+    await expect(refreshedSale).toContainText("Transfer");
+    await input.testInfo.attach("cashier-payment-correction-mobile", {
+      body: await primaryPage.screenshot({ fullPage: true }),
+      contentType: "image/png",
+    });
+  } finally {
+    await primaryContext.close();
+  }
+
+  const reloginContext = await createCashierBrowserContext(input.browser, input.baseOrigin);
+  await authenticateCashierContext(reloginContext, input.baseOrigin);
+  const reloginPage = await reloginContext.newPage();
+  const reloginAudit = await installCashierPaymentBrowserAudit(reloginPage, input.baseOrigin);
+  try {
+    await reloginPage.setViewportSize(mobileViewport);
+    await gotoDirect(
+      reloginPage,
+      `/pos/history?registerId=${encodeURIComponent(paymentFixture.eligibleRegister.id)}`,
+    );
+    const reloggedSale = paymentCorrectionSale(reloginPage, eligibleId);
+    await expect(reloggedSale).toContainText(paymentFixture.eligibleReceipt.number);
+    await expect(reloggedSale).toContainText("Transfer");
+    await reloggedSale.getByRole("button", { name: "Correct payment", exact: true }).click();
+    const historyDialog = reloginPage.getByRole("dialog", { name: "Correct payment" });
+    await expect(historyDialog).toContainText(
+      /Cash\s+KGS\s*4,100\.00\s+→\s+Transfer\s+KGS\s*4,100\.00/,
+    );
+    await expect(historyDialog).toContainText(paymentFixture.reason);
+    await historyDialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(historyDialog).toBeHidden();
+
+    await reloginPage.setViewportSize(desktopViewport);
+    await gotoDirect(
+      reloginPage,
+      `/pos/history?registerId=${encodeURIComponent(paymentFixture.ineligibleRegister.id)}`,
+    );
+    const ineligibleSale = paymentCorrectionSale(reloginPage, paymentFixture.ineligibleReceipt.id);
+    await expect(ineligibleSale).toContainText(paymentFixture.ineligibleReceipt.number);
+    await expect(ineligibleSale).toContainText("66,390.00");
+    await expect(
+      ineligibleSale.getByRole("button", { name: "Correct payment", exact: true }),
+    ).toBeDisabled();
+    await expect(ineligibleSale).toContainText(
+      "The original shift is closed, so its recorded payment cannot be changed.",
+    );
+    await input.testInfo.attach("cashier-payment-correction-ineligible", {
+      body: await reloginPage.screenshot({ fullPage: true }),
+      contentType: "image/png",
+    });
+  } finally {
+    await reloginContext.close();
+  }
+
+  const [
+    saleAfter,
+    shiftAfter,
+    snapshotAfter,
+    costAfter,
+    stockMovementsAfter,
+    cashMovementsAfter,
+    audit,
+  ] = await Promise.all([
+    prisma.customerOrder.findUniqueOrThrow({
+      where: { id: eligibleId },
+      include: { lines: true, payments: true },
+    }),
+    prisma.registerShift.findUniqueOrThrow({
+      where: { id: paymentFixture.eligibleShiftId },
+    }),
+    prisma.inventorySnapshot.findUniqueOrThrow({
+      where: {
+        storeId_productId_variantKey: {
+          storeId: fixture.storeId,
+          productId: fixture.product.id,
+          variantKey: fixture.variantKey,
+        },
+      },
+    }),
+    prisma.productCost.findUniqueOrThrow({
+      where: {
+        organizationId_productId_variantKey: {
+          organizationId: fixture.organizationId,
+          productId: fixture.product.id,
+          variantKey: fixture.variantKey,
+        },
+      },
+    }),
+    prisma.stockMovement.findMany({
+      where: { storeId: fixture.storeId, productId: fixture.product.id },
+      orderBy: { id: "asc" },
+    }),
+    prisma.cashDrawerMovement.findMany({
+      where: { shiftId: paymentFixture.eligibleShiftId },
+      orderBy: { id: "asc" },
+    }),
+    prisma.auditLog.findFirstOrThrow({
+      where: {
+        action: "POS_PAYMENT_CORRECTION",
+        entity: "CustomerOrder",
+        entityId: eligibleId,
+      },
+    }),
+  ]);
+
+  expect(saleAfter.createdAt.toISOString()).toBe(paymentFixture.eligibleReceipt.createdAt);
+  expect(saleAfter.completedAt?.toISOString()).toBe(paymentFixture.eligibleReceipt.completedAt);
+  expect(saleAfter.totalKgs.toString()).toBe(saleBefore.totalKgs.toString());
+  expect(saleAfter.lines).toEqual(saleBefore.lines);
+  expect(saleAfter.payments).toHaveLength(1);
+  expect(saleAfter.payments[0]).toMatchObject({
+    method: PosPaymentMethod.TRANSFER,
+    shiftId: paymentFixture.eligibleShiftId,
+    isRefund: false,
+    createdById: cashier.id,
+  });
+  expect(Number(saleAfter.payments[0]!.amountKgs)).toBe(paymentFixture.eligibleReceipt.totalKgs);
+  expect(Number(shiftAfter.expectedCashKgs)).toBe(0);
+  expect(snapshotAfter).toEqual(snapshotBefore);
+  expect(costAfter).toEqual(costBefore);
+  expect(stockMovementsAfter).toEqual(stockMovementsBefore);
+  expect(cashMovementsAfter).toEqual(cashMovementsBefore);
+  expect(audit.actorId).toBe(cashier.id);
+  expect(audit.before).toMatchObject({
+    effectivePayments: [{ method: PosPaymentMethod.CASH, amountKgs: 4_100 }],
+    completedAt: paymentFixture.eligibleReceipt.completedAt,
+  });
+  expect(audit.after).toMatchObject({
+    effectivePayments: [{ method: PosPaymentMethod.TRANSFER, amountKgs: 4_100 }],
+    cashDeltaKgs: -4_100,
+    reason: paymentFixture.reason,
+    correctedById: cashier.id,
+  });
+  expect(primaryAudit.consoleErrors).toEqual([]);
+  expect(primaryAudit.pageErrors).toEqual([]);
+  expect(primaryAudit.externalRequests).toEqual([]);
+  expect(reloginAudit.consoleErrors).toEqual([]);
+  expect(reloginAudit.pageErrors).toEqual([]);
+  expect(reloginAudit.externalRequests).toEqual([]);
+  expect(reloginAudit.correctionMutationRequests).toEqual([]);
+
+  const evidence = {
+    actorRole: "CASHIER",
+    eligibleReceipt: paymentFixture.eligibleReceipt.number,
+    ineligibleReceipt: paymentFixture.ineligibleReceipt.number,
+    beforePayment: "CASH 4100",
+    afterPayment: "TRANSFER 4100",
+    historyCompletedAt,
+    persistedCompletedAt: saleAfter.completedAt?.toISOString(),
+    correctionMutationRequests: primaryAudit.correctionMutationRequests.length,
+    auditEvents: 1,
+    shiftExpectedCashKgs: Number(shiftAfter.expectedCashKgs),
+    stockUnchanged: true,
+    cogsUnchanged: true,
+    refreshPassed: true,
+    reloginPassed: true,
+    inaccessibleReason: "SHIFT_CLOSED",
+  };
+  await input.testInfo.attach("cashier-payment-correction-evidence", {
+    body: JSON.stringify(evidence, null, 2),
+    contentType: "application/json",
+  });
+  console.info(`[POS-PAYMENT-CORRECTION-EVIDENCE] ${JSON.stringify(evidence)}`);
 };
 
 const openMobileSaleWithProduct = async (
@@ -154,12 +773,20 @@ test("BZR-REQ-0080/0081/0082 foreign-tenant register and shift remain undiscover
   assertCleanPosOperationsAudit(posOperationsAudit);
 });
 
-test("BZR-REQ-0079/0080/0081/0082 POS operations reconcile exactly and rapid submits settle once", async ({
+test("BZR-REQ-0079/0080/0081/0082 POS operations and cashier payment corrections reconcile exactly once", async ({
   page,
+  browser,
+  baseURL,
   posOperationsAudit,
-}) => {
+}, testInfo) => {
   test.setTimeout(240_000);
   await installOwnedIdempotencyKeys(page);
+  await seedPaymentCorrectionBrowserFixtures();
+  await runCashierPaymentCorrectionJourney({
+    browser,
+    baseOrigin: assertAuthenticatedE2EBaseUrl(baseURL),
+    testInfo,
+  });
 
   const [baselineShift, baselineSnapshot, baselineCost, baselineCustomer] = await Promise.all([
     prisma.registerShift.findUniqueOrThrow({ where: { id: fixture.shift.id } }),

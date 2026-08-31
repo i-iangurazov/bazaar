@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "artifactKind": "POS_PAYMENT_CORRECTION_QUALIFICATION",
+  "generatedAt": "2026-08-31T13:15:08Z",
+  "releaseBranch": "codex/bazaar-readiness-release-20260831",
+  "sourceCheckpoint": "19c62cd0d2435eac08d8dbd472e4c2b73b849138",
+  "rescueCommit": "e04df7c322c0da46665aa764e113423223222390",
+  "productionDataUsed": false,
+  "externalProvidersEnabled": false,
+  "browser": {
+    "mode": "production",
+    "database": "bazaar_hardening_agent4_platform",
+    "redisNamespace": "bazaar:test:authenticated-e2e:",
+    "result": "PASS",
+    "passed": 8,
+    "failed": 0,
+    "skipped": 0,
+    "case": "BZR-REQ-0079/0080/0081/0082 POS operations and cashier payment corrections reconcile exactly once",
+    "artifacts": [
+      {
+        "path": "test-results/release-pos-cashier.json",
+        "sha256": "8af3e536fffc627cb97b0eea3286bbd8de0226a86906afaa23eebc540978c8d2"
+      },
+      {
+        "path": "test-results/release-pos-cashier-junit.xml",
+        "sha256": "bba578ab87991789b459120e8aa0d34790fac5e725c729941b60d658e3845b32"
+      },
+      {
+        "path": "test-results/release-pos-cashier-html/index.html",
+        "sha256": "c95fff494c9a1cb3f68dfc7c9cb25f6c5766156242cb5a5b0229f50cf3d1e5c3"
+      }
+    ]
+  },
+  "serviceIntegration": {
+    "database": "bazaar_hardening_agent1_pos",
+    "result": "PASS",
+    "passed": 1,
+    "failed": 0,
+    "skippedByTargetFilter": 46,
+    "case": "corrects completed-sale tenders exactly once without changing stock, COGS, or sale time",
+    "artifacts": [
+      {
+        "path": "test-results/release-pos-service.json",
+        "sha256": "c9b2605c5991f1aafc75e747d7dc81d9cf251a94155bbc1c9559d903f8609b78"
+      },
+      {
+        "path": "test-results/release-pos-service-junit.xml",
+        "sha256": "965d8d174178aa2cc37cfb9b520f7baac3650e40e76332f9f91b7dbe9d3e194f"
+      }
+    ]
+  },
+  "acceptance": {
+    "eligibleReceipt": "S-006065",
+    "ineligibleReceipt": "S-006072",
+    "cashToTransfer": "PASS",
+    "transferToCash": "PASS",
+    "splitPayment": "PASS",
+    "paymentTotalEqualsSaleTotal": "PASS",
+    "stockUnchangedByCorrection": "PASS",
+    "cogsUnchangedByCorrection": "PASS",
+    "cashDrawerMovementCountUnchanged": "PASS",
+    "shiftExpectedCashAdjustedExactlyOnce": "PASS",
+    "receiptReportsCsvXlsxReconciled": "PASS",
+    "auditBeforeAfterActorReason": "PASS",
+    "cashierAuthorized": "PASS",
+    "staffForbidden403": "PASS",
+    "refreshPersistence": "PASS",
+    "reloginPersistence": "PASS",
+    "doubleSubmitIdempotency": "PASS",
+    "fiscalizedReceiptDirectMutationBlocked": "PASS",
+    "desktopViewport": "PASS",
+    "clientMobileViewport390x844": "PASS",
+    "canonicalCompletedAt": "PASS",
+    "mixedVersionNullableCostBasisRead": "PASS",
+    "physicalAndPreciseCostBasisReconciled": "PASS"
+  },
+  "observed": {
+    "actorRole": "CASHIER",
+    "beforePayment": "CASH 4100",
+    "afterPayment": "TRANSFER 4100",
+    "correctionMutationRequests": 1,
+    "auditEvents": 1,
+    "shiftExpectedCashKgs": 0,
+    "stockUnchanged": true,
+    "cogsUnchanged": true,
+    "historyCompletedAt": "2026-08-31T05:23:00.000Z",
+    "ineligibleReason": "SHIFT_CLOSED"
+  },
+  "releaseDecision": {
+    "posClientComplaint": "RESOLVED_AND_RETESTED",
+    "checkpointOnly": true,
+    "pushPermittedByThisArtifactAlone": false,
+    "deploymentPermittedByThisArtifactAlone": false,
+    "remainingRequiredGates": [
+      "mixed-version migration compatibility and rollback",
+      "final authenticated matrix 762/762",
+      "readiness reconciliation",
+      "final deterministic gates and production build",
+      "green CI and preview"
+    ]
+  }
+}

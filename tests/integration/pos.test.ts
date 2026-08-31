@@ -1,14 +1,18 @@
+import { promises as fs } from "node:fs";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   CashDrawerMovementType,
+  ExportType,
   PosPaymentMethod,
   Prisma,
   StockMovementType,
 } from "@prisma/client";
+import * as XLSX from "xlsx";
 
 import { buildPosPaymentSubmitPayload } from "@/lib/posSaleMath";
 import { fetchAllReceiptPages } from "@/components/pos/receipt-registry-export";
 import { prisma } from "@/server/db/prisma";
+import { runJob } from "@/server/jobs";
 import {
   connectorPullQueue,
   connectorPushResult,
@@ -4799,5 +4803,407 @@ describeDb("pos", () => {
       activeDraftAfterSuite: null,
     });
     console.info(`[B2-POS-EVIDENCE] ${JSON.stringify(evidence)}`);
+  });
+
+  it("corrects completed-sale tenders exactly once without changing stock, COGS, or sale time", async () => {
+    const { org, store, product, cashierUser, managerUser, staffUser, adminUser } = await seedBase({
+      plan: "BUSINESS",
+    });
+    await prisma.product.update({ where: { id: product.id }, data: { basePriceKgs: 4_100 } });
+    await adjustStock({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      storeId: store.id,
+      productId: product.id,
+      qtyDelta: 3,
+      unitCostKgs: 800,
+      reason: "seed POS payment correction fixtures",
+      idempotencyKey: "pos-payment-correction-stock-1",
+      requestId: "pos-payment-correction-stock-1",
+    });
+
+    const [eligibleRegister, ineligibleRegister] = await Promise.all([
+      prisma.posRegister.create({
+        data: {
+          organizationId: org.id,
+          storeId: store.id,
+          name: "Payment correction register",
+          code: "PAY-CORR",
+        },
+      }),
+      prisma.posRegister.create({
+        data: {
+          organizationId: org.id,
+          storeId: store.id,
+          name: "Closed fiscal register",
+          code: "PAY-LOCKED",
+        },
+      }),
+    ]);
+    const cashierCaller = createTestCaller({
+      id: cashierUser.id,
+      email: cashierUser.email,
+      role: cashierUser.role,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+    const managerCaller = createTestCaller({
+      id: managerUser.id,
+      email: managerUser.email,
+      role: managerUser.role,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+    const staffCaller = createTestCaller({
+      id: staffUser.id,
+      email: staffUser.email,
+      role: staffUser.role,
+      organizationId: org.id,
+      isOrgOwner: false,
+    });
+
+    const eligibleShift = await cashierCaller.pos.shifts.open({
+      registerId: eligibleRegister.id,
+      openingCashKgs: 1_000,
+      idempotencyKey: "pos-payment-correction-open-eligible",
+    });
+    const eligibleDraft = await cashierCaller.pos.sales.createDraft({
+      registerId: eligibleRegister.id,
+    });
+    await cashierCaller.pos.sales.addLine({
+      saleId: eligibleDraft.id,
+      productId: product.id,
+      qty: 1,
+    });
+    await cashierCaller.pos.sales.complete({
+      saleId: eligibleDraft.id,
+      payments: [{ method: PosPaymentMethod.CASH, amountKgs: 4_100 }],
+      idempotencyKey: "pos-payment-correction-complete-eligible",
+    });
+    const fixtureCreatedAt = new Date("2026-08-31T02:08:00.000Z");
+    const fixtureCompletedAt = new Date("2026-08-31T05:23:00.000Z");
+    await prisma.customerOrder.update({
+      where: { id: eligibleDraft.id },
+      data: {
+        number: "S-006065",
+        createdAt: fixtureCreatedAt,
+        completedAt: fixtureCompletedAt,
+      },
+    });
+
+    const before = await prisma.customerOrder.findUniqueOrThrow({
+      where: { id: eligibleDraft.id },
+      include: { lines: true, payments: true },
+    });
+    const [stockBefore, costBefore, movementsBefore, cashMovementsBefore, reportBefore] =
+      await Promise.all([
+        prisma.inventorySnapshot.findUniqueOrThrow({
+          where: {
+            storeId_productId_variantKey: {
+              storeId: store.id,
+              productId: product.id,
+              variantKey: "BASE",
+            },
+          },
+        }),
+        prisma.productCost.findUnique({
+          where: {
+            organizationId_productId_variantKey: {
+              organizationId: org.id,
+              productId: product.id,
+              variantKey: "BASE",
+            },
+          },
+        }),
+        prisma.stockMovement.findMany({
+          where: { referenceType: "CustomerOrder", referenceId: eligibleDraft.id },
+          orderBy: { id: "asc" },
+        }),
+        prisma.cashDrawerMovement.count({ where: { shiftId: eligibleShift.id } }),
+        cashierCaller.pos.shifts.xReport({ shiftId: eligibleShift.id }),
+      ]);
+    expect(reportBefore.summary.expectedCashKgs).toBe(5_100);
+    expect(reportBefore.paymentsByMethod.CASH.salesKgs).toBe(4_100);
+
+    const cashToTransfer = await cashierCaller.pos.sales.correctPayments({
+      saleId: eligibleDraft.id,
+      payments: [{ method: PosPaymentMethod.TRANSFER, amountKgs: 4_100 }],
+      reason: "Кассир выбрал наличные вместо перевода",
+      idempotencyKey: "pos-payment-correction-cash-transfer",
+    });
+    expect(cashToTransfer.cashDeltaKgs).toBe(-4_100);
+    const afterCashToTransfer = await cashierCaller.pos.shifts.xReport({
+      shiftId: eligibleShift.id,
+    });
+    expect(afterCashToTransfer.summary.expectedCashKgs).toBe(1_000);
+    expect(afterCashToTransfer.paymentsByMethod.CASH.salesKgs).toBe(0);
+    expect(afterCashToTransfer.paymentsByMethod.TRANSFER.salesKgs).toBe(4_100);
+
+    const transferToCash = await cashierCaller.pos.sales.correctPayments({
+      saleId: eligibleDraft.id,
+      payments: [{ method: PosPaymentMethod.CASH, amountKgs: 4_100 }],
+      reason: "Клиент фактически оплатил наличными",
+      idempotencyKey: "pos-payment-correction-transfer-cash",
+    });
+    expect(transferToCash.cashDeltaKgs).toBe(4_100);
+    const afterTransferToCash = await cashierCaller.pos.shifts.xReport({
+      shiftId: eligibleShift.id,
+    });
+    expect(afterTransferToCash.summary.expectedCashKgs).toBe(5_100);
+
+    const splitInput = {
+      saleId: eligibleDraft.id,
+      payments: [
+        { method: PosPaymentMethod.CASH, amountKgs: 1_000 },
+        { method: PosPaymentMethod.TRANSFER, amountKgs: 3_100 },
+      ],
+      reason: "Разделённая оплата была записана одним способом",
+      idempotencyKey: "pos-payment-correction-split-once",
+    };
+    const splitCorrection = await cashierCaller.pos.sales.correctPayments(splitInput);
+    const splitReplay = await cashierCaller.pos.sales.correctPayments(splitInput);
+    expect(splitCorrection.cashDeltaKgs).toBe(-3_100);
+    expect(splitReplay.replayed).toBe(true);
+    await expect(
+      cashierCaller.pos.sales.correctPayments({
+        ...splitInput,
+        payments: [{ method: PosPaymentMethod.CARD, amountKgs: 4_100 }],
+      }),
+    ).rejects.toMatchObject({ code: "CONFLICT", message: "idempotencyKeyPayloadMismatch" });
+
+    await expect(
+      cashierCaller.pos.sales.correctPayments({
+        saleId: eligibleDraft.id,
+        payments: [{ method: PosPaymentMethod.CASH, amountKgs: 4_099 }],
+        reason: "Некорректная контрольная сумма",
+        idempotencyKey: "pos-payment-correction-wrong-total",
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST", message: "posPaymentCorrectionTotalMismatch" });
+    await expect(
+      staffCaller.pos.sales.correctPayments({
+        saleId: eligibleDraft.id,
+        payments: [{ method: PosPaymentMethod.CARD, amountKgs: 4_100 }],
+        reason: "Недостаточная роль",
+        idempotencyKey: "pos-payment-correction-staff-forbidden",
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN", message: "posPaymentCorrectionRoleRequired" });
+
+    const [after, stockAfter, costAfter, movementsAfter, cashMovementsAfter, splitReport] =
+      await Promise.all([
+        prisma.customerOrder.findUniqueOrThrow({
+          where: { id: eligibleDraft.id },
+          include: { lines: true, payments: true },
+        }),
+        prisma.inventorySnapshot.findUniqueOrThrow({
+          where: {
+            storeId_productId_variantKey: {
+              storeId: store.id,
+              productId: product.id,
+              variantKey: "BASE",
+            },
+          },
+        }),
+        prisma.productCost.findUnique({
+          where: {
+            organizationId_productId_variantKey: {
+              organizationId: org.id,
+              productId: product.id,
+              variantKey: "BASE",
+            },
+          },
+        }),
+        prisma.stockMovement.findMany({
+          where: { referenceType: "CustomerOrder", referenceId: eligibleDraft.id },
+          orderBy: { id: "asc" },
+        }),
+        prisma.cashDrawerMovement.count({ where: { shiftId: eligibleShift.id } }),
+        cashierCaller.pos.shifts.xReport({ shiftId: eligibleShift.id }),
+      ]);
+    expect(after.completedAt?.toISOString()).toBe(before.completedAt?.toISOString());
+    expect(after.totalKgs.toString()).toBe(before.totalKgs.toString());
+    expect(after.lines).toEqual(before.lines);
+    expect(stockAfter).toEqual(stockBefore);
+    expect(costAfter).toEqual(costBefore);
+    expect(movementsAfter).toEqual(movementsBefore);
+    expect(cashMovementsAfter).toBe(cashMovementsBefore);
+    expect(after.payments).toHaveLength(2);
+    expect(
+      after.payments
+        .map((payment) => [payment.method, Number(payment.amountKgs)] as const)
+        .sort(([left], [right]) => left.localeCompare(right)),
+    ).toEqual([
+      [PosPaymentMethod.CASH, 1_000],
+      [PosPaymentMethod.TRANSFER, 3_100],
+    ]);
+    expect(splitReport.summary.expectedCashKgs).toBe(2_000);
+    expect(splitReport.paymentsByMethod.CASH.salesKgs).toBe(1_000);
+    expect(splitReport.paymentsByMethod.TRANSFER.salesKgs).toBe(3_100);
+
+    const [detail, history, registry, correctionAudits] = await Promise.all([
+      cashierCaller.pos.sales.get({ saleId: eligibleDraft.id }),
+      cashierCaller.pos.sales.list({
+        registerId: eligibleRegister.id,
+        statuses: ["COMPLETED"],
+        dateFrom: new Date("2026-08-31T00:00:00.000Z"),
+        dateTo: new Date("2026-08-31T23:59:59.999Z"),
+        page: 1,
+        pageSize: 25,
+      }),
+      managerCaller.pos.receipts({
+        storeId: store.id,
+        statuses: ["COMPLETED"],
+        page: 1,
+        pageSize: 25,
+      }),
+      prisma.auditLog.findMany({
+        where: {
+          action: "POS_PAYMENT_CORRECTION",
+          entity: "CustomerOrder",
+          entityId: eligibleDraft.id,
+        },
+        orderBy: { createdAt: "asc" },
+      }),
+    ]);
+    expect(detail?.effectivePayments).toEqual([
+      { method: PosPaymentMethod.CASH, amountKgs: 1_000 },
+      { method: PosPaymentMethod.TRANSFER, amountKgs: 3_100 },
+    ]);
+    expect(
+      history.items.find((item) => item.id === eligibleDraft.id)?.occurredAt.toISOString(),
+    ).toBe(fixtureCompletedAt.toISOString());
+    expect(detail?.paymentCorrections).toHaveLength(3);
+    expect(correctionAudits).toHaveLength(3);
+    const splitAudit = correctionAudits[2];
+    const splitAuditBefore = splitAudit?.before as Prisma.JsonObject;
+    const splitAuditAfter = splitAudit?.after as Prisma.JsonObject;
+    expect(splitAudit?.actorId).toBe(cashierUser.id);
+    expect(splitAuditBefore.storeId).toBe(store.id);
+    expect(splitAuditBefore.shiftId).toBe(eligibleShift.id);
+    expect(Array.isArray(splitAuditBefore.payments)).toBe(true);
+    expect((splitAuditBefore.payments as Prisma.JsonArray)[0]).toMatchObject({
+      method: PosPaymentMethod.CASH,
+      amountKgs: 4_100,
+      createdById: cashierUser.id,
+    });
+    expect(splitAuditAfter).toMatchObject({
+      storeId: store.id,
+      shiftId: eligibleShift.id,
+      saleNumber: "S-006065",
+      reason: "Разделённая оплата была записана одним способом",
+      correctedById: cashierUser.id,
+      idempotencyKey: "pos-payment-correction-split-once",
+      cashDeltaKgs: -3_100,
+    });
+    expect(splitAuditAfter.payments as Prisma.JsonArray).toHaveLength(2);
+    const registryReceipt = registry.items.find((item) => item.id === eligibleDraft.id);
+    expect(registryReceipt?.paymentBreakdown).toMatchObject({
+      CASH: 1_000,
+      TRANSFER: 3_100,
+      CARD: 0,
+      OTHER: 0,
+    });
+    expect(registryReceipt?.completedAt?.toISOString()).toBe(before.completedAt?.toISOString());
+
+    const exportPeriod = {
+      periodStart: new Date("2026-08-31T00:00:00.000Z"),
+      periodEnd: new Date("2026-08-31T23:59:59.999Z"),
+    };
+    const csvExport = await managerCaller.exports.create({
+      storeId: store.id,
+      type: ExportType.RECEIPTS_REGISTRY,
+      format: "csv",
+      ...exportPeriod,
+    });
+    await runJob("export-job", { jobId: csvExport.id });
+    const csvJob = await managerCaller.exports.get({ jobId: csvExport.id });
+    expect(csvJob?.status).toBe("DONE");
+    expect(csvJob?.storagePath).toBeTruthy();
+    const csv = await fs.readFile(csvJob?.storagePath ?? "", "utf8");
+    const csvReceiptRow = csv.split(/\r?\n/).find((line) => line.includes("S-006065"));
+    expect(csvReceiptRow).toContain(fixtureCompletedAt.toISOString());
+    expect(csvReceiptRow).toContain(";1000;0;3100;0;");
+
+    const xlsxExport = await managerCaller.exports.create({
+      storeId: store.id,
+      type: ExportType.RECEIPTS_REGISTRY,
+      format: "xlsx",
+      ...exportPeriod,
+    });
+    await runJob("export-job", { jobId: xlsxExport.id });
+    const xlsxJob = await managerCaller.exports.get({ jobId: xlsxExport.id });
+    expect(xlsxJob?.status).toBe("DONE");
+    expect(xlsxJob?.storagePath).toBeTruthy();
+    const workbook = XLSX.read(await fs.readFile(xlsxJob?.storagePath ?? ""), { type: "buffer" });
+    const worksheet = workbook.Sheets[workbook.SheetNames[0] ?? ""];
+    const xlsxRows = XLSX.utils.sheet_to_json<Record<string, string | number>>(worksheet);
+    const xlsxReceiptRow = xlsxRows.find((row) => row["Номер чека"] === "S-006065");
+    expect(xlsxReceiptRow).toMatchObject({
+      Создано: fixtureCompletedAt.toISOString(),
+      Завершено: fixtureCompletedAt.toISOString(),
+    });
+    expect(Number(xlsxReceiptRow?.["Наличные KGS"])).toBe(1_000);
+    expect(Number(xlsxReceiptRow?.["Перевод KGS"])).toBe(3_100);
+
+    await prisma.product.update({ where: { id: product.id }, data: { basePriceKgs: 66_390 } });
+    const ineligibleShift = await cashierCaller.pos.shifts.open({
+      registerId: ineligibleRegister.id,
+      openingCashKgs: 0,
+      idempotencyKey: "pos-payment-correction-open-ineligible",
+    });
+    const ineligibleDraft = await cashierCaller.pos.sales.createDraft({
+      registerId: ineligibleRegister.id,
+    });
+    await cashierCaller.pos.sales.addLine({
+      saleId: ineligibleDraft.id,
+      productId: product.id,
+      qty: 1,
+    });
+    await cashierCaller.pos.sales.complete({
+      saleId: ineligibleDraft.id,
+      payments: [{ method: PosPaymentMethod.CASH, amountKgs: 66_390 }],
+      idempotencyKey: "pos-payment-correction-complete-ineligible",
+    });
+    await prisma.customerOrder.update({
+      where: { id: ineligibleDraft.id },
+      data: { number: "S-006072", kkmStatus: "SENT" },
+    });
+    await prisma.fiscalReceipt.create({
+      data: {
+        organizationId: org.id,
+        storeId: store.id,
+        customerOrderId: ineligibleDraft.id,
+        status: "SENT",
+        mode: "EXPORT_ONLY",
+        idempotencyKey: "pos-payment-correction-fiscal-fixture",
+        payloadJson: { receiptId: "S-006072" },
+        fiscalizedAt: new Date(),
+      },
+    });
+    await expect(
+      cashierCaller.pos.sales.correctPayments({
+        saleId: ineligibleDraft.id,
+        payments: [{ method: PosPaymentMethod.TRANSFER, amountKgs: 66_390 }],
+        reason: "Прямая мутация фискального чека запрещена",
+        idempotencyKey: "pos-payment-correction-fiscal-block",
+      }),
+    ).rejects.toMatchObject({ code: "CONFLICT", message: "posPaymentCorrectionFiscalized" });
+
+    await managerCaller.pos.shifts.close({
+      shiftId: ineligibleShift.id,
+      closingCashCountedKgs: 66_390,
+      idempotencyKey: "pos-payment-correction-close-ineligible",
+    });
+    const lockedHistory = await cashierCaller.pos.sales.list({
+      registerId: ineligibleRegister.id,
+      statuses: ["COMPLETED"],
+      page: 1,
+      pageSize: 25,
+    });
+    expect(lockedHistory.items).toHaveLength(1);
+    expect(lockedHistory.items[0]?.number).toBe("S-006072");
+    expect(lockedHistory.items[0]?.paymentCorrectionEligibility).toEqual({
+      eligible: false,
+      reason: "SHIFT_CLOSED",
+    });
   });
 });

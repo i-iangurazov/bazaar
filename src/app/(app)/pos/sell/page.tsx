@@ -46,6 +46,7 @@ import {
 } from "@/components/icons";
 import { ScanInput } from "@/components/ScanInput";
 import { ContextualHelpButton } from "@/components/help/ContextualHelpButton";
+import { PosPaymentCorrectionModal } from "@/components/pos/payment-correction-modal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -579,6 +580,7 @@ const PosSellPage = () => {
   const [journalDetailSaleId, setJournalDetailSaleId] = useState<string | null>(null);
   const [journalReturnSaleId, setJournalReturnSaleId] = useState<string | null>(null);
   const [journalEditSaleId, setJournalEditSaleId] = useState<string | null>(null);
+  const [paymentCorrectionSaleId, setPaymentCorrectionSaleId] = useState<string | null>(null);
   const [journalReturnQtyByLine, setJournalReturnQtyByLine] = useState<Record<string, string>>({});
   const [journalRefundMethod, setJournalRefundMethod] = useState<PosPaymentMethod>(
     PosPaymentMethod.CASH,
@@ -710,12 +712,11 @@ const PosSellPage = () => {
       return;
     }
     receiptEditDeepLinkRef.current = deepLinkKey;
-    completedSaleEditHydratedRef.current = null;
-    completedSaleEditIdempotencyKeyRef.current = createIdempotencyKey();
     setReceiptJournalOpen(false);
     setJournalDetailSaleId(null);
     setJournalReturnSaleId(null);
-    setJournalEditSaleId(receiptId);
+    setJournalEditSaleId(null);
+    setPaymentCorrectionSaleId(receiptId);
   }, [searchParams]);
 
   useEffect(() => {
@@ -1586,7 +1587,8 @@ const PosSellPage = () => {
     const deepLinkedEditSaleId = receiptEditDeepLinkRef.current?.startsWith("edit:")
       ? receiptEditDeepLinkRef.current.slice("edit:".length)
       : null;
-    setJournalEditSaleId(deepLinkedEditSaleId);
+    setJournalEditSaleId(null);
+    setPaymentCorrectionSaleId(deepLinkedEditSaleId);
     completedSaleEditHydratedRef.current = null;
     completedSaleEditIdempotencyKeyRef.current = null;
     setOptimisticSaleLines(null);
@@ -4013,24 +4015,10 @@ const PosSellPage = () => {
                   return;
                 }
                 if (isCompletedReceipt) {
-                  void trpcUtils.pos.sales.get.invalidate({ saleId: saleItem.id });
-                  clearActiveDraftCache();
-                  setLastCompletedSale(null);
-                  setAutoReceiptStatus("idle");
-                  setOptimisticSaleLines(null);
-                  clearCartRuntimeSyncState();
-                  setLineInputDrafts({});
-                  setPayments([createDefaultPosPaymentDraft()]);
-                  setDiscountDraft("");
-                  setSelectedCustomer(null);
-                  setMobileComment("");
-                  paymentAutoFillRef.current = { saleId: null, totalKgs: null };
-                  completedSaleEditHydratedRef.current = null;
-                  completedSaleEditIdempotencyKeyRef.current = createIdempotencyKey();
                   setJournalDetailSaleId(null);
                   setJournalReturnSaleId(null);
-                  setJournalEditSaleId(saleItem.id);
-                  setSaleId(saleItem.id);
+                  setJournalEditSaleId(null);
+                  setPaymentCorrectionSaleId(saleItem.id);
                   setReceiptJournalOpen(false);
                   return;
                 }
@@ -4057,12 +4045,26 @@ const PosSellPage = () => {
                 setSaleId(saleItem.id);
                 setReceiptJournalOpen(false);
               }}
-              disabled={!isDraftReceipt && !isCompletedReceipt}
+              disabled={
+                (!isDraftReceipt && !isCompletedReceipt) ||
+                (isCompletedReceipt && !saleItem.paymentCorrectionEligibility.eligible)
+              }
+              aria-describedby={
+                isCompletedReceipt ? `journal-payment-correction-reason-${saleItem.id}` : undefined
+              }
             >
               <EditIcon className="h-3.5 w-3.5" aria-hidden />
-              {t("sell.editReceipt")}
+              {isCompletedReceipt ? t("sell.paymentCorrection.title") : t("sell.editReceipt")}
             </Button>
           )}
+          {isCompletedReceipt && !saleItem.paymentCorrectionEligibility.eligible ? (
+            <span
+              id={`journal-payment-correction-reason-${saleItem.id}`}
+              className="max-w-64 text-xs text-muted-foreground"
+            >
+              {t(`sell.paymentCorrection.reasons.${saleItem.paymentCorrectionEligibility.reason}`)}
+            </span>
+          ) : null}
           <Button
             type="button"
             variant="secondary"
@@ -4311,7 +4313,9 @@ const PosSellPage = () => {
                               ) : null}
                             </div>
                           </TableCell>
-                          <TableCell>{formatDateTime(saleItem.createdAt, locale)}</TableCell>
+                          <TableCell>
+                            {formatDateTime(saleItem.completedAt ?? saleItem.createdAt, locale)}
+                          </TableCell>
                           <TableCell>
                             {saleItem.customerName ||
                               saleItem.customerPhone ||
@@ -4369,7 +4373,7 @@ const PosSellPage = () => {
                         <div className="min-w-0">
                           <p className="font-semibold text-foreground">{saleItem.number}</p>
                           <p className="text-xs text-muted-foreground">
-                            {formatDateTime(saleItem.createdAt, locale)}
+                            {formatDateTime(saleItem.completedAt ?? saleItem.createdAt, locale)}
                           </p>
                         </div>
                         <p className="shrink-0 text-sm font-semibold">
@@ -4491,7 +4495,10 @@ const PosSellPage = () => {
               <p className="text-xs uppercase text-muted-foreground">{t("history.store")}</p>
               <p className="mt-1 font-medium">{journalSelectedSale.store.name}</p>
               <p className="text-sm text-muted-foreground">
-                {formatDateTime(journalSelectedSale.createdAt, locale)}
+                {formatDateTime(
+                  journalSelectedSale.completedAt ?? journalSelectedSale.createdAt,
+                  locale,
+                )}
               </p>
             </div>
           </div>
@@ -5991,7 +5998,9 @@ const PosSellPage = () => {
           null)
         : null;
       const documentDate = new Date(
-        (isCompletedSaleEdit ? journalSelectedSale?.createdAt : sale?.createdAt) ?? Date.now(),
+        (isCompletedSaleEdit
+          ? (journalSelectedSale?.completedAt ?? journalSelectedSale?.createdAt)
+          : sale?.createdAt) ?? Date.now(),
       );
       const documentDateLabel = new Intl.DateTimeFormat(locale, {
         day: "numeric",
@@ -8426,7 +8435,27 @@ const PosSellPage = () => {
     return <div className="min-h-screen bg-background" />;
   }
 
-  return isPhoneScreen ? MobilePosView() : DesktopPosSaleView();
+  return (
+    <>
+      {isPhoneScreen ? MobilePosView() : DesktopPosSaleView()}
+      <PosPaymentCorrectionModal
+        saleId={paymentCorrectionSaleId}
+        onOpenChange={(open) => {
+          if (open) {
+            return;
+          }
+          setPaymentCorrectionSaleId(null);
+          if (searchParams.get("mode") === "edit") {
+            const nextParams = new URLSearchParams(searchParams.toString());
+            nextParams.delete("mode");
+            nextParams.delete("receiptId");
+            router.replace(`/pos/sell${nextParams.size ? `?${nextParams.toString()}` : ""}`);
+          }
+        }}
+        onCorrected={() => journalSalesQuery.refetch().then(() => undefined)}
+      />
+    </>
+  );
 };
 
 export default PosSellPage;

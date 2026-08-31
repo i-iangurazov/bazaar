@@ -901,7 +901,8 @@ const buildReceiptsRegistryRows = async (
       organizationId,
       storeId: store.id,
       isPosSale: true,
-      createdAt: { gte: periodStart, lte: periodEnd },
+      status: CustomerOrderStatus.COMPLETED,
+      completedAt: { gte: periodStart, lte: periodEnd },
     },
     include: {
       register: { select: { code: true, name: true } },
@@ -922,7 +923,7 @@ const buildReceiptsRegistryRows = async (
         },
       },
     },
-    orderBy: { createdAt: "desc" },
+    orderBy: { completedAt: "desc" },
   });
 
   return receipts.map((receipt) => {
@@ -952,7 +953,7 @@ const buildReceiptsRegistryRows = async (
       storeCode: store.code,
       storeName: store.name,
       receiptNumber: receipt.number,
-      createdAt: receipt.createdAt.toISOString(),
+      createdAt: (receipt.completedAt ?? receipt.createdAt).toISOString(),
       completedAt: receipt.completedAt ? receipt.completedAt.toISOString() : "",
       status: receipt.status,
       registerCode: receipt.register?.code ?? "",
