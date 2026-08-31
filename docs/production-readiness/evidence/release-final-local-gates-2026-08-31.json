@@ -1,0 +1,191 @@
+{
+  "schemaVersion": 1,
+  "artifactKind": "FINAL_LOCAL_RELEASE_GATE_RECONCILIATION",
+  "generatedAt": "2026-08-31T15:44:23Z",
+  "releaseBranch": "codex/bazaar-readiness-release-20260831",
+  "finalHead": "323579dac57847b6f390c9c9b108851e4fd95671",
+  "finalCommittedTree": "cc397fc5e7a316fec6c7a7d88cd70aaa5d9ca02b",
+  "finalProductionRuntimeCheckpoint": "1a2f795e40ca3a1aafe4b22662eb6f63b7bd01d0",
+  "finalHeadDeltaFromRuntime": "Test-only consistent-type-import correction; no application runtime source changed after the green production build and browser shard.",
+  "rescueCommit": "e04df7c322c0da46665aa764e113423223222390",
+  "productionRollbackPoint": "7db455397eb38e9bcaa09bda5acc951964df5ab2",
+  "productionDataUsed": false,
+  "externalProvidersEnabled": false,
+  "gates": {
+    "frozenLockfileInstall": {
+      "result": "PASS",
+      "source": "Retained release deterministic gate",
+      "dependencyChangesAfterEvidence": 0
+    },
+    "secretScan": {
+      "result": "PASS",
+      "scope": "Final changed source, tests, manifests, evidence, and tracker",
+      "patterns": [
+        "AWS access key",
+        "private key header",
+        "live Stripe key",
+        "GitHub token",
+        "Slack token"
+      ],
+      "matches": 0
+    },
+    "gitDiffCheck": {
+      "command": "git diff --check",
+      "result": "PASS",
+      "exitCode": 0
+    },
+    "changedFileFormatting": {
+      "command": "pnpm exec prettier --check <final changed source, test, manifest, evidence and tracker files>",
+      "result": "PASS",
+      "exitCode": 0
+    },
+    "lint": {
+      "command": "pnpm lint",
+      "result": "PASS",
+      "exitCode": 0,
+      "rerunAfterCorrection": true,
+      "correction": "One migration-backfill test import was marked type-only; targeted 4/4 and full lint then passed."
+    },
+    "typescript": {
+      "command": "pnpm typecheck",
+      "result": "PASS",
+      "exitCode": 0
+    },
+    "localization": {
+      "command": "pnpm i18n:check",
+      "result": "PASS",
+      "exitCode": 0,
+      "supportedLocales": ["ru", "kg", "en"]
+    },
+    "deterministic": {
+      "retainedFull": {
+        "passed": 1688,
+        "failed": 0,
+        "skipped": 0,
+        "artifact": "test-results/release-deterministic-full-final.xml",
+        "sha256": "534815935b538376a98fb3768e93efe0b3bd7490c036f421599705b8a7849220"
+      },
+      "changedMMarketIntegration": {
+        "command": "pnpm exec vitest run tests/integration/m-market.test.ts",
+        "passed": 20,
+        "failed": 0,
+        "skipped": 0,
+        "database": "bazaar_hardening_agent3_commerce"
+      },
+      "changedBackfillUnit": {
+        "command": "pnpm exec vitest run tests/unit/inventory-valuation-backfill.test.ts",
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0
+      },
+      "operationsSettingsSource": {
+        "command": "pnpm exec vitest run tests/unit/authenticated-operations-settings-source.test.ts",
+        "passed": 6,
+        "failed": 0,
+        "skipped": 0
+      }
+    },
+    "dependencyAuditProduction": {
+      "command": "pnpm audit --prod --audit-level low --json",
+      "result": "PASS",
+      "dependencies": 434,
+      "vulnerabilities": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 0,
+        "critical": 0
+      },
+      "artifact": "test-results/release-audit-prod.json",
+      "sha256": "0bdc62ae18de687628de995d0a8ec5493eb70748bb29113cdca7d9174272b2e6"
+    },
+    "dependencyAuditFull": {
+      "command": "pnpm audit --audit-level low --json",
+      "result": "PASS",
+      "dependencies": 1042,
+      "vulnerabilities": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 0,
+        "critical": 0
+      },
+      "artifact": "test-results/release-audit-full.json",
+      "sha256": "0254deb82366fe45c9b566ee38eb3429b883a21ae594ab6f1cfee04155527d53"
+    },
+    "productionBuild": {
+      "command": "pnpm build",
+      "result": "PASS",
+      "staticPagesGenerated": 120,
+      "runtimeCheckpoint": "1a2f795e40ca3a1aafe4b22662eb6f63b7bd01d0"
+    },
+    "publicBrowserMatrix": {
+      "result": "PASS",
+      "passed": 189,
+      "failed": 0,
+      "skipped": 0,
+      "artifact": "test-results/release-public-matrix.json",
+      "sha256": "5b283a5ac7aa65396b3abb53e776abbcc95fc2e8d38bf39f00cfeaafbf270be4"
+    },
+    "authenticatedBrowserMatrix": {
+      "currentExactCaseIdentities": 762,
+      "identitiesWithRetainedPassEvidence": 762,
+      "identitiesWithoutPassEvidence": 0,
+      "result": "PASS_BY_EXACT_IDENTITY_RECONCILIATION",
+      "singleUninterruptedRun": {
+        "passed": 753,
+        "failedFixtureOrOracleCases": 5,
+        "notRunAfterFailureLimit": 4,
+        "clean762Pass": false
+      },
+      "affectedCaseReruns": "PASS",
+      "finalProcurementShard": "14/14 PASS",
+      "finalOperationsSettingsShard": "11/11 PASS",
+      "failedProductionBehaviorRelabelled": 0,
+      "artifact": "docs/production-readiness/evidence/release-final-authenticated-reconciliation-2026-08-31.json"
+    },
+    "posPaymentCorrection": {
+      "result": "PASS",
+      "artifact": "docs/production-readiness/evidence/release-pos-payment-correction-2026-08-31.json",
+      "sha256": "0180f4468215b94003c19dc6de38d87d3a9c9894388cafc9a9e5045a8469f3cc"
+    },
+    "mixedVersionMigration": {
+      "result": "PASS",
+      "oldBeforeExpand": "129/129",
+      "oldAfterExpand": "129/129",
+      "newReconciliation": "134/134",
+      "backfill": "4/4",
+      "applicationRollback": "PASS",
+      "futureContractDeployed": false,
+      "artifact": "docs/production-readiness/evidence/release-mixed-version-migration-2026-08-31.json",
+      "sha256": "be6ac406d2e01280068d9443910b32f1935ce72d274eb9de22fe195a3f172161"
+    }
+  },
+  "readiness": {
+    "tracker": "docs/production-readiness/readiness-release-final-local-gates-2026-08-31.json",
+    "trackerSha256": "72cfe419f0d36d842c376ce2612c3f64993c2e9c9b6ce3e9a6b2fdc108cd160a",
+    "officialPercent": 95.6,
+    "applicationOwnedPercent": 97.2,
+    "execution": "225/230 (97.8%)",
+    "verifiedPass": "209/230 (90.9%)",
+    "criticalWorkflowVerifiedPass": "64/67 (95.5%)",
+    "requirements": {
+      "PASS": 209,
+      "PARTIAL": 16,
+      "FAIL": 0,
+      "BLOCKED": 5
+    },
+    "defects": {
+      "BLOCKER": 0,
+      "CRITICAL": 0,
+      "HIGH": 0,
+      "MEDIUM": 6,
+      "LOW": 2
+    }
+  },
+  "localReleaseGate": "PASS",
+  "productionAuthorityGate": {
+    "result": "NOT_YET_EVALUATED",
+    "requiredBeforeProductionDatabaseChange": "Confirm production PITR or verified backup and observe production table size/locking before expand migration."
+  }
+}
