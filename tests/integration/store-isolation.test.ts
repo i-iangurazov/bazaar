@@ -14,6 +14,7 @@ import { createProduct } from "@/server/services/products";
 import { adjustStock, postStockReceiving } from "@/server/services/inventory";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 import { createTestCaller } from "../helpers/context";
+import { withRecordedSalesProjection } from "../helpers/recordedSalesProjection";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
 
@@ -769,15 +770,17 @@ describeDb("store isolation", () => {
     });
 
     const shrinkage = await managerCaller.reports.shrinkage({ days: 30 });
-    const topProducts = await managerCaller.analytics.topProducts({
-      rangeDays: 30,
-      metric: "units",
-    });
+    const topProducts = await withRecordedSalesProjection([
+      { organizationId: org.id, storeId: store.id, productId: product.id,
+        sku: product.sku, name: product.name, qty: 3, revenueKgs: 90, costKgs: 30 },
+      { organizationId: org.id, storeId: storeB.id, productId: storeBProduct.id,
+        sku: storeBProduct.sku, name: storeBProduct.name, qty: 999, revenueKgs: 9999, costKgs: 1 },
+    ], () => managerCaller.analytics.topProducts({ rangeDays: 30, metric: "units" }));
     const exportJobs = await managerCaller.exports.list();
     const storeBExport = await managerCaller.exports.get({ jobId: storeBJob.id });
 
     expect(shrinkage.items.map((item) => item.storeId)).toEqual([store.id]);
-    expect(topProducts.items.map((item) => item.name)).toContain(product.name);
+    expect(topProducts.items).toEqual([{ sku: product.sku, name: product.name, value: 3 }]);
     expect(topProducts.items.map((item) => item.name)).not.toContain(storeBProduct.name);
     expect(exportJobs.map((job) => job.id)).toContain(storeAJob.id);
     expect(exportJobs.map((job) => job.id)).not.toContain(storeBJob.id);

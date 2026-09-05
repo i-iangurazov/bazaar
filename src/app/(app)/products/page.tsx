@@ -106,6 +106,7 @@ import {
 } from "@/lib/labelPrintFlow";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
+import { updateSelectedProductArchiveState } from "@/lib/productBulkActions";
 import { normalizeCurrencyCode } from "@/lib/currency";
 import { formatCurrency } from "@/lib/i18nFormat";
 import { defaultLocale, normalizeLocale } from "@/lib/locales";
@@ -346,6 +347,9 @@ const ProductsPage = () => {
   const [bulkStorePriceOpen, setBulkStorePriceOpen] = useState(false);
   const [catalogDiscountMode, setCatalogDiscountMode] = useState<"APPLY" | "REMOVE" | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const pendingBulkConfirmationRef = useRef<(() => void) | null>(null);
+  const bulkArchiveRunningRef = useRef(false);
+  const [bulkArchiveRunning, setBulkArchiveRunning] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<DownloadFormat>("csv");
   const [selectedExportColumns, setSelectedExportColumns] = useState<ProductExportColumnKey[]>([
@@ -645,7 +649,7 @@ const ProductsPage = () => {
     enabled: productsTableStateReady,
     keepPreviousData: true,
   });
-  const storeId = rawStoreId || productsBootstrapQuery.data?.selectedStoreId || "";
+  const storeId = rawStoreId === "all" ? "" : rawStoreId || productsBootstrapQuery.data?.selectedStoreId || "";
   const stores = useMemo(
     () => productsBootstrapQuery.data?.stores ?? [],
     [productsBootstrapQuery.data?.stores],
@@ -1587,8 +1591,9 @@ const ProductsPage = () => {
     () => products.filter((product) => selectedIds.has(product.id)),
     [products, selectedIds],
   );
-  const hasActiveSelected = selectedProducts.some((product) => !product.isDeleted);
-  const hasArchivedSelected = selectedProducts.some((product) => product.isDeleted);
+  const hasOffPageSelected = selectedProducts.length < selectedList.length;
+  const hasActiveSelected = hasOffPageSelected || selectedProducts.some((product) => !product.isDeleted);
+  const hasArchivedSelected = hasOffPageSelected || selectedProducts.some((product) => product.isDeleted);
   const bulkCategorySelectValue =
     bulkCategoryMode === "custom"
       ? customCategorySelectValue
@@ -2883,67 +2888,52 @@ const ProductsPage = () => {
     }
   };
 
-  const handleBulkArchive = async () => {
-    if (!selectedList.length || !hasActiveSelected) {
-      return;
-    }
-    if (!(await confirm({ description: t("confirmBulkArchive"), confirmVariant: "danger" }))) {
-      return;
-    }
-    const targets = selectedProducts.filter((product) => !product.isDeleted);
+  const handleBulkArchiveState = async (archived: boolean) => {
+    if (!selectedList.length || bulkArchiveRunningRef.current) return;
+    bulkArchiveRunningRef.current = true;
+    setBulkArchiveRunning(true);
+    const selection = [...selectedList];
     try {
-      await Promise.all(
-        targets.map((product) => bulkArchiveMutation.mutateAsync({ productId: product.id })),
-      );
-      targets.forEach((product) => patchProductArchiveState(product.id, true));
-      void Promise.all([
+      if (!(await confirm({
+        description: t(archived ? "confirmBulkArchive" : "confirmBulkRestore"),
+        confirmVariant: "danger",
+      }))) return;
+      const result = await updateSelectedProductArchiveState({
+        selectedIds: selection,
+        archived,
+        loadProducts: (ids) => trpcUtils.products.byIds.fetch({ ids }, { staleTime: 0 }),
+        updateProduct: (productId) => archived
+          ? bulkArchiveMutation.mutateAsync({ productId })
+          : bulkRestoreMutation.mutateAsync({ productId }),
+      });
+      result.succeededIds.forEach((id) => patchProductArchiveState(id, archived));
+      await Promise.all([
         trpcUtils.products.bootstrap.invalidate(productsBootstrapInput),
         trpcUtils.products.list.invalidate(),
+        trpcUtils.products.byIds.invalidate(),
         trpcUtils.inventory.searchProducts.invalidate(),
       ]);
+      const completed = new Set([...result.succeededIds, ...result.skippedIds]);
+      setSelectedIds((current) => new Set([...current].filter((id) => !completed.has(id))));
       toast({
-        variant: "success",
-        description: t("bulkArchiveSuccess", { count: targets.length }),
+        variant: result.failedIds.length ? "error" : "success",
+        description: result.failedIds.length
+          ? t("bulkActionPartial", { succeeded: result.succeededIds.length, failed: result.failedIds.length })
+          : t(archived ? "bulkArchiveSuccess" : "bulkRestoreSuccess", { count: result.succeededIds.length }),
       });
-      setSelectedIds(new Set());
     } catch (error) {
       toast({
         variant: "error",
         description: translateError(tErrors, error as Parameters<typeof translateError>[1]),
       });
+    } finally {
+      bulkArchiveRunningRef.current = false;
+      setBulkArchiveRunning(false);
     }
   };
 
-  const handleBulkRestore = async () => {
-    if (!selectedList.length || !hasArchivedSelected) {
-      return;
-    }
-    if (!(await confirm({ description: t("confirmBulkRestore"), confirmVariant: "danger" }))) {
-      return;
-    }
-    const targets = selectedProducts.filter((product) => product.isDeleted);
-    try {
-      await Promise.all(
-        targets.map((product) => bulkRestoreMutation.mutateAsync({ productId: product.id })),
-      );
-      targets.forEach((product) => patchProductArchiveState(product.id, false));
-      void Promise.all([
-        trpcUtils.products.bootstrap.invalidate(productsBootstrapInput),
-        trpcUtils.products.list.invalidate(),
-        trpcUtils.inventory.searchProducts.invalidate(),
-      ]);
-      toast({
-        variant: "success",
-        description: t("bulkRestoreSuccess", { count: targets.length }),
-      });
-      setSelectedIds(new Set());
-    } catch (error) {
-      toast({
-        variant: "error",
-        description: translateError(tErrors, error as Parameters<typeof translateError>[1]),
-      });
-    }
-  };
+  const handleBulkArchive = () => handleBulkArchiveState(true);
+  const handleBulkRestore = () => handleBulkArchiveState(false);
 
   const handleBulkCategoryApply = () => {
     if (!selectedList.length) {
@@ -3426,7 +3416,7 @@ const ProductsPage = () => {
             <div className="min-w-[11rem] flex-1">
               <Select
                 value={storeId || "all"}
-                onValueChange={(value) => setStoreId(value === "all" ? "" : value)}
+                onValueChange={setStoreId}
               >
                 <SelectTrigger className="h-11 bg-card shadow-sm">
                   <SelectValue placeholder={tCommon("selectStore")} />
@@ -3446,7 +3436,10 @@ const ProductsPage = () => {
                 value={category || "all"}
                 onValueChange={(value) => setCategory(value === "all" ? "" : value)}
               >
-                <SelectTrigger className="h-11 bg-card shadow-sm">
+                <SelectTrigger
+                  className="h-11 min-w-0 gap-2 bg-card shadow-sm [&>span]:min-w-0 [&>span]:truncate [&>svg]:shrink-0"
+                  title={category || t("allCategories")}
+                >
                   <SelectValue placeholder={t("allCategories")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -3550,7 +3543,7 @@ const ProductsPage = () => {
         </div>
         <Select
           value={storeId || "all"}
-          onValueChange={(value) => setStoreId(value === "all" ? "" : value)}
+          onValueChange={setStoreId}
         >
           <SelectTrigger className="min-h-11">
             <SelectValue placeholder={tCommon("selectStore")} />
@@ -3858,7 +3851,17 @@ const ProductsPage = () => {
                         {tCommon("actions")}
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="min-w-[280px]">
+                    <DropdownMenuContent
+                      align="end"
+                      className="min-w-[280px]"
+                      onCloseAutoFocus={(event) => {
+                        const openConfirmation = pendingBulkConfirmationRef.current;
+                        if (!openConfirmation) return;
+                        event.preventDefault();
+                        pendingBulkConfirmationRef.current = null;
+                        requestAnimationFrame(openConfirmation);
+                      }}
+                    >
                       <DropdownMenuItem
                         disabled={exportQuery.isFetching}
                         onSelect={() => openExportDialog("csv")}
@@ -3990,9 +3993,9 @@ const ProductsPage = () => {
                           {hasActiveSelected ? (
                             <DropdownMenuItem
                               className="text-danger focus:text-danger"
-                              onSelect={(event) => {
-                                event.preventDefault();
-                                void handleBulkArchive();
+                              disabled={bulkArchiveRunning}
+                              onSelect={() => {
+                                pendingBulkConfirmationRef.current = () => void handleBulkArchive();
                               }}
                             >
                               <ArchiveIcon className="h-4 w-4" aria-hidden />
@@ -4001,9 +4004,9 @@ const ProductsPage = () => {
                           ) : null}
                           {hasArchivedSelected ? (
                             <DropdownMenuItem
-                              onSelect={(event) => {
-                                event.preventDefault();
-                                void handleBulkRestore();
+                              disabled={bulkArchiveRunning}
+                              onSelect={() => {
+                                pendingBulkConfirmationRef.current = () => void handleBulkRestore();
                               }}
                             >
                               <RestoreIcon className="h-4 w-4" aria-hidden />

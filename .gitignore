@@ -28,3 +28,4 @@ ios/*.xcarchive
 # Local audit evidence, screenshots, and generated synthetic login fixtures.
 /artifacts/bazaar-assessment/
 /artifacts/bazaar-stabilization/
+/artifacts/bazaar-continuation/

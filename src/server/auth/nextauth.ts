@@ -18,6 +18,7 @@ import { getLogger } from "@/server/logging";
 import { defaultLocale, normalizeLocale, type Locale } from "@/lib/locales";
 import { ThemePreference } from "@prisma/client";
 import { getRuntimeEnv } from "@/server/config/runtime";
+import { isEmailVerificationRequired } from "@/server/config/auth";
 
 const credentialsSchema = z.object({
   email: z.string().email(),
@@ -132,6 +133,7 @@ const extractUserClaims = (
   isPlatformOwner?: boolean;
   isOrgOwner?: boolean;
   emailVerified?: boolean;
+  sessionVersion?: number;
 } | null => {
   if (!user || typeof user !== "object") {
     return null;
@@ -144,13 +146,14 @@ const extractUserClaims = (
     isPlatformOwner?: boolean;
     isOrgOwner?: boolean;
     emailVerified?: boolean;
+    sessionVersion?: number;
   };
-  const { role, organizationId, preferredLocale, themePreference, isPlatformOwner, isOrgOwner, emailVerified } =
+  const { role, organizationId, preferredLocale, themePreference, isPlatformOwner, isOrgOwner, emailVerified, sessionVersion } =
     candidate;
   if (!role || !organizationId) {
     return null;
   }
-  return { role, organizationId, preferredLocale, themePreference, isPlatformOwner, isOrgOwner, emailVerified };
+  return { role, organizationId, preferredLocale, themePreference, isPlatformOwner, isOrgOwner, emailVerified, sessionVersion };
 };
 
 export const authOptions: NextAuthOptions = {
@@ -245,6 +248,9 @@ export const authOptions: NextAuthOptions = {
         if (!user.organizationId || storeCount === 0) {
           throw new Error("registrationNotCompleted");
         }
+        if (isEmailVerificationRequired() && !user.emailVerifiedAt) {
+          throw new Error("emailNotVerified");
+        }
 
         const cookieLocale = resolvePreferredLocale(getCookie(req, "NEXT_LOCALE"));
         const storedLocale = resolvePreferredLocale(user.preferredLocale);
@@ -271,6 +277,7 @@ export const authOptions: NextAuthOptions = {
           isPlatformOwner: isPlatformOwnerEmail(user.email),
           isOrgOwner: Boolean(user.isOrgOwner),
           emailVerified: Boolean(user.emailVerifiedAt),
+          sessionVersion: user.sessionVersion,
         };
       },
     }),
@@ -301,34 +308,39 @@ export const authOptions: NextAuthOptions = {
         token.isPlatformOwner = claims.isPlatformOwner ?? false;
         token.isOrgOwner = claims.isOrgOwner ?? false;
         token.emailVerified = claims.emailVerified ?? false;
+        token.sessionVersion = claims.sessionVersion;
       }
-      if (trigger === "update" && session && typeof session === "object") {
-        // NextAuth forwards client-controlled session.update(data) here. Refresh
-        // identity/authorization from storage; only preferences may come from data.
-        const currentUser = token.sub
-          ? await prisma.user.findUnique({
-              where: { id: token.sub },
-              select: {
-                id: true,
-                email: true,
-                role: true,
-                organizationId: true,
-                isActive: true,
-                isOrgOwner: true,
-                emailVerifiedAt: true,
-              },
-            })
-          : null;
-        if (!currentUser?.isActive || !currentUser.organizationId) {
-          throw new Error("sessionUserUnavailable");
-        }
-        token.email = currentUser.email;
-        token.role = currentUser.role;
-        token.organizationId = currentUser.organizationId;
-        token.isPlatformOwner = isPlatformOwnerEmail(currentUser.email);
-        token.isOrgOwner = Boolean(currentUser.isOrgOwner);
-        token.emailVerified = Boolean(currentUser.emailVerifiedAt);
+      // Check every issuance/read/update. An old session must never be revived by
+      // refreshing its cookie or by copying the current version from the database.
+      const currentUser = token.sub
+        ? await prisma.user.findUnique({
+            where: { id: token.sub },
+            select: {
+              id: true,
+              email: true,
+              role: true,
+              organizationId: true,
+              isActive: true,
+              isOrgOwner: true,
+              emailVerifiedAt: true,
+              sessionVersion: true,
+            },
+          })
+        : null;
+      if (!currentUser?.isActive || !currentUser.organizationId ||
+          (isEmailVerificationRequired() && !currentUser.emailVerifiedAt) ||
+          !Number.isSafeInteger(token.sessionVersion) || token.sessionVersion !== currentUser.sessionVersion) {
+        throw new Error("sessionUserUnavailable");
+      }
+      token.email = currentUser.email;
+      token.role = currentUser.role;
+      token.organizationId = currentUser.organizationId;
+      token.isPlatformOwner = isPlatformOwnerEmail(currentUser.email);
+      token.isOrgOwner = Boolean(currentUser.isOrgOwner);
+      token.emailVerified = Boolean(currentUser.emailVerifiedAt);
 
+      if (trigger === "update" && session && typeof session === "object") {
+        // NextAuth forwards client-controlled data. Only preferences may come from it.
         const updatePayload = session as {
           preferredLocale?: unknown;
           themePreference?: unknown;

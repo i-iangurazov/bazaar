@@ -115,6 +115,7 @@ export const getRoleHomePath = (access: RoleAccess) => {
 };
 
 const routeAccessRules: Array<{ prefix: string; permission: AppPermission }> = [
+  { prefix: "/baam", permission: "viewReports" },
   { prefix: "/platform", permission: "viewPlatform" },
   { prefix: "/admin/support", permission: "viewSupport" },
   { prefix: "/admin/jobs", permission: "viewSystem" },

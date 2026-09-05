@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useHydrated } from "@/hooks/use-hydrated";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -20,6 +21,7 @@ import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 
 const InvitePage = () => {
+  const hydrated = useHydrated();
   const params = useParams();
   const token = String(params?.token ?? "");
   const t = useTranslations("invite");
@@ -131,7 +133,7 @@ const InvitePage = () => {
                 <p>{t("inviteEmail", { email: inviteQuery.data.email })}</p>
                 <p>{t("inviteRole", { role: inviteQuery.data.role })}</p>
               </div>
-              <form onSubmit={handleSubmit}>
+              <form method="post" onSubmit={handleSubmit}>
                 <FormStack>
                   <div className="space-y-1">
                     <label className="text-sm font-medium text-foreground" htmlFor="invite-name">
@@ -199,7 +201,7 @@ const InvitePage = () => {
                       <p className="text-xs font-medium text-danger">{fieldErrors.preferredLocale}</p>
                     ) : null}
                   </div>
-                  <Button type="submit" className="w-full" disabled={acceptMutation.isLoading}>
+                  <Button type="submit" className="w-full" disabled={!hydrated || acceptMutation.isLoading}>
                     {acceptMutation.isLoading ? tCommon("loading") : t("accept")}
                   </Button>
                 </FormStack>

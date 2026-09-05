@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
@@ -59,6 +60,7 @@ const SignupPage = () => {
   const { toast } = useToast();
   const router = useRouter();
 
+  const hydrated = useHydrated();
   const [submitted, setSubmitted] = useState(false);
   const [redirectingToBusiness, setRedirectingToBusiness] = useState(false);
   const [requestValues, setRequestValues] = useState<RequestValues>({ email: "", orgName: "" });
@@ -320,7 +322,7 @@ const SignupPage = () => {
               </FormStack>
             </form>
           ) : (
-            <form onSubmit={handleSignupSubmit}>
+            <form method="post" onSubmit={handleSignupSubmit}>
               <FormStack>
                 <div className="space-y-1">
                   <label className="text-sm font-medium text-foreground" htmlFor="signup-name">
@@ -421,7 +423,7 @@ const SignupPage = () => {
                     </p>
                   ) : null}
                 </div>
-                <Button type="submit" className="w-full" disabled={signupMutation.isLoading}>
+                <Button type="submit" className="w-full" disabled={!hydrated || signupMutation.isLoading}>
                   {signupMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
                   {signupMutation.isLoading ? tCommon("loading") : t("createAccount")}
                 </Button>

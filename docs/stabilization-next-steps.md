@@ -1,5 +1,7 @@
 # Stabilization: what remains next
 
+**Continuation:** see [5 September implementation and verification](continuation-2026-09-05.md) for the subsequent work. The acceptance criteria below remain the full backlog; completed subsets are documented there rather than being treated as proof of every workflow.
+
 The focused local pass fixed and verified the nine confirmed audit findings and two newly discovered security defects. The remaining work below is mostly **verification still to complete**, not a list of demonstrated failures. Overall production readiness remains **UNVERIFIED**. The original **14/100 readiness and 23% coverage are historical**; this focused pass did not rescore the original 430-feature inventory, so there is no new global score.
 
 Use the isolated environment in [stabilization.md](stabilization.md). Continue on `main`; use local capture or authorized provider sandboxes for the workflows below.
@@ -23,7 +25,7 @@ Historical local evidence: `artifacts/bazaar-stabilization/20260905/reassessment
 
 ## Prioritized backlog
 
-Priority indicates execution order, not a newly assigned defect severity. Complete release checks for the current fixes alongside the next development task; do not wait for Stripe or ORDO.
+Priority indicates execution order, not a newly assigned defect severity. Complete release checks for the current fixes alongside the next development task; do not wait for Stripe or BAAM.
 
 ### 1. Complete authentication and access revocation — immediate
 
@@ -57,7 +59,7 @@ First establish the actual legal seller, account country/readiness, authorized s
 
 **Acceptance before activation:** prove exact before/after legacy entitlements through provider outage, webhook replay, and rollback. In the authorized sandbox, verify owner-only organization-bound Checkout/Portal, server-selected prices, duplicate requests, signed duplicate/out-of-order webhooks, reconciliation, abandoned Checkout, failed payment/authentication required, renewal, cancellation, and upgrade/downgrade policy. A browser redirect never grants paid access. Legacy entitlements remain independent of Stripe. No operational restrictions inside POS or Inventory are introduced.
 
-### 6. Build the ORDO read-only MVP after metric certification
+### 6. Build the BAAM read-only MVP after metric certification
 
 Start with an internal dashboard, deterministic period comparisons, and an assistant explaining certified metrics. Operational records remain authoritative; derived projections and simulations are separate and are not a second editable business database.
 

@@ -8,7 +8,7 @@
     "db:down": "docker compose down",
     "db:reset": "pnpm db:up && pnpm prisma:reset",
     "dev": "next dev",
-    "prebuild": "pnpm prisma:generate && pnpm env:check:build",
+    "prebuild": "pnpm prisma:generate && pnpm env:check:build && node --import tsx scripts/deployment/migrations.ts",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",

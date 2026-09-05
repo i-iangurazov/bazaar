@@ -657,7 +657,8 @@
     "emailVerificationSent": "Email sent",
     "diagnostics": "Diagnostics",
     "posKkm": "KKM queue",
-    "posReceipts": "Receipt register"
+    "posReceipts": "Receipt register",
+    "baam": "BAAM"
   },
   "printingSettings": {
     "title": "Print settings",
@@ -3728,6 +3729,7 @@
     "confirmBulkRestore": "Confirm bulk restore",
     "bulkArchiveSuccess": "Bulk archive success {count}",
     "bulkRestoreSuccess": "Bulk restore success {count}",
+    "bulkActionPartial": "Updated: {succeeded}. Could not update: {failed}. Unsuccessful products remain selected.",
     "manageCategories": "Manage categories",
     "categoriesManageTitle": "Categories manage",
     "categoriesManageSubtitle": "Categories manage overview",
@@ -5198,7 +5200,9 @@
     "priceTagsStoreSelectionRequired": "Price tags store selection is required.",
     "priceTagsPriceMissing": "Price tags price missing",
     "notFound": "Not found.",
-    "salesOrderNotFound": "Customer order not found."
+    "salesOrderNotFound": "Customer order not found.",
+    "jobRetryInProgress": "A retry is already claimed. Reconcile its outcome before taking further action.",
+    "jobRetryStateChanged": "The job changed while this action was running. Refresh and review its current state."
   },
   "adminJobs": {
     "title": "Admin jobs",
@@ -5218,7 +5222,16 @@
     "retry": "Retry",
     "resolve": "Resolve",
     "retrySuccess": "Retry completed.",
-    "resolveSuccess": "Resolve completed."
+    "resolveSuccess": "The job was marked as manually reconciled.",
+    "retryFailed": "The retry failed. The job remains unresolved; review its latest error.",
+    "statusNeedsReconciliation": "Running / needs reconciliation",
+    "retryClaimed": "A retry has already started. It may still be running or its outcome may be unknown. Another retry is blocked until the outcome is reconciled.",
+    "retryStartedAt": "Retry started: {time}",
+    "resolveConfirmTitle": "Mark as manually reconciled?",
+    "resolveConfirmDescription": "This closes the job without running it again. It does not confirm successful execution or undo any effects.",
+    "resolveClaimWarning": "The recorded attempt may still be active. Verify the external outcome and ensure the work has completed or stopped before closing this job.",
+    "resolveAcknowledgement": "I have checked the outcome and confirmed that any active work has completed or stopped.",
+    "resolveConfirm": "Mark as reconciled"
   },
   "adminSupport": {
     "title": "Admin support",
@@ -6694,5 +6707,42 @@
     "supportTitle": "Questions about data",
     "supportBody": "Open Bazaar Guide and contact support. Never send a password, API key, or payment data in a support message.",
     "supportAction": "Open support"
+  },
+  "baam": {
+    "subtitle": "A read-only summary of completed sales and returns. Recorded amounts in KGS, within your store access.",
+    "loading": "Loading current figures…",
+    "refresh": "Refresh",
+    "dateFrom": "From",
+    "dateTo": "To",
+    "store": "Store",
+    "allStores": "All accessible stores",
+    "apply": "Apply",
+    "retry": "Try again",
+    "briefTitle": "Your period at a glance",
+    "noStores": "You do not currently have access to any stores.",
+    "empty": "No qualifying completed sales or returns were found in this period. This does not confirm that all business activity has been received.",
+    "brief": "From {from} to {to}, across {stores, plural, one {# store} other {# stores}}: completed sales were {sales}, returns were {returns}, and sales after returns were {net}. The period includes {receipts, plural, one {# receipt} other {# receipts}} and {returnCount, plural, one {# return} other {# returns}}.",
+    "completeness": "Source completeness is unknown. Late or missing records may change these figures.",
+    "paymentMismatch": "Payment records do not reconcile: sales difference {sales}; refund difference {returns}. Check the source records before relying on payment totals.",
+    "paymentsMatch": "Recorded payment and refund amounts match these sale and return totals. This does not confirm source completeness.",
+    "net": "Sales after returns",
+    "sales": "Sales before returns",
+    "returns": "Returns",
+    "receipts": "Receipts",
+    "average": "Average receipt before returns",
+    "discounts": "Recorded discounts",
+    "notAvailable": "Not available",
+    "daysTitle": "By business day",
+    "date": "Date",
+    "policyTitle": "How to read these figures",
+    "policy": "Sales include completed, non-held POS sales after recorded discounts. Discounts are shown separately and are not deducted twice. Returns count on their own completion date, including returns from earlier sales. Negative net sales are possible.",
+    "exclusions": "This summary does not calculate profit, tax, expenses, inventory, forecasts or revenue across every sales channel.",
+    "queriedAt": "Queried at {time}. Query time is not a guarantee that all source records are complete.",
+    "timeZone": "Business dates use {zone}. All amounts are recorded KGS; no current exchange-rate conversion is applied.",
+    "appliedScope": "Applied period: {from} to {to}. Stores: {stores}.",
+    "noStoresShort": "No accessible stores",
+    "source": "Source: recorded completed POS sales and completed returns in Bazaar reporting.",
+    "version": "Metric definitions: {version}.",
+    "title": "BAAM"
   }
 }

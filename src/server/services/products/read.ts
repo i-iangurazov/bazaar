@@ -277,6 +277,9 @@ export const resolveProductsBootstrapStoreId = ({
   preferredStoreId?: string;
   storeIds: string[];
 }) => {
+  if (preferredStoreId === "all") {
+    return null;
+  }
   if (preferredStoreId && storeIds.includes(preferredStoreId)) {
     return preferredStoreId;
   }

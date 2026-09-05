@@ -17,6 +17,7 @@ const localeCookieOptions = {
 } as const;
 
 export const protectedPrefixes = [
+  "/baam",
   "/admin",
   "/billing",
   "/cash",

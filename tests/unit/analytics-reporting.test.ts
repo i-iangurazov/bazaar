@@ -186,4 +186,26 @@ describe("historical analytics reporting contract", () => {
       "analytics:top:v2:report-org:stores:report-store:30:revenue",
     );
   });
+
+  it("shares cache only for equivalent scopes and separates organization, store, range and metric", async () => {
+    const cache = new Map<string, string>();
+    mocks.redisGet.mockImplementation(async (key: string) => cache.get(key) ?? null);
+    mocks.redisSet.mockImplementation(async (key: string, value: string) => { cache.set(key, value); });
+    mocks.queryRaw.mockResolvedValue([{ bucket, salesKgs: "450.50" }]);
+    const base = { ...scope, storeIds: ["store-a", "store-b"], granularity: "day" as const };
+    await getSalesTrend(base);
+    await getSalesTrend({ ...base, storeIds: ["store-b", "store-a"] });
+    expect(mocks.queryRaw).toHaveBeenCalledTimes(1);
+    for (const input of [
+      { ...base, organizationId: "another-org" }, { ...base, storeIds: ["store-a"] },
+      { ...base, rangeDays: 7 }, { ...base, granularity: "week" as const },
+    ]) await getSalesTrend(input);
+    expect(mocks.queryRaw).toHaveBeenCalledTimes(5);
+    mocks.queryRaw.mockResolvedValue([product]);
+    await getTopProducts({ ...scope, metric: "units" });
+    await getTopProducts({ ...scope, metric: "revenue" });
+    await getTopProducts({ ...scope, metric: "profit" });
+    expect(mocks.queryRaw).toHaveBeenCalledTimes(8);
+    expect(mocks.redisSet.mock.calls.every((call) => call[2] === "EX" && call[3] === 180)).toBe(true);
+  });
 });

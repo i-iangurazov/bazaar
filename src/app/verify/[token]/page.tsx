@@ -27,13 +27,8 @@ const VerifyPage = () => {
       setNextPath(result.nextPath ?? "/login");
       setStatus("success");
     },
-    onError: (error) => {
-      if (error.data?.code === "CONFLICT") {
-        // Token may already be consumed, but the account can still proceed to login.
-        setNextPath("/login");
-        setStatus("success");
-        return;
-      }
+    onError: () => {
+      // A conflict can mean an expired token; it does not prove verification.
       setStatus("error");
     },
   });

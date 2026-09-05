@@ -606,6 +606,7 @@ model User {
   phone           String?
   jobTitle        String?
   passwordHash    String
+  sessionVersion  Int             @default(0)
   role            Role
   isOrgOwner      Boolean         @default(false)
   preferredLocale String          @default("ru")
@@ -3106,6 +3107,8 @@ model DeadLetterJob {
   lastErrorAt    DateTime  @default(now())
   resolvedAt     DateTime?
   resolvedById   String?
+  retryAttemptId String?
+  retryStartedAt DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 

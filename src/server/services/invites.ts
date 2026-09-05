@@ -154,7 +154,7 @@ export const getInviteByToken = async (token: string) => {
       organization: { select: { id: true, name: true } },
     },
   });
-  if (!invite || invite.acceptedAt || invite.expiresAt < new Date()) {
+  if (!invite || invite.acceptedAt || invite.expiresAt <= new Date()) {
     throw new AppError("inviteInvalid", "NOT_FOUND", 404);
   }
   return invite;
@@ -173,7 +173,15 @@ export const acceptInvite = async (input: {
       where: { tokenHash },
       include: { organization: true },
     });
-    if (!invite || invite.acceptedAt || invite.expiresAt < new Date()) {
+    if (!invite || invite.acceptedAt || invite.expiresAt <= new Date()) {
+      throw new AppError("inviteInvalid", "NOT_FOUND", 404);
+    }
+    const acceptedAt = new Date();
+    const claimed = await tx.inviteToken.updateMany({
+      where: { id: invite.id, acceptedAt: null, expiresAt: { gt: acceptedAt } },
+      data: { acceptedAt },
+    });
+    if (claimed.count !== 1) {
       throw new AppError("inviteInvalid", "NOT_FOUND", 404);
     }
 
@@ -229,10 +237,7 @@ export const acceptInvite = async (input: {
       storeIds: invite.storeIds,
     });
 
-    const updatedInvite = await tx.inviteToken.update({
-      where: { id: invite.id },
-      data: { acceptedAt: new Date() },
-    });
+    const updatedInvite = { ...invite, acceptedAt };
 
     await writeAuditLog(tx, {
       organizationId: invite.organizationId,

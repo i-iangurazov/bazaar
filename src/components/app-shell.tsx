@@ -342,6 +342,13 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
         labelKey: "groups.insights",
         items: [
           {
+            key: "baam",
+            href: "/baam",
+            icon: MetricsIcon,
+            managerOnly: true,
+            requiredPermission: "viewReports",
+          },
+          {
             key: "reports",
             href: "/reports",
             icon: ReportsIcon,

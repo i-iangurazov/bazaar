@@ -1,5 +1,7 @@
 # Local stabilization verification
 
+For the subsequent auth, management, reporting, BAAM and release work, see [the continuation](continuation-2026-09-05.md).
+
 This guide reproduces the focused stabilization checks on `main`, using disposable local PostgreSQL and Redis. It covers selected application metadata, authorization, signup, and reporting behavior. It does not certify the whole application or production performance. Keep the original readiness audit as its historical baseline; record subsequent fixes and executed checks under `artifacts/bazaar-stabilization/`.
 
 The prioritized remaining work and acceptance criteria are in [stabilization-next-steps.md](stabilization-next-steps.md).
@@ -83,7 +85,9 @@ The development launcher loads local configuration, applies the isolated overrid
 
 [environment.ts](../scripts/stabilization/environment.ts) clears credentials/settings with the prefixes `RESEND_`, `OPENAI_`, `R2_`, `STRIPE_`, `SMTP_`, `BAKAI_`, `M_MARKET_`, and `O_MARKET_`, then selects local/log storage and email behavior and the configured market mock flag. The isolated test setup rejects every `fetch` call and makes the excluded inventory operation throw if reached.
 
-The development server rejects server-side `fetch` destinations other than `localhost` or `127.0.0.1`, and rejects redirects. These application-level controls, combined with stripped provider credentials, are not a general network sandbox: they do not intercept every socket, HTTP library, subprocess, or browser request. Browser checks must stay within the approved local metadata and reporting workflows. Do not use live payment, email delivery, marketplace, POS, or inventory operations as part of this guide.
+The development launcher sets a synthetic Resend credential and captures only outbound single-email requests to `https://api.resend.com/emails` into `artifacts/bazaar-stabilization/mailbox.jsonl`. It forwards no request to Resend: the complete real email payload and its verification/reset/invitation link are saved locally. Only synthetic `.test` and `.invalid` recipient domains are accepted. Keep this private generated file local. This is a mock provider boundary, not sandbox delivery.
+
+All other server-side `fetch` destinations must be `localhost` or `127.0.0.1`, and redirects are rejected. These application-level controls, combined with stripped provider credentials, are not a general network sandbox: they do not intercept every socket, HTTP library, subprocess, or browser request. Browser checks must stay within the approved local metadata and reporting workflows. Do not use live payment, email delivery, marketplace, POS, or inventory operations as part of this guide.
 
 ## What the focused tests establish
 
@@ -121,7 +125,7 @@ Top-product results retain `{ items: [{ sku, name, value }], canProfit }`. Produ
 
 The cache namespaces advance to `analytics:sales:v2` and `analytics:top:v2` with a 180-second TTL, avoiding reuse of cached results computed under the prior contract.
 
-The database reporting tests create `CustomerOrder`, `CustomerOrderLine`, and `Product` as TEMP reporting projections on one transaction connection, with `ON COMMIT DROP`. A query adapter directs the service's SQL to that connection. They establish monetary sums, completion-time and tenant/store filtering, metric-specific ranking, unknown-cost handling, and losses against PostgreSQL. They do not insert into the operational order tables or exercise their write paths. ORDO and live Stripe subscription implementation remain outside this stabilization work.
+The database reporting tests create `CustomerOrder`, `CustomerOrderLine`, and `Product` as TEMP reporting projections on one transaction connection, with `ON COMMIT DROP`. A query adapter directs the service's SQL to that connection. They establish monetary sums, completion-time and tenant/store filtering, metric-specific ranking, unknown-cost handling, and losses against PostgreSQL. They do not insert into the operational order tables or exercise their write paths. BAAM and live Stripe subscription implementation remain outside this stabilization work.
 
 ## Teardown and evidence
 

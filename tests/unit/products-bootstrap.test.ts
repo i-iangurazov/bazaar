@@ -3,6 +3,15 @@ import { describe, expect, it } from "vitest";
 import { resolveProductsBootstrapStoreId } from "@/server/services/products/read";
 
 describe("products bootstrap store resolution", () => {
+  it("preserves an explicit all-stores selection instead of selecting the first store", () => {
+    expect(
+      resolveProductsBootstrapStoreId({
+        preferredStoreId: "all",
+        storeIds: ["empty-store", "populated-store"],
+      }),
+    ).toBeNull();
+  });
+
   it("auto-selects the only store when no preference is stored", () => {
     expect(
       resolveProductsBootstrapStoreId({

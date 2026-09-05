@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
@@ -27,6 +28,7 @@ import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 
 const ResetTokenPage = () => {
+  const hydrated = useHydrated();
   const params = useParams();
   const token = String(params?.token ?? "");
   const t = useTranslations("reset");
@@ -78,6 +80,7 @@ const ResetTokenPage = () => {
           ) : (
             <Form {...form}>
               <form
+                method="post"
                 onSubmit={form.handleSubmit((values) => resetMutation.mutate({ token, ...values }))}
               >
                 <FormStack>
@@ -90,6 +93,7 @@ const ResetTokenPage = () => {
                         <FormControl>
                           <PasswordInput
                             {...field}
+                            disabled={!hydrated}
                             placeholder={t("passwordPlaceholder")}
                             showLabel={tCommon("showPassword")}
                             hideLabel={tCommon("hidePassword")}
@@ -99,7 +103,7 @@ const ResetTokenPage = () => {
                       </FormItem>
                     )}
                   />
-                  <Button type="submit" className="w-full" disabled={resetMutation.isLoading}>
+                  <Button type="submit" className="w-full" disabled={!hydrated || resetMutation.isLoading}>
                     {resetMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
                     {resetMutation.isLoading ? tCommon("loading") : t("save")}
                   </Button>

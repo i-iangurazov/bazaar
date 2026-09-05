@@ -9,6 +9,7 @@ dist
 tmp
 coverage
 uploads
+artifacts/
 *.log
 *.tsbuildinfo
 .DS_Store

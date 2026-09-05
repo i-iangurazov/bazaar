@@ -35,6 +35,7 @@ import { baseAccountingCurrency, formatKgsMoney } from "@/lib/currencyDisplay";
 import { downloadTableFile, type DownloadFormat } from "@/lib/fileExport";
 import { formatDate, formatDateTime, formatNumber } from "@/lib/i18nFormat";
 import { defaultTimeZone } from "@/lib/timezone";
+import { buildSoldProductsPageExport } from "@/lib/soldProductsExport";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { cn } from "@/lib/utils";
@@ -281,37 +282,8 @@ const AnalyticsPage = () => {
   const handleExportProducts = () => {
     downloadTableFile({
       format: downloadFormat,
-      fileNameBase: `sold-products-${dateFrom}-${dateTo}`,
-      header: [
-        "productName",
-        "sku",
-        "barcode",
-        "category",
-        "quantitySold",
-        "quantityReturned",
-        "netQuantity",
-        "grossRevenue",
-        "returns",
-        "netRevenue",
-        "averagePrice",
-        "stockRemaining",
-        "receiptCount",
-      ],
-      rows: soldProducts.map((product) => [
-        product.productName,
-        product.productSku,
-        product.barcode ?? "",
-        product.category ?? "",
-        String(product.quantitySold),
-        String(product.quantityReturned),
-        String(product.netQuantity),
-        formatKgsMoney(product.grossRevenueKgs, locale, currencySource),
-        formatKgsMoney(product.returnedRevenueKgs, locale, currencySource),
-        formatKgsMoney(product.netRevenueKgs, locale, currencySource),
-        formatKgsMoney(product.averagePriceKgs, locale, currencySource),
-        String(product.stockRemaining),
-        String(product.receiptCount),
-      ]),
+      fileNameBase: `sold-products-${dateFrom}-${dateTo}-page-${productPage}`,
+      ...buildSoldProductsPageExport(soldProducts, (value) => formatKgsMoney(value, locale, currencySource)),
     });
   };
 

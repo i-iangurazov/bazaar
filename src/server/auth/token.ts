@@ -4,6 +4,7 @@ import { decode, type JWT } from "next-auth/jwt";
 
 import { isPlatformOwnerEmail } from "@/server/auth/platformOwner";
 import { prisma } from "@/server/db/prisma";
+import { isEmailVerificationRequired } from "@/server/config/auth";
 
 const sessionCookieNames = [
   "__Secure-next-auth.session-token",
@@ -78,12 +79,15 @@ const revalidateUserClaims = async (token: JWT | null) => {
       organizationId: true,
       isOrgOwner: true,
       emailVerifiedAt: true,
+      sessionVersion: true,
       isActive: true,
       preferredLocale: true,
       themePreference: true,
     },
   });
-  if (!user || !user.isActive || !user.organizationId) {
+  if (!user || !user.isActive || !user.organizationId ||
+      (isEmailVerificationRequired() && !user.emailVerifiedAt) ||
+      !Number.isSafeInteger(token.sessionVersion) || token.sessionVersion !== user.sessionVersion) {
     return null;
   }
   return {

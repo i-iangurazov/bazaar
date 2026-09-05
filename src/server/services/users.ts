@@ -222,8 +222,17 @@ export const setUserActive = async (input: SetUserActiveInput) =>
 
     const updated = await tx.user.update({
       where: { id: input.userId },
-      data: { isActive: input.isActive },
+      data: {
+        isActive: input.isActive,
+        ...(!input.isActive ? { sessionVersion: { increment: 1 } } : {}),
+      },
     });
+    if (!input.isActive) {
+      await tx.authToken.updateMany({
+        where: { userId: before.id, usedAt: null },
+        data: { usedAt: new Date() },
+      });
+    }
 
     const { passwordHash: _passwordHash, ...safeUser } = updated;
     void _passwordHash;
@@ -260,7 +269,11 @@ export const resetUserPassword = async (input: ResetUserPasswordInput) =>
     const passwordHash = await bcrypt.hash(input.password, 10);
     const updated = await tx.user.update({
       where: { id: input.userId },
-      data: { passwordHash },
+      data: { passwordHash, sessionVersion: { increment: 1 } },
+    });
+    await tx.authToken.updateMany({
+      where: { userId: before.id, type: "PASSWORD_RESET", usedAt: null },
+      data: { usedAt: new Date() },
     });
 
     const { passwordHash: _passwordHash, ...safeUser } = updated;

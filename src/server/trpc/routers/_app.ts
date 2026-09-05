@@ -31,6 +31,7 @@ import { invitesRouter } from "@/server/trpc/routers/invites";
 import { billingRouter } from "@/server/trpc/routers/billing";
 import { searchRouter } from "@/server/trpc/routers/search";
 import { analyticsRouter } from "@/server/trpc/routers/analytics";
+import { baamRouter } from "@/server/trpc/routers/baam";
 import { platformOwnerRouter } from "@/server/trpc/routers/platformOwner";
 import { diagnosticsRouter } from "@/server/trpc/routers/diagnostics";
 import { guidanceRouter } from "@/server/trpc/routers/guidance";
@@ -48,6 +49,7 @@ import { productImageStudioRouter } from "@/server/trpc/routers/productImageStud
 import { emailMarketingRouter } from "@/server/trpc/routers/emailMarketing";
 
 export const appRouter = router({
+  baam: baamRouter,
   inventory: inventoryRouter,
   products: productsRouter,
   stores: storesRouter,

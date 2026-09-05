@@ -50,33 +50,25 @@ const assertDateOnly = (value: string) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     throw new AppError("invalidInput", "BAD_REQUEST", 400);
   }
-};
-
-const parseDateOnlyParts = (value: string) => {
-  assertDateOnly(value);
-  const [year, month, day] = value.split("-").map(Number);
-  return { year, month, day };
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) {
+    throw new AppError("invalidInput", "BAD_REQUEST", 400);
+  }
 };
 
 const dateOnlyToUtc = (value: string, extraDays = 0) => {
-  const { year, month, day } = parseDateOnlyParts(value);
+  assertDateOnly(value);
   return new Date(
-    Date.UTC(year, month - 1, day + extraDays, 0, 0, 0, 0) -
+    Date.parse(`${value}T00:00:00.000Z`) + extraDays * DAY_MS -
       BUSINESS_TIME_ZONE_OFFSET_MINUTES * 60 * 1000,
   );
 };
 
-const addDaysToDateOnly = (value: string, days: number) => {
-  const { year, month, day } = parseDateOnlyParts(value);
-  return new Date(Date.UTC(year, month - 1, day + days, 0, 0, 0, 0)).toISOString().slice(0, 10);
-};
-
 const enumerateDateKeys = (dateFrom: string, dateTo: string) => {
   const keys: string[] = [];
-  let cursor = dateFrom;
-  while (cursor <= dateTo && keys.length <= MAX_RANGE_DAYS) {
-    keys.push(cursor);
-    cursor = addDaysToDateOnly(cursor, 1);
+  const end = Date.parse(`${dateTo}T00:00:00.000Z`);
+  for (let cursor = Date.parse(`${dateFrom}T00:00:00.000Z`); cursor <= end && keys.length < MAX_RANGE_DAYS; cursor += DAY_MS) {
+    keys.push(new Date(cursor).toISOString().slice(0, 10));
   }
   return keys;
 };
@@ -183,6 +175,7 @@ const noRows = (scope: SalesAnalyticsScope) => scope.storeIds && scope.storeIds.
 
 export const getSalesAnalyticsOverview = async (
   input: SalesAnalyticsScope & SalesAnalyticsDateInput,
+  client: Pick<Prisma.TransactionClient, "$queryRaw" | "salePayment"> = prisma,
 ) => {
   if (noRows(input)) {
     return emptySalesAnalyticsOverview(input);
@@ -193,7 +186,7 @@ export const getSalesAnalyticsOverview = async (
 
   const [salesByDay, returnsByDay, salesPayments, refundPayments] = await Promise.all([
     timed(() =>
-      prisma.$queryRaw<
+      client.$queryRaw<
         Array<{
           date: string;
           receiptCount: number;
@@ -214,7 +207,7 @@ export const getSalesAnalyticsOverview = async (
       `),
     ),
     timed(() =>
-      prisma.$queryRaw<
+      client.$queryRaw<
         Array<{ date: string; returnCount: number; returnsKgs: string | number | null }>
       >(Prisma.sql`
         SELECT ${localDaySql(Prisma.sql`r."completedAt"`)} AS "date",
@@ -229,12 +222,13 @@ export const getSalesAnalyticsOverview = async (
       `),
     ),
     timed(() =>
-      prisma.salePayment.groupBy({
+      client.salePayment.groupBy({
         by: ["method"],
         where: {
           organizationId: input.organizationId,
           isRefund: false,
           customerOrder: {
+            organizationId: input.organizationId,
             isPosSale: true,
             isHeld: false,
             status: CustomerOrderStatus.COMPLETED,
@@ -252,12 +246,13 @@ export const getSalesAnalyticsOverview = async (
       }),
     ),
     timed(() =>
-      prisma.salePayment.groupBy({
+      client.salePayment.groupBy({
         by: ["method"],
         where: {
           organizationId: input.organizationId,
           isRefund: true,
           saleReturn: {
+            organizationId: input.organizationId,
             status: PosReturnStatus.COMPLETED,
             completedAt: { gte: range.fromUtc, lt: range.toUtcExclusive },
             ...(input.storeId
@@ -267,7 +262,12 @@ export const getSalesAnalyticsOverview = async (
                 : {}),
             ...(input.registerId ? { registerId: input.registerId } : {}),
             ...(input.cashierId
-              ? { OR: [{ completedById: input.cashierId }, { createdById: input.cashierId }] }
+              ? {
+                  OR: [
+                    { completedById: input.cashierId },
+                    { completedById: null, createdById: input.cashierId },
+                  ],
+                }
               : {}),
           },
         },
@@ -395,27 +395,28 @@ export const getSalesAnalyticsFilterOptions = async (
   }
   const range = resolveSalesAnalyticsDateRange(input);
   const orderScope = buildOrderScopeFilter(input);
+  const returnScope = buildReturnScopeFilter(input);
   const rows = await prisma.$queryRaw<Array<{ category: string }>>(Prisma.sql`
-    SELECT DISTINCT category
-    FROM (
-      SELECT NULLIF(TRIM(p."category"), '') AS category
+    WITH active_products AS (
+      SELECT l."productId"
       FROM "CustomerOrderLine" l
       JOIN "CustomerOrder" o ON o.id = l."customerOrderId"
-      JOIN "Product" p ON p.id = l."productId"
       ${orderScope}
         AND o."completedAt" >= ${range.fromUtc}
         AND o."completedAt" < ${range.toUtcExclusive}
       UNION
-      SELECT NULLIF(TRIM(category_value), '') AS category
-      FROM "CustomerOrderLine" l
-      JOIN "CustomerOrder" o ON o.id = l."customerOrderId"
-      JOIN "Product" p ON p.id = l."productId"
-      CROSS JOIN LATERAL unnest(p."categories") AS category_value
-      ${orderScope}
-        AND o."completedAt" >= ${range.fromUtc}
-        AND o."completedAt" < ${range.toUtcExclusive}
-    ) categories
-    WHERE category IS NOT NULL
+      SELECT rl."productId"
+      FROM "SaleReturnLine" rl
+      JOIN "SaleReturn" r ON r.id = rl."saleReturnId"
+      ${returnScope}
+        AND r."completedAt" >= ${range.fromUtc}
+        AND r."completedAt" < ${range.toUtcExclusive}
+    )
+    SELECT DISTINCT TRIM(category_value) AS category
+    FROM active_products a
+    JOIN "Product" p ON p.id = a."productId" AND p."organizationId" = ${input.organizationId}
+    CROSS JOIN LATERAL unnest(ARRAY[p.category] || p.categories) AS category_value
+    WHERE NULLIF(TRIM(category_value), '') IS NOT NULL
     ORDER BY category
     LIMIT 100
   `);
@@ -442,6 +443,49 @@ export const getSoldProductsAnalytics = async (
   const returnScope = buildReturnScopeFilter(input);
   const productFilter = buildProductFilterSql(input);
 
+  // Aggregate both event populations before filtering/pagination. A return can
+  // belong to a sale outside this period, so sale-only keys lose valid negatives.
+  const activity = Prisma.sql`
+    WITH activity AS (
+      SELECT l."productId", l."variantId", l."variantKey", l.qty AS "quantitySold",
+             l."lineTotalKgs" AS "grossRevenueKgs", 0 AS "quantityReturned",
+             0::numeric AS "returnedRevenueKgs", o.id AS "orderId"
+      FROM "CustomerOrderLine" l
+      JOIN "CustomerOrder" o ON o.id = l."customerOrderId"
+      ${orderScope}
+        AND o."completedAt" >= ${range.fromUtc}
+        AND o."completedAt" < ${range.toUtcExclusive}
+      UNION ALL
+      SELECT rl."productId", rl."variantId", rl."variantKey", 0, 0::numeric,
+             rl.qty, rl."lineTotalKgs", NULL::text
+      FROM "SaleReturnLine" rl
+      JOIN "SaleReturn" r ON r.id = rl."saleReturnId"
+      ${returnScope}
+        AND r."completedAt" >= ${range.fromUtc}
+        AND r."completedAt" < ${range.toUtcExclusive}
+    ), grouped AS (
+      SELECT "productId", "variantKey", MAX("variantId") AS "variantId",
+             SUM("quantitySold")::int AS "quantitySold",
+             SUM("grossRevenueKgs") AS "grossRevenueKgs",
+             SUM("quantityReturned")::int AS "quantityReturned",
+             SUM("returnedRevenueKgs") AS "returnedRevenueKgs",
+             COUNT(DISTINCT "orderId")::int AS "receiptCount"
+      FROM activity
+      GROUP BY "productId", "variantKey"
+    ), filtered AS (
+      SELECT g.*, p.name AS "productName", p.sku AS "productSku",
+             v.name AS "variantName", v.sku AS "variantSku", b.value AS barcode,
+             COALESCE(p.categories[1], p.category) AS category
+      FROM grouped g
+      JOIN "Product" p ON p.id = g."productId" AND p."organizationId" = ${input.organizationId}
+      LEFT JOIN "ProductVariant" v ON v.id = g."variantId" AND v."productId" = p.id
+      LEFT JOIN LATERAL (
+        SELECT pb.value FROM "ProductBarcode" pb WHERE pb."productId" = p.id
+        ORDER BY pb."createdAt" ASC, pb.id ASC LIMIT 1
+      ) b ON true
+      WHERE true ${productFilter}
+    )
+  `;
   const [salesRows, totalRows] = await Promise.all([
     timed(() =>
       prisma.$queryRaw<
@@ -457,64 +501,22 @@ export const getSoldProductsAnalytics = async (
           category: string | null;
           quantitySold: number;
           grossRevenueKgs: string | number | null;
+          quantityReturned: number;
+          returnedRevenueKgs: string | number | null;
           receiptCount: number;
         }>
       >(Prisma.sql`
-        SELECT l."productId" AS "productId",
-               l."variantId" AS "variantId",
-               l."variantKey" AS "variantKey",
-               p."name" AS "productName",
-               p."sku" AS "productSku",
-               v."name" AS "variantName",
-               v."sku" AS "variantSku",
-               b."value" AS "barcode",
-               COALESCE(p."categories"[1], p."category") AS "category",
-               SUM(l."qty")::int AS "quantitySold",
-               SUM(l."lineTotalKgs") AS "grossRevenueKgs",
-               COUNT(DISTINCT o.id)::int AS "receiptCount"
-        FROM "CustomerOrderLine" l
-        JOIN "CustomerOrder" o ON o.id = l."customerOrderId"
-        JOIN "Product" p ON p.id = l."productId"
-        LEFT JOIN "ProductVariant" v ON v.id = l."variantId"
-        LEFT JOIN LATERAL (
-          SELECT pb."value"
-          FROM "ProductBarcode" pb
-          WHERE pb."productId" = p.id
-          ORDER BY pb."createdAt" ASC
-          LIMIT 1
-        ) b ON true
-        ${orderScope}
-          AND o."completedAt" >= ${range.fromUtc}
-          AND o."completedAt" < ${range.toUtcExclusive}
-          ${productFilter}
-        GROUP BY l."productId", l."variantId", l."variantKey", p."name", p."sku", v."name", v."sku", b."value", p."categories", p."category"
-        ORDER BY SUM(l."lineTotalKgs") DESC, SUM(l."qty") DESC, p."name" ASC
-        LIMIT ${pageSize}
-        OFFSET ${offset}
+        ${activity}
+        SELECT * FROM filtered
+        ORDER BY "grossRevenueKgs" DESC, "quantitySold" DESC, "productName" ASC,
+                 "productId" ASC, "variantKey" ASC
+        LIMIT ${pageSize} OFFSET ${offset}
       `),
     ),
     timed(() =>
       prisma.$queryRaw<Array<{ total: number }>>(Prisma.sql`
-        SELECT COUNT(*)::int AS total
-        FROM (
-          SELECT l."productId", l."variantKey"
-          FROM "CustomerOrderLine" l
-          JOIN "CustomerOrder" o ON o.id = l."customerOrderId"
-          JOIN "Product" p ON p.id = l."productId"
-          LEFT JOIN "ProductVariant" v ON v.id = l."variantId"
-          LEFT JOIN LATERAL (
-            SELECT pb."value"
-            FROM "ProductBarcode" pb
-            WHERE pb."productId" = p.id
-            ORDER BY pb."createdAt" ASC
-            LIMIT 1
-          ) b ON true
-          ${orderScope}
-            AND o."completedAt" >= ${range.fromUtc}
-            AND o."completedAt" < ${range.toUtcExclusive}
-            ${productFilter}
-          GROUP BY l."productId", l."variantKey"
-        ) grouped
+        ${activity}
+        SELECT COUNT(*)::int AS total FROM filtered
       `),
     ),
   ]);
@@ -523,33 +525,6 @@ export const getSoldProductsAnalytics = async (
     productId: row.productId,
     variantKey: row.variantKey,
   }));
-
-  const returnsRows = productKeys.length
-    ? await timed(() =>
-        prisma.$queryRaw<
-          Array<{
-            productId: string;
-            variantKey: string;
-            quantityReturned: number;
-            returnedRevenueKgs: string | number | null;
-          }>
-        >(Prisma.sql`
-          SELECT rl."productId" AS "productId",
-                 rl."variantKey" AS "variantKey",
-                 SUM(rl."qty")::int AS "quantityReturned",
-                 SUM(rl."lineTotalKgs") AS "returnedRevenueKgs"
-          FROM "SaleReturnLine" rl
-          JOIN "SaleReturn" r ON r.id = rl."saleReturnId"
-          ${returnScope}
-            AND r."completedAt" >= ${range.fromUtc}
-            AND r."completedAt" < ${range.toUtcExclusive}
-            AND (rl."productId", rl."variantKey") IN (${Prisma.join(
-              productKeys.map((row) => Prisma.sql`(${row.productId}, ${row.variantKey})`),
-            )})
-          GROUP BY rl."productId", rl."variantKey"
-        `),
-      )
-    : { value: [], ms: 0 };
 
   const stockRows = productKeys.length
     ? await timed(() =>
@@ -568,22 +543,16 @@ export const getSoldProductsAnalytics = async (
       )
     : { value: [], ms: 0 };
 
-  const returnsMap = new Map(
-    returnsRows.value.map((row) => [
-      `${row.productId}:${row.variantKey}`,
-      {
-        quantityReturned: Number(row.quantityReturned ?? 0),
-        returnedRevenueKgs: Number(row.returnedRevenueKgs ?? 0),
-      },
-    ]),
-  );
   const stockMap = new Map(
     stockRows.value.map((row) => [`${row.productId}:${row.variantKey}`, row._sum.onHand ?? 0]),
   );
 
   const items = salesRows.value.map((row) => {
     const key = `${row.productId}:${row.variantKey}`;
-    const returned = returnsMap.get(key) ?? { quantityReturned: 0, returnedRevenueKgs: 0 };
+    const returned = {
+      quantityReturned: Number(row.quantityReturned ?? 0),
+      returnedRevenueKgs: Number(row.returnedRevenueKgs ?? 0),
+    };
     const quantitySold = Number(row.quantitySold ?? 0);
     const grossRevenueKgs = Number(row.grossRevenueKgs ?? 0);
     const netQuantity = quantitySold - returned.quantityReturned;
@@ -619,7 +588,6 @@ export const getSoldProductsAnalytics = async (
       timingsMs: {
         salesProducts: salesRows.ms,
         productCount: totalRows.ms,
-        productReturns: returnsRows.ms,
         stockRemaining: stockRows.ms,
       },
     },

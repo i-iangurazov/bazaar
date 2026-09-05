@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 
@@ -9,6 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Modal } from "@/components/ui/modal";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { RowActions } from "@/components/row-actions";
 import { RestoreIcon, CheckIcon } from "@/components/icons";
@@ -37,26 +40,40 @@ const AdminJobsPage = () => {
 
   const jobsQuery = trpc.adminJobs.list.useQuery(undefined, { enabled: isAdmin });
   type JobRow = NonNullable<typeof jobsQuery.data>[number];
+  const [resolveJob, setResolveJob] = useState<JobRow | null>(null);
+  const [resolutionAcknowledged, setResolutionAcknowledged] = useState(false);
+  const openResolve = (job: JobRow) => {
+    setResolutionAcknowledged(false);
+    setResolveJob(job);
+  };
 
   const retryMutation = trpc.adminJobs.retry.useMutation({
-    onSuccess: () => {
-      jobsQuery.refetch();
-      toast({ variant: "success", description: t("retrySuccess") });
+    onSuccess: async (result) => {
+      toast(result.status === "resolved"
+        ? { variant: "success", description: t("retrySuccess") }
+        : { variant: "error", description: t("retryFailed") });
+      await jobsQuery.refetch();
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
+      void jobsQuery.refetch();
     },
   });
 
   const resolveMutation = trpc.adminJobs.resolve.useMutation({
     onSuccess: () => {
-      jobsQuery.refetch();
+      setResolveJob(null);
+      setResolutionAcknowledged(false);
+      void jobsQuery.refetch();
       toast({ variant: "success", description: t("resolveSuccess") });
     },
     onError: (error) => {
+      setResolutionAcknowledged(false);
       toast({ variant: "error", description: translateError(tErrors, error) });
+      void jobsQuery.refetch();
     },
   });
+  const actionsBusy = retryMutation.isLoading || resolveMutation.isLoading || jobsQuery.isFetching;
 
   if (isForbidden) {
     return (
@@ -114,6 +131,12 @@ const AdminJobsPage = () => {
                           <TableCell>
                             {job.resolvedAt ? (
                               <Badge variant="success">{t("statusResolved")}</Badge>
+                            ) : job.retryAttemptId ? (
+                              <div className="max-w-[18rem] space-y-2 text-left">
+                                <Badge variant="warning">{t("statusNeedsReconciliation")}</Badge>
+                                <p className="text-xs text-muted-foreground">{t("retryClaimed")}</p>
+                                {job.retryStartedAt ? <p className="text-xs text-muted-foreground">{t("retryStartedAt", { time: formatDateTime(job.retryStartedAt, locale) })}</p> : null}
+                              </div>
                             ) : (
                               <Badge variant="warning">{t("statusOpen")}</Badge>
                             )}
@@ -128,7 +151,7 @@ const AdminJobsPage = () => {
                                   variant="ghost"
                                   size="sm"
                                   onClick={() => retryMutation.mutate({ jobId: job.id })}
-                                  disabled={retryMutation.isLoading}
+                                  disabled={actionsBusy || Boolean(job.retryAttemptId)}
                                 >
                                   {t("retry")}
                                 </Button>
@@ -136,8 +159,8 @@ const AdminJobsPage = () => {
                                   type="button"
                                   variant="secondary"
                                   size="sm"
-                                  onClick={() => resolveMutation.mutate({ jobId: job.id })}
-                                  disabled={resolveMutation.isLoading}
+                                  onClick={() => openResolve(job)}
+                                  disabled={actionsBusy}
                                 >
                                   {t("resolve")}
                                 </Button>
@@ -165,10 +188,16 @@ const AdminJobsPage = () => {
                     </div>
                     {job.resolvedAt ? (
                       <Badge variant="success">{t("statusResolved")}</Badge>
+                    ) : job.retryAttemptId ? (
+                      <Badge variant="warning" className="max-w-[10rem]">{t("statusNeedsReconciliation")}</Badge>
                     ) : (
                       <Badge variant="warning">{t("statusOpen")}</Badge>
                     )}
                   </div>
+                  {!job.resolvedAt && job.retryAttemptId ? <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                    <p>{t("retryClaimed")}</p>
+                    {job.retryStartedAt ? <p>{t("retryStartedAt", { time: formatDateTime(job.retryStartedAt, locale) })}</p> : null}
+                  </div> : null}
                   <div className="mt-2 flex justify-end">
                     {job.resolvedAt ? (
                       <span className="text-xs text-muted-foreground/80">{t("resolved")}</span>
@@ -180,14 +209,14 @@ const AdminJobsPage = () => {
                             label: t("retry"),
                             icon: RestoreIcon,
                             onSelect: () => retryMutation.mutate({ jobId: job.id }),
-                            disabled: retryMutation.isLoading,
+                            disabled: actionsBusy || Boolean(job.retryAttemptId),
                           },
                           {
                             key: "resolve",
                             label: t("resolve"),
                             icon: CheckIcon,
-                            onSelect: () => resolveMutation.mutate({ jobId: job.id }),
-                            disabled: resolveMutation.isLoading,
+                            onSelect: () => openResolve(job),
+                            disabled: actionsBusy,
                           },
                         ]}
                         maxInline={2}
@@ -201,6 +230,32 @@ const AdminJobsPage = () => {
           )}
         </CardContent>
       </Card>
+      <Modal
+        open={Boolean(resolveJob)}
+        onOpenChange={(open) => {
+          if (!open && !resolveMutation.isLoading) {
+            setResolveJob(null);
+            setResolutionAcknowledged(false);
+          }
+        }}
+        title={t("resolveConfirmTitle")}
+        subtitle={t("resolveConfirmDescription")}
+      >
+        <div className="space-y-4">
+          <p className="break-words font-medium">{resolveJob?.jobName}</p>
+          {resolveJob?.retryAttemptId ? <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">{t("resolveClaimWarning")}</p> : null}
+          <label htmlFor="job-resolution-acknowledgement" className="flex items-start gap-3 text-sm leading-6">
+            <Checkbox id="job-resolution-acknowledgement" className="mt-1" checked={resolutionAcknowledged} onCheckedChange={value => setResolutionAcknowledged(value === true)} disabled={resolveMutation.isLoading} />
+            <span>{t("resolveAcknowledgement")}</span>
+          </label>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button type="button" variant="outline" disabled={resolveMutation.isLoading} onClick={() => { setResolveJob(null); setResolutionAcknowledged(false); }}>{tCommon("cancel")}</Button>
+            <Button type="button" disabled={!resolutionAcknowledged || actionsBusy} onClick={() => {
+              if (resolveJob && resolutionAcknowledged) resolveMutation.mutate({ jobId: resolveJob.id });
+            }}>{t("resolveConfirm")}</Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

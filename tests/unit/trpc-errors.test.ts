@@ -141,10 +141,10 @@ describe("nextauth credentials authorize", () => {
     });
   });
 
-  it("allows unverified users with completed registration after valid credentials", async () => {
+  it("denies unverified users under the required policy and permits login after verification", async () => {
     const { authorize, findUnique, count, clearLoginFailures } = await createHarness();
     const passwordHash = await bcrypt.hash("CorrectPass123", 10);
-    findUnique.mockResolvedValue({
+    const pendingUser = {
       id: "user-2",
       email: "verify@test.local",
       name: "Verify",
@@ -155,10 +155,19 @@ describe("nextauth credentials authorize", () => {
       isActive: true,
       isOrgOwner: false,
       emailVerifiedAt: null,
+      sessionVersion: 0,
       passwordHash,
-    });
+    };
+    findUnique.mockResolvedValue(pendingUser);
     count.mockResolvedValue(1);
 
+    await expect(authorize(
+      { email: "verify@test.local", password: "CorrectPass123" },
+      { headers: new Headers([["x-forwarded-for", "127.0.0.1"]]) },
+    )).rejects.toMatchObject({ message: "emailNotVerified" });
+    expect(clearLoginFailures).not.toHaveBeenCalled();
+
+    findUnique.mockResolvedValue({ ...pendingUser, emailVerifiedAt: new Date() });
     const result = await authorize(
       { email: "verify@test.local", password: "CorrectPass123" },
       { headers: new Headers([["x-forwarded-for", "127.0.0.1"]]) },
@@ -167,7 +176,8 @@ describe("nextauth credentials authorize", () => {
     expect(result).toMatchObject({
       email: "verify@test.local",
       organizationId: "org-1",
-      emailVerified: false,
+      emailVerified: true,
+      sessionVersion: 0,
     });
     expect(clearLoginFailures).toHaveBeenCalledWith({
       email: "verify@test.local",
@@ -401,6 +411,7 @@ describe("auth token revalidation", () => {
     const { getAuthTokenFromCookieHeader, decodeMock, findUnique } = await createTokenHarness();
     decodeMock.mockResolvedValue({
       sub: "user-1",
+      sessionVersion: 0,
       email: "inactive@test.local",
       role: "ADMIN",
       organizationId: "org-1",
@@ -413,6 +424,8 @@ describe("auth token revalidation", () => {
       organizationId: "org-1",
       isOrgOwner: false,
       isActive: false,
+      emailVerifiedAt: new Date(),
+      sessionVersion: 0,
       preferredLocale: "ru",
       themePreference: "LIGHT",
     });
@@ -426,6 +439,7 @@ describe("auth token revalidation", () => {
     const { getAuthTokenFromCookieHeader, decodeMock, findUnique } = await createTokenHarness();
     decodeMock.mockResolvedValue({
       sub: "user-2",
+      sessionVersion: 0,
       email: "stale@test.local",
       role: "STAFF",
       organizationId: "org-old",
@@ -438,6 +452,8 @@ describe("auth token revalidation", () => {
       organizationId: "org-2",
       isOrgOwner: true,
       isActive: true,
+      emailVerifiedAt: new Date(),
+      sessionVersion: 0,
       preferredLocale: "kg",
       themePreference: "DARK",
     });

@@ -10,7 +10,6 @@ import { sendVerificationEmail } from "@/server/services/email";
 import { consumeAuthToken } from "@/server/services/authTokens";
 import { assertWithinLimits } from "@/server/services/planLimits";
 import { isEmailVerificationRequired } from "@/server/config/auth";
-import { isProductionRuntime } from "@/server/config/runtime";
 import { defaultLocale, normalizeLocale } from "@/lib/locales";
 
 const DEFAULT_TRIAL_DAYS = Number(process.env.TRIAL_DAYS ?? "14");
@@ -57,7 +56,12 @@ export const createSignup = async (input: {
   name: string;
   preferredLocale: string;
   requestId: string;
-}) => {
+}): Promise<{
+  sent: boolean;
+  nextPath?: string;
+  verifyLink?: string | null;
+  verificationEmailSent?: boolean;
+}> => {
   ensureSignupOpen();
   const verificationRequired = isEmailVerificationRequired();
 
@@ -84,55 +88,13 @@ export const createSignup = async (input: {
       throw new AppError("accountAlreadyExists", "CONFLICT", 409);
     }
 
-    const passwordHash = await bcrypt.hash(input.password, 10);
-    const updatedUser =
-      !verificationRequired && !existingUser.emailVerifiedAt
-        ? await prisma.user.update({
-            where: { id: existingUser.id },
-            data: {
-              passwordHash,
-              name: input.name,
-              preferredLocale: input.preferredLocale,
-              emailVerifiedAt: new Date(),
-            },
-          })
-        : await prisma.user.update({
-            where: { id: existingUser.id },
-            data: {
-              passwordHash,
-              name: input.name,
-              preferredLocale: input.preferredLocale,
-            },
-          });
-
-    if (!updatedUser.organizationId || hasStore === 0) {
-      const nextPath = await createRegistrationNextPath(updatedUser.id, updatedUser.email, updatedUser.organizationId);
-      return { sent: true, nextPath };
+    // Resuming onboarding must authenticate the existing identity. Registration
+    // is never an alternate password-reset endpoint.
+    if (!existingUser.isActive || !(await bcrypt.compare(input.password, existingUser.passwordHash))) {
+      throw new AppError("accountAlreadyExists", "CONFLICT", 409);
     }
-
-    if (verificationRequired && !updatedUser.emailVerifiedAt) {
-      try {
-        const verifyLink = await sendEmailVerificationToken({
-          userId: updatedUser.id,
-          email: updatedUser.email,
-          organizationId: updatedUser.organizationId,
-          preferredLocale: updatedUser.preferredLocale ?? input.preferredLocale,
-          requestId: input.requestId,
-        });
-        return { sent: true, verifyLink, verificationEmailSent: true };
-      } catch (error) {
-        if (error instanceof EmailVerificationDeliveryError) {
-          return {
-            sent: true,
-            verifyLink: isProductionRuntime() ? null : error.verifyLink,
-            verificationEmailSent: false,
-          };
-        }
-        throw error;
-      }
-    }
-
-    return { sent: true };
+    const nextPath = await createRegistrationNextPath(existingUser.id, existingUser.email, existingUser.organizationId);
+    return { sent: true, nextPath };
   }
 
   const passwordHash = await bcrypt.hash(input.password, 10);
@@ -171,13 +133,9 @@ export const registerBusinessFromToken = async (input: {
   phone?: string | null;
   requestId: string;
 }) => {
-  const token = await consumeAuthToken({ purpose: "REGISTRATION", token: input.token });
-  if (!token.userId) {
-    throw new AppError("tokenInvalid", "NOT_FOUND", 404);
-  }
-  const userId = token.userId;
-
   return prisma.$transaction(async (tx) => {
+    const token = await consumeAuthToken({ purpose: "REGISTRATION", token: input.token }, tx);
+    const userId = token.userId!;
     const user = await tx.user.findUnique({ where: { id: userId } });
     if (!user) {
       throw new AppError("userNotFound", "NOT_FOUND", 404);

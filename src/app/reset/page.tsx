@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { z } from "zod";
@@ -26,6 +27,7 @@ import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 
 const ResetRequestPage = () => {
+  const hydrated = useHydrated();
   const t = useTranslations("reset");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
@@ -70,6 +72,7 @@ const ResetRequestPage = () => {
           ) : (
             <Form {...form}>
               <form
+                method="post"
                 onSubmit={form.handleSubmit((values) => requestMutation.mutate(values))}
               >
                 <FormStack>
@@ -80,13 +83,13 @@ const ResetRequestPage = () => {
                       <FormItem>
                         <FormLabel>{t("email")}</FormLabel>
                         <FormControl>
-                          <Input {...field} type="email" placeholder={t("emailPlaceholder")} />
+                          <Input {...field} disabled={!hydrated} type="email" placeholder={t("emailPlaceholder")} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                  <Button type="submit" className="w-full" disabled={requestMutation.isLoading}>
+                  <Button type="submit" className="w-full" disabled={!hydrated || requestMutation.isLoading}>
                     {requestMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
                     {requestMutation.isLoading ? tCommon("loading") : t("send")}
                   </Button>

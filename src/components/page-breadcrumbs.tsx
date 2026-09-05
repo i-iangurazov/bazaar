@@ -48,6 +48,8 @@ const segmentLabel = (
   tPos: ReturnType<typeof useTranslations>,
 ) => {
   switch (segment) {
+    case "baam":
+      return tNav("baam");
     case "dashboard":
       return tNav("dashboard");
     case "pos":

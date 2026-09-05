@@ -3,6 +3,7 @@ import { CustomerOrderStatus, PosPaymentMethod, PosReturnStatus, Prisma } from "
 
 import { prisma } from "@/server/db/prisma";
 import { createTestCaller } from "../helpers/context";
+import { withRecordedSalesProjection } from "../helpers/recordedSalesProjection";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
@@ -47,28 +48,22 @@ describeDb("analytics", () => {
       organizationId: adminUser.organizationId!,
     });
 
-    const sales = await adminCaller.analytics.salesTrend({
-      storeId: store.id,
-      rangeDays: 30,
-      granularity: "day",
-    });
-    expect(sales.series.length).toBeGreaterThan(0);
-
-    const top = await adminCaller.analytics.topProducts({
-      storeId: store.id,
-      rangeDays: 30,
-      metric: "units",
-    });
-    expect(top.items.length).toBeGreaterThan(0);
+    const { sales, top, orgSales } = await withRecordedSalesProjection([
+      { organizationId: adminUser.organizationId!, storeId: store.id, productId: product.id,
+        sku: product.sku, name: product.name, qty: 5, revenueKgs: 450.5, costKgs: 125 },
+    ], async () => ({
+      sales: await adminCaller.analytics.salesTrend({ storeId: store.id, rangeDays: 30, granularity: "day" }),
+      top: await adminCaller.analytics.topProducts({ storeId: store.id, rangeDays: 30, metric: "units" }),
+      orgSales: await adminCaller.analytics.salesTrend({ rangeDays: 30, granularity: "day" }),
+    }));
+    expect(sales.series.map((point) => point.salesKgs)).toEqual([450.5]);
+    expect(sales.usesFallback).toBe(false);
+    expect(top.items).toEqual([{ sku: product.sku, name: product.name, value: 5 }]);
 
     const value = await adminCaller.analytics.inventoryValue({ storeId: store.id });
     expect(value.valueKgs).toBeGreaterThan(0);
 
-    const orgSales = await adminCaller.analytics.salesTrend({
-      rangeDays: 30,
-      granularity: "day",
-    });
-    expect(Array.isArray(orgSales.series)).toBe(true);
+    expect(orgSales.series).toEqual(sales.series);
   });
 
   it("denies staff analytics and scopes manager charts to assigned stores", async () => {

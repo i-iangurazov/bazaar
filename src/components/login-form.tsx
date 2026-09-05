@@ -10,6 +10,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 import { normalizeLocale } from "@/lib/locales";
+import { resolveSafeReturnTo } from "@/lib/safeReturnTo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -22,26 +23,39 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { FormStack } from "@/components/form-layout";
+import { trpc } from "@/lib/trpc";
+import { translateError } from "@/lib/translateError";
+import { useHydrated } from "@/hooks/use-hydrated";
 
 export const LoginForm = () => {
+  const hydrated = useHydrated();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [verificationSent, setVerificationSent] = useState(false);
+  const [verificationError, setVerificationError] = useState<string | null>(null);
   const t = useTranslations("auth");
   const tCommon = useTranslations("common");
+  const tNav = useTranslations("nav");
+  const tErrors = useTranslations("errors");
   const router = useRouter();
   const searchParams = useSearchParams();
+  const resendVerification = trpc.publicAuth.resendVerification.useMutation({
+    onSuccess: () => setVerificationSent(true),
+    onError: (error) => setVerificationError(translateError(tErrors, error)),
+  });
 
   const normalizeNext = (next: string | null) => {
-    if (!next || !next.startsWith("/")) {
+    const safeNext = resolveSafeReturnTo(next, "");
+    if (!safeNext) {
       return null;
     }
-    const segment = next.split("/")[1];
+    const segment = safeNext.split("/")[1];
     const normalized = normalizeLocale(segment);
     if (normalized) {
-      const rest = next.split("/").slice(2).join("/");
-      return rest ? `/${rest}` : "/";
+      const rest = safeNext.split("/").slice(2).join("/");
+      return resolveSafeReturnTo(rest ? `/${rest}` : "/", "") || null;
     }
-    return next;
+    return safeNext;
   };
 
   const schema = z.object({
@@ -64,6 +78,8 @@ export const LoginForm = () => {
   const handleSubmit = async (values: z.infer<typeof schema>) => {
     setIsLoading(true);
     setError(null);
+    setVerificationSent(false);
+    setVerificationError(null);
 
     const result = await signIn("credentials", {
       email: values.email,
@@ -104,7 +120,7 @@ export const LoginForm = () => {
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)}>
+      <form method="post" onSubmit={form.handleSubmit(handleSubmit)}>
         <FormStack>
           <FormField
             control={form.control}
@@ -115,6 +131,7 @@ export const LoginForm = () => {
                 <FormControl>
                   <Input
                     {...field}
+                    disabled={!hydrated}
                     type="email"
                     autoComplete="email"
                     placeholder={t("emailPlaceholder")}
@@ -133,6 +150,7 @@ export const LoginForm = () => {
                 <FormControl>
                   <PasswordInput
                     {...field}
+                    disabled={!hydrated}
                     autoComplete="current-password"
                     placeholder={t("passwordPlaceholder")}
                     showLabel={tCommon("showPassword")}
@@ -144,12 +162,34 @@ export const LoginForm = () => {
             )}
           />
           {error ? <p className="text-sm text-danger">{t(error)}</p> : null}
+          {error === "emailNotVerified" ? (
+            <div className="space-y-2" aria-live="polite">
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full"
+                disabled={resendVerification.isLoading || verificationSent}
+                onClick={async () => {
+                  if (!(await form.trigger("email"))) return;
+                  setVerificationError(null);
+                  resendVerification.mutate({ email: form.getValues("email") });
+                }}
+              >
+                {resendVerification.isLoading
+                  ? tNav("emailVerificationSending")
+                  : verificationSent
+                    ? tNav("emailVerificationSent")
+                    : tNav("emailVerificationResend")}
+              </Button>
+              {verificationError ? <p className="text-sm text-danger">{verificationError}</p> : null}
+            </div>
+          ) : null}
           <div className="text-right">
             <Link href="/reset" className="text-xs font-semibold text-primary hover:text-primary/80">
               {t("forgotPassword")}
             </Link>
           </div>
-          <Button className="w-full" type="submit" disabled={isLoading}>
+          <Button className="w-full" type="submit" disabled={!hydrated || isLoading}>
             {isLoading ? t("signingIn") : t("signIn")}
           </Button>
         </FormStack>

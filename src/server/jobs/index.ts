@@ -324,6 +324,36 @@ const executeJob = async (
   return { result: null, attempts, error: new Error("jobFailed") };
 };
 
+const startLockRenewal = (name: string, lock: LockHandle) => {
+  const logger = getLogger();
+  const renewEveryMs = Math.max(5_000, Math.floor(lock.ttlMs / 3));
+  const timer = setInterval(() => {
+    void renewLock(lock)
+      .then((renewed) => {
+        if (!renewed)
+          logger.warn({ job: name }, "job lock ownership lost; outcome may require reconciliation");
+      })
+      .catch((error) => {
+        logger.warn({ job: name, error }, "job lock renew failed");
+      });
+  }, renewEveryMs);
+  timer.unref?.();
+  return timer;
+};
+
+/** Shares the normal runner's owner-checked lock with recovery control actions. */
+export const withJobLock = async <T>(name: string, action: () => Promise<T>) => {
+  const lock = await acquireLock(name, 5 * 60 * 1000);
+  if (!lock) return { acquired: false as const };
+  const timer = startLockRenewal(name, lock);
+  try {
+    return { acquired: true as const, value: await action() };
+  } finally {
+    clearInterval(timer);
+    await releaseLock(lock);
+  }
+};
+
 export const runJob = async (name: string, payload?: JobPayload): Promise<JobResult> => {
   const logger = getLogger();
   const job = jobs[name];
@@ -338,13 +368,7 @@ export const runJob = async (name: string, payload?: JobPayload): Promise<JobRes
     return { job: name, status: "skipped", details: { reason: "locked" } };
   }
   const startedAt = Date.now();
-  const renewEveryMs = Math.max(5_000, Math.floor(lock.ttlMs / 3));
-  let lockRenewTimer: NodeJS.Timeout | null = setInterval(() => {
-    void renewLock(lock).catch((error) => {
-      logger.warn({ job: name, error }, "job lock renew failed");
-    });
-  }, renewEveryMs);
-  lockRenewTimer.unref?.();
+  const lockRenewTimer = startLockRenewal(name, lock);
 
   try {
     incrementGauge(jobsInflight, undefined, 1);
@@ -375,10 +399,7 @@ export const runJob = async (name: string, payload?: JobPayload): Promise<JobRes
     logger.error({ job: name, attempts, error }, "job failed; dead letter created");
     return { job: name, status: "skipped", details: { reason: "failed" } };
   } finally {
-    if (lockRenewTimer) {
-      clearInterval(lockRenewTimer);
-      lockRenewTimer = null;
-    }
+    clearInterval(lockRenewTimer);
     decrementGauge(jobsInflight, undefined, 1);
     observeHistogram(jobDurationMs, { job: name }, Date.now() - startedAt);
     await releaseLock(lock);
@@ -387,12 +408,33 @@ export const runJob = async (name: string, payload?: JobPayload): Promise<JobRes
 
 export const listJobs = () => Object.keys(jobs);
 
-export const retryJob = async (jobName: string, payload?: JobPayload) => {
-  const { result, attempts, error } = await executeJob(jobName, payload);
-  if (result) {
-    return { result, attempts, error: null };
+export const retryJob = async (
+  jobName: string,
+  payload?: JobPayload,
+  beforeExecute?: () => Promise<void>,
+) => {
+  if (!jobs[jobName]) {
+    return {
+      result: { job: jobName, status: "skipped" as const, details: { reason: "unknown" } },
+      attempts: 0,
+      error: null,
+    };
   }
-  return { result: null, attempts, error };
+  const locked = await withJobLock(jobName, async () => {
+    // Durable ownership may change between a database claim and lock acquisition.
+    // Validate it only after owning the same lock used by manual resolution.
+    await beforeExecute?.();
+    const { result, attempts, error } = await executeJob(jobName, payload);
+    return { result, attempts, error: result ? null : error };
+  });
+  if (!locked.acquired) {
+    return {
+      result: { job: jobName, status: "skipped" as const, details: { reason: "locked" } },
+      attempts: 0,
+      error: null,
+    };
+  }
+  return locked.value;
 };
 
 export const registerJobForTests = (name: string, handler: JobDefinition["handler"]) => {

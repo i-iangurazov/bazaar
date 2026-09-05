@@ -6,6 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const db = vi.hoisted(() => ({ findUser: vi.fn() }));
 vi.mock("@/server/db/prisma", () => ({ prisma: { user: { findUnique: db.findUser } } }));
 vi.mock("@/server/config/startupChecks", () => ({ assertStartupConfigured: vi.fn() }));
+// This suite isolates claim provenance. Required-verification authorization is
+// exercised against actual database users in auth-lifecycle.test.ts.
+vi.mock("@/server/config/auth", () => ({ isEmailVerificationRequired: () => false }));
 vi.mock("@/server/config/runtime", () => ({
   getRuntimeEnv: () => ({
     nodeEnv: "test",
@@ -27,6 +30,7 @@ import { canAccessAppRoute } from "@/lib/roleAccess";
 const secret = "synthetic-session-claims-test-secret";
 const baseToken = (): JWT => ({
   sub: "synthetic-user",
+  sessionVersion: 0,
   email: "synthetic@example.invalid",
   role: "STAFF",
   organizationId: "synthetic-org",
@@ -38,6 +42,7 @@ const baseToken = (): JWT => ({
 });
 const databaseUser = () => ({
   id: "synthetic-user",
+  sessionVersion: 0,
   email: "synthetic@example.invalid",
   name: "Synthetic user",
   role: "STAFF",
