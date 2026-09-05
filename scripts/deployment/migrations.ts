@@ -31,11 +31,17 @@ export function planProductionMigrations(
   }
   const active = history.filter((record) => !record.rolled_back_at);
   if (active.some((record) => !record.finished_at)) throw new Error("Unfinished migration requires recovery.");
-  for (const record of active) {
+  const divergentHistory = active.flatMap((record) => {
     const file = files.find((candidate) => candidate.name === record.migration_name);
     if (!file || file.checksum !== record.checksum) {
-      throw new Error("Database migration history differs from this release.");
+      return [{ name: record.migration_name, recordedChecksum: record.checksum, releaseChecksum: file?.checksum ?? null }];
     }
+    return [];
+  });
+  if (divergentHistory.length) {
+    // Migration names and SQL digests are safe deployment diagnostics. No
+    // database URL, credentials, customer rows or provider values are logged.
+    throw new Error(`Database migration history differs from this release: ${JSON.stringify(divergentHistory)}`);
   }
   const completed = new Set(active.map((record) => record.migration_name));
   const pending = files.filter((file) => !completed.has(file.name)).map((file) => file.name);
