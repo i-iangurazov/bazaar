@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { planProductionMigrations } from "../../scripts/deployment/migrations";
+import { acknowledgedAppliedHistory, planProductionMigrations } from "../../scripts/deployment/migrations";
 
 const baseline = { name: "baseline", checksum: "unchanged" };
 const addition = { name: "reviewed-addition", checksum: "new" };
@@ -26,5 +26,18 @@ describe("production migration release guard", () => {
   });
   it("rejects changed pending SQL even when the migration name is approved", () => {
     expect(() => planProductionMigrations([addition], [], { [addition.name]: "reviewed-original" })).toThrow("SQL changed");
+  });
+  it("acknowledges only the exact completed historical ledger and current-file digest pairs", () => {
+    for (const [name, digests] of Object.entries(acknowledgedAppliedHistory)) {
+      const files = digests.releaseChecksum ? [{ name, checksum: digests.releaseChecksum }] : [];
+      const historical = { ...record, migration_name: name, checksum: digests.recordedChecksum };
+      expect(planProductionMigrations(files, [historical], {})).toEqual([]);
+      expect(() => planProductionMigrations(files, [{ ...historical, checksum: "unknown" }], {})).toThrow("differs");
+      expect(() => planProductionMigrations(files, [{ ...historical, finished_at: null }], {})).toThrow("Unfinished");
+    }
+  });
+  it("never treats a historical acknowledgement as approval to run or restore that migration", () => {
+    const [name, digests] = Object.entries(acknowledgedAppliedHistory)[1]!;
+    expect(() => planProductionMigrations([{ name, checksum: digests.recordedChecksum }], [], {})).toThrow("unapproved");
   });
 });

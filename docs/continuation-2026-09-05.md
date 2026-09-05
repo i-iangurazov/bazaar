@@ -4,7 +4,7 @@ This continues the original 5 September assessment and stabilization commit `190
 
 Current local evidence is under `artifacts/bazaar-continuation/20260905/`. These ignored artifacts include browser journeys and machine-readable before/after results. Captured email links and synthetic credentials remain private. Tracked tests and these documents describe reproducible contracts without embedding credentials.
 
-Final local validation passed **94 focused unit tests and 80 disposable database tests**, plus 12 selected legacy auth contract checks. TypeScript, changed-file ESLint, translation validation and diff checks passed. Browser evidence is reported separately below; overlapping scenarios are not added into a global readiness score.
+Final local validation passed **96 focused unit tests and 80 disposable database tests**, plus 12 selected legacy auth contract checks. TypeScript, changed-file ESLint, translation validation and diff checks passed. Browser evidence is reported separately below; overlapping scenarios are not added into a global readiness score.
 
 ## Authentication
 
@@ -48,6 +48,8 @@ The owner authorized migrations, pushes to `main`, CI checks and Vercel deployme
 4. Check CI and the exact Vercel deployment, then perform in-scope read-only smoke checks.
 
 `vercel.json` explicitly selects `pnpm build`, including its guarded prebuild. Migration-history checks do not certify arbitrary physical schema drift. Git-triggered Vercel builds can run concurrently with CI; both exact-commit outcomes must be checked. Artifacts are excluded from CLI deployments as well as Git.
+
+The first guarded deployment identified five pre-existing ledger differences. [Exact historical acknowledgements](deployment-migration-history.md) document their Git provenance and pinned digests. They do not authorize any additional migration or change the excluded scope.
 
 The auth migration requires existing users to log in again. Unverified accounts must verify their email when required; login provides resend recovery. No verification backfill is included. The job migration adds nullable retry-claim metadata and preserves existing jobs.
 

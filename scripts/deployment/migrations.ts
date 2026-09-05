@@ -11,6 +11,30 @@ export const approvedProductionMigrations = {
   "20260905150000_dead_letter_retry_claim": "3cb56dbbea878d9980a92fc7f88079ec569c935b840a04fd2b1525c2c27c1814",
 } as const;
 
+// Observed completed production ledger entries, verified against Git history.
+// These are not pending-migration approvals and are never restored or replayed.
+// Provenance and scope: docs/deployment-migration-history.md.
+export const acknowledgedAppliedHistory: Readonly<Record<string, {
+  recordedChecksum: string; releaseChecksum: string | null;
+}>> = {
+  "20260429123000_bazaar_api_keys": {
+    recordedChecksum: "01d8eafc05ce163d68a9906c0ce83e2b2b3188ca21af59739f74785defcfbc95",
+    releaseChecksum: "ef6bd40462fd79d293eb9eab79e92518a1b5a37136c53f147ba6eaa4b356341c",
+  },
+  "20260831122000_allow_zero_cost_stock_movement": {
+    recordedChecksum: "0c472ace8b0b64bcc5e83fffc5f17040d9b27b2e64ee8a01420db37478a63a98", releaseChecksum: null,
+  },
+  "20260831120000_product_cost_precise_basis_value": {
+    recordedChecksum: "8b4b977fa0fb4cc2a6e91389cd6ea33d70f5b66cfa7fdf96690101418ea77d66", releaseChecksum: null,
+  },
+  "20260831121000_stock_movement_inventory_value": {
+    recordedChecksum: "2d3c0b3fa238ff8d48acf78c8d165acaaf3bff411d75f0a7967820400c5d06c2", releaseChecksum: null,
+  },
+  "20260831121500_stock_movement_valuation_cursor_index": {
+    recordedChecksum: "378043484b656d0fc0c3f061e0f556944a7db95eb6b0f3911775931f5fd34445", releaseChecksum: null,
+  },
+};
+
 type MigrationFile = { name: string; checksum: string };
 type MigrationRecord = {
   migration_name: string;
@@ -34,6 +58,9 @@ export function planProductionMigrations(
   const divergentHistory = active.flatMap((record) => {
     const file = files.find((candidate) => candidate.name === record.migration_name);
     if (!file || file.checksum !== record.checksum) {
+      const acknowledged = acknowledgedAppliedHistory[record.migration_name];
+      if (acknowledged?.recordedChecksum === record.checksum &&
+          acknowledged.releaseChecksum === (file?.checksum ?? null)) return [];
       return [{ name: record.migration_name, recordedChecksum: record.checksum, releaseChecksum: file?.checksum ?? null }];
     }
     return [];
