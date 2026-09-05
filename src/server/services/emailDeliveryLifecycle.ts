@@ -14,8 +14,7 @@ export const emailRecipientLifecycleStatuses = [
   "CANCELLED",
 ] as const;
 
-export type EmailRecipientLifecycleStatus =
-  (typeof emailRecipientLifecycleStatuses)[number];
+export type EmailRecipientLifecycleStatus = (typeof emailRecipientLifecycleStatuses)[number];
 
 export const terminalEmailRecipientStatuses = new Set<EmailRecipientLifecycleStatus>([
   "DELIVERED",
@@ -88,11 +87,7 @@ export const countEmailRecipientLifecycleStatuses = (
   );
   const unresolved = counts.QUEUED + counts.SENDING + counts.ACCEPTED + counts.DEFERRED;
   const permanentFailures =
-    counts.BOUNCED +
-    counts.DROPPED +
-    counts.SUPPRESSED +
-    counts.COMPLAINED +
-    counts.FAILED;
+    counts.BOUNCED + counts.DROPPED + counts.SUPPRESSED + counts.COMPLAINED + counts.FAILED;
 
   return {
     ...counts,
@@ -133,7 +128,10 @@ export const resolveEmailCampaignLifecycleStatus = (
 };
 
 const normalizedProviderEventType = (eventType: string) =>
-  eventType.trim().toLowerCase().replace(/^email\./, "");
+  eventType
+    .trim()
+    .toLowerCase()
+    .replace(/^email\./, "");
 
 export const lifecycleStatusForProviderEvent = (
   eventType: string,
@@ -225,6 +223,7 @@ export const decideEmailRecipientTransition = (input: {
   eventStatus: EmailRecipientLifecycleStatus | null;
   eventAt: Date;
   eventIdentity: string;
+  currentFailureIsLocal?: boolean;
 }): EmailRecipientTransitionDecision => {
   if (input.currentEventIdentity && input.currentEventIdentity === input.eventIdentity) {
     return { nextStatus: input.currentStatus, apply: false, reason: "duplicate_event" };
@@ -232,14 +231,24 @@ export const decideEmailRecipientTransition = (input: {
   if (!input.eventStatus) {
     return { nextStatus: input.currentStatus, apply: false, reason: "engagement_event" };
   }
+  // A complaint remains authoritative even when a later open/click was observed
+  // first. Engagement timestamps must not prevent a complaint suppression.
+  if (input.currentStatus === "DELIVERED" && input.eventStatus === "COMPLAINED") {
+    return { nextStatus: "COMPLAINED", apply: true, reason: "applied" };
+  }
   if (input.currentEventAt && input.eventAt.getTime() < input.currentEventAt.getTime()) {
     return { nextStatus: input.currentStatus, apply: false, reason: "older_event" };
   }
 
   if (terminalEmailRecipientStatuses.has(input.currentStatus)) {
-    // Resend defines complained as an event after successful delivery.
-    if (input.currentStatus === "DELIVERED" && input.eventStatus === "COMPLAINED") {
-      return { nextStatus: "COMPLAINED", apply: true, reason: "applied" };
+    // Local lookup exhaustion says delivery is unknown, not that the provider
+    // failed. A later provider terminal fact can correct it without resending.
+    if (
+      input.currentStatus === "FAILED" &&
+      input.currentFailureIsLocal &&
+      terminalEmailRecipientStatuses.has(input.eventStatus)
+    ) {
+      return { nextStatus: input.eventStatus, apply: true, reason: "applied" };
     }
     if (input.currentStatus === input.eventStatus) {
       return { nextStatus: input.currentStatus, apply: false, reason: "duplicate_event" };
@@ -272,6 +281,11 @@ export const normalizeEmailDeliveryError = (input: {
   reason?: string | null;
 }): EmailDeliveryErrorCategory => {
   const reason = input.reason?.trim().toLowerCase() ?? "";
+  if (
+    input.status &&
+    ["QUEUED", "SENDING", "ACCEPTED", "DELIVERED", "CANCELLED"].includes(input.status)
+  )
+    return "NONE";
   if (input.status === "COMPLAINED") return "COMPLAINT";
   if (input.status === "SUPPRESSED") return "SUPPRESSED";
   if (input.status === "BOUNCED") {

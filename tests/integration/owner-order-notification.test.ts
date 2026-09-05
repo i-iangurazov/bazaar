@@ -14,6 +14,11 @@ import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
 
+// These fixtures exercise durable application recovery, not transport retries.
+// A 60s provider delay exceeds the single-send budget and leaves the failure for
+// the next explicitly scheduled worker attempt; bounded HTTP retries have their
+// own isolated transport tests.
+
 describeDb("external order owner notifications", () => {
   beforeEach(async () => {
     await resetDatabase();
@@ -167,7 +172,7 @@ describeDb("external order owner notifications", () => {
           headers: { "Content-Type": "application/json" },
         }),
       )
-      .mockResolvedValueOnce(new Response("unavailable", { status: 503 }))
+      .mockResolvedValueOnce(new Response("unavailable", { status: 503, headers: { "Retry-After": "60" } }))
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ id: "owner-recovered" }), {
           status: 200,

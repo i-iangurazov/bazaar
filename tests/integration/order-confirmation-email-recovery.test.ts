@@ -14,6 +14,11 @@ import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
 
+// These fixtures exercise durable application recovery, not transport retries.
+// A 60s provider delay exceeds the single-send budget and leaves the failure for
+// the next explicitly scheduled worker attempt; bounded HTTP retries have their
+// own isolated transport tests.
+
 const deferred = <T>() => {
   let resolve!: (value: T) => void;
   let reject!: (reason?: unknown) => void;
@@ -60,7 +65,7 @@ describeDb("API order confirmation email recovery", () => {
     });
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(new Response("provider unavailable", { status: 503 }))
+      .mockResolvedValueOnce(new Response("provider unavailable", { status: 503, headers: { "Retry-After": "60" } }))
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ id: "resend-recovered-1" }), {
           status: 200,
@@ -168,7 +173,7 @@ describeDb("API order confirmation email recovery", () => {
     });
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(new Response("provider unavailable", { status: 503 }))
+      .mockResolvedValueOnce(new Response("provider unavailable", { status: 503, headers: { "Retry-After": "60" } }))
       .mockResolvedValue(
         new Response(JSON.stringify({ id: "resend-concurrent-1" }), {
           status: 200,
@@ -225,11 +230,11 @@ describeDb("API order confirmation email recovery", () => {
         status: 200,
         headers: { "Content-Type": "application/json" },
       }),
-      staleResponse: new Response("stale failed", { status: 503 }),
+      staleResponse: new Response("stale failed", { status: 503, headers: { "Retry-After": "60" } }),
     },
     {
       newerOutcome: "failed" as const,
-      newerResponse: new Response("newer failed", { status: 503 }),
+      newerResponse: new Response("newer failed", { status: 503, headers: { "Retry-After": "60" } }),
       staleResponse: new Response(JSON.stringify({ id: "stale-sent" }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -250,7 +255,7 @@ describeDb("API order confirmation email recovery", () => {
       const heldAttempt = deferred<Response>();
       const fetchMock = vi
         .fn()
-        .mockResolvedValueOnce(new Response("initial failure", { status: 503 }))
+        .mockResolvedValueOnce(new Response("initial failure", { status: 503, headers: { "Retry-After": "60" } }))
         .mockImplementationOnce(() => heldAttempt.promise)
         .mockResolvedValueOnce(newerResponse);
       vi.stubGlobal("fetch", fetchMock);

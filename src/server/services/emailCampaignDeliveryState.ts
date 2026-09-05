@@ -5,13 +5,11 @@ import {
   EmailCampaignStatus,
   EmailDeliveryErrorCategory,
   Prisma,
+  type EmailCampaignRecipient,
 } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
-import {
-  EmailProviderError,
-  retrieveResendEmail,
-} from "@/server/services/email";
+import { EmailProviderError, retrieveResendEmail } from "@/server/services/email";
 import {
   buildEmailProviderEventIdentity,
   countEmailRecipientLifecycleStatuses,
@@ -30,9 +28,7 @@ type DeliveryTransaction = Prisma.TransactionClient;
 
 const lifecycleStatusSet = new Set<string>(emailRecipientLifecycleStatuses);
 
-const toLifecycleStatus = (
-  status: EmailCampaignRecipientStatus,
-): EmailRecipientLifecycleStatus => {
+const toLifecycleStatus = (status: EmailCampaignRecipientStatus): EmailRecipientLifecycleStatus => {
   if (lifecycleStatusSet.has(status)) {
     return status as EmailRecipientLifecycleStatus;
   }
@@ -52,8 +48,8 @@ export const recomputeEmailCampaignDeliverySummaryTx = async (
   // Serialize counter recomputation per campaign before reading recipients. If two
   // webhook/reconciliation transactions counted first, the later campaign update
   // could persist a snapshot that did not include the other committed transition.
-  await tx.$queryRaw`
-    SELECT "id"
+  const [campaign] = await tx.$queryRaw<Array<{ id: string; sentAt: Date | null }>>`
+    SELECT "id", "sentAt"
     FROM "EmailCampaign"
     WHERE "id" = ${campaignId}
     FOR UPDATE
@@ -64,10 +60,7 @@ export const recomputeEmailCampaignDeliverySummaryTx = async (
     _count: { _all: true },
   });
   const statuses = grouped.flatMap((row) =>
-    Array.from(
-      { length: row._count._all },
-      () => toLifecycleStatus(row.status),
-    ),
+    Array.from({ length: row._count._all }, () => toLifecycleStatus(row.status)),
   );
   const counts = countEmailRecipientLifecycleStatuses(statuses);
   const cumulativeAccepted = await tx.emailCampaignRecipient.count({
@@ -92,7 +85,10 @@ export const recomputeEmailCampaignDeliverySummaryTx = async (
       cancelledCount: counts.CANCELLED,
       unresolvedCount: counts.unresolved,
       sentCount: cumulativeAccepted,
-      sentAt: counts.unresolved === 0 && cumulativeAccepted > 0 ? new Date() : undefined,
+      sentAt:
+        counts.unresolved === 0 && cumulativeAccepted > 0
+          ? (campaign?.sentAt ?? new Date())
+          : undefined,
       errorMessage:
         nextStatus === EmailCampaignStatus.FAILED ||
         nextStatus === EmailCampaignStatus.COMPLETED_WITH_ERRORS
@@ -150,7 +146,7 @@ const providerTag = (payload: ProviderEventPayload | null | undefined, name: str
   if (Array.isArray(tags)) {
     return tags.find((tag) => tag.name === name)?.value ?? null;
   }
-  return tags && typeof tags === "object" ? tags[name] ?? null : null;
+  return tags && typeof tags === "object" ? (tags[name] ?? null) : null;
 };
 
 const sanitizedProviderPayload = (payload: ProviderEventPayload | null | undefined) => {
@@ -182,7 +178,7 @@ const terminalFailureStatus = (status: EmailRecipientLifecycleStatus) =>
   status === "COMPLAINED" ||
   status === "FAILED";
 
-export const processEmailProviderRecipientEvent = async (input: {
+type ProviderRecipientEventInput = {
   provider: string;
   providerMessageId: string;
   providerEventId?: string | null;
@@ -190,7 +186,23 @@ export const processEmailProviderRecipientEvent = async (input: {
   eventAt: Date;
   providerReason?: string | null;
   payload?: ProviderEventPayload | null;
-}) => {
+};
+
+type ReconciliationEventInput = ProviderRecipientEventInput & {
+  reconciliation?: {
+    recipient: EmailCampaignRecipient;
+    retryAt: Date | null;
+    localFailure?: boolean;
+  };
+};
+
+export const processEmailProviderRecipientEvent = (input: ProviderRecipientEventInput) =>
+  prisma.$transaction((tx) => processEmailProviderRecipientEventTx(tx, input));
+
+const processEmailProviderRecipientEventTx = async (
+  tx: DeliveryTransaction,
+  input: ReconciliationEventInput,
+) => {
   const provider = input.provider.trim().toLowerCase();
   const eventIdentity = buildEmailProviderEventIdentity({
     provider,
@@ -200,27 +212,50 @@ export const processEmailProviderRecipientEvent = async (input: {
     eventAt: input.eventAt,
   });
 
-  return prisma.$transaction(async (tx) => {
-    const candidate = await tx.emailCampaignRecipient.findFirst({
-      where: {
-        provider,
-        providerMessageId: input.providerMessageId,
-      },
-      select: { id: true, campaignId: true },
-    });
-    if (!candidate) {
-      return { processed: false as const, reason: "recipient_not_found" as const };
+  const candidate = await tx.emailCampaignRecipient.findFirst({
+    where: {
+      provider,
+      providerMessageId: input.providerMessageId,
+    },
+    select: { id: true, campaignId: true },
+  });
+  if (!candidate) {
+    // A signed, tagged callback can beat persistence of the batch response.
+    // Ask the transport to retry only for a known campaign with a pending
+    // provider identity; unrelated transactional-email callbacks stay ignored.
+    const campaignId = providerTag(input.payload, "campaign_id");
+    const storeId = providerTag(input.payload, "store_id");
+    if (campaignId && storeId) {
+      const campaign = await tx.emailCampaign.findFirst({
+        where: { id: campaignId, storeId },
+        select: { organizationId: true },
+      });
+      if (
+        campaign &&
+        (await tx.emailCampaignRecipient.count({
+          where: {
+            campaignId,
+            organizationId: campaign.organizationId,
+            provider,
+            providerMessageId: null,
+            status: EmailCampaignRecipientStatus.SENDING,
+          },
+        }))
+      )
+        return { processed: false as const, reason: "recipient_identity_pending" as const };
     }
-    // Campaign first, recipient second is the canonical lock order. This prevents
-    // different-recipient webhooks from holding recipient/FK locks while each waits
-    // to serialize the same campaign summary.
-    await tx.$queryRaw`
+    return { processed: false as const, reason: "recipient_not_found" as const };
+  }
+  // Campaign first, recipient second is the canonical lock order. This prevents
+  // different-recipient webhooks from holding recipient/FK locks while each waits
+  // to serialize the same campaign summary.
+  await tx.$queryRaw`
       SELECT "id"
       FROM "EmailCampaign"
       WHERE "id" = ${candidate.campaignId}
       FOR UPDATE
     `;
-    const locked = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+  const locked = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
       SELECT "id"
       FROM "EmailCampaignRecipient"
       WHERE "id" = ${candidate.id}
@@ -228,17 +263,31 @@ export const processEmailProviderRecipientEvent = async (input: {
         AND "providerMessageId" = ${input.providerMessageId}
       FOR UPDATE
     `);
-    if (locked.length !== 1) {
-      return { processed: false as const, reason: "recipient_not_found" as const };
-    }
+  if (locked.length !== 1) {
+    return { processed: false as const, reason: "recipient_not_found" as const };
+  }
 
-    const recipient = await tx.emailCampaignRecipient.findUniqueOrThrow({
-      where: { id: locked[0]!.id },
-      include: { campaign: { select: { id: true, organizationId: true, storeId: true } } },
-    });
-    if (recipient.organizationId !== recipient.campaign.organizationId) {
-      await tx.emailCampaignRecipientEvent.createMany({
-        data: [{
+  const recipient = await tx.emailCampaignRecipient.findUniqueOrThrow({
+    where: { id: locked[0]!.id },
+    include: { campaign: { select: { id: true, organizationId: true, storeId: true } } },
+  });
+  const snapshot = input.reconciliation?.recipient;
+  if (
+    snapshot &&
+    (recipient.id !== snapshot.id ||
+      recipient.updatedAt.getTime() !== snapshot.updatedAt.getTime() ||
+      recipient.status !== snapshot.status ||
+      recipient.providerMessageId !== snapshot.providerMessageId ||
+      recipient.reconcileAttemptCount !== snapshot.reconcileAttemptCount ||
+      recipient.lastProviderEventId !== snapshot.lastProviderEventId ||
+      recipient.sendLeaseToken !== snapshot.sendLeaseToken)
+  ) {
+    return { processed: false as const, reason: "recipient_changed" as const };
+  }
+  if (recipient.organizationId !== recipient.campaign.organizationId) {
+    await tx.emailCampaignRecipientEvent.createMany({
+      data: [
+        {
           organizationId: recipient.campaign.organizationId,
           campaignId: recipient.campaignId,
           recipientId: recipient.id,
@@ -254,157 +303,203 @@ export const processEmailProviderRecipientEvent = async (input: {
           ignoredReason: "recipient_organization_mismatch",
           providerReason: boundedText(input.providerReason, 1_000),
           payloadJson: sanitizedProviderPayload(input.payload) ?? Prisma.JsonNull,
-        }],
-        skipDuplicates: true,
-      });
-      return {
-        processed: false as const,
-        reason: "recipient_organization_mismatch" as const,
-        campaignId: recipient.campaignId,
-        recipientId: recipient.id,
-      };
-    }
-    const campaignTag = providerTag(input.payload, "campaign_id");
-    const storeTag = providerTag(input.payload, "store_id");
-    if (
-      (campaignTag && campaignTag !== recipient.campaignId) ||
-      (storeTag && storeTag !== recipient.campaign.storeId)
-    ) {
-      return { processed: false as const, reason: "scope_mismatch" as const };
-    }
-
-    const currentStatus = toLifecycleStatus(recipient.status);
-    const eventStatus = lifecycleStatusForProviderEvent(input.eventType);
-    const decision = decideEmailRecipientTransition({
-      currentStatus,
-      currentEventAt: recipient.lastProviderEventAt,
-      currentEventIdentity: recipient.lastProviderEventId,
-      eventStatus,
-      eventAt: input.eventAt,
-      eventIdentity,
-    });
-    const inserted = await tx.emailCampaignRecipientEvent.createMany({
-      data: [
-        {
-          organizationId: recipient.campaign.organizationId,
-          campaignId: recipient.campaignId,
-          recipientId: recipient.id,
-          provider,
-          eventIdentity,
-          providerEventId: input.providerEventId ?? null,
-          providerMessageId: input.providerMessageId,
-          eventType: input.eventType.slice(0, 100),
-          eventAt: input.eventAt,
-          statusBefore: recipient.status,
-          statusAfter: decision.nextStatus as EmailCampaignRecipientStatus,
-          applied: decision.apply,
-          ignoredReason: decision.apply ? null : decision.reason,
-          providerReason: boundedText(input.providerReason, 1_000),
-          payloadJson: sanitizedProviderPayload(input.payload) ?? Prisma.JsonNull,
         },
       ],
       skipDuplicates: true,
     });
-    if (inserted.count === 0) {
-      return {
-        processed: true as const,
-        duplicate: true,
+    return {
+      processed: false as const,
+      reason: "recipient_organization_mismatch" as const,
+      campaignId: recipient.campaignId,
+      recipientId: recipient.id,
+    };
+  }
+  const campaignTag = providerTag(input.payload, "campaign_id");
+  const storeTag = providerTag(input.payload, "store_id");
+  if (
+    (campaignTag && campaignTag !== recipient.campaignId) ||
+    (storeTag && storeTag !== recipient.campaign.storeId)
+  ) {
+    return { processed: false as const, reason: "scope_mismatch" as const };
+  }
+
+  const currentStatus = toLifecycleStatus(recipient.status);
+  const eventStatus = input.reconciliation?.localFailure
+    ? "FAILED"
+    : lifecycleStatusForProviderEvent(input.eventType);
+  const decision = decideEmailRecipientTransition({
+    currentStatus,
+    currentEventAt: recipient.lastProviderEventAt,
+    currentEventIdentity: recipient.lastProviderEventId,
+    eventStatus,
+    eventAt: input.eventAt,
+    eventIdentity,
+    currentFailureIsLocal: recipient.lastProviderEvent === "reconciliation.failed",
+  });
+  const inserted = await tx.emailCampaignRecipientEvent.createMany({
+    data: [
+      {
+        organizationId: recipient.campaign.organizationId,
         campaignId: recipient.campaignId,
         recipientId: recipient.id,
-      };
+        provider,
+        eventIdentity,
+        providerEventId: input.providerEventId ?? null,
+        providerMessageId: input.providerMessageId,
+        eventType: input.eventType.slice(0, 100),
+        eventAt: input.eventAt,
+        statusBefore: recipient.status,
+        statusAfter: decision.nextStatus as EmailCampaignRecipientStatus,
+        applied: decision.apply,
+        ignoredReason: decision.apply ? null : decision.reason,
+        providerReason: boundedText(input.providerReason, 1_000),
+        payloadJson: sanitizedProviderPayload(input.payload) ?? Prisma.JsonNull,
+      },
+    ],
+    skipDuplicates: true,
+  });
+  if (inserted.count === 0) {
+    const existing = await tx.emailCampaignRecipientEvent.findUniqueOrThrow({
+      where: { provider_eventIdentity: { provider, eventIdentity } },
+    });
+    if (
+      existing.recipientId !== recipient.id ||
+      existing.providerMessageId !== input.providerMessageId ||
+      existing.eventType !== input.eventType.slice(0, 100) ||
+      (!input.reconciliation && existing.eventAt.getTime() !== input.eventAt.getTime())
+    ) {
+      return { processed: false as const, reason: "event_identity_conflict" as const };
     }
-
-    if (decision.apply) {
-      const category = normalizeEmailDeliveryError({
-        status: decision.nextStatus,
-        reason: input.providerReason,
-      });
-      const isTerminal = terminalEmailRecipientStatuses.has(decision.nextStatus);
+    if (input.reconciliation) {
       await tx.emailCampaignRecipient.update({
         where: { id: recipient.id },
         data: {
-          status: decision.nextStatus as EmailCampaignRecipientStatus,
-          providerStatus: input.eventType.replace(/^email\./, "").slice(0, 100),
-          providerReason: boundedText(input.providerReason, 1_000),
-          normalizedErrorCategory: category as EmailDeliveryErrorCategory,
-          errorMessage: terminalFailureStatus(decision.nextStatus)
-            ? (boundedText(input.providerReason, 1_000) ?? input.eventType.slice(0, 100))
-            : null,
-          lastProviderEvent: input.eventType.slice(0, 100),
-          lastProviderEventId: eventIdentity,
-          lastProviderEventAt: input.eventAt,
-          retryAt:
-            decision.nextStatus === "DEFERRED"
-              ? new Date(input.eventAt.getTime() + 15 * 60 * 1_000)
-              : null,
-          deliveredAt: decision.nextStatus === "DELIVERED" ? input.eventAt : undefined,
-          bouncedAt: decision.nextStatus === "BOUNCED" ? input.eventAt : undefined,
-          complainedAt: decision.nextStatus === "COMPLAINED" ? input.eventAt : undefined,
-          failedAt: terminalFailureStatus(decision.nextStatus) ? input.eventAt : undefined,
-          terminalAt: isTerminal ? input.eventAt : null,
-          sendLeaseToken: null,
-          sendLeaseExpiresAt: null,
+          reconcileAt: input.eventAt,
+          reconcileAttemptCount: { increment: 1 },
+          retryAt: terminalEmailRecipientStatuses.has(currentStatus)
+            ? null
+            : input.reconciliation.retryAt,
         },
       });
+    }
+    return {
+      processed: true as const,
+      duplicate: true,
+      campaignId: recipient.campaignId,
+      recipientId: recipient.id,
+    };
+  }
 
-      if (
-        decision.nextStatus === "BOUNCED" ||
-        decision.nextStatus === "SUPPRESSED" ||
-        decision.nextStatus === "COMPLAINED"
-      ) {
-        await tx.emailMarketingSuppression.upsert({
-          where: {
-            organizationId_storeId_email: {
-              organizationId: recipient.campaign.organizationId,
-              storeId: recipient.campaign.storeId,
-              email: recipient.email.trim().toLowerCase(),
-            },
-          },
-          create: {
+  if (decision.apply) {
+    const category = normalizeEmailDeliveryError({
+      status: decision.nextStatus,
+      reason: input.providerReason,
+    });
+    const isTerminal = terminalEmailRecipientStatuses.has(decision.nextStatus);
+    await tx.emailCampaignRecipient.update({
+      where: { id: recipient.id },
+      data: {
+        status: decision.nextStatus as EmailCampaignRecipientStatus,
+        providerStatus: input.eventType.replace(/^email\./, "").slice(0, 100),
+        providerReason: boundedText(input.providerReason, 1_000),
+        normalizedErrorCategory: category as EmailDeliveryErrorCategory,
+        errorMessage: terminalFailureStatus(decision.nextStatus)
+          ? (boundedText(input.providerReason, 1_000) ?? input.eventType.slice(0, 100))
+          : null,
+        lastProviderEvent: input.eventType.slice(0, 100),
+        lastProviderEventId: eventIdentity,
+        // A lookup exposes a latest event but no occurrence timestamp. Keep
+        // polling time in the immutable event row, never in webhook ordering.
+        lastProviderEventAt: input.reconciliation ? undefined : input.eventAt,
+        retryAt: isTerminal
+          ? null
+          : input.reconciliation
+            ? input.reconciliation.retryAt
+            : decision.nextStatus === "DEFERRED"
+              ? new Date(input.eventAt.getTime() + 15 * 60 * 1_000)
+              : null,
+        deliveredAt: decision.nextStatus === "DELIVERED" ? input.eventAt : undefined,
+        bouncedAt: decision.nextStatus === "BOUNCED" ? input.eventAt : undefined,
+        complainedAt: decision.nextStatus === "COMPLAINED" ? input.eventAt : undefined,
+        failedAt: terminalFailureStatus(decision.nextStatus) ? input.eventAt : null,
+        terminalAt: isTerminal ? input.eventAt : null,
+        sendLeaseToken: null,
+        sendLeaseExpiresAt: null,
+        ...(input.reconciliation
+          ? { reconcileAt: input.eventAt, reconcileAttemptCount: { increment: 1 } }
+          : {}),
+      },
+    });
+
+    if (
+      decision.nextStatus === "BOUNCED" ||
+      decision.nextStatus === "SUPPRESSED" ||
+      decision.nextStatus === "COMPLAINED"
+    ) {
+      await tx.emailMarketingSuppression.upsert({
+        where: {
+          organizationId_storeId_email: {
             organizationId: recipient.campaign.organizationId,
             storeId: recipient.campaign.storeId,
             email: recipient.email.trim().toLowerCase(),
-            provider,
-            source: decision.nextStatus,
-            reason: boundedText(input.providerReason, 1_000),
-            originProviderEventId: input.providerEventId ?? eventIdentity,
-            active: true,
-            suppressedAt: input.eventAt,
           },
-          update: {
-            provider,
-            source: decision.nextStatus,
-            reason: boundedText(input.providerReason, 1_000),
-            originProviderEventId: input.providerEventId ?? eventIdentity,
-            active: true,
-            suppressedAt: input.eventAt,
-            clearedAt: null,
-          },
-        });
-      }
+        },
+        create: {
+          organizationId: recipient.campaign.organizationId,
+          storeId: recipient.campaign.storeId,
+          email: recipient.email.trim().toLowerCase(),
+          provider,
+          source: decision.nextStatus,
+          reason: boundedText(input.providerReason, 1_000),
+          originProviderEventId: input.providerEventId ?? eventIdentity,
+          active: true,
+          suppressedAt: input.eventAt,
+        },
+        update: {
+          provider,
+          source: decision.nextStatus,
+          reason: boundedText(input.providerReason, 1_000),
+          originProviderEventId: input.providerEventId ?? eventIdentity,
+          active: true,
+          suppressedAt: input.eventAt,
+          clearedAt: null,
+        },
+      });
     }
+  } else if (input.reconciliation) {
+    await tx.emailCampaignRecipient.update({
+      where: { id: recipient.id },
+      data: {
+        reconcileAt: input.eventAt,
+        reconcileAttemptCount: { increment: 1 },
+        retryAt: terminalEmailRecipientStatuses.has(currentStatus)
+          ? null
+          : input.reconciliation.retryAt,
+      },
+    });
+  }
 
-    const summary = await recomputeEmailCampaignDeliverySummaryTx(tx, recipient.campaignId);
-    return {
-      processed: true as const,
-      duplicate: false,
-      applied: decision.apply,
-      ignoredReason: decision.apply ? null : decision.reason,
-      campaignId: recipient.campaignId,
-      recipientId: recipient.id,
-      status: decision.nextStatus,
-      counts: summary.counts,
-    };
-  });
+  const summary = await recomputeEmailCampaignDeliverySummaryTx(tx, recipient.campaignId);
+  return {
+    processed: true as const,
+    duplicate: false,
+    applied: decision.apply,
+    ignoredReason: decision.apply ? null : decision.reason,
+    campaignId: recipient.campaignId,
+    recipientId: recipient.id,
+    status: decision.nextStatus,
+    counts: summary.counts,
+  };
 };
 
 const reconciliationEventId = (messageId: string, lastEvent: string) =>
-  `reconcile:${createHash("sha256")
-    .update(`${messageId}\u0000${lastEvent}`)
-    .digest("hex")}`;
+  `reconcile:${createHash("sha256").update(`${messageId}\u0000${lastEvent}`).digest("hex")}`;
 
 export const canonicalEmailEventTypeForProviderLookup = (lastEvent: string) => {
-  const normalized = lastEvent.trim().toLowerCase().replace(/^email\./, "");
+  const normalized = lastEvent
+    .trim()
+    .toLowerCase()
+    .replace(/^email\./, "");
   return normalized === "opened" || normalized === "clicked"
     ? "email.delivered"
     : `email.${normalized}`;
@@ -433,9 +528,7 @@ export const canRetryEmailProviderOperation = (input: {
       now: input.now,
     }));
 
-export const buildEmailCampaignProviderOperationKey = (
-  sendOperationKeys: readonly string[],
-) =>
+export const buildEmailCampaignProviderOperationKey = (sendOperationKeys: readonly string[]) =>
   `email-campaign-${createHash("sha256")
     .update([...sendOperationKeys].sort().join("\u0000"))
     .digest("hex")}`;
@@ -467,6 +560,34 @@ export const isEmailReconciliationExhausted = (input: {
 const wait = (milliseconds: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
 
+// Provider calls run outside transactions. Commit only if the scanned recipient
+// still has the same version, with counters in that same transaction. A callback
+// or sender that won the race must never be overwritten by the stale lookup.
+const updateReconciliationSnapshot = async (
+  recipient: EmailCampaignRecipient,
+  data: Prisma.EmailCampaignRecipientUpdateManyMutationInput,
+) =>
+  prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT "id" FROM "EmailCampaign" WHERE "id" = ${recipient.campaignId} FOR UPDATE`;
+    const result = await tx.emailCampaignRecipient.updateMany({
+      where: {
+        id: recipient.id,
+        campaignId: recipient.campaignId,
+        organizationId: recipient.organizationId,
+        campaign: { organizationId: recipient.organizationId },
+        status: recipient.status,
+        providerMessageId: recipient.providerMessageId,
+        updatedAt: recipient.updatedAt,
+        reconcileAttemptCount: recipient.reconcileAttemptCount,
+        lastProviderEventId: recipient.lastProviderEventId,
+        sendLeaseToken: recipient.sendLeaseToken,
+      },
+      data,
+    });
+    if (result.count) await recomputeEmailCampaignDeliverySummaryTx(tx, recipient.campaignId);
+    return result.count === 1;
+  });
+
 export const reconcileEmailCampaignRecipients = async (input?: {
   organizationId?: string | null;
   campaignId?: string | null;
@@ -479,7 +600,12 @@ export const reconcileEmailCampaignRecipients = async (input?: {
   const limit = Math.max(1, Math.min(250, Number.isFinite(requestedLimit) ? requestedLimit : 100));
   const recipients = await prisma.emailCampaignRecipient.findMany({
     where: {
-      ...(input?.organizationId ? { organizationId: input.organizationId } : {}),
+      ...(input?.organizationId
+        ? {
+            organizationId: input.organizationId,
+            campaign: { organizationId: input.organizationId },
+          }
+        : {}),
       ...(input?.campaignId ? { campaignId: input.campaignId } : {}),
       status: {
         in: [
@@ -505,153 +631,118 @@ export const reconcileEmailCampaignRecipients = async (input?: {
 
   for (const recipient of recipients) {
     campaignIds.add(recipient.campaignId);
-    const nextReconcileAttempt = recipient.reconcileAttemptCount + 1;
-    const reconciliationExhausted = isEmailReconciliationExhausted({
-      nextAttempt: nextReconcileAttempt,
+    const nextAttempt = recipient.reconcileAttemptCount + 1;
+    const isExhausted = isEmailReconciliationExhausted({
+      nextAttempt,
       lifecycleStartedAt:
-        recipient.acceptedAt ??
-        recipient.providerOperationStartedAt ??
-        recipient.createdAt,
+        recipient.acceptedAt ?? recipient.providerOperationStartedAt ?? recipient.createdAt,
       now,
     });
-    const failExhaustedReconciliation = async (reason: string) => {
+    const metadata = { reconcileAt: now, reconcileAttemptCount: { increment: 1 } };
+    const localFailure = async (reason: string, exhaustedBudget = false) => {
       if (!recipient.providerMessageId) return;
-      await processEmailProviderRecipientEvent({
-        provider: recipient.provider,
-        providerMessageId: recipient.providerMessageId,
-        providerEventId: reconciliationEventId(
-          recipient.providerMessageId,
-          `exhausted:${reason}`,
-        ),
-        eventType: "email.failed",
-        eventAt: now,
-        providerReason: `reconciliationExhausted:${reason}`,
-      });
-      await prisma.emailCampaignRecipient.update({
-        where: { id: recipient.id },
-        data: {
-          reconcileAt: now,
-          reconcileAttemptCount: nextReconcileAttempt,
-          retryAt: null,
-        },
-      });
-      exhausted += 1;
-      failed += 1;
-    };
-    if (recipient.status === EmailCampaignRecipientStatus.SENDING && !recipient.providerMessageId) {
-      if (recipient.sendLeaseExpiresAt && recipient.sendLeaseExpiresAt > now) {
-        continue;
+      const result = await prisma.$transaction((tx) =>
+        processEmailProviderRecipientEventTx(tx, {
+          provider: recipient.provider,
+          providerMessageId: recipient.providerMessageId!,
+          providerEventId: reconciliationEventId(
+            recipient.providerMessageId!,
+            `local-failure:${reason}`,
+          ),
+          eventType: "reconciliation.failed",
+          eventAt: now,
+          providerReason: reason,
+          reconciliation: { recipient, retryAt: null, localFailure: true },
+        }),
+      );
+      if (result.processed && "applied" in result && result.applied) {
+        failed += 1;
+        if (exhaustedBudget) exhausted += 1;
       }
+    };
+    const postpone = async (
+      reason: string,
+      category: EmailDeliveryErrorCategory,
+      minimumDelayMs = 0,
+    ) => {
+      if (isExhausted) {
+        await localFailure(`reconciliationExhausted:${reason}`, true);
+        return;
+      }
+      if (
+        await updateReconciliationSnapshot(recipient, {
+          ...metadata,
+          providerReason: boundedText(reason, 1_000),
+          normalizedErrorCategory: category,
+          retryAt: reconciliationRetryAt(nextAttempt, minimumDelayMs),
+        })
+      )
+        deferred += 1;
+    };
+
+    if (recipient.status === EmailCampaignRecipientStatus.SENDING && !recipient.providerMessageId) {
+      if (recipient.sendLeaseExpiresAt && recipient.sendLeaseExpiresAt > now) continue;
       const operationExpired = isEmailProviderOperationExpired({
         providerOperationStartedAt: recipient.providerOperationStartedAt,
         lastUpdatedAt: recipient.updatedAt,
         now,
       });
-      await prisma.emailCampaignRecipient.update({
-        where: { id: recipient.id },
-        data: operationExpired
+      const changed = await updateReconciliationSnapshot(recipient, {
+        ...metadata,
+        sendLeaseToken: null,
+        sendLeaseExpiresAt: null,
+        ...(operationExpired
           ? {
               status: EmailCampaignRecipientStatus.FAILED,
               normalizedErrorCategory: EmailDeliveryErrorCategory.UNKNOWN,
               providerReason: "providerMessageIdMissingAfterIdempotencyWindow",
               errorMessage: "providerMessageIdMissingAfterIdempotencyWindow",
+              lastProviderEvent: "reconciliation.failed",
               failedAt: now,
               terminalAt: now,
               retryAt: null,
-              sendLeaseToken: null,
-              sendLeaseExpiresAt: null,
-              reconcileAt: now,
-              reconcileAttemptCount: { increment: 1 },
             }
           : {
               status: EmailCampaignRecipientStatus.QUEUED,
               normalizedErrorCategory: EmailDeliveryErrorCategory.PROVIDER_TIMEOUT,
               providerReason: "sendLeaseExpiredBeforeProviderIdentityPersisted",
               retryAt: now,
-              sendLeaseToken: null,
-              sendLeaseExpiresAt: null,
-              reconcileAt: now,
-              reconcileAttemptCount: { increment: 1 },
-            },
+            }),
       });
-      if (operationExpired) failed += 1;
-      else requeued += 1;
+      if (changed) {
+        if (operationExpired) failed += 1;
+        else requeued += 1;
+      }
       continue;
     }
 
     if (!recipient.providerMessageId || recipient.provider !== "resend") {
-      await prisma.emailCampaignRecipient.update({
-        where: { id: recipient.id },
-        data: {
+      if (
+        await updateReconciliationSnapshot(recipient, {
+          ...metadata,
           status: EmailCampaignRecipientStatus.FAILED,
           normalizedErrorCategory: EmailDeliveryErrorCategory.UNKNOWN,
           providerReason: "providerLookupUnavailable",
           errorMessage: "providerLookupUnavailable",
+          lastProviderEvent: "reconciliation.failed",
           failedAt: now,
           terminalAt: now,
           retryAt: null,
-          reconcileAt: now,
-          reconcileAttemptCount: { increment: 1 },
-        },
-      });
-      failed += 1;
+        })
+      )
+        failed += 1;
       continue;
     }
 
+    const lookupDelayMs = Math.max(0, 250 - (Date.now() - lastProviderLookupStartedAt));
+    if (lookupDelayMs > 0) await wait(lookupDelayMs);
+    lastProviderLookupStartedAt = Date.now();
+    let providerEmail: Awaited<ReturnType<typeof retrieveResendEmail>>;
     try {
-      const lookupDelayMs = Math.max(0, 250 - (Date.now() - lastProviderLookupStartedAt));
-      if (lookupDelayMs > 0) await wait(lookupDelayMs);
-      lastProviderLookupStartedAt = Date.now();
-      const providerEmail = await retrieveResendEmail(recipient.providerMessageId);
-      const lastEvent = providerEmail.last_event?.trim().toLowerCase() ?? "";
-      const lookupStatus = lifecycleStatusForProviderLookup(lastEvent);
-      if (!lookupStatus) {
-        if (reconciliationExhausted) {
-          await failExhaustedReconciliation(`unknownProviderEvent:${lastEvent || "missing"}`);
-          continue;
-        }
-        await prisma.emailCampaignRecipient.update({
-          where: { id: recipient.id },
-          data: {
-            providerReason: `providerLookupUnknownEvent:${lastEvent || "missing"}`,
-            normalizedErrorCategory: EmailDeliveryErrorCategory.UNKNOWN,
-            retryAt: reconciliationRetryAt(recipient.reconcileAttemptCount + 1),
-            reconcileAt: now,
-            reconcileAttemptCount: { increment: 1 },
-          },
-        });
-        deferred += 1;
-        continue;
-      }
-      if (lookupStatus === "DEFERRED" && reconciliationExhausted) {
-        await failExhaustedReconciliation("providerRemainedDeferred");
-        continue;
-      }
-      const result = await processEmailProviderRecipientEvent({
-        provider: "resend",
-        providerMessageId: recipient.providerMessageId,
-        providerEventId: reconciliationEventId(recipient.providerMessageId, lastEvent),
-        // Resend lookups use opened/clicked as the latest event. Canonicalize those
-        // engagement-only values to delivered because the lookup proves delivery.
-        eventType: canonicalEmailEventTypeForProviderLookup(lastEvent),
-        eventAt: now,
-        providerReason: `reconciledFromProvider:${lastEvent}`,
-      });
-      if (result.processed) {
-        reconciled += 1;
-        if (lookupStatus === "DEFERRED") {
-          await prisma.emailCampaignRecipient.updateMany({
-            where: { id: recipient.id, status: EmailCampaignRecipientStatus.DEFERRED },
-            data: {
-              reconcileAt: now,
-              reconcileAttemptCount: nextReconcileAttempt,
-              retryAt: reconciliationRetryAt(nextReconcileAttempt),
-            },
-          });
-          deferred += 1;
-        }
-      }
+      providerEmail = await retrieveResendEmail(recipient.providerMessageId);
     } catch (error) {
+      // Only a provider call belongs in this catch. Database/commit failures must
+      // propagate, not masquerade as transient provider errors and change state.
       const providerError = error instanceof EmailProviderError ? error : null;
       const retryable =
         !providerError ||
@@ -659,53 +750,60 @@ export const reconcileEmailCampaignRecipients = async (input?: {
         providerError.status === 429 ||
         providerError.status >= 500;
       if (retryable) {
-        if (reconciliationExhausted) {
-          await failExhaustedReconciliation(
-            providerError?.status === 429
-              ? "providerRateLimitRepeated"
-              : "providerLookupTransientRepeated",
-          );
-          continue;
-        }
-        await prisma.emailCampaignRecipient.update({
-          where: { id: recipient.id },
-          data: {
-            providerReason: boundedText(
-              providerError?.providerMessage ?? (error instanceof Error ? error.message : "providerLookupFailed"),
-              1_000,
-            ),
-            normalizedErrorCategory:
-              providerError?.status === 429
-                ? EmailDeliveryErrorCategory.RATE_LIMIT
-                : EmailDeliveryErrorCategory.PROVIDER_TEMPORARY,
-            retryAt: reconciliationRetryAt(
-              recipient.reconcileAttemptCount + 1,
-              providerError?.retryAfterMs ?? 0,
-            ),
-            reconcileAt: now,
-            reconcileAttemptCount: { increment: 1 },
-          },
-        });
-        deferred += 1;
+        await postpone(
+          providerError?.status === 429
+            ? "providerRateLimitRepeated"
+            : "providerLookupTransientFailure",
+          providerError?.status === 429
+            ? EmailDeliveryErrorCategory.RATE_LIMIT
+            : EmailDeliveryErrorCategory.PROVIDER_TEMPORARY,
+          providerError?.retryAfterMs ?? 0,
+        );
       } else {
-        await processEmailProviderRecipientEvent({
-          provider: "resend",
-          providerMessageId: recipient.providerMessageId,
-          providerEventId: reconciliationEventId(recipient.providerMessageId, "lookup_failed"),
-          eventType: "email.failed",
-          eventAt: now,
-          providerReason:
-            providerError?.status === 404
-              ? "providerMessageNotFound"
-              : (providerError?.providerMessage ?? "providerLookupPermanentFailure"),
-        });
-        failed += 1;
+        await localFailure(
+          providerError?.status === 404
+            ? "providerMessageNotFound"
+            : "providerLookupPermanentFailure",
+        );
       }
+      continue;
     }
-  }
-
-  for (const campaignId of campaignIds) {
-    await recomputeEmailCampaignDeliverySummary(campaignId);
+    if (providerEmail.id !== recipient.providerMessageId) {
+      await postpone("providerLookupIdentityMismatch", EmailDeliveryErrorCategory.UNKNOWN);
+      continue;
+    }
+    const lastEvent = providerEmail.last_event?.trim().toLowerCase() ?? "";
+    const lookupStatus = lifecycleStatusForProviderLookup(lastEvent);
+    if (!lookupStatus) {
+      await postpone(
+        `providerLookupUnknownEvent:${lastEvent || "missing"}`,
+        EmailDeliveryErrorCategory.UNKNOWN,
+      );
+      continue;
+    }
+    const unresolved = !terminalEmailRecipientStatuses.has(lookupStatus);
+    if (unresolved && isExhausted) {
+      await localFailure(`reconciliationExhausted:providerRemained:${lastEvent}`, true);
+      continue;
+    }
+    const result = await prisma.$transaction((tx) =>
+      processEmailProviderRecipientEventTx(tx, {
+        provider: "resend",
+        providerMessageId: recipient.providerMessageId!,
+        providerEventId: reconciliationEventId(recipient.providerMessageId!, lastEvent),
+        eventType: canonicalEmailEventTypeForProviderLookup(lastEvent),
+        eventAt: now,
+        providerReason: `reconciledFromProvider:${lastEvent}`,
+        reconciliation: {
+          recipient,
+          retryAt: unresolved ? reconciliationRetryAt(nextAttempt) : null,
+        },
+      }),
+    );
+    if (result.processed) {
+      reconciled += 1;
+      if (unresolved) deferred += 1;
+    }
   }
 
   return {

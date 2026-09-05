@@ -1,5 +1,7 @@
 # Bazaar continuation on main
 
+**Follow-up correction:** this document records the earlier continuation. BAAM has since moved to a [question assistant](baam-assistant.md). The initial release check verified Vercel URLs but missed the staged custom-domain alias; [the release correction](custom-domain-release.md) explains the `bazaar.kg` 404 and the required canonical-domain verification.
+
 This continues the original 5 September assessment and stabilization commit `190edad`. The audit's **14/100 score and 23% coverage remain historical**, not a current readiness score. Its report and Stripe/ORDO designs remain unchanged under `artifacts/bazaar-assessment/20260905T114424Z/`. **BAAM is the current product name.**
 
 Current local evidence is under `artifacts/bazaar-continuation/20260905/`. These ignored artifacts include browser journeys and machine-readable before/after results. Captured email links and synthetic credentials remain private. Tracked tests and these documents describe reproducible contracts without embedding credentials.
@@ -47,7 +49,7 @@ The owner authorized migrations, pushes to `main`, CI checks and Vercel deployme
 1. Require every reviewed migration file and its pinned SQL checksum. Verify applied migration names/checksums match this checkout and no unfinished migration exists.
 2. Permit only the reviewed pending additions: `20260905140000_user_session_version` and `20260905150000_dead_letter_retry_claim`. Older unexpected pending migrations stop the build.
 3. Apply those additions before building. Repeated builds with an up-to-date schema are a no-op.
-4. Check CI and the exact Vercel deployment, then perform in-scope read-only smoke checks.
+4. Check CI and the exact Vercel deployment, promote that tested deployment when staged, verify the canonical `www.bazaar.kg` alias points to its ID, then perform in-scope browser smoke checks on the actual customer domain. See [the custom-domain release procedure](custom-domain-release.md).
 
 `vercel.json` explicitly selects `pnpm build`, including its guarded prebuild. Migration-history checks do not certify arbitrary physical schema drift. Git-triggered Vercel builds can run concurrently with CI; both exact-commit outcomes must be checked. Artifacts are excluded from CLI deployments as well as Git.
 

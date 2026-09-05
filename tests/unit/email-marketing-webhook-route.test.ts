@@ -3,7 +3,9 @@ import { createHmac } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const webhookSideEffects = vi.hoisted(() => ({
-  handleResendEmailWebhook: vi.fn(async () => ({ processed: true })),
+  handleResendEmailWebhook: vi.fn(
+    async () => ({ processed: true }) as { processed: boolean; reason?: string },
+  ),
 }));
 
 vi.mock("@/server/services/emailMarketing", () => webhookSideEffects);
@@ -58,11 +60,34 @@ describe("Resend webhook route", () => {
   it("rejects a signature generated for a different body", async () => {
     const validBody = JSON.stringify({ type: "email.delivered" });
     const tamperedBody = JSON.stringify({ type: "email.bounced" });
-    const response = await POST(
-      signedRequest(tamperedBody, { signaturePayload: validBody }),
-    );
+    const response = await POST(signedRequest(tamperedBody, { signaturePayload: validBody }));
 
     expect(response.status).toBe(400);
     expect(webhookSideEffects.handleResendEmailWebhook).not.toHaveBeenCalled();
+  });
+
+  it("requests retry when a known campaign callback arrives before its provider identity is persisted", async () => {
+    webhookSideEffects.handleResendEmailWebhook.mockResolvedValueOnce({
+      processed: false,
+      reason: "recipient_identity_pending",
+    });
+    const response = await POST(
+      signedRequest(JSON.stringify({ type: "email.delivered", data: { email_id: "pending" } })),
+    );
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Retry-After")).toBe("5");
+  });
+
+  it("acknowledges unrelated messages without causing endless campaign callback retries", async () => {
+    webhookSideEffects.handleResendEmailWebhook.mockResolvedValueOnce({
+      processed: false,
+      reason: "recipient_not_found",
+    });
+    const response = await POST(
+      signedRequest(
+        JSON.stringify({ type: "email.delivered", data: { email_id: "transactional" } }),
+      ),
+    );
+    expect(response.status).toBe(200);
   });
 });

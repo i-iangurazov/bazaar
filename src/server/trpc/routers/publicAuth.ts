@@ -235,7 +235,10 @@ export const publicAuthRouter = router({
           await sendResetEmail({ email: user.email, resetLink });
         } catch (emailError) {
           ctx.logger.warn(
-            { emailError, email: user.email },
+            {
+              errorName: emailError instanceof Error ? emailError.name : "UnknownError",
+              userId: user.id,
+            },
             "password reset email delivery failed",
           );
         }
@@ -386,6 +389,9 @@ export const publicAuthRouter = router({
         });
         return { sent: true };
       } catch (error) {
+        if (error instanceof EmailVerificationDeliveryError) {
+          throw toTRPCError(new AppError("emailDeliveryFailed", "INTERNAL_SERVER_ERROR", 500));
+        }
         throw toTRPCError(error);
       }
     }),

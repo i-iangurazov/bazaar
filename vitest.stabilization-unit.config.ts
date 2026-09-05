@@ -8,6 +8,11 @@ export default defineConfig({
     environment: "node",
     include: [
       "tests/unit/admin-jobs-page.test.tsx",
+      "tests/unit/email-delivery-lifecycle.test.ts",
+      "tests/unit/email-campaign-delivery-state.test.ts",
+      "tests/unit/email-marketing-webhook-route.test.ts",
+      "tests/unit/transactional-email.test.ts",
+      "tests/unit/order-email-retry.test.ts",
       "tests/unit/signup-page.test.tsx",
       "tests/unit/analytics-reporting.test.ts",
       "tests/unit/auth-session-claims.test.ts",

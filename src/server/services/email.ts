@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import { getLogger } from "@/server/logging";
 import { assertExternalProviderCallAllowed, isProductionRuntime } from "@/server/config/runtime";
@@ -68,17 +68,75 @@ export class EmailProviderError extends Error {
     providerMessage?: string | null;
     retryAfterMs?: number | null;
   }) {
-    super(input.providerMessage ?? `emailProviderError:${input.status}`);
+    super(`emailProviderError:${input.status}`);
     this.name = "EmailProviderError";
     this.provider = input.provider;
     this.status = input.status;
     this.responseText = input.responseText;
     this.providerMessage = input.providerMessage ?? null;
     this.retryAfterMs = input.retryAfterMs ?? null;
+    // Classifiers may inspect these explicitly, but routine JSON/error logging
+    // must not serialize a provider's echoed recipient, body or auth link.
+    Object.defineProperty(this, "responseText", { enumerable: false });
+    Object.defineProperty(this, "providerMessage", { enumerable: false });
   }
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const SEND_BUDGET_MS = 15_000;
+const SEND_ATTEMPT_TIMEOUT_MS = 5_000;
+
+class EmailTransportError extends Error {
+  constructor(
+    message: "emailProviderTimeout" | "emailProviderNetworkError" | "emailProviderInvalidResponse",
+  ) {
+    super(message);
+    this.name = "EmailTransportError";
+  }
+}
+
+const retryAfterMilliseconds = (value: string | null) => {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (/^\d+(?:\.\d+)?$/.test(trimmed)) {
+    const milliseconds = Number(trimmed) * 1000;
+    return Number.isFinite(milliseconds) ? milliseconds : null;
+  }
+  const timestamp = Date.parse(trimmed);
+  return Number.isNaN(timestamp) ? null : Math.max(0, timestamp - Date.now());
+};
+
+const fetchEmailAttempt = async (init: RequestInit, timeoutMs: number) => {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new EmailTransportError("emailProviderTimeout"));
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([
+      (async () => {
+        const response = await fetch("https://api.resend.com/emails", {
+          ...init,
+          signal: controller.signal,
+          redirect: "error",
+        });
+        // The body is part of the deadline too: headers alone are not acceptance.
+        return { response, text: await response.text() };
+      })(),
+      timeout,
+    ]);
+  } catch (error) {
+    if (controller.signal.aborted) throw new EmailTransportError("emailProviderTimeout");
+    if (error instanceof EmailTransportError) throw error;
+    // Fetch errors can include URLs/credentials; do not retain their raw cause.
+    throw new EmailTransportError("emailProviderNetworkError");
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+};
 export const MARKETING_EMAIL_FROM = "no-reply@bazaar.kg";
 
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");
@@ -139,9 +197,7 @@ const safeMessageCategories = new Set([
 ]);
 
 const messageCategory = (payload: EmailPayload) => {
-  const value = payload.tags?.find(
-    (tag) => tag.name === "kind" || tag.name === "category",
-  )?.value;
+  const value = payload.tags?.find((tag) => tag.name === "kind" || tag.name === "category")?.value;
   if (!value) return "unspecified";
   return safeMessageCategories.has(value) ? value : `custom_${safeValueHash(value)}`;
 };
@@ -233,12 +289,9 @@ export const retrieveResendDomain = async (domainId: string) =>
   });
 
 export const verifyResendDomain = async (domainId: string) =>
-  resendFetch<{ object?: string; id: string }>(
-    `/domains/${encodeURIComponent(domainId)}/verify`,
-    {
-      method: "POST",
-    },
-  );
+  resendFetch<{ object?: string; id: string }>(`/domains/${encodeURIComponent(domainId)}/verify`, {
+    method: "POST",
+  });
 
 export const listResendDomains = async () =>
   resendFetch<{ data?: ResendDomainResponse[] } | ResendDomainResponse[]>("/domains", {
@@ -257,41 +310,70 @@ const sendWithResend = async (payload: EmailPayload): Promise<EmailSendResult> =
     throw new Error("emailProviderNotConfigured");
   }
   const maxAttempts = 3;
-
+  const deadline = Date.now() + SEND_BUDGET_MS;
+  // Caller-owned keys survive retries across invocations. The fallback protects
+  // only this invocation's bounded retries, and never contains recipient data.
+  const idempotencyKey = payload.idempotencyKey ?? `transactional-${randomUUID()}`;
+  const init: RequestInit = {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+      "Content-Type": "application/json",
+      "Idempotency-Key": idempotencyKey,
+    },
+    body: JSON.stringify({
+      from,
+      to: [payload.to],
+      subject: payload.subject,
+      html: payload.html,
+      text: payload.text,
+      ...(payload.replyTo ? { reply_to: payload.replyTo } : {}),
+      ...(payload.tags?.length ? { tags: payload.tags } : {}),
+    }),
+  };
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-        "Content-Type": "application/json",
-        ...(payload.idempotencyKey ? { "Idempotency-Key": payload.idempotencyKey } : {}),
-      },
-      body: JSON.stringify({
-        from,
-        to: [payload.to],
-        subject: payload.subject,
-        html: payload.html,
-        text: payload.text,
-        ...(payload.replyTo ? { reply_to: payload.replyTo } : {}),
-        ...(payload.tags?.length ? { tags: payload.tags } : {}),
-      }),
-    });
-
-    if (response.ok) {
-      const body = (await response.json().catch(() => ({}))) as { id?: string };
-      return { provider: "resend", id: body.id ?? null };
+    try {
+      const remainingMs = deadline - Date.now();
+      if (remainingMs <= 0) throw new EmailTransportError("emailProviderTimeout");
+      const { response, text } = await fetchEmailAttempt(
+        init,
+        Math.min(SEND_ATTEMPT_TIMEOUT_MS, remainingMs),
+      );
+      let body: Record<string, unknown> = {};
+      try {
+        const parsed: unknown = JSON.parse(text);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed))
+          body = parsed as Record<string, unknown>;
+      } catch {
+        /* A malformed response cannot establish provider acceptance. */
+      }
+      if (response.ok) {
+        if (typeof body.id !== "string" || !body.id.trim())
+          throw new EmailTransportError("emailProviderInvalidResponse");
+        return { provider: "resend", id: body.id };
+      }
+      throw new EmailProviderError({
+        provider: "resend",
+        status: response.status,
+        responseText: text,
+        providerMessage: typeof body.message === "string" ? body.message : null,
+        retryAfterMs: retryAfterMilliseconds(response.headers.get("retry-after")),
+      });
+    } catch (error) {
+      const retryable =
+        error instanceof EmailProviderError
+          ? error.status === 429 || error.status >= 500
+          : error instanceof EmailTransportError &&
+            error.message !== "emailProviderInvalidResponse";
+      const delay =
+        error instanceof EmailProviderError && error.retryAfterMs !== null
+          ? error.retryAfterMs
+          : 1000 * attempt;
+      // Never shorten Retry-After and send too early. Return the typed failure
+      // when its delay cannot fit; a caller can schedule a later recovery.
+      if (!retryable || attempt === maxAttempts || Date.now() + delay >= deadline) throw error;
+      await sleep(delay);
     }
-
-    const body = await response.text();
-    const canRetry = response.status === 429 && attempt < maxAttempts;
-    if (!canRetry) {
-      throw new Error(`emailProviderError:${response.status}:${body}`);
-    }
-
-    const retryAfterHeader = response.headers.get("retry-after");
-    const retryAfterSeconds = retryAfterHeader ? Number.parseInt(retryAfterHeader, 10) : Number.NaN;
-    const retryDelayMs = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0 ? retryAfterSeconds * 1000 : 1000 * attempt;
-    await sleep(retryDelayMs);
   }
   throw new Error("emailProviderError");
 };
@@ -352,10 +434,7 @@ const sendEmail = async (payload: EmailPayload): Promise<EmailSendResult> => {
     throw new Error("emailProviderRequiredInProduction");
   }
 
-  logger.info(
-    safeLogMetadata(payload),
-    "email delivery fallback",
-  );
+  logger.info(safeLogMetadata(payload), "email delivery fallback");
   return { provider: "log", id: `log_${Date.now()}_${Math.random().toString(36).slice(2, 10)}` };
 };
 
@@ -380,7 +459,9 @@ export const sendEmailBatch = async (
     {
       provider: "log",
       recipientCount: payloads.length,
-      recipientDomains: Array.from(new Set(payloads.map((payload) => emailDomain(payload.to)))).sort(),
+      recipientDomains: Array.from(
+        new Set(payloads.map((payload) => emailDomain(payload.to))),
+      ).sort(),
       messageCategories: Array.from(new Set(payloads.map(messageCategory))).sort(),
       subjectHashes: Array.from(new Set(payloads.map((payload) => safeValueHash(payload.subject)))),
     },
@@ -505,10 +586,7 @@ export const sendVerificationEmail = async (input: {
   });
 };
 
-export const sendResetEmail = async (input: {
-  email: string;
-  resetLink: string;
-}) => {
+export const sendResetEmail = async (input: { email: string; resetLink: string }) => {
   await sendEmail({
     to: input.email,
     subject: "Password reset",
@@ -518,10 +596,7 @@ export const sendResetEmail = async (input: {
   });
 };
 
-export const sendInviteEmail = async (input: {
-  email: string;
-  inviteLink: string;
-}) => {
+export const sendInviteEmail = async (input: { email: string; inviteLink: string }) => {
   await sendEmail({
     to: input.email,
     subject: "Organization invite",

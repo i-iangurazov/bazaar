@@ -7,6 +7,8 @@ import { useTranslations } from "next-intl";
 import { usePathname, useRouter } from "next/navigation";
 
 import { GuidanceOverlay } from "@/components/guidance/guidance-overlay";
+import { BaamAssistant, BaamAssistantProvider } from "@/components/baam-assistant";
+import { BaamLauncher } from "@/components/baam-launcher";
 import { GuidanceProvider } from "@/components/guidance/guidance-provider";
 import { PageTipsButton } from "@/components/guidance/page-tips-button";
 import { LanguageSwitcher } from "@/components/language-switcher";
@@ -920,6 +922,14 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
       requiredPermission: "manageIntegrations",
     },
     {
+      key: "mobile-baam",
+      label: tNav("baam"),
+      href: "/baam",
+      icon: MetricsIcon,
+      managerOnly: true,
+      requiredPermission: "viewReports",
+    },
+    {
       key: "mobile-reports",
       label: tNav("reports"),
       href: "/reports",
@@ -999,6 +1009,9 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
     if (normalizedPath.startsWith("/customers")) {
       return tNav("customers");
     }
+    if (normalizedPath === "/baam" || normalizedPath.startsWith("/baam/")) {
+      return tNav("baam");
+    }
     if (normalizedPath.startsWith("/reports")) {
       return tNav("reports");
     }
@@ -1046,6 +1059,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
 
   return (
     <GuidanceProvider role={guidanceRole}>
+      <BaamAssistantProvider>
       <div className="min-h-screen bg-gradient-to-br from-background via-background to-secondary/40">
         {impersonation ? (
           <div className="sticky top-0 z-50 border-b border-warning/40 bg-warning/10 px-4 py-2 text-sm text-foreground">
@@ -1213,7 +1227,11 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
         </Modal>
         <CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} />
         <GuidanceOverlay />
+        <BaamLauncher access={access} pathname={normalizedPath}>
+          <BaamAssistant compact />
+        </BaamLauncher>
       </div>
+      </BaamAssistantProvider>
     </GuidanceProvider>
   );
 };

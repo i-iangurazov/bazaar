@@ -28,6 +28,7 @@ import {
   BillingIcon,
   CustomerDatabaseIcon,
   InventoryIcon,
+  MetricsIcon,
   PurchaseOrdersIcon,
   ProductsIcon,
   ReceiveIcon,
@@ -90,6 +91,8 @@ export const CommandPalette = ({
   onOpenChange?: (open: boolean) => void;
 }) => {
   const t = useTranslations("commandPalette");
+  const tNav = useTranslations("nav");
+  const tBaam = useTranslations("baam");
   const tErrors = useTranslations("errors");
   const router = useRouter();
   const { toast } = useToast();
@@ -310,6 +313,17 @@ export const CommandPalette = ({
         permission: "viewStores",
       },
       {
+        id: "open-baam",
+        label: tNav("baam"),
+        keywords: [tNav("groups.insights"), tBaam("sales"), tBaam("returns")],
+        sublabel: tBaam("briefTitle"),
+        href: "/baam",
+        icon: MetricsIcon,
+        group: "actions",
+        category: "other",
+        permission: "viewReports",
+      },
+      {
         id: "cash",
         label: t("actions.cash"),
         keywords: [t("keywords.cash"), t("keywords.other")],
@@ -343,7 +357,7 @@ export const CommandPalette = ({
         permission: "viewCash",
       },
     ],
-    [t],
+    [t, tNav, tBaam],
   );
 
   const filteredActions = useMemo(() => {

@@ -16,6 +16,10 @@ import { defaultTimeZone } from "@/lib/timezone";
 import { prisma } from "@/server/db/prisma";
 import { getLogger } from "@/server/logging";
 import { sendTransactionalEmail, type EmailPayload } from "@/server/services/email";
+import {
+  ORDER_EMAIL_MAX_ATTEMPTS as ORDER_CONFIRMATION_MAX_ATTEMPTS,
+  resolveOrderEmailRetryAt,
+} from "@/server/services/orderEmailRetry";
 import { resolveStorePrimaryVerifiedSender } from "@/server/services/emailMarketing";
 import { AppError } from "@/server/services/errors";
 
@@ -235,8 +239,6 @@ const persistEmailLog = async (input: {
   });
 };
 
-const ORDER_CONFIRMATION_MAX_ATTEMPTS = 5;
-const ORDER_CONFIRMATION_RETRY_BASE_MS = 60_000;
 const ORDER_CONFIRMATION_PROCESSING_TIMEOUT_MS = 10 * 60 * 1000;
 
 const findDeliveryLog = (input: {
@@ -926,10 +928,9 @@ const sendOrderEmail = async (input: {
   } catch (error) {
     const message = error instanceof Error ? error.message : "emailSendFailed";
     const attemptCount = delivery.claimed?.attemptCount ?? 1;
-    const retryable = Boolean(delivery.claimed) && attemptCount < ORDER_CONFIRMATION_MAX_ATTEMPTS;
-    const nextAttemptAt = retryable
-      ? new Date(Date.now() + ORDER_CONFIRMATION_RETRY_BASE_MS * 2 ** (attemptCount - 1))
-      : null;
+    const nextAttemptAt = resolveOrderEmailRetryAt({
+      hasClaim: Boolean(delivery.claimed), attemptCount, error,
+    });
     if (delivery.claimed) {
       const owned = await persistClaimedTerminalLog({
         deliveryLogId: delivery.claimed.id,

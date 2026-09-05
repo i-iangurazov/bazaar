@@ -18,14 +18,12 @@ const decodeSvixSecret = (secret: string) => {
 const secureCompare = (actual: string, expected: string) => {
   const actualBuffer = Buffer.from(actual);
   const expectedBuffer = Buffer.from(expected);
-  return actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer);
+  return (
+    actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer)
+  );
 };
 
-const verifyResendSignature = (input: {
-  payload: string;
-  headers: Headers;
-  secret: string;
-}) => {
+const verifyResendSignature = (input: { payload: string; headers: Headers; secret: string }) => {
   const id = input.headers.get("svix-id");
   const timestamp = input.headers.get("svix-timestamp");
   const signature = input.headers.get("svix-signature");
@@ -47,12 +45,10 @@ const verifyResendSignature = (input: {
     .update(signedContent)
     .digest("base64");
 
-  return signature
-    .split(" ")
-    .some((part) => {
-      const [version, value] = part.split(",");
-      return version === "v1" && Boolean(value) && secureCompare(value, expected);
-    });
+  return signature.split(" ").some((part) => {
+    const [version, value] = part.split(",");
+    return version === "v1" && Boolean(value) && secureCompare(value, expected);
+  });
 };
 
 export const POST = async (request: Request) => {
@@ -79,6 +75,10 @@ export const POST = async (request: Request) => {
     >[0]["event"],
     webhookEventId: request.headers.get("svix-id"),
   });
+
+  if (!result.processed && result.reason === "recipient_identity_pending") {
+    return Response.json(result, { status: 503, headers: { "Retry-After": "5" } });
+  }
 
   return Response.json(result);
 };
