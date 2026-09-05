@@ -227,4 +227,49 @@ describe("BAAM assistant workspace", () => {
     view.rerender(page()); await act(async () => resolveAnswer(answer()));
     expect(screen.queryByText(answer().answer)).toBeNull(); expect((input() as HTMLTextAreaElement).value).toBe("");
   });
+
+  it.each(["during", "after"])("preserves prior history and a request completing %s same-actor session revalidation", async completion => {
+    const currentSession = { user: { id: "actor", organizationId: "org", role: "MANAGER" } };
+    const view = render(page());
+    fireEvent.click(screen.getByText(/Answer scope/));
+    fireEvent.change(screen.getByLabelText("From"), { target: { value: "2026-09-01" } });
+    fireEvent.change(screen.getByLabelText("To"), { target: { value: "2026-09-02" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Store" }), { target: { value: "store" } });
+    submit("Previous question"); await screen.findByText(answer().answer);
+    let resolveAnswer!: (value: ReturnType<typeof answer>) => void;
+    mocks.ask.mockReturnValue(new Promise(resolve => { resolveAnswer = resolve; }));
+    submit("Pending question during profile update");
+    mocks.session.mockReturnValue({ status: "loading", data: currentSession }); view.rerender(page());
+    expect(screen.getByRole("status").textContent).toBe(messages.baam.loading);
+    expect(screen.queryByText(answer().answer)).toBeNull(); expect(screen.queryByRole("textbox")).toBeNull();
+    expect(mocks.capabilities.mock.lastCall?.[1].enabled).toBe(false);
+    expect(mocks.overview.mock.lastCall?.[1].enabled).toBe(false);
+    const nextAnswer = { ...answer(), answer: "Answer retained across profile update." };
+    if (completion === "during") {
+      await act(async () => resolveAnswer(nextAnswer));
+      expect(screen.queryByText(nextAnswer.answer)).toBeNull();
+    }
+    mocks.session.mockReturnValue({ status: "authenticated", data: currentSession }); view.rerender(page());
+    expect(screen.getByText(answer().answer)).toBeTruthy();
+    expect((input() as HTMLTextAreaElement).value).toBe("Pending question during profile update");
+    expect((screen.getByLabelText("From") as HTMLInputElement).value).toBe("2026-09-01");
+    expect((screen.getByRole("combobox", { name: "Store" }) as HTMLSelectElement).value).toBe("store");
+    if (completion === "after") {
+      expect((screen.getByRole("button", { name: "Send question" }) as HTMLButtonElement).disabled).toBe(true);
+      await act(async () => resolveAnswer(nextAnswer));
+    }
+    await screen.findByText(nextAnswer.answer);
+    expect(mocks.ask).toHaveBeenCalledTimes(2);
+    expect(mocks.retryCapabilities).toHaveBeenCalledTimes(1);
+    expect(mocks.retryOverview).toHaveBeenCalledTimes(1);
+  });
+
+  it("purges retained history when session revalidation confirms a role downgrade", async () => {
+    const view = render(page()); submit(); await screen.findByText(answer().answer);
+    mocks.session.mockReturnValue({ status: "loading", data: { user: { id: "actor", organizationId: "org", role: "MANAGER" } } }); view.rerender(page());
+    mocks.session.mockReturnValue({ status: "authenticated", data: { user: { id: "actor", organizationId: "org", role: "STAFF" } } }); view.rerender(page());
+    expect(screen.getByRole("alert")).toBeTruthy(); expect(screen.queryByText(answer().answer)).toBeNull();
+    mocks.session.mockReturnValue({ status: "authenticated", data: { user: { id: "actor", organizationId: "org", role: "MANAGER" } } }); view.rerender(page());
+    expect(screen.queryByText(answer().answer)).toBeNull(); expect((input() as HTMLTextAreaElement).value).toBe("");
+  });
 });

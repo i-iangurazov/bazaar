@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import type { Session } from "next-auth";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 
@@ -22,17 +23,29 @@ type AssistantContextValue = { status: "loading" } | { status: "forbidden" } | {
 };
 const AssistantContext = createContext<AssistantContextValue | null>(null);
 
+// NextAuth's union types loading as null data, but SessionProvider.update()
+// retains its existing Session while setting loading=true. Represent that runtime state.
+type RuntimeSessionState = {
+  data: Session | null;
+  status: "loading" | "authenticated" | "unauthenticated";
+};
+
 /** RAM only. This owner survives drawer/page navigation and is discarded with the authenticated layout. */
 export function BaamAssistantProvider({ children }: { children: ReactNode }) {
-  const { data: session, status } = useSession();
-  if (status === "loading") return <AssistantContext.Provider value={{ status: "loading" }}>{children}</AssistantContext.Provider>;
-  if (status !== "authenticated" || !session?.user.id || !session.user.organizationId ||
+  const { data: session, status } = useSession() as RuntimeSessionState;
+  // Session.update() briefly reports loading while retaining the current identity.
+  // Keep that identity's RAM owner mounted, but conceal it until revalidation ends.
+  if (status === "loading" && (!session?.user.id || !session.user.organizationId)) {
+    return <AssistantContext.Provider value={{ status: "loading" }}>{children}</AssistantContext.Provider>;
+  }
+  if ((status !== "authenticated" && status !== "loading") || !session?.user.id || !session.user.organizationId ||
       !hasPermission({ role: session.user.role }, "viewReports")) {
     return <AssistantContext.Provider value={{ status: "forbidden" }}>{children}</AssistantContext.Provider>;
   }
   return <AuthorizedBaamAssistantProvider
     key={`${session.user.id}:${session.user.organizationId}`}
     actorId={session.user.id} organizationId={session.user.organizationId}
+    sessionRevalidating={status === "loading"}
   >{children}</AuthorizedBaamAssistantProvider>;
 }
 
@@ -50,8 +63,8 @@ export function BaamAssistant({ compact = false }: { compact?: boolean }) {
   return <BaamAssistantPanel {...context.panel} compact={compact} />;
 }
 
-function AuthorizedBaamAssistantProvider({ actorId, organizationId, children }: {
-  actorId: string; organizationId: string; children: ReactNode;
+function AuthorizedBaamAssistantProvider({ actorId, organizationId, sessionRevalidating, children }: {
+  actorId: string; organizationId: string; sessionRevalidating: boolean; children: ReactNode;
 }) {
   const t = useTranslations("baam");
   const tAssistant = useTranslations("baam.assistant");
@@ -79,7 +92,7 @@ function AuthorizedBaamAssistantProvider({ actorId, organizationId, children }: 
   const pendingRef = useRef(false);
   const accessEpoch = useRef(0);
   const capabilities = trpc.baam.capabilities.useQuery(undefined, {
-    enabled: activated, retry: false, staleTime: 0, cacheTime: 0,
+    enabled: activated && !sessionRevalidating, retry: false, staleTime: 0, cacheTime: 0,
     refetchOnMount: "always", refetchOnWindowFocus: true, refetchOnReconnect: true,
   });
   const capabilitiesMatch = capabilities.data?.audience.actorId === actorId &&
@@ -88,7 +101,7 @@ function AuthorizedBaamAssistantProvider({ actorId, organizationId, children }: 
   // Reuse the existing reporting access boundary for the authorized store picker.
   // Its metric totals are not rendered as another dashboard.
   const overview = trpc.baam.overview.useQuery(initial, {
-    enabled: activated && configured, retry: false, staleTime: 0, cacheTime: 0,
+    enabled: activated && configured && !sessionRevalidating, retry: false, staleTime: 0, cacheTime: 0,
     refetchOnMount: "always", refetchOnWindowFocus: true, refetchOnReconnect: true,
   });
   const overviewMatch = overview.data?.audience.actorId === actorId &&
@@ -99,7 +112,7 @@ function AuthorizedBaamAssistantProvider({ actorId, organizationId, children }: 
   const previousAccessKey = useRef<string>();
   const selectedStoreAvailable = !scope.storeId || stores.some(store => store.id === scope.storeId);
   const mutation = trpc.baam.ask.useMutation();
-  const available = activated && configured && !capabilities.error && !capabilities.isFetching && scopeReady && selectedStoreAvailable;
+  const available = !sessionRevalidating && activated && configured && !capabilities.error && !capabilities.isFetching && scopeReady && selectedStoreAvailable;
   const queryError = capabilities.error ?? (configured ? overview.error : null);
   refreshAccessRef.current = () => {
     void capabilities.refetch();
@@ -176,7 +189,7 @@ function AuthorizedBaamAssistantProvider({ actorId, organizationId, children }: 
     ? tAssistant("checkingAvailability")
     : configured ? tAssistant("aiAvailability") : tErrors("baamNotConfigured");
   // A failed permission refresh must not retain previous protected answers.
-  const visibleEntries = activated && configured && capabilitiesMatch && !capabilities.error && !capabilities.isFetching &&
+  const visibleEntries = !sessionRevalidating && activated && configured && capabilitiesMatch && !capabilities.error && !capabilities.isFetching &&
     scopeReady && conversationAccessKey === currentAccessKey ? entries : [];
 
   const panel: Omit<BaamAssistantPanelProps, "compact"> = {
@@ -214,5 +227,5 @@ function AuthorizedBaamAssistantProvider({ actorId, organizationId, children }: 
       </div>
     </details>,
   };
-  return <AssistantContext.Provider value={{ status: "ready", activate, panel }}>{children}</AssistantContext.Provider>;
+  return <AssistantContext.Provider value={sessionRevalidating ? { status: "loading" } : { status: "ready", activate, panel }}>{children}</AssistantContext.Provider>;
 }
