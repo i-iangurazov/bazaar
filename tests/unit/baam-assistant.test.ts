@@ -2,10 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   metrics: vi.fn(),
+  products: vi.fn(),
   access: vi.fn(),
   providerGuard: vi.fn(),
   fetch: vi.fn(),
 }));
+vi.mock("@/server/services/baamProducts", () => ({ executeBaamProductPlan: mocks.products }));
 vi.mock("@/server/db/prisma", () => ({ prisma: {} }));
 vi.mock("@/server/services/baamMetrics", () => ({
   getBaamSalesMetrics: mocks.metrics,
@@ -20,6 +22,7 @@ import {
   getBaamCapabilities,
   previousBaamPeriod,
 } from "@/server/services/baamAssistant";
+import { baamProductFollowUps } from "@/server/services/baamFollowUps";
 
 const input = {
   actorId: "server-actor",
@@ -29,6 +32,10 @@ const input = {
   locale: "en" as const,
 };
 const scope = {
+  role: "ADMIN" as const,
+  isOrgOwner: true,
+  planFeatures: ["analytics"],
+  authorizationFingerprint: "current-grants",
   actorId: input.actorId,
   organizationId: "private-org",
   storeIds: ["private-store"],
@@ -63,7 +70,10 @@ const response = (value: unknown) =>
     JSON.stringify({
       status: "completed",
       output: [
-        { type: "message", content: [{ type: "output_text", text: JSON.stringify(value) }] },
+        {
+          type: "message",
+          content: [{ type: "output_text", text: JSON.stringify({ plan: value }) }],
+        },
       ],
     }),
   );
@@ -72,13 +82,14 @@ describe("BAAM question interpretation and authoritative answers", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     vi.stubEnv("OPENAI_API_KEY", "synthetic-model-key");
+    vi.stubEnv("NEXTAUTH_SECRET", "synthetic-context-secret");
     vi.stubEnv("OPENAI_MODEL", "gpt-5-mini");
     vi.stubGlobal("fetch", mocks.fetch);
     mocks.metrics.mockImplementation(async (args) =>
       report(args.dateFrom, args.dateTo, args.dateFrom !== input.dateFrom),
     );
     mocks.access.mockResolvedValue(scope);
-    mocks.fetch.mockResolvedValue(response(plan()));
+    mocks.fetch.mockImplementation(async () => response(plan()));
   });
   afterEach(() => {
     vi.useRealTimers();
@@ -129,7 +140,9 @@ describe("BAAM question interpretation and authoritative answers", () => {
       max_output_tokens: 500,
       text: { format: { type: "json_schema", strict: true } },
     });
-    expect(JSON.parse(body.input[1].content[0].text)).toEqual({ question: input.question });
+    expect(JSON.parse(body.input[1].content[0].text)).toEqual({
+      question: input.question.toLowerCase(),
+    });
     for (const value of [
       "server-actor",
       "private-org",
@@ -226,7 +239,7 @@ describe("BAAM question interpretation and authoritative answers", () => {
       mocks.fetch.mockResolvedValue(response(plan({ intent: "unsupported", limitation })));
       const { answer } = await askBaam(input);
       expect(answer).toContain(
-        "These records cannot establish causes, forecasts, profit, other business data or perform actions",
+        "I cannot establish causes, forecast, calculate historical profit, or perform business actions",
       );
       expect(answer).not.toContain("Sales before returns: 300 KGS");
     },
@@ -235,10 +248,14 @@ describe("BAAM question interpretation and authoritative answers", () => {
   it("reports configuration explicitly and never fabricates an AI reply without a key", async () => {
     vi.stubEnv("OPENAI_API_KEY", "");
     expect(await getBaamCapabilities(input.actorId)).toMatchObject({
-      available: false,
-      reason: "not_configured",
+      available: true,
+      aiConfigured: false,
+      reason: "local_only",
     });
-    await expect(askBaam(input)).rejects.toThrow("baamNotConfigured");
+    expect((await askBaam(input)).mode).toBe("guided");
+    await expect(askBaam({ ...input, question: "Discuss an unspecified issue" })).rejects.toThrow(
+      "baamNotConfigured",
+    );
     expect(mocks.fetch).not.toHaveBeenCalled();
   });
 
@@ -255,7 +272,7 @@ describe("BAAM question interpretation and authoritative answers", () => {
     await expect(getBaamCapabilities(input.actorId)).rejects.toThrow("forbidden");
   });
 
-  it("refuses grants/tenant changes between snapshots before sending the question", async () => {
+  it("refuses grants/tenant changes between reporting snapshots without returning facts", async () => {
     mocks.metrics
       .mockResolvedValueOnce(report(input.dateFrom, input.dateTo))
       .mockResolvedValueOnce({
@@ -263,23 +280,29 @@ describe("BAAM question interpretation and authoritative answers", () => {
         scope: { ...scope, storeIds: ["new-store"] },
       });
     await expect(askBaam(input)).rejects.toThrow("baamScopeChanged");
-    expect(mocks.fetch).not.toHaveBeenCalled();
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
   });
 
   it.each(["forbidden", "unauthorized", "subscriptionInactive", "storeAccessDenied"])(
     "does not reveal an answer after %s during the provider request",
     async (reason) => {
-      mocks.access.mockRejectedValue(new Error(reason));
+      mocks.access
+        .mockResolvedValueOnce(scope)
+        .mockResolvedValueOnce(scope)
+        .mockRejectedValueOnce(new Error(reason));
       await expect(askBaam(input)).rejects.toThrow(reason);
       expect(mocks.access).toHaveBeenCalledWith(input.actorId, undefined);
-      expect(mocks.access.mock.invocationCallOrder[0]).toBeGreaterThan(
+      expect(mocks.access.mock.invocationCallOrder[2]).toBeGreaterThan(
         mocks.fetch.mock.invocationCallOrder[0],
       );
     },
   );
 
   it("rejects a new tenant or changed all-store scope after the model completes", async () => {
-    mocks.access.mockResolvedValue({ ...scope, organizationId: "new-tenant" });
+    mocks.access
+      .mockResolvedValueOnce(scope)
+      .mockResolvedValueOnce(scope)
+      .mockResolvedValueOnce({ ...scope, organizationId: "new-tenant" });
     await expect(askBaam(input)).rejects.toThrow("baamScopeChanged");
   });
 
@@ -349,69 +372,100 @@ describe("BAAM question interpretation and authoritative answers", () => {
     },
   );
 
-  it.each([
-    "What were sales yesterday?",
-    "Sales for Store B",
-    "Продажи за вчера?",
-    "Кечээги сатуулар?",
-  ])("returns scope clarification instead of different-period facts for %s", async (question) => {
-    mocks.fetch.mockResolvedValue(response(plan({ intent: "unsupported", limitation: "scope" })));
-    const { answer, evidence, mode } = await askBaam({ ...input, question });
-    expect(answer).toContain("Selected period: 2026-09-01 — 2026-09-02 (Asia/Bishkek), KGS.");
-    expect(answer).toContain("Use the date and store controls");
-    expect(answer).not.toContain("300 KGS");
-    expect(evidence.currentQueriedAt).toBe("2026-09-05T12:00:01.000Z");
-    expect(evidence.previousQueriedAt).toBe("2026-09-05T12:00:02.000Z");
-    expect(mode).toBe("guided");
-    expect(mocks.fetch).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    ["en", "How much did we sell yesterday?"],
-    ["en", "Show today's sales"],
-    ["en", "Sales ｙｅｓｔｅｒｄａｙ"],
-    ["en", "Sales last week"],
-    ["en", "Sales for the previous 3 months"],
-    ["en", "Sales on September 3"],
-    ["en", "Sales on Monday"],
-    ["en", "Sales on 2026-09-04"],
-    ["en", "Sales in Store B"],
-    ["en", "Compare stores"],
-    ["en", "Private Store Name sales"],
-    ["ru", "Сколько мы продали вчера?"],
-    ["ru", "Покажи сегодняшние продажи"],
-    ["ru", "Продажи за прошлую неделю"],
-    ["ru", "Продажи за последние 3 месяца"],
-    ["ru", "Продажи за 4 сентября"],
-    ["ru", "Продажи в понедельник"],
-    ["ru", "Продажи за 04.09.2026"],
-    ["ru", "Продажи в магазине Север"],
-    ["ru", "Сравни магазины"],
-    ["kg", "Кечээ канча саттык?"],
-    ["kg", "Бүгүнкү сатуулар канча?"],
-    ["kg", "Өткөн аптадагы сатуулар"],
-    ["kg", "Акыркы 3 айдагы сатуулар"],
-    ["kg", "4-сентябрдагы сатуулар"],
-    ["kg", "Дүйшөмбүдөгү сатуулар"],
-    ["kg", "04/09/2026 сатуулары"],
-    ["kg", "Север дүкөнүндөгү сатуулар"],
-    ["kg", "Дүкөндөрдү салыштыр"],
-  ] as const)(
-    "blocks explicit %s scope even if the model would return selected-scope facts: %s",
-    async (locale, question) => {
-      mocks.fetch.mockResolvedValue(
-        response(plan({ intent: "summary", metrics: ["sales", "net_sales"] })),
-      );
-      const result = await askBaam({ ...input, locale, question });
+  it.each(["Sales in Store Unknown", "Sales during July", "Sales on 04/09/2026", "Compare stores"])(
+    "clarifies unresolved scope without figures or provider: %s",
+    async (question) => {
+      const result = await askBaam({ ...input, question });
+      expect(result.status).toBe("clarification");
       expect(result.mode).toBe("guided");
-      expect(result.answer).not.toContain("300 KGS");
-      expect(result.answer).not.toContain("240 KGS");
-      expect(result.answer).toContain("2026-09-01");
+      expect(result.evidence).toBeNull();
+      expect(result.contextToken).toBeNull();
+      expect(result.analyticsHref).toBeNull();
+      expect(mocks.metrics).not.toHaveBeenCalled();
       expect(mocks.fetch).not.toHaveBeenCalled();
-      expect(mocks.metrics).toHaveBeenCalledTimes(2);
-      expect(mocks.access).toHaveBeenCalledWith(input.actorId, undefined);
     },
   );
+
+  it("resolves a date and authorized store before fresh reporting, and keeps both private from the provider", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-05T12:00:00Z"));
+    const result = await askBaam({
+      ...input,
+      question: "Sales for Private Store Name last two months",
+    });
+    expect(result.status).toBe("answer");
+    expect(result.scope).toMatchObject({
+      dateFrom: "2026-07-01",
+      dateTo: "2026-08-31",
+      storeId: "private-store",
+      source: "question",
+    });
+    expect(result.analyticsHref).toBe(
+      "/reports/analytics?dateFrom=2026-07-01&dateTo=2026-08-31&storeId=private-store",
+    );
+    expect(mocks.metrics.mock.calls[0][0]).toMatchObject({
+      dateFrom: "2026-07-01",
+      dateTo: "2026-08-31",
+      storeId: "private-store",
+    });
+    const payload = mocks.fetch.mock.calls[0][1].body;
+    for (const value of ["Private Store Name", "private-store", "last two months", "2026-07-01"])
+      expect(payload).not.toContain(value);
+    expect(result.contextToken).toEqual(expect.any(String));
+  });
+
+  it("carries only authenticated typed intent into follow-ups and re-reads figures", async () => {
+    const first = await askBaam(input);
+    mocks.fetch.mockResolvedValue(response(plan({ intent: "returns", metrics: ["returns"] })));
+    const second = await askBaam({
+      ...input,
+      question: "And returns?",
+      contextToken: first.contextToken!,
+    });
+    expect(second.scope.source).toBe("context");
+    expect(second.answer).toContain("Returns: 60 KGS");
+    expect(mocks.metrics).toHaveBeenCalledTimes(4);
+    const payload = JSON.parse(mocks.fetch.mock.calls[1][1].body);
+    expect(JSON.parse(payload.input[1].content[0].text)).toEqual({
+      question: "and returns?",
+      previousPlan: plan(),
+    });
+    expect(mocks.fetch.mock.calls[1][1].body).not.toContain(first.contextToken);
+    expect(mocks.fetch.mock.calls[1][1].body).not.toContain("300 KGS");
+  });
+
+  it("does not reuse previous intent after an explicit manual control change", async () => {
+    const first = await askBaam(input);
+    await askBaam({
+      ...input,
+      dateFrom: "2026-08-01",
+      dateTo: "2026-08-02",
+      question: "And returns?",
+      contextToken: first.contextToken!,
+    });
+    expect(
+      JSON.parse(JSON.parse(mocks.fetch.mock.calls[1][1].body).input[1].content[0].text)
+        .previousPlan,
+    ).toBeUndefined();
+  });
+
+  it("rejects a modified, cross-actor or grant-stale context before report/provider access", async () => {
+    const first = await askBaam(input);
+    mocks.metrics.mockClear();
+    mocks.fetch.mockClear();
+    expect((await askBaam({ ...input, contextToken: first.contextToken! + "x" })).status).toBe(
+      "clarification",
+    );
+    expect(
+      (await askBaam({ ...input, actorId: "other", contextToken: first.contextToken! })).status,
+    ).toBe("clarification");
+    mocks.access.mockResolvedValue({ ...scope, authorizationFingerprint: "new-grants" });
+    expect((await askBaam({ ...input, contextToken: first.contextToken! })).status).toBe(
+      "clarification",
+    );
+    expect(mocks.metrics).not.toHaveBeenCalled();
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
 
   it.each([
     "What is happening in my business?",
@@ -436,13 +490,13 @@ describe("BAAM question interpretation and authoritative answers", () => {
     "Store sales for the selected period",
     "May I see sales?",
     "Are net sales greater than 2026.05 KGS?",
-    "Сатуу боюнча прогноз бер.",
   ])(
     "does not misclassify a supported suggestion or a date-free forecast as explicit scope: %s",
     async (question) => {
       const result = await askBaam({ ...input, question });
-      expect(result.mode).toBe("ai");
-      expect(mocks.fetch).toHaveBeenCalledTimes(1);
+      expect(result.status).toBe("answer");
+      expect(result.evidence).not.toBeNull();
+      expect(mocks.metrics).toHaveBeenCalledTimes(2);
     },
   );
 
@@ -450,8 +504,374 @@ describe("BAAM question interpretation and authoritative answers", () => {
     mocks.access.mockRejectedValueOnce(new Error("forbidden"));
     await expect(askBaam({ ...input, question: "Sales yesterday" })).rejects.toThrow("forbidden");
     vi.stubEnv("OPENAI_API_KEY", "");
-    await expect(askBaam({ ...input, question: "Sales yesterday" })).rejects.toThrow(
-      "baamNotConfigured",
+    expect((await askBaam({ ...input, question: "Sales yesterday" })).mode).toBe("guided");
+  });
+  it.each([
+    "Open sales report for last two months",
+    "Open analytics for last 2 months",
+    "Open analytics from 2026-07-01 to 2026-08-31",
+  ])("opens exactly filtered reports without model or sales reads: %s", async (question) => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-05T12:00:00Z"));
+    const result = await askBaam({ ...input, question });
+    expect(result.status).toBe("answer");
+    expect(result.analyticsHref).toBe("/reports/analytics?dateFrom=2026-07-01&dateTo=2026-08-31");
+    expect(result.actions.some((action) => action.href === result.analyticsHref)).toBe(true);
+    expect(result.answer).toContain("2026-07-01");
+    expect(result.evidence).toBeNull();
+    expect(mocks.fetch).not.toHaveBeenCalled();
+    expect(mocks.metrics).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    "What can you help me with?",
+    "Чем ты можешь помочь?",
+    "Сен эмне менен жардам бере аласың?",
+  ])("explains shipped tools without a provider: %s", async (question) => {
+    vi.stubEnv("OPENAI_API_KEY", "");
+    const result = await askBaam({ ...input, question });
+    expect(result.status).toBe("answer");
+    expect(result.mode).toBe("guided");
+    expect(result.actions.length).toBeGreaterThan(0);
+    expect(result.evidence).toBeNull();
+    expect(mocks.fetch).not.toHaveBeenCalled();
+    expect(mocks.metrics).not.toHaveBeenCalled();
+  });
+
+  it.each(["Why did sales fall?", "Почему упали продажи?", "Сатуу эмне үчүн азайды?"])(
+    "provides bounded non-causal diagnostics for %s",
+    async (question) => {
+      const result = await askBaam({ ...input, question });
+      expect(result.status).toBe("answer");
+      expect(result.mode).toBe("guided");
+      expect(result.answer).toContain("not proof of what caused");
+      expect(result.answer).toContain("Completed receipts");
+      expect(result.answer).toContain("Average receipt");
+      expect(result.answer).toContain("Returns");
+      expect(result.answer).toContain("Net sales");
+      expect(result.followUps[0]).toBe("Do payments and refunds reconcile?");
+      expect(mocks.fetch).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    "Forecast sales",
+    "What is our profit?",
+    "Delete products",
+    "Why did product Apple fall?",
+  ])("does not turn unsupported %s into arbitrary figures", async (question) => {
+    const result = await askBaam({ ...input, question });
+    expect(result.status).toBe("unsupported");
+    expect(result.evidence).toBeNull();
+    expect(mocks.fetch).not.toHaveBeenCalled();
+    expect(mocks.metrics).not.toHaveBeenCalled();
+  });
+
+  it("retains prior metric references for a no-key comparison follow-up", async () => {
+    mocks.fetch.mockResolvedValue(response(plan({ intent: "summary", metrics: ["discounts"] })));
+    const first = await askBaam(input);
+    vi.stubEnv("OPENAI_API_KEY", "");
+    const second = await askBaam({
+      ...input,
+      question: "Compare that with the previous period",
+      contextToken: first.contextToken!,
+    });
+    expect(second.answer).toContain("Recorded discounts:");
+    expect(second.answer).not.toContain("Sales before returns:");
+    expect(second.mode).toBe("guided");
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses a literal quoted catalog query and keeps product evidence separate from sales", async () => {
+    mocks.products.mockResolvedValue({
+      status: "answer",
+      answer: "Current catalog result",
+      cards: [
+        {
+          id: "product-a",
+          title: "May ABC123",
+          href: "/products/product-a",
+          sku: "ABC123",
+          displayFields: [],
+        },
+      ],
+      evidence: { summary: "Current catalog", details: ["Date not applied"], appliedPeriod: false },
+      contextProductId: "product-a",
+    });
+    const result = await askBaam({ ...input, question: 'Find product "May ABC123"' });
+    expect(result.status).toBe("answer");
+    expect(result.products[0].id).toBe("product-a");
+    expect(mocks.products.mock.calls[0][0].plan.query).toBe("May ABC123");
+    expect(result.evidence).toBeNull();
+    expect(result.productEvidence?.appliedPeriod).toBe(false);
+    expect(mocks.metrics).not.toHaveBeenCalled();
+    expect(mocks.fetch).not.toHaveBeenCalled();
+    const payload = JSON.parse(
+      Buffer.from(result.contextToken!.split(".")[0], "base64url").toString(),
     );
+    expect(payload.plan.query).toBeNull();
+    expect(payload.productId).toBe("product-a");
+    expect(JSON.stringify(payload)).not.toContain("ABC123");
+  });
+
+  it("uses the current product page before a previous product context and never sends IDs to the model", async () => {
+    mocks.products.mockResolvedValue({
+      status: "answer",
+      answer: "Catalog details",
+      cards: [],
+      evidence: { summary: "Current catalog", details: [], appliedPeriod: false },
+      contextProductId: "product-a",
+    });
+    const first = await askBaam({
+      ...input,
+      question: "Tell me about this product",
+      pageContext: { kind: "product", id: "product-a" },
+    });
+    await askBaam({
+      ...input,
+      question: "Tell me about this product",
+      pageContext: { kind: "product", id: "product-b" },
+      contextToken: first.contextToken!,
+    });
+    expect(mocks.products.mock.calls[1][0].pageProductId).toBe("product-b");
+    expect(mocks.fetch).not.toHaveBeenCalled();
+    expect(mocks.metrics).not.toHaveBeenCalled();
+  });
+
+  it("does not silently repeat a one-period product ranking when asked to compare it", async () => {
+    mocks.products.mockResolvedValue({
+      status: "answer",
+      answer: "Ranking",
+      cards: [],
+      evidence: { summary: "Product ranking", details: [], appliedPeriod: true },
+    });
+    const first = await askBaam({ ...input, question: "Show top products" });
+    const second = await askBaam({
+      ...input,
+      question: "Compare that with the previous period",
+      contextToken: first.contextToken!,
+    });
+    expect(second.status).toBe("clarification");
+    expect(second.answer).toContain("cannot yet compare product rankings");
+    expect(mocks.products).toHaveBeenCalledTimes(1);
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+
+  it("validates a product model branch but rejects a fabricated search term", async () => {
+    mocks.fetch.mockResolvedValue(
+      response({
+        intent: "products",
+        productAction: "search",
+        query: "INVENTED",
+        direction: null,
+        metric: null,
+        limit: 5,
+      }),
+    );
+    const result = await askBaam({ ...input, question: "Explore the catalog for apple" });
+    expect(result.status).toBe("clarification");
+    expect(mocks.products).not.toHaveBeenCalled();
+    expect(mocks.metrics).not.toHaveBeenCalled();
+  });
+  it.each([
+    "Open the sales report for this period",
+    "Открой отчёт о продажах за этот период",
+    "Бул мезгил үчүн сатуу отчётун ач",
+  ])("opens the actual localized report suggestion with matching filters: %s", async (question) => {
+    const result = await askBaam({ ...input, question });
+    expect(result.analyticsHref).toBe("/reports/analytics?dateFrom=2026-09-01&dateTo=2026-09-02");
+    expect(mocks.fetch).not.toHaveBeenCalled();
+    expect(mocks.metrics).not.toHaveBeenCalled();
+  });
+
+  it.each(["А возвраты?", "Ал эми кайтаруулар?", "And returns?"])(
+    "preserves typed prior context for multilingual follow-up %s",
+    async (question) => {
+      const first = await askBaam(input);
+      mocks.fetch.mockResolvedValue(response(plan({ intent: "returns" })));
+      const second = await askBaam({ ...input, question, contextToken: first.contextToken! });
+      expect(second.scope.source).toBe("context");
+      expect(
+        JSON.parse(JSON.parse(mocks.fetch.mock.calls[1][1].body).input[1].content[0].text)
+          .previousPlan,
+      ).toEqual(plan());
+    },
+  );
+
+  it("does not echo client text, context tokens or page IDs into scope metadata", async () => {
+    const result = await askBaam({
+      ...input,
+      contextToken: "invalid-context",
+      pageContext: { kind: "product", id: "product-a" },
+    });
+    expect(result.status).toBe("clarification");
+    expect(Object.keys(result.scope).sort()).toEqual(
+      [
+        "dateFrom",
+        "dateTo",
+        "storeId",
+        "source",
+        "reason",
+        "timeZone",
+        "storeNames",
+        "comparison",
+      ].sort(),
+    );
+    expect(JSON.stringify(result.scope)).not.toContain("invalid-context");
+    expect(JSON.stringify(result.scope)).not.toContain("product-a");
+  });
+
+  it("rejects arbitrary page URLs and extra context fields before model access", () => {
+    for (const pageContext of [
+      { kind: "section", section: "https://attacker.test" },
+      { kind: "product", id: "../../other-tenant" },
+      { kind: "product", id: "product-a", totals: 123 },
+    ]) {
+      const request = {
+        question: input.question,
+        dateFrom: input.dateFrom,
+        dateTo: input.dateTo,
+        locale: input.locale,
+      };
+      expect(baamAskSchema.safeParse({ ...request, pageContext }).success).toBe(false);
+    }
+  });
+  it.each(["Explain its change", "Объясни его результат", "Анын жыйынтыгын түшүндүр"])(
+    "blocks an adversarial whole-store model plan for dependent product question: %s",
+    async (question) => {
+      mocks.products.mockResolvedValue({
+        status: "answer",
+        answer: "Product",
+        cards: [],
+        evidence: { summary: "Catalog", details: [], appliedPeriod: false },
+        contextProductId: "product-a",
+      });
+      const first = await askBaam({
+        ...input,
+        question: "Tell me about this product",
+        pageContext: { kind: "product", id: "product-a" },
+      });
+      mocks.fetch.mockResolvedValue(response(plan({ intent: "summary" })));
+      const second = await askBaam({ ...input, question, contextToken: first.contextToken! });
+      expect(second.status).toBe("clarification");
+      expect(second.answer).not.toContain("300 KGS");
+      expect(mocks.metrics).not.toHaveBeenCalled();
+    },
+  );
+
+  it("allows an explicit switch from product context to overall sales", async () => {
+    mocks.products.mockResolvedValue({
+      status: "answer",
+      answer: "Product",
+      cards: [],
+      evidence: { summary: "Catalog", details: [], appliedPeriod: false },
+      contextProductId: "product-a",
+    });
+    const first = await askBaam({
+      ...input,
+      question: "Tell me about this product",
+      pageContext: { kind: "product", id: "product-a" },
+    });
+    const second = await askBaam({
+      ...input,
+      question: "Compare overall sales with the previous period",
+      contextToken: first.contextToken!,
+    });
+    expect(second.status).toBe("answer");
+    expect(second.answer).toContain("Sales before returns:");
+    expect(
+      JSON.parse(JSON.parse(mocks.fetch.mock.calls[0][1].body).input[1].content[0].text)
+        .previousPlan,
+    ).toBeUndefined();
+  });
+
+  it.each(["What are its returns?", "А сколько его продали?", "Анын кайтаруулары канча?"])(
+    "routes a known product follow-up to product performance, never whole-store totals: %s",
+    async (question) => {
+      mocks.products.mockResolvedValue({
+        status: "answer",
+        answer: "Product",
+        cards: [],
+        evidence: { summary: "Catalog", details: [], appliedPeriod: false },
+        contextProductId: "product-a",
+      });
+      const first = await askBaam({
+        ...input,
+        question: "Tell me about this product",
+        pageContext: { kind: "product", id: "product-a" },
+      });
+      mocks.products.mockResolvedValue({
+        status: "answer",
+        answer: "Product performance",
+        cards: [],
+        evidence: {
+          summary: "Recorded product sales and returns",
+          details: [],
+          appliedPeriod: true,
+        },
+        contextProductId: "product-a",
+      });
+      const second = await askBaam({ ...input, question, contextToken: first.contextToken! });
+      expect(second.status).toBe("answer");
+      expect(second.productEvidence?.appliedPeriod).toBe(true);
+      expect(mocks.products.mock.calls[1][0]).toMatchObject({
+        pageProductId: "product-a",
+        plan: { productAction: "performance" },
+      });
+      expect(mocks.metrics).not.toHaveBeenCalled();
+      expect(mocks.fetch).not.toHaveBeenCalled();
+    },
+  );
+  it.each(["en", "ru", "kg"] as const)(
+    "answers both suggested single-product performance follow-ups in %s without whole-store reads",
+    async (locale) => {
+      mocks.products.mockResolvedValue({
+        status: "answer",
+        answer: "Product result",
+        cards: [],
+        evidence: { summary: "Scoped product", details: [], appliedPeriod: true },
+        contextProductId: "product-a",
+      });
+      const first = await askBaam({
+        ...input,
+        locale,
+        question: "Tell me about this product",
+        pageContext: { kind: "product", id: "product-a" },
+      });
+      expect(first.followUps).toEqual(baamProductFollowUps(locale, true));
+      for (const question of first.followUps.slice(0, 2)) {
+        const answer = await askBaam({
+          ...input,
+          locale,
+          question,
+          contextToken: first.contextToken!,
+        });
+        expect(answer.status).toBe("answer");
+        expect(mocks.products.mock.lastCall?.[0]).toMatchObject({
+          pageProductId: "product-a",
+          plan: { productAction: "performance" },
+        });
+      }
+      expect(mocks.metrics).not.toHaveBeenCalled();
+      expect(mocks.fetch).not.toHaveBeenCalled();
+    },
+  );
+  it.each([
+    "Open the sales report for this period",
+    "Open receiving documents",
+    "What can you help me with?",
+  ])("preserves valid analytical context through local guidance: %s", async (question) => {
+    mocks.fetch.mockResolvedValue(response(plan({ intent: "summary", metrics: ["discounts"] })));
+    const first = await askBaam(input);
+    const navigation = await askBaam({ ...input, question, contextToken: first.contextToken! });
+    expect(navigation.contextToken).toBe(first.contextToken);
+    const followUp = await askBaam({
+      ...input,
+      question: "Compare that with the previous period",
+      contextToken: navigation.contextToken!,
+    });
+    expect(followUp.answer).toContain("Recorded discounts:");
+    expect(followUp.answer).not.toContain("Sales before returns:");
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
   });
 });

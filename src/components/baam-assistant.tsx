@@ -3,16 +3,17 @@
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Session } from "next-auth";
 import { useSession } from "next-auth/react";
+import { usePathname } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 
 import { BaamAssistantPanel, type BaamConversationEntry, type BaamAssistantPanelProps } from "@/components/baam-assistant-panel";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { formatDateTime } from "@/lib/i18nFormat";
 import { normalizeLocale } from "@/lib/locales";
 import { hasPermission } from "@/lib/roleAccess";
-import { addBusinessDays, businessDateKey } from "@/lib/timezone";
+import { baamDatePresets, baamPresetRange, type BaamDatePreset } from "@/lib/baamDatePresets";
+import { baamPageLabelKey, baamStarterKeys, getBaamUiPageContext } from "@/lib/baamSuggestions";
 import { translateError } from "@/lib/translateError";
 import { trpc } from "@/lib/trpc";
 
@@ -70,12 +71,12 @@ function AuthorizedBaamAssistantProvider({ actorId, organizationId, sessionReval
   const tAssistant = useTranslations("baam.assistant");
   const tErrors = useTranslations("errors");
   const locale = normalizeLocale(useLocale()) ?? "ru";
+  const pathname = usePathname();
+  const pageContext = useMemo(() => getBaamUiPageContext(pathname), [pathname]);
   const scopeId = useId();
-  const initial = useMemo(() => {
-    const today = businessDateKey(new Date());
-    return { dateFrom: addBusinessDays(today, -6), dateTo: today, storeId: undefined as string | undefined };
-  }, []);
+  const initial = useMemo(() => ({ ...baamPresetRange("last7"), storeId: undefined as string | undefined }), []);
   const [scope, setScope] = useState(initial);
+  const [contextToken, setContextToken] = useState<string>();
   const [activated, setActivated] = useState(false);
   const activatedRef = useRef(false);
   const refreshAccessRef = useRef<() => void>(() => undefined);
@@ -128,6 +129,7 @@ function AuthorizedBaamAssistantProvider({ actorId, organizationId, sessionReval
       setQuestion("");
       setError(undefined);
       setConversationAccessKey(undefined);
+      setContextToken(undefined);
     }
     if (currentAccessKey !== undefined) previousAccessKey.current = currentAccessKey;
   }, [currentAccessKey, permissionFailed]);
@@ -143,16 +145,19 @@ function AuthorizedBaamAssistantProvider({ actorId, organizationId, sessionReval
     const requestAccessEpoch = accessEpoch.current;
     setError(undefined);
     try {
-      const response = await mutation.mutateAsync({ question, ...scope, locale });
+      const response = await mutation.mutateAsync({ question, ...scope, locale, pageContext, ...(contextToken ? { contextToken } : {}) });
       if (requestAccessEpoch !== accessEpoch.current) return;
       if (response.audience.actorId !== actorId || response.audience.organizationId !== organizationId) {
         setEntries([]);
+        setContextToken(undefined);
         setError(tErrors("forbidden"));
         return;
       }
       setEntries(current => [...(conversationAccessKey === currentAccessKey ? current : []), {
         id: crypto.randomUUID(), question, answer: response.answer, followUps: response.followUps,
-        evidence: {
+        status: response.status, scope: response.evidence || response.productEvidence?.appliedPeriod || response.status === "clarification" ? response.scope : undefined,
+        products: response.products, productEvidence: response.productEvidence ?? undefined,
+        evidence: response.evidence ? {
           summary: tAssistant("evidence"),
           details: [
             t("appliedScope", {
@@ -165,17 +170,25 @@ function AuthorizedBaamAssistantProvider({ actorId, organizationId, sessionReval
             t("version", { version: response.evidence.metricVersion }),
             t("completeness"),
           ],
-        },
-        // Analytics owns its filters locally; do not imply a filtered deep link.
-        links: [{ label: tAssistant("openAnalytics"), href: "/reports/analytics" }],
+        } : undefined,
+        links: [
+          ...(response.analyticsHref ? [{ label: tAssistant("openAnalytics"), href: response.analyticsHref }] : []),
+          ...(response.actions ?? []).filter(action => action.href !== response.analyticsHref),
+        ],
       }]);
       setConversationAccessKey(currentAccessKey);
+      setContextToken(response.contextToken ?? undefined);
+      if (response.status === "answer") {
+        setScope({ dateFrom: response.scope.dateFrom, dateTo: response.scope.dateTo, storeId: response.scope.storeId });
+        setQuestion(current => current.trim() === question.trim() ? "" : current);
+      }
     } catch (cause) {
       const failure = cause as NonNullable<Parameters<typeof translateError>[1]>;
       if (requestAccessEpoch !== accessEpoch.current) return;
       if (["FORBIDDEN", "UNAUTHORIZED"].includes(failure.data?.code ?? "") || failure.message === "baamScopeChanged") {
         setEntries([]);
         setQuestion("");
+        setContextToken(undefined);
         accessEpoch.current += 1;
       }
       setError(translateError(tErrors, failure));
@@ -187,16 +200,29 @@ function AuthorizedBaamAssistantProvider({ actorId, organizationId, sessionReval
 
   const availabilityLabel = queryError ? tAssistant("unavailable") : capabilities.isFetching || !capabilitiesMatch || (configured && !scopeReady)
     ? tAssistant("checkingAvailability")
-    : configured ? tAssistant("aiAvailability") : tErrors("baamNotConfigured");
+    : configured ? tAssistant(capabilities.data?.aiConfigured ? "aiAvailability" : "localAvailability") : tErrors("baamNotConfigured");
   // A failed permission refresh must not retain previous protected answers.
   const visibleEntries = !sessionRevalidating && activated && configured && capabilitiesMatch && !capabilities.error && !capabilities.isFetching &&
     scopeReady && conversationAccessKey === currentAccessKey ? entries : [];
+  const changeScope = (next: typeof scope) => {
+    setScope(next);
+    setContextToken(undefined);
+    setError(undefined);
+  };
+  const activePreset = baamDatePresets.find(preset => {
+    const range = baamPresetRange(preset);
+    return range.dateFrom === scope.dateFrom && range.dateTo === scope.dateTo;
+  }) ?? "custom";
 
   const panel: Omit<BaamAssistantPanelProps, "compact"> = {
     entries: visibleEntries, onAsk: question => void ask(question), pending,
     question, onQuestionChange: setQuestion,
     available, availabilityLabel,
     error: queryError ? translateError(tErrors, queryError) : error,
+    hasContext: Boolean(contextToken),
+    suggestions: baamStarterKeys(pageContext, capabilitiesMatch ? capabilities.data?.navigationIds : []).map(key => tAssistant(key)),
+    pageContextLabel: tAssistant("pageContext", { page: tAssistant(baamPageLabelKey(pageContext)) }),
+    onNewConversation: () => { setEntries([]); setQuestion(""); setContextToken(undefined); setError(undefined); },
     onRetryAvailability: queryError ? () => refreshAccessRef.current() : undefined,
     scopeControls: <details className="text-xs">
       <summary className="cursor-pointer break-words font-medium text-foreground">
@@ -205,25 +231,34 @@ function AuthorizedBaamAssistantProvider({ actorId, organizationId, sessionReval
           : t("allStores")}
       </summary>
       <div className="mt-3 grid grid-cols-2 gap-3">
+        <label htmlFor={`${scopeId}-preset`} className="col-span-2 space-y-1"><span>{tAssistant("period")}</span>
+          <select id={`${scopeId}-preset`} value={activePreset} disabled={pending}
+            onChange={event => {
+              if (event.target.value !== "custom") changeScope({ ...scope, ...baamPresetRange(event.target.value as BaamDatePreset) });
+            }}
+            className="h-10 w-full rounded-lg border border-input bg-background px-2 text-sm">
+            <option value="custom">{tAssistant("presets.custom")}</option>
+            {baamDatePresets.map(preset => <option key={preset} value={preset}>{tAssistant(`presets.${preset}`)}</option>)}
+          </select>
+        </label>
         <label htmlFor={`${scopeId}-from`} className="space-y-1"><span>{t("dateFrom")}</span>
           <Input id={`${scopeId}-from`} type="date" value={scope.dateFrom} disabled={pending}
-            onChange={event => setScope(current => ({ ...current, dateFrom: event.target.value }))} className="min-w-0 text-xs" />
+            onChange={event => changeScope({ ...scope, dateFrom: event.target.value })} className="min-w-0 text-xs" />
         </label>
         <label htmlFor={`${scopeId}-to`} className="space-y-1"><span>{t("dateTo")}</span>
           <Input id={`${scopeId}-to`} type="date" value={scope.dateTo} disabled={pending}
-            onChange={event => setScope(current => ({ ...current, dateTo: event.target.value }))} className="min-w-0 text-xs" />
+            onChange={event => changeScope({ ...scope, dateTo: event.target.value })} className="min-w-0 text-xs" />
         </label>
         <label htmlFor={`${scopeId}-store`} className="col-span-2 min-w-0 space-y-1"><span>{t("store")}</span>
           <select id={`${scopeId}-store`} value={scope.storeId ?? ""} disabled={!scopeReady || pending}
-            onChange={event => setScope(current => ({ ...current, storeId: event.target.value || undefined }))}
+            onChange={event => changeScope({ ...scope, storeId: event.target.value || undefined })}
             className="h-10 w-full min-w-0 rounded-lg border border-input bg-background px-2 text-sm">
             <option value="">{t("allStores")}</option>
             {scope.storeId && !selectedStoreAvailable ? <option value={scope.storeId} disabled>{tAssistant("selectedStoreUnavailable")}</option> : null}
             {stores.map(store => <option key={store.id} value={store.id}>{store.name}</option>)}
           </select>
         </label>
-        {entries.length ? <Button variant="ghost" size="sm" className="col-span-2" disabled={pending}
-          onClick={() => { setEntries([]); setQuestion(""); setError(undefined); }}>{tAssistant("newConversation")}</Button> : null}
+        <p className="col-span-2 leading-5 text-muted-foreground">{tAssistant("datePolicy")}</p>
       </div>
     </details>,
   };

@@ -423,29 +423,23 @@ export const getSalesAnalyticsFilterOptions = async (
   return { categories: rows.map((row) => row.category) };
 };
 
-export const getSoldProductsAnalytics = async (
-  input: SalesAnalyticsScope &
-    SalesAnalyticsDateInput & {
-      category?: string;
-      search?: string;
-      page?: number;
-      pageSize?: number;
-    },
-) => {
-  if (noRows(input)) {
-    return { items: [], total: 0, page: input.page ?? 1, pageSize: input.pageSize ?? 25, meta: { timingsMs: {} } };
-  }
-  const range = resolveSalesAnalyticsDateRange(input);
-  const page = input.page ?? 1;
-  const pageSize = Math.min(Math.max(input.pageSize ?? 25, 1), 100);
-  const offset = (page - 1) * pageSize;
+type SoldProductsFilters = SalesAnalyticsScope & SalesAnalyticsDateInput & { category?: string; search?: string };
+type SoldProductActivityRow = {
+  productId: string; variantId: string | null; variantKey: string;
+  productName: string; productSku: string; variantName: string | null; variantSku: string | null;
+  barcode: string | null; category: string | null; quantitySold: number;
+  grossRevenueKgs: string | number | null; quantityReturned: number;
+  returnedRevenueKgs: string | number | null; receiptCount: number;
+};
+
+const buildSoldProductsActivity = (input: SoldProductsFilters, range: SalesAnalyticsRange) => {
   const orderScope = buildOrderScopeFilter(input);
   const returnScope = buildReturnScopeFilter(input);
   const productFilter = buildProductFilterSql(input);
 
   // Aggregate both event populations before filtering/pagination. A return can
   // belong to a sale outside this period, so sale-only keys lose valid negatives.
-  const activity = Prisma.sql`
+  return Prisma.sql`
     WITH activity AS (
       SELECT l."productId", l."variantId", l."variantKey", l.qty AS "quantitySold",
              l."lineTotalKgs" AS "grossRevenueKgs", 0 AS "quantityReturned",
@@ -486,26 +480,63 @@ export const getSoldProductsAnalytics = async (
       WHERE true ${productFilter}
     )
   `;
+};
+
+const mapSoldProductActivity = (row: SoldProductActivityRow) => {
+  const quantitySold = Number(row.quantitySold ?? 0);
+  const quantityReturned = Number(row.quantityReturned ?? 0);
+  const grossRevenueKgs = Number(row.grossRevenueKgs ?? 0);
+  const returnedRevenueKgs = Number(row.returnedRevenueKgs ?? 0);
+  return {
+    productId: row.productId, variantId: row.variantId, variantKey: row.variantKey,
+    productName: row.productName, productSku: row.variantSku ?? row.productSku,
+    baseSku: row.productSku, variantName: row.variantName, barcode: row.barcode, category: row.category,
+    quantitySold, quantityReturned, netQuantity: quantitySold - quantityReturned,
+    grossRevenueKgs: roundMoney(grossRevenueKgs), returnedRevenueKgs: roundMoney(returnedRevenueKgs),
+    netRevenueKgs: roundMoney(grossRevenueKgs - returnedRevenueKgs),
+    averagePriceKgs: quantitySold ? roundMoney(grossRevenueKgs / quantitySold) : 0,
+    receiptCount: Number(row.receiptCount ?? 0),
+  };
+};
+
+export const SOLD_PRODUCTS_EXPORT_ROW_LIMIT = 10_000;
+
+// One SELECT gives the entire filtered population one PostgreSQL statement
+// snapshot. Fetching one extra row detects overflow without a count/read race.
+// This monetary export never queries the operational stock projection.
+export const getSoldProductsAnalyticsExport = async (input: SoldProductsFilters) => {
+  const range = resolveSalesAnalyticsDateRange(input);
+  const generatedAt = new Date();
+  const rows = noRows(input) ? [] : await prisma.$queryRaw<SoldProductActivityRow[]>(Prisma.sql`
+    ${buildSoldProductsActivity(input, range)}
+    SELECT * FROM filtered
+    ORDER BY "grossRevenueKgs" DESC, "quantitySold" DESC, "productName" ASC,
+             "productId" ASC, "variantKey" ASC
+    LIMIT ${SOLD_PRODUCTS_EXPORT_ROW_LIMIT + 1}
+  `);
+  if (rows.length > SOLD_PRODUCTS_EXPORT_ROW_LIMIT) {
+    throw new AppError("analyticsExportRowLimit", "BAD_REQUEST", 400);
+  }
+  return {
+    items: rows.map(mapSoldProductActivity), total: rows.length, range,
+    meta: { population: "all-filtered" as const, rowLimit: SOLD_PRODUCTS_EXPORT_ROW_LIMIT, generatedAt },
+  };
+};
+
+export const getSoldProductsAnalytics = async (
+  input: SoldProductsFilters & { page?: number; pageSize?: number },
+) => {
+  if (noRows(input)) {
+    return { items: [], total: 0, page: input.page ?? 1, pageSize: input.pageSize ?? 25, meta: { timingsMs: {} } };
+  }
+  const range = resolveSalesAnalyticsDateRange(input);
+  const page = input.page ?? 1;
+  const pageSize = Math.min(Math.max(input.pageSize ?? 25, 1), 100);
+  const offset = (page - 1) * pageSize;
+  const activity = buildSoldProductsActivity(input, range);
   const [salesRows, totalRows] = await Promise.all([
     timed(() =>
-      prisma.$queryRaw<
-        Array<{
-          productId: string;
-          variantId: string | null;
-          variantKey: string;
-          productName: string;
-          productSku: string;
-          variantName: string | null;
-          variantSku: string | null;
-          barcode: string | null;
-          category: string | null;
-          quantitySold: number;
-          grossRevenueKgs: string | number | null;
-          quantityReturned: number;
-          returnedRevenueKgs: string | number | null;
-          receiptCount: number;
-        }>
-      >(Prisma.sql`
+      prisma.$queryRaw<SoldProductActivityRow[]>(Prisma.sql`
         ${activity}
         SELECT * FROM filtered
         ORDER BY "grossRevenueKgs" DESC, "quantitySold" DESC, "productName" ASC,
@@ -549,33 +580,9 @@ export const getSoldProductsAnalytics = async (
 
   const items = salesRows.value.map((row) => {
     const key = `${row.productId}:${row.variantKey}`;
-    const returned = {
-      quantityReturned: Number(row.quantityReturned ?? 0),
-      returnedRevenueKgs: Number(row.returnedRevenueKgs ?? 0),
-    };
-    const quantitySold = Number(row.quantitySold ?? 0);
-    const grossRevenueKgs = Number(row.grossRevenueKgs ?? 0);
-    const netQuantity = quantitySold - returned.quantityReturned;
-    const netRevenueKgs = grossRevenueKgs - returned.returnedRevenueKgs;
     return {
-      productId: row.productId,
-      variantId: row.variantId,
-      variantKey: row.variantKey,
-      productName: row.productName,
-      productSku: row.variantSku ?? row.productSku,
-      baseSku: row.productSku,
-      variantName: row.variantName,
-      barcode: row.barcode,
-      category: row.category,
-      quantitySold,
-      quantityReturned: returned.quantityReturned,
-      netQuantity,
-      grossRevenueKgs: roundMoney(grossRevenueKgs),
-      returnedRevenueKgs: roundMoney(returned.returnedRevenueKgs),
-      netRevenueKgs: roundMoney(netRevenueKgs),
-      averagePriceKgs: quantitySold ? roundMoney(grossRevenueKgs / quantitySold) : 0,
+      ...mapSoldProductActivity(row),
       stockRemaining: stockMap.get(key) ?? 0,
-      receiptCount: Number(row.receiptCount ?? 0),
     };
   });
 

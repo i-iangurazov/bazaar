@@ -1,10 +1,12 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { Suspense, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
 import dynamic from "next/dynamic";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { TRPCClientError } from "@trpc/client";
 
 import { PageHeader } from "@/components/page-header";
 import { ReceiptPreviewModal } from "@/components/pos/receipt-preview-modal";
@@ -35,10 +37,11 @@ import { baseAccountingCurrency, formatKgsMoney } from "@/lib/currencyDisplay";
 import { downloadTableFile, type DownloadFormat } from "@/lib/fileExport";
 import { formatDate, formatDateTime, formatNumber } from "@/lib/i18nFormat";
 import { defaultTimeZone } from "@/lib/timezone";
-import { buildSoldProductsPageExport } from "@/lib/soldProductsExport";
+import { buildSoldProductsFilteredExport } from "@/lib/soldProductsExport";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { cn } from "@/lib/utils";
+import { parseAnalyticsReportScope } from "@/lib/analyticsReportLink";
 
 type Preset = "today" | "yesterday" | "last7" | "last30" | "thisMonth" | "lastMonth";
 type SelectedPreset = Preset | "custom";
@@ -123,29 +126,61 @@ const buildPresetRange = (preset: Preset) => {
   return { from: addDays(today, -29), to: today };
 };
 
-const AnalyticsPage = () => {
+const AnalyticsUrlScope = () => {
+  const searchParams = useSearchParams();
+  const { data: session } = useSession();
+  const queryString = searchParams.toString();
+  // A new URL or authenticated audience gets one atomic filter initialization.
+  // Other filter controls remain local until the date/store URL changes.
+  return <AnalyticsReportContent
+    key={`${session?.user.id}:${session?.user.organizationId}:${session?.user.role}:${queryString}`}
+    queryString={queryString}
+  />;
+};
+
+const AnalyticsPage = () => <Suspense fallback={<Skeleton className="h-[28rem] w-full" />}><AnalyticsUrlScope /></Suspense>;
+
+const AnalyticsReportContent = ({ queryString }: { queryString: string }) => {
   const t = useTranslations("analytics");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const tPos = useTranslations("pos");
   const tExports = useTranslations("exports");
   const locale = useLocale();
+  const router = useRouter();
+  const pathname = usePathname();
   const { data: session, status } = useSession();
   const role = session?.user?.role ?? "STAFF";
   const canView = role === "ADMIN" || role === "MANAGER";
 
-  const initialRange = useMemo(() => buildPresetRange("last30"), []);
-  const [storeId, setStoreId] = useState(canView ? "all" : "");
+  const params = useMemo(() => new URLSearchParams(queryString), [queryString]);
+  const requestedScope = useMemo(() => parseAnalyticsReportScope(params), [params]);
+  const initialRange = useMemo(() => requestedScope.kind === "default" ? buildPresetRange("last30") : {
+    from: params.get("dateFrom") ?? "", to: params.get("dateTo") ?? "",
+  }, [params, requestedScope]);
+  const storeId = params.get("storeId") ?? "all";
   const [registerId, setRegisterId] = useState("all");
   const [cashierId, setCashierId] = useState("all");
-  const [dateFrom, setDateFrom] = useState(initialRange.from);
-  const [dateTo, setDateTo] = useState(initialRange.to);
-  const [preset, setPreset] = useState<SelectedPreset>("last30");
+  const dateFrom = initialRange.from;
+  const dateTo = initialRange.to;
+  const preset: SelectedPreset = requestedScope.kind === "default" ? "last30" :
+    (["today", "yesterday", "last7", "last30", "thisMonth", "lastMonth"] as Preset[]).find(value => {
+      const range = buildPresetRange(value);
+      return range.from === dateFrom && range.to === dateTo;
+    }) ?? "custom";
   const [category, setCategory] = useState("all");
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search.trim());
   const [productPage, setProductPage] = useState(1);
   const [downloadFormat, setDownloadFormat] = useState<DownloadFormat>("csv");
+  const [exportingProducts, setExportingProducts] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const trpcUtils = trpc.useUtils();
+  const exportMounted = useRef(true);
+  useEffect(() => {
+    exportMounted.current = true;
+    return () => { exportMounted.current = false; };
+  }, []);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<{
     productId: string;
@@ -156,14 +191,8 @@ const AnalyticsPage = () => {
 
   const storesQuery = trpc.stores.list.useQuery(undefined, {
     enabled: status === "authenticated" && canView,
+    retry: false, staleTime: 0, cacheTime: 0, refetchOnMount: "always",
   });
-
-  useEffect(() => {
-    if (storeId || !storesQuery.data?.length) {
-      return;
-    }
-    setStoreId(canView ? "all" : storesQuery.data[0].id);
-  }, [canView, storeId, storesQuery.data]);
 
   const resolvedStoreId = storeId === "all" ? undefined : storeId || undefined;
   const selectedStore = resolvedStoreId
@@ -177,7 +206,15 @@ const AnalyticsPage = () => {
     dateFrom,
     dateTo,
   };
-  const analyticsEnabled = status === "authenticated" && canView && Boolean(storeId);
+  const storesReady = storesQuery.data !== undefined && !storesQuery.isFetching && !storesQuery.error;
+  const scopeError = requestedScope.kind === "invalid" ? tErrors("invalidInput") : storesQuery.error
+    ? translateError(tErrors, storesQuery.error)
+    : storesReady && resolvedStoreId && !selectedStore ? tErrors("storeAccessDenied") : null;
+  const analyticsEnabled = status === "authenticated" && canView && storesReady && !scopeError;
+  const exportSnapshotKey = JSON.stringify([session?.user.id, session?.user.organizationId, role, status, commonAnalyticsInput, category, search, analyticsEnabled]);
+  const exportSnapshot = useRef(exportSnapshotKey);
+  exportSnapshot.current = exportSnapshotKey;
+  useEffect(() => { setExportError(null); }, [exportSnapshotKey]);
 
   const registersQuery = trpc.pos.registers.list.useQuery(
     {
@@ -192,11 +229,11 @@ const AnalyticsPage = () => {
   );
   const overviewQuery = trpc.analytics.salesOverview.useQuery(commonAnalyticsInput, {
     enabled: analyticsEnabled,
-    keepPreviousData: true,
+    keepPreviousData: false,
   });
   const filterOptionsQuery = trpc.analytics.salesFilterOptions.useQuery(commonAnalyticsInput, {
     enabled: analyticsEnabled,
-    keepPreviousData: true,
+    keepPreviousData: false,
   });
   const soldProductsQuery = trpc.analytics.soldProducts.useQuery(
     {
@@ -208,7 +245,7 @@ const AnalyticsPage = () => {
     },
     {
       enabled: analyticsEnabled,
-      keepPreviousData: true,
+      keepPreviousData: false,
     },
   );
   const dayDetailQuery = trpc.analytics.salesDayDetail.useQuery(
@@ -256,35 +293,61 @@ const AnalyticsPage = () => {
     setProductPage(1);
   }, [dateFrom, dateTo, storeId, registerId, cashierId, category, deferredSearch]);
 
-  const chartData = (overviewQuery.data?.series ?? []) as SalesPoint[];
-  const totals = overviewQuery.data?.totals;
-  const soldProducts = soldProductsQuery.data?.items ?? [];
-  const productTotal = soldProductsQuery.data?.total ?? 0;
+  const overviewLoading = !analyticsEnabled || overviewQuery.isLoading || overviewQuery.isFetching;
+  const soldProductsLoading = !analyticsEnabled || soldProductsQuery.isLoading || soldProductsQuery.isFetching;
+  const chartData = (overviewLoading || overviewQuery.error ? [] : overviewQuery.data?.series ?? []) as SalesPoint[];
+  const totals = overviewLoading || overviewQuery.error ? undefined : overviewQuery.data?.totals;
+  const soldProducts = soldProductsLoading || soldProductsQuery.error ? [] : soldProductsQuery.data?.items ?? [];
+  const productTotal = soldProductsLoading || soldProductsQuery.error ? 0 : soldProductsQuery.data?.total ?? 0;
   const productPages = Math.max(1, Math.ceil(productTotal / pageSize));
-  const categories = filterOptionsQuery.data?.categories ?? [];
+  const categories = analyticsEnabled && !filterOptionsQuery.isFetching ? filterOptionsQuery.data?.categories ?? [] : [];
 
+  // Date and store controls update the URL, which is their only source of truth.
+  // Raw incomplete dates remain explicit invalid input rather than reverting to a default range.
+  const replaceScope = (patch: { dateFrom?: string; dateTo?: string; storeId?: string }) => {
+    const next = new URLSearchParams({ dateFrom: patch.dateFrom ?? dateFrom, dateTo: patch.dateTo ?? dateTo });
+    const nextStore = patch.storeId ?? storeId;
+    if (nextStore !== "all") next.set("storeId", nextStore);
+    router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+  };
+  const setStoreId = (nextStoreId: string) => replaceScope({ storeId: nextStoreId });
   const applyPreset = (nextPreset: Preset) => {
     const range = buildPresetRange(nextPreset);
-    setPreset(nextPreset);
-    setDateFrom(range.from);
-    setDateTo(range.to);
+    replaceScope({ dateFrom: range.from, dateTo: range.to });
   };
 
   const handleCustomDate = (field: "from" | "to", value: string) => {
-    setPreset("custom");
-    if (field === "from") {
-      setDateFrom(value);
-    } else {
-      setDateTo(value);
-    }
+    replaceScope(field === "from" ? { dateFrom: value } : { dateTo: value });
   };
 
-  const handleExportProducts = () => {
-    downloadTableFile({
-      format: downloadFormat,
-      fileNameBase: `sold-products-${dateFrom}-${dateTo}-page-${productPage}`,
-      ...buildSoldProductsPageExport(soldProducts, (value) => formatKgsMoney(value, locale, currencySource)),
-    });
+  const handleExportProducts = async () => {
+    if (!analyticsEnabled || soldProductsLoading || soldProductsQuery.error || search.trim() !== deferredSearch || exportingProducts) return;
+    const snapshot = exportSnapshot.current;
+    setExportingProducts(true);
+    setExportError(null);
+    try {
+      // Direct request deliberately avoids cached/in-flight query reuse when
+      // an authenticated audience changes. Pagination is never exported.
+      const result = await trpcUtils.client.analytics.soldProductsExport.query({
+        ...commonAnalyticsInput,
+        category: category === "all" ? undefined : category,
+        search: deferredSearch || undefined,
+      });
+      if (!exportMounted.current || exportSnapshot.current !== snapshot) return;
+      await downloadTableFile({
+        format: downloadFormat,
+        fileNameBase: `sold-products-all-filtered-${dateFrom}-${dateTo}`,
+        ...buildSoldProductsFilteredExport(result.items, (value) => formatKgsMoney(value, locale, currencySource)),
+        shouldDownload: () => exportMounted.current && exportSnapshot.current === snapshot,
+      });
+    } catch (error) {
+      if (exportMounted.current && exportSnapshot.current === snapshot) {
+        setExportError(error instanceof TRPCClientError ? translateError(tErrors, error)
+          : error instanceof Error && tErrors.has(error.message) ? tErrors(error.message) : tErrors("genericMessage"));
+      }
+    } finally {
+      if (exportMounted.current) setExportingProducts(false);
+    }
   };
 
   const renderMoney = (value: number) => formatKgsMoney(value, locale, currencySource);
@@ -331,7 +394,7 @@ const AnalyticsPage = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">{t("allStores")}</SelectItem>
-                      {(storesQuery.data ?? []).map((store) => (
+                      {(storesReady ? storesQuery.data ?? [] : []).map((store) => (
                         <SelectItem key={store.id} value={store.id}>
                           {store.name}
                         </SelectItem>
@@ -347,7 +410,7 @@ const AnalyticsPage = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">{t("filters.allRegisters")}</SelectItem>
-                      {(registersQuery.data ?? []).map((register) => (
+                      {(analyticsEnabled && !registersQuery.isFetching ? registersQuery.data ?? [] : []).map((register) => (
                         <SelectItem key={register.id} value={register.id}>
                           {register.name} ({register.code})
                         </SelectItem>
@@ -363,7 +426,7 @@ const AnalyticsPage = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">{t("filters.allCashiers")}</SelectItem>
-                      {(cashiersQuery.data ?? []).map((cashier) => (
+                      {(analyticsEnabled && !cashiersQuery.isFetching ? cashiersQuery.data ?? [] : []).map((cashier) => (
                         <SelectItem key={cashier.id} value={cashier.id}>
                           {cashier.name ?? cashier.email}
                         </SelectItem>
@@ -438,7 +501,7 @@ const AnalyticsPage = () => {
                   />
                 </label>
                 <div className="flex gap-2">
-                  <Select value={downloadFormat} onValueChange={(value) => setDownloadFormat(value as DownloadFormat)}>
+                  <Select value={downloadFormat} onValueChange={(value) => setDownloadFormat(value as DownloadFormat)} disabled={exportingProducts}>
                     <SelectTrigger className="w-[120px]" aria-label={tExports("formatLabel")}>
                       <SelectValue />
                     </SelectTrigger>
@@ -451,16 +514,20 @@ const AnalyticsPage = () => {
                     type="button"
                     variant="outline"
                     onClick={handleExportProducts}
-                    disabled={!soldProducts.length}
+                    disabled={!productTotal || !analyticsEnabled || soldProductsLoading || Boolean(soldProductsQuery.error) || search.trim() !== deferredSearch || exportingProducts}
                   >
-                    <DownloadIcon className="h-4 w-4" aria-hidden />
-                    {t("actions.exportProducts")}
+                    {exportingProducts ? <Spinner className="h-4 w-4" /> : <DownloadIcon className="h-4 w-4" aria-hidden />}
+                    {t(exportingProducts ? "actions.exportingProducts" : "actions.exportAllProducts")}
                   </Button>
                 </div>
               </div>
+              <p className="text-xs text-muted-foreground">{t("exportProductsHint")}</p>
+              {exportError ? <p role="alert" className="text-sm text-danger">{exportError}</p> : null}
             </CardContent>
           </Card>
 
+          {scopeError ? <div role="alert" className="rounded-md border border-danger/30 bg-danger/10 p-4 text-sm text-danger">{scopeError}</div>
+            : !storesReady ? <Skeleton className="h-[28rem] w-full" /> : <>
           {overviewQuery.error ? (
             <div className="rounded-md border border-danger/30 bg-danger/10 p-4 text-sm text-danger">
               {translateError(tErrors, overviewQuery.error)}
@@ -484,7 +551,7 @@ const AnalyticsPage = () => {
                 )}
               >
                 <p className="text-xs font-medium text-muted-foreground">{item.label}</p>
-                {overviewQuery.isLoading ? (
+                {overviewLoading ? (
                   <Skeleton className="mt-3 h-7 w-28" />
                 ) : (
                   <p className="mt-2 text-xl font-semibold text-foreground">{item.value}</p>
@@ -504,7 +571,7 @@ const AnalyticsPage = () => {
               ) : null}
             </CardHeader>
             <CardContent className="p-4 sm:p-5">
-              {overviewQuery.isLoading ? (
+              {overviewLoading ? (
                 <Skeleton className="h-[22rem] w-full" />
               ) : chartData.some((point) => point.grossSalesKgs || point.returnsKgs || point.receiptCount) ? (
                 <div className="h-[22rem] w-full">
@@ -535,14 +602,14 @@ const AnalyticsPage = () => {
                   <CardTitle className="text-base">{t("products.title")}</CardTitle>
                   <p className="text-xs text-muted-foreground">{t("products.subtitle")}</p>
                 </div>
-                {!soldProductsQuery.isLoading ? (
+                {!soldProductsLoading ? (
                   <p className="text-xs text-muted-foreground">
                     {t("products.count", { count: productTotal })}
                   </p>
                 ) : null}
               </CardHeader>
               <CardContent className="p-0">
-                {soldProductsQuery.isLoading ? (
+                {soldProductsLoading ? (
                   <div className="space-y-2 p-4 sm:p-5">
                     {Array.from({ length: 6 }).map((_, index) => (
                       <Skeleton key={index} className="h-12 w-full" />
@@ -679,7 +746,7 @@ const AnalyticsPage = () => {
                   <CardTitle className="text-base">{t("dayTable.title")}</CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
-                  {overviewQuery.isLoading ? (
+                  {overviewLoading ? (
                     <div className="space-y-2 p-4">
                       {Array.from({ length: 5 }).map((_, index) => (
                         <Skeleton key={index} className="h-10 w-full" />
@@ -983,6 +1050,7 @@ const AnalyticsPage = () => {
               }
             }}
           />
+          </>}
         </>
       )}
     </div>

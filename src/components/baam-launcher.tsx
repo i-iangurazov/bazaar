@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 
 import { ExternalLinkIcon, SparklesIcon } from "@/components/icons";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { hasPermission, type RoleAccess } from "@/lib/roleAccess";
+import { baamLauncherLift } from "@/lib/baamLauncherPosition";
 
 const hiddenPrefixes = [
   "/pos", "/inventory", "/reports/receipts", "/printing/receipt",
@@ -26,8 +27,39 @@ export function BaamLauncher({ access, pathname, children }: {
   const t = useTranslations("baam.assistant");
   const tBaam = useTranslations("baam");
   const [open, setOpen] = useState(false);
+  const launcherRef = useRef<HTMLButtonElement>(null);
+  const [lift, setLift] = useState(0);
+  const liftRef = useRef(0);
+  const visible = canShowBaamLauncher(access, pathname);
   useEffect(() => setOpen(false), [pathname]);
-  if (!canShowBaamLauncher(access, pathname)) return null;
+  useEffect(() => {
+    if (!visible) return;
+    let frame = 0;
+    const measure = () => {
+      frame = 0;
+      const launcher = launcherRef.current;
+      if (!launcher || open) return;
+      const current = launcher.getBoundingClientRect();
+      if (!current.width || !current.height) return;
+      const base = { left: current.left, right: current.right, top: current.top + liftRef.current, bottom: current.bottom + liftRef.current };
+      const controls = Array.from(document.querySelectorAll<HTMLElement>("main button, main a[href], main input, main select, main textarea, main summary, main [role=button], main [role=combobox]"))
+        .filter(el => el !== launcher && !el.contains(launcher) && el.getClientRects().length && getComputedStyle(el).visibility !== "hidden")
+        .map(el => el.getBoundingClientRect());
+      const next = baamLauncherLift(base, controls);
+      if (next !== liftRef.current) { liftRef.current = next; setLift(next); }
+    };
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(measure); };
+    window.addEventListener("scroll", schedule, true);
+    window.addEventListener("resize", schedule);
+    const observer = new MutationObserver(schedule);
+    const main = document.querySelector("main");
+    if (main) observer.observe(main, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "style", "open", "hidden"] });
+    const resizeObserver = typeof ResizeObserver !== "undefined" ? new ResizeObserver(schedule) : null;
+    if (main) resizeObserver?.observe(main);
+    schedule();
+    return () => { cancelAnimationFrame(frame); observer.disconnect(); resizeObserver?.disconnect(); window.removeEventListener("scroll", schedule, true); window.removeEventListener("resize", schedule); };
+  }, [pathname, visible, open]);
+  if (!visible) return null;
 
   const inWorkspace = pathname === "/baam" || pathname === "/baam/";
   const focusWorkspace = () => {
@@ -39,8 +71,9 @@ export function BaamLauncher({ access, pathname, children }: {
   const launcher = (
     <button
       type="button" aria-label={t("launcherLabel")} title={t("launcherLabel")} data-baam-launcher
+      ref={launcherRef} style={{ transform: lift ? `translateY(-${lift}px)` : undefined }}
       onClick={inWorkspace ? focusWorkspace : undefined}
-      className="button-focus-ring fixed bottom-[calc(6rem+env(safe-area-inset-bottom,0px))] right-[max(1rem,env(safe-area-inset-right,0px))] z-30 flex h-14 w-14 flex-col items-center justify-center gap-0.5 rounded-full border border-primary-foreground/20 bg-primary text-primary-foreground shadow-lg shadow-primary/25 transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 md:bottom-6 md:right-6 [body:has([role=dialog][data-state=open])_&]:invisible [body:has([role=alertdialog][data-state=open])_&]:invisible"
+      className="button-focus-ring fixed bottom-[calc(6rem+env(safe-area-inset-bottom,0px))] right-[max(1rem,env(safe-area-inset-right,0px))] z-30 flex h-14 w-14 flex-col items-center justify-center gap-0.5 rounded-full border border-primary-foreground/20 bg-primary text-primary-foreground shadow-lg shadow-primary/25 transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 md:bottom-6 md:right-6 [body:has([role=dialog][data-state=open])_&]:invisible [body:has([role=alertdialog][data-state=open])_&]:invisible"
     >
       <SparklesIcon className="h-5 w-5" aria-hidden />
       <span className="text-[9px] font-bold leading-none tracking-wider" aria-hidden>{tBaam("title")}</span>
@@ -57,7 +90,7 @@ export function BaamLauncher({ access, pathname, children }: {
     >
       <DialogHeader className="space-y-1">
         <DialogTitle className="flex items-center gap-2"><SparklesIcon className="h-5 w-5 text-primary" aria-hidden />{tBaam("title")}</DialogTitle>
-        <DialogDescription>{t("drawerDescription")}</DialogDescription>
+        <DialogDescription className="sr-only">{t("drawerDescription")}</DialogDescription>
         <Link href="/baam" prefetch={false} onClick={() => setOpen(false)}
           className="button-focus-ring inline-flex min-h-8 items-center gap-1 rounded-md text-xs font-medium text-primary hover:underline">
           {t("openWorkspace")}<ExternalLinkIcon className="h-3.5 w-3.5" aria-hidden />

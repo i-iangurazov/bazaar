@@ -13,10 +13,12 @@ import {
   getSalesAnalyticsFilterOptions,
   getSalesAnalyticsOverview,
   getSoldProductsAnalytics,
+  getSoldProductsAnalyticsExport,
   listSalesAnalyticsReceipts,
   type SalesAnalyticsScope,
 } from "@/server/services/salesAnalytics";
 import { AppError } from "@/server/services/errors";
+import { getBaamAccessScope } from "@/server/services/baamMetrics";
 import {
   assertUserCanAccessStore,
   resolveAccessibleStoreIds,
@@ -257,6 +259,43 @@ export const analyticsRouter = router({
           page: input.page,
           pageSize: input.pageSize,
         });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+  soldProductsExport: managerProcedure
+    .input(salesAnalyticsBaseInput.extend({
+      storeId: z.string().min(1).max(200).optional(),
+      registerId: z.string().min(1).max(200).optional(),
+      cashierId: z.string().min(1).max(200).optional(),
+      category: z.string().max(200).optional(),
+      search: z.string().max(200).optional(),
+    }).strict())
+    .query(async ({ ctx, input }) => {
+      try {
+        // Reuse the certified live role/plan/store-grant reader. Request input
+        // never chooses an organization or supplies its own list of stores.
+        const access = await getBaamAccessScope(ctx.user.id, input.storeId);
+        if (access.organizationId !== ctx.user.organizationId) {
+          throw new AppError("forbidden", "FORBIDDEN", 403);
+        }
+        if (!access.planFeatures.includes("exports")) {
+          throw new AppError("featureLockedExports", "FORBIDDEN", 403);
+        }
+        const freshContext = { ...ctx, user: { ...ctx.user, role: access.role, isOrgOwner: access.isOrgOwner, isPlatformOwner: false } };
+        await assertAnalyticsRegisterScope(freshContext, input);
+        await assertAnalyticsCashierScope(freshContext, input.cashierId);
+        const result = await getSoldProductsAnalyticsExport({
+          organizationId: access.organizationId, storeIds: access.storeIds,
+          registerId: input.registerId, cashierId: input.cashierId,
+          dateFrom: input.dateFrom, dateTo: input.dateTo,
+          category: input.category?.trim() || undefined, search: input.search?.trim() || undefined,
+        });
+        const current = await getBaamAccessScope(ctx.user.id, input.storeId);
+        if (current.organizationId !== access.organizationId || current.authorizationFingerprint !== access.authorizationFingerprint) {
+          throw new AppError("analyticsExportScopeChanged", "FORBIDDEN", 403);
+        }
+        return result;
       } catch (error) {
         throw toTRPCError(error);
       }

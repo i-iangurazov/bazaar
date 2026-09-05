@@ -29,11 +29,13 @@ export const sanitizeSpreadsheetValue = (value: unknown) => {
   return str;
 };
 
-const triggerDownload = async (blob: Blob, fileName: string) => {
+const triggerDownload = async (blob: Blob, fileName: string, shouldDownload?: () => boolean) => {
+  if (shouldDownload && !shouldDownload()) return;
   if (isNativeApp()) {
     const shared = await shareBlobNative({ blob, fileName, title: "Bazaar export" });
     if (shared) return;
   }
+  if (shouldDownload && !shouldDownload()) return;
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -64,7 +66,9 @@ export const downloadTableFile = async (input: {
   fileNameBase: string;
   header: string[];
   rows: string[][];
+  shouldDownload?: () => boolean;
 }) => {
+  if (input.shouldDownload && !input.shouldDownload()) return;
   const allRows = ensureRows(input.header, input.rows);
   if (input.format === "xlsx") {
     const content = await buildXlsx(allRows);
@@ -73,6 +77,7 @@ export const downloadTableFile = async (input: {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       }),
       `${input.fileNameBase}.xlsx`,
+      input.shouldDownload,
     );
     return;
   }
@@ -81,6 +86,7 @@ export const downloadTableFile = async (input: {
   await triggerDownload(
     new Blob([content], { type: "text/csv;charset=utf-8" }),
     `${input.fileNameBase}.csv`,
+    input.shouldDownload,
   );
 };
 

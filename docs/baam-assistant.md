@@ -1,47 +1,74 @@
-# BAAM question assistant
+# BAAM business assistant
 
-BAAM now accepts a business question through `baam.ask`. The model chooses an intent and a small set of metric references. The server builds the answer from freshly authorized reporting results, including the immediately preceding period of equal length. The model cannot supply figures, execute tools, read arbitrary records, change data, or run SQL.
+BAAM helps an authorized business user answer a question, inspect the evidence, and reach the existing page where they can continue their work. The drawer and `/baam` workspace share a conversation. It does not duplicate the reporting dashboard or execute business changes.
 
-## Access and conversation
+## Product direction
 
-Use the circular BAAM button at the bottom right of supported application pages, or open `/baam`. Command search and mobile More also expose the workspace to authorized roles. The old metric-card dashboard has been removed. Every answer can link back to the existing analytics page; that page currently requires selecting the same dates and stores manually.
+The assistant serves four connected jobs:
 
-The circle remains visible on `/baam`; there it scrolls to and focuses the existing question box (or the workspace while the assistant is unavailable). Elsewhere it opens the assistant drawer. Both entry points use the same sparkle icon, distinct from reports and metrics.
+1. Understand performance: summarize sales, compare periods, inspect returns and payment reconciliation, and identify recorded changes that merit investigation.
+2. Find and inspect products: search the accessible catalog by name, SKU or barcode; inspect a product and its recorded sales/returns for the selected period; distinguish stronger sellers, weaker sellers and products without completed sales.
+3. Reach the next step: open a product or an existing, permission-checked application page. Inventory movement, receiving, transfer and write-off document lists are allowed navigation destinations; BAAM does not operate those workflows.
+4. Continue an investigation: preserve dates, store and the supported topic across follow-ups; offer relevant questions and destinations instead of repeating a fixed list.
 
-The drawer and full workspace share the current conversation, draft and date/store selection in the authenticated layout's RAM. A pending request can finish while the drawer is closed. Reopening revalidates access. Reload, logout or an account/organization change clears this memory; no transcript is stored in browser storage or the database. Changes to authorized stores or a failed permission check clear protected history. Previous conversation is displayed for the user but is not sent to the model: each new question is interpreted independently using the selected controls. Availability failures offer an explicit retry.
+Additional capabilities should extend these jobs through typed, authorized readers with independently verified definitions. Useful later readers include customer/order investigation, supplier purchasing history, catalog completeness, integration job health and carefully defined business alerts. A destination link alone must not be presented as the ability to analyze that destination's records. Forecasts, historical profit and recommendations to change stock require their own data and evidence contracts before they are advertised.
 
-## Supported contract
+## Entry points and interaction
 
-`baam.capabilities` checks current membership, role, subscription and analytics entitlement. Its `available` flag means an API key is configured; it does not prove that the provider, model or account is healthy. `baam.ask` uses `managerProcedure` and the existing per-user rate limiter, limited to five requests per minute outside test/CI.
+ADMIN and MANAGER use the bottom-right BAAM circle, sidebar, command search, mobile More or `/baam`. Existing role and analytics entitlement checks still apply. STAFF and CASHIER are not given access to the business assistant by this change.
 
-Input is strictly limited to `question` (1–1,500 trimmed characters), `dateFrom`, `dateTo`, optional `storeId`, and `locale` (`en`, `ru`, or `kg`). Actor identity comes from the server session. Client metrics, history and organization/actor overrides are rejected.
+The circle opens a drawer on supported pages. On `/baam`, it focuses the existing composer. It is hidden behind other open dialogs and on operational routes excluded from the stabilization scope. Where nearby controls intersect its normal position, it moves upward within the right gutter; it never moves off screen or over the app header. Dense layouts with no free gap keep the normal anchor and need separate layout review.
 
-Supported answers describe recorded sales, net sales, receipts, average receipt, recorded discounts, returns and payment/refund reconciliation. Comparisons use server-calculated differences; a zero baseline never produces an invented percentage. Return amounts use their own completion dates, so returns divided by sales is a period ratio, not the return rate of a sales cohort. Changes in that ratio use percentage points.
+The welcome starts at the top. Suggestions depend on the current section or product, while subsequent questions come from the last answer. Product results are readable cards with direct product links. Evidence is expandable, and date-sensitive results state their exact period, store scope and business time zone. Enter sends a question; Shift+Enter inserts a line break and IME composition is preserved. A newly typed draft is not erased when a previous request completes.
 
-The selected UI controls define the date/store scope. A deterministic server preflight recognizes common English, Russian and Kyrgyz relative dates, calendar forms, weekday/month forms, explicit store syntax and literal authorized store names. Recognized requests return a scope clarification with `mode: guided`, no metric facts and no provider call. This is an intentional preflight path, not a fallback for provider errors. It retains the same configured-key requirement, authorized reporting reads and final scope check. Names stay on the server. The guard never changes dates or grants; it asks the user to choose the controls. Its bounded lexicon is not a complete natural-language date/name parser, and ambiguous names may conservatively request clarification. The model is also instructed to reject other explicit scope requests. All answers state the actual selected dates, business time zone and KGS currency. Causes, forecasts, profit, unrelated data and requested actions receive a limitation and follow-up suggestions, without unrelated figures. For wording outside the deterministic preflight, intent classification remains model-dependent; the schema and server renderer prevent arbitrary numeric or causal claims even if the intent is misclassified.
+## Dates, stores and conversation
 
-## Authorization and freshness
+Natural-language scope is resolved on the server before the model interprets the remaining question. Authorized store names stay local. Unknown or ambiguous scope requests produce a clarification rather than a query using unrelated default filters.
 
-Each period is read in its own read-only, repeatable-read transaction using current database membership, role, subscription and store grants. The comparison uses the same authorized organization and store set; changes abort the answer. After the provider completes, a third short read-only transaction rechecks those grants before any earlier facts are returned. No database transaction remains open while waiting for the provider.
+The calendar contract uses Asia/Bishkek:
 
-Evidence includes both periods, authorized store names, both `currentQueriedAt` and `previousQueriedAt`, the final `scopeCheckedAt`, metric version and two query hashes. The legacy `queriedAt` response field is retained as the previous-period query completion time. These are separate snapshots, not an atomic snapshot of both periods. The underlying reporting contract does not prove producer completeness, and no source-complete-through timestamp is asserted.
+- “Last two months” means the previous two complete calendar months. On September 5, 2026, that is July 1 through August 31.
+- “This month” includes today; “last N days/weeks” uses complete days ending yesterday.
+- “Last week” without a number means the previous Monday through Sunday.
+- Explicit supported date ranges and named months with a year are accepted. Ambiguous dates need clarification.
+- The maximum supported range is 366 inclusive days. A comparison uses the immediately preceding equal number of days, which is not necessarily the previous calendar month.
 
-## Provider behavior and privacy
+The response includes the resolved scope and reason. Successful date-sensitive answers synchronize the visible controls. Matching analytics links carry validated date/store query parameters. The analytics page rejects invalid or unauthorized URL scope before fetching results, and preserves those filters on refresh and navigation.
 
-The existing `OPENAI_API_KEY` and optional `OPENAI_MODEL` are used; the fallback model remains `gpt-5-mini`. The `minimal` reasoning setting is sent only for the original GPT-5 family and its dated snapshots; other configured models receive no forced reasoning parameter. A configured model must support Responses structured outputs. Unsupported configuration fails explicitly rather than returning a simulated AI answer.
+Conversation state lives in the authenticated layout's RAM. A short-lived signed context token carries only the bounded plan, scope and allowed record references; it is not authentication and does not contain a transcript or metric figures. Tokens are actor/organization-bound, expire after 30 minutes, and are invalidated by effective authorization changes. Current access is rechecked for every request and again before returning results. Manual filters reset question context. Drawer closure and a move to the full workspace preserve it; reload, logout or an account change clears it.
 
-Only the user's question and static interpretation instructions/schema are sent to OpenAI. No database-derived metrics, dates, store names, organization/user identifiers, customer records or prior conversation are included. Users can still type personal information into the question; this is not a claim that arbitrary free text is automatically de-identified.
+## Answer and evidence contracts
 
-The Responses request uses `store: false`, strict `text.format` JSON schema, no tools, no conversation identifier and a 500-output-token limit. `store: false` controls response storage for API retrieval; it is not a claim of zero provider retention. The provider request and body read have one 20-second deadline and no automatic retry. Database transactions retain their own 15-second limits, so the entire route is not guaranteed to finish within 20 seconds.
+Sales answers use the existing completed-sales reporting contract: recorded sales after discounts, net sales after completed returns, receipt count, average receipt, recorded discounts, returns, and payment/refund reconciliation. Return amounts follow their own completion dates. The returns-to-sales percentage is a period ratio, not a cohort return rate. A zero comparison baseline does not produce an invented percentage change.
 
-Refusal, incomplete output, malformed/extra plan fields, unsupported references, non-success HTTP responses and timeouts fail with `baamUnavailable`; no raw provider response or question is attached to that error. A missing key returns `baamNotConfigured`; changed authorized scope returns `baamScopeChanged`. Manual resubmission can incur another provider charge, including after a timeout.
+Diagnostics show observed differences in receipt count, average receipt, returns and net sales. These aggregates can identify what changed; they cannot establish why customers behaved differently or prove a causal explanation.
 
-The API shape follows the official [Structured Outputs guide](https://developers.openai.com/api/docs/guides/structured-outputs) and [Responses creation reference](https://developers.openai.com/api/reference/cli/resources/responses/methods/create), checked September 5, 2026. The OpenAI Docs skill and the repository's existing Responses implementation were consulted.
+Product readers use a separate read-only projection. Catalog fields are current and do not claim to reconstruct a product's historical state. The product population is the current nonarchived catalog actively assigned to the selected accessible stores; variants combine at product level. Rankings state their measure and include zero or negative values when sorting lowest first. “Without completed sales” means no qualifying sold quantity in the stated period; it is not a claim of no demand or continuous availability. Line revenue and order-wide revenue may differ when order-level adjustments are not allocated. Product evidence describes these definitions separately from sales snapshot evidence.
 
-## Verification and remaining limits
+Product rankings currently cover one period. Cross-period product comparisons receive an explicit clarification; they do not repeat the current ranking as a comparison. Unqualified rankings use net line revenue. Quantity ranking requires an explicit quantity request because different base units are not directly comparable. Lifetime requests require a supported, explicit period rather than silently using the current date controls.
 
-Executed final isolated checks: 96 assistant unit tests, 11 existing reporting-boundary unit tests, and seven PostgreSQL authorization tests. The latter use real synthetic accounts/organizations/store grants, the narrow BAAM router, and stored mid-request disable/grant changes. Report projections and model transport are mocked; no operational POS/Inventory producer or live provider is executed. The local configuration has no legacy global setup, reset or migration action. TypeScript and scoped ESLint passed.
+A question such as “how much did it sell?” after identifying one product uses that product's freshly authorized sales/returns projection. Ambiguous references clarify; they never substitute whole-store totals. Navigation/help can preserve a still-valid analytical context without extending its expiration.
 
-The mocked provider checks establish the request/response contract, rejection behavior, deadline and deterministic rendering. They do not establish live model interpretation accuracy, real provider availability, latency, cost, production question quality, or full producer-to-report correctness. Multilingual known-scope cases deliberately provide an incorrect supported model response and prove no provider call occurs; unsupported causal/forecast cases still use synthetic classified responses. Live deployed interpretation checks, when performed, are recorded separately in the release evidence. The existing rate limiter is wired into the route but bypassed by the application's test policy; these tests do not claim to exercise production Redis rate limiting.
+Sales evidence includes current and comparison query times, scope validation, metric version and query hashes. These are separate snapshots. Product evidence includes its read time, population, measure and whether dates were applied. Neither contract certifies upstream producer completeness, historical cost correctness, profit, stock availability or all sales channels.
 
-Machine-readable final evidence is in `artifacts/bazaar-reliability/20260905/baam-scope-guard-after.json`, `baam-scope-guard-db.json` and `baam-scope-guard-handoff.json`. The initial guard regression run (`baam-scope-guard-before.json`) recorded 32 failures before implementation; three further normalization/false-positive cases were added afterward. Earlier backend artifacts preserve the pre-guard implementation evidence. The prior backend offered only `baam.overview`; this adds a question workflow while preserving that query for current consumers.
+## Authorization and tools
+
+`baam.ask` accepts a bounded question, dates, optional store, locale, signed context and an optional page reference. Section context is an allowlisted enum. A product-page ID is an untrusted reference until a fresh catalog/store lookup authorizes it. Client-provided figures, actors, organizations, arbitrary URLs and SQL are rejected.
+
+Navigation is a static catalog of real application destinations. Every link passes current role, route and feature checks. Product links come only from authorized query results. The model never supplies a URL or record identifier that becomes trusted without validation.
+
+`baam.capabilities` reports local availability, whether AI interpretation is configured, and authorized navigation IDs. Local navigation, capability guidance, common analytical questions and recognized product requests do not require an external provider. An unrecognized request with no configured provider receives an explicit limitation; it is not answered with unrelated figures. Configured provider failures remain visible rather than silently becoming a simulated AI answer.
+
+The route retains the per-user five-requests-per-minute limit. Rate-limit wiring tests and real Redis verification must be distinguished in release evidence.
+
+## Provider privacy and failures
+
+The existing `OPENAI_API_KEY` and optional `OPENAI_MODEL` configure free-form interpretation. The model chooses a strict typed plan; server readers and renderers supply every numeric claim. It cannot execute arbitrary tools, SQL or business mutations. Database figures, catalog records, store names, actor IDs and prior transcript are not sent to the provider. Resolved date/store spans are removed locally. Users may still include private information in free text; this is not a promise of automatic de-identification of arbitrary input.
+
+The Responses request uses `store: false`, a strict structured-output schema, bounded output and a 20-second request/body deadline. Provider refusal, invalid output, non-success responses and timeouts fail explicitly. No automatic provider retry is performed. Database transactions have separate deadlines and do not remain open during provider calls. `store: false` is not a claim of zero provider retention.
+
+The original integration was checked against the official [Structured Outputs guide](https://developers.openai.com/api/docs/guides/structured-outputs) and [Responses reference](https://developers.openai.com/api/reference/cli/resources/responses/methods/create) on September 5, 2026. Mock interpretation tests establish the API and rendering contract; actual interpretation accuracy and provider availability require separate live checks.
+
+## Verification records
+
+The original readiness audit remains in `artifacts/bazaar-assessment/20260905T114424Z/`. Subsequent releases retain their own evidence in `artifacts/bazaar-reliability/20260905/`. This implementation's tests, browser checks and exact-commit release verification are recorded separately in `artifacts/baam-professional/20260905/`; unfinished checks must not be counted as passing.

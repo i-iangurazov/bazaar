@@ -12,6 +12,28 @@ export type RateLimiter = {
   consume: (key: string) => Promise<void> | void;
 };
 
+// MULTI can resolve while individual commands failed (for example, INCR on a
+// corrupt value). Such a reply is not a successful rate-limit check. Validate
+// both the counter and its expiration before allowing the protected request.
+export const readRedisCounterResults = (result: unknown, counterCount: number): number[] => {
+  if (!Array.isArray(result) || result.length !== counterCount * 2) {
+    throw new Error("redisUnavailable");
+  }
+  const counts: number[] = [];
+  for (let index = 0; index < result.length; index += 2) {
+    const increment = result[index];
+    const expiry = result[index + 1];
+    if (!Array.isArray(increment) || increment.length !== 2 || increment[0] !== null ||
+        !Number.isSafeInteger(increment[1]) || increment[1] < 1 ||
+        !Array.isArray(expiry) || expiry.length !== 2 || expiry[0] !== null ||
+        (expiry[1] !== 0 && expiry[1] !== 1)) {
+      throw new Error("redisUnavailable");
+    }
+    counts.push(increment[1]);
+  }
+  return counts;
+};
+
 class MemoryRateLimiter implements RateLimiter {
   private readonly store = new Map<string, { count: number; resetAt: number }>();
   private readonly windowMs: number;
@@ -67,7 +89,7 @@ class RedisRateLimiter implements RateLimiter {
         .pexpire(bucketKey, this.windowMs, "NX")
         .exec();
 
-      const count = Array.isArray(result?.[0]) ? Number(result?.[0][1]) : 0;
+      const [count] = readRedisCounterResults(result, 1);
       if (count > this.max) {
         throw new Error("rateLimited");
       }

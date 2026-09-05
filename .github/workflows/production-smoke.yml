@@ -1,0 +1,47 @@
+name: Production public smoke
+
+on:
+  deployment_status:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  public-smoke:
+    # Vercel sends environment=Production even when production_environment=false.
+    if: >-
+      github.event_name != 'deployment_status' ||
+      (github.event.deployment_status.state == 'success' && github.event.deployment.environment == 'Production')
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    concurrency:
+      group: production-public-smoke-${{ github.event_name == 'deployment_status' && 'deployment' || 'periodic' }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Verify smoke transport guards offline
+        run: node --test scripts/deployment/public-smoke.test.mjs
+      - name: Wait for exact production alias and probe public routes
+        env:
+          # Treated as data and validated as 40 hex digits; never interpolated into a shell command.
+          SMOKE_EXPECTED_SHA: ${{ github.event_name == 'deployment_status' && github.event.deployment.sha || '' }}
+          SMOKE_REQUIRE_EXPECTED_SHA: ${{ github.event_name == 'deployment_status' && '1' || '0' }}
+          SMOKE_OUTPUT_DIR: artifacts/production-smoke
+        run: node scripts/deployment/public-smoke.mjs
+      - name: Upload public smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-public-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/production-smoke/
+          if-no-files-found: warn
+          retention-days: 14

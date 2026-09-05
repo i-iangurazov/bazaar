@@ -36,7 +36,9 @@ describe("BAAM assistant persisted authorization", () => {
             content: [
               {
                 type: "output_text",
-                text: JSON.stringify({ intent: "summary", metrics: ["sales"], limitation: "none" }),
+                text: JSON.stringify({
+                  plan: { intent: "summary", metrics: ["sales"], limitation: "none" },
+                }),
               },
             ],
           },
@@ -46,8 +48,9 @@ describe("BAAM assistant persisted authorization", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     vi.stubEnv("OPENAI_API_KEY", "synthetic-model-key");
+    vi.stubEnv("NEXTAUTH_SECRET", "synthetic-context-secret");
     vi.stubGlobal("fetch", mocks.fetch);
-    mocks.fetch.mockResolvedValue(providerResponse());
+    mocks.fetch.mockImplementation(async () => providerResponse());
     mocks.overview.mockResolvedValue({
       totals: {
         grossSalesKgs: 80,
@@ -76,7 +79,7 @@ describe("BAAM assistant persisted authorization", () => {
     const { a } = fixture.tenants;
     const result = await caller("MANAGER").ask(request);
     expect(result.answer).toContain("Sales before returns: 80 KGS");
-    expect(result.evidence.storeNames).toEqual([a.stores[0].name]);
+    expect(result.evidence!.storeNames).toEqual([a.stores[0].name]);
     expect(result.audience).toEqual({ actorId: a.users.MANAGER.id, organizationId: a.org.id });
     expect(mocks.overview).toHaveBeenCalledTimes(2);
     for (const [scope] of mocks.overview.mock.calls)
@@ -117,7 +120,7 @@ describe("BAAM assistant persisted authorization", () => {
       return providerResponse();
     });
     await expect(caller("MANAGER").ask(request)).rejects.toThrow("baamScopeChanged");
-    expect(mocks.overview).toHaveBeenCalledTimes(2);
+    expect(mocks.overview).not.toHaveBeenCalled();
   });
 
   it("discards an in-flight answer when the actor is disabled", async () => {
@@ -133,10 +136,11 @@ describe("BAAM assistant persisted authorization", () => {
   it("rechecks actual entitlements and reports missing configuration without making a provider call", async () => {
     vi.stubEnv("OPENAI_API_KEY", "");
     expect(await caller("ADMIN").capabilities()).toMatchObject({
-      available: false,
-      reason: "not_configured",
+      available: true,
+      aiConfigured: false,
+      reason: "local_only",
     });
-    await expect(caller("ADMIN").ask(request)).rejects.toThrow("baamNotConfigured");
+    expect((await caller("ADMIN").ask(request)).mode).toBe("guided");
     await prisma.organization.update({
       where: { id: fixture.tenants.a.org.id },
       data: { plan: "STARTER" },
@@ -145,24 +149,53 @@ describe("BAAM assistant persisted authorization", () => {
     expect(mocks.fetch).not.toHaveBeenCalled();
   });
 
-  it("clarifies an explicit date without provider access while preserving actual role enforcement", async () => {
+  it("resolves an explicit date with fresh grants and enforces actual role revocation", async () => {
     const staleCaller = caller("MANAGER");
-    const explicitDate = {
-      ...request,
-      locale: "ru" as const,
-      question: "Сколько мы продали вчера?",
-    };
+    const explicitDate = { ...request, question: "Summarize sales for the last two months" };
     const result = await staleCaller.ask(explicitDate);
-    expect(result.mode).toBe("guided");
-    expect(result.answer).toContain("Выберите нужный период и магазин в фильтрах");
-    expect(result.answer).not.toContain("80 KGS");
+    expect(result.status).toBe("answer");
+    expect(result.scope.source).toBe("question");
+    expect(result.contextToken).toEqual(expect.any(String));
     expect(mocks.overview).toHaveBeenCalledTimes(2);
-    expect(mocks.fetch).not.toHaveBeenCalled();
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
     await prisma.user.update({
       where: { id: fixture.tenants.a.users.MANAGER.id },
       data: { role: "STAFF" },
     });
     await expect(staleCaller.ask(explicitDate)).rejects.toThrow("forbidden");
     expect(mocks.overview).toHaveBeenCalledTimes(2);
+  });
+
+  it("invalidates previous context after grant additions and password session-version changes", async () => {
+    const { a } = fixture.tenants;
+    const first = await caller("MANAGER").ask(request);
+    mocks.overview.mockClear();
+    mocks.fetch.mockClear();
+    await prisma.userStoreAccess.create({
+      data: { userId: a.users.MANAGER.id, organizationId: a.org.id, storeId: a.stores[1].id },
+    });
+    expect(
+      (
+        await caller("MANAGER").ask({
+          ...request,
+          question: "And returns?",
+          contextToken: first.contextToken!,
+        })
+      ).status,
+    ).toBe("clarification");
+    expect(mocks.overview).not.toHaveBeenCalled();
+    expect(mocks.fetch).not.toHaveBeenCalled();
+    const fresh = await caller("MANAGER").ask(request);
+    await prisma.user.update({
+      where: { id: a.users.MANAGER.id },
+      data: { sessionVersion: { increment: 1 } },
+    });
+    mocks.overview.mockClear();
+    mocks.fetch.mockClear();
+    expect(
+      (await caller("MANAGER").ask({ ...request, contextToken: fresh.contextToken! })).status,
+    ).toBe("clarification");
+    expect(mocks.overview).not.toHaveBeenCalled();
+    expect(mocks.fetch).not.toHaveBeenCalled();
   });
 });

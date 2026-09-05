@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { createRateLimiter } from "@/server/middleware/rateLimiter";
+import { createRateLimiter, readRedisCounterResults } from "@/server/middleware/rateLimiter";
 import { isProductionRuntime } from "@/server/config/runtime";
 import { getRedisPublisher } from "@/server/redis";
 
@@ -122,8 +122,7 @@ export const registerLoginFailure = async (input: { email: string; ip: string })
       .incr(pairFailKey)
       .pexpire(pairFailKey, LOGIN_FAILURE_WINDOW_MS, "NX")
       .exec();
-    const userAttempts = Number(Array.isArray(result?.[0]) ? result?.[0][1] : 1);
-    const pairAttempts = Number(Array.isArray(result?.[2]) ? result?.[2][1] : 1);
+    const [userAttempts, pairAttempts] = readRedisCounterResults(result, 2);
     const maxAttempts = Math.max(userAttempts, pairAttempts);
 
     if (maxAttempts >= LOGIN_LOCKOUT_ATTEMPT) {

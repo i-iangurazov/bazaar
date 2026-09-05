@@ -3,7 +3,11 @@ import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
-import { hasPlanFeature, resolveOrganizationAccessState } from "@/server/services/planLimits";
+import {
+  getPlanFeatures,
+  hasPlanFeature,
+  resolveOrganizationAccessState,
+} from "@/server/services/planLimits";
 import {
   getSalesAnalyticsOverview,
   resolveSalesAnalyticsDateRange,
@@ -15,14 +19,21 @@ const money = (value: number) => Math.round((value + Number.EPSILON) * 100) / 10
 
 // Shared by metric snapshots and post-provider authorization. This reads only
 // membership, entitlements and store grants, never operational records.
-const readBaamAccessScope = async (
+export const readBaamAccessScope = async (
   tx: Prisma.TransactionClient,
   actorId: string,
   storeId?: string,
 ) => {
   const actor = await tx.user.findUnique({
     where: { id: actorId },
-    select: { id: true, organizationId: true, role: true, isActive: true, isOrgOwner: true },
+    select: {
+      id: true,
+      organizationId: true,
+      role: true,
+      isActive: true,
+      isOrgOwner: true,
+      sessionVersion: true,
+    },
   });
   if (!actor?.isActive || !actor.organizationId) {
     throw new AppError("unauthorized", "UNAUTHORIZED", 401);
@@ -57,6 +68,20 @@ const readBaamAccessScope = async (
   }
   const storeIds = storeId ? [storeId] : stores.map((store) => store.id);
   return {
+    role: actor.role,
+    isOrgOwner: actor.isOrgOwner,
+    planFeatures: getPlanFeatures(organization.plan),
+    authorizationFingerprint: createHash("sha256")
+      .update(
+        JSON.stringify({
+          role: actor.role,
+          owner: actor.isOrgOwner,
+          sessionVersion: actor.sessionVersion,
+          organization,
+          stores: stores.map((store) => store.id),
+        }),
+      )
+      .digest("hex"),
     actorId: actor.id,
     organizationId: actor.organizationId,
     storeIds,

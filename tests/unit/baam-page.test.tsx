@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import messages from "../../messages/en.json";
 import { BaamAssistant, BaamAssistantProvider } from "@/components/baam-assistant";
 
-const mocks = vi.hoisted(() => ({ session: vi.fn(), capabilities: vi.fn(), overview: vi.fn(), mutation: vi.fn(), ask: vi.fn(), retryCapabilities: vi.fn(), retryOverview: vi.fn() }));
+const mocks = vi.hoisted(() => ({ pathname: vi.fn(), session: vi.fn(), capabilities: vi.fn(), overview: vi.fn(), mutation: vi.fn(), ask: vi.fn(), retryCapabilities: vi.fn(), retryOverview: vi.fn() }));
+vi.mock("next/navigation", () => ({ usePathname: mocks.pathname }));
 vi.mock("next-auth/react", () => ({ useSession: mocks.session }));
 vi.mock("@/lib/trpc", () => ({ trpc: { baam: {
   capabilities: { useQuery: mocks.capabilities }, overview: { useQuery: mocks.overview }, ask: { useMutation: mocks.mutation },
@@ -17,6 +18,11 @@ const audience = { actorId: "actor", organizationId: "org" };
 const capabilities = () => ({ data: { available: true, reason: "configured", mode: "ai", audience }, error: null, isFetching: false, refetch: mocks.retryCapabilities });
 const overview = () => ({ data: { audience, scope: { organizationId: "org", storeIds: ["store"], availableStores: [{ id: "store", name: "Authorized synthetic store" }] } }, error: null, isFetching: false, refetch: mocks.retryOverview });
 const answer = () => ({
+  status: "answer" as const,
+  scope: { dateFrom: "2026-09-01", dateTo: "2026-09-02", storeId: "store", timeZone: "Asia/Bishkek", storeNames: ["Authorized synthetic store"], reason: "Selected dates and authorized store.", source: "controls", comparison: { dateFrom: "2026-08-30", dateTo: "2026-08-31" } },
+  contextToken: "opaque-server-context",
+  actions: [], products: [], productEvidence: null,
+  analyticsHref: "/reports/analytics?dateFrom=2026-09-01&dateTo=2026-09-02&storeId=store",
   answer: "Recorded sales after returns are -30.00 KGS. Check the completed returns before inferring a sales decline.",
   mode: "ai", audience, followUps: ["Check recorded payments"],
   evidence: {
@@ -39,6 +45,7 @@ const submit = (question = "Explain returns") => {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  mocks.pathname.mockReturnValue("/baam");
   mocks.session.mockReturnValue({ status: "authenticated", data: { user: { id: "actor", organizationId: "org", role: "MANAGER" } } });
   mocks.capabilities.mockReturnValue(capabilities()); mocks.overview.mockReturnValue(overview());
   mocks.mutation.mockReturnValue({ mutateAsync: mocks.ask, isLoading: false }); mocks.ask.mockResolvedValue(answer());
@@ -49,7 +56,7 @@ describe("BAAM assistant workspace", () => {
   it("starts with questions and suggestions without a duplicate metric dashboard or automatic AI call", () => {
     render(page());
     expect(screen.getByText("What would you like to understand?")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "What changed in this period?" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: messages.baam.assistant.briefPrompt })).toBeTruthy();
     expect(screen.queryByRole("table")).toBeNull(); expect(screen.queryByTestId("baam-metric-net")).toBeNull();
     expect(mocks.ask).not.toHaveBeenCalled();
   });
@@ -62,16 +69,17 @@ describe("BAAM assistant workspace", () => {
     fireEvent.change(screen.getByRole("combobox", { name: "Store" }), { target: { value: "store" } });
     submit();
     await screen.findByText(answer().answer);
-    expect(mocks.ask).toHaveBeenCalledWith({ question: "Explain returns", dateFrom: "2026-09-01", dateTo: "2026-09-02", storeId: "store", locale: "en" });
+    expect(mocks.ask).toHaveBeenCalledWith({ question: "Explain returns", dateFrom: "2026-09-01", dateTo: "2026-09-02", storeId: "store", locale: "en", pageContext: { kind: "section", section: "baam" } });
     fireEvent.click(screen.getByText("Evidence and scope"));
     expect(screen.getByText(/Applied period: 2026-09-01 to 2026-09-02/).textContent).toContain("Authorized synthetic store");
     expect(screen.getByText(/Source completeness is unknown/)).toBeTruthy();
     expect(screen.getByText(/Metric definitions: completed-sales-kgs-v1/)).toBeTruthy();
     expect(screen.getByText(/Selected-period records queried at/)).toBeTruthy();
     expect(screen.getByText(/Comparison-period records queried at/)).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Open analytics · apply the same dates and stores" }).getAttribute("href")).toBe("/reports/analytics");
+    expect(screen.getByRole("link", { name: messages.baam.assistant.openAnalytics }).getAttribute("href")).toBe(answer().analyticsHref);
     fireEvent.click(screen.getByRole("button", { name: "Check recorded payments" }));
     await waitFor(() => expect(mocks.ask).toHaveBeenCalledTimes(2));
+    expect(mocks.ask.mock.calls[1][0]).toMatchObject({ contextToken: "opaque-server-context", dateFrom: "2026-09-01", dateTo: "2026-09-02", storeId: "store" });
   });
 
   it("shows truthful unconfigured availability and sends no questions or overview requests", () => {
@@ -143,7 +151,9 @@ describe("BAAM assistant workspace", () => {
     view.rerender(page());
     expect(screen.queryByText(answer().answer)).toBeNull();
     expect(screen.queryByText(/Applied period:/)).toBeNull();
-    mocks.ask.mockResolvedValue({ ...answer(), answer: "Only the newly authorized store was queried." });
+    expect((input() as HTMLTextAreaElement).disabled).toBe(true);
+    fireEvent.change(screen.getByRole("combobox", { name: "Store" }), { target: { value: "other-store" } });
+    mocks.ask.mockResolvedValue({ ...answer(), scope: { ...answer().scope, storeId: "other-store", storeNames: ["Another authorized store"] }, answer: "Only the newly authorized store was queried." });
     submit(); await screen.findByText("Only the newly authorized store was queried.");
     expect(screen.queryByText(answer().answer)).toBeNull();
   });
@@ -251,7 +261,7 @@ describe("BAAM assistant workspace", () => {
     }
     mocks.session.mockReturnValue({ status: "authenticated", data: currentSession }); view.rerender(page());
     expect(screen.getByText(answer().answer)).toBeTruthy();
-    expect((input() as HTMLTextAreaElement).value).toBe("Pending question during profile update");
+    expect((input() as HTMLTextAreaElement).value).toBe(completion === "during" ? "" : "Pending question during profile update");
     expect((screen.getByLabelText("From") as HTMLInputElement).value).toBe("2026-09-01");
     expect((screen.getByRole("combobox", { name: "Store" }) as HTMLSelectElement).value).toBe("store");
     if (completion === "after") {
@@ -271,5 +281,93 @@ describe("BAAM assistant workspace", () => {
     expect(screen.getByRole("alert")).toBeTruthy(); expect(screen.queryByText(answer().answer)).toBeNull();
     mocks.session.mockReturnValue({ status: "authenticated", data: { user: { id: "actor", organizationId: "org", role: "MANAGER" } } }); view.rerender(page());
     expect(screen.queryByText(answer().answer)).toBeNull(); expect((input() as HTMLTextAreaElement).value).toBe("");
+  });
+
+  it("applies the server-resolved period and clears context when manual filters change", async () => {
+    mocks.ask.mockResolvedValue({ ...answer(), scope: { ...answer().scope, dateFrom: "2026-07-01", dateTo: "2026-08-31", reason: "The previous two complete months.", source: "question" } });
+    render(page()); submit("Summarize the last two months");
+    await screen.findByText(answer().answer);
+    expect((screen.getByLabelText("From") as HTMLInputElement).value).toBe("2026-07-01");
+    expect((screen.getByLabelText("To") as HTMLInputElement).value).toBe("2026-08-31");
+    expect(screen.getByText(messages.baam.assistant.contextActive)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("From"), { target: { value: "2026-08-01" } });
+    expect(screen.queryByText(messages.baam.assistant.contextActive)).toBeNull();
+    submit("Compare that with the previous period");
+    await waitFor(() => expect(mocks.ask).toHaveBeenCalledTimes(2));
+    expect(mocks.ask.mock.calls[1][0]).toMatchObject({ dateFrom: "2026-08-01", dateTo: "2026-08-31" });
+    expect(mocks.ask.mock.calls[1][0]).not.toHaveProperty("contextToken");
+  });
+
+  it("keeps a clarification distinct from a measured answer and preserves the chosen dates", async () => {
+    mocks.ask.mockResolvedValue({ ...answer(), status: "clarification", answer: "Which August do you mean?", evidence: null, analyticsHref: null, contextToken: null });
+    render(page());
+    fireEvent.change(screen.getByLabelText("From"), { target: { value: "2026-07-01" } });
+    submit("Show August sales");
+    await screen.findByText("Which August do you mean?");
+    expect(screen.getByText(messages.baam.assistant.clarification)).toBeTruthy();
+    expect(screen.queryByText(messages.baam.assistant.evidence)).toBeNull();
+    expect(screen.queryByRole("link", { name: messages.baam.assistant.openAnalytics })).toBeNull();
+    expect((screen.getByLabelText("From") as HTMLInputElement).value).toBe("2026-07-01");
+    expect((input() as HTMLTextAreaElement).value).toBe("Show August sales");
+  });
+
+  it("preserves a new draft typed while the previous question completes", async () => {
+    let resolveAnswer!: (value: ReturnType<typeof answer>) => void;
+    mocks.ask.mockReturnValue(new Promise(resolve => { resolveAnswer = resolve; }));
+    render(page()); submit();
+    fireEvent.change(input(), { target: { value: "My next question" } });
+    await act(async () => resolveAnswer(answer()));
+    expect((input() as HTMLTextAreaElement).value).toBe("My next question");
+  });
+
+  it("sends with Enter while preserving Shift+Enter and IME composition", async () => {
+    render(page()); fireEvent.change(input(), { target: { value: "Explain returns" } });
+    fireEvent.keyDown(input(), { key: "Enter", shiftKey: true });
+    fireEvent.keyDown(input(), { key: "Enter", isComposing: true });
+    fireEvent.keyDown(input(), { key: "Enter", keyCode: 229 });
+    expect(mocks.ask).not.toHaveBeenCalled();
+    fireEvent.keyDown(input(), { key: "Enter" });
+    await screen.findByText(answer().answer);
+    expect(mocks.ask).toHaveBeenCalledTimes(1);
+    expect((input() as HTMLTextAreaElement).value).toBe("");
+  });
+
+  it("resets the conversation to the top of the welcome content without a stale context token", async () => {
+    render(page()); submit(); await screen.findByText(answer().answer);
+    const history = document.querySelector<HTMLElement>("[data-baam-history]")!;
+    history.scrollTop = 300;
+    fireEvent.click(screen.getByRole("button", { name: messages.baam.assistant.newConversation }));
+    expect(history.scrollTop).toBe(0);
+    expect(screen.queryByText(answer().answer)).toBeNull();
+    expect(screen.queryByText(messages.baam.assistant.contextActive)).toBeNull();
+    submit(); await waitFor(() => expect(mocks.ask).toHaveBeenCalledTimes(2));
+    expect(mocks.ask.mock.calls[1][0]).not.toHaveProperty("contextToken");
+  });
+
+  it("changes starter suggestions with the page and sends only a bounded product reference", async () => {
+    const view = render(page());
+    expect(screen.getByRole("button", { name: messages.baam.assistant.briefPrompt })).toBeTruthy();
+    mocks.pathname.mockReturnValue("/products/synthetic-product?private=omitted"); view.rerender(page());
+    expect(screen.queryByRole("button", { name: messages.baam.assistant.briefPrompt })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: messages.baam.assistant.productDetailsPrompt }));
+    await screen.findByText(answer().answer);
+    expect(mocks.ask.mock.calls[0][0].pageContext).toEqual({ kind: "product", id: "synthetic-product" });
+  });
+
+  it("renders product cards and their own evidence without presenting a sales snapshot", async () => {
+    mocks.ask.mockResolvedValue({ ...answer(), answer: "Two matching products in your authorized catalog.", evidence: null, analyticsHref: null,
+      products: [{ id: "one", title: "Synthetic tea", href: "/products/one", sku: "TEA-01", displayFields: [{ label: "Net units", value: "12" }] }],
+      productEvidence: { summary: "Catalog and product sales evidence", details: ["Authorized active catalog, sorted by net units."] },
+      actions: [{ id: "movements", label: "Stock movement history", href: "/inventory/movements" }],
+    });
+    render(page()); submit("Find tea");
+    await screen.findByRole("link", { name: "Synthetic tea" });
+    expect(screen.getByRole("link", { name: "Synthetic tea" }).getAttribute("href")).toBe("/products/one");
+    expect(screen.getByText("SKU: TEA-01")).toBeTruthy();
+    expect(screen.getByText("Net units")).toBeTruthy();
+    expect(screen.getByText("Catalog and product sales evidence")).toBeTruthy();
+    expect(screen.queryByText(/Selected-period records queried at/)).toBeNull();
+    expect(document.querySelector("[data-baam-answer-scope]")).toBeNull();
+    expect(screen.getByRole("link", { name: "Stock movement history" }).getAttribute("href")).toBe("/inventory/movements");
   });
 });
