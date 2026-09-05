@@ -12,8 +12,14 @@ export default defineConfig({
     },
   },
   test: {
-    // This suite owns separate disposable services and must use its dedicated launcher.
-    exclude: [...configDefaults.exclude, "tests/stabilization/**"],
+    // Stabilization owns separate services; deployment transport checks use
+    // node:test and run explicitly in CI. Generated audit artifacts are evidence.
+    exclude: [
+      ...configDefaults.exclude,
+      "tests/stabilization/**",
+      "scripts/deployment/*.test.mjs",
+      "artifacts/**",
+    ],
     environment: "node",
     setupFiles: ["./tests/setup.ts"],
     globalSetup: "./tests/global-setup.ts",
