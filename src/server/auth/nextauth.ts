@@ -303,30 +303,44 @@ export const authOptions: NextAuthOptions = {
         token.emailVerified = claims.emailVerified ?? false;
       }
       if (trigger === "update" && session && typeof session === "object") {
+        // NextAuth forwards client-controlled session.update(data) here. Refresh
+        // identity/authorization from storage; only preferences may come from data.
+        const currentUser = token.sub
+          ? await prisma.user.findUnique({
+              where: { id: token.sub },
+              select: {
+                id: true,
+                email: true,
+                role: true,
+                organizationId: true,
+                isActive: true,
+                isOrgOwner: true,
+                emailVerifiedAt: true,
+              },
+            })
+          : null;
+        if (!currentUser?.isActive || !currentUser.organizationId) {
+          throw new Error("sessionUserUnavailable");
+        }
+        token.email = currentUser.email;
+        token.role = currentUser.role;
+        token.organizationId = currentUser.organizationId;
+        token.isPlatformOwner = isPlatformOwnerEmail(currentUser.email);
+        token.isOrgOwner = Boolean(currentUser.isOrgOwner);
+        token.emailVerified = Boolean(currentUser.emailVerifiedAt);
+
         const updatePayload = session as {
-          preferredLocale?: string;
-          themePreference?: string;
-          isPlatformOwner?: boolean;
-          isOrgOwner?: boolean;
-          emailVerified?: boolean;
+          preferredLocale?: unknown;
+          themePreference?: unknown;
         };
-        if (updatePayload.preferredLocale) {
+        if (typeof updatePayload.preferredLocale === "string" && updatePayload.preferredLocale) {
           token.preferredLocale = resolvePreferredLocale(updatePayload.preferredLocale) ?? defaultLocale;
         }
-        if (updatePayload.themePreference) {
+        if (typeof updatePayload.themePreference === "string" && updatePayload.themePreference) {
           token.themePreference =
             updatePayload.themePreference === ThemePreference.DARK
               ? ThemePreference.DARK
               : ThemePreference.LIGHT;
-        }
-        if (typeof updatePayload.isPlatformOwner === "boolean") {
-          token.isPlatformOwner = updatePayload.isPlatformOwner;
-        }
-        if (typeof updatePayload.isOrgOwner === "boolean") {
-          token.isOrgOwner = updatePayload.isOrgOwner;
-        }
-        if (typeof updatePayload.emailVerified === "boolean") {
-          token.emailVerified = updatePayload.emailVerified;
         }
       }
       return token;
@@ -341,7 +355,7 @@ export const authOptions: NextAuthOptions = {
         session.user.isPlatformOwner = Boolean(token.isPlatformOwner);
         session.user.isOrgOwner = Boolean(token.isOrgOwner);
         session.user.emailVerified =
-          typeof token.emailVerified === "boolean" ? token.emailVerified : true;
+          typeof token.emailVerified === "boolean" ? token.emailVerified : false;
       }
       return session;
     },

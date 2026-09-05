@@ -39,7 +39,14 @@
     "mobile:ios": "cap open ios",
     "mobile:build:android": "pnpm mobile:sync && cd android && ./gradlew assembleDebug bundleRelease",
     "mobile:build:ios": "pnpm mobile:sync && xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug -sdk iphonesimulator -derivedDataPath ios/DerivedData CODE_SIGNING_ALLOWED=NO build",
-    "mobile:test": "pnpm mobile:validate && vitest run tests/unit/native-*.test.ts tests/unit/mobile-*.test.ts"
+    "mobile:test": "pnpm mobile:validate && vitest run tests/unit/native-*.test.ts tests/unit/mobile-*.test.ts",
+    "test:stabilization:up": "node --import tsx scripts/stabilization/run.ts up",
+    "test:stabilization:down": "node --import tsx scripts/stabilization/run.ts down",
+    "test:stabilization:unit": "vitest run --config vitest.stabilization-unit.config.ts",
+    "test:stabilization": "pnpm test:stabilization:unit && node --import tsx scripts/stabilization/run.ts test",
+    "pretest:stabilization:unit": "pnpm prisma:generate",
+    "test:stabilization:seed": "node --import tsx scripts/stabilization/seed.ts",
+    "dev:stabilization": "NODE_OPTIONS=--max-old-space-size=8192 node --import tsx scripts/stabilization/dev.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.985.0",

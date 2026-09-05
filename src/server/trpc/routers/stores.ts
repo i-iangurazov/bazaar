@@ -282,6 +282,9 @@ export const storesRouter = router({
     .input(z.object({ storeId: z.string(), name: z.string().min(1), code: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       try {
+        if (!userHasAllStoreAccess(ctx.user)) {
+          await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+        }
         return await updateStore({
           storeId: input.storeId,
           organizationId: ctx.user.organizationId,

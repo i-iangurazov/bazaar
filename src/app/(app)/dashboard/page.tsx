@@ -609,11 +609,11 @@ const DashboardPage = () => {
           />
         ) : null}
 
-        <div className="grid gap-4 lg:grid-cols-3 xl:grid-cols-6">
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,180px),1fr))] gap-4">
           {kpis.map((kpi, index) => {
             const content = (
               <>
-                <div className="flex min-h-7 items-start justify-between gap-3">
+                <div className="flex min-h-7 flex-wrap items-start justify-between gap-x-3 gap-y-2">
                   <p className="text-sm font-medium text-muted-foreground">{kpi.label}</p>
                   {"trend" in kpi ? renderTrendBadge(kpi.trend) : null}
                 </div>

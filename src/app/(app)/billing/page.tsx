@@ -298,20 +298,17 @@ const BillingPage = () => {
                       </div>
                       <div className="space-y-1">
                         <p>
-                          {t("usageStores", {
-                            count: 0,
+                          {t("capacityStores", {
                             limit: planItem.limits.maxStores,
                           })}
                         </p>
                         <p>
-                          {t("usageUsers", {
-                            count: 0,
+                          {t("capacityUsers", {
                             limit: planItem.limits.maxUsers,
                           })}
                         </p>
                         <p>
-                          {t("usageProducts", {
-                            count: 0,
+                          {t("capacityProducts", {
                             limit: planItem.limits.maxProducts,
                           })}
                         </p>

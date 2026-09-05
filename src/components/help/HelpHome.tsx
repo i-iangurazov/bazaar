@@ -8,7 +8,7 @@ import { ArrowRightIcon, CheckIcon, SearchIcon } from "@/components/icons";
 import type { HelpHomeData } from "@/content/help/home-data";
 import { searchHelpDocuments } from "@/content/help/search-core";
 import type { HelpLocale } from "@/content/help/types";
-import { localize, localizedUi } from "@/content/help/ui";
+import { formatHelpCount, localize, localizedUi } from "@/content/help/ui";
 import { HelpIcon } from "./HelpIcon";
 import { trackHelpEvent } from "./help-analytics";
 import styles from "./help.module.css";
@@ -364,7 +364,7 @@ export const HelpHome = ({ locale, data }: { locale: HelpLocale; data: HelpHomeD
                   <strong>{category.title}</strong>
                   <small>{category.description}</small>
                   <em>
-                    {category.count} {ui.guideCount}
+                    {formatHelpCount(category.count, "guide", locale)}
                   </em>
                 </span>
                 <ArrowRightIcon aria-hidden />

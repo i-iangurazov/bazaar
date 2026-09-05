@@ -9,12 +9,16 @@ type Granularity = "day" | "week";
 type SeriesPoint = { date: string; value: number };
 
 type SalesTrendResult = {
+  // Recorded completed-order totals, after discounts and before returns.
   series: { date: string; salesKgs: number }[];
+  // Retained for caller compatibility; monetary sales never fall back to movements.
   usesFallback: boolean;
 };
 
 type TopProductsResult = {
+  // Recorded line revenue/cost, before returns or separate order-wide adjustments.
   items: { sku: string; name: string; value: number }[];
+  // True only when every sold line in the requested scope has historical cost.
   canProfit: boolean;
 };
 
@@ -84,15 +88,8 @@ const resolveScopedStoreIds = async (input: {
 const resolveScopeCacheKey = (input: { storeId?: string; storeIds?: string[] }) =>
   input.storeId ?? (input.storeIds ? `stores:${[...input.storeIds].sort().join(",")}` : "all");
 
-const buildMovementStoreFilter = (input: { storeId?: string; storeIds?: string[] }) => {
-  if (input.storeId) {
-    return Prisma.sql`AND m."storeId" = ${input.storeId}`;
-  }
-  if (input.storeIds) {
-    return Prisma.sql`AND m."storeId" IN (${Prisma.join(input.storeIds)})`;
-  }
-  return Prisma.empty;
-};
+const buildOrderStoreFilter = (storeIds: string[]) =>
+  Prisma.sql`AND o."storeId" IN (${Prisma.join(storeIds)})`;
 
 const toDateKey = (date: Date) => date.toISOString().slice(0, 10);
 
@@ -162,7 +159,7 @@ export const getSalesTrend = async (input: {
   if (!storeIds.length) {
     return { series: [], usesFallback: false };
   }
-  const cacheKey = `analytics:sales:${input.organizationId}:${resolveScopeCacheKey(input)}:${input.rangeDays}:${input.granularity}`;
+  const cacheKey = `analytics:sales:v2:${input.organizationId}:${resolveScopeCacheKey(input)}:${input.rangeDays}:${input.granularity}`;
   const cached = await cacheGet<SalesTrendResult>(cacheKey);
   if (cached) {
     return cached;
@@ -171,49 +168,29 @@ export const getSalesTrend = async (input: {
   const from = new Date(Date.now() - input.rangeDays * 24 * 60 * 60 * 1000);
   const to = new Date();
   const granularity = input.granularity === "week" ? "week" : "day";
-  const storeFilter = buildMovementStoreFilter(input);
+  const storeFilter = buildOrderStoreFilter(storeIds);
 
-  const rows = await prisma.$queryRaw<Array<{ bucket: Date; units: number }>>(Prisma.sql`
-    SELECT date_trunc(${granularity}, m."createdAt") AS bucket,
-           SUM(ABS(m."qtyDelta"))::int AS units
-    FROM "StockMovement" m
-    JOIN "Store" s ON s.id = m."storeId"
-    WHERE s."organizationId" = ${input.organizationId}
-      AND m."createdAt" >= ${from}
-      AND m."createdAt" <= ${to}
-      AND m."type" = 'SALE'
+  const rows = await prisma.$queryRaw<
+    Array<{ bucket: Date; salesKgs: string | number }>
+  >(Prisma.sql`
+    SELECT date_trunc(${granularity}, o."completedAt") AS bucket,
+           SUM(o."totalKgs") AS "salesKgs"
+    FROM "CustomerOrder" o
+    WHERE o."organizationId" = ${input.organizationId}
+      AND o.status = 'COMPLETED'
+      AND o."completedAt" >= ${from}
+      AND o."completedAt" <= ${to}
       ${storeFilter}
     GROUP BY bucket
     ORDER BY bucket
   `);
 
-  let usesFallback = false;
-  let series = rows.map((row) => ({
+  const series = rows.map((row) => ({
     date: row.bucket.toISOString(),
-    salesKgs: Number(row.units ?? 0),
+    salesKgs: Number(row.salesKgs),
   }));
 
-  if (!series.length) {
-    usesFallback = true;
-    const fallbackRows = await prisma.$queryRaw<Array<{ bucket: Date; units: number }>>(Prisma.sql`
-      SELECT date_trunc(${granularity}, m."createdAt") AS bucket,
-             COUNT(*)::int AS units
-      FROM "StockMovement" m
-      JOIN "Store" s ON s.id = m."storeId"
-      WHERE s."organizationId" = ${input.organizationId}
-        AND m."createdAt" >= ${from}
-        AND m."createdAt" <= ${to}
-        ${storeFilter}
-      GROUP BY bucket
-      ORDER BY bucket
-    `);
-    series = fallbackRows.map((row) => ({
-      date: row.bucket.toISOString(),
-      salesKgs: Number(row.units ?? 0),
-    }));
-  }
-
-  const result = { series, usesFallback };
+  const result = { series, usesFallback: false };
   await cacheSet(cacheKey, result);
   return result;
 };
@@ -229,7 +206,7 @@ export const getTopProducts = async (input: {
   if (!storeIds.length) {
     return { items: [], canProfit: false };
   }
-  const cacheKey = `analytics:top:${input.organizationId}:${resolveScopeCacheKey(input)}:${input.rangeDays}:${input.metric}`;
+  const cacheKey = `analytics:top:v2:${input.organizationId}:${resolveScopeCacheKey(input)}:${input.rangeDays}:${input.metric}`;
   const cached = await cacheGet<TopProductsResult>(cacheKey);
   if (cached) {
     return cached;
@@ -237,7 +214,12 @@ export const getTopProducts = async (input: {
 
   const from = new Date(Date.now() - input.rangeDays * 24 * 60 * 60 * 1000);
   const to = new Date();
-  const storeFilter = buildMovementStoreFilter(input);
+  const storeFilter = buildOrderStoreFilter(storeIds);
+  const sortMetric = {
+    revenue: Prisma.sql`revenue`,
+    units: Prisma.sql`units`,
+    profit: Prisma.sql`profit`,
+  }[input.metric];
 
   const rows = await prisma.$queryRaw<
     Array<{
@@ -247,38 +229,46 @@ export const getTopProducts = async (input: {
       units: number;
       revenue: string | number | null;
       profit: string | number | null;
+      canProfit: boolean;
     }>
   >(Prisma.sql`
-    SELECT m."productId" AS "productId",
-           p."sku" AS "sku",
-           p."name" AS "name",
-           SUM(ABS(m."qtyDelta"))::int AS units,
-           SUM(ABS(m."qtyDelta") * COALESCE(sp."priceKgs", p."basePriceKgs", 0)) AS revenue,
-           SUM(ABS(m."qtyDelta") * (COALESCE(sp."priceKgs", p."basePriceKgs", 0) - COALESCE(pc."avgCostKgs", 0))) AS profit
-    FROM "StockMovement" m
-    JOIN "Store" s ON s.id = m."storeId"
-    JOIN "Product" p ON p.id = m."productId"
-    LEFT JOIN "StorePrice" sp ON sp."organizationId" = s."organizationId"
-      AND sp."storeId" = m."storeId"
-      AND sp."productId" = m."productId"
-      AND sp."variantKey" = COALESCE(m."variantId", 'BASE')
-    LEFT JOIN "ProductCost" pc ON pc."organizationId" = s."organizationId"
-      AND pc."productId" = m."productId"
-      AND pc."variantKey" = COALESCE(m."variantId", 'BASE')
-    WHERE s."organizationId" = ${input.organizationId}
-      AND m."createdAt" >= ${from}
-      AND m."createdAt" <= ${to}
-      AND m."type" = 'SALE'
-      ${storeFilter}
-    GROUP BY m."productId", p."sku", p."name"
-    ORDER BY units DESC
+    WITH product_sales AS (
+      SELECT l."productId" AS "productId",
+             p."sku" AS sku,
+             p."name" AS name,
+             SUM(l.qty) AS units,
+             SUM(l."lineTotalKgs") AS revenue,
+             BOOL_AND(COALESCE(l."lineCostTotalKgs", l."unitCostKgs" * l.qty) IS NOT NULL) AS "hasCost",
+             CASE WHEN BOOL_AND(COALESCE(l."lineCostTotalKgs", l."unitCostKgs" * l.qty) IS NOT NULL)
+               THEN SUM(l."lineTotalKgs" - COALESCE(l."lineCostTotalKgs", l."unitCostKgs" * l.qty))
+               ELSE NULL
+             END AS profit
+      FROM "CustomerOrderLine" l
+      JOIN "CustomerOrder" o ON o.id = l."customerOrderId"
+      JOIN "Product" p ON p.id = l."productId"
+        AND p."organizationId" = o."organizationId"
+      WHERE o."organizationId" = ${input.organizationId}
+        AND o.status = 'COMPLETED'
+        AND o."completedAt" >= ${from}
+        AND o."completedAt" <= ${to}
+        ${storeFilter}
+      GROUP BY l."productId", p."sku", p."name"
+    )
+    SELECT "productId", sku, name, units, revenue, profit,
+           BOOL_AND("hasCost") OVER () AS "canProfit"
+    FROM product_sales
+    ORDER BY ${sortMetric} DESC NULLS LAST, sku ASC, "productId" ASC
     LIMIT 10
   `);
 
-  const hasCost = await prisma.productCost.count({
-    where: { organizationId: input.organizationId },
-  });
-  const canProfit = hasCost > 0;
+  // Cost availability covers every product in this scope before LIMIT, not just
+  // the selected ten. Missing historical costs cannot be replaced with zero.
+  const canProfit = rows.length > 0 && rows.every((row) => row.canProfit);
+  if (input.metric === "profit" && !canProfit) {
+    const result = { items: [], canProfit: false };
+    await cacheSet(cacheKey, result);
+    return result;
+  }
 
   const items = rows.map((row) => {
     const value =

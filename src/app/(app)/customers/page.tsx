@@ -393,7 +393,11 @@ const CustomerDatabasePage = () => {
                   setFilter("storeId", value);
                 }}
               >
-                <SelectTrigger id="customer-store">
+                <SelectTrigger
+                  id="customer-store"
+                  className="min-w-0 gap-2 [&>span]:min-w-0 [&>span]:truncate [&>svg]:shrink-0"
+                  title={selectedStore?.name}
+                >
                   <SelectValue placeholder={t("filters.storePlaceholder")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -476,7 +480,10 @@ const CustomerDatabasePage = () => {
               setFilter("storeId", value);
             }}
           >
-            <SelectTrigger className="min-h-11">
+            <SelectTrigger
+              className="min-h-11 min-w-0 gap-2 [&>span]:min-w-0 [&>span]:truncate [&>svg]:shrink-0"
+              title={selectedStore?.name}
+            >
               <SelectValue placeholder={t("filters.storePlaceholder")} />
             </SelectTrigger>
             <SelectContent>

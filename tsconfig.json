@@ -37,7 +37,9 @@
     "tests",
     "prisma",
     "vitest.config.ts",
-    ".next/types/**/*.ts"
+    ".next/types/**/*.ts",
+    "scripts/stabilization/**/*.ts",
+    "vitest.stabilization*.ts"
   ],
   "exclude": [
     "node_modules"

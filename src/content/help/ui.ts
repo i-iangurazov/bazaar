@@ -98,4 +98,27 @@ export const localizedUi = (locale: HelpLocale) =>
     Object.entries(helpUi).map(([key, value]) => [key, localize(value, locale)]),
   ) as { [Key in keyof typeof helpUi]: string };
 
+type CountWords = Partial<Record<Intl.LDMLPluralRule, string>> & { other: string };
+
+const countWords: Record<HelpLocale, Record<"guide" | "step", CountWords>> = {
+  ru: {
+    guide: { one: "инструкция", few: "инструкции", many: "инструкций", other: "инструкции" },
+    step: { one: "шаг", few: "шага", many: "шагов", other: "шага" },
+  },
+  kg: {
+    guide: { other: "нускама" },
+    step: { other: "кадам" },
+  },
+  en: {
+    guide: { one: "guide", other: "guides" },
+    step: { one: "step", other: "steps" },
+  },
+};
+
+export const formatHelpCount = (count: number, kind: "guide" | "step", locale: HelpLocale) => {
+  const plural = new Intl.PluralRules(locale === "kg" ? "ky" : locale).select(count);
+  const words = countWords[locale][kind];
+  return `${count} ${words[plural] ?? words.other}`;
+};
+
 export { text as helpText };

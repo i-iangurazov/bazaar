@@ -2157,7 +2157,7 @@ export const EmailMarketingWorkspace = () => {
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <Card className="bazaar-admin-surface">
           <CardContent className="p-4">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="space-y-4">
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-foreground">
                   {selectedStore?.name ?? "Выберите магазин"}
@@ -2166,9 +2166,14 @@ export const EmailMarketingWorkspace = () => {
                   {overviewQuery.data?.reachableCustomers ?? 0} клиентов доступны для рассылки.
                 </p>
               </div>
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[220px_auto_auto_auto]">
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,220px),1fr))] gap-2">
                 <Select value={storeId} onValueChange={setStoreId}>
-                  <SelectTrigger><SelectValue placeholder="Магазин" /></SelectTrigger>
+                  <SelectTrigger
+                    className="min-w-0 gap-2 [&>span]:min-w-0 [&>span]:truncate [&>svg]:shrink-0"
+                    title={selectedStore?.name}
+                  >
+                    <SelectValue placeholder="Магазин" />
+                  </SelectTrigger>
                   <SelectContent>
                     {stores.map((store) => (
                       <SelectItem key={store.id} value={store.id}>{store.name}</SelectItem>

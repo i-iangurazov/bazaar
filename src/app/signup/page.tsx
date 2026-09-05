@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
@@ -11,10 +11,17 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { FormStack } from "@/components/form-layout";
+import { QueryErrorState } from "@/components/query-error-state";
 import { useToast } from "@/components/ui/toast";
 import { locales, type Locale } from "@/lib/locales";
 import { trpc } from "@/lib/trpc";
@@ -31,6 +38,19 @@ type SignupValues = {
   name: string;
   preferredLocale: Locale;
 };
+
+const SignupFrame = ({ children }: { children: ReactNode }) => (
+  <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-4 px-4 py-8 sm:py-12">
+    <div className="flex justify-center">
+      <AuthBrand />
+    </div>
+    <div className="flex justify-end">
+      <LanguageSwitcher />
+    </div>
+    {/* Reserve the open-signup form's space while its mode is loading. */}
+    <div className="min-h-[30rem] sm:min-h-[31rem]">{children}</div>
+  </div>
+);
 
 const SignupPage = () => {
   const t = useTranslations("signup");
@@ -50,8 +70,12 @@ const SignupPage = () => {
   });
   const [formError, setFormError] = useState<string | null>(null);
   const [emailDeliveryFailed, setEmailDeliveryFailed] = useState(false);
-  const [requestFieldErrors, setRequestFieldErrors] = useState<Partial<Record<keyof RequestValues, string>>>({});
-  const [signupFieldErrors, setSignupFieldErrors] = useState<Partial<Record<keyof SignupValues, string>>>({});
+  const [requestFieldErrors, setRequestFieldErrors] = useState<
+    Partial<Record<keyof RequestValues, string>>
+  >({});
+  const [signupFieldErrors, setSignupFieldErrors] = useState<
+    Partial<Record<keyof SignupValues, string>>
+  >({});
 
   const modeQuery = trpc.publicAuth.signupMode.useQuery();
   const mode = modeQuery.data?.mode;
@@ -173,35 +197,41 @@ const SignupPage = () => {
 
   if (modeQuery.isLoading || redirectingToBusiness) {
     return (
-      <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-4 px-4 py-8 sm:py-12">
-        <div className="flex justify-center">
-          <AuthBrand />
-        </div>
-        <div className="flex justify-end">
-          <LanguageSwitcher />
-        </div>
-        <Card>
+      <SignupFrame>
+        <Card className="min-h-[30rem] sm:min-h-[31rem]" aria-busy="true">
           <CardHeader>
             <CardTitle>{t("title")}</CardTitle>
           </CardHeader>
-          <CardContent className="flex items-center gap-2 text-sm text-muted-foreground">
+          <CardContent
+            role="status"
+            className="flex items-center gap-2 text-sm text-muted-foreground"
+          >
             <Spinner className="h-4 w-4" />
             {tCommon("loading")}
           </CardContent>
         </Card>
-      </div>
+      </SignupFrame>
+    );
+  }
+
+  if (modeQuery.error && !mode) {
+    return (
+      <SignupFrame>
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("title")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <QueryErrorState onRetry={() => void modeQuery.refetch()} />
+          </CardContent>
+        </Card>
+      </SignupFrame>
     );
   }
 
   if (submitted) {
     return (
-      <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-4 px-4 py-8 sm:py-12">
-        <div className="flex justify-center">
-          <AuthBrand />
-        </div>
-        <div className="flex justify-end">
-          <LanguageSwitcher />
-        </div>
+      <SignupFrame>
         <Card>
           <CardHeader>
             <CardTitle>{t("submittedTitle")}</CardTitle>
@@ -214,23 +244,20 @@ const SignupPage = () => {
                   : t("submittedVerify")
                 : t("submittedRequest")}
             </p>
-            <Link href="/login" className="text-sm font-semibold text-primary hover:text-primary/80">
+            <Link
+              href="/login"
+              className="text-sm font-semibold text-primary hover:text-primary/80"
+            >
               {t("backToLogin")}
             </Link>
           </CardContent>
         </Card>
-      </div>
+      </SignupFrame>
     );
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-4 px-4 py-8 sm:py-12">
-      <div className="flex justify-center">
-        <AuthBrand />
-      </div>
-      <div className="flex justify-end">
-        <LanguageSwitcher />
-      </div>
+    <SignupFrame>
       <Card>
         <CardHeader>
           <CardTitle>{t("title")}</CardTitle>
@@ -281,15 +308,15 @@ const SignupPage = () => {
                     <p className="text-xs font-medium text-danger">{requestFieldErrors.orgName}</p>
                   ) : null}
                 </div>
-                  <Button type="submit" className="w-full" disabled={requestMutation.isLoading}>
-                    {requestMutation.isLoading ? tCommon("loading") : t("requestAccess")}
-                  </Button>
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-                    <span>{t("inviteOnlyNote")}</span>
-                    <Link href="/invite" className="font-semibold text-primary hover:text-primary/80">
-                      {t("haveInvite")}
-                    </Link>
-                  </div>
+                <Button type="submit" className="w-full" disabled={requestMutation.isLoading}>
+                  {requestMutation.isLoading ? tCommon("loading") : t("requestAccess")}
+                </Button>
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                  <span>{t("inviteOnlyNote")}</span>
+                  <Link href="/invite" className="font-semibold text-primary hover:text-primary/80">
+                    {t("haveInvite")}
+                  </Link>
+                </div>
               </FormStack>
             </form>
           ) : (
@@ -316,7 +343,10 @@ const SignupPage = () => {
                   ) : null}
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-foreground" htmlFor="signup-open-email">
+                  <label
+                    className="text-sm font-medium text-foreground"
+                    htmlFor="signup-open-email"
+                  >
                     {t("email")}
                   </label>
                   <Input
@@ -359,7 +389,12 @@ const SignupPage = () => {
                   ) : null}
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-foreground">{t("preferredLocale")}</label>
+                  <label
+                    className="text-sm font-medium text-foreground"
+                    htmlFor="signup-preferred-locale"
+                  >
+                    {t("preferredLocale")}
+                  </label>
                   <Select
                     value={signupValues.preferredLocale}
                     onValueChange={(value) => {
@@ -369,7 +404,7 @@ const SignupPage = () => {
                       }
                     }}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="signup-preferred-locale">
                       <SelectValue placeholder={t("selectLocale")} />
                     </SelectTrigger>
                     <SelectContent>
@@ -381,19 +416,21 @@ const SignupPage = () => {
                     </SelectContent>
                   </Select>
                   {signupFieldErrors.preferredLocale ? (
-                    <p className="text-xs font-medium text-danger">{signupFieldErrors.preferredLocale}</p>
+                    <p className="text-xs font-medium text-danger">
+                      {signupFieldErrors.preferredLocale}
+                    </p>
                   ) : null}
                 </div>
-                  <Button type="submit" className="w-full" disabled={signupMutation.isLoading}>
-                    {signupMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
-                    {signupMutation.isLoading ? tCommon("loading") : t("createAccount")}
-                  </Button>
+                <Button type="submit" className="w-full" disabled={signupMutation.isLoading}>
+                  {signupMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
+                  {signupMutation.isLoading ? tCommon("loading") : t("createAccount")}
+                </Button>
               </FormStack>
             </form>
           )}
         </CardContent>
       </Card>
-    </div>
+    </SignupFrame>
   );
 };
 

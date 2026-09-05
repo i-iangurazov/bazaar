@@ -6,7 +6,7 @@ import { useLocale } from "next-intl";
 import { ArrowRightIcon } from "@/components/icons";
 import { getGuidesForCategory, helpGuideId, helpJourney } from "@/content/help/catalog";
 import type { HelpCategory } from "@/content/help/types";
-import { localize, localizedUi } from "@/content/help/ui";
+import { formatHelpCount, localize, localizedUi } from "@/content/help/ui";
 import { defaultLocale, normalizeLocale } from "@/lib/locales";
 import { HelpIcon } from "./HelpIcon";
 import styles from "./help.module.css";
@@ -64,8 +64,7 @@ export const HelpCategoryPage = ({ category }: { category: HelpCategory }) => {
                 <strong>{localize(guide.title, locale)}</strong>
                 <small>{localize(guide.summary, locale)}</small>
                 <em>
-                  {guide.estimatedMinutes} {ui.minutes} · {guide.steps.length}{" "}
-                  {ui.step.toLocaleLowerCase()}
+                  {guide.estimatedMinutes} {ui.minutes} · {formatHelpCount(guide.steps.length, "step", locale)}
                 </em>
               </span>
               <ArrowRightIcon aria-hidden />

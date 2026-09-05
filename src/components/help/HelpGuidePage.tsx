@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowRightIcon, CheckIcon, ExternalLinkIcon } from "@/components/icons";
 import { getHelpCategory, getHelpGuideById } from "@/content/help/catalog";
 import type { HelpGuide } from "@/content/help/types";
-import { localize, localizedUi } from "@/content/help/ui";
+import { formatHelpCount, localize, localizedUi } from "@/content/help/ui";
 import { defaultLocale, normalizeLocale } from "@/lib/locales";
 import { AnnotatedScreenshot } from "./AnnotatedScreenshot";
 import { HelpIcon } from "./HelpIcon";
@@ -61,7 +61,7 @@ export const HelpGuidePage = ({
             {guide.estimatedMinutes} {ui.minutes}
           </span>
           <span>
-            {guide.steps.length} {ui.step.toLocaleLowerCase()}
+            {formatHelpCount(guide.steps.length, "step", locale)}
           </span>
         </div>
         <h1>{localize(guide.title, locale)}</h1>

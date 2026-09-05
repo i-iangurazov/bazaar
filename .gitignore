@@ -24,3 +24,7 @@ uploads/
 android/app/google-services.json
 ios/App/App/GoogleService-Info.plist
 ios/*.xcarchive
+
+# Local audit evidence, screenshots, and generated synthetic login fixtures.
+/artifacts/bazaar-assessment/
+/artifacts/bazaar-stabilization/

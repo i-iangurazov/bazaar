@@ -1,0 +1,33 @@
+name: bazaar-stabilization
+services:
+  postgres:
+    image: postgres:16-alpine
+    labels:
+      bazaar.test-purpose: disposable-stabilization
+    environment:
+      POSTGRES_USER: bazaar_test
+      POSTGRES_PASSWORD: bazaar_test_only
+      POSTGRES_DB: bazaar_hardening_ci
+    ports:
+      - "127.0.0.1:55432:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bazaar_test -d bazaar_hardening_ci"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  redis:
+    image: redis:7-alpine
+    labels:
+      bazaar.test-purpose: disposable-stabilization
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "127.0.0.1:56379:6379"
+    tmpfs:
+      - /data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30

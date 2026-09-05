@@ -350,8 +350,8 @@ const AnalyticsPage = () => {
               <CardTitle className="text-base">{t("filters.title")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 p-4 sm:p-5">
-              <div className="grid gap-3 md:grid-cols-[minmax(160px,1fr)_minmax(160px,1fr)_minmax(160px,1fr)_minmax(160px,1fr)]">
-                <label className="space-y-1.5 text-sm">
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,160px),1fr))] gap-3">
+                <label className="min-w-0 space-y-1.5 text-sm">
                   <span className="text-xs font-medium text-muted-foreground">{t("filters.store")}</span>
                   <Select value={storeId || "all"} onValueChange={setStoreId}>
                     <SelectTrigger>
@@ -367,7 +367,7 @@ const AnalyticsPage = () => {
                     </SelectContent>
                   </Select>
                 </label>
-                <label className="space-y-1.5 text-sm">
+                <label className="min-w-0 space-y-1.5 text-sm">
                   <span className="text-xs font-medium text-muted-foreground">{t("filters.register")}</span>
                   <Select value={registerId} onValueChange={setRegisterId}>
                     <SelectTrigger>
@@ -383,7 +383,7 @@ const AnalyticsPage = () => {
                     </SelectContent>
                   </Select>
                 </label>
-                <label className="space-y-1.5 text-sm">
+                <label className="min-w-0 space-y-1.5 text-sm">
                   <span className="text-xs font-medium text-muted-foreground">{t("filters.cashier")}</span>
                   <Select value={cashierId} onValueChange={setCashierId}>
                     <SelectTrigger>
@@ -399,7 +399,7 @@ const AnalyticsPage = () => {
                     </SelectContent>
                   </Select>
                 </label>
-                <label className="space-y-1.5 text-sm">
+                <label className="min-w-0 space-y-1.5 text-sm">
                   <span className="text-xs font-medium text-muted-foreground">{t("filters.category")}</span>
                   <Select value={category} onValueChange={setCategory}>
                     <SelectTrigger>
