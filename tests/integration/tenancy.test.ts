@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import bcrypt from "bcryptjs";
+import { randomUUID } from "node:crypto";
 
 import { prisma } from "@/server/db/prisma";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
@@ -95,14 +96,15 @@ describeDb("tenant isolation and signup", () => {
     expect(usersWithEmail).toBe(1);
   });
 
-  it("updates password and returns business registration for an incomplete existing signup", async () => {
+  it("authenticates an incomplete signup before resuming and preserves its saved credentials", async () => {
     vi.stubEnv("SIGNUP_MODE", "open");
     const caller = createTestCaller();
     const passwordHash = await bcrypt.hash("OldPassword123!", 10);
+    const email = `incomplete-${randomUUID()}@example.test`;
     const existing = await prisma.user.create({
       data: {
         organizationId: null,
-        email: "incomplete@test.local",
+        email,
         name: "Incomplete",
         passwordHash,
         role: "ADMIN",
@@ -110,20 +112,37 @@ describeDb("tenant isolation and signup", () => {
       },
     });
 
-    const signup = await caller.publicAuth.signup({
-      email: "incomplete@test.local",
-      password: "NewPassword123!",
-      name: "Completed Name",
-      preferredLocale: "en",
-    });
+    try {
+      await expect(caller.publicAuth.signup({
+        email,
+        password: "NewPassword123!",
+        name: "Completed Name",
+        preferredLocale: "en",
+      })).rejects.toMatchObject({ code: "CONFLICT", message: "accountAlreadyExists" });
+      expect(await prisma.authToken.count({ where: { userId: existing.id } })).toBe(0);
 
-    expect(signup.sent).toBe(true);
-    expect(signup.nextPath).toBeTruthy();
+      const signup = await caller.publicAuth.signup({
+        email,
+        password: "OldPassword123!",
+        name: "Completed Name",
+        preferredLocale: "en",
+      });
+      expect(signup.sent).toBe(true);
+      expect(signup.nextPath).toMatch(/^\/register-business\//);
 
-    const updated = await prisma.user.findUnique({ where: { id: existing.id } });
-    expect(updated?.name).toBe("Completed Name");
-    expect(updated?.preferredLocale).toBe("en");
-    await expect(bcrypt.compare("NewPassword123!", updated?.passwordHash ?? "")).resolves.toBe(true);
+      const updated = await prisma.user.findUniqueOrThrow({ where: { id: existing.id } });
+      expect(updated).toMatchObject({ name: "Incomplete", preferredLocale: "ru", passwordHash });
+      await expect(bcrypt.compare("OldPassword123!", updated.passwordHash)).resolves.toBe(true);
+      await expect(bcrypt.compare("NewPassword123!", updated.passwordHash)).resolves.toBe(false);
+      expect(await prisma.user.count({ where: { email } })).toBe(1);
+    } finally {
+      // This case also supports isolated replay without resetting a shared DB.
+      await prisma.$transaction(async (tx) => {
+        await tx.authToken.deleteMany({ where: { userId: existing.id } });
+        await tx.auditLog.deleteMany({ where: { actorId: existing.id } });
+        await tx.user.delete({ where: { id: existing.id } });
+      });
+    }
   });
 
   it("accepts invite within the correct organization", async () => {

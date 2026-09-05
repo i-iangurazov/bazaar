@@ -6,6 +6,8 @@ Current local evidence is under `artifacts/bazaar-continuation/20260905/`. These
 
 Final local validation passed **96 focused unit tests and 80 disposable database tests**, plus 12 selected legacy auth contract checks. TypeScript, changed-file ESLint, translation validation and diff checks passed. Browser evidence is reported separately below; overlapping scenarios are not added into a global readiness score.
 
+CI includes a dedicated stabilization job with separate ephemeral PostgreSQL/Redis services, explicit image pulls, and cleanup even on failure. The release gate requires that job alongside the existing checks. The regular test job continues using its own separate database.
+
 ## Authentication
 
 The real browser journey passed **19 checks**: cold-page safety, signup, invalid business input/retry, persistence, mandatory verification and resend, reused-link error, owner login, reset delivery/completion, old-cookie rejection, fresh login, all four roles, open-session role/store revocation, disable/reactivate, invitation acceptance/verification/login, and logout.
@@ -53,7 +55,9 @@ The first guarded deployment identified five pre-existing ledger differences. [E
 
 The auth migration requires existing users to log in again. Unverified accounts must verify their email when required; login provides resend recovery. No verification backfill is included. The job migration adds nullable retry-claim metadata and preserves existing jobs.
 
-The previous push's CI reported two failures in old reporting expectations; native builds and security checks passed. Replacement monetary fixtures use an explicit reporting projection. Mixed legacy suites invoking excluded operations are not manually executed here. Final CI/deployment outcomes must be read from actual runs, not inferred from local checks.
+Both reviewed migrations applied successfully in Vercel on 5 September at 14:05 UTC. Exact deployment, CI and production smoke outcomes are recorded in `artifacts/bazaar-continuation/20260905/release.json` and the interactive continuation report.
+
+The baseline CI reported two failures in old reporting expectations. Replacement monetary fixtures use an explicit reporting projection. A subsequent run passed 1,441 tests and exposed one old signup expectation permitting account takeover; that expectation now verifies the secure resume contract. Mixed legacy suites invoking excluded operations are not manually executed here. Final CI/deployment outcomes must be read from actual runs, not inferred from local checks.
 
 ## Scope
 
