@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import messages from "../../messages/en.json";
 import { BaamLauncher } from "@/components/baam-launcher";
 
@@ -28,11 +28,42 @@ describe("BAAM assistant launcher", () => {
   });
 
   it.each([
-    "/baam", "/baam/detail", "/pos", "/pos/sell", "/inventory", "/inventory/overview",
+    "/pos", "/pos/sell", "/inventory", "/inventory/overview",
     "/reports/receipts", "/printing/receipt", "/cash", "/finance/income", "/finance/expense", "/help/pos",
   ])("hides the launcher at %s", pathname => {
     render(launcher("ADMIN", pathname));
     expect(screen.queryByRole("button", { name: "Open BAAM assistant" })).toBeNull();
+  });
+
+  it.each(["ADMIN", "MANAGER"])("keeps the workspace circle visible for %s and focuses the existing question", role => {
+    render(<>
+      <section data-baam-workspace tabIndex={-1}>
+        <textarea aria-label="Your BAAM question" defaultValue="My draft" />
+      </section>
+      {launcher(role, "/baam")}
+    </>);
+    const question = screen.getByRole("textbox", { name: "Your BAAM question" });
+    question.scrollIntoView = vi.fn();
+    fireEvent.click(screen.getByRole("button", { name: "Open BAAM assistant" }));
+    expect(document.activeElement).toBe(question);
+    expect(question.scrollIntoView).toHaveBeenCalled();
+    expect((question as HTMLTextAreaElement).value).toBe("My draft");
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("focuses the workspace when its question box is unavailable", () => {
+    render(<>
+      <section data-baam-workspace tabIndex={-1} aria-label="BAAM workspace">
+        <textarea aria-label="Your BAAM question" disabled />
+      </section>
+      {launcher("ADMIN", "/baam")}
+    </>);
+    const workspace = screen.getByRole("region", { name: "BAAM workspace" });
+    workspace.scrollIntoView = vi.fn();
+    fireEvent.click(screen.getByRole("button", { name: "Open BAAM assistant" }));
+    expect(document.activeElement).toBe(workspace);
+    expect(workspace.scrollIntoView).toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("closes on Escape and returns keyboard focus to the launcher", async () => {

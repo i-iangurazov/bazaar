@@ -55,12 +55,15 @@ import {
   SuppliersIcon,
   ProductsIcon,
   StoresIcon,
+  StoreGroupsIcon,
   UnitsIcon,
   UsersIcon,
   OnboardingIcon,
   HelpIcon,
   SupportIcon,
   MetricsIcon,
+  SparklesIcon,
+  SettingsIcon,
   ReportsIcon,
   DiagnosticsIcon,
   PlatformIcon,
@@ -346,7 +349,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
           {
             key: "baam",
             href: "/baam",
-            icon: MetricsIcon,
+            icon: SparklesIcon,
             managerOnly: true,
             requiredPermission: "viewReports",
           },
@@ -386,7 +389,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
           {
             key: "storeGroups",
             href: "/settings/store-groups",
-            icon: StoresIcon,
+            icon: StoreGroupsIcon,
             adminOnly: true,
             requiredPermission: "manageSettings",
           },
@@ -756,7 +759,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
         setCustomizeNavOpen(true);
       }}
     >
-      <AdjustIcon className="h-4 w-4" aria-hidden />
+      <SettingsIcon className="h-4 w-4" aria-hidden />
       <span className="group-data-[state=collapsed]/sidebar-wrapper:sr-only">
         {tNav("customize")}
       </span>
@@ -925,7 +928,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
       key: "mobile-baam",
       label: tNav("baam"),
       href: "/baam",
-      icon: MetricsIcon,
+      icon: SparklesIcon,
       managerOnly: true,
       requiredPermission: "viewReports",
     },

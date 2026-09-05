@@ -6,6 +6,8 @@ BAAM now accepts a business question through `baam.ask`. The model chooses an in
 
 Use the circular BAAM button at the bottom right of supported application pages, or open `/baam`. Command search and mobile More also expose the workspace to authorized roles. The old metric-card dashboard has been removed. Every answer can link back to the existing analytics page; that page currently requires selecting the same dates and stores manually.
 
+The circle remains visible on `/baam`; there it scrolls to and focuses the existing question box (or the workspace while the assistant is unavailable). Elsewhere it opens the assistant drawer. Both entry points use the same sparkle icon, distinct from reports and metrics.
+
 The drawer and full workspace share the current conversation, draft and date/store selection in the authenticated layout's RAM. A pending request can finish while the drawer is closed. Reopening revalidates access. Reload, logout or an account/organization change clears this memory; no transcript is stored in browser storage or the database. Changes to authorized stores or a failed permission check clear protected history. Previous conversation is displayed for the user but is not sent to the model: each new question is interpreted independently using the selected controls. Availability failures offer an explicit retry.
 
 ## Supported contract

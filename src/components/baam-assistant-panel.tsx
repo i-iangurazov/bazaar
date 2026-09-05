@@ -111,7 +111,11 @@ export function BaamAssistantPanel({
       {pending ? <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner className="h-4 w-4" />{t("thinking")}</p> : null}
       {error ? <div role="alert" className="rounded-xl border border-danger/30 bg-danger/5 p-3 text-sm leading-6">{error}</div> : null}
     </div>
-    <form onSubmit={submit} className="shrink-0 space-y-2 border-t border-border/70 bg-card px-4 py-3 sm:px-5">
+    <form onSubmit={submit} className={cn(
+      "shrink-0 space-y-2 border-t border-border/70 bg-card px-4 py-3 sm:px-5",
+      // Keep the fixed workspace circle clear of Send on phone and tablet layouts.
+      !compact && "pr-20 sm:pr-20 xl:pr-5",
+    )}>
       <label htmlFor={inputId} className="sr-only">{t("questionLabel")}</label>
       <div className="flex items-end gap-2">
         <Textarea

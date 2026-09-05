@@ -73,6 +73,7 @@ import {
   StackMinus,
   StackPlus,
   Storefront,
+  TreeStructure,
   Tag,
   TextAlignCenter,
   TextAlignLeft,
@@ -124,6 +125,7 @@ export const CustomerDatabaseIcon = navIcon(AddressBook);
 export const SuppliersIcon = navIcon(Handshake);
 export const ProductsIcon = navIcon(Package);
 export const StoresIcon = navIcon(Storefront);
+export const StoreGroupsIcon = navIcon(TreeStructure);
 export const UnitsIcon = navIcon(Ruler);
 export const UsersIcon = navIcon(Users);
 export const IntegrationsIcon = navIcon(PlugsConnected);
