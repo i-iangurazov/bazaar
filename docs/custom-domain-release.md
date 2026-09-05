@@ -4,6 +4,12 @@ On 5 September 2026, commit `41afd694f0de141ea4ecb990678d079d2b6a6868` passed CI
 
 Promoting `dpl_G66F1Bf6HTrDgxCp8GY2QcJ6gcoj` corrected that mismatch. The canonical alias was checked through Vercel and all four supplied roles were checked in real browser sessions at `https://www.bazaar.kg`. Unauthenticated `/baam` then redirected to login. Evidence is under `artifacts/bazaar-reliability/20260905/`.
 
+## Rollback and automatic assignment
+
+A Vercel rollback disables automatic production-domain assignment. An explicit promotion ends that rollback state and re-enables automatic assignment for subsequent production builds. After the initial G66 promotion, follow-up main builds therefore reached the custom domain automatically. When a real-model scope defect was found, the verified G66 deployment was restored with `vercel rollback` before the correction was pushed. Do not assume that a later production build remains staged just because an earlier one did.
+
+During a rollback, keep it active until the exact replacement passes CI and feature verification, then promote that deployment. After promotion, ordinary Git-triggered production builds can again publish before GitHub CI finishes; this procedure is a manual verification workflow, not a permanent enforced CI deployment gate. [Vercel rollback documentation](https://vercel.com/docs/cli/rollback) and [Instant Rollback](https://vercel.com/docs/instant-rollback) describe this behavior.
+
 ## Required release evidence
 
 1. Record the exact pushed `main` SHA. Check the GitHub Actions run for that SHA, including the release gate. A green older run is insufficient.

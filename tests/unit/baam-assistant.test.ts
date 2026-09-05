@@ -356,13 +356,102 @@ describe("BAAM question interpretation and authoritative answers", () => {
     "Кечээги сатуулар?",
   ])("returns scope clarification instead of different-period facts for %s", async (question) => {
     mocks.fetch.mockResolvedValue(response(plan({ intent: "unsupported", limitation: "scope" })));
-    const { answer, evidence } = await askBaam({ ...input, question });
+    const { answer, evidence, mode } = await askBaam({ ...input, question });
     expect(answer).toContain("Selected period: 2026-09-01 — 2026-09-02 (Asia/Bishkek), KGS.");
     expect(answer).toContain("Use the date and store controls");
     expect(answer).not.toContain("300 KGS");
     expect(evidence.currentQueriedAt).toBe("2026-09-05T12:00:01.000Z");
     expect(evidence.previousQueriedAt).toBe("2026-09-05T12:00:02.000Z");
-    const prompt = JSON.parse(mocks.fetch.mock.calls[0][1].body).input[0].content[0].text;
-    expect(prompt).toContain("never silently answer a different period or store");
+    expect(mode).toBe("guided");
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["en", "How much did we sell yesterday?"],
+    ["en", "Show today's sales"],
+    ["en", "Sales ｙｅｓｔｅｒｄａｙ"],
+    ["en", "Sales last week"],
+    ["en", "Sales for the previous 3 months"],
+    ["en", "Sales on September 3"],
+    ["en", "Sales on Monday"],
+    ["en", "Sales on 2026-09-04"],
+    ["en", "Sales in Store B"],
+    ["en", "Compare stores"],
+    ["en", "Private Store Name sales"],
+    ["ru", "Сколько мы продали вчера?"],
+    ["ru", "Покажи сегодняшние продажи"],
+    ["ru", "Продажи за прошлую неделю"],
+    ["ru", "Продажи за последние 3 месяца"],
+    ["ru", "Продажи за 4 сентября"],
+    ["ru", "Продажи в понедельник"],
+    ["ru", "Продажи за 04.09.2026"],
+    ["ru", "Продажи в магазине Север"],
+    ["ru", "Сравни магазины"],
+    ["kg", "Кечээ канча саттык?"],
+    ["kg", "Бүгүнкү сатуулар канча?"],
+    ["kg", "Өткөн аптадагы сатуулар"],
+    ["kg", "Акыркы 3 айдагы сатуулар"],
+    ["kg", "4-сентябрдагы сатуулар"],
+    ["kg", "Дүйшөмбүдөгү сатуулар"],
+    ["kg", "04/09/2026 сатуулары"],
+    ["kg", "Север дүкөнүндөгү сатуулар"],
+    ["kg", "Дүкөндөрдү салыштыр"],
+  ] as const)(
+    "blocks explicit %s scope even if the model would return selected-scope facts: %s",
+    async (locale, question) => {
+      mocks.fetch.mockResolvedValue(
+        response(plan({ intent: "summary", metrics: ["sales", "net_sales"] })),
+      );
+      const result = await askBaam({ ...input, locale, question });
+      expect(result.mode).toBe("guided");
+      expect(result.answer).not.toContain("300 KGS");
+      expect(result.answer).not.toContain("240 KGS");
+      expect(result.answer).toContain("2026-09-01");
+      expect(mocks.fetch).not.toHaveBeenCalled();
+      expect(mocks.metrics).toHaveBeenCalledTimes(2);
+      expect(mocks.access).toHaveBeenCalledWith(input.actorId, undefined);
+    },
+  );
+
+  it.each([
+    "What is happening in my business?",
+    "What changed in this period?",
+    "What should I check next?",
+    "What changed compared with the previous period?",
+    "How much do returns affect net sales?",
+    "Do payments and refunds reconcile?",
+    "Что происходит в моём бизнесе?",
+    "Что изменилось за этот период?",
+    "Что мне проверить в первую очередь?",
+    "Что изменилось по сравнению с предыдущим периодом?",
+    "Как возвраты влияют на продажи?",
+    "Сходятся ли платежи и возвраты?",
+    "Бизнесимде эмне болуп жатат?",
+    "Бул мезгилде эмне өзгөрдү?",
+    "Биринчи кезекте эмнени текшеришим керек?",
+    "Мурунку мезгилге салыштырмалуу эмне өзгөрдү?",
+    "Кайтаруулар сатууга кандай таасир этет?",
+    "Төлөмдөр менен кайтаруулар дал келеби?",
+    "Sales for selected stores",
+    "Store sales for the selected period",
+    "May I see sales?",
+    "Are net sales greater than 2026.05 KGS?",
+    "Сатуу боюнча прогноз бер.",
+  ])(
+    "does not misclassify a supported suggestion or a date-free forecast as explicit scope: %s",
+    async (question) => {
+      const result = await askBaam({ ...input, question });
+      expect(result.mode).toBe("ai");
+      expect(mocks.fetch).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("does not let the deterministic guard bypass authorization or missing configuration", async () => {
+    mocks.access.mockRejectedValueOnce(new Error("forbidden"));
+    await expect(askBaam({ ...input, question: "Sales yesterday" })).rejects.toThrow("forbidden");
+    vi.stubEnv("OPENAI_API_KEY", "");
+    await expect(askBaam({ ...input, question: "Sales yesterday" })).rejects.toThrow(
+      "baamNotConfigured",
+    );
   });
 });

@@ -144,4 +144,25 @@ describe("BAAM assistant persisted authorization", () => {
     await expect(caller("ADMIN").capabilities()).rejects.toThrow("featureLockedAnalytics");
     expect(mocks.fetch).not.toHaveBeenCalled();
   });
+
+  it("clarifies an explicit date without provider access while preserving actual role enforcement", async () => {
+    const staleCaller = caller("MANAGER");
+    const explicitDate = {
+      ...request,
+      locale: "ru" as const,
+      question: "Сколько мы продали вчера?",
+    };
+    const result = await staleCaller.ask(explicitDate);
+    expect(result.mode).toBe("guided");
+    expect(result.answer).toContain("Выберите нужный период и магазин в фильтрах");
+    expect(result.answer).not.toContain("80 KGS");
+    expect(mocks.overview).toHaveBeenCalledTimes(2);
+    expect(mocks.fetch).not.toHaveBeenCalled();
+    await prisma.user.update({
+      where: { id: fixture.tenants.a.users.MANAGER.id },
+      data: { role: "STAFF" },
+    });
+    await expect(staleCaller.ask(explicitDate)).rejects.toThrow("forbidden");
+    expect(mocks.overview).toHaveBeenCalledTimes(2);
+  });
 });

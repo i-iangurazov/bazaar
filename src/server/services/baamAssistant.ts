@@ -4,6 +4,7 @@ import { assertExternalProviderCallAllowed } from "@/server/config/runtime";
 import { AppError } from "@/server/services/errors";
 import { getBaamAccessScope, getBaamSalesMetrics } from "@/server/services/baamMetrics";
 import { resolveSalesAnalyticsDateRange } from "@/server/services/salesAnalytics";
+import { hasExplicitBaamScope } from "@/server/services/baamQuestionScope";
 
 export const baamAskSchema = z
   .object({
@@ -387,7 +388,15 @@ export const askBaam = async (input: z.input<typeof baamAskSchema> & { actorId: 
   ) {
     throw new AppError("baamScopeChanged", "CONFLICT", 409);
   }
-  const plan = await requestPlan({ question: parsed.question, ...config });
+  const explicitScope = hasExplicitBaamScope(
+    parsed.question,
+    current.scope.availableStores.map((store) => store.name),
+  );
+  // This is a deterministic scope clarification, not an AI failure fallback.
+  // Model interpretation cannot override known explicit dates or named stores.
+  const plan: Plan = explicitScope
+    ? { intent: "unsupported", limitation: "scope", metrics: ["sales"] }
+    : await requestPlan({ question: parsed.question, ...config });
   // A model response may take seconds. Do not return earlier facts after a
   // role, tenant, subscription or store-grant change during that request.
   const access = await getBaamAccessScope(actorId, parsed.storeId);
@@ -399,7 +408,7 @@ export const askBaam = async (input: z.input<typeof baamAskSchema> & { actorId: 
   }
   return {
     answer: renderAnswer(plan, current, previous, parsed.locale),
-    mode: "ai" as const,
+    mode: explicitScope ? ("guided" as const) : ("ai" as const),
     evidence: {
       period: {
         dateFrom: current.period.dateFrom,
