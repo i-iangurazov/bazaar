@@ -115,7 +115,8 @@ describeDb("search router", () => {
     );
 
     expect(productResult?.href).toBe(`/products/${product.id}`);
-    expect(supplierResult?.href).toBe(`/suppliers?${new URLSearchParams({ q: supplier.name })}`);
+    expect(supplierResult?.label).toBe("Acme Supply");
+    expect(supplierResult?.href).toBe("/suppliers?q=Acme+Supply");
     expect(storeResult?.href).toBe("/stores");
     expect(poResult?.href).toBe(`/purchase-orders/${po.id}`);
 
