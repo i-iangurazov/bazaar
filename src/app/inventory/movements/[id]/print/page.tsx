@@ -7,6 +7,7 @@ import {
   type MovementPrintDocumentLabels,
 } from "@/components/inventory/movement-print-document";
 import { MovementPrintToolbar } from "@/components/inventory/movement-print-toolbar";
+import { canPrintMovementDocument } from "@/lib/movementPrint";
 import { resolveSafeReturnTo } from "@/lib/safeReturnTo";
 import { prisma } from "@/server/db/prisma";
 import { getServerAuthToken } from "@/server/auth/token";
@@ -49,13 +50,7 @@ const MovementPrintPage = async ({ params, searchParams }: PageProps) => {
     documentKey,
   );
 
-  if (
-    !document ||
-    (document.documentType !== "STOCK_RECEIVING" &&
-      document.documentType !== "RECEIVE" &&
-      document.documentType !== "TRANSFER" &&
-      document.documentType !== "WRITE_OFF")
-  ) {
+  if (!document || !canPrintMovementDocument(document.documentType)) {
     notFound();
   }
 
@@ -69,7 +64,9 @@ const MovementPrintPage = async ({ params, searchParams }: PageProps) => {
       ? t("printTransferTitle")
       : document.documentType === "WRITE_OFF"
         ? t("printWriteOffTitle")
-        : t("printReceivingTitle");
+        : document.documentType === "ADJUSTMENT"
+          ? t("type.ADJUSTMENT")
+          : t("printReceivingTitle");
   const labels: MovementPrintDocumentLabels = {
     companyFallback: "Bazaar",
     documentNumber: t("printDocumentNumber", {
@@ -77,6 +74,7 @@ const MovementPrintPage = async ({ params, searchParams }: PageProps) => {
     }),
     date: t("date"),
     status: t("statusLabel"),
+    store: t("store"),
     sourceStore: t("printSourceStore"),
     destinationStore: t("printDestinationStore"),
     receivingStore: t("printReceivingStore"),
@@ -86,7 +84,6 @@ const MovementPrintPage = async ({ params, searchParams }: PageProps) => {
     reason: t("reason"),
     comment: t("comment"),
     product: tCommon("product"),
-    skuBarcode: t("printSkuBarcode"),
     unit: t("printUnit"),
     quantity: t("quantity"),
     unitCost: t("printUnitCost"),
@@ -106,10 +103,12 @@ const MovementPrintPage = async ({ params, searchParams }: PageProps) => {
     title,
   };
   const returnTo = resolveSafeReturnTo(getSearchParam(searchParams, "returnTo"));
-  const detailHref = `/inventory/movements/${encodeURIComponent(document.id)}?${new URLSearchParams({
-    from: "movements",
-    returnTo,
-  }).toString()}`;
+  const detailHref = `/inventory/movements/${encodeURIComponent(document.id)}?${new URLSearchParams(
+    {
+      from: "movements",
+      returnTo,
+    },
+  ).toString()}`;
 
   return (
     <main className="movement-print-page min-h-screen bg-slate-100 py-1 print:bg-white">

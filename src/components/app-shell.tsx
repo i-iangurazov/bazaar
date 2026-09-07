@@ -1,5 +1,7 @@
 "use client";
 
+import { appRoutes } from "@/lib/appRoutes";
+
 import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import Link from "next/link";
 import Image from "next/image";
@@ -229,10 +231,10 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
             icon: DashboardIcon,
             requiredPermission: "viewDashboard",
           },
-          { key: "pos", href: "/pos", icon: PosIcon, requiredPermission: "usePos" },
+          { key: "pos", href: appRoutes.pos, icon: PosIcon, requiredPermission: "usePos" },
           {
             key: "products",
-            href: "/products",
+            href: appRoutes.products,
             icon: ProductsIcon,
             requiredPermission: "viewProducts",
           },
@@ -242,38 +244,38 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
             children: [
               {
                 key: "inventoryOverview",
-                href: "/inventory",
+                href: appRoutes.inventory,
                 icon: InventoryOverviewIcon,
                 exact: true,
                 requiredPermission: "viewInventory",
               },
               {
                 key: "productMovements",
-                href: "/inventory/movements",
+                href: appRoutes.movements,
                 icon: ProductMovementIcon,
                 requiredPermission: "viewInventory",
               },
               {
                 key: "stockReceiving",
-                href: "/inventory/receiving",
+                href: appRoutes.receiving,
                 icon: ReceiveIcon,
                 requiredPermission: "viewInventory",
               },
               {
                 key: "stockTransfer",
-                href: "/inventory/transfers",
+                href: appRoutes.transfers,
                 icon: TransferIcon,
                 requiredPermission: "viewInventory",
               },
               {
                 key: "stockWriteOff",
-                href: "/inventory/write-offs",
+                href: appRoutes.writeOffs,
                 icon: WriteOffIcon,
                 requiredPermission: "viewInventory",
               },
               {
                 key: "stockCounts",
-                href: "/inventory/counts",
+                href: appRoutes.counts,
                 icon: StockCountsIcon,
                 requiredPermission: "viewInventory",
               },
@@ -291,7 +293,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
               },
               {
                 key: "purchaseOrders",
-                href: "/purchase-orders",
+                href: appRoutes.purchaseOrders,
                 icon: PurchaseOrdersIcon,
                 requiredPermission: "viewPurchaseOrders",
               },
@@ -299,19 +301,19 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
           },
           {
             key: "customers",
-            href: "/customers",
+            href: appRoutes.customers,
             icon: CustomerDatabaseIcon,
             requiredPermission: "manageCustomers",
           },
           {
             key: "suppliers",
-            href: "/suppliers",
+            href: appRoutes.suppliers,
             icon: SuppliersIcon,
             requiredPermission: "viewSuppliers",
           },
           {
             key: "stores",
-            href: "/stores",
+            href: appRoutes.stores,
             icon: StoresIcon,
             requiredPermission: "viewStores",
           },
@@ -348,7 +350,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
         items: [
           {
             key: "baam",
-            href: "/baam",
+            href: appRoutes.baam,
             icon: SparklesIcon,
             managerOnly: true,
             requiredPermission: "viewReports",
@@ -375,7 +377,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
         items: [
           {
             key: "users",
-            href: "/settings/users",
+            href: appRoutes.users,
             icon: UsersIcon,
             adminOnly: true,
             requiredPermission: "manageUsers",
@@ -878,7 +880,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
     {
       key: "mobile-pos",
       label: tNav("pos"),
-      href: "/pos",
+      href: appRoutes.pos,
       activePath: "/pos",
       icon: PosIcon,
       requiredPermission: "usePos",
@@ -886,7 +888,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
     {
       key: "mobile-products",
       label: tNav("products"),
-      href: "/products",
+      href: appRoutes.products,
       icon: ProductsIcon,
       requiredPermission: "viewProducts",
     },
@@ -904,7 +906,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
     {
       key: "mobile-inventory",
       label: tNav("inventory"),
-      href: "/inventory",
+      href: appRoutes.inventory,
       activePath: "/inventory",
       icon: InventoryIcon,
       requiredPermission: "viewInventory",
@@ -912,7 +914,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
     {
       key: "mobile-customers",
       label: tNav("customers"),
-      href: "/customers",
+      href: appRoutes.customers,
       icon: CustomerDatabaseIcon,
       requiredPermission: "manageCustomers",
     },
@@ -927,7 +929,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
     {
       key: "mobile-baam",
       label: tNav("baam"),
-      href: "/baam",
+      href: appRoutes.baam,
       icon: SparklesIcon,
       managerOnly: true,
       requiredPermission: "viewReports",
@@ -965,14 +967,14 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
     {
       key: "mobile-stores",
       label: tNav("stores"),
-      href: "/stores",
+      href: appRoutes.stores,
       icon: StoresIcon,
       requiredPermission: "viewStores",
     },
     {
       key: "mobile-users",
       label: tNav("users"),
-      href: "/settings/users",
+      href: appRoutes.users,
       icon: UsersIcon,
       adminOnly: true,
       requiredPermission: "manageUsers",

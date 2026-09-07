@@ -1,3 +1,4 @@
+import { appLinks, appRoutes } from "@/lib/appRoutes";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import type { Logger } from "pino";
 
@@ -90,7 +91,7 @@ const buildProductResult = ({
     type: "product",
     label: product.name,
     sublabel: sublabel || product.sku,
-    href: `/products/${product.id}`,
+    href: appLinks.product(product.id),
     matchKind,
     product: preview,
   };
@@ -271,7 +272,7 @@ export const searchGlobal = async ({
       type: "store",
       label: store.name,
       sublabel: store.code,
-      href: "/stores",
+      href: appRoutes.stores,
       matchKind: "exact",
     });
   });
@@ -430,7 +431,7 @@ export const searchGlobal = async ({
       type: "supplier",
       label: supplier.name,
       sublabel: supplier.email ?? null,
-      href: "/suppliers",
+      href: appLinks.supplierSearch(supplier.name),
       matchKind:
         supplier.email?.toLowerCase() === queryLower || supplier.name.toLowerCase() === queryLower
           ? "exact"
@@ -444,7 +445,7 @@ export const searchGlobal = async ({
       type: "store",
       label: store.name,
       sublabel: store.code ?? null,
-      href: "/stores",
+      href: appRoutes.stores,
       matchKind:
         store.code.toLowerCase() === queryLower || store.name.toLowerCase() === queryLower
           ? "exact"
@@ -461,7 +462,7 @@ export const searchGlobal = async ({
       type: "purchaseOrder",
       label: order.id.slice(0, 8).toUpperCase(),
       sublabel: `${supplierLabel}${order.store.name}`,
-      href: `/purchase-orders/${order.id}`,
+      href: appLinks.purchaseOrder(order.id),
       matchKind: order.id.toLowerCase().startsWith(queryLower) ? "prefix" : "fuzzy",
     });
   });

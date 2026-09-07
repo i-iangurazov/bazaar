@@ -1,5 +1,7 @@
 "use client";
 
+import { canPrintMovementDocument } from "@/lib/movementPrint";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -388,12 +390,12 @@ const ProductMovementsPage = () => {
     t(`editUnavailable.${reason}`);
 
   const renderActions = (movement: MovementRow, layout: "desktop" | "mobile" = "desktop") => {
-    const isPrintableStockDocument =
+    const isStockDocument =
       movement.documentType === "STOCK_RECEIVING" ||
       movement.documentType === "TRANSFER" ||
       movement.documentType === "WRITE_OFF";
     const isPostedStockDocument =
-      isPrintableStockDocument && (movement.status === "POSTED" || !movement.status);
+      isStockDocument && (movement.status === "POSTED" || !movement.status);
     const viewButton = movement.detailUrl ? (
       <Button
         variant={layout === "desktop" ? "ghost" : "secondary"}
@@ -445,7 +447,7 @@ const ProductMovementsPage = () => {
       </Button>
     );
     const printButton =
-      movement.id && isPrintableStockDocument ? (
+      movement.id && canPrintMovementDocument(movement.documentType) ? (
         <Button
           variant={layout === "desktop" ? "ghost" : "secondary"}
           size={layout === "desktop" ? "icon" : undefined}

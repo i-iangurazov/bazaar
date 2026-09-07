@@ -12,13 +12,13 @@ describe("product movement journal source", () => {
     const breadcrumbsSource = await readSource("src/components/page-breadcrumbs.tsx");
 
     expect(appShellSource).toContain('key: "productMovements"');
-    expect(appShellSource).toContain('href: "/inventory/movements"');
+    expect(appShellSource).toContain('href: appRoutes.movements');
     expect(appShellSource).toContain("icon: ProductMovementIcon");
     expect(appShellSource).toContain('key: "stockTransfer"');
-    expect(appShellSource).toContain('href: "/inventory/transfers"');
+    expect(appShellSource).toContain('href: appRoutes.transfers');
     expect(appShellSource).toContain("icon: TransferIcon");
     expect(appShellSource).toContain('key: "stockWriteOff"');
-    expect(appShellSource).toContain('href: "/inventory/write-offs"');
+    expect(appShellSource).toContain('href: appRoutes.writeOffs');
     expect(appShellSource).toContain("exact: true");
     expect(breadcrumbsSource).toContain('case "movements"');
     expect(breadcrumbsSource).toContain('tBreadcrumbs("productMovements")');
@@ -216,7 +216,7 @@ describe("product movement journal source", () => {
     expect(pageSource).toContain("document.detailUrl");
     expect(pageSource).toContain("documentActions");
     expect(pageSource).toContain("printInvoice");
-    expect(pageSource).toContain('document?.documentType === "WRITE_OFF"');
+    expect(pageSource).toContain("canPrintMovementDocument(document.documentType)");
     expect(pageSource).toContain("formatMovementNote");
     expect(pageSource).toContain('target="_blank"');
     expect(pageSource).toContain('auto: "1"');
@@ -237,9 +237,7 @@ describe("product movement journal source", () => {
 
     expect(printPageSource).toContain("getServerAuthToken");
     expect(printPageSource).toContain("getProductMovementDocument");
-    expect(printPageSource).toContain('document.documentType !== "STOCK_RECEIVING"');
-    expect(printPageSource).toContain('document.documentType !== "TRANSFER"');
-    expect(printPageSource).toContain('document.documentType !== "WRITE_OFF"');
+    expect(printPageSource).toContain("canPrintMovementDocument(document.documentType)");
     expect(printPageSource).toContain("printWriteOffTitle");
     expect(printPageSource).toContain("MovementPrintDocument");
     expect(printPageSource).toContain("MovementPrintToolbar");

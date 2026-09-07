@@ -10,7 +10,7 @@ import {
   type ComponentType,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
 
@@ -45,19 +45,18 @@ import {
   addRecentCommandPaletteSearch,
   parseRecentCommandPaletteSearches,
 } from "@/lib/command-palette-recent";
-import { buildPosCashMovementHref } from "@/lib/posCashMovementRoute";
+import {
+  canNavigateCommand,
+  commandDestination,
+  searchResultDestination,
+} from "@/lib/commandPaletteNavigation";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import {
   buildScopedStorageKey,
   useScopedLocalStorageState,
 } from "@/lib/useScopedLocalStorageState";
-import {
-  hasPermission,
-  permissionForSearchResultType,
-  type AppPermission,
-  type RoleAccess,
-} from "@/lib/roleAccess";
+import { type AppPermission, type RoleAccess } from "@/lib/roleAccess";
 import { cn } from "@/lib/utils";
 import type { SearchResult } from "@/server/services/search/global";
 
@@ -95,6 +94,9 @@ export const CommandPalette = ({
   const tBaam = useTranslations("baam");
   const tErrors = useTranslations("errors");
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const storeId = searchParams.get("storeId") || undefined;
+  const fromStoreId = searchParams.get("fromStoreId") || undefined;
   const { toast } = useToast();
   const { data: session } = useSession();
   const access: RoleAccess = useMemo(
@@ -105,6 +107,10 @@ export const CommandPalette = ({
     }),
     [session?.user?.isOrgOwner, session?.user?.isPlatformOwner, session?.user?.role],
   );
+  const accessRef = useRef(access);
+  accessRef.current = access;
+  const userIdRef = useRef(session?.user?.id);
+  userIdRef.current = session?.user?.id;
   const [internalOpen, setInternalOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
@@ -182,186 +188,170 @@ export const CommandPalette = ({
     () => [
       {
         id: "create-sale-order",
+        ...commandDestination("create-sale-order", { storeId, fromStoreId }),
         label: t("actions.sale"),
         keywords: [t("keywords.sale"), t("keywords.document"), t("keywords.order")],
         sublabel: null,
-        href: "/pos/sell",
         icon: SalesOrdersIcon,
         group: "actions",
         category: "documents",
-        permission: "usePos",
       },
       {
         id: "sale-return",
+        ...commandDestination("sale-return", { storeId, fromStoreId }),
         label: t("actions.saleReturn"),
         keywords: [t("keywords.sale"), t("keywords.return"), t("keywords.document")],
         sublabel: null,
-        href: "/pos/history",
         icon: ArrowDownIcon,
         group: "actions",
         category: "documents",
-        permission: "viewSales",
       },
       {
         id: "inventory-receive",
+        ...commandDestination("inventory-receive", { storeId, fromStoreId }),
         label: t("actions.stockReceive"),
         keywords: [t("keywords.inventory"), t("keywords.receive"), t("keywords.document")],
         sublabel: null,
-        href: "/inventory?action=receive",
         icon: ReceiveIcon,
         group: "actions",
         category: "documents",
-        permission: "viewInventory",
       },
       {
         id: "inventory-adjust",
+        ...commandDestination("inventory-adjust", { storeId, fromStoreId }),
         label: t("actions.stockWriteoff"),
         keywords: [t("keywords.inventory"), t("keywords.adjust"), t("keywords.document")],
         sublabel: null,
-        href: "/inventory?action=adjust",
         icon: AdjustIcon,
         group: "actions",
         category: "documents",
-        permission: "viewInventory",
       },
       {
         id: "inventory-count",
+        ...commandDestination("inventory-count", { storeId, fromStoreId }),
         label: t("actions.stockCount"),
         keywords: [t("keywords.inventory"), t("keywords.count"), t("keywords.document")],
         sublabel: null,
-        href: "/inventory/counts/new",
         icon: InventoryIcon,
         group: "actions",
         category: "documents",
-        permission: "viewInventory",
       },
       {
         id: "inventory-transfer",
+        ...commandDestination("inventory-transfer", { storeId, fromStoreId }),
         label: t("actions.stockTransfer"),
         keywords: [t("keywords.inventory"), t("keywords.transfer"), t("keywords.document")],
         sublabel: null,
-        href: "/inventory?action=transfer",
         icon: TransferIcon,
         group: "actions",
         category: "documents",
-        permission: "viewInventory",
       },
       {
         id: "create-product",
+        ...commandDestination("create-product", { storeId, fromStoreId }),
         label: t("actions.product"),
         keywords: [t("keywords.product"), t("keywords.catalog"), t("keywords.create")],
         sublabel: null,
-        href: "/products/new?type=product",
         icon: ProductsIcon,
         group: "actions",
         category: "products",
-        permission: "manageProducts",
       },
       {
         id: "create-bundle",
+        ...commandDestination("create-bundle", { storeId, fromStoreId }),
         label: t("actions.bundle"),
         keywords: [t("keywords.bundle"), t("keywords.catalog"), t("keywords.create")],
         sublabel: null,
-        href: "/products/new?type=bundle",
         icon: TagIcon,
         group: "actions",
         category: "products",
-        permission: "manageProducts",
       },
       {
         id: "new-customer",
+        ...commandDestination("new-customer", { storeId, fromStoreId }),
         label: t("actions.customer"),
         keywords: [t("keywords.customer"), t("keywords.other"), t("keywords.create")],
         sublabel: null,
-        href: "/customers?add=1",
         icon: CustomerDatabaseIcon,
         group: "actions",
         category: "other",
-        permission: "manageCustomers",
       },
       {
         id: "new-supplier",
+        ...commandDestination("new-supplier", { storeId, fromStoreId }),
         label: t("actions.supplier"),
         keywords: [t("keywords.supplier"), t("keywords.other"), t("keywords.create")],
         sublabel: null,
-        href: "/suppliers/new",
         icon: SuppliersIcon,
         group: "actions",
         category: "other",
-        permission: "viewSuppliers",
       },
       {
         id: "new-employee",
+        ...commandDestination("new-employee", { storeId, fromStoreId }),
         label: t("actions.employee"),
         keywords: [t("keywords.employee"), t("keywords.other"), t("keywords.create")],
         sublabel: null,
-        href: "/settings/users?create=1",
         icon: UsersIcon,
         group: "actions",
         category: "other",
-        permission: "manageUsers",
       },
       {
         id: "new-store",
+        ...commandDestination("new-store", { storeId, fromStoreId }),
         label: t("actions.store"),
         keywords: [t("keywords.store"), t("keywords.other"), t("keywords.create")],
         sublabel: null,
-        href: "/stores/new",
         icon: StoresIcon,
         group: "actions",
         category: "other",
-        permission: "viewStores",
       },
       {
         id: "open-baam",
+        ...commandDestination("open-baam", { storeId, fromStoreId }),
         label: tNav("baam"),
         keywords: [tNav("groups.insights"), tBaam("sales"), tBaam("returns")],
         sublabel: tBaam("briefTitle"),
-        href: "/baam",
         icon: SparklesIcon,
         group: "actions",
         category: "other",
-        permission: "viewReports",
       },
       {
         id: "cash",
+        ...commandDestination("cash", { storeId, fromStoreId }),
         label: t("actions.cash"),
         keywords: [t("keywords.cash"), t("keywords.other")],
         sublabel: null,
-        href: buildPosCashMovementHref(),
         icon: BillingIcon,
         group: "actions",
         category: "other",
-        permission: "viewCash",
       },
       {
         id: "finance-income",
+        ...commandDestination("finance-income", { storeId, fromStoreId }),
         label: t("actions.income"),
         keywords: [t("keywords.finance"), t("keywords.income"), t("keywords.payment")],
         sublabel: null,
-        href: buildPosCashMovementHref("PAY_IN"),
         icon: ArrowDownIcon,
         group: "actions",
         category: "payments",
-        permission: "viewCash",
       },
       {
         id: "finance-expense",
+        ...commandDestination("finance-expense", { storeId, fromStoreId }),
         label: t("actions.expense"),
         keywords: [t("keywords.finance"), t("keywords.expense"), t("keywords.payment")],
         sublabel: null,
-        href: buildPosCashMovementHref("PAY_OUT"),
         icon: ArrowUpIcon,
         group: "actions",
         category: "payments",
-        permission: "viewCash",
       },
     ],
-    [t, tNav, tBaam],
+    [t, tNav, tBaam, storeId, fromStoreId],
   );
 
   const filteredActions = useMemo(() => {
-    const visibleActions = actions.filter((action) => hasPermission(access, action.permission));
+    const visibleActions = actions.filter((action) => canNavigateCommand(access, action));
     const searchable = visibleActions.map((action) => ({
       id: action.id,
       category: action.category ?? "other",
@@ -380,7 +370,7 @@ export const CommandPalette = ({
   const results = useMemo<PaletteItem[]>(() => {
     const items = searchQuery.data?.results ?? [];
     return items
-      .filter((item) => hasPermission(access, permissionForSearchResultType(item.type)))
+      .filter((item) => canNavigateCommand(access, searchResultDestination(item)))
       .map((item) => {
         switch (item.type) {
           case "supplier":
@@ -388,7 +378,7 @@ export const CommandPalette = ({
               id: item.id,
               label: item.label,
               sublabel: item.sublabel,
-              href: item.href,
+              ...searchResultDestination(item),
               icon: SuppliersIcon,
               group: "results",
               resultType: item.type,
@@ -398,7 +388,7 @@ export const CommandPalette = ({
               id: item.id,
               label: item.label,
               sublabel: item.sublabel,
-              href: item.href,
+              ...searchResultDestination(item),
               icon: StoresIcon,
               group: "results",
               resultType: item.type,
@@ -408,7 +398,7 @@ export const CommandPalette = ({
               id: item.id,
               label: item.label,
               sublabel: item.sublabel,
-              href: item.href,
+              ...searchResultDestination(item),
               icon: PurchaseOrdersIcon,
               group: "results",
               resultType: item.type,
@@ -418,7 +408,7 @@ export const CommandPalette = ({
               id: item.id,
               label: item.label,
               sublabel: item.sublabel,
-              href: item.href,
+              ...searchResultDestination(item),
               icon: ProductsIcon,
               group: "results",
               resultType: item.type,
@@ -500,6 +490,7 @@ export const CommandPalette = ({
       setTimeout(() => inputRef.current?.focus(), 0);
       return;
     }
+    if (!canNavigateCommand(accessRef.current, item)) return;
     if (normalizedQuery) {
       rememberRecentSearch(normalizedQuery);
     }
@@ -548,14 +539,28 @@ export const CommandPalette = ({
       return false;
     }
 
+    const requestUserId = userIdRef.current;
+    if (
+      !canNavigateCommand(
+        accessRef.current,
+        searchResultDestination({ type: "product", id: "lookup", label: "" }),
+      )
+    )
+      return false;
     try {
       const product = await findByBarcode.mutateAsync({ value: normalizedValue });
       if (!product) {
         toast({ variant: "info", description: t("noResults") });
         return false;
       }
+      const destination = searchResultDestination({ type: "product", id: product.id, label: "" });
+      if (
+        requestUserId !== userIdRef.current ||
+        !canNavigateCommand(accessRef.current, destination)
+      )
+        return false;
       rememberRecentSearch(normalizedValue);
-      router.push(`/products/${product.id}`);
+      router.push(destination.href);
       setOpen(false);
       return true;
     } catch {
@@ -643,6 +648,7 @@ export const CommandPalette = ({
                                 event.preventDefault();
                                 setKeyboardNavigation(false);
                               }}
+                              data-command-id={item.group === "actions" ? item.id : undefined}
                               onClick={() => handleSelect(item)}
                             />
                           );
@@ -669,6 +675,7 @@ export const CommandPalette = ({
                               event.preventDefault();
                               setKeyboardNavigation(false);
                             }}
+                            data-command-id={item.group === "actions" ? item.id : undefined}
                             onClick={() => handleSelect(item)}
                           >
                             <span
@@ -748,6 +755,7 @@ export const CommandPalette = ({
                           event.preventDefault();
                           setKeyboardNavigation(false);
                         }}
+                        data-command-id={item.group === "actions" ? item.id : undefined}
                         onClick={() => handleSelect(item)}
                       >
                         <span
@@ -816,6 +824,7 @@ export const CommandPalette = ({
                           event.preventDefault();
                           setKeyboardNavigation(false);
                         }}
+                        data-command-id={item.group === "actions" ? item.id : undefined}
                         onClick={() => handleSelect(item)}
                       >
                         <span

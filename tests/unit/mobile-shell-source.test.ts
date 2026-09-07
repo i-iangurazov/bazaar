@@ -37,10 +37,10 @@ describe("mobile app shell source", () => {
     expect(appShellSource).toContain("md:sticky md:top-0 md:h-screen");
     expect(appShellSource).toContain("MobileAppShell");
     expect(appShellSource).toContain('href: "/dashboard"');
-    expect(appShellSource).toContain('href: "/pos"');
-    expect(appShellSource).toContain('href: "/products"');
+    expect(appShellSource).toContain("href: appRoutes.pos");
+    expect(appShellSource).toContain("href: appRoutes.products");
     expect(appShellSource).toContain('href: "/sales/orders"');
-    expect(appShellSource).toContain('href: "/inventory"');
+    expect(appShellSource).toContain("href: appRoutes.inventory");
     expect(appShellSource).toContain("<Sidebar className=");
     expect(appShellSource).toContain('requiredPermission: "usePos"');
     expect(appShellSource).toContain('requiredPermission: "viewProducts"');

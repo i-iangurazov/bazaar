@@ -45,6 +45,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AddIcon, EmptyIcon, ViewIcon } from "@/components/icons";
 import { useToast } from "@/components/ui/toast";
+import { appRoutes } from "@/lib/appRoutes";
 import { formatDateTime } from "@/lib/i18nFormat";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
@@ -95,19 +96,46 @@ const StockCountsPage = () => {
   }, [storeId, storesQuery.data]);
 
   useEffect(() => {
-    if (!storeId) {
+    // Let legacy server redirects settle before synchronizing list parameters.
+    if (pathname !== appRoutes.counts || !storeId) {
       return;
     }
-    const nextQuery = writeStockCountHistoryRouteState(searchParams.toString(), {
-      page,
-      pageSize,
-      storeId,
-      status: statusFilter,
-    });
-    if (nextQuery !== searchParams.toString()) {
-      router.replace(`${pathname}?${nextQuery}`, { scroll: false });
+    const nextParams = new URLSearchParams(
+      writeStockCountHistoryRouteState(searchParams.toString(), {
+        page,
+        pageSize,
+        storeId,
+        status: statusFilter,
+      }),
+    );
+    const openCreation =
+      searchParams.get("create") === "1" &&
+      canManage &&
+      storesQuery.data?.some((store) => store.id === storeId);
+    if (openCreation) {
+      setDialogOpen(true);
+      nextParams.delete("create");
     }
-  }, [page, pageSize, pathname, router, searchParams, statusFilter, storeId]);
+    const nextQuery = nextParams.toString();
+    if (nextQuery !== searchParams.toString()) {
+      if (openCreation) {
+        // Consuming a UI instruction must not start a second server navigation.
+        window.history.replaceState(null, "", `${appRoutes.counts}?${nextQuery}`);
+      } else {
+        router.replace(`${appRoutes.counts}?${nextQuery}`, { scroll: false });
+      }
+    }
+  }, [
+    canManage,
+    page,
+    pageSize,
+    pathname,
+    router,
+    searchParams,
+    statusFilter,
+    storeId,
+    storesQuery.data,
+  ]);
 
   const countsQuery = trpc.stockCounts.list.useQuery(
     {

@@ -1,7 +1,8 @@
+import { appLinks } from "@/lib/appRoutes";
 import { redirect } from "next/navigation";
 
 const SupplierCreateRedirectPage = () => {
-  redirect("/suppliers?create=1");
+  redirect(appLinks.newSupplier());
 };
 
 export default SupplierCreateRedirectPage;

@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 
 const source = readFileSync(join(process.cwd(), "src/components/command-palette.tsx"), "utf8");
 
+const navigation = readFileSync(join(process.cwd(), "src/lib/commandPaletteNavigation.ts"), "utf8");
+
 const expectInOrder = (content: string, markers: string[]) => {
   let previousIndex = -1;
   for (const marker of markers) {
@@ -40,19 +42,19 @@ describe("conservative command palette role filtering source", () => {
 
   it("filters commands and search results with the central role permissions", () => {
     expect(source).toContain("permission?: AppPermission");
-    expect(source).toContain("hasPermission(access, action.permission)");
-    expect(source).toContain("permissionForSearchResultType(item.type)");
-    expect(source).toContain('permission: "manageProducts"');
-    expect(source).toContain('permission: "manageCustomers"');
+    expect(source).toContain("canNavigateCommand(access, action)");
+    expect(navigation).toContain("permissionForSearchResultType(item.type)");
+    expect(navigation).toContain('permission: "manageProducts"');
+    expect(navigation).toContain('permission: "manageCustomers"');
     expect(source).toContain("CustomerDatabaseIcon");
-    expect(source).toContain('permission: "manageUsers"');
-    expect(source).toContain('permission: "viewInventory"');
+    expect(navigation).toContain('permission: "manageUsers"');
+    expect(navigation).toContain('permission: "viewInventory"');
   });
 
   it("routes cash actions to the real POS cash movement form", () => {
-    expect(source).toContain("href: buildPosCashMovementHref()");
-    expect(source).toContain('href: buildPosCashMovementHref("PAY_IN")');
-    expect(source).toContain('href: buildPosCashMovementHref("PAY_OUT")');
+    expect(navigation).toContain("href: () => buildPosCashMovementHref()");
+    expect(navigation).toContain('href: () => buildPosCashMovementHref("PAY_IN")');
+    expect(navigation).toContain('href: () => buildPosCashMovementHref("PAY_OUT")');
     expect(source).not.toContain('href: "/finance/income"');
     expect(source).not.toContain('href: "/finance/expense"');
   });

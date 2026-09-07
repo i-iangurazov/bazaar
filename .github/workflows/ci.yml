@@ -98,6 +98,20 @@ jobs:
         run: node --test scripts/deployment/public-smoke.test.mjs
       - name: Run checks
         run: pnpm test:ci
+      - name: Verify movement A4 printing
+        run: |
+          pnpm exec playwright install --with-deps chromium
+          pnpm exec tailwindcss -i src/app/globals.css -o /tmp/bazaar-print.css
+          QA_PRINT_ONLY=1 QA_PRINT_CSS=/tmp/bazaar-print.css pnpm test:browser:print-navigation
+          python3 -m pip install PyMuPDF==1.26.5
+          python3 scripts/qa/verify-movement-pdfs.py artifacts/movement-print-command/latest
+      - name: Upload movement print evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: movement-print-regression
+          path: artifacts/movement-print-command/latest
+          if-no-files-found: ignore
 
   stabilization:
     runs-on: ubuntu-latest

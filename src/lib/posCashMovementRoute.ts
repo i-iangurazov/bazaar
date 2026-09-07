@@ -1,3 +1,5 @@
+import { appRoutes } from "@/lib/appRoutes";
+
 export const POS_CASH_MOVEMENT_ANCHOR = "cash-movement";
 export const POS_CASH_MOVEMENT_QUERY_PARAM = "cashMovementType";
 
@@ -10,5 +12,5 @@ export const parsePosCashMovementType = (value: string | null): PosCashMovementT
 
 export const buildPosCashMovementHref = (type?: PosCashMovementType) => {
   const query = type ? `?${POS_CASH_MOVEMENT_QUERY_PARAM}=${type}` : "";
-  return `/pos/shifts${query}#${POS_CASH_MOVEMENT_ANCHOR}`;
+  return `${appRoutes.shifts}${query}#${POS_CASH_MOVEMENT_ANCHOR}`;
 };

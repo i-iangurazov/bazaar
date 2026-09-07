@@ -1,5 +1,7 @@
 "use client";
 
+import { canPrintMovementDocument } from "@/lib/movementPrint";
+
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
@@ -60,11 +62,7 @@ const ProductMovementDocumentPage = () => {
   const documentNumber = document
     ? document.documentNumber || shortDocumentReference(document.documentId)
     : "";
-  const isPrintableDocument =
-    document?.documentType === "STOCK_RECEIVING" ||
-    document?.documentType === "RECEIVE" ||
-    document?.documentType === "TRANSFER" ||
-    document?.documentType === "WRITE_OFF";
+  const isPrintableDocument = document && canPrintMovementDocument(document.documentType);
   const formatDocumentLabel = () => {
     if (!document) {
       return t("documentDetails");

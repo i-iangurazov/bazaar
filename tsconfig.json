@@ -39,6 +39,7 @@
     "vitest.config.ts",
     ".next/types/**/*.ts",
     "scripts/stabilization/**/*.ts",
+    "scripts/qa/**/*.tsx",
     "vitest.stabilization*.ts"
   ],
   "exclude": [
