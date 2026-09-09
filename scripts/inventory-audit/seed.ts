@@ -57,4 +57,9 @@ try {
   console.log("Isolated inventory browser fixture ready");
 } finally {
   await prisma.$disconnect();
+  const { getRedisPublisher } = await import("../../src/server/redis");
+  const publisher = getRedisPublisher();
+  if (publisher) {
+    try { await publisher.quit(); } finally { publisher.disconnect(); }
+  }
 }
