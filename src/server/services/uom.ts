@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
 import { AppError } from "@/server/services/errors";
 
@@ -33,11 +33,16 @@ export const resolveBaseQuantity = async (
     if (!allowed) {
       throw new AppError("packNotAllowed", "FORBIDDEN", 403);
     }
-    const baseQty = input.qty * pack.multiplierToBase;
-    if (!Number.isFinite(baseQty) || !Number.isInteger(baseQty)) {
+    if (!Number.isFinite(input.qty)) {
       throw new AppError("invalidQuantity", "BAD_REQUEST", 400);
     }
-    return baseQty;
+    // Decimal pack inputs such as 0.29 * 100 must produce 29 base units,
+    // without accepting genuinely fractional base quantities by rounding.
+    const baseQty = new Prisma.Decimal(input.qty).mul(pack.multiplierToBase);
+    if (!baseQty.isFinite() || !baseQty.isInteger() || !Number.isSafeInteger(baseQty.toNumber())) {
+      throw new AppError("invalidQuantity", "BAD_REQUEST", 400);
+    }
+    return baseQty.toNumber();
   }
 
   if (input.unitId && input.unitId !== input.baseUnitId) {

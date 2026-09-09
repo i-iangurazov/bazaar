@@ -230,6 +230,10 @@ describeDb("stock correctness regression", () => {
       idempotencyKey: randomUUID(),
     });
     await f.check(5);
+    await prisma.productPack.update({ where: { id: pack.id }, data: { multiplierToBase: 100 } });
+    await receiveStock({ ...f.input, qtyReceived: 0.29, packId: pack.id, unitCost: 0, idempotencyKey: randomUUID() });
+    await f.check(34);
+    await prisma.productPack.update({ where: { id: pack.id }, data: { multiplierToBase: 10 } });
     await expect(
       receiveStock({
         ...f.input,
@@ -239,7 +243,7 @@ describeDb("stock correctness regression", () => {
         idempotencyKey: randomUUID(),
       }),
     ).rejects.toMatchObject({ message: "invalidQuantity" });
-    await f.check(5);
+    await f.check(34);
   });
 
   it("keeps zero/negative sales and partial replenishment valid, including an open purchase order", async () => {
