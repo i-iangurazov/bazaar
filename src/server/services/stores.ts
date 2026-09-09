@@ -1,10 +1,10 @@
 import { StockMovementType, type InventorySnapshot, type LegalEntityType } from "@prisma/client";
+import { randomUUID } from "node:crypto";
 
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
 import { writeAuditLog } from "@/server/services/audit";
 import { toJson } from "@/server/services/json";
-import { applyStockMovement } from "@/server/services/inventory";
 import { assertWithinLimits } from "@/server/services/planLimits";
 import {
   createDefaultProductCatalog,
@@ -157,6 +157,7 @@ export const createStore = async (input: CreateStoreInput) =>
                 variantKey: true,
                 onHand: true,
                 onOrder: true,
+                variant: { select: { productId: true } },
               },
             })
           : Promise.resolve([]),
@@ -201,6 +202,10 @@ export const createStore = async (input: CreateStoreInput) =>
         }),
       ]);
 
+      if (sourceSnapshots.some((snapshot) => snapshot.variantKey !== (snapshot.variantId ?? "BASE") ||
+          (snapshot.variantId && snapshot.variant?.productId !== snapshot.productId))) {
+        throw new AppError("inventoryReconciliationRequired", "CONFLICT", 409);
+      }
       const nextSnapshots = sourceSnapshots.map((snapshot) => ({
         storeId: store.id,
         productId: snapshot.productId,
@@ -213,7 +218,10 @@ export const createStore = async (input: CreateStoreInput) =>
       }));
 
       if (nextSnapshots.length) {
-        await tx.inventorySnapshot.createMany({ data: nextSnapshots.map((snapshot) => ({ ...snapshot, onHand: 0 })) });
+        // This store is new and not visible outside the transaction. Initialize
+        // snapshots, journal and lots together in batches; per-row posting would
+        // exceed the transaction deadline for ordinary multi-thousand-item stores.
+        await tx.inventorySnapshot.createMany({ data: nextSnapshots });
       }
 
       const stockMovements = nextSnapshots
@@ -228,12 +236,17 @@ export const createStore = async (input: CreateStoreInput) =>
           referenceId: store.id,
           note: `Copied from ${sourceStore.name}`,
           createdById: input.actorId,
+          stockLotId: input.trackExpiryLots ? randomUUID() : undefined,
         }));
       if (stockMovements.length) {
-        for (const movement of stockMovements) {
-          await applyStockMovement(tx, { ...movement, actorId: input.actorId,
-            organizationId: input.organizationId });
+        if (input.trackExpiryLots) {
+          await tx.stockLot.createMany({ data: stockMovements.map((movement) => ({
+            id: movement.stockLotId!, organizationId: input.organizationId,
+            storeId: store.id, productId: movement.productId, variantId: movement.variantId,
+            variantKey: movement.variantId ?? "BASE", onHandQty: movement.qtyDelta,
+          })) });
         }
+        await tx.stockMovement.createMany({ data: stockMovements });
       }
 
       const nextPrices = sourcePrices.map((price) => ({

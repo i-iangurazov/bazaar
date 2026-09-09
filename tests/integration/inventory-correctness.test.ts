@@ -296,6 +296,38 @@ describeDb("stock correctness regression", () => {
     await f.check(-5);
   });
 
+  it("initializes a 2000-position store clone atomically without per-row transaction timeouts", async () => {
+    const f = await fixture();
+    await updateStorePolicy({ ...f.input, allowNegativeStock: false, trackExpiryLots: false });
+    await f.receive(1);
+    const products = Array.from({ length: 1999 }, (_, index) => ({
+      id: randomUUID(), organizationId: f.org.id, sku: `CLONE-${index}`, name: `Clone ${index}`,
+      unit: f.baseUnit.code, baseUnitId: f.baseUnit.id,
+    }));
+    await prisma.product.createMany({ data: products });
+    await prisma.storeProduct.createMany({ data: products.map((product) => ({
+      organizationId: f.org.id, storeId: f.store.id, productId: product.id,
+    })) });
+    await prisma.inventorySnapshot.createMany({ data: products.map((product) => ({
+      storeId: f.store.id, productId: product.id, variantKey: "BASE", onHand: 1, onOrder: 0,
+    })) });
+    await prisma.stockMovement.createMany({ data: products.map((product) => ({
+      storeId: f.store.id, productId: product.id, type: StockMovementType.ADJUSTMENT,
+      qtyDelta: 1, referenceType: "QA_OPENING",
+    })) });
+    const cloned = await createStore({ ...f.input, name: "Large clone", code: "COPY",
+      allowNegativeStock: false, trackExpiryLots: true, cloneFromStoreId: f.store.id, copyInventory: true });
+    const [stock, movements, lots] = await Promise.all([
+      prisma.inventorySnapshot.aggregate({ where: { storeId: cloned.id }, _count: true, _sum: { onHand: true, onOrder: true } }),
+      prisma.stockMovement.aggregate({ where: { storeId: cloned.id }, _count: true, _sum: { qtyDelta: true } }),
+      prisma.stockLot.aggregate({ where: { storeId: cloned.id }, _count: true, _sum: { onHandQty: true } }),
+    ]);
+    expect(stock).toMatchObject({ _count: 2000, _sum: { onHand: 2000, onOrder: 0 } });
+    expect(movements).toMatchObject({ _count: 2000, _sum: { qtyDelta: 2000 } });
+    expect(lots).toMatchObject({ _count: 2000, _sum: { onHandQty: 2000 } });
+    expect(await prisma.stockMovement.count({ where: { storeId: cloned.id, stockLotId: null } })).toBe(0);
+  }, 20_000);
+
   it("initializes only unallocated lot coverage when expiry tracking is enabled or re-enabled", async () => {
     const f = await fixture();
     await updateStorePolicy({ ...f.input, allowNegativeStock: false, trackExpiryLots: false });
