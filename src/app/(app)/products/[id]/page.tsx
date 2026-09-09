@@ -1,5 +1,8 @@
 "use client";
 
+import { StockQuantityCell } from "@/components/inventory/stock-quantity-cell";
+import { useSse } from "@/lib/useSse";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
@@ -96,13 +99,6 @@ import { translateError } from "@/lib/translateError";
 import { useToast } from "@/components/ui/toast";
 import { RowActions } from "@/components/row-actions";
 import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
-
-const createIdempotencyKey = () => {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return crypto.randomUUID();
-  }
-  return `inventory-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-};
 
 const showProductExpiryLotsSection = false;
 const productEditReceivingReturnSource = "stockReceiving";
@@ -206,9 +202,7 @@ const ProductDetailPage = () => {
   const [componentSearch, setComponentSearch] = useState("");
   const [basePriceDraft, setBasePriceDraft] = useState("");
   const [storePriceDrafts, setStorePriceDrafts] = useState<Record<string, string>>({});
-  const [storeOnHandDrafts, setStoreOnHandDrafts] = useState<Record<string, string>>({});
   const [variantPriceDrafts, setVariantPriceDrafts] = useState<Record<string, string>>({});
-  const [variantOnHandDrafts, setVariantOnHandDrafts] = useState<Record<string, string>>({});
   const [productFormDirty, setProductFormDirty] = useState(false);
   const [productFormSavedRevision, setProductFormSavedRevision] = useState(0);
   const [selectedComponent, setSelectedComponent] = useState<{
@@ -219,8 +213,6 @@ const ProductDetailPage = () => {
   const [assembleOpen, setAssembleOpen] = useState(false);
   const [savingStorePriceId, setSavingStorePriceId] = useState<string | null>(null);
   const [savingVariantPriceKey, setSavingVariantPriceKey] = useState<string | null>(null);
-  const [savingStoreOnHandId, setSavingStoreOnHandId] = useState<string | null>(null);
-  const [savingVariantOnHandKey, setSavingVariantOnHandKey] = useState<string | null>(null);
   const [labelSetupOpen, setLabelSetupOpen] = useState(false);
   const [labelAction, setLabelAction] = useState<"print" | "download" | null>(null);
   const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
@@ -438,22 +430,6 @@ const ProductDetailPage = () => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
   });
-  const adjustStockMutation = trpc.inventory.adjust.useMutation({
-    onSuccess: async () => {
-      await Promise.all([
-        productQuery.refetch(),
-        storePricingQuery.refetch(),
-        pricingQuery.refetch(),
-        trpcUtils.products.bootstrap.invalidate(),
-        trpcUtils.products.list.invalidate(),
-        trpcUtils.inventory.list.invalidate(),
-      ]);
-      toast({ variant: "success", description: tInventory("adjustSuccess") });
-    },
-    onError: (error) => {
-      toast({ variant: "error", description: translateError(tErrors, error) });
-    },
-  });
   const addComponentMutation = trpc.bundles.addComponent.useMutation({
     onSuccess: () => {
       bundleComponentsQuery.refetch();
@@ -484,6 +460,9 @@ const ProductDetailPage = () => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
   });
+  useSse({ "inventory.updated": () => {
+    void Promise.all([storePricingQuery.refetch(), productQuery.refetch()]);
+  } });
   const archiveMutation = trpc.products.archive.useMutation({
     onSuccess: async () => {
       await Promise.all([
@@ -536,17 +515,6 @@ const ProductDetailPage = () => {
           : "",
       ]),
     );
-    const onHandDrafts = Object.fromEntries(
-      storePricingQuery.data.stores.map((storeRow) => [storeRow.storeId, String(storeRow.onHand)]),
-    );
-    const variantDrafts = Object.fromEntries(
-      storePricingQuery.data.stores.flatMap((storeRow) =>
-        storeRow.variants.map((variant) => [
-          `${storeRow.storeId}:${variant.variantId}`,
-          String(variant.onHand),
-        ]),
-      ),
-    );
     const variantPriceDrafts = Object.fromEntries(
       storePricingQuery.data.stores.flatMap((storeRow) =>
         storeRow.variants.map((variant) => [
@@ -558,9 +526,7 @@ const ProductDetailPage = () => {
       ),
     );
     setStorePriceDrafts(priceDrafts);
-    setStoreOnHandDrafts(onHandDrafts);
     setVariantPriceDrafts(variantPriceDrafts);
-    setVariantOnHandDrafts(variantDrafts);
   }, [convertStoreMoneyFromKgs, formatDraftMoneyAmount, storePricingQuery.data]);
 
   useEffect(() => {
@@ -911,30 +877,6 @@ const ProductDetailPage = () => {
     }
   };
 
-  const handleSaveStoreOnHand = async (storeId: string, currentOnHand: number) => {
-    const raw = storeOnHandDrafts[storeId]?.trim() ?? "";
-    const targetOnHand = Number(raw);
-    if (!raw.length || !Number.isFinite(targetOnHand) || !Number.isInteger(targetOnHand)) {
-      toast({ variant: "error", description: tErrors("validationError") });
-      return;
-    }
-    if (targetOnHand === currentOnHand) {
-      return;
-    }
-    setSavingStoreOnHandId(storeId);
-    try {
-      await adjustStockMutation.mutateAsync({
-        storeId,
-        productId,
-        qtyDelta: targetOnHand - currentOnHand,
-        reason: tInventory("stockAdjustment"),
-        idempotencyKey: createIdempotencyKey(),
-      });
-    } finally {
-      setSavingStoreOnHandId(null);
-    }
-  };
-
   const handleSaveStoreVariantPrice = async (
     storeId: string,
     variantId: string,
@@ -962,36 +904,6 @@ const ProductDetailPage = () => {
       });
     } finally {
       setSavingVariantPriceKey(null);
-    }
-  };
-
-  const handleSaveStoreVariantOnHand = async (
-    storeId: string,
-    variantId: string,
-    currentOnHand: number,
-  ) => {
-    const key = `${storeId}:${variantId}`;
-    const raw = variantOnHandDrafts[key]?.trim() ?? "";
-    const targetOnHand = Number(raw);
-    if (!raw.length || !Number.isFinite(targetOnHand) || !Number.isInteger(targetOnHand)) {
-      toast({ variant: "error", description: tErrors("validationError") });
-      return;
-    }
-    if (targetOnHand === currentOnHand) {
-      return;
-    }
-    setSavingVariantOnHandKey(key);
-    try {
-      await adjustStockMutation.mutateAsync({
-        storeId,
-        productId,
-        variantId,
-        qtyDelta: targetOnHand - currentOnHand,
-        reason: tInventory("stockAdjustment"),
-        idempotencyKey: createIdempotencyKey(),
-      });
-    } finally {
-      setSavingVariantOnHandKey(null);
     }
   };
 
@@ -1467,49 +1379,15 @@ const ProductDetailPage = () => {
                           store: selectedPricingStore.storeName,
                         })}
                       </Label>
-                      <Input
-                        id="current-store-on-hand"
-                        type="number"
-                        inputMode="numeric"
-                        step="1"
-                        className="mt-2 w-full sm:max-w-[220px]"
-                        value={
-                          storeOnHandDrafts[selectedPricingStore.storeId] ??
-                          String(selectedPricingStore.onHand)
-                        }
-                        onChange={(event) =>
-                          setStoreOnHandDrafts((prev) => ({
-                            ...prev,
-                            [selectedPricingStore.storeId]: event.target.value,
-                          }))
-                        }
-                        onBlur={() =>
-                          void handleSaveStoreOnHand(
-                            selectedPricingStore.storeId,
-                            selectedPricingStore.onHand,
-                          )
-                        }
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") {
-                            event.preventDefault();
-                            event.currentTarget.blur();
-                          }
-                        }}
-                        placeholder={tInventory("qtyPlaceholder")}
-                        disabled={!canManageInventory || adjustStockMutation.isLoading}
+                      <StockQuantityCell
+                        storeId={selectedPricingStore.storeId}
+                        productId={productId}
+                        onHand={selectedPricingStore.onHand}
+                        version={selectedPricingStore.stockVersion}
                       />
                     </div>
                     <div className="flex min-h-10 items-center gap-2 text-xs text-muted-foreground">
-                      {savingStoreOnHandId === selectedPricingStore.storeId ? (
-                        <>
-                          <Spinner className="h-4 w-4" />
-                          {tCommon("saving")}
-                        </>
-                      ) : (
-                        t("currentStoreStockCurrent", {
-                          qty: formatNumber(selectedPricingStore.onHand, locale),
-                        })
-                      )}
+                      {t("currentStoreStockCurrent", { qty: formatNumber(selectedPricingStore.onHand, locale) })}
                     </div>
                   </div>
                 ) : (
@@ -1654,38 +1532,12 @@ const ProductDetailPage = () => {
                               ) : null}
                               {canManageInventory ? (
                                 <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-                                  <Input
-                                    type="number"
-                                    inputMode="numeric"
-                                    step="1"
-                                    className="w-full sm:w-[160px]"
-                                    value={
-                                      storeOnHandDrafts[storeRow.storeId] ?? String(storeRow.onHand)
-                                    }
-                                    onChange={(event) =>
-                                      setStoreOnHandDrafts((prev) => ({
-                                        ...prev,
-                                        [storeRow.storeId]: event.target.value,
-                                      }))
-                                    }
-                                    onBlur={() =>
-                                      void handleSaveStoreOnHand(storeRow.storeId, storeRow.onHand)
-                                    }
-                                    onKeyDown={(event) => {
-                                      if (event.key === "Enter") {
-                                        event.preventDefault();
-                                        event.currentTarget.blur();
-                                      }
-                                    }}
-                                    placeholder={tInventory("qtyPlaceholder")}
-                                    disabled={adjustStockMutation.isLoading}
+                                  <StockQuantityCell
+                                    storeId={storeRow.storeId}
+                                    productId={productId}
+                                    onHand={storeRow.onHand}
+                                    version={storeRow.stockVersion}
                                   />
-                                  {savingStoreOnHandId === storeRow.storeId ? (
-                                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                      <Spinner className="h-4 w-4" />
-                                      {tCommon("saving")}
-                                    </div>
-                                  ) : null}
                                 </div>
                               ) : null}
                             </div>
@@ -1757,40 +1609,13 @@ const ProductDetailPage = () => {
                                       )}
                                       {canManageInventory ? (
                                         <div className="flex items-center gap-2">
-                                          <Input
-                                            type="number"
-                                            inputMode="numeric"
-                                            step="1"
-                                            className="h-9"
-                                            value={
-                                              variantOnHandDrafts[key] ?? String(variant.onHand)
-                                            }
-                                            onChange={(event) =>
-                                              setVariantOnHandDrafts((prev) => ({
-                                                ...prev,
-                                                [key]: event.target.value,
-                                              }))
-                                            }
-                                            onBlur={() =>
-                                              void handleSaveStoreVariantOnHand(
-                                                storeRow.storeId,
-                                                variant.variantId,
-                                                variant.onHand,
-                                              )
-                                            }
-                                            onKeyDown={(event) => {
-                                              if (event.key === "Enter") {
-                                                event.preventDefault();
-                                                event.currentTarget.blur();
-                                              }
-                                            }}
-                                            aria-label={tInventory("onHand")}
-                                            placeholder={tInventory("qtyPlaceholder")}
-                                            disabled={adjustStockMutation.isLoading}
+                                          <StockQuantityCell
+                                            storeId={storeRow.storeId}
+                                            productId={productId}
+                                            onHand={variant.onHand}
+                                            version={variant.stockVersion}
+                                            variantId={variant.variantId}
                                           />
-                                          {savingVariantOnHandKey === key ? (
-                                            <Spinner className="h-4 w-4 text-muted-foreground" />
-                                          ) : null}
                                         </div>
                                       ) : (
                                         <p className="text-xs text-muted-foreground">

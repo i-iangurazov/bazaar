@@ -329,7 +329,7 @@ const productPreviewSelect = {
     take: 3,
   },
   inventorySnapshots: {
-    select: { storeId: true, onHand: true },
+    select: { storeId: true, onHand: true, variantId: true, version: true },
   },
   images: {
     select: { url: true },
@@ -354,7 +354,7 @@ const productListSelect = {
   createdAt: true,
   updatedAt: true,
   barcodes: { select: { value: true } },
-  inventorySnapshots: { select: { storeId: true, onHand: true } },
+  inventorySnapshots: { select: { storeId: true, onHand: true, variantId: true, version: true } },
   images: {
     where: {
       url: {
@@ -1858,6 +1858,7 @@ export const getProductStorePricing = async ({
         select: {
           storeId: true,
           onHand: true,
+          version: true,
         },
       }),
       prisma.productVariant.findMany({
@@ -1886,6 +1887,7 @@ export const getProductStorePricing = async ({
           storeId: true,
           variantId: true,
           onHand: true,
+          version: true,
         },
       }),
       prisma.reorderPolicy.findMany({
@@ -1938,6 +1940,7 @@ export const getProductStorePricing = async ({
         overridePriceKgs: override ?? null,
         priceOverridden: override !== undefined,
         onHand: onHandByStore.get(store.id) ?? 0,
+        stockVersion: snapshots.find((snapshot) => snapshot.storeId === store.id)?.version ?? 0,
         minStock: minStockByStore.get(store.id) ?? 0,
         variants: variants.map((variant) => {
           const variantOverride = variantOverrideByStoreAndVariant.get(`${store.id}:${variant.id}`);
@@ -1950,6 +1953,7 @@ export const getProductStorePricing = async ({
             overridePriceKgs: variantOverride ?? null,
             priceOverridden: variantOverride !== undefined,
             onHand: variantOnHandByStore.get(`${store.id}:${variant.id}`) ?? 0,
+            stockVersion: variantSnapshots.find((snapshot) => snapshot.storeId === store.id && snapshot.variantId === variant.id)?.version ?? 0,
           };
         }),
       };

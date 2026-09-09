@@ -22,7 +22,7 @@ describe("bazaar api stock source structure", () => {
 
     expect(salesOrdersService).toContain("restoreCustomerOrderStockOnCancel");
     expect(salesOrdersService).toContain("StockMovementType.RETURN");
-    expect(salesOrdersService).toContain("qtyDelta: Math.abs(movement.qtyDelta)");
+    expect(salesOrdersService).toContain("qtyDelta: -movement.qtyDelta");
     expect(salesOrdersService).toContain("SELECT id FROM \"CustomerOrder\"");
   });
 });

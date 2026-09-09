@@ -97,7 +97,6 @@ const restoreCustomerOrderStockOnCancel = async (
       referenceType: "CustomerOrder",
       referenceId: input.order.id,
       type: StockMovementType.SALE,
-      qtyDelta: { lt: 0 },
     },
     orderBy: [{ linePosition: "asc" }, { createdAt: "asc" }],
   });
@@ -107,7 +106,11 @@ const restoreCustomerOrderStockOnCancel = async (
       storeId: input.order.storeId,
       productId: movement.productId,
       variantId: movement.variantId,
-      qtyDelta: Math.abs(movement.qtyDelta),
+      // Edits can add positive SALE corrections; reverse the signed journal,
+      // not only its original negative entries.
+      qtyDelta: -movement.qtyDelta,
+      stockLotId: movement.stockLotId,
+      allowNegativeStock: true,
       type: StockMovementType.RETURN,
       referenceType: "CustomerOrder",
       referenceId: input.order.id,
@@ -121,6 +124,37 @@ const restoreCustomerOrderStockOnCancel = async (
   }
 
   return saleMovements.length;
+};
+
+const syncAlreadyDeductedOrderStock = async (
+  tx: Prisma.TransactionClient,
+  order: { id: string; source: CustomerOrderSource; storeId: string; organizationId: string },
+  actorId: string,
+) => {
+  if (order.source !== CustomerOrderSource.API) return;
+  const movements = await tx.stockMovement.groupBy({
+    by: ["productId", "variantId"],
+    where: { referenceType: "CustomerOrder", referenceId: order.id, type: StockMovementType.SALE },
+    _sum: { qtyDelta: true },
+  });
+  if (!movements.length) return; // Ordinary drafts have not touched inventory.
+  const lines = await tx.customerOrderLine.findMany({ where: { customerOrderId: order.id } });
+  const deltas = new Map(movements.map((movement) => [
+    `${movement.productId}:${movement.variantId ?? "BASE"}`,
+    { productId: movement.productId, variantId: movement.variantId, qtyDelta: -(movement._sum.qtyDelta ?? 0) },
+  ]));
+  for (const line of lines) {
+    const key = `${line.productId}:${line.variantId ?? "BASE"}`;
+    const delta = deltas.get(key) ?? { productId: line.productId, variantId: line.variantId, qtyDelta: 0 };
+    delta.qtyDelta -= line.qty;
+    deltas.set(key, delta);
+  }
+  for (const delta of [...deltas.values()].sort((a,b) => a.productId.localeCompare(b.productId))) {
+    if (!delta.qtyDelta) continue;
+    await applyStockMovement(tx, { ...delta, storeId: order.storeId, organizationId: order.organizationId,
+      actorId, type: StockMovementType.SALE, referenceType: "CustomerOrder", referenceId: order.id,
+      note: "Order line correction", allowNegativeStock: true });
+  }
 };
 
 const nextSalesOrderNumber = async (
@@ -912,6 +946,7 @@ export const setCustomerOrderCustomer = async (input: {
   requestId: string;
 }) => {
   return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT "id" FROM "CustomerOrder" WHERE "id" = ${input.customerOrderId} FOR UPDATE`;
     const order = await tx.customerOrder.findUnique({ where: { id: input.customerOrderId } });
     if (!order) {
       throw new AppError("salesOrderNotFound", "NOT_FOUND", 404);
@@ -1073,7 +1108,8 @@ export const addCustomerOrderLine = async (input: {
   actorId: string;
   requestId: string;
 }) => {
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT "id" FROM "CustomerOrder" WHERE "id" = ${input.customerOrderId} FOR UPDATE`;
     const order = await tx.customerOrder.findUnique({ where: { id: input.customerOrderId } });
     if (!order) {
       throw new AppError("salesOrderNotFound", "NOT_FOUND", 404);
@@ -1136,6 +1172,7 @@ export const addCustomerOrderLine = async (input: {
       },
     });
 
+    await syncAlreadyDeductedOrderStock(tx, order, input.actorId);
     await recomputeTotals(tx, order.id, input.actorId);
 
     await writeAuditLog(tx, {
@@ -1157,6 +1194,9 @@ export const addCustomerOrderLine = async (input: {
       lineCostTotalKgs: line.lineCostTotalKgs ? Number(line.lineCostTotalKgs) : null,
     };
   });
+  const store = await prisma.customerOrder.findUnique({ where: { id: result.customerOrderId }, select: { storeId: true } });
+  if (store) eventBus.publish({ type: "inventory.updated", payload: { storeId: store.storeId, productId: "*" } });
+  return result;
 };
 
 export const updateCustomerOrderLine = async (input: {
@@ -1166,7 +1206,9 @@ export const updateCustomerOrderLine = async (input: {
   actorId: string;
   requestId: string;
 }) => {
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
+    const identity = await tx.customerOrderLine.findUnique({ where: { id: input.lineId }, select: { customerOrderId: true } });
+    if (identity) await tx.$queryRaw`SELECT "id" FROM "CustomerOrder" WHERE "id" = ${identity.customerOrderId} FOR UPDATE`;
     const line = await tx.customerOrderLine.findUnique({
       where: { id: input.lineId },
       include: { customerOrder: true },
@@ -1193,6 +1235,7 @@ export const updateCustomerOrderLine = async (input: {
       },
     });
 
+    await syncAlreadyDeductedOrderStock(tx, line.customerOrder, input.actorId);
     await recomputeTotals(tx, line.customerOrderId, input.actorId);
 
     await writeAuditLog(tx, {
@@ -1214,6 +1257,9 @@ export const updateCustomerOrderLine = async (input: {
       lineCostTotalKgs: nextLine.lineCostTotalKgs ? Number(nextLine.lineCostTotalKgs) : null,
     };
   });
+  const store = await prisma.customerOrder.findUnique({ where: { id: result.customerOrderId }, select: { storeId: true } });
+  if (store) eventBus.publish({ type: "inventory.updated", payload: { storeId: store.storeId, productId: "*" } });
+  return result;
 };
 
 export const removeCustomerOrderLine = async (input: {
@@ -1222,7 +1268,9 @@ export const removeCustomerOrderLine = async (input: {
   actorId: string;
   requestId: string;
 }) => {
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
+    const identity = await tx.customerOrderLine.findUnique({ where: { id: input.lineId }, select: { customerOrderId: true } });
+    if (identity) await tx.$queryRaw`SELECT "id" FROM "CustomerOrder" WHERE "id" = ${identity.customerOrderId} FOR UPDATE`;
     const line = await tx.customerOrderLine.findUnique({
       where: { id: input.lineId },
       include: { customerOrder: true },
@@ -1240,6 +1288,7 @@ export const removeCustomerOrderLine = async (input: {
     assertEditable(line.customerOrder.status);
 
     await tx.customerOrderLine.delete({ where: { id: line.id } });
+    await syncAlreadyDeductedOrderStock(tx, line.customerOrder, input.actorId);
     await recomputeTotals(tx, line.customerOrderId, input.actorId);
 
     await writeAuditLog(tx, {
@@ -1255,6 +1304,9 @@ export const removeCustomerOrderLine = async (input: {
 
     return { customerOrderId: line.customerOrderId };
   });
+  const store = await prisma.customerOrder.findUnique({ where: { id: result.customerOrderId }, select: { storeId: true } });
+  if (store) eventBus.publish({ type: "inventory.updated", payload: { storeId: store.storeId, productId: "*" } });
+  return result;
 };
 
 const updateOrderStatus = async (input: {
@@ -1334,6 +1386,9 @@ const updateOrderStatus = async (input: {
       newStatus: result.newStatus,
     },
   });
+  if (result.newStatus === CustomerOrderStatus.CANCELED) {
+    eventBus.publish({ type: "inventory.updated", payload: { storeId: result.order.storeId, productId: "*" } });
+  }
   if (
     result.newStatus !== CustomerOrderStatus.CONFIRMED &&
     result.newStatus !== CustomerOrderStatus.CANCELED

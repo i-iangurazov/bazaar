@@ -1633,6 +1633,7 @@ const dispatchBazaarApiOrderCreated = async (
   result: BazaarApiOrderCreateResult,
 ) => {
   if (!result.replayed) {
+    eventBus.publish({ type: "inventory.updated", payload: { storeId: result.order.storeId, productId: "*" } });
     eventBus.publish({
       type: "customerOrder.created",
       payload: {

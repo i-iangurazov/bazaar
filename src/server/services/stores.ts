@@ -1,9 +1,10 @@
-import { StockMovementType, type LegalEntityType } from "@prisma/client";
+import { StockMovementType, type InventorySnapshot, type LegalEntityType } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
 import { writeAuditLog } from "@/server/services/audit";
 import { toJson } from "@/server/services/json";
+import { applyStockMovement } from "@/server/services/inventory";
 import { assertWithinLimits } from "@/server/services/planLimits";
 import {
   createDefaultProductCatalog,
@@ -206,12 +207,13 @@ export const createStore = async (input: CreateStoreInput) =>
         variantId: snapshot.variantId,
         variantKey: snapshot.variantKey,
         onHand: Math.max(0, snapshot.onHand + stockQuantityDelta),
-        onOrder: snapshot.onOrder,
+        // Purchase commitments belong to documents in the source store.
+        onOrder: 0,
         allowNegativeStock: input.allowNegativeStock,
       }));
 
       if (nextSnapshots.length) {
-        await tx.inventorySnapshot.createMany({ data: nextSnapshots });
+        await tx.inventorySnapshot.createMany({ data: nextSnapshots.map((snapshot) => ({ ...snapshot, onHand: 0 })) });
       }
 
       const stockMovements = nextSnapshots
@@ -228,7 +230,10 @@ export const createStore = async (input: CreateStoreInput) =>
           createdById: input.actorId,
         }));
       if (stockMovements.length) {
-        await tx.stockMovement.createMany({ data: stockMovements });
+        for (const movement of stockMovements) {
+          await applyStockMovement(tx, { ...movement, actorId: input.actorId,
+            organizationId: input.organizationId });
+        }
       }
 
       const nextPrices = sourcePrices.map((price) => ({
@@ -414,8 +419,38 @@ export const updateStorePolicy = async (input: UpdateStorePolicyInput) =>
       data: { allowNegativeStock: input.allowNegativeStock, trackExpiryLots: input.trackExpiryLots },
     });
 
+    if (!store.trackExpiryLots && input.trackExpiryLots) {
+      const snapshots = await tx.$queryRaw<InventorySnapshot[]>`
+        SELECT * FROM "InventorySnapshot" WHERE "storeId" = ${input.storeId}
+        ORDER BY "productId", "variantKey" FOR UPDATE
+      `;
+      for (const snapshot of snapshots) {
+        const identity = { storeId: input.storeId, productId: snapshot.productId, variantId: snapshot.variantId };
+        const journal = await tx.stockMovement.aggregate({ where: identity, _sum: { qtyDelta: true } });
+        if ((journal._sum.qtyDelta ?? 0) !== snapshot.onHand) {
+          throw new AppError("inventoryReconciliationRequired", "CONFLICT", 409);
+        }
+        const total = await tx.stockLot.aggregate({ where: identity, _sum: { onHandQty: true } });
+        const delta = snapshot.onHand - (total._sum.onHandQty ?? 0);
+        if (!delta) continue;
+        // Enabling/re-enabling expiry tracking must include stock that moved
+        // while it was disabled. Only the unallocated bucket can be inferred;
+        // dated lots, physical quantities and movement history stay intact.
+        const before = await tx.stockLot.findFirst({ where: { ...identity, expiryDate: null } });
+        const lot = before
+          ? await tx.stockLot.update({ where: { id: before.id }, data: { onHandQty: { increment: delta } } })
+          : await tx.stockLot.create({ data: { ...identity, organizationId: input.organizationId,
+              variantKey: snapshot.variantKey, onHandQty: delta } });
+        await writeAuditLog(tx, { organizationId: input.organizationId, actorId: input.actorId,
+          action: "STOCK_LOT_TRACKING_BASELINE", entity: "StockLot", entityId: lot.id,
+          before: before ? toJson(before) : null,
+          after: toJson({ ...lot, snapshotId: snapshot.id, sourceOnHand: snapshot.onHand, sourceVersion: snapshot.version }),
+          requestId: input.requestId });
+      }
+    }
+
     await tx.inventorySnapshot.updateMany({
-      where: { storeId: input.storeId },
+      where: { storeId: input.storeId, ...(input.allowNegativeStock ? {} : { onHand: { gte: 0 } }) },
       data: { allowNegativeStock: input.allowNegativeStock },
     });
 
@@ -431,7 +466,7 @@ export const updateStorePolicy = async (input: UpdateStorePolicyInput) =>
     });
 
     return updated;
-  });
+  }, { isolationLevel: "Serializable", timeout: 120_000 });
 
 export const updateStoreProductSettings = async (input: UpdateStoreProductSettingsInput) =>
   prisma.$transaction(async (tx) => {

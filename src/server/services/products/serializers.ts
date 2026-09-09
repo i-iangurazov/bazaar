@@ -13,7 +13,7 @@ type ProductPreviewRecord = {
   categories?: string[];
   basePriceKgs?: Prisma.Decimal | null;
   barcodes?: Array<{ value: string }>;
-  inventorySnapshots?: Array<{ storeId: string; onHand: number }>;
+  inventorySnapshots?: Array<{ storeId: string; onHand: number; variantId?: string | null; version?: number }>;
   images: Array<{ url: string }>;
 };
 
@@ -32,7 +32,7 @@ type ProductListRecord = {
   createdAt: Date;
   updatedAt: Date;
   barcodes: Array<{ value: string }>;
-  inventorySnapshots: Array<{ storeId: string; onHand: number }>;
+  inventorySnapshots: Array<{ storeId: string; onHand: number; variantId?: string | null; version?: number }>;
   images: Array<{ id: string; url: string; position: number }>;
 };
 

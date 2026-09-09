@@ -105,7 +105,15 @@ export const getStockoutsReport = async (
   }
   const offset = (page - 1) * pageSize;
   const rows = await prisma.$queryRaw<Array<StockoutRow & CountedRow>>(Prisma.sql`
-    WITH scoped_movements AS (
+    WITH later_movements AS (
+      SELECT m."storeId", m."productId", m."variantId", SUM(m."qtyDelta") AS delta
+      FROM "StockMovement" m
+      INNER JOIN "Store" s ON s.id = m."storeId"
+      WHERE s."organizationId" = ${input.organizationId}
+        ${storeScope}
+        AND m."createdAt" > ${input.to}
+      GROUP BY m."storeId", m."productId", m."variantId"
+    ), scoped_movements AS (
       SELECT
         m.id,
         m."storeId",
@@ -114,6 +122,7 @@ export const getStockoutsReport = async (
         m."qtyDelta",
         m."createdAt",
         COALESCE(snapshot."onHand", 0)::int AS "currentOnHand",
+        (COALESCE(snapshot."onHand", 0) - COALESCE(later.delta, 0))::int AS "periodEndOnHand",
         SUM(m."qtyDelta") OVER (
           PARTITION BY m."storeId", m."productId", m."variantId"
         )::int AS "rangeDelta",
@@ -124,6 +133,9 @@ export const getStockoutsReport = async (
         )::int AS "cumulativeDelta"
       FROM "StockMovement" m
       INNER JOIN "Store" s ON s.id = m."storeId"
+      LEFT JOIN later_movements later
+        ON later."storeId" = m."storeId" AND later."productId" = m."productId"
+        AND later."variantId" IS NOT DISTINCT FROM m."variantId"
       LEFT JOIN "InventorySnapshot" snapshot
         ON snapshot."storeId" = m."storeId"
         AND snapshot."productId" = m."productId"
@@ -135,8 +147,8 @@ export const getStockoutsReport = async (
     ), crossings AS (
       SELECT
         *,
-        "currentOnHand" - "rangeDelta" + "cumulativeDelta" - "qtyDelta" AS "beforeOnHand",
-        "currentOnHand" - "rangeDelta" + "cumulativeDelta" AS "afterOnHand"
+        "periodEndOnHand" - "rangeDelta" + "cumulativeDelta" - "qtyDelta" AS "beforeOnHand",
+        "periodEndOnHand" - "rangeDelta" + "cumulativeDelta" AS "afterOnHand"
       FROM scoped_movements
     ), grouped AS (
       SELECT

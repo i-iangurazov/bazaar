@@ -8,7 +8,7 @@ import {
 } from "@/components/table/inlineEditPolicy";
 
 describe("inline edit policy", () => {
-  it("enters edit mode on desktop double-click and blocks it on touch devices", () => {
+  it("enters edit mode on desktop and touch-capable computers", () => {
     expect(
       shouldBeginInlineEdit({
         trigger: "doubleClick",
@@ -29,7 +29,7 @@ describe("inline edit policy", () => {
         activeCellId: null,
         cellId: "row-1:name",
       }),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("opens edit mode from mobile action button only on touch devices", () => {

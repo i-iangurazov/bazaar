@@ -1536,6 +1536,9 @@ const PosSellPage = () => {
   ]);
 
   useSse({
+    "inventory.updated": () => {
+      void Promise.all([productsBootstrapQuery.refetch(), catalogProductsQuery.refetch()]);
+    },
     "shift.opened": () => {
       void Promise.all([
         shiftQuery.refetch(),

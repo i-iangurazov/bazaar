@@ -38,7 +38,7 @@ type VariantSummary = {
 
 type LowStockSnapshot = Pick<
   InventorySnapshot,
-  "id" | "storeId" | "productId" | "variantId" | "variantKey" | "onHand" | "onOrder" | "allowNegativeStock" | "updatedAt"
+  "id" | "storeId" | "productId" | "variantId" | "variantKey" | "onHand" | "version" | "onOrder" | "allowNegativeStock" | "updatedAt"
 > & {
   product: ProductSummary;
   variant: VariantSummary | null;
@@ -448,6 +448,7 @@ export const getDashboardSummary = async ({
             variantKey: true,
             onHand: true,
             onOrder: true,
+            version: true,
             allowNegativeStock: true,
             updatedAt: true,
             product: {

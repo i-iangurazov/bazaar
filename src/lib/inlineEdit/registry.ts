@@ -22,7 +22,7 @@ export type InlineEditTableKey =
 export type InlineMutationRoute =
   | "products.inlineUpdate"
   | "products.bulkUpdateCategory"
-  | "inventory.adjust"
+  | "inventory.setOnHand"
   | "storePrices.upsert"
   | "inventory.setMinStock"
   | "suppliers.update"
@@ -48,10 +48,13 @@ export type InlineMutationInputByRoute = {
     category: string | null;
     mode?: "add" | "setPrimary" | "replace";
   };
-  "inventory.adjust": {
+  "inventory.setOnHand": {
     storeId: string;
     productId: string;
-    qtyDelta: number;
+    variantId?: string | null;
+    targetOnHand: number;
+    expectedOnHand: number;
+    expectedVersion: number;
     reason: string;
     idempotencyKey: string;
   };
@@ -147,6 +150,7 @@ export type InlineEditColumnDefinition<TRow, TValue, TContext> = {
   parser: (raw: string, row: TRow, context: TContext) => InlineParseResult<TValue>;
   mutation: (row: TRow, value: TValue, context: TContext) => InlineMutationOperation;
   permissionCheck: (role: SessionRole, row: TRow, context: TContext) => boolean;
+  disabledHintKey?: (row: TRow, context: TContext) => string | undefined;
   selectOptions?: (
     row: TRow,
     context: TContext,
@@ -165,6 +169,7 @@ export type InlineProductsRow = {
   basePriceKgs: number | null;
   avgCostKgs?: number | null;
   onHandQty: number;
+  inventorySnapshots?: Array<{ storeId: string; variantId?: string | null; version?: number; onHand: number }>;
 };
 
 export type InlineProductsContext = {
@@ -179,6 +184,9 @@ export type InlineInventoryRow = {
   snapshot: {
     storeId: string;
     productId: string;
+    variantId?: string | null;
+    onHand?: number;
+    version?: number;
   };
   minStock: number;
 };
@@ -272,6 +280,16 @@ const parseNonNegativeInt = (raw: string): InlineParseResult<number> => {
     return { ok: false, errorKey: "validationError" };
   }
   return { ok: true, value: parsed };
+};
+
+const parseStockQuantity = (raw: string): InlineParseResult<number> => {
+  const normalized = raw.trim().replace(",", ".");
+  const value = Number(normalized);
+  if (!/^-?\d+(?:\.0+)?$/.test(normalized) || !Number.isSafeInteger(value) ||
+      value < -2147483648 || value > 2147483647) {
+    return { ok: false, errorKey: "invalidQuantity" };
+  }
+  return { ok: true, value };
 };
 
 const parseBooleanSelect = (raw: string): InlineParseResult<boolean> => {
@@ -401,6 +419,7 @@ export type InlineEditRegistry = {
     onHand: InlineEditColumnDefinition<InlineProductsRow, number, InlineProductsContext>;
   };
   inventory: {
+    onHand: InlineEditColumnDefinition<InlineInventoryRow, number, { stockAdjustReason: string }>;
     minStock: InlineEditColumnDefinition<InlineInventoryRow, number, Record<string, never>>;
   };
   suppliers: {
@@ -522,23 +541,43 @@ export const inlineEditRegistry: InlineEditRegistry = {
         if (!context.storeId) {
           return { ok: false, errorKey: "storeRequired" };
         }
-        return parseNonNegativeInt(raw);
+        return parseStockQuantity(raw);
       },
       mutation: (row, value, context) => ({
-        route: "inventory.adjust",
+        route: "inventory.setOnHand",
         input: {
           storeId: context.storeId as string,
           productId: row.id,
-          qtyDelta: value - row.onHandQty,
+          targetOnHand: value,
+          expectedOnHand: row.onHandQty,
+          expectedVersion: row.inventorySnapshots?.find((snapshot) =>
+            snapshot.storeId === context.storeId && !snapshot.variantId)?.version ?? 0,
           reason: context.stockAdjustReason,
           idempotencyKey: createInlineIdempotencyKey(),
         },
       }),
-      permissionCheck: (role, _row, context) =>
-        Boolean(context.storeId) && isManagerOrAdmin(role),
+      permissionCheck: (role, row, context) =>
+        Boolean(context.storeId) && isManagerOrAdmin(role) &&
+        !row.inventorySnapshots?.some((snapshot) =>
+          snapshot.storeId === context.storeId && Boolean(snapshot.variantId)),
+      disabledHintKey: (row, context) => !context.storeId ? "stockStoreHint" :
+        row.inventorySnapshots?.some((snapshot) => snapshot.storeId === context.storeId && snapshot.variantId)
+          ? "stockVariantHint" : undefined,
     },
   },
   inventory: {
+    onHand: {
+      tableKey: "inventory", columnKey: "onHand", inputType: "number",
+      formatter: (value, _row, _context, display) => formatInt(value, display.locale, display.notAvailableLabel),
+      parser: parseStockQuantity,
+      mutation: (row, value, context) => ({ route: "inventory.setOnHand", input: {
+        storeId: row.snapshot.storeId, productId: row.snapshot.productId,
+        variantId: row.snapshot.variantId ?? null, targetOnHand: value,
+        expectedOnHand: row.snapshot.onHand ?? 0, expectedVersion: row.snapshot.version ?? 0,
+        reason: context.stockAdjustReason, idempotencyKey: createInlineIdempotencyKey(),
+      } }),
+      permissionCheck: isManagerOrAdmin,
+    },
     minStock: {
       tableKey: "inventory",
       columnKey: "minStock",

@@ -36,6 +36,7 @@ import { normalizeScanValue } from "@/lib/scanning/normalize";
 import { assignProductToStore, productStoreAssignmentInWhere } from "@/server/services/storeAccess";
 import { resolveProductCatalogStoresForStore } from "@/server/services/productCatalogs";
 import { getLogger } from "@/server/logging";
+import { lockStockSnapshot } from "@/server/services/inventoryLock";
 import { applyStockMovement } from "@/server/services/inventory";
 import {
   OPERATION_TRANSACTION_TIMEOUT_MAX_MS,
@@ -1581,31 +1582,11 @@ const applyInitialVariantInventory = async (
     if (initialOnHand <= 0) {
       continue;
     }
-    await tx.inventorySnapshot.update({
-      where: {
-        storeId_productId_variantKey: {
-          storeId: input.store.id,
-          productId: input.productId,
-          variantKey: variant.id,
-        },
-      },
-      data: {
-        onHand: { increment: initialOnHand },
-        allowNegativeStock: input.store.allowNegativeStock,
-      },
-    });
-    await tx.stockMovement.create({
-      data: {
-        storeId: input.store.id,
-        productId: input.productId,
-        variantId: variant.id,
-        type: StockMovementType.ADJUSTMENT,
-        qtyDelta: initialOnHand,
-        referenceType: "ProductVariant",
-        referenceId: variant.id,
-        note: "Initial variant stock",
-        createdById: input.actorId,
-      },
+    await applyStockMovement(tx, {
+      storeId: input.store.id, productId: input.productId, variantId: variant.id,
+      qtyDelta: initialOnHand, type: StockMovementType.ADJUSTMENT,
+      referenceType: "ProductVariant", referenceId: variant.id,
+      note: "Initial variant stock", actorId: input.actorId, organizationId: input.organizationId,
     });
   }
 };
@@ -1648,30 +1629,11 @@ const applyInitialInventorySettings = async (
   }
 
   if (initialOnHand && initialOnHand > 0) {
-    await tx.inventorySnapshot.update({
-      where: {
-        storeId_productId_variantKey: {
-          storeId: input.store.id,
-          productId: input.productId,
-          variantKey: "BASE",
-        },
-      },
-      data: {
-        onHand: { increment: initialOnHand },
-        allowNegativeStock: input.store.allowNegativeStock,
-      },
-    });
-    await tx.stockMovement.create({
-      data: {
-        storeId: input.store.id,
-        productId: input.productId,
-        type: StockMovementType.ADJUSTMENT,
-        qtyDelta: initialOnHand,
-        referenceType: "Product",
-        referenceId: input.productId,
-        note: "Initial stock",
-        createdById: input.actorId,
-      },
+    await applyStockMovement(tx, {
+      storeId: input.store.id, productId: input.productId,
+      qtyDelta: initialOnHand, type: StockMovementType.ADJUSTMENT,
+      referenceType: "Product", referenceId: input.productId,
+      note: "Initial stock", actorId: input.actorId, organizationId: input.organizationId,
     });
   }
 
@@ -2940,31 +2902,14 @@ export const duplicateProduct = async (input: {
         if (snapshot.variantId && !copiedVariantId) {
           continue;
         }
-        const variantKey = copiedVariantId ?? "BASE";
-        await tx.inventorySnapshot.update({
-          where: {
-            storeId_productId_variantKey: {
-              storeId: snapshot.storeId,
-              productId: duplicate.id,
-              variantKey,
-            },
-          },
-          data: { onHand: snapshot.onHand, onOrder: 0 },
-        });
         copiedInventoryRows += 1;
         if (snapshot.onHand !== 0) {
-          await tx.stockMovement.create({
-            data: {
-              storeId: snapshot.storeId,
-              productId: duplicate.id,
-              variantId: copiedVariantId,
-              type: StockMovementType.ADJUSTMENT,
-              qtyDelta: snapshot.onHand,
-              referenceType: "PRODUCT_DUPLICATE",
-              referenceId: duplicate.id,
-              note: `Copied inventory from ${source.sku}`,
-              createdById: input.actorId,
-            },
+          await applyStockMovement(tx, {
+            storeId: snapshot.storeId, productId: duplicate.id, variantId: copiedVariantId,
+            qtyDelta: snapshot.onHand, type: StockMovementType.ADJUSTMENT,
+            referenceType: "PRODUCT_DUPLICATE", referenceId: duplicate.id,
+            note: `Copied inventory from ${source.sku}`,
+            actorId: input.actorId, organizationId: input.organizationId, allowNegativeStock: true,
           });
         }
       }
@@ -4140,15 +4085,8 @@ export const importProductsTx = async (
       throw new AppError("invalidInput", "BAD_REQUEST", 400);
     }
 
-    const currentSnapshot = await tx.inventorySnapshot.findUnique({
-      where: {
-        storeId_productId_variantKey: {
-          storeId: input.storeId,
-          productId,
-          variantKey: "BASE",
-        },
-      },
-      select: { onHand: true },
+    const currentSnapshot = await lockStockSnapshot(tx, {
+      storeId: input.storeId, productId, organizationId: input.organizationId,
     });
     const currentOnHand = currentSnapshot?.onHand ?? 0;
     const qtyDelta = stockBehavior === "set" ? stockQty - currentOnHand : stockQty;

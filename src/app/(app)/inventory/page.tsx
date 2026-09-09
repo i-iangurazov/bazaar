@@ -1942,8 +1942,21 @@ const InventoryPage = () => {
     [inventoryListInput, inventoryQuery, trpcUtils.inventory.list],
   );
 
+  const inlineOnHandMutation = trpc.inventory.setOnHand.useMutation();
+
   const executeInlineInventoryMutation = useCallback(
     async (operation: InlineMutationOperation) => {
+      if (operation.route === "inventory.setOnHand") {
+        try {
+          await inlineOnHandMutation.mutateAsync(operation.input);
+        } finally {
+          await Promise.all([
+            trpcUtils.inventory.list.invalidate(),
+            trpcUtils.products.bootstrap.invalidate(),
+          ]);
+        }
+        return;
+      }
       if (operation.route !== "inventory.setMinStock") {
         throw new Error(`Unsupported inline operation: ${operation.route}`);
       }
@@ -1962,7 +1975,7 @@ const InventoryPage = () => {
       }
       await trpcUtils.inventory.list.invalidate(inventoryListInput);
     },
-    [applyInventoryListPatch, inlineMinStockMutation, inventoryListInput, trpcUtils.inventory.list],
+    [applyInventoryListPatch, inlineMinStockMutation, inlineOnHandMutation, inventoryListInput, trpcUtils],
   );
 
   const createPoDraftMutation = trpc.purchaseOrders.createFromReorder.useMutation({
@@ -2698,7 +2711,17 @@ const InventoryPage = () => {
                                           : undefined
                                       }
                                     >
-                                      {formatNumber(item.snapshot.onHand, locale)}
+                                      <InlineEditableCell
+                                        rowId={item.snapshot.id}
+                                        row={item}
+                                        value={item.snapshot.onHand}
+                                        definition={inlineEditRegistry.inventory.onHand}
+                                        context={{ stockAdjustReason: t("stockAdjustment") }}
+                                        role={role} locale={locale}
+                                        columnLabel={t("onHand")} tTable={t} tCommon={tCommon}
+                                        enabled={inlineEditingEnabled}
+                                        executeMutation={executeInlineInventoryMutation}
+                                      />
                                     </TableCell>
                                   ) : null}
                                   {visibleInventoryColumnSet.has("minStock") ? (

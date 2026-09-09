@@ -10,6 +10,8 @@ import {
   useState,
   type KeyboardEvent,
   type ReactNode,
+  type Dispatch,
+  type SetStateAction,
 } from "react";
 import { useTranslations } from "next-intl";
 
@@ -39,16 +41,33 @@ import type {
   SessionRole,
 } from "@/lib/inlineEdit/registry";
 
+type EditSession = {
+  row: unknown;
+  context: unknown;
+  value: unknown;
+  draft: string;
+  saving: boolean;
+  finished: boolean;
+  operation?: InlineMutationOperation;
+};
+
 type InlineEditTableState = {
   activeCellId: string | null;
-  setActiveCellId: (cellId: string | null) => void;
+  setActiveCellId: Dispatch<SetStateAction<string | null>>;
+  sessions: Map<string, EditSession>;
+  refresh: () => void;
 };
 
 const InlineEditTableContext = createContext<InlineEditTableState | null>(null);
 
 export const InlineEditTableProvider = ({ children }: { children: ReactNode }) => {
   const [activeCellId, setActiveCellId] = useState<string | null>(null);
-  const value = useMemo(() => ({ activeCellId, setActiveCellId }), [activeCellId]);
+  // TanStack column callbacks can remount cells on query/mutation updates.
+  // Keep the active draft and in-flight request outside that component lifetime.
+  const sessions = useRef(new Map<string, EditSession>()).current;
+  const [revision, setRevision] = useState(0);
+  const refresh = useCallback(() => setRevision((value) => value + 1), []);
+  const value = useMemo(() => ({ activeCellId, setActiveCellId, sessions, refresh, revision }), [activeCellId, sessions, refresh, revision]);
   return (
     <InlineEditTableContext.Provider value={value}>{children}</InlineEditTableContext.Provider>
   );
@@ -137,13 +156,21 @@ export const InlineEditableCell = <
   const tErrors = useTranslations("errors");
   const isTouch = useTouchDevice();
 
+  const cellId = `${definition.tableKey}:${String(context.storeId ?? "")}:${rowId}:${definition.columnKey}`;
+  const sessionRef = useRef<EditSession | undefined>(tableState?.sessions.get(cellId));
   const [localValue, setLocalValue] = useState<TValue>(value);
-  const [draftValue, setDraftValue] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
+  const [draftValue, setDraftValue] = useState(sessionRef.current?.draft ?? "");
+  const [, renderSaving] = useState(false);
+  const isSaving = sessionRef.current?.saving ?? false;
+  const refreshTable = tableState?.refresh;
+  const setIsSaving = useCallback((saving: boolean) => {
+    if (sessionRef.current) sessionRef.current.saving = saving;
+    renderSaving(saving);
+    refreshTable?.();
+  }, [refreshTable]);
   const [standaloneEditing, setStandaloneEditing] = useState(false);
   const selectEditorRef = useRef<HTMLDivElement | null>(null);
 
-  const cellId = `${rowId}:${definition.columnKey}`;
   const activeCellId = tableState?.activeCellId ?? (standaloneEditing ? cellId : null);
   const isEditing = tableState ? activeCellId === cellId : standaloneEditing;
   const equals = useMemo(
@@ -170,12 +197,14 @@ export const InlineEditableCell = <
   }, [value, isEditing, isSaving]);
 
   const closeEditor = useCallback(() => {
+    if (sessionRef.current) sessionRef.current.finished = true;
     if (tableState) {
-      tableState.setActiveCellId(null);
+      tableState.sessions.delete(cellId);
+      tableState.setActiveCellId((active) => active === cellId ? null : active);
       return;
     }
     setStandaloneEditing(false);
-  }, [tableState]);
+  }, [tableState, cellId]);
 
   const beginEdit = useCallback(
     (trigger: "doubleClick" | "mobileButton") => {
@@ -194,11 +223,13 @@ export const InlineEditableCell = <
       if (isEditing) {
         return;
       }
-      setDraftValue(
-        definition.editorValue
+      const draft = definition.editorValue
           ? definition.editorValue(localValue, row, context, displayContext)
-          : toEditorValue(localValue),
-      );
+          : toEditorValue(localValue);
+      const session: EditSession = { row, context, value: localValue, draft, saving: false, finished: false };
+      sessionRef.current = session;
+      tableState?.sessions.set(cellId, session);
+      setDraftValue(draft);
       if (tableState) {
         tableState.setActiveCellId(cellId);
         return;
@@ -233,18 +264,20 @@ export const InlineEditableCell = <
 
   const commitFromRawValue = useCallback(
     async (rawValue: string, reason: InlineCommitReason) => {
+      const session = sessionRef.current;
+      if (!session || session.saving || session.finished || !canEdit) return;
+      const editRow = session.row as TRow;
+      const editContext = session.context as TContext;
       const draftResolution = resolveInlineDraft({
         rawValue,
-        currentValue: localValue,
-        parser: (raw) => definition.parser(raw, row, context),
+        currentValue: session.value as TValue,
+        parser: (raw) => definition.parser(raw, editRow, editContext),
         equals,
       });
 
       if (draftResolution.kind === "invalid") {
-        closeEditor();
-        if (reason !== "blur") {
-          toast({ variant: "error", description: resolveParserError(draftResolution.errorKey) });
-        }
+        if (reason === "blur") closeEditor();
+        toast({ variant: "error", description: resolveParserError(draftResolution.errorKey) });
         return;
       }
       if (draftResolution.kind === "unchanged") {
@@ -252,9 +285,12 @@ export const InlineEditableCell = <
         return;
       }
 
-      const previousValue = localValue;
+      const previousValue = session.value as TValue;
       setIsSaving(true);
-      const operation = definition.mutation(row, draftResolution.value, context);
+      // Retain the same operation/key after a lost response. The server replays
+      // it even if the first request committed before the connection failed.
+      const operation = session.operation ?? definition.mutation(editRow, draftResolution.value, editContext);
+      session.operation = operation;
       const outcome = await executeOptimisticMutation({
         previousValue,
         nextValue: draftResolution.value,
@@ -266,7 +302,8 @@ export const InlineEditableCell = <
       });
       setIsSaving(false);
       if (!outcome.ok) {
-        closeEditor();
+        const error = outcome.error as { message?: string; data?: { code?: string } };
+        if (error.message === "inventoryStockConflict" || error.data?.code === "CONFLICT") closeEditor();
         toast({
           variant: "error",
           description: translateError(tErrors, outcome.error as never),
@@ -274,19 +311,20 @@ export const InlineEditableCell = <
         return;
       }
       closeEditor();
+      toast({ variant: "success", description: tInline("saved") });
       onMutationSuccess?.();
     },
     [
       closeEditor,
-      context,
+      canEdit,
       definition,
       equals,
       executeMutation,
-      localValue,
       onMutationSuccess,
       resolveParserError,
-      row,
+      setIsSaving,
       tErrors,
+      tInline,
       toast,
     ],
   );
@@ -296,15 +334,18 @@ export const InlineEditableCell = <
       const action = resolveInlineKeyAction(event.key);
       if (action === "cancel") {
         event.preventDefault();
+        event.stopPropagation();
+        if (sessionRef.current?.saving) return;
         closeEditor();
         return;
       }
       if (action === "commit") {
         event.preventDefault();
-        void commitFromRawValue(draftValue, "enter");
+        event.stopPropagation();
+        void commitFromRawValue(event.currentTarget.value, "enter");
       }
     },
-    [closeEditor, commitFromRawValue, draftValue],
+    [closeEditor, commitFromRawValue],
   );
 
   useEffect(() => {
@@ -343,6 +384,7 @@ export const InlineEditableCell = <
   }, [closeEditor, definition.inputType, isEditing, isSaving]);
 
   const displayText = definition.formatter(localValue, row, context, displayContext);
+  const disabledHint = definition.disabledHintKey?.(row, context);
   const editorType =
     definition.inputType === "money" ? "number" : definition.inputType === "date" ? "date" : "text";
 
@@ -362,6 +404,7 @@ export const InlineEditableCell = <
           <Select
             value={selectValue}
             onValueChange={(next) => {
+              if (sessionRef.current) sessionRef.current.draft = next;
               setDraftValue(next);
               void commitFromRawValue(next, "select");
             }}
@@ -393,9 +436,10 @@ export const InlineEditableCell = <
     }
 
     return (
-      <div className={cn("flex items-center gap-2", className)}>
+      <div className={cn("flex items-center gap-2", className)} onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
         <Input
           autoFocus
+          readOnly={isSaving}
           value={draftValue}
           type={editorType}
           inputMode={
@@ -403,13 +447,17 @@ export const InlineEditableCell = <
               ? "decimal"
               : undefined
           }
-          onChange={(event) => setDraftValue(event.target.value)}
-          onKeyDown={onInputKeyDown}
-          onBlur={() => {
-            if (isSaving) {
-              return;
+          onFocus={(event) => event.currentTarget.select()}
+          onChange={(event) => {
+            if (sessionRef.current) {
+              sessionRef.current.draft = event.target.value;
+              sessionRef.current.operation = undefined;
             }
-            void commitFromRawValue(draftValue, "blur");
+            setDraftValue(event.target.value);
+          }}
+          onKeyDown={onInputKeyDown}
+          onBlur={(event) => {
+            void commitFromRawValue(event.currentTarget.value, "blur");
           }}
           className="h-8 min-w-[120px]"
           aria-label={tInline("editorAria", { field: columnLabel })}
@@ -423,15 +471,18 @@ export const InlineEditableCell = <
     <div
       className={cn(
         "flex min-h-8 items-center gap-1",
-        canEdit && !isTouch ? "cursor-text" : undefined,
+        canEdit ? "cursor-text select-none" : undefined,
         className,
       )}
-      onDoubleClick={() => {
-        if (!isTouch) {
-          beginEdit("doubleClick");
-        }
+      data-inline-cell={cellId}
+      onClick={(event) => { if (canEdit) event.stopPropagation(); }}
+      onDoubleClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        beginEdit("doubleClick");
       }}
-      title={!canEdit ? tInline("noPermissionTooltip") : undefined}
+      title={!canEdit ? tInline(disabledHint ?? "noPermissionTooltip") :
+        definition.columnKey === "onHand" ? tInline("stockAbsoluteHint") : undefined}
     >
       <span>{displayText}</span>
       {isSaving ? <Spinner className="h-3.5 w-3.5" aria-label={tInline("savingAria")} /> : null}

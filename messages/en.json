@@ -4869,6 +4869,8 @@
     }
   },
   "errors": {
+    "inventoryStockConflict": "Stock changed in another session or operation. Data has been refreshed; check the quantity and try again.",
+    "inventoryReconciliationRequired": "Inventory data disagrees. Source operations must be reconciled; automatic overwrite was cancelled.",
     "baamNotConfigured": "BAAM is not connected yet. An administrator needs to configure the AI connection before questions can be answered.",
     "baamUnavailable": "BAAM could not answer right now. Your question is kept; try again shortly.",
     "baamScopeChanged": "Your store access changed while BAAM was checking. Refresh your access and try again.",
@@ -6432,6 +6434,11 @@
     }
   },
   "inlineEditing": {
+    "stockStoreHint": "Select a store to edit stock.",
+    "stockVariantHint": "Total across variants. Edit a specific variant in inventory or product details.",
+    "stockAbsoluteHint": "Double-click to enter the new absolute quantity in base units.",
+
+    "saved": "Change saved",
     "editorAria": "Editor aria {field}",
     "savingAria": "Saving aria",
     "noPermissionTooltip": "No permission tooltip",

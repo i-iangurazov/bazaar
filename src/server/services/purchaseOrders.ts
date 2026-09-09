@@ -17,7 +17,6 @@ import { eventBus } from "@/server/events/eventBus";
 import { getLogger } from "@/server/logging";
 import { toJson } from "@/server/services/json";
 import { updateProductCost } from "@/server/services/productCost";
-import { applyStockLotAdjustment } from "@/server/services/stockLots";
 import { resolveBaseQuantity } from "@/server/services/uom";
 import { recordFirstEvent } from "@/server/services/productEvents";
 import { resolveCurrencySnapshot } from "@/lib/currencyDisplay";
@@ -116,7 +115,7 @@ const adjustOnOrder = async (
     where: { id: snapshot.id },
     data: {
       onOrder: nextOnOrder,
-      allowNegativeStock,
+      allowNegativeStock: allowNegativeStock || snapshot.onHand < 0,
     },
   });
 };
@@ -850,7 +849,7 @@ export const receivePurchaseOrder = async (input: {
             throw new AppError("poOverReceiveNotAllowed", "CONFLICT", 409);
           }
 
-          const movement = await applyStockMovement(tx, {
+          await applyStockMovement(tx, {
             storeId: po.storeId,
             productId: line.productId,
             variantId: line.variantId,
@@ -867,20 +866,6 @@ export const receivePurchaseOrder = async (input: {
             organizationId: input.organizationId,
           });
 
-          const lot = await applyStockLotAdjustment(tx, {
-            storeId: po.storeId,
-            productId: line.productId,
-            variantId: line.variantId ?? undefined,
-            qtyDelta: receiveQty,
-            expiryDate: null,
-            organizationId: input.organizationId,
-          });
-          if (lot) {
-            await tx.stockMovement.update({
-              where: { id: movement.movementId },
-              data: { stockLotId: lot.id },
-            });
-          }
 
           const onOrderDelta = -Math.min(receiveQty, Math.max(remaining, 0));
           if (onOrderDelta !== 0) {

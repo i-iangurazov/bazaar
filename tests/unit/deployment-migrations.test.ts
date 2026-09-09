@@ -21,7 +21,7 @@ describe("production migration release guard", () => {
   it("permits an explicitly reviewed retry after a migration was formally rolled back", () => {
     expect(planProductionMigrations([baseline], [{ ...record, finished_at: null, rolled_back_at: new Date() }], { [baseline.name]: baseline.checksum })).toEqual([baseline.name]);
   });
-  it("requires both reviewed release migration files to be present", () => {
+  it("requires every reviewed release migration file to be present", () => {
     expect(() => planProductionMigrations([baseline], [record])).toThrow("missing");
   });
   it("rejects changed pending SQL even when the migration name is approved", () => {

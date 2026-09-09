@@ -13,6 +13,7 @@ import { logProfileSection } from "@/server/profiling/perf";
 import { toTRPCError } from "@/server/trpc/errors";
 import {
   adjustStock,
+  setStockOnHand,
   archiveStockMovementDocument,
   bulkSetOnHand,
   editStockMovementDocument,
@@ -396,6 +397,7 @@ const inventoryListSnapshotSelect = {
   variantId: true,
   variantKey: true,
   onHand: true,
+  version: true,
   onOrder: true,
   allowNegativeStock: true,
   updatedAt: true,
@@ -677,6 +679,7 @@ export const inventoryRouter = router({
               variantId: true,
               variantKey: true,
               onHand: true,
+              version: true,
               onOrder: true,
               allowNegativeStock: true,
               updatedAt: true,
@@ -703,6 +706,7 @@ export const inventoryRouter = router({
                 variantId: null,
                 variantKey: "BASE",
                 onHand: 0,
+                version: 0,
                 onOrder: 0,
                 allowNegativeStock: false,
                 updatedAt: new Date(0),
@@ -1168,6 +1172,23 @@ export const inventoryRouter = router({
       } catch (error) {
         throw toTRPCError(error);
       }
+    }),
+
+  setOnHand: managerProcedure
+    .use(rateLimit({ windowMs: 10_000, max: 30, prefix: "inventory-set-on-hand" }))
+    .input(z.object({
+      storeId: z.string().min(1), productId: z.string().min(1),
+      variantId: z.string().nullable().optional(),
+      targetOnHand: z.number().int().min(-2147483648).max(2147483647),
+      expectedOnHand: z.number().int(), expectedVersion: z.number().int().nonnegative(),
+      reason: z.string().min(3), idempotencyKey: z.string().min(8),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+        return await setStockOnHand({ ...input, actorId: ctx.user.id,
+          organizationId: ctx.user.organizationId, requestId: ctx.requestId });
+      } catch (error) { throw toTRPCError(error); }
     }),
 
   adjust: managerProcedure

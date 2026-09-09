@@ -18,6 +18,7 @@ import { classifyDatabaseOperationFailure } from "@/server/services/databaseOper
 import { runOperationRequest } from "@/server/services/operationRequests";
 import { applyStockLotAdjustment } from "@/server/services/stockLots";
 import { resolveBaseQuantity } from "@/server/services/uom";
+import { lockStockSnapshot } from "@/server/services/inventoryLock";
 import {
   assertUserCanAccessStore,
   assignProductToStore,
@@ -89,6 +90,8 @@ export type ApplyStockMovementInput = {
   organizationId?: string;
   allowNegativeStock?: boolean;
   movementDate?: Date | null;
+  expiryDate?: Date | null;
+  stockLotId?: string | null;
 };
 
 const resolveVariantKey = (variantId?: string | null) => variantId ?? "BASE";
@@ -97,6 +100,9 @@ export const applyStockMovement = async (
   tx: Prisma.TransactionClient,
   input: ApplyStockMovementInput,
 ): Promise<{ snapshot: InventorySnapshot; movementId: string }> => {
+  if (!Number.isSafeInteger(input.qtyDelta)) {
+    throw new AppError("invalidQuantity", "BAD_REQUEST", 400);
+  }
   const store = await tx.store.findUnique({ where: { id: input.storeId } });
   if (!store) {
     throw new AppError("storeNotFound", "NOT_FOUND", 404);
@@ -109,7 +115,8 @@ export const applyStockMovement = async (
   if (!product || product.isDeleted) {
     throw new AppError("productNotFound", "NOT_FOUND", 404);
   }
-  if (input.organizationId && product.organizationId !== input.organizationId) {
+  if (product.organizationId !== store.organizationId ||
+      (input.organizationId && product.organizationId !== input.organizationId)) {
     throw new AppError("productOrgMismatch", "FORBIDDEN", 403);
   }
   await assignProductToStore(tx, {
@@ -131,7 +138,8 @@ export const applyStockMovement = async (
 
   const variantKey = resolveVariantKey(input.variantId);
 
-  const effectiveAllowNegativeStock = store.allowNegativeStock || input.allowNegativeStock === true;
+  const effectiveAllowNegativeStock = store.allowNegativeStock || input.allowNegativeStock === true ||
+    input.type === StockMovementType.SALE;
   const snapshotCreatedAt = new Date();
   await tx.$executeRaw`
     INSERT INTO "InventorySnapshot" ("id", "storeId", "productId", "variantId", "variantKey", "onHand", "onOrder", "allowNegativeStock", "updatedAt")
@@ -151,7 +159,7 @@ export const applyStockMovement = async (
   }
 
   const nextOnHand = snapshot.onHand + input.qtyDelta;
-  if (!effectiveAllowNegativeStock && nextOnHand < 0) {
+  if (!effectiveAllowNegativeStock && input.qtyDelta < 0 && nextOnHand < 0) {
     throw new AppError("insufficientStock", "CONFLICT", 409);
   }
 
@@ -159,16 +167,23 @@ export const applyStockMovement = async (
     where: { id: snapshot.id },
     data: {
       onHand: nextOnHand,
-      allowNegativeStock: effectiveAllowNegativeStock,
+      allowNegativeStock: effectiveAllowNegativeStock || nextOnHand < 0,
     },
   });
 
+  const lot = input.qtyDelta === 0 ? null : await applyStockLotAdjustment(tx, {
+    ...input, organizationId: store.organizationId,
+    // Unallocated lots may be negative (no FEFO allocation is implemented).
+    // Stock policy has already been enforced against the physical total above.
+    allowNegativeStock: true,
+  });
   const movement = await tx.stockMovement.create({
     data: {
       storeId: input.storeId,
       productId: input.productId,
       variantId: input.variantId ?? undefined,
       type: input.type,
+      stockLotId: lot?.id,
       qtyDelta: input.qtyDelta,
       linePosition: input.linePosition ?? undefined,
       unitCostKgs: input.unitCostKgs ?? undefined,
@@ -230,6 +245,7 @@ export const adjustStock = async (input: StockAdjustmentInput): Promise<StockAdj
         });
 
         const { snapshot, movementId } = await applyStockMovement(tx, {
+          expiryDate: input.expiryDate ?? null,
           storeId: input.storeId,
           productId: input.productId,
           variantId: input.variantId,
@@ -240,22 +256,6 @@ export const adjustStock = async (input: StockAdjustmentInput): Promise<StockAdj
           organizationId: input.organizationId,
           allowNegativeStock: true,
         });
-
-        const lot = await applyStockLotAdjustment(tx, {
-          storeId: input.storeId,
-          productId: input.productId,
-          variantId: input.variantId,
-          qtyDelta,
-          expiryDate: input.expiryDate ?? null,
-          organizationId: input.organizationId,
-          allowNegativeStock: true,
-        });
-        if (lot) {
-          await tx.stockMovement.update({
-            where: { id: movementId },
-            data: { stockLotId: lot.id },
-          });
-        }
 
         await writeAuditLog(tx, {
           organizationId: input.organizationId,
@@ -302,6 +302,50 @@ export const adjustStock = async (input: StockAdjustmentInput): Promise<StockAdj
     requestId: input.requestId,
   });
 
+  return result;
+};
+
+export const setStockOnHand = async (input: {
+  storeId: string;
+  productId: string;
+  variantId?: string | null;
+  targetOnHand: number;
+  expectedOnHand: number;
+  expectedVersion: number;
+  reason: string;
+  actorId: string;
+  organizationId: string;
+  requestId: string;
+  idempotencyKey: string;
+}) => {
+  const result = await prisma.$transaction(async (tx) => {
+    const { result } = await withIdempotency(tx, {
+      key: input.idempotencyKey, route: "inventory.setOnHand", userId: input.actorId,
+      request: toJson({ ...input, requestId: undefined, idempotencyKey: undefined }),
+    }, async () => {
+      const before = await lockStockSnapshot(tx, input);
+      if (before.version !== input.expectedVersion || before.onHand !== input.expectedOnHand) {
+        throw new AppError("inventoryStockConflict", "CONFLICT", 409);
+      }
+      const qtyDelta = input.targetOnHand - before.onHand;
+      if (!qtyDelta) return before;
+      const { snapshot } = await applyStockMovement(tx, {
+        ...input, qtyDelta, type: StockMovementType.ADJUSTMENT,
+        referenceType: "INLINE_STOCK", referenceId: input.idempotencyKey,
+        note: input.reason, allowNegativeStock: true,
+      });
+      await writeAuditLog(tx, {
+        organizationId: input.organizationId, actorId: input.actorId,
+        action: "INVENTORY_SET_ON_HAND", entity: "InventorySnapshot", entityId: snapshot.id,
+        before: toJson(before), after: toJson(snapshot), requestId: input.requestId,
+      });
+      return snapshot;
+    });
+    return result;
+  });
+  eventBus.publish({ type: "inventory.updated", payload: {
+    storeId: input.storeId, productId: input.productId, variantId: input.variantId ?? null,
+  } });
   return result;
 };
 
@@ -364,13 +408,17 @@ export const bulkSetOnHand = async (input: BulkSetOnHandInput): Promise<BulkSetO
       }
 
       let updatedCount = 0;
-      for (const snapshot of snapshots) {
+      for (const selected of snapshots) {
+        const snapshot = await lockStockSnapshot(tx, {
+          ...input, productId: selected.productId, variantId: selected.variantId,
+        });
         const qtyDelta = input.targetOnHand - snapshot.onHand;
         if (qtyDelta === 0) {
           continue;
         }
 
-        const { snapshot: updatedSnapshot, movementId } = await applyStockMovement(tx, {
+        const { snapshot: updatedSnapshot } = await applyStockMovement(tx, {
+          expiryDate: null,
           storeId: input.storeId,
           productId: snapshot.productId,
           variantId: snapshot.variantId,
@@ -381,22 +429,6 @@ export const bulkSetOnHand = async (input: BulkSetOnHandInput): Promise<BulkSetO
           organizationId: input.organizationId,
           allowNegativeStock: true,
         });
-
-        const lot = await applyStockLotAdjustment(tx, {
-          storeId: input.storeId,
-          productId: snapshot.productId,
-          variantId: snapshot.variantId,
-          qtyDelta,
-          expiryDate: null,
-          organizationId: input.organizationId,
-          allowNegativeStock: true,
-        });
-        if (lot) {
-          await tx.stockMovement.update({
-            where: { id: movementId },
-            data: { stockLotId: lot.id },
-          });
-        }
 
         await writeAuditLog(tx, {
           organizationId: input.organizationId,
@@ -521,6 +553,7 @@ export const receiveStock = async (input: ReceiveStockInput): Promise<StockAdjus
         });
 
         const { snapshot, movementId } = await applyStockMovement(tx, {
+          expiryDate: input.expiryDate ?? null,
           storeId: input.storeId,
           productId: input.productId,
           variantId: input.variantId,
@@ -536,21 +569,6 @@ export const receiveStock = async (input: ReceiveStockInput): Promise<StockAdjus
           organizationId: input.organizationId,
           allowNegativeStock: true,
         });
-
-        const lot = await applyStockLotAdjustment(tx, {
-          storeId: input.storeId,
-          productId: input.productId,
-          variantId: input.variantId,
-          qtyDelta: qtyReceived,
-          expiryDate: input.expiryDate ?? null,
-          organizationId: input.organizationId,
-        });
-        if (lot) {
-          await tx.stockMovement.update({
-            where: { id: movementId },
-            data: { stockLotId: lot.id },
-          });
-        }
 
         if (input.unitCost !== null && input.unitCost !== undefined) {
           await updateProductCost(tx, {
@@ -1354,6 +1372,7 @@ export const transferStock = async (input: TransferStockInput) => {
           });
 
           const outMovement = await applyStockMovement(tx, {
+            expiryDate: line.expiryDate ?? null,
             storeId: input.fromStoreId,
             productId: line.productId,
             variantId: line.variantId,
@@ -1371,6 +1390,7 @@ export const transferStock = async (input: TransferStockInput) => {
           });
 
           const inMovement = await applyStockMovement(tx, {
+            expiryDate: line.expiryDate ?? null,
             storeId: input.toStoreId,
             productId: line.productId,
             variantId: line.variantId,
@@ -1383,37 +1403,6 @@ export const transferStock = async (input: TransferStockInput) => {
             actorId: input.actorId,
             organizationId: input.organizationId,
           });
-
-          const outLot = await applyStockLotAdjustment(tx, {
-            storeId: input.fromStoreId,
-            productId: line.productId,
-            variantId: line.variantId,
-            qtyDelta: -Math.abs(qty),
-            expiryDate: line.expiryDate ?? null,
-            organizationId: input.organizationId,
-            allowNegativeStock: true,
-          });
-          if (outLot) {
-            await tx.stockMovement.update({
-              where: { id: outMovement.movementId },
-              data: { stockLotId: outLot.id },
-            });
-          }
-          const inLot = await applyStockLotAdjustment(tx, {
-            storeId: input.toStoreId,
-            productId: line.productId,
-            variantId: line.variantId,
-            qtyDelta: Math.abs(qty),
-            expiryDate: line.expiryDate ?? null,
-            organizationId: input.organizationId,
-          });
-          if (inLot) {
-            await tx.stockMovement.update({
-              where: { id: inMovement.movementId },
-              data: { stockLotId: inLot.id },
-            });
-          }
-
           await writeAuditLog(tx, {
             organizationId: input.organizationId,
             actorId: input.actorId,
@@ -1752,6 +1741,24 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
           FOR UPDATE
         `;
 
+        const archived = await tx.stockMovement.findFirst({
+          where: {
+            store: { organizationId: input.organizationId },
+            OR: [
+              { referenceType: STOCK_DOCUMENT_ARCHIVE_REFERENCE_TYPE,
+                referenceId: stockMovementDocumentArchiveKey(input) },
+              ...(input.documentType === "STOCK_RECEIVING" ? [{
+                referenceType: STOCK_RECEIVING_ARCHIVE_REFERENCE_TYPE,
+                referenceId: input.referenceId,
+              }] : []),
+            ],
+          },
+          select: { id: true },
+        });
+        if (archived) {
+          throw new AppError("productMovementDocumentAlreadyArchived", "CONFLICT", 409);
+        }
+
         const movements = await tx.stockMovement.findMany({
           where: {
             referenceType: input.referenceType,
@@ -1759,6 +1766,7 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
             store: { organizationId: input.organizationId },
           },
           orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          include: { stockLot: { select: { expiryDate: true } } },
         });
         if (!movements.length) {
           throw new AppError("productMovementDocumentNotFound", "NOT_FOUND", 404);
@@ -1916,6 +1924,12 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
           if (!movementLine) {
             continue;
           }
+          // A transfer line keeps its original expiry bucket when its quantity
+          // or stores are edited. Its editor does not change expiry dates.
+          const expiryDate = input.documentType === "TRANSFER"
+            ? movements.find((movement) => movement.productId === movementLine.productId &&
+                movement.variantId === movementLine.variantId && movement.stockLot)?.stockLot?.expiryDate
+            : undefined;
           const oldQuantity = beforeLine?.quantity ?? 0;
           const newQuantity = desiredLine?.quantity ?? 0;
           const oldLineTotal =
@@ -2103,6 +2117,7 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
                 storeId: oldSourceStoreId,
                 productId: movementLine.productId,
                 variantId: movementLine.variantId,
+                expiryDate,
                 qtyDelta: oldQuantity,
                 type: StockMovementType.TRANSFER_OUT,
                 referenceType: input.referenceType,
@@ -2119,6 +2134,7 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
                 storeId: oldDestinationStoreId,
                 productId: movementLine.productId,
                 variantId: movementLine.variantId,
+                expiryDate,
                 qtyDelta: -oldQuantity,
                 type: StockMovementType.TRANSFER_IN,
                 referenceType: input.referenceType,
@@ -2147,6 +2163,7 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
                 storeId: sourceStoreId,
                 productId: movementLine.productId,
                 variantId: movementLine.variantId,
+                expiryDate,
                 qtyDelta: -newQuantity,
                 type: StockMovementType.TRANSFER_OUT,
                 referenceType: input.referenceType,
@@ -2163,6 +2180,7 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
                 storeId: destinationStoreId,
                 productId: movementLine.productId,
                 variantId: movementLine.variantId,
+                expiryDate,
                 qtyDelta: newQuantity,
                 type: StockMovementType.TRANSFER_IN,
                 referenceType: input.referenceType,
@@ -2193,6 +2211,7 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
               storeId: sourceStoreId,
               productId: movementLine.productId,
               variantId: movementLine.variantId,
+                expiryDate,
               qtyDelta: outQtyDelta,
               type: StockMovementType.TRANSFER_OUT,
               referenceType: input.referenceType,
@@ -2219,6 +2238,7 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
                 storeId: destinationStoreId,
                 productId: movementLine.productId,
                 variantId: movementLine.variantId,
+                expiryDate,
                 qtyDelta: inQtyDelta,
                 type: StockMovementType.TRANSFER_IN,
                 referenceType: input.referenceType,
@@ -2241,6 +2261,7 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
                 storeId: oldDestinationStoreId,
                 productId: movementLine.productId,
                 variantId: movementLine.variantId,
+                expiryDate,
                 qtyDelta: -oldQuantity,
                 type: StockMovementType.TRANSFER_IN,
                 referenceType: input.referenceType,
@@ -2263,6 +2284,7 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
                 storeId: destinationStoreId,
                 productId: movementLine.productId,
                 variantId: movementLine.variantId,
+                expiryDate,
                 qtyDelta: newQuantity,
                 type: StockMovementType.TRANSFER_IN,
                 referenceType: input.referenceType,
@@ -2588,7 +2610,7 @@ export const recomputeInventorySnapshots = async (input: RecomputeInventoryInput
       where: {
         purchaseOrder: {
           storeId: input.storeId,
-          status: { in: [PurchaseOrderStatus.SUBMITTED, PurchaseOrderStatus.APPROVED] },
+          status: { in: [PurchaseOrderStatus.SUBMITTED, PurchaseOrderStatus.APPROVED, PurchaseOrderStatus.PARTIALLY_RECEIVED] },
         },
       },
       select: { productId: true, variantId: true, qtyOrdered: true, qtyReceived: true },
@@ -2628,6 +2650,11 @@ export const recomputeInventorySnapshots = async (input: RecomputeInventoryInput
       const onOrder = onOrderMap.get(snapshotKey) ?? 0;
 
       const before = snapshotMap.get(snapshotKey) ?? null;
+      // A ledger/aggregate disagreement requires evidence-backed reconciliation.
+      // Missing openings must never be interpreted as a zero opening balance.
+      if ((before?.onHand ?? 0) !== onHand) {
+        throw new AppError("inventoryReconciliationRequired", "CONFLICT", 409);
+      }
       const resolvedVariantId = before?.variantId ?? (variantKey === "BASE" ? null : variantKey);
       const allowNegativeStock = store.allowNegativeStock || onHand < 0;
       const updated = await tx.inventorySnapshot.upsert({
@@ -2669,8 +2696,9 @@ export const recomputeInventorySnapshots = async (input: RecomputeInventoryInput
     }
 
     return { updatedCount: updatedSnapshots.length };
-  });
+  }, { isolationLevel: "Serializable", timeout: 120_000 });
 
+  eventBus.publish({ type: "inventory.updated", payload: { storeId: input.storeId, productId: "*" } });
   logger.info(
     { storeId: input.storeId, updatedCount: result.updatedCount },
     "inventory snapshots recomputed",

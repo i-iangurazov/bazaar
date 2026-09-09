@@ -182,7 +182,9 @@ describe("index page source layout", () => {
     expect(detailSource).toContain("enableSimilarProductCheck={enableSimilarProductCheck}");
     expect(detailSource).toContain("minStock: selectedSettingsStore?.minStock");
     expect(detailSource).toContain("selectedSettingsStore?.minStock");
-    expect(detailSource).toContain("handleSaveStoreVariantOnHand");
+    expect(detailSource).toContain("<StockQuantityCell");
+    expect(detailSource).toContain("variantId={variant.variantId}");
+    expect(detailSource).toContain("version={variant.stockVersion}");
     expect(listSource).toContain("<ProductDuplicateDialog");
     expect(detailSource).toContain("<ProductDuplicateDialog");
     expect(duplicateDialogSource).toContain("copyInventory");

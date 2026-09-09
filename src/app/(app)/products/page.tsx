@@ -28,6 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useSse } from "@/lib/useSse";
 import { DataTable } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
@@ -925,7 +926,7 @@ const ProductsPage = () => {
   const inlineProductMutation = trpc.products.inlineUpdate.useMutation();
   const inlineCategoryMutation = trpc.products.bulkUpdateCategory.useMutation();
   const inlineStorePriceMutation = trpc.storePrices.upsert.useMutation();
-  const inlineInventoryAdjustMutation = trpc.inventory.adjust.useMutation();
+  const inlineInventoryAdjustMutation = trpc.inventory.setOnHand.useMutation();
   const bulkPriceOperationRef = useRef<{ signature: string; key: string } | null>(null);
 
   const bulkPriceMutation = trpc.storePrices.bulkUpdate.useMutation({
@@ -1344,21 +1345,16 @@ const ProductsPage = () => {
         return;
       }
 
-      if (operation.route === "inventory.adjust") {
-        applyProductListPatch(operation.input.productId, (item) => ({
-          ...item,
-          onHandQty: item.onHandQty + operation.input.qtyDelta,
-        }));
+      if (operation.route === "inventory.setOnHand") {
         try {
           await inlineInventoryAdjustMutation.mutateAsync(operation.input);
-        } catch (error) {
-          rollback();
-          throw error;
+        } finally {
+          await Promise.all([
+            trpcUtils.products.bootstrap.invalidate(),
+            trpcUtils.products.list.invalidate(),
+            trpcUtils.inventory.list.invalidate(),
+          ]);
         }
-        await Promise.all([
-          trpcUtils.products.bootstrap.invalidate(productsBootstrapInput),
-          trpcUtils.inventory.list.invalidate(),
-        ]);
         return;
       }
 
@@ -1374,9 +1370,14 @@ const ProductsPage = () => {
       productsBootstrapInput,
       showEffectivePrice,
       trpcUtils.products.bootstrap,
+      trpcUtils.products.list,
       trpcUtils.inventory.list,
     ],
   );
+
+  useSse({
+    "inventory.updated": () => { void trpcUtils.products.bootstrap.invalidate(); },
+  });
 
   const bulkSchema = useMemo(
     () =>

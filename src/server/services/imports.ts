@@ -6,6 +6,7 @@ import {
   StockMovementType,
 } from "@prisma/client";
 
+import { eventBus } from "@/server/events/eventBus";
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
 import { writeAuditLog } from "@/server/services/audit";
@@ -270,6 +271,7 @@ export const runProductImport = async (input: RunProductImportInput) => {
   };
 
   if (!operation.replayed) {
+    if (input.storeId) eventBus.publish({ type: "inventory.updated", payload: { storeId: input.storeId, productId: "*" } });
     await recordFirstEvent({
       organizationId: input.organizationId,
       actorId: input.actorId,
@@ -357,8 +359,8 @@ const lockInventorySnapshot = async (
     ON CONFLICT ("storeId", "productId", "variantKey") DO NOTHING;
   `;
 
-  const rows = await tx.$queryRaw<{ id: string; onOrder: number }[]>`
-    SELECT "id", "onOrder" FROM "InventorySnapshot"
+  const rows = await tx.$queryRaw<{ id: string; onOrder: number; onHand: number }[]>`
+    SELECT "id", "onOrder", "onHand" FROM "InventorySnapshot"
     WHERE "storeId" = ${input.storeId} AND "productId" = ${input.productId} AND "variantKey" = ${variantKey}
     FOR UPDATE
   `;
@@ -391,7 +393,7 @@ const adjustOnOrder = async (
     where: { id: snapshot.id },
     data: {
       onOrder: nextOnOrder,
-      allowNegativeStock: input.allowNegativeStock,
+      allowNegativeStock: input.allowNegativeStock || snapshot.onHand < 0,
     },
   });
 };
@@ -403,7 +405,7 @@ export const rollbackImportBatch = async (input: {
   batchId: string;
 }) => {
   await assertFeatureEnabled({ organizationId: input.organizationId, feature: "imports" });
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`
       SELECT "id"
       FROM "ImportBatch"
@@ -434,6 +436,7 @@ export const rollbackImportBatch = async (input: {
 
     const purchaseOrderIds = byType.get("PurchaseOrder") ?? [];
     if (purchaseOrderIds.length) {
+      await tx.$queryRaw`SELECT "id" FROM "PurchaseOrder" WHERE "id" IN (${Prisma.join(purchaseOrderIds)}) ORDER BY "id" FOR UPDATE`;
       const purchaseOrders = await tx.purchaseOrder.findMany({
         where: { id: { in: purchaseOrderIds }, organizationId: input.organizationId },
         include: { lines: true, store: true },
@@ -485,7 +488,8 @@ export const rollbackImportBatch = async (input: {
             ) {
               throw new AppError("productCostContributionMismatch", "CONFLICT", 409);
             }
-            const adjustment = await applyStockMovement(tx, {
+            await applyStockMovement(tx, {
+              stockLotId: movement.stockLotId,
               storeId: movement.storeId,
               productId: movement.productId,
               variantId: movement.variantId ?? undefined,
@@ -500,24 +504,6 @@ export const rollbackImportBatch = async (input: {
               actorId: input.actorId,
               organizationId: input.organizationId,
             });
-
-            if (movement.stockLotId) {
-              const lot = await tx.stockLot.findUnique({ where: { id: movement.stockLotId } });
-              if (lot) {
-                const nextQty = lot.onHandQty - movement.qtyDelta;
-                if (!po.store.allowNegativeStock && nextQty < 0) {
-                  throw new AppError("insufficientStock", "CONFLICT", 409);
-                }
-                await tx.stockLot.update({
-                  where: { id: lot.id },
-                  data: { onHandQty: nextQty },
-                });
-                await tx.stockMovement.update({
-                  where: { id: adjustment.movementId },
-                  data: { stockLotId: lot.id },
-                });
-              }
-            }
 
             adjustments += 1;
             if (unitCostKgs !== null && receivedLineTotalKgs !== null) {
@@ -598,6 +584,24 @@ export const rollbackImportBatch = async (input: {
 
         cancelledPurchaseOrders += 1;
       }
+    }
+
+    // Product imports also write stock without a PurchaseOrder. Undo their
+    // recorded deltas before archiving imported catalog entries, preserving all
+    // subsequent sales/receipts. The batch lock makes this reversal once-only.
+    const importedStock = await tx.stockMovement.findMany({ where: {
+      referenceType: "IMPORT", referenceId: batch.id,
+      store: { organizationId: input.organizationId },
+    }, orderBy: [{ storeId: "asc" }, { productId: "asc" }, { id: "asc" }] });
+    for (const movement of importedStock) {
+      await applyStockMovement(tx, {
+        storeId: movement.storeId, productId: movement.productId, variantId: movement.variantId,
+        stockLotId: movement.stockLotId, qtyDelta: -movement.qtyDelta,
+        type: StockMovementType.ADJUSTMENT, referenceType: "IMPORT_ROLLBACK",
+        referenceId: batch.id, note: "importRollback", actorId: input.actorId,
+        organizationId: input.organizationId, allowNegativeStock: true,
+      });
+      adjustments += 1;
     }
 
     const productIds = byType.get("Product") ?? [];
@@ -711,4 +715,7 @@ export const rollbackImportBatch = async (input: {
 
     return { batchId: batch.id, reportId: report.id, summary };
   });
+  const stores = await prisma.store.findMany({ where: { organizationId: input.organizationId }, select: { id: true } });
+  for (const store of stores) eventBus.publish({ type: "inventory.updated", payload: { storeId: store.id, productId: "*" } });
+  return result;
 };

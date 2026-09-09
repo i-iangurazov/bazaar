@@ -26,7 +26,7 @@ export const shouldBeginInlineEdit = ({
     return false;
   }
   if (trigger === "doubleClick") {
-    return !isTouch;
+    return true;
   }
   return isTouch;
 };

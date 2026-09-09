@@ -172,7 +172,10 @@ describeDb("Bazaar API order OperationRequest consumer", () => {
     });
     expect(operation.requestFingerprint).toMatch(/^[a-f0-9]{64}$/);
     expect(operation.expiresAt?.getTime()).toBeGreaterThan(Date.now() + 89 * 24 * 60 * 60 * 1000);
-    expect(sideEffects.publish).toHaveBeenCalledTimes(1);
+    expect(sideEffects.publish).toHaveBeenCalledTimes(2);
+    expect(sideEffects.publish.mock.calls.map(([event]) => event.type).sort()).toEqual([
+      "customerOrder.created", "inventory.updated",
+    ]);
     expect(sideEffects.publish).toHaveBeenCalledWith({
       type: "customerOrder.created",
       payload: {
@@ -240,7 +243,10 @@ describeDb("Bazaar API order OperationRequest consumer", () => {
     await expect(missingKeyResponse.json()).resolves.toEqual({
       message: "idempotencyKeyRequired",
     });
-    expect(sideEffects.publish).toHaveBeenCalledTimes(1);
+    expect(sideEffects.publish).toHaveBeenCalledTimes(2);
+    expect(sideEffects.publish.mock.calls.map(([event]) => event.type).sort()).toEqual([
+      "customerOrder.created", "inventory.updated",
+    ]);
     expect(sideEffects.sendOrderConfirmationEmail).toHaveBeenCalledTimes(1);
   });
 
@@ -280,7 +286,10 @@ describeDb("Bazaar API order OperationRequest consumer", () => {
         },
       }),
     ).resolves.toBe(1);
-    expect(sideEffects.publish).toHaveBeenCalledTimes(1);
+    expect(sideEffects.publish).toHaveBeenCalledTimes(2);
+    expect(sideEffects.publish.mock.calls.map(([event]) => event.type).sort()).toEqual([
+      "customerOrder.created", "inventory.updated",
+    ]);
     expect(sideEffects.sendOrderConfirmationEmail).toHaveBeenCalledTimes(1);
   });
 });

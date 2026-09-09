@@ -1734,6 +1734,7 @@ model InventorySnapshot {
   variantId          String?
   variantKey         String   @default("BASE")
   onHand             Int
+  version            Int      @default(0)
   onOrder            Int      @default(0)
   allowNegativeStock Boolean  @default(false)
   updatedAt          DateTime @updatedAt

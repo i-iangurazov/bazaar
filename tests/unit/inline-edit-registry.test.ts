@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { inlineEditRegistry } from "@/lib/inlineEdit/registry";
 
 describe("inline edit registry", () => {
-  it("maps products.onHand absolute value to inventory.adjust delta", () => {
+  it("sends an absolute stock target with the displayed baseline", () => {
     const row = {
       id: "product-1",
       name: "Product 1",
@@ -24,15 +24,17 @@ describe("inline edit registry", () => {
 
     const operation = inlineEditRegistry.products.onHand.mutation(row, 18, context);
     expect(operation).toMatchObject({
-      route: "inventory.adjust",
+      route: "inventory.setOnHand",
       input: {
         storeId: "store-1",
         productId: "product-1",
-        qtyDelta: 6,
+        targetOnHand: 18,
+        expectedOnHand: 12,
+        expectedVersion: 0,
         reason: "inlineStockEdit",
       },
     });
-    if (operation.route === "inventory.adjust") {
+    if (operation.route === "inventory.setOnHand") {
       expect(operation.input.idempotencyKey.length).toBeGreaterThanOrEqual(8);
     }
   });

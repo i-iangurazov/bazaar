@@ -153,6 +153,7 @@ export const addOrUpdateLineByScan = async (input: {
       classifyFailure: (error) => classifyDatabaseOperationFailure(error, "stockCountScanFailed"),
     },
     async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "StockCount" WHERE "id" = ${input.stockCountId} FOR UPDATE`;
       const count = await tx.stockCount.findUnique({ where: { id: input.stockCountId } });
       if (!count || count.organizationId !== input.organizationId) {
         throw new AppError("stockCountNotFound", "NOT_FOUND", 404);
@@ -261,6 +262,8 @@ export const setLineCountedQty = async (input: {
   requestId: string;
 }) => {
   return prisma.$transaction(async (tx) => {
+    const identity = await tx.stockCountLine.findUnique({ where: { id: input.lineId }, select: { stockCountId: true } });
+    if (identity) await tx.$queryRaw`SELECT "id" FROM "StockCount" WHERE "id" = ${identity.stockCountId} FOR UPDATE`;
     const line = await tx.stockCountLine.findUnique({
       where: { id: input.lineId },
       include: { stockCount: true },
@@ -292,6 +295,8 @@ export const removeLine = async (input: {
   requestId: string;
 }) => {
   return prisma.$transaction(async (tx) => {
+    const identity = await tx.stockCountLine.findUnique({ where: { id: input.lineId }, select: { stockCountId: true } });
+    if (identity) await tx.$queryRaw`SELECT "id" FROM "StockCount" WHERE "id" = ${identity.stockCountId} FOR UPDATE`;
     const line = await tx.stockCountLine.findUnique({
       where: { id: input.lineId },
       include: { stockCount: true },
@@ -323,6 +328,7 @@ export const applyStockCount = async (input: {
       tx,
       { key: input.idempotencyKey, route: "stockCounts.apply", userId: input.actorId },
       async () => {
+        await tx.$queryRaw`SELECT "id" FROM "StockCount" WHERE "id" = ${input.stockCountId} FOR UPDATE`;
         const count = await tx.stockCount.findUnique({
           where: { id: input.stockCountId },
           include: { lines: true },
@@ -349,13 +355,9 @@ export const applyStockCount = async (input: {
               },
             },
           });
-          const expectedOnHand = snapshot?.onHand ?? 0;
-          const deltaQty = line.countedQty - expectedOnHand;
-
-          await tx.stockCountLine.update({
-            where: { id: line.id },
-            data: { expectedOnHand, deltaQty },
-          });
+          // Apply the discrepancy observed when this line was counted. Later sales
+          // and receipts must survive; never reset the current stock to an old count.
+          const deltaQty = line.countedQty - line.expectedOnHand;
 
           if (deltaQty === 0) {
             continue;
@@ -368,6 +370,7 @@ export const applyStockCount = async (input: {
             variantId: line.variantId ?? undefined,
             qtyDelta: deltaQty,
             type: StockMovementType.ADJUSTMENT,
+            allowNegativeStock: true,
             referenceType: "STOCK_COUNT",
             referenceId: count.id,
             note: `stockCount:${count.code}`,
@@ -402,6 +405,7 @@ export const applyStockCount = async (input: {
       },
     );
 
+    await tx.$queryRaw`SELECT "id" FROM "StockCount" WHERE "id" = ${input.stockCountId} FOR UPDATE`;
     const count = await tx.stockCount.findUnique({ where: { id: input.stockCountId } });
     const touched: Array<{ productId: string; variantId: string | null }> =
       await tx.stockCountLine.findMany({
@@ -435,6 +439,7 @@ export const cancelStockCount = async (input: {
   requestId: string;
 }) => {
   return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT "id" FROM "StockCount" WHERE "id" = ${input.stockCountId} FOR UPDATE`;
     const count = await tx.stockCount.findUnique({ where: { id: input.stockCountId } });
     if (!count || count.organizationId !== input.organizationId) {
       throw new AppError("stockCountNotFound", "NOT_FOUND", 404);
