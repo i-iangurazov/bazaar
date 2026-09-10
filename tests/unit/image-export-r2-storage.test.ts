@@ -151,6 +151,7 @@ describe("R2 image export artifacts", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllEnvs();
   });
 
@@ -181,6 +182,10 @@ describe("R2 image export artifacts", () => {
   });
 
   it("restores a failed GET with only the original remaining lease", async () => {
+    // Redis PTTL and the claim timestamp share a deterministic clock. Real time
+    // can tick between them, legitimately shortening the lease by a millisecond.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-09-10T00:00:00Z"));
     const token = randomUUID();
     const owner = { userId: "r2-user", organizationId: "r2-org" };
     const payload = new TextEncoder().encode("retryable-r2-zip");
@@ -189,6 +194,7 @@ describe("R2 image export artifacts", () => {
     const originalExpiry = mocks.expirations.get(member)!;
     const originalMetadataExpiry = mocks.metadataExpirations.get(`image-export:${token}`)!;
 
+    vi.setSystemTime(Date.now() + 30_000);
     mocks.failures.get = 1;
     await expect(consumeZip(token, owner)).rejects.toThrow("getFailure");
 
@@ -197,6 +203,7 @@ describe("R2 image export artifacts", () => {
     expect(mocks.metadataExpirations.get(`image-export:${token}`)).toBeLessThanOrEqual(
       originalMetadataExpiry,
     );
+    expect(mocks.metadataExpirations.get(`image-export:${token}`)! - Date.now()).toBe(30_000);
     const consumed = await consumeZip(token, owner);
     expect(new Uint8Array(await new Response(consumed?.data).arrayBuffer())).toEqual(payload);
     expect(await consumeZip(token, owner)).toBeUndefined();
