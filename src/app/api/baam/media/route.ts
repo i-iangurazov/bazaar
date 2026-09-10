@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { createContext } from "@/server/trpc/trpc";
 import { ownBaamConversation } from "@/server/services/baamConversations";
 import { transcribeBaamAudio } from "@/server/services/baamAudio";
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
     if (origin && origin !== new URL(request.url).origin)
       throw new AppError("forbidden", "FORBIDDEN", 403);
     if (Number(request.headers.get("content-length")) > 3.3 * 1024 * 1024)
-      return Response.json({ message: "baamAudioTooLarge" }, { status: 413 });
+      return Response.json({ message: "baamMediaTooLarge" }, { status: 413 });
     const ctx = await createContext({ req: request, resHeaders: new Headers() });
     if (!ctx.user) throw new AppError("unauthorized", "UNAUTHORIZED", 401);
     await limiter.consume(ctx.user.id);
@@ -53,7 +54,7 @@ export async function POST(request: Request) {
       total += chunk.value.byteLength;
       if (total > 3.3 * 1024 * 1024) {
         await reader.cancel();
-        throw new AppError("baamAudioTooLarge", "BAD_REQUEST", 413);
+        throw new AppError("baamMediaTooLarge", "BAD_REQUEST", 413);
       }
       chunks.push(chunk.value);
     }
@@ -71,8 +72,18 @@ export async function POST(request: Request) {
     )
       throw new AppError("invalidInput", "BAD_REQUEST", 400);
     const access = await ownBaamConversation(ctx, conversationId);
-    if (!file.size) throw new AppError("baamAudioEmpty", "BAD_REQUEST", 400);
-    if (file.size > 3 * 1024 * 1024) throw new AppError("baamAudioTooLarge", "BAD_REQUEST", 400);
+    if (!file.size)
+      throw new AppError(
+        kind === "image" ? "imageInvalidType" : "baamAudioEmpty",
+        "BAD_REQUEST",
+        400,
+      );
+    if (file.size > 3 * 1024 * 1024)
+      throw new AppError(
+        kind === "image" ? "imageTooLarge" : "baamAudioTooLarge",
+        "BAD_REQUEST",
+        413,
+      );
     const buffer = Buffer.from(await file.arrayBuffer());
     if (kind === "audio") {
       const result = await transcribeBaamAudio(
@@ -96,6 +107,11 @@ export async function POST(request: Request) {
       )
     )
       throw new AppError("imageInvalidType", "BAD_REQUEST", 400);
+    const contentHash = createHash("sha256").update(buffer).digest("hex");
+    const existing = await prisma.baamAttachment.findUnique({
+      where: { conversationId_contentHash: { conversationId, contentHash } },
+    });
+    if (existing) return Response.json(existing);
     const uploaded = await uploadProductImageBuffer({
       organizationId: access.scope.organizationId,
       buffer,
@@ -103,8 +119,11 @@ export async function POST(request: Request) {
       sourceFileName: file.name,
     });
     await ownBaamConversation(ctx, conversationId);
-    const attachment = await prisma.baamAttachment.create({
-      data: {
+    const attachment = await prisma.baamAttachment.upsert({
+      where: { conversationId_contentHash: { conversationId, contentHash } },
+      update: {},
+      create: {
+        contentHash,
         conversationId,
         url: uploaded.url,
         name: file.name.slice(0, 180),
@@ -116,9 +135,19 @@ export async function POST(request: Request) {
     const message =
       error instanceof AppError
         ? error.message
-        : error instanceof Error && error.message === "rateLimited"
-          ? "rateLimited"
+        : error instanceof Error &&
+            [
+              "rateLimited",
+              "imageInvalidType",
+              "imageTooLarge",
+              "imageStorageNotConfigured",
+            ].includes(error.message)
+          ? error.message
           : "baamMediaFailed";
+    console.warn("baam.media.failed", {
+      code: message,
+      status: error instanceof AppError ? error.status : 400,
+    });
     return Response.json(
       { message },
       { status: error instanceof AppError ? error.status : message === "rateLimited" ? 429 : 400 },

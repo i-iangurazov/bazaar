@@ -1,4 +1,6 @@
 "use client";
+import { BaamWorkflowCard } from "./baam-workflow-card";
+import type { WorkflowAction } from "@/lib/baam/workflows";
 import Link from "next/link";
 import { ArrowDown, ArrowUpRight, Check, ImageSquare, Microphone } from "@phosphor-icons/react";
 import { BaamIcon } from "./baam-icon";
@@ -100,11 +102,13 @@ function ActionCard({ actionId, c }: { actionId: string; c: BaamController }) {
 }
 export function BaamMessageList({ c }: { c: BaamController }) {
   const lastActionMessage = new Map<string, string>();
+  const lastWorkflowMessage = new Map<string, string>();
   for (const message of c.messages)
     for (const part of Array.isArray(message.parts)
       ? (message.parts as unknown as BaamPart[])
       : []) {
       if (part.type === "action") lastActionMessage.set(part.actionId, message.id);
+      if (part.type === "workflow") lastWorkflowMessage.set(part.workflowId, message.id);
     }
   const suggestions =
     c.pathname.startsWith("/inventory") || c.pathname.startsWith("/products")
@@ -148,7 +152,25 @@ export function BaamMessageList({ c }: { c: BaamController }) {
                   type="button"
                   key={key}
                   disabled={!c.available || c.busy}
-                  onClick={() => void c.ask(c.t(key as BaamCopyKey))}
+                  onClick={() =>
+                    void c.ask(
+                      c.t(key as BaamCopyKey),
+                      undefined,
+                      key === "help"
+                        ? { kind: "help" }
+                        : key === "sales"
+                          ? { kind: "report", period: "week" }
+                          : {
+                              kind: "action",
+                              action:
+                                key === "createProduct"
+                                  ? "product_create"
+                                  : key === "receive"
+                                    ? "stock_receive"
+                                    : "pos_create_draft",
+                            },
+                    )
+                  }
                   className="flex min-h-12 items-center justify-between gap-3 rounded-xl border border-border px-4 py-3 text-left text-sm transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline focus-visible:outline-2 disabled:opacity-50"
                 >
                   {c.t(key as BaamCopyKey)}
@@ -187,9 +209,63 @@ export function BaamMessageList({ c }: { c: BaamController }) {
                   </p>
                 </div>
               )}
+              {message.role === "error" &&
+              [
+                "baamProviderUnavailable",
+                "baamProviderInvalidResponse",
+                "baamInterrupted",
+              ].includes(message.text) &&
+              message.id === c.messages.at(-1)?.id ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={c.busy}
+                  onClick={() => {
+                    const previous = c.messages.find(
+                      (m) => m.role === "user" && m.turnId === message.turnId,
+                    );
+                    if (previous) void c.ask(previous.text);
+                  }}
+                >
+                  {c.t("retry")}
+                </Button>
+              ) : null}
               <div className="mt-3 space-y-3">
                 {(Array.isArray(message.parts) ? (message.parts as unknown as BaamPart[]) : []).map(
                   (part, index) => {
+                    if (
+                      part.type === "workflow" &&
+                      lastWorkflowMessage.get(part.workflowId) === message.id
+                    )
+                      return (
+                        <BaamWorkflowCard
+                          key={part.workflowId}
+                          workflowId={part.workflowId}
+                          c={c}
+                        />
+                      );
+                    if (part.type === "commands")
+                      return (
+                        <div key={index} className="flex flex-wrap gap-2">
+                          {part.commands.map((command) => (
+                            <Button
+                              key={command.action}
+                              size="sm"
+                              variant="outline"
+                              disabled={c.busy}
+                              onClick={() =>
+                                void c.ask(command.label, undefined, {
+                                  kind: "action",
+                                  action: command.action as WorkflowAction,
+                                })
+                              }
+                            >
+                              {command.label}
+                            </Button>
+                          ))}
+                        </div>
+                      );
                     if (
                       part.type === "action" &&
                       lastActionMessage.get(part.actionId) === message.id

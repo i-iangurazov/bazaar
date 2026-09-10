@@ -1,5 +1,7 @@
 # BAAM companion: capability and verification matrix
 
+This is the original companion release record. The current header launcher supersedes its floating-launcher description. For the current deterministic workflows, latency measurements and photo fixes, see [BAAM fast workflows](baam-fast-workflows.md).
+
 Baseline: `4556bee5bf870a9f7ca29412005595bf006f0060` (main). Release evidence is recorded against the final SHA by CI and `scripts/baam/production-smoke.ts`; a local result is not a production claim.
 
 ## Confirmed causes and implementation

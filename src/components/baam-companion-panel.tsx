@@ -1,6 +1,20 @@
 "use client";
 import { useState } from "react";
-import { ClockCounterClockwise, PencilSimple, Plus, Trash } from "@phosphor-icons/react";
+import {
+  ClockCounterClockwise,
+  PencilSimple,
+  Plus,
+  Trash,
+  ListBullets,
+} from "@phosphor-icons/react";
+import { baamText } from "@/lib/baam/companion";
+import { workflowTitle, type WorkflowAction } from "@/lib/baam/workflows";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "./ui/dropdown-menu";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
@@ -89,12 +103,15 @@ export function BaamCompanionPanel({
       data-baam-chat
       className={cn(
         "relative flex min-h-0 flex-col bg-card text-card-foreground",
-        compact ? "h-full" : "h-[min(50rem,78dvh)] min-h-[30rem]",
+        compact
+          ? "h-full"
+          : "h-[calc(100dvh-16rem)] min-h-[24rem] sm:h-[min(50rem,78dvh)] sm:min-h-[30rem]",
       )}
     >
       <div className="flex shrink-0 items-center gap-2 border-b border-border/70 px-4 py-2.5">
         <Button
           size="sm"
+          className="shrink-0 whitespace-nowrap px-2"
           variant={c.showHistory ? "secondary" : "ghost"}
           onClick={() => {
             c.voice.stop(true);
@@ -105,9 +122,47 @@ export function BaamCompanionPanel({
           <span className="ml-1.5">{c.t(c.showHistory ? "back" : "history")}</span>
         </Button>
         <div className="min-w-0 flex-1" />
-        <Button size="sm" variant="ghost" onClick={c.newConversation}>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-9 w-9 shrink-0"
+              disabled={c.busy || !c.available}
+              aria-label={baamText(c.locale, "Действия BAAM", "BAAM actions", "BAAM иш-аракеттери")}
+            >
+              <ListBullets size={18} />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="end"
+            className="max-h-[min(28rem,65dvh)] w-72 overflow-y-auto"
+          >
+            {c.capabilities.data?.workflows?.map((action) => (
+              <DropdownMenuItem
+                key={action}
+                onSelect={() =>
+                  void c.ask(workflowTitle(action, c.locale), undefined, {
+                    kind: "action",
+                    action: action as WorkflowAction,
+                  })
+                }
+              >
+                {workflowTitle(action, c.locale)}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <Button
+          size="sm"
+          variant="ghost"
+          className="shrink-0 whitespace-nowrap px-2"
+          onClick={c.newConversation}
+          aria-label={c.t("new")}
+        >
           <Plus size={17} />
-          <span className="ml-1.5">{c.t("new")}</span>
+          <span className="ml-1.5 hidden sm:inline">{c.t("new")}</span>
         </Button>
       </div>
       {c.showHistory ? (

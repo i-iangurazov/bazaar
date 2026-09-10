@@ -1,4 +1,5 @@
 "use client";
+import Image from "next/image";
 import { useRef } from "react";
 import { ImageSquare, Microphone, PaperPlaneTilt, Stop, X } from "@phosphor-icons/react";
 import { Spinner } from "./ui/spinner";
@@ -8,6 +9,11 @@ const iconButton =
   "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-muted-foreground hover:bg-secondary focus-visible:outline focus-visible:outline-2 disabled:opacity-40";
 export function BaamComposer({ c }: { c: BaamController }) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const editingForm = c.workflows?.some(
+    (w) =>
+      w.id === c.data?.conversation.activeWorkflowId &&
+      ["EDITING", "FAILED", "RECEIPT"].includes(w.status),
+  );
   return (
     <div className="shrink-0 border-t border-border/70 bg-card p-3 sm:p-4">
       {c.notice ? (
@@ -52,6 +58,15 @@ export function BaamComposer({ c }: { c: BaamController }) {
           {c.t("retry")}
         </button>
       ) : null}
+      {c.imageRetry && !c.mediaPending ? (
+        <button
+          type="button"
+          className="mb-2 min-h-9 text-sm text-primary underline"
+          onClick={() => void c.upload(c.imageRetry!, "image", c.imageRetry!.name)}
+        >
+          {c.t("retry")} · {c.imageRetry.name}
+        </button>
+      ) : null}
       {c.attachments.length ? (
         <div className="mb-2 flex flex-wrap gap-2">
           {c.attachments.map((a) => (
@@ -59,7 +74,14 @@ export function BaamComposer({ c }: { c: BaamController }) {
               key={a.id}
               className="flex max-w-full items-center gap-2 rounded-lg border px-2 text-xs"
             >
-              <ImageSquare size={16} />
+              <Image
+                unoptimized
+                width={40}
+                height={40}
+                src={a.url}
+                alt=""
+                className="h-10 w-10 rounded object-cover"
+              />
               <span className="max-w-48 truncate">{a.name}</span>
               <button
                 type="button"
@@ -116,7 +138,7 @@ export function BaamComposer({ c }: { c: BaamController }) {
             aria-label={c.t("placeholder")}
             placeholder={c.t("placeholder")}
             value={c.question}
-            rows={2}
+            rows={editingForm ? 1 : 2}
             maxLength={6000}
             onChange={(e) => c.setQuestion(e.target.value)}
             onKeyDown={(e) => {
@@ -125,7 +147,7 @@ export function BaamComposer({ c }: { c: BaamController }) {
                 void c.ask();
               }
             }}
-            className="block max-h-36 min-h-14 w-full resize-none border-0 bg-transparent px-2 py-1 text-base leading-6 shadow-none outline-none focus:ring-0 sm:text-sm"
+            className={`block max-h-36 ${editingForm ? "min-h-8" : "min-h-14"} w-full resize-none border-0 bg-transparent px-2 py-1 text-base leading-6 shadow-none outline-none focus:ring-0 sm:text-sm`}
           />
           <div className="flex items-center gap-1">
             <input
@@ -151,7 +173,9 @@ export function BaamComposer({ c }: { c: BaamController }) {
             <button
               type="button"
               aria-label={c.t("microphone")}
-              disabled={!c.available || c.busy || c.mediaPending}
+              disabled={
+                !c.available || !c.capabilities.data?.voiceConfigured || c.busy || c.mediaPending
+              }
               className={iconButton}
               onClick={() => void c.voice.start()}
             >
@@ -161,7 +185,8 @@ export function BaamComposer({ c }: { c: BaamController }) {
               {c.mediaPending ? (
                 <span className="flex items-center gap-2">
                   <Spinner />
-                  {c.t(c.mediaKind === "image" ? "loading" : "transcribing")}
+                  {c.t(c.mediaKind === "image" ? "loading" : "transcribing")}{" "}
+                  {c.mediaKind === "image" ? `${c.uploadProgress}%` : ""}
                 </span>
               ) : null}
             </span>

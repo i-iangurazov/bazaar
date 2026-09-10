@@ -21,11 +21,23 @@ export const baamSendSchema = z
     page: baamPageSchema.optional(),
     attachmentIds: z.array(z.string()).max(4).default([]),
     transcriptionId: z.string().optional(),
+    command: z
+      .object({
+        kind: z.enum(["action", "report", "help", "search"]),
+        action: z.string().max(80).optional(),
+        sourceWorkflowId: z.string().max(100).optional(),
+        query: z.string().max(160).optional(),
+        period: z.enum(["today", "yesterday", "week", "month"]).optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 export type BaamSend = z.infer<typeof baamSendSchema>;
 export type BaamChoice = { label: string; value: string };
 export type BaamPart =
+  | { type: "workflow"; workflowId: string }
+  | { type: "commands"; commands: Array<{ label: string; action: string }> }
   | { type: "choices"; choices: BaamChoice[] }
   | { type: "link"; label: string; href: string }
   | { type: "attachment"; id: string; name: string; url: string }

@@ -144,6 +144,17 @@ export async function readBaamConversation(ctx: Context, id: string, before?: nu
       ...action,
       canRecover: action.status === "RUNNING" && action.updatedAt.getTime() < Date.now() - 90_000,
     })),
+    workflows: await prisma.baamWorkflow.findMany({
+      where: {
+        conversationId: id,
+        OR: [
+          { turnId: { in: messages.flatMap((m) => (m.turnId ? [m.turnId] : [])) } },
+          { id: conversation.activeWorkflowId ?? "" },
+        ],
+      },
+      orderBy: { createdAt: "desc" },
+      take: 60,
+    }),
     activeTurn,
     next: messages.length > 40 ? messages[39].sequence : null,
   };
@@ -166,11 +177,23 @@ export async function changeBaamConversation(
     const current = await tx.baamConversation.findUniqueOrThrow({ where: { id: input.id } });
     if (current.revision !== input.revision)
       throw new AppError("baamScopeChanged", "CONFLICT", 409);
-    if (await tx.baamAction.count({ where: { conversationId: input.id, status: "RUNNING" } })) {
+    if (
+      (await tx.baamAction.count({ where: { conversationId: input.id, status: "RUNNING" } })) ||
+      (await tx.baamWorkflow.count({
+        where: {
+          conversationId: input.id,
+          OR: [{ status: "RUNNING" }, { pendingRequestId: { not: null } }],
+        },
+      }))
+    ) {
       throw new AppError("baamActionRunning", "CONFLICT", 409);
     }
     const scopeChanged = input.storeId !== undefined && input.storeId !== current.storeId;
     if (scopeChanged || input.remove) {
+      await tx.baamWorkflow.updateMany({
+        where: { conversationId: input.id, status: { in: ["EDITING", "FAILED", "RECEIPT"] } },
+        data: { status: "SUPERSEDED" },
+      });
       await tx.baamTurn.updateMany({
         where: { conversationId: input.id, status: "RUNNING" },
         data: { cancelRequested: true },
@@ -271,6 +294,12 @@ export async function claimBaamTurn(ctx: Context, input: BaamSend) {
       throw new AppError("baamScopeChanged", "CONFLICT", 409);
     if (
       conversation.activeTurnId ||
+      (await tx.baamWorkflow.count({
+        where: {
+          conversationId: conversation.id,
+          OR: [{ status: "RUNNING" }, { pendingRequestId: { not: null } }],
+        },
+      })) ||
       (await tx.baamAction.count({ where: { conversationId: conversation.id, status: "RUNNING" } }))
     ) {
       throw new AppError("baamBusy", "CONFLICT", 409);

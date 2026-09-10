@@ -32,7 +32,14 @@ vi.mock("@/lib/trpc", () => ({
     useUtils: () => ({
       invalidate: mocks.invalidate,
       baam: {
-        conversation: { fetch: mocks.fetch, invalidate: mocks.invalidate },
+        conversation: {
+          fetch: mocks.fetch,
+          invalidate: mocks.invalidate,
+          getData: () => undefined,
+          setData: (_input: unknown, data: BaamData) => {
+            saved = data;
+          },
+        },
         conversations: { invalidate: mocks.invalidate },
       },
     }),
@@ -70,12 +77,14 @@ const blank = (): BaamData => ({
     revision: 0,
     nextSequence: 0,
     activeTurnId: null,
+    activeWorkflowId: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     deletedAt: null,
   },
   messages: [],
   actions: [],
+  workflows: [],
   activeTurn: null,
   next: null,
 });
@@ -138,6 +147,7 @@ beforeEach(() => {
       ...saved,
       messages: [entry(request.text, 1, "user"), entry("Which supplier should I use?", 2)],
     };
+    return { data: saved };
   });
 });
 afterEach(cleanup);
@@ -227,8 +237,8 @@ describe("BAAM persistent companion workspace", () => {
   it("prevents duplicate sends while a request is pending and preserves a newly typed draft", async () => {
     let finish!: () => void;
     mocks.send.mockReturnValue(
-      new Promise<void>((r) => {
-        finish = r;
+      new Promise<{ data: BaamData }>((r) => {
+        finish = () => r({ data: saved });
       }),
     );
     render(shell());
@@ -246,14 +256,16 @@ describe("BAAM persistent companion workspace", () => {
     mocks.send
       .mockImplementationOnce(
         () =>
-          new Promise<void>((r) => {
-            finishOld = r;
+          new Promise<{ data: BaamData }>((r) => {
+            finishOld = () =>
+              r({ data: { ...saved, conversation: { ...saved.conversation, id: "dialog" } } });
           }),
       )
       .mockImplementationOnce(
         () =>
-          new Promise<void>((r) => {
-            finishNew = r;
+          new Promise<{ data: BaamData }>((r) => {
+            finishNew = () =>
+              r({ data: { ...saved, conversation: { ...saved.conversation, id: "new-dialog" } } });
           }),
       );
     mocks.fetch.mockImplementation(async ({ id }: { id: string }) => ({
@@ -396,16 +408,16 @@ describe("BAAM persistent companion workspace", () => {
     fireEvent.keyDown(input(), { key: "Enter" });
     await waitFor(() => expect(mocks.send).toHaveBeenCalledTimes(1));
   });
-  it("keeps unconfigured history readable while disabling provider requests", () => {
+  it("keeps history and deterministic forms usable without a provider key", async () => {
     saved.messages = [entry("Saved result", 1)];
     const cap = capabilities();
     cap.data.configured = false;
     mocks.capabilities.mockReturnValue(cap);
     render(shell());
     expect(screen.getByText("Saved result")).toBeTruthy();
-    submit();
-    expect(mocks.send).not.toHaveBeenCalled();
-    expect(screen.getByText(/not configured yet/)).toBeTruthy();
+    submit("Create a product");
+    await waitFor(() => expect(mocks.send).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText(/not configured yet/)).toBeNull();
   });
   it("offers durable recovery for a stale running action without claiming success", async () => {
     saved.messages = [{ ...entry("Review", 1), parts: [{ type: "action", actionId: "action" }] }];

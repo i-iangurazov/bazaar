@@ -174,6 +174,46 @@ const copy = {
     "The operation needs a status check. Automatic retry is stopped; open the document in Bazaar.",
     "Иштин абалын текшерүү керек. Автоматтык кайталоо токтотулду; документти Bazaar ичинде ачыңыз.",
   ],
+  baamWorkflowChanged: [
+    "Форма изменилась в другой вкладке или заменена новым действием. Откройте текущую карточку; ваш ввод сохранён в этой вкладке.",
+    "This form changed in another tab or was replaced. Open the current card; your input is retained in this tab.",
+    "Форма башка өтмөктө өзгөрдү же алмаштырылды. Учурдагы карточканы ачыңыз; киргизилген маалымат бул өтмөктө сакталды.",
+  ],
+  baamReceiptChanged: [
+    "Чек изменён другим пользователем. Нажмите «Обновить чек», проверьте товары и оплату.",
+    "Another user changed this receipt. Refresh it and review the items and payment.",
+    "Чекти башка колдонуучу өзгөрттү. Чекти жаңыртып, товарларды жана төлөмдү текшериңиз.",
+  ],
+  baamCheckFields: [
+    "Проверьте отмеченные поля.",
+    "Check the highlighted fields.",
+    "Белгиленген талааларды текшериңиз.",
+  ],
+  baamInvalidField: [
+    "Укажите допустимое значение.",
+    "Enter a valid value.",
+    "Туура маани киргизиңиз.",
+  ],
+  baamRecoverRequest: [
+    "Ответ не получен. Проверьте результат сохранённого запроса перед повторным действием.",
+    "No response received. Check the saved request result before another action.",
+    "Жооп алынган жок. Башка аракетке чейин сакталган суроонун натыйжасын текшериңиз.",
+  ],
+  baamMediaTooLarge: [
+    "Файл превышает лимит загрузки. Выберите фотографию заново: BAAM подготовит её размер автоматически.",
+    "The upload exceeds the limit. Select the photo again so BAAM can resize it.",
+    "Файл жүктөө чегинен ашты. Сүрөттү кайра тандаңыз: BAAM өлчөмүн даярдайт.",
+  ],
+  baamMediaFailed: [
+    "Не удалось сохранить фото. Попробуйте ещё раз или продолжите без фотографии. Остальные поля сохранены.",
+    "Could not save the photo. Retry or continue without it. Other fields are preserved.",
+    "Сүрөт сакталган жок. Кайра аракет кылыңыз же сүрөтсүз улантыңыз. Башка талаалар сакталды.",
+  ],
+  imageInvalidType: [
+    "Не удалось прочитать изображение. Выберите другое фото в JPEG, PNG или WebP.",
+    "Could not read this image. Choose another JPEG, PNG or WebP photo.",
+    "Сүрөт окулган жок. Башка JPEG, PNG же WebP сүрөтүн тандаңыз.",
+  ],
   baamProviderUnavailable: [
     "Помощник временно не отвечает. Сообщение сохранено. Попробуйте продолжить чуть позже.",
     "The assistant is temporarily unavailable. Your message is saved. Try continuing shortly.",

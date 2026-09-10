@@ -1,4 +1,6 @@
 "use client";
+import { uploadBaamImage } from "@/lib/baam/mediaClient";
+import type { WorkflowCommand } from "@/lib/baam/workflows";
 import { useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -25,6 +27,7 @@ export function useBaamCompanion(identity: BaamIdentity) {
   const [notice, setNotice] = useState<string>();
   const [older, setOlder] = useState<BaamData["messages"]>([]);
   const [olderActions, setOlderActions] = useState<BaamData["actions"]>([]);
+  const [olderWorkflows, setOlderWorkflows] = useState<BaamData["workflows"]>([]);
   const [olderCursor, setOlderCursor] = useState<number | null>();
   const [loadingMore, setLoadingMore] = useState(false);
   const [rename, setRename] = useState<string>();
@@ -35,6 +38,8 @@ export function useBaamCompanion(identity: BaamIdentity) {
   slotRef.current = slot;
   const [uploadSlot, setUploadSlot] = useState<string>();
   const mediaPending = uploadSlot === slot;
+  const [imageRetry, setImageRetry] = useState<File>();
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [mediaKind, setMediaKind] = useState<"audio" | "image">("audio");
   const [attachments, setAttachments] = useState<Array<{ id: string; url: string; name: string }>>(
     [],
@@ -76,7 +81,11 @@ export function useBaamCompanion(identity: BaamIdentity) {
       retry: false,
       refetchOnWindowFocus: true,
       refetchInterval: (data) =>
-        data?.activeTurn || data?.actions.some((a) => a.status === "RUNNING") ? 1200 : 10000,
+        data?.activeTurn ||
+        data?.actions.some((a) => a.status === "RUNNING") ||
+        data?.workflows.some((w) => w.status === "RUNNING")
+          ? 5000
+          : 30000,
     },
   );
   const allowed =
@@ -94,10 +103,11 @@ export function useBaamCompanion(identity: BaamIdentity) {
       capabilities.data?.stores.some((s) => s.id === raw.conversation.storeId))
       ? raw
       : undefined;
-  const available = allowed && capabilities.data?.configured;
+  const available = allowed;
   const busy =
     Boolean(sendingSlots[slot]) ||
     Boolean(data?.activeTurn) ||
+    Boolean(data?.workflows.some((w) => w.status === "RUNNING" || w.pendingRequestId)) ||
     Boolean(executing) ||
     Boolean(data?.actions.some((a) => a.status === "RUNNING" && !a.canRecover));
   const messages = [
@@ -106,6 +116,11 @@ export function useBaamCompanion(identity: BaamIdentity) {
   const actions = [
     ...new Map(
       [...(data ? olderActions : []), ...(data?.actions ?? [])].map((a) => [a.id, a]),
+    ).values(),
+  ];
+  const workflows = [
+    ...new Map(
+      [...(data ? olderWorkflows : []), ...(data?.workflows ?? [])].map((w) => [w.id, w]),
     ).values(),
   ];
   const readableError = (value: unknown) => {
@@ -131,9 +146,12 @@ export function useBaamCompanion(identity: BaamIdentity) {
     }
     setOlder([]);
     setOlderActions([]);
+    setOlderWorkflows([]);
     setOlderCursor(undefined);
     setQuestion("");
     setAttachments([]);
+    setImageRetry(undefined);
+    setUploadProgress(0);
     setVoiceId(undefined);
     setVoiceBlob(undefined);
     setError(undefined);
@@ -186,9 +204,16 @@ export function useBaamCompanion(identity: BaamIdentity) {
       if (scrollRef.current) scrollRef.current.scrollTop = 0;
       return;
     }
-    if (nearBottom.current) bottom();
-    else setUnread(true);
-  }, [lastMessageId, data?.activeTurn?.id, optimistic]);
+    if (nearBottom.current) {
+      const form = scrollRef.current?.querySelector<HTMLElement>(
+        `[data-baam-workflow="${data?.conversation.activeWorkflowId ?? ""}"]`,
+      );
+      if (form && scrollRef.current) {
+        scrollRef.current.scrollTop +=
+          form.getBoundingClientRect().top - scrollRef.current.getBoundingClientRect().top - 16;
+      } else bottom();
+    } else setUnread(true);
+  }, [lastMessageId, data?.activeTurn?.id, data?.conversation.activeWorkflowId, optimistic]);
   useEffect(() => {
     if (
       optimistic &&
@@ -247,7 +272,7 @@ export function useBaamCompanion(identity: BaamIdentity) {
       utils.baam.conversations.invalidate(),
     ]);
   };
-  const ask = async (text = question, retry?: BaamSend) => {
+  const ask = async (text = question, retry?: BaamSend, command?: WorkflowCommand) => {
     if ((!text.trim() && !retry) || busyRef.current.has(slot) || busy || !available) return;
     const requestSlot = slotRef.current;
     const requestToken = crypto.randomUUID();
@@ -261,8 +286,10 @@ export function useBaamCompanion(identity: BaamIdentity) {
       requestId = id;
       busyRef.current.set(id, requestToken);
       setSendingSlots((old) => ({ ...old, [id]: requestToken }));
-      const current = await utils.baam.conversation.fetch({ id });
+      const current =
+        utils.baam.conversation.getData({ id }) ?? (await utils.baam.conversation.fetch({ id }));
       const request: BaamSend = retry ?? {
+        ...(command ? { command } : {}),
         conversationId: id,
         clientRequestId: crypto.randomUUID(),
         text: text.trim(),
@@ -292,11 +319,8 @@ export function useBaamCompanion(identity: BaamIdentity) {
       } catch {
         /* optional */
       }
-      const promise = send.mutateAsync(request);
-      setTimeout(() => {
-        void utils.baam.conversation.invalidate({ id });
-      }, 300);
-      await promise;
+      const response = await send.mutateAsync(request);
+      utils.baam.conversation.setData({ id }, response.data);
       try {
         const saved = JSON.parse(sessionStorage.getItem(outboxKey) ?? "null");
         if (saved?.pending?.clientRequestId === request.clientRequestId)
@@ -306,8 +330,20 @@ export function useBaamCompanion(identity: BaamIdentity) {
       }
       if (identityRef.current === id && busyRef.current.get(id) === requestToken)
         setPendingRequest(undefined);
-      await refresh(id);
-      if (identityRef.current === id) inputRef.current?.focus({ preventScroll: true });
+      void utils.baam.conversations.invalidate();
+      if (identityRef.current === id)
+        requestAnimationFrame(() => {
+          const form = scrollRef.current?.querySelector<HTMLElement>(
+            `[data-baam-workflow="${response.data.conversation.activeWorkflowId ?? ""}"]`,
+          );
+          if (form && scrollRef.current) {
+            scrollRef.current.scrollTop +=
+              form.getBoundingClientRect().top - scrollRef.current.getBoundingClientRect().top - 16;
+            form
+              .querySelector<HTMLElement>("input:not([type=file]),button[role=combobox]")
+              ?.focus({ preventScroll: true });
+          } else inputRef.current?.focus({ preventScroll: true });
+        });
     } catch (e) {
       if (
         (identityRef.current === requestId &&
@@ -334,6 +370,19 @@ export function useBaamCompanion(identity: BaamIdentity) {
       const id = await ensureConversation();
       uploadId = id;
       if (identityRef.current === id) setUploadSlot(id);
+      if (kind === "image") {
+        const image = await uploadBaamImage(
+          file instanceof File ? file : new File([file], name, { type: file.type }),
+          id,
+          locale,
+          setUploadProgress,
+        );
+        if (identityRef.current === id) {
+          setAttachments((old) => [...old.filter((a) => a.id !== image.id), image]);
+          setImageRetry(undefined);
+        }
+        return image;
+      }
       const form = new FormData();
       form.append("conversationId", id);
       form.append("locale", locale);
@@ -366,6 +415,8 @@ export function useBaamCompanion(identity: BaamIdentity) {
     } catch (e) {
       if (identityRef.current === uploadId || slotRef.current === originalSlot) {
         if (kind === "audio") setVoiceBlob(file);
+        else
+          setImageRetry(file instanceof File ? file : new File([file], name, { type: file.type }));
         setError(readableError(e));
       }
     } finally {
@@ -503,6 +554,7 @@ export function useBaamCompanion(identity: BaamIdentity) {
       });
       setOlder((old) => [...page.messages, ...old]);
       setOlderActions((old) => [...old, ...page.actions]);
+      setOlderWorkflows((old) => [...old, ...page.workflows]);
       setOlderCursor(page.next);
       requestAnimationFrame(() => {
         if (scrollRef.current)
@@ -533,6 +585,9 @@ export function useBaamCompanion(identity: BaamIdentity) {
     setUnread,
     mediaPending,
     mediaKind,
+    imageRetry,
+    setImageRetry,
+    uploadProgress,
     attachments,
     setAttachments,
     voiceId,
@@ -551,6 +606,7 @@ export function useBaamCompanion(identity: BaamIdentity) {
     busy,
     messages,
     actions,
+    workflows,
     readableError,
     bottom,
     ask,

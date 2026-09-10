@@ -1,3 +1,14 @@
+import {
+  workflowSaveSchema,
+  workflowSubmitSchema,
+  workflowValuesSchema,
+} from "@/lib/baam/workflows";
+import {
+  saveBaamWorkflow,
+  submitBaamWorkflow,
+  recoverBaamWorkflow,
+} from "@/server/services/baamWorkflows";
+import { lookupWorkflow } from "@/server/services/baamWorkflowRecords";
 import { z } from "zod";
 import { managerProcedure, rateLimit, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
@@ -28,6 +39,30 @@ const handle = async <T>(run: () => Promise<T>) => {
 };
 
 export const baamRouter = router({
+  recoverWorkflow: companion
+    .input(z.object({ id: z.string() }).strict())
+    .mutation(({ ctx, input }) => handle(() => recoverBaamWorkflow(ctx, input.id))),
+  saveWorkflow: companion
+    .input(workflowSaveSchema)
+    .mutation(({ ctx, input }) => handle(() => saveBaamWorkflow(ctx, input))),
+  submitWorkflow: companion
+    .use(rateLimit({ windowMs: 60000, max: 30, prefix: "baam-workflow" }))
+    .input(workflowSubmitSchema)
+    .mutation(({ ctx, input }) => handle(() => submitBaamWorkflow(ctx, input))),
+  workflowLookup: companion
+    .input(
+      z
+        .object({
+          id: z.string(),
+          path: z.string().max(150),
+          query: z.string().max(160).optional(),
+          selected: z.string().max(100).optional(),
+          locale: baamLocaleSchema.optional(),
+          parameters: workflowValuesSchema.optional(),
+        })
+        .strict(),
+    )
+    .query(({ ctx, input }) => handle(() => lookupWorkflow(ctx, input))),
   companion: companion.query(({ ctx }) => handle(() => baamCompanionCapabilities(ctx))),
   conversations: companion
     .input(z.object({ cursor: z.string().optional() }).optional())

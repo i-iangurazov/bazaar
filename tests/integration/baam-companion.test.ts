@@ -480,7 +480,7 @@ describe.skipIf(!shouldRunDbTests)("BAAM companion domain integration", () => {
       const request = {
         conversationId: f.conversation.id,
         clientRequestId: randomUUID(),
-        text: "Create a product",
+        text: "Could you help me register a new seasonal assortment for my shop?",
         locale: "en" as const,
         revision: 0,
         attachmentIds: [],

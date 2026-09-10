@@ -41,6 +41,7 @@ try {
   }
   if (!ready) throw new Error("Isolated browser server did not become ready");
   await run(process.execPath, ["--import", "tsx", "scripts/baam/capture.ts"]);
+  await run(process.execPath, ["--import", "tsx", "scripts/baam/fast-capture.ts"]);
 } finally {
   server.kill("SIGTERM");
   await log.close();

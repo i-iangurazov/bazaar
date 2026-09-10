@@ -179,6 +179,7 @@ export function resultId(value: unknown): string | undefined {
     "customerOrderId",
     "saleReturnId",
     "stockCountId",
+    "receivingId",
     "shiftId",
   ]) {
     if (typeof record[key] === "string") return record[key];
@@ -197,8 +198,8 @@ const productCreate = createProductInputSchema
   })
   .extend({
     name: z.string().trim().min(2).max(180),
-    storeId: id,
-    imageChoice: z.enum(["without_photo", "attached_photo"]),
+    storeId: id.optional(),
+    imageChoice: z.enum(["without_photo", "attached_photo"]).default("without_photo"),
     attachmentId: id.optional(),
     variants: z
       .array(
@@ -239,7 +240,7 @@ defineAction({
     "Create a product in a chosen store. Ask for required name and unit and offer photo upload or no photo. Use unit IDs from search. Initial stock >0 requires ADMIN; receiving is available to MANAGER. Never invent price, attributes or quantities.",
   schema: productCreate,
   async prepare(c, input) {
-    const store = await baamStore(c, input.storeId);
+    const store = input.storeId ? await baamStore(c, input.storeId) : null;
     if ((input.initialOnHand ?? 0) > 0 && c.scope.role !== "ADMIN")
       throw new AppError("inventoryAdminRequired", "FORBIDDEN", 403);
     const unit = await prisma.unit.findFirst({
@@ -263,7 +264,7 @@ defineAction({
     const { imageChoice, attachmentId: _attachmentId, ...fields } = input;
     void _attachmentId;
     for (const component of fields.bundleComponents ?? [])
-      await baamProduct(c, component.componentProductId, component.componentVariantId, store.id);
+      await baamProduct(c, component.componentProductId, component.componentVariantId, store?.id);
     const data = {
       ...fields,
       variants: fields.variants?.map((v) => ({
@@ -278,7 +279,7 @@ defineAction({
       title: title(c, "Создать товар", "Create product", "Товар түзүү"),
       details: [
         input.name,
-        store.name,
+        ...(store ? [store.name] : []),
         unit.code,
         ...(input.basePriceKgs !== undefined ? [`${input.basePriceKgs} KGS`] : []),
         ...(input.initialOnHand !== undefined
@@ -296,7 +297,7 @@ defineAction({
       ],
       href: "/products",
     };
-    return { input: { data, summary }, summary, storeIds: [store.id] };
+    return { input: { data, summary }, summary, storeIds: store ? [store.id] : [] };
   },
   async execute(c, p) {
     const created = await c.step("create", ["PRODUCT_CREATE"], (api, key) =>
@@ -523,10 +524,14 @@ defineAction({
     return { input: { data, summary }, summary, storeIds: [store.id] };
   },
   async execute(c, p) {
-    await c.step("receive", ["INVENTORY_RECEIVE"], (api, key) =>
+    const value = await c.step("receive", ["INVENTORY_RECEIVE"], (api, key) =>
       api.inventory.postStockReceiving({ ...p.data, idempotencyKey: key }),
     );
-    return result(p.summary);
+    const receivingId = resultId(value);
+    return {
+      ...result(p.summary, receivingId),
+      href: receivingId ? `/inventory/receiving/${receivingId}/edit` : "/inventory",
+    };
   },
 });
 defineAction({

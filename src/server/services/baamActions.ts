@@ -196,7 +196,7 @@ export async function executeBaamAction(ctx: Context, actionId: string) {
         where: { id: actionId, status: "RUNNING", attemptToken },
         data: { status: "COMPLETED", result: baamJson(final), errorCode: null },
       });
-      if (won.count)
+      if (won.count && !(await tx.baamWorkflowRequest.count({ where: { actionId } })))
         await appendBaamMessage(tx, {
           conversationId: original.conversationId,
           turnId: original.turnId,
