@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import SignupPage from "@/app/signup/page";
 
 const mocks = vi.hoisted(() => ({
+  locale: "ru",
   modeQuery: {
     data: undefined as { mode: "open" | "invite_only" } | undefined,
     isLoading: true,
@@ -23,6 +24,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: mocks.replace }) }));
 vi.mock("next-intl", () => ({
+  useLocale: () => mocks.locale,
   useTranslations: (namespace: string) =>
     Object.assign((key: string) => `${namespace}.${key}`, { has: () => true }),
 }));
@@ -54,6 +56,7 @@ vi.mock("@/lib/trpc", () => ({
 describe("signup mode transitions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.locale = "ru";
     mocks.modeQuery.data = undefined;
     mocks.modeQuery.isLoading = true;
     mocks.modeQuery.error = null;
@@ -62,6 +65,32 @@ describe("signup mode transitions", () => {
   });
 
   afterEach(cleanup);
+
+  it.each(["kg", "en"])(
+    "keeps the %s language selected on the landing when registering",
+    (locale) => {
+      mocks.locale = locale;
+      mocks.modeQuery.isLoading = false;
+      mocks.modeQuery.data = { mode: "open" };
+      render(<SignupPage />);
+      expect(
+        screen.getByRole("combobox", { name: "signup.preferredLocale" }).textContent,
+      ).toContain(`common.locales.${locale}`);
+      fireEvent.change(screen.getByLabelText("signup.name"), {
+        target: { value: "Synthetic User" },
+      });
+      fireEvent.change(screen.getByLabelText("signup.email"), {
+        target: { value: "language@example.invalid" },
+      });
+      fireEvent.change(screen.getByLabelText("signup.password"), {
+        target: { value: "synthetic-password" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "signup.createAccount" }));
+      expect(mocks.signupMutate).toHaveBeenCalledWith(
+        expect.objectContaining({ preferredLocale: locale }),
+      );
+    },
+  );
 
   it("loads the open form with a named language selector and preserves entered values on failure", () => {
     const page = render(<SignupPage />);

@@ -26,6 +26,6 @@ describe("public landing theme isolation", () => {
     expect(landingPage).toContain("MarketingLanding");
     expect(landingPage).not.toContain("ForceLightTheme");
     expect(marketingStyles).toContain(".marketing {");
-    expect(marketingStyles).toContain("--dark: #070b13");
+    expect(marketingStyles).toContain("--dark: #172c35");
   });
 });

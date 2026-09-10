@@ -3,7 +3,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
 import { z } from "zod";
 
@@ -24,7 +24,7 @@ import { LanguageSwitcher } from "@/components/language-switcher";
 import { FormStack } from "@/components/form-layout";
 import { QueryErrorState } from "@/components/query-error-state";
 import { useToast } from "@/components/ui/toast";
-import { locales, type Locale } from "@/lib/locales";
+import { defaultLocale, locales, normalizeLocale, type Locale } from "@/lib/locales";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 
@@ -54,6 +54,7 @@ const SignupFrame = ({ children }: { children: ReactNode }) => (
 );
 
 const SignupPage = () => {
+  const initialLocale = normalizeLocale(useLocale()) ?? defaultLocale;
   const t = useTranslations("signup");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
@@ -68,7 +69,7 @@ const SignupPage = () => {
     email: "",
     password: "",
     name: "",
-    preferredLocale: "ru",
+    preferredLocale: initialLocale,
   });
   const [formError, setFormError] = useState<string | null>(null);
   const [emailDeliveryFailed, setEmailDeliveryFailed] = useState(false);

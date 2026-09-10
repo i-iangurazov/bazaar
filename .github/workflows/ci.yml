@@ -181,6 +181,29 @@ jobs:
             artifacts/bazaar-stock-audit/*.png
             artifacts/bazaar-stock-audit/server.log
 
+  landing-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm prisma:generate
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: Verify landing on four widths and three languages
+        run: node scripts/marketing/run.mjs
+      - name: Upload landing screenshots and browser report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: landing-browser
+          path: artifacts/bazaar-landing-redesign
+          if-no-files-found: error
+
   native-android:
     runs-on: ubuntu-latest
     env:
@@ -243,6 +266,7 @@ jobs:
       - test
       - stabilization
       - inventory-browser
+      - landing-browser
     services:
       postgres:
         image: postgres:16-alpine
