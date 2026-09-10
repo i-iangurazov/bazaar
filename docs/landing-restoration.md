@@ -83,3 +83,21 @@ Vitest suite passed: 290 files / 2009 tests, including the isolated database sui
 Typecheck, lint, i18n validation and the production build passed. The menu also passed
 a normal-motion touch-emulation check on the locally built production runtime. Release identity and public production
 verification are captured separately for the final pushed SHA.
+
+## CI storage correction during release
+
+Two CI attempts exposed intermittent database setup timeouts unrelated to the landing.
+The completed attempt passed 2008 of 2009 tests; its single failure was the existing
+`resetDatabase()` beforeEach hook, before the application assertion ran. PostgreSQL logs
+showed checkpoints synchronizing 95,000–128,000 files for 11–14 seconds while the schema
+reset hook has a 10-second limit. Repeated full-schema truncation generates this work.
+
+Only the disposable PostgreSQL service in the CI `test` job now stores its data in a
+bounded 2 GiB tmpfs. PostgreSQL fsync/synchronous_commit, test timeouts, assertions and
+the release gate are unchanged. Its health check names the actual test database.
+No application or production database settings change.
+
+The full local `pnpm test:ci` passed against a separate PostgreSQL 16 container with
+the same tmpfs mount: typecheck, lint, 290 files / 2009 tests (198.20 seconds), and i18n.
+The previously failing five-test group passed in 907 ms. `fsync`, `synchronous_commit`
+and `full_page_writes` were verified enabled.

@@ -58,8 +58,11 @@ jobs:
           POSTGRES_DB: bazaar_hardening_ci
         ports:
           - 5432:5432
+        # Each test truncates the full schema. Keep this disposable database off
+        # runner disk to avoid checkpoint fsync stalls; PostgreSQL sync stays on.
         options: >-
-          --health-cmd="pg_isready -U inventory"
+          --tmpfs=/var/lib/postgresql/data:rw,size=2g
+          --health-cmd="pg_isready -U inventory -d bazaar_hardening_ci"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
