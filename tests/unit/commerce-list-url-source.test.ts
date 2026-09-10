@@ -18,7 +18,11 @@ describe("commerce list URL state", () => {
     expect(source).toContain('searchParams.get("search")');
     expect(source).toContain('searchParams.get("storeId")');
     expect(source).toContain('searchParams.get("sortBy")');
-    expect(source).toMatch(/window\.history\.replaceState\(\s*window\.history\.state/);
+    // Passing the existing __NA state makes Next.js treat this as an internal
+    // navigation and skip updating useSearchParams. Let its patched History API
+    // copy the state instead; the browser suite verifies the resulting requests.
+    expect(source).toMatch(/window\.history\.replaceState\(\s*null\s*,/);
+    expect(source).not.toMatch(/window\.history\.replaceState\(\s*window\.history\.state/);
     expect(source).toContain("new URLSearchParams(window.location.search)");
   });
 });
