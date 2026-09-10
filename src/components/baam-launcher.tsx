@@ -17,9 +17,16 @@ import { baamCopy } from "@/lib/baam/copy";
 import { BaamIcon } from "@/components/icons";
 import { launcherBottom } from "@/lib/baam/launcher-position";
 import { cn } from "@/lib/utils";
+import { normalizeLocale } from "@/lib/locales";
 
-export const canShowBaamLauncher = (access: RoleAccess, pathname: string) =>
-  hasPermission(access, "viewReports") && !pathname.startsWith("/printing/");
+export const canShowBaamLauncher = (access: RoleAccess, pathname: string) => {
+  const segments = pathname.split(/[?#]/, 1)[0].split("/");
+  if (normalizeLocale(segments[1])) segments.splice(1, 1);
+  const path = segments.join("/").replace(/\/+$/, "") || "/";
+  return (
+    hasPermission(access, "viewReports") && path !== "/pos/sell" && !path.startsWith("/printing/")
+  );
+};
 
 export function BaamLauncher({
   access,

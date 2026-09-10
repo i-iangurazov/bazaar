@@ -34,7 +34,7 @@ try {
     const page = await context.newPage();
     const errors: string[] = [];
     page.on("pageerror", (e) => errors.push(e.message));
-    for (const path of ["/pos", "/inventory", "/products", "/baam"]) {
+    for (const path of ["/pos", "/inventory", "/products", "/baam", "/pos/sell"]) {
       let releaseSession: (() => void) | undefined;
       const earlyClick = role === "admin" && path === "/pos";
       if (earlyClick) {
@@ -50,7 +50,11 @@ try {
       await page.waitForTimeout(1500);
       const launcher = page.locator("[data-baam-launcher]");
       const count = await launcher.count();
-      assert.equal(count, ["admin", "manager"].includes(role) ? 1 : 0, `${role} ${path}`);
+      assert.equal(
+        count,
+        ["admin", "manager"].includes(role) && path !== "/pos/sell" ? 1 : 0,
+        `${role} ${path}`,
+      );
       report.push({ role, path, count, errors: [...errors] });
       console.log({ role, path, count, url: page.url() });
       if (count && path !== "/baam") {
@@ -101,6 +105,33 @@ try {
         });
         await page.keyboard.press("Escape");
       }
+    }
+    if (["admin", "manager"].includes(role)) {
+      // Use real client navigation and Back/Forward while the dialog is open.
+      await page.evaluate(() => {
+        document.documentElement.dataset.baamNavigation = "same-document";
+      });
+      await page
+        .locator('a[href="/pos"], a[href^="/pos?"]')
+        .filter({ visible: true })
+        .first()
+        .click();
+      await page.waitForURL((url) => url.pathname === "/pos");
+      await page.locator("[data-baam-launcher]").click();
+      await page.locator("[data-baam-chat]").waitFor();
+      await page.goBack();
+      await page.waitForURL((url) => url.pathname === "/pos/sell");
+      await page.locator("[data-baam-drawer]").waitFor({ state: "hidden" });
+      assert.equal(await page.locator("[data-baam-launcher]").count(), 0);
+      await page.goForward();
+      await page.waitForURL((url) => url.pathname === "/pos");
+      await page.locator("[data-baam-launcher]").waitFor();
+      assert.equal(await page.locator("[data-baam-drawer]").count(), 0);
+      assert.equal(
+        await page.locator("html").getAttribute("data-baam-navigation"),
+        "same-document",
+      );
+      report.push({ role, checkoutClientNavigation: "passed" });
     }
     if (role === "admin") {
       for (const width of [360, 390, 768]) {

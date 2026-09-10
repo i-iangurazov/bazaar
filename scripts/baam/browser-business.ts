@@ -121,6 +121,9 @@ try {
   console.log("Receipt persisted, stock 8");
   await page.keyboard.press("Escape");
   await page.goto(base + `/pos/sell?registerId=${register.id}`);
+  await page.locator("main").first().waitFor();
+  assert.equal(await page.locator("[data-baam-launcher], [data-baam-drawer]").count(), 0);
+  await page.goto(base + `/pos?store=${fixture.storeId}`);
   await page.locator("[data-baam-launcher]").waitFor();
   assert.equal(await page.locator("[data-baam-launcher]").count(), 1);
   await page.locator("[data-baam-launcher]").click();

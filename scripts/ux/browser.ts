@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { chromium, type BrowserContext, type Page, type Locator } from "playwright";
+import { verifyProductTable } from "./product-table-check";
 const base = process.env.UX_HTTPS === "1" ? "https://localhost:3122" : "http://localhost:3122";
 const f = JSON.parse(await readFile("artifacts/ux/fixture.json", "utf8"));
 const directory = "artifacts/ux/flows";
@@ -117,6 +118,10 @@ async function commitStock(page: Page) {
 let failure: string | undefined;
 try {
   const admin = await login("admin");
+  const tablePage = await admin.newPage();
+  await verifyProductTable(tablePage, base, f.storeId, `${directory}/product-table`);
+  await tablePage.close();
+  record("Product card has one contour; table scroll, row menus and pagination work at four widths");
   for (const path of ["/stores", "/suppliers"]) {
     const formPage = await admin.newPage();
     let releaseSession!: () => void;
@@ -467,11 +472,7 @@ try {
   const complete = dashboard.getByRole("button", { name: "Завершить продажу", exact: true });
   await complete.waitFor();
   await until(() => complete.isEnabled(), "Checkout is not ready");
-  await clearOfBaam(dashboard, complete);
-  await clearOfBaam(
-    dashboard,
-    dashboard.getByRole("button", { name: "Отложить чек", exact: true }).filter({ visible: true }),
-  );
+  assert.equal(await dashboard.locator("[data-baam-launcher], [data-baam-drawer]").count(), 0);
   await dashboard.screenshot({ path: `${directory}/pos-checkout.png` });
   await complete.click();
   await until(

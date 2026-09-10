@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { NextIntlClientProvider } from "next-intl";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import messages from "../../messages/en.json";
-import { BaamLauncher } from "@/components/baam-launcher";
+import { BaamLauncher, canShowBaamLauncher } from "@/components/baam-launcher";
 
 const launcher = (role = "ADMIN", pathname = "/dashboard") => (
   <NextIntlClientProvider
@@ -74,7 +74,12 @@ describe("BAAM assistant launcher", () => {
 
   it.each([
     "/pos",
-    "/pos/sell",
+    "/pos/",
+    "/en/pos?store=one",
+    "/pos/history",
+    "/pos/receipts",
+    "/pos/seller",
+    "/products",
     "/inventory",
     "/inventory/overview",
     "/reports/receipts",
@@ -86,6 +91,37 @@ describe("BAAM assistant launcher", () => {
     render(launcher("ADMIN", pathname));
     expect(screen.getByRole("button", { name: "Open BAAM assistant" })).toBeTruthy();
   });
+
+  it.each([
+    "/pos/sell",
+    "/pos/sell/",
+    "/pos/sell?registerId=one",
+    "/pos/sell/?saleId=two#cart",
+    "/ru/pos/sell",
+    "/en/pos/sell/",
+    "/kg/pos/sell?registerId=one",
+    "/ky/pos/sell/",
+  ])("excludes only the checkout route variant %s for both allowed roles", (pathname) => {
+    for (const role of ["ADMIN", "MANAGER"]) {
+      expect(canShowBaamLauncher({ role }, pathname)).toBe(false);
+    }
+  });
+
+  it.each(["ADMIN", "MANAGER"])(
+    "hides an open assistant on checkout and restores its launcher after leaving for %s",
+    async (role) => {
+      const view = render(launcher(role, "/pos"));
+      fireEvent.click(screen.getByRole("button", { name: "Open BAAM assistant" }));
+      expect(screen.getByRole("dialog")).toBeTruthy();
+      view.rerender(launcher(role, "/ru/pos/sell/?registerId=one"));
+      expect(screen.queryByRole("button", { name: "Open BAAM assistant" })).toBeNull();
+      expect(screen.queryByRole("dialog")).toBeNull();
+      view.rerender(launcher(role, "/inventory"));
+      expect(screen.queryByRole("dialog")).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "Open BAAM assistant" }));
+      expect(screen.getByRole("button", { name: "Ask a supported question" })).toBeTruthy();
+    },
+  );
 
   it("hides the launcher on printed documents", () => {
     render(launcher("ADMIN", "/printing/receipt"));

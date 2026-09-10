@@ -57,6 +57,8 @@ export type DataTableProps<TData, TValue> = {
   rowClassName?: (row: Row<TData>) => string | undefined;
   rowTestId?: string | ((row: Row<TData>) => string | undefined);
   stickyHeader?: boolean;
+  /** Disable the inner contour when the table already sits inside a bordered card. */
+  framed?: boolean;
   pagination?: {
     page: number;
     pageSize: number;
@@ -87,6 +89,7 @@ export const DataTable = <TData, TValue>({
   rowClassName,
   rowTestId,
   stickyHeader = false,
+  framed = true,
   pagination,
 }: DataTableProps<TData, TValue>) => {
   const pageSizeLabelId = React.useId();
@@ -117,7 +120,12 @@ export const DataTable = <TData, TValue>({
 
   return (
     <div className={cn("min-w-0", className)} data-component="data-table">
-      <div className="relative min-w-0 max-w-full overflow-x-auto rounded-lg border border-border bg-card">
+      <div
+        className={cn(
+          "relative min-w-0 max-w-full overflow-x-auto bg-card",
+          framed && "rounded-lg border border-border",
+        )}
+      >
         <table className={cn("w-full caption-bottom text-sm", tableClassName)}>
           <thead
             className={cn(

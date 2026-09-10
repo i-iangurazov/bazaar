@@ -4011,6 +4011,7 @@ const ProductsPage = () => {
                 viewMode === "table" ? (
                   <TooltipProvider>
                     <DataTable
+                      framed={false}
                       columns={productColumns}
                       data={visibleItems}
                       getRowId={(product) => product.id}
