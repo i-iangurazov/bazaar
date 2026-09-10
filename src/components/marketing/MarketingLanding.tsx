@@ -1,332 +1,592 @@
 import Image from "next/image";
 import Link from "next/link";
-import { getLocale, getTranslations } from "next-intl/server";
-import { PLAN_CODES, getPlanLimits, getPlanMonthlyPriceKgs } from "@/server/billing/planCatalog";
-import { toIntlLocale } from "@/lib/locales";
+import type { ReactNode } from "react";
+
 import { FeatureShowcase } from "./FeatureShowcase";
+import { MarketingMotion } from "./MarketingMotion";
 import { MarketingNav } from "./MarketingNav";
-import { MarketingIcon } from "./MarketingIcon";
-import { MobilePreview, ProductPreview } from "./ProductPreview";
 import styles from "./marketing.module.css";
 
 const whatsappUrl = "https://wa.me/996709911300";
 
-export const MarketingLanding = async () => {
-  const t = await getTranslations("marketing");
-  const locale = await getLocale();
-  const format = (value: number) =>
-    new Intl.NumberFormat(toIntlLocale(locale), { maximumFractionDigits: 2 }).format(value);
-  const configuredTrialDays = Number(process.env.TRIAL_DAYS ?? "14");
-  const trialDays =
-    Number.isFinite(configuredTrialDays) && configuredTrialDays > 0 ? configuredTrialDays : 14;
-  const structuredData = {
-    "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    name: "Bazaar",
-    applicationCategory: "BusinessApplication",
-    operatingSystem: "Web, iOS, Android",
-    description: t("meta.description"),
-    url: "https://www.bazaar.kg/",
-    offers: PLAN_CODES.map((code) => ({
-      "@type": "Offer",
-      name: t(`pricing.${code}.name`),
-      price: String(getPlanMonthlyPriceKgs(code)),
-      priceCurrency: "KGS",
-    })),
-  };
-  return (
-    <div className={styles.marketing} data-marketing-root>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify(structuredData).replace(/</g, "\\u003c"),
-        }}
+const structuredData = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  name: "Bazaar",
+  applicationCategory: "BusinessApplication",
+  operatingSystem: "Web, iOS PWA, Android PWA",
+  description:
+    "Retail Operating System для кассы, товаров, запасов, клиентов, аналитики и каналов продаж.",
+  url: "https://www.bazaar.kg/",
+  offers: [
+    { "@type": "Offer", name: "Новичок", price: "1750", priceCurrency: "KGS" },
+    { "@type": "Offer", name: "Бизнесмен", price: "4375", priceCurrency: "KGS" },
+    { "@type": "Offer", name: "Монополист", price: "8750", priceCurrency: "KGS" },
+  ],
+};
+
+const Glyph = ({ children }: { children: ReactNode }) => (
+  <span className={styles.glyph} aria-hidden="true">
+    {children}
+  </span>
+);
+
+const Arrow = () => (
+  <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <path
+      d="M3 8h9M9 4.5 12.5 8 9 11.5"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const Check = () => (
+  <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <path
+      d="m3 8.25 3.15 3L13 4.75"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const ProductWindow = ({
+  src,
+  alt,
+  priority = false,
+  className,
+}: {
+  src: string;
+  alt: string;
+  priority?: boolean;
+  className?: string;
+}) => (
+  <div className={`${styles.productWindow} ${className ?? ""}`}>
+    <div className={styles.windowBar} aria-hidden="true">
+      <span />
+      <span />
+      <span />
+      <p>app.bazaar.kg</p>
+    </div>
+    <div className={styles.productWindowViewport}>
+      <Image
+        src={src}
+        alt={alt}
+        width={1920}
+        height={1080}
+        sizes="(max-width: 767px) 94vw, (max-width: 1199px) 88vw, 1120px"
+        priority={priority}
       />
-      <MarketingNav />
-      <main id="main-content" tabIndex={-1}>
-        <section className={styles.hero} aria-labelledby="hero-title">
-          <div className={`${styles.container} ${styles.heroGrid}`}>
-            <div className={styles.heroCopy}>
-              <p className={styles.heroKicker}>
-                <span />
-                {t("hero.eyebrow")}
-              </p>
-              <h1 id="hero-title">
-                {t("hero.title")}
-                <span>{t("hero.accent")}</span>
-              </h1>
-              <p className={styles.heroLead}>{t("hero.description")}</p>
-              <div className={styles.heroActions}>
-                <Link href="/signup" className={styles.primaryCta}>
-                  {t("actions.try")}
-                  <MarketingIcon />
-                </Link>
-                <a href="#platform" className={styles.secondaryCta}>
-                  {t("actions.explore")}
-                  <span>↘</span>
-                </a>
-              </div>
-              <p className={styles.heroNote}>
-                <MarketingIcon name="check" />
-                {t("hero.note", { days: trialDays })}
-              </p>
-            </div>
-            <div className={styles.heroVisual}>
-              <ProductPreview />
-              <div className={styles.heroVisualLabel}>
-                <span>01 — BAZAAR</span>
-                <span>{t("hero.visualLabel")}</span>
-              </div>
-            </div>
-          </div>
-          <div className={`${styles.container} ${styles.heroFooter}`}>
-            <span>{t("hero.for")}</span>
-            <div>
-              {(t.raw("hero.businesses") as string[]).map((item) => (
-                <span key={item}>{item}</span>
-              ))}
-            </div>
-          </div>
-        </section>
+    </div>
+  </div>
+);
 
-        <section
-          className={`${styles.container} ${styles.connection}`}
-          aria-labelledby="connection-title"
-        >
-          <div className={styles.sectionHeading}>
-            <p className={styles.eyebrow}>{t("connection.eyebrow")}</p>
-            <h2 id="connection-title">{t("connection.title")}</h2>
-            <p>{t("connection.description")}</p>
-          </div>
-          <div className={styles.connectionSteps}>
-            {(["sell", "stock", "understand"] as const).map((id, i) => (
-              <article key={id}>
-                <span className={styles.stepNumber}>0{i + 1}</span>
-                <MarketingIcon name={(["receipt", "box", "chart"] as const)[i]} />
-                <h3>{t(`connection.${id}.title`)}</h3>
-                <p>{t(`connection.${id}.body`)}</p>
-              </article>
-            ))}
-          </div>
-        </section>
+const Story = ({
+  id,
+  number,
+  eyebrow,
+  title,
+  description,
+  bullets,
+  visual,
+  reverse = false,
+  dark = false,
+}: {
+  id: string;
+  number: string;
+  eyebrow: string;
+  title: string;
+  description: string;
+  bullets: string[];
+  visual: ReactNode;
+  reverse?: boolean;
+  dark?: boolean;
+}) => (
+  <section id={id} className={`${styles.story} ${dark ? styles.storyDark : ""}`}>
+    <div className={`${styles.storyGrid} ${reverse ? styles.storyReverse : ""}`}>
+      <div className={styles.storyCopy} data-reveal>
+        <p className={styles.eyebrow}>
+          <span>{number}</span>
+          {eyebrow}
+        </p>
+        <h2>{title}</h2>
+        <p className={styles.storyDescription}>{description}</p>
+        <ul className={styles.checkList}>
+          {bullets.map((bullet) => (
+            <li key={bullet}>
+              <Check />
+              <span>{bullet}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div className={styles.storyVisual} data-reveal>
+        {visual}
+      </div>
+    </div>
+  </section>
+);
 
-        <section
-          id="platform"
-          tabIndex={-1}
-          className={styles.platform}
-          aria-labelledby="platform-title"
-        >
-          <div className={styles.container}>
-            <div className={styles.platformHeading}>
-              <div>
-                <p className={styles.eyebrow}>{t("showcase.eyebrow")}</p>
-                <h2 id="platform-title">{t("showcase.title")}</h2>
-              </div>
-              <p>{t("showcase.description")}</p>
-            </div>
-            <FeatureShowcase />
-          </div>
-        </section>
+const integrationChannels = [
+  { mark: "API", label: "Bazaar API", data: "Товары · остатки · заказы" },
+  { mark: "M", label: "M-Market", data: "Каталог · цены · наличие" },
+  { mark: "B", label: "Bakai Store", data: "Каталог · цены · наличие" },
+  { mark: "O!", label: "O! Market", data: "Товары · остатки · заказы" },
+  { mark: "@", label: "Email Marketing", data: "Клиенты · кампании" },
+] as const;
 
-        <section
-          id="workflows"
-          tabIndex={-1}
-          className={`${styles.container} ${styles.workflows}`}
-          aria-labelledby="workflows-title"
-        >
-          <div className={styles.workflowsCopy}>
-            <p className={styles.eyebrow}>{t("workflows.eyebrow")}</p>
-            <h2 id="workflows-title">{t("workflows.title")}</h2>
-            <p className={styles.sectionLead}>{t("workflows.description")}</p>
-            <div className={styles.workflowList}>
-              {(["stores", "team", "customers"] as const).map((id, i) => (
-                <article key={id}>
-                  <MarketingIcon name={(["store", "people", "receipt"] as const)[i]} />
-                  <div>
-                    <h3>{t(`workflows.${id}.title`)}</h3>
-                    <p>{t(`workflows.${id}.body`)}</p>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </div>
-          <div className={styles.mobileCard}>
-            <div className={styles.mobileCopy}>
-              <span className={styles.mobileBadge}>{t("mobile.eyebrow")}</span>
-              <h2>{t("mobile.title")}</h2>
-              <p>{t("mobile.description")}</p>
-            </div>
-            <MobilePreview />
-            <p className={styles.mobileCaption}>{t("preview.caption")}</p>
-          </div>
-        </section>
+const IntegrationFlow = () => (
+  <div
+    className={styles.integrationConsole}
+    aria-label="Каналы продаж, синхронизированные с Bazaar"
+  >
+    <div className={styles.integrationConsoleHeader}>
+      <div className={styles.integrationIdentity}>
+        <Image src="/brand/icon.png" width={42} height={42} alt="" />
+        <p>
+          <strong>Единый каталог Bazaar</strong>
+          <span>Один источник данных для всех каналов</span>
+        </p>
+      </div>
+      <span className={styles.liveStatus}>
+        <i aria-hidden="true" />
+        Синхронизация включена
+      </span>
+    </div>
+    <div className={styles.integrationPipeline} aria-hidden="true">
+      <span>Товары</span>
+      <b>→</b>
+      <span>Цены</span>
+      <b>→</b>
+      <span>Остатки</span>
+      <b>→</b>
+      <span>Заказы</span>
+    </div>
+    <div className={styles.integrationChannels}>
+      {integrationChannels.map((channel) => (
+        <div className={styles.integrationChannel} key={channel.label}>
+          <b>{channel.mark}</b>
+          <p>
+            <strong>{channel.label}</strong>
+            <span>{channel.data}</span>
+          </p>
+          <small>
+            <i aria-hidden="true" />
+            Актуально
+          </small>
+        </div>
+      ))}
+    </div>
+  </div>
+);
 
-        <section
-          className={`${styles.container} ${styles.integrations}`}
-          aria-labelledby="integrations-title"
-        >
-          <div>
-            <p className={styles.eyebrow}>{t("integrations.eyebrow")}</p>
-            <h2 id="integrations-title">{t("integrations.title")}</h2>
-            <p>{t("integrations.description")}</p>
-          </div>
-          <div className={styles.integrationNames}>
-            <span>M-Market</span>
-            <span>Bakai Store</span>
-            <span>O! Market</span>
-            <Link href="/developers/bazaar-api">
-              Bazaar API
-              <MarketingIcon />
+const plans = [
+  {
+    name: "Новичок",
+    description: "Для первой точки и понятного старта.",
+    price: "1 750",
+    stores: "1 магазин",
+    features: ["Касса и продажи", "Товары и остатки", "Клиентская база"],
+  },
+  {
+    name: "Бизнесмен",
+    description: "Для растущего розничного бизнеса.",
+    price: "4 375",
+    stores: "до 5 магазинов",
+    features: ["Всё из Новичка", "Несколько магазинов", "Аналитика и интеграции"],
+    recommended: true,
+  },
+  {
+    name: "Монополист",
+    description: "Для сети и сложных процессов.",
+    price: "8 750",
+    stores: "до 15 магазинов",
+    features: ["Всё из Бизнесмена", "Управление сетью", "Расширенный контроль"],
+  },
+];
+
+export const MarketingLanding = () => (
+  <main className={styles.marketing} data-marketing-root>
+    <MarketingMotion />
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+    />
+    <MarketingNav />
+
+    <section className={styles.hero} aria-labelledby="hero-title">
+      <div className={styles.heroGlow} aria-hidden="true" />
+      <div className={styles.heroGrid}>
+        <div className={styles.heroCopy}>
+          <p className={styles.heroKicker}>
+            <span />
+            Retail OS для современного магазина
+          </p>
+          <h1 id="hero-title">Весь ваш магазин. В одной системе.</h1>
+          <p className={styles.heroLead}>
+            Продажи, товары, остатки, клиенты, интернет-магазины и аналитика — синхронизированы в
+            реальном времени.
+          </p>
+          <div className={styles.heroActions}>
+            <Link className={styles.primaryCta} href="/signup">
+              Начать бесплатно
+              <Arrow />
             </Link>
-          </div>
-        </section>
-
-        <section
-          id="pricing"
-          tabIndex={-1}
-          className={styles.pricing}
-          aria-labelledby="pricing-title"
-        >
-          <div className={styles.container}>
-            <div className={styles.pricingHeading}>
-              <div>
-                <p className={styles.eyebrow}>{t("pricing.eyebrow")}</p>
-                <h2 id="pricing-title">{t("pricing.title")}</h2>
-              </div>
-              <p>{t("pricing.description", { days: trialDays })}</p>
-            </div>
-            <div className={styles.planGrid}>
-              {PLAN_CODES.map((code) => {
-                const limits = getPlanLimits(code);
-                return (
-                  <article
-                    key={code}
-                    className={`${styles.planCard} ${code === "BUSINESS" ? styles.planFeatured : ""}`}
-                  >
-                    <div className={styles.planName}>
-                      <h3>{t(`pricing.${code}.name`)}</h3>
-                      {code === "BUSINESS" && <span>{t("pricing.retail")}</span>}
-                    </div>
-                    <p>{t(`pricing.${code}.description`)}</p>
-                    <div className={styles.planPrice}>
-                      <strong>{format(getPlanMonthlyPriceKgs(code))}</strong>
-                      <span>
-                        {t("pricing.currency")}
-                        <br />
-                        {t("pricing.period")}
-                      </span>
-                    </div>
-                    <div className={styles.planStores}>
-                      <MarketingIcon name="store" />
-                      <strong>{t("pricing.stores", { count: limits.maxStores })}</strong>
-                    </div>
-                    <ul>
-                      {(t.raw(`pricing.${code}.features`) as string[]).map((feature) => (
-                        <li key={feature}>
-                          <MarketingIcon name="check" />
-                          {feature}
-                        </li>
-                      ))}
-                      <li>
-                        <MarketingIcon name="check" />
-                        {t("pricing.products", { count: format(limits.maxProducts) })}
-                      </li>
-                      <li>
-                        <MarketingIcon name="check" />
-                        {t("pricing.users", { count: limits.maxActiveUsers })}
-                      </li>
-                    </ul>
-                    <Link
-                      className={code === "BUSINESS" ? styles.primaryCta : styles.outlineCta}
-                      href="/signup"
-                    >
-                      {t("actions.start")}
-                      <MarketingIcon />
-                    </Link>
-                  </article>
-                );
-              })}
-            </div>
-            <p className={styles.pricingNote}>{t("pricing.note")}</p>
-          </div>
-        </section>
-
-        <section
-          id="faq"
-          tabIndex={-1}
-          className={`${styles.container} ${styles.faq}`}
-          aria-labelledby="faq-title"
-        >
-          <div>
-            <p className={styles.eyebrow}>{t("faq.eyebrow")}</p>
-            <h2 id="faq-title">{t("faq.title")}</h2>
-            <p>{t("faq.help")}</p>
-            <a href={whatsappUrl} className={styles.textLink}>
-              {t("actions.contact")}
-              <MarketingIcon />
+            <a className={styles.secondaryCta} href="#platform">
+              Посмотреть Bazaar в действии
             </a>
           </div>
-          <div className={styles.faqList}>
-            {(["start", "import", "devices", "access"] as const).map((id) => (
-              <details key={id}>
-                <summary>
-                  {t(`faq.${id}.question`)}
-                  <MarketingIcon name="plus" />
-                </summary>
-                <p>{t(`faq.${id}.answer`)}</p>
-              </details>
-            ))}
-          </div>
-        </section>
+          <p className={styles.heroNote}>Без установки · Работает в браузере · Mobile/PWA</p>
+        </div>
 
-        <section className={`${styles.container} ${styles.finalCta}`} aria-labelledby="start-title">
-          <div>
-            <p className={styles.eyebrow}>{t("closing.eyebrow")}</p>
-            <h2 id="start-title">{t("closing.title")}</h2>
-            <p>{t("closing.description")}</p>
+        <div className={styles.heroVisual}>
+          <div className={styles.heroDesktop}>
+            <ProductWindow
+              src="/marketing/captures/pos-desktop-wide.webp"
+              alt="Настоящий интерфейс настольной кассы Bazaar с каталогом и текущим чеком"
+              priority
+            />
           </div>
-          <div>
-            <Link href="/signup" className={styles.primaryCta}>
-              {t("actions.try")}
-              <MarketingIcon />
-            </Link>
-            <span>{t("hero.note", { days: trialDays })}</span>
+          <div className={styles.heroProducts} aria-hidden="true">
+            <Image
+              src="/marketing/captures/products-wide.webp"
+              alt=""
+              width={1920}
+              height={1080}
+              sizes="360px"
+            />
           </div>
-        </section>
-      </main>
-      <footer className={`${styles.container} ${styles.footer}`}>
-        <div className={styles.footerTop}>
-          <div>
-            <Link href="/" className={styles.brand} aria-label={t("nav.home")}>
-              <Image src="/brand/icon.png" width={32} height={32} alt="" />
-              <span>BAZAAR</span>
-            </Link>
-            <p>{t("footer.description")}</p>
+          <div className={styles.heroPhone}>
+            <div className={styles.phoneSpeaker} aria-hidden="true" />
+            <Image
+              src="/marketing/captures/pos-mobile.webp"
+              alt="Настоящий мобильный интерфейс Bazaar POS"
+              width={780}
+              height={1688}
+              sizes="(max-width: 767px) 36vw, 230px"
+            />
           </div>
-          <div className={styles.footerLinks}>
-            <nav aria-label={t("footer.product")}>
-              <h3>{t("footer.product")}</h3>
-              <a href="#platform">{t("nav.platform")}</a>
-              <a href="#pricing">{t("nav.pricing")}</a>
-              <Link href="/developers/bazaar-api">Bazaar API</Link>
-            </nav>
-            <nav aria-label={t("footer.support")}>
-              <h3>{t("footer.support")}</h3>
-              <Link href="/help">{t("footer.help")}</Link>
-              <a href={whatsappUrl}>
-                WhatsApp
-                <MarketingIcon />
-              </a>
-              <Link href="/login">{t("actions.login")}</Link>
-            </nav>
+          <div className={styles.activityStack} aria-label="Примеры активности магазина">
+            <div>
+              <Glyph>✓</Glyph>
+              <p>
+                <b>Продажа завершена</b>
+                <span>3 220 сом</span>
+              </p>
+            </div>
+            <div>
+              <Glyph>−2</Glyph>
+              <p>
+                <b>Остаток обновлён</b>
+                <span>Матча Yuzu</span>
+              </p>
+            </div>
+            <div>
+              <Glyph>O!</Glyph>
+              <p>
+                <b>O! Market</b>
+                <span>128 товаров синхронизировано</span>
+              </p>
+            </div>
           </div>
         </div>
-        <div className={styles.footerBottom}>
-          <span>© {new Date().getFullYear()} Bazaar</span>
-          <span>{t("footer.origin")}</span>
-          <Link href="/privacy">{t("footer.privacy")}</Link>
+      </div>
+      <div className={styles.heroSystems} aria-label="Системы Bazaar">
+        {[
+          "POS",
+          "Products",
+          "Inventory",
+          "Customers",
+          "Analytics",
+          "Marketplaces",
+          "Bazaar API",
+          "Mobile / PWA",
+        ].map((system) => (
+          <span key={system}>{system}</span>
+        ))}
+      </div>
+    </section>
+
+    <section id="platform" className={styles.platformIntro}>
+      <div className={styles.sectionHeading} data-reveal>
+        <p className={styles.eyebrow}>
+          <span>01</span>Одна операционная система
+        </p>
+        <h2>
+          Не набор модулей.
+          <br />
+          Один поток данных.
+        </h2>
+        <p>
+          Продажа меняет остаток. Остаток обновляет каналы. Каналы возвращают заказы. Аналитика
+          показывает результат — без ручной сверки между системами.
+        </p>
+      </div>
+      <FeatureShowcase />
+    </section>
+
+    <Story
+      id="pos"
+      number="02"
+      eyebrow="POS"
+      title="Продавайте за секунды"
+      description="Касса Bazaar оставляет кассиру только то, что нужно для быстрой и точной продажи — от сканирования до фискального результата."
+      bullets={[
+        "Поиск и штрихкод",
+        "Клиент, скидка и разделённая оплата",
+        "Отложенные чеки, возвраты и журнал",
+      ]}
+      visual={
+        <ProductWindow
+          src="/marketing/captures/pos-desktop-wide.webp"
+          alt="Настольная касса Bazaar"
+        />
+      }
+      dark
+    />
+
+    <Story
+      id="inventory"
+      number="03"
+      eyebrow="Inventory"
+      title="Каждый товар под контролем"
+      description="Поступления, перемещения, списания и пересчёты формируют одну прозрачную историю движения по каждому магазину и варианту."
+      bullets={[
+        "Текущий и минимальный остаток",
+        "Оприходование, перемещение и списание",
+        "Product Movement и себестоимость",
+      ]}
+      visual={
+        <ProductWindow
+          src="/marketing/captures/movements-wide.webp"
+          alt="История движения товаров в Bazaar"
+        />
+      }
+      reverse
+    />
+
+    <section id="commerce" className={styles.commerceSection}>
+      <div className={styles.commerceHeading} data-reveal>
+        <p className={styles.eyebrow}>
+          <span>04</span>Commerce
+        </p>
+        <h2>
+          Один каталог.
+          <br />
+          Все каналы продаж.
+        </h2>
+        <p>
+          Bazaar API, маркетплейсы и коммуникации с клиентами работают вокруг одного каталога, одной
+          цены и одного остатка.
+        </p>
+      </div>
+      <div className={styles.commerceGrid}>
+        <IntegrationFlow />
+        <div className={styles.commerceScreenshot} data-reveal>
+          <ProductWindow
+            src="/marketing/captures/integrations-wide.webp"
+            alt="Центр интеграций Bazaar"
+          />
         </div>
-      </footer>
-    </div>
-  );
-};
+      </div>
+    </section>
+
+    <Story
+      id="analytics"
+      number="05"
+      eyebrow="Analytics"
+      title="Видите не отчёты. Видите бизнес."
+      description="Bazaar соединяет продажи, стоимость запасов и себестоимость, чтобы цифры отвечали на ежедневные вопросы владельца."
+      bullets={[
+        "Выручка и валовая прибыль",
+        "Стоимость запасов и потенциальная маржа",
+        "Топ товаров и сравнение магазинов",
+      ]}
+      visual={
+        <ProductWindow
+          src="/marketing/captures/dashboard-wide.webp"
+          alt="Бизнес-панель Bazaar с продажами и маржой"
+        />
+      }
+      dark
+    />
+
+    <section id="mobile" className={styles.mobileSection}>
+      <div className={styles.mobileCopy} data-reveal>
+        <p className={styles.eyebrow}>
+          <span>06</span>Mobile / PWA
+        </p>
+        <h2>Bazaar всегда с вами</h2>
+        <p>
+          Продажа, каталог и рабочие операции адаптированы под телефон и планшет. Это не уменьшенный
+          desktop — мобильный сценарий собран отдельно.
+        </p>
+        <div className={styles.mobileBadges}>
+          <span>Установка как приложение</span>
+          <span>Сканирование камерой</span>
+          <span>Светлая и тёмная темы</span>
+        </div>
+      </div>
+      <div className={styles.deviceStage} data-reveal>
+        <div className={styles.tabletFrame}>
+          <Image
+            src="/marketing/captures/dashboard-wide.webp"
+            alt="Bazaar на планшете"
+            width={1920}
+            height={1080}
+            sizes="700px"
+          />
+        </div>
+        <div className={styles.mobilePhoneFrame}>
+          <div aria-hidden="true" />
+          <Image
+            src="/marketing/captures/pos-mobile.webp"
+            alt="Мобильная касса Bazaar"
+            width={780}
+            height={1688}
+            sizes="240px"
+          />
+        </div>
+      </div>
+    </section>
+
+    <section className={styles.proofSection} aria-labelledby="proof-title">
+      <div data-reveal>
+        <p className={styles.eyebrow}>
+          <span>07</span>Trust
+        </p>
+        <h2 id="proof-title">Доказательства, а не придуманные цифры.</h2>
+      </div>
+      <p data-reveal>
+        Здесь появятся только подтверждённые кейсы, логотипы и показатели — после согласия клиентов.
+        До этого Bazaar не публикует вымышленные отзывы или статистику.
+      </p>
+    </section>
+
+    <section id="pricing" className={styles.pricingSection}>
+      <div className={styles.sectionHeading} data-reveal>
+        <p className={styles.eyebrow}>
+          <span>08</span>Pricing
+        </p>
+        <h2>
+          Понятные тарифы.
+          <br />
+          Без сложной математики.
+        </h2>
+        <p>Начните с одной точки и расширяйте систему вместе с бизнесом.</p>
+      </div>
+      <div className={styles.planGrid}>
+        {plans.map((plan) => (
+          <article
+            key={plan.name}
+            className={`${styles.planCard} ${plan.recommended ? styles.planFeatured : ""}`}
+            data-reveal
+          >
+            {plan.recommended ? <span className={styles.recommended}>Рекомендуем</span> : null}
+            <h3>{plan.name}</h3>
+            <p>{plan.description}</p>
+            <div className={styles.planPrice}>
+              <b>{plan.price}</b>
+              <span>сом / месяц</span>
+            </div>
+            <strong>{plan.stores}</strong>
+            <ul>
+              {plan.features.map((feature) => (
+                <li key={feature}>
+                  <Check />
+                  {feature}
+                </li>
+              ))}
+            </ul>
+            <Link href="/signup">
+              Начать бесплатно <Arrow />
+            </Link>
+          </article>
+        ))}
+      </div>
+      <details className={styles.planComparison}>
+        <summary>
+          Сравнить тарифы <Arrow />
+        </summary>
+        <div>
+          <p>
+            <b>Новичок</b>
+            <span>Основные операции одного магазина</span>
+          </p>
+          <p>
+            <b>Бизнесмен</b>
+            <span>Мультистор, расширенная аналитика и интеграции</span>
+          </p>
+          <p>
+            <b>Монополист</b>
+            <span>Сеть магазинов и расширенный контроль</span>
+          </p>
+        </div>
+      </details>
+    </section>
+
+    <section className={styles.finalCta}>
+      <div data-reveal>
+        <p>Retail OS · Bazaar</p>
+        <h2>
+          Ваш магазин уже работает.
+          <br />
+          Теперь пусть он работает как система.
+        </h2>
+        <Link href="/signup">
+          Начать с Bazaar <Arrow />
+        </Link>
+      </div>
+    </section>
+
+    <footer className={styles.footer}>
+      <div className={styles.footerBrand}>
+        <Link href="/" aria-label="Bazaar — на главную">
+          <Image src="/brand/icon.png" alt="" width={34} height={34} />
+          <span>BAZAAR</span>
+        </Link>
+        <p>Retail Operating System для современного магазина.</p>
+      </div>
+      <div className={styles.footerLinks}>
+        <div>
+          <h3>Product</h3>
+          <a href="#pos">Касса</a>
+          <a href="#inventory">Запасы</a>
+          <a href="#analytics">Аналитика</a>
+        </div>
+        <div>
+          <h3>Solutions</h3>
+          <a href="#platform">Retail OS</a>
+          <a href="#mobile">Mobile / PWA</a>
+          <a href="#pricing">Тарифы</a>
+        </div>
+        <div>
+          <h3>Integrations</h3>
+          <a href="#commerce">Commerce</a>
+          <Link href="/developers/bazaar-api">Bazaar API</Link>
+          <a href="#commerce">Маркетплейсы</a>
+        </div>
+        <div>
+          <h3>Company / Support</h3>
+          <a href={whatsappUrl}>Связаться</a>
+          <Link href="/login">Войти</Link>
+          <Link href="/signup">Регистрация</Link>
+        </div>
+        <div>
+          <h3>Legal</h3>
+          <a href={`${whatsappUrl}?text=Legal%20information`}>Правовая информация</a>
+          <a href={`${whatsappUrl}?text=Privacy%20request`}>Конфиденциальность</a>
+        </div>
+      </div>
+      <div className={styles.footerBottom}>
+        <span>© {new Date().getFullYear()} Bazaar</span>
+        <span>Сделано для розничной торговли Кыргызстана</span>
+      </div>
+    </footer>
+  </main>
+);

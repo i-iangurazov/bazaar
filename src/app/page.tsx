@@ -1,49 +1,46 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { getLocale, getTranslations } from "next-intl/server";
 
 import { MarketingLanding } from "@/components/marketing/MarketingLanding";
 import { getServerAuthToken } from "@/server/auth/token";
 
 const siteUrl = "https://www.bazaar.kg";
 
-export const generateMetadata = async (): Promise<Metadata> => {
-  const t = await getTranslations("marketing");
-  const locale = await getLocale();
-  return {
-    metadataBase: new URL(siteUrl),
-    title: { absolute: t("meta.title") },
-    description: t("meta.description"),
-    alternates: {
-      canonical: "/",
-    },
-    openGraph: {
-      title: t("meta.title"),
-      description: t("meta.description"),
-      url: siteUrl,
-      siteName: "Bazaar",
-      locale: locale === "en" ? "en_US" : locale === "kg" ? "ky_KG" : "ru_KG",
-      type: "website",
-      images: [
-        {
-          url: "/marketing/captures/dashboard-wide.webp",
-          width: 1920,
-          height: 1080,
-          alt: t("showcase.reports.alt"),
-        },
-      ],
-    },
-    twitter: {
-      card: "summary_large_image",
-      title: t("meta.title"),
-      description: t("meta.description"),
-      images: ["/marketing/captures/dashboard-wide.webp"],
-    },
-    robots: {
-      index: true,
-      follow: true,
-    },
-  };
+export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
+  title: "Bazaar — Retail OS для современного магазина",
+  description:
+    "Bazaar объединяет кассу, товары, остатки, клиентов, аналитику, маркетплейсы, Bazaar API и мобильную работу в одной retail-системе.",
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    title: "Bazaar — весь ваш магазин в одной системе",
+    description:
+      "Продажи, товары, остатки, клиенты, интернет-магазины и аналитика синхронизированы в реальном времени.",
+    url: siteUrl,
+    siteName: "Bazaar",
+    locale: "ru_KG",
+    type: "website",
+    images: [
+      {
+        url: "/marketing/captures/dashboard-wide.webp",
+        width: 1440,
+        height: 900,
+        alt: "Рабочая панель Bazaar Retail OS",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Bazaar — Retail OS для современного магазина",
+    description: "Касса, запасы, товары, клиенты, commerce и аналитика в одной системе.",
+    images: ["/marketing/captures/dashboard-wide.webp"],
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
 };
 
 const RootPage = async () => {

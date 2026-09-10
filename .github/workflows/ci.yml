@@ -337,14 +337,14 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm prisma:generate
       - run: pnpm exec playwright install --with-deps chromium
-      - name: Verify landing on four widths and three languages
+      - name: Verify restored landing, mobile navigation, themes and localized entry points
         run: node scripts/marketing/run.mjs
       - name: Upload landing screenshots and browser report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: landing-browser
-          path: artifacts/bazaar-landing-redesign
+          path: artifacts/bazaar-landing-restoration
           if-no-files-found: error
 
   native-android:

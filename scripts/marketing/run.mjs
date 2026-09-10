@@ -1,8 +1,8 @@
 import { spawn } from "node:child_process";
 import { mkdir, open } from "node:fs/promises";
 
-await mkdir("artifacts/bazaar-landing-redesign", { recursive: true });
-const output = await open("artifacts/bazaar-landing-redesign/server.log", "w");
+await mkdir("artifacts/bazaar-landing-restoration", { recursive: true });
+const output = await open("artifacts/bazaar-landing-restoration/server.log", "w");
 const server = spawn(process.execPath, ["scripts/marketing/serve.mjs"], {
   stdio: ["ignore", output.fd, output.fd],
 });

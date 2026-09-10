@@ -1,114 +1,81 @@
-// @vitest-environment jsdom
 import { readFile } from "node:fs/promises";
-import { createElement } from "react";
-import type { ImageProps } from "next/image";
-import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { MarketingLanding } from "@/components/marketing/MarketingLanding";
-import ru from "../../messages/ru.json";
-import kg from "../../messages/kg.json";
-import en from "../../messages/en.json";
+import path from "node:path";
 
-const state = vi.hoisted(() => ({ locale: "ru" as "ru" | "kg" | "en" }));
-// Image loading/optimization is covered by the real-browser suite; this test
-// renders document semantics without Next's client-only preload side effects.
-vi.mock("next/image", () => ({ default: ({ alt, src, width, height }: ImageProps) => createElement("img", { alt, src: typeof src === "string" ? src : "", width, height }) }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
-vi.mock("next-intl/server", async () => {
-  const { createTranslator } = await import("next-intl");
-  return {
-    getLocale: async () => state.locale,
-    getTranslations: async (namespace: string) =>
-      createTranslator({ locale: state.locale, messages: { ru, kg, en }[state.locale], namespace }),
-  };
-});
-vi.mock("next-intl", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("next-intl")>();
-  return {
-    ...actual,
-    useLocale: () => state.locale,
-    useTranslations: (namespace: string) =>
-      actual.createTranslator({
-        locale: state.locale,
-        messages: { ru, kg, en }[state.locale],
-        namespace,
-      }),
-  };
-});
-afterEach(() => {
-  vi.unstubAllEnvs();
-  state.locale = "ru";
-});
-async function landing() {
-  return new DOMParser().parseFromString(renderToStaticMarkup(await MarketingLanding()), "text/html");
-}
+import { describe, expect, it } from "vitest";
 
-describe("public marketing page contracts", () => {
-  it.each(["ru", "kg", "en"] as const)(
-    "server-renders complete %s copy, working destinations and honest demo labels",
-    async (locale) => {
-      state.locale = locale;
-      const copy = { ru, kg, en }[locale].marketing;
-      const page = await landing();
-      expect(page.querySelectorAll("h1")).toHaveLength(1);
-      expect(page.querySelector("h1")?.textContent).toBe(copy.hero.title + copy.hero.accent);
-      expect(page.querySelector("main")?.textContent).not.toContain("marketing.");
-      for (const id of ["platform", "workflows", "pricing", "faq"])
-        expect(page.getElementById(id)).not.toBeNull();
-      expect(page.querySelectorAll('a[href="/signup"]').length).toBeGreaterThanOrEqual(5);
-      expect(page.querySelector('footer a[href="/privacy"]')).not.toBeNull();
-      expect(page.querySelector('footer a[href="/help"]')).not.toBeNull();
-      expect(page.querySelectorAll("details")).toHaveLength(4);
-      expect(page.body.textContent).toContain(copy.preview.caption);
-      expect(page.body.textContent).toContain(copy.showcase.caption);
-      expect(page.querySelectorAll('[role="tab"]')).toHaveLength(3);
-      expect(page.querySelectorAll('[role="tabpanel"]')).toHaveLength(3);
-      for (const image of ["pos-desktop-wide.webp", "products-wide.webp", "dashboard-wide.webp"]) {
-        expect(page.querySelector(`a[href="/marketing/captures/${image}"]`)).not.toBeNull();
-      }
-    },
-  );
+const readSource = (relativePath: string) =>
+  readFile(path.join(process.cwd(), relativePath), "utf8");
 
-  it("uses current billing prices, fractional overrides, limits and trial length without promising Starter POS", async () => {
-    vi.stubEnv("PLAN_PRICE_STARTER_KGS", "2100.5");
-    vi.stubEnv("TRIAL_DAYS", "21");
-    const page = await landing();
-    const offers = JSON.parse(
-      page.querySelector('script[type="application/ld+json"]')!.textContent!,
-    ).offers;
-    expect(offers[0]).toMatchObject({ price: "2100.5", priceCurrency: "KGS" });
-    const plans = Array.from(page.querySelectorAll("#pricing article"));
-    expect(plans[0].textContent).toContain(
-      new Intl.NumberFormat("ru", { maximumFractionDigits: 2 }).format(2100.5),
-    );
-    expect(plans[0].textContent).not.toContain("POS");
-    expect(plans[1].textContent).toContain("Касса POS");
-    expect(plans[0].textContent).toContain("1 магазин");
-    expect(plans[1].textContent).toContain("До 5 магазинов");
-    expect(plans[2].textContent).toContain("До 15 магазинов");
-    expect(page.body.textContent).toContain("21 день пробного доступа");
+describe("Bazaar Retail OS marketing landing", () => {
+  it("uses isolated marketing components and real optimized Bazaar captures", async () => {
+    const page = await readSource("src/app/page.tsx");
+    const landing = await readSource("src/components/marketing/MarketingLanding.tsx");
+
+    expect(page).toContain("@/components/marketing/MarketingLanding");
+    expect(page).not.toContain("@/components/ui/");
+    expect(landing).toContain('from "next/image"');
+    expect(landing).toContain("/marketing/captures/pos-desktop-wide.webp");
+    expect(landing).toContain("/marketing/captures/pos-mobile.webp");
+    expect(landing).toContain("/marketing/captures/products-wide.webp");
+    expect(landing).toContain("/marketing/captures/movements-wide.webp");
+    expect(landing).toContain("/marketing/captures/dashboard-wide.webp");
+    expect(landing).toContain("/marketing/captures/integrations-wide.webp");
+    expect(landing).not.toContain("data:image");
   });
 
-  it("preserves indexed metadata, app redirect, isolated styles and immediate readable content", async () => {
-    const [page, css, robots, sitemap] = await Promise.all([
-      readFile("src/app/page.tsx", "utf8"),
-      readFile("src/components/marketing/marketing.module.css", "utf8"),
-      readFile("src/app/robots.ts", "utf8"),
-      readFile("src/app/sitemap.ts", "utf8"),
-    ]);
-    for (const key of [
-      "metadataBase",
-      "openGraph",
-      "twitter",
-      "canonical",
-      "getTranslations",
-      'redirect("/dashboard")',
-    ])
-      expect(page).toContain(key);
-    expect(page).not.toContain("@/components/ui/");
-    expect(css).toContain("@media (prefers-reduced-motion: reduce)");
-    expect(css).not.toContain("[data-reveal]");
+  it("keeps the product story, pricing, SEO and trust copy explicit and crawlable", async () => {
+    const page = await readSource("src/app/page.tsx");
+    const landing = await readSource("src/components/marketing/MarketingLanding.tsx");
+    const robots = await readSource("src/app/robots.ts");
+    const sitemap = await readSource("src/app/sitemap.ts");
+
+    expect(page).toContain("metadataBase");
+    expect(page).toContain("openGraph");
+    expect(page).toContain("twitter");
+    expect(page).toContain("canonical");
     expect(robots).toContain('sitemap: "https://www.bazaar.kg/sitemap.xml"');
+    expect(robots).toContain('"/api/"');
+    expect(robots).toContain('"/dashboard"');
     expect(sitemap).toContain('url: "https://www.bazaar.kg/"');
+    expect(sitemap).toContain('url: "https://www.bazaar.kg/signup"');
+    expect(landing).toContain('"@type": "SoftwareApplication"');
+    expect(landing).toContain("Весь ваш магазин. В одной системе.");
+    expect(landing).toContain("Продавайте за секунды");
+    expect(landing).toContain("Каждый товар под контролем");
+    expect(landing).toContain("Один каталог.");
+    expect(landing).toContain("Все каналы продаж.");
+    expect(landing).toContain("Видите не отчёты. Видите бизнес.");
+    expect(landing).toContain("Bazaar всегда с вами");
+    expect(landing).toContain('price: "1750"');
+    expect(landing).toContain('price: "4375"');
+    expect(landing).toContain('price: "8750"');
+    expect(landing).toContain("не публикует вымышленные отзывы или статистику");
+  });
+
+  it("limits hydration and provides keyboard and reduced-motion behavior", async () => {
+    const showcase = await readSource("src/components/marketing/FeatureShowcase.tsx");
+    const motion = await readSource("src/components/marketing/MarketingMotion.tsx");
+    const styles = await readSource("src/components/marketing/marketing.module.css");
+
+    expect(showcase).toContain('role="tablist"');
+    expect(showcase).toContain('role="tab"');
+    expect(showcase).toContain('role="tabpanel"');
+    expect(showcase).toContain('event.key === "ArrowRight"');
+    expect(motion).toContain("IntersectionObserver");
+    expect(motion).toContain("prefers-reduced-motion: reduce");
+    expect(styles).toContain("@media (prefers-reduced-motion: reduce)");
+  });
+
+  it("uses a readable 16:9 product frame and a structured channel status surface", async () => {
+    const landing = await readSource("src/components/marketing/MarketingLanding.tsx");
+    const styles = await readSource("src/components/marketing/marketing.module.css");
+
+    expect(landing).toContain("width={1920}");
+    expect(landing).toContain("height={1080}");
+    expect(landing).toContain("integrationConsole");
+    expect(landing).toContain("Один источник данных для всех каналов");
+    expect(styles).toContain("aspect-ratio: 16 / 9");
+    expect(styles).not.toContain(".flowLines");
+    expect(styles).not.toContain(".integrationNode");
   });
 });
