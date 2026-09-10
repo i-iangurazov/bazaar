@@ -120,7 +120,10 @@ const normalizeOptionalParam = (value: string) => {
 };
 
 const shortDocumentReference = (documentId: string) =>
-  documentId.replace(/[^a-z0-9]/gi, "").slice(0, 8).toUpperCase() || documentId.slice(0, 8);
+  documentId
+    .replace(/[^a-z0-9]/gi, "")
+    .slice(0, 8)
+    .toUpperCase() || documentId.slice(0, 8);
 
 const ProductMovementsPage = () => {
   const t = useTranslations("inventory.movementJournal");
@@ -386,8 +389,9 @@ const ProductMovementsPage = () => {
       <Badge variant={paymentVariant(value)}>{paymentStatusLabel(value)}</Badge>
     );
 
-  const editDisabledReasonLabel = (reason: NonNullable<ReturnType<typeof getProductMovementEditTarget>["disabledReason"]>) =>
-    t(`editUnavailable.${reason}`);
+  const editDisabledReasonLabel = (
+    reason: NonNullable<ReturnType<typeof getProductMovementEditTarget>["disabledReason"]>,
+  ) => t(`editUnavailable.${reason}`);
 
   const renderActions = (movement: MovementRow, layout: "desktop" | "mobile" = "desktop") => {
     const isStockDocument =
@@ -470,8 +474,7 @@ const ProductMovementsPage = () => {
         </Button>
       ) : null;
     const archiveButton =
-      archiveMode === "ACTIVE" &&
-      isPostedStockDocument ? (
+      archiveMode === "ACTIVE" && isPostedStockDocument ? (
         <Button
           type="button"
           variant={layout === "desktop" ? "ghost" : "secondary"}
@@ -707,7 +710,7 @@ const ProductMovementsPage = () => {
 
   const filterControls = (
     <div className="flex w-full flex-col gap-3">
-      <div className="grid w-full gap-3 md:grid-cols-2 xl:grid-cols-[minmax(16rem,2fr)_minmax(15rem,1.5fr)_minmax(10rem,1fr)_minmax(10rem,1fr)_minmax(10rem,1fr)]">
+      <div className="grid w-full gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)_repeat(3,minmax(0,1fr))]">
         <div className="space-y-1">
           <Label htmlFor="movement-search">{tCommon("search")}</Label>
           <div className="relative">

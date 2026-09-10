@@ -11,7 +11,6 @@ import { QueryErrorState } from "@/components/query-error-state";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -21,11 +20,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
 import { formatDateTime } from "@/lib/i18nFormat";
-import {
-  buildPosFilterHref,
-  readPosEnumParam,
-  readPosPageParam,
-} from "@/lib/posUrlFilters";
+import { buildPosFilterHref, readPosEnumParam, readPosPageParam } from "@/lib/posUrlFilters";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 
@@ -190,19 +185,27 @@ const PosKkmPage = () => {
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="grid gap-3 sm:grid-cols-2">
-            <Select value={status} onValueChange={(value) => setStatus(value as FiscalReceiptStatus | "ALL")}>
+            <Select
+              value={status}
+              onValueChange={(value) => setStatus(value as FiscalReceiptStatus | "ALL")}
+            >
               <SelectTrigger aria-label={t("status")}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">{t("statusAll")}</SelectItem>
                 <SelectItem value={FiscalReceiptStatus.QUEUED}>{t("statusQueued")}</SelectItem>
-                <SelectItem value={FiscalReceiptStatus.PROCESSING}>{t("statusProcessing")}</SelectItem>
+                <SelectItem value={FiscalReceiptStatus.PROCESSING}>
+                  {t("statusProcessing")}
+                </SelectItem>
                 <SelectItem value={FiscalReceiptStatus.SENT}>{t("statusSent")}</SelectItem>
                 <SelectItem value={FiscalReceiptStatus.FAILED}>{t("statusFailed")}</SelectItem>
               </SelectContent>
             </Select>
-            <Input value={storeId} readOnly placeholder={t("storeFilterHint")} />
+            <p className="flex min-h-10 items-center text-sm text-muted-foreground">
+              {storesQuery.data?.find((store) => store.id === storeId)?.name ??
+                tCommon("allStores")}
+            </p>
           </div>
 
           {receiptsQuery.isLoading ? (

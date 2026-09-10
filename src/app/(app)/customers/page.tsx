@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CustomerSource } from "@prisma/client";
 import { useLocale, useTranslations } from "next-intl";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 
+import { ListToolbar } from "@/components/list-toolbar";
 import { PageHeader } from "@/components/page-header";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { DownloadIcon } from "@/components/icons";
@@ -83,13 +84,12 @@ const parseOption = <T extends string>(value: string | null, options: readonly T
 const CustomerDatabasePage = () => {
   const t = useTranslations("customers");
   const tCommon = useTranslations("common");
+  const tWorkspace = useTranslations("workspace");
   const tErrors = useTranslations("errors");
   const locale = useLocale();
-  const router = useRouter();
   const pathname = usePathname() ?? "/customers";
   const searchParams = useSearchParams();
   const { toast } = useToast();
-  const currentQueryString = searchParams.toString();
   const storeId = searchParams.get("storeId") ?? "";
   const search = searchParams.get("search") ?? "";
   const source = parseOption(
@@ -116,7 +116,7 @@ const CustomerDatabasePage = () => {
 
   const updateListParams = useCallback(
     (updates: Record<string, string | number | null>) => {
-      const params = new URLSearchParams(currentQueryString);
+      const params = new URLSearchParams(window.location.search);
       Object.entries(updates).forEach(([key, value]) => {
         if (value === null || value === "") {
           params.delete(key);
@@ -125,9 +125,13 @@ const CustomerDatabasePage = () => {
         }
       });
       const nextQuery = params.toString();
-      router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+      window.history.replaceState(
+        window.history.state,
+        "",
+        nextQuery ? `${pathname}?${nextQuery}` : pathname,
+      );
     },
-    [currentQueryString, pathname, router],
+    [pathname],
   );
   const setPage = (value: number) => updateListParams({ page: value === 1 ? null : value });
   const setPageSize = (value: number) =>
@@ -358,7 +362,27 @@ const CustomerDatabasePage = () => {
 
   const emptyState = (
     <Card className="bazaar-admin-surface">
-      <CardContent className="bazaar-admin-empty">{t("empty")}</CardContent>
+      <CardContent className="bazaar-admin-empty">
+        <p className="font-medium text-foreground">
+          {search || source !== "ALL" ? tWorkspace("emptyFilteredTitle") : t("empty")}
+        </p>
+        {search || source !== "ALL" ? (
+          <>
+            <p className="mt-1">{tWorkspace("emptyFilteredHint")}</p>
+            <Button
+              className="mt-3"
+              variant="secondary"
+              onClick={() => updateListParams({ search: null, source: null, page: null })}
+            >
+              {tWorkspace("resetFilters")}
+            </Button>
+          </>
+        ) : (
+          <Button className="mt-3" onClick={openAdd} disabled={!storeId}>
+            {t("actions.add")}
+          </Button>
+        )}
+      </CardContent>
     </Card>
   );
 
@@ -368,7 +392,7 @@ const CustomerDatabasePage = () => {
         title={t("title")}
         subtitle={t("subtitle")}
         action={
-          <div className="hidden gap-2 md:flex">
+          <div className="flex flex-wrap gap-2">
             <Button
               type="button"
               variant="outline"
@@ -383,97 +407,34 @@ const CustomerDatabasePage = () => {
             </Button>
           </div>
         }
-        filters={
-          <div className="hidden md:contents">
-            <div className="w-full sm:w-64">
-              <Label htmlFor="customer-store">{t("filters.store")}</Label>
-              <Select
-                value={storeId}
-                onValueChange={(value) => {
-                  setFilter("storeId", value);
-                }}
-              >
-                <SelectTrigger
-                  id="customer-store"
-                  className="min-w-0 gap-2 [&>span]:min-w-0 [&>span]:truncate [&>svg]:shrink-0"
-                  title={selectedStore?.name}
-                >
-                  <SelectValue placeholder={t("filters.storePlaceholder")} />
-                </SelectTrigger>
-                <SelectContent>
-                  {stores.map((store) => (
-                    <SelectItem key={store.id} value={store.id}>
-                      {store.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="w-full sm:w-72">
-              <Label htmlFor="customer-search">{t("filters.search")}</Label>
-              <Input
-                id="customer-search"
-                value={search}
-                onChange={(event) => {
-                  setFilter("search", event.target.value);
-                }}
-                placeholder={t("filters.searchPlaceholder")}
-              />
-            </div>
-            <div className="w-full sm:w-56">
-              <Label htmlFor="customer-source">{t("filters.source")}</Label>
-              <Select
-                value={source}
-                onValueChange={(value) => {
-                  setFilter("source", value === "ALL" ? null : value);
-                }}
-              >
-                <SelectTrigger id="customer-source">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">{t("filters.allSources")}</SelectItem>
-                  {sourceValues.map((value) => (
-                    <SelectItem key={value} value={value}>
-                      {renderSource(value)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="w-full sm:w-56">
-              <Label htmlFor="customer-sort">{t("filters.sort")}</Label>
-              <Select
-                value={`${sortBy}:${sortDirection}`}
-                onValueChange={(value) => {
-                  const [nextSortBy, nextDirection] = value.split(":");
-                  updateListParams({
-                    sortBy: nextSortBy === "createdAt" ? null : nextSortBy,
-                    sortDirection: nextDirection === "desc" ? null : nextDirection,
-                    page: null,
-                  });
-                }}
-              >
-                <SelectTrigger id="customer-sort">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="createdAt:desc">{t("filters.sortNewest")}</SelectItem>
-                  <SelectItem value="createdAt:asc">{t("filters.sortOldest")}</SelectItem>
-                  <SelectItem value="name:asc">{t("filters.sortName")}</SelectItem>
-                  <SelectItem value="lastOrderAt:desc">
-                    {t("filters.sortRecentPurchase")}
-                  </SelectItem>
-                  <SelectItem value="orderCount:desc">{t("filters.sortPurchases")}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        }
       />
-
-      <section data-mobile-customers-toolbar className="mb-5 space-y-4 md:hidden">
-        <div className="bazaar-admin-toolbar space-y-3">
+      <ListToolbar
+        total={customersQuery.data?.total}
+        loading={customersQuery.isFetching}
+        filters={[
+          ...(search
+            ? [
+                {
+                  key: "search",
+                  label: `${tCommon("search")}: ${search}`,
+                  onRemove: () => setFilter("search", null),
+                },
+              ]
+            : []),
+          ...(source !== "ALL"
+            ? [
+                {
+                  key: "source",
+                  label: renderSource(source),
+                  onRemove: () => setFilter("source", null),
+                },
+              ]
+            : []),
+        ]}
+        onReset={() => updateListParams({ search: null, source: null, page: null })}
+      >
+        <div className="min-w-0 flex-1 basis-48">
+          <Label htmlFor="customer-store">{t("filters.store")}</Label>
           <Select
             value={storeId}
             onValueChange={(value) => {
@@ -481,7 +442,8 @@ const CustomerDatabasePage = () => {
             }}
           >
             <SelectTrigger
-              className="min-h-11 min-w-0 gap-2 [&>span]:min-w-0 [&>span]:truncate [&>svg]:shrink-0"
+              id="customer-store"
+              className="min-w-0 gap-2 [&>span]:min-w-0 [&>span]:truncate [&>svg]:shrink-0"
               title={selectedStore?.name}
             >
               <SelectValue placeholder={t("filters.storePlaceholder")} />
@@ -494,45 +456,41 @@ const CustomerDatabasePage = () => {
               ))}
             </SelectContent>
           </Select>
+        </div>
+        <div className="min-w-0 flex-1 basis-60">
+          <Label htmlFor="customer-search">{t("filters.search")}</Label>
           <Input
-            className="min-h-11"
+            id="customer-search"
             value={search}
             onChange={(event) => {
               setFilter("search", event.target.value);
             }}
-            placeholder={t("filters.mobileSearchPlaceholder")}
+            placeholder={t("filters.searchPlaceholder")}
           />
-          <div
-            className="scrollbar-none -mx-1 flex gap-2 overflow-x-auto px-1 pb-1"
-            role="group"
-            aria-label={t("filters.source")}
+        </div>
+        <div className="min-w-0 flex-1 basis-44">
+          <Label htmlFor="customer-source">{t("filters.source")}</Label>
+          <Select
+            value={source}
+            onValueChange={(value) => {
+              setFilter("source", value === "ALL" ? null : value);
+            }}
           >
-            <Button
-              type="button"
-              size="sm"
-              variant={source === "ALL" ? "primary" : "secondary"}
-              className="min-h-10 shrink-0"
-              onClick={() => {
-                setFilter("source", null);
-              }}
-            >
-              {t("filters.allSources")}
-            </Button>
-            {sourceValues.map((value) => (
-              <Button
-                key={value}
-                type="button"
-                size="sm"
-                variant={source === value ? "primary" : "secondary"}
-                className="min-h-10 shrink-0"
-                onClick={() => {
-                  setFilter("source", value);
-                }}
-              >
-                {renderSource(value)}
-              </Button>
-            ))}
-          </div>
+            <SelectTrigger id="customer-source">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">{t("filters.allSources")}</SelectItem>
+              {sourceValues.map((value) => (
+                <SelectItem key={value} value={value}>
+                  {renderSource(value)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="min-w-0 flex-1 basis-44">
+          <Label htmlFor="customer-sort">{t("filters.sort")}</Label>
           <Select
             value={`${sortBy}:${sortDirection}`}
             onValueChange={(value) => {
@@ -544,7 +502,7 @@ const CustomerDatabasePage = () => {
               });
             }}
           >
-            <SelectTrigger className="min-h-11" aria-label={t("filters.sort")}>
+            <SelectTrigger id="customer-sort">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -555,23 +513,8 @@ const CustomerDatabasePage = () => {
               <SelectItem value="orderCount:desc">{t("filters.sortPurchases")}</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            className="min-h-12 w-full"
-            onClick={() => setExportOpen(true)}
-            disabled={!storeId || customersQuery.isLoading || !customersQuery.data?.total}
-          >
-            <DownloadIcon className="h-4 w-4" aria-hidden />
-            {t("actions.export")}
-          </Button>
-          <Button type="button" className="min-h-12 w-full" onClick={openAdd} disabled={!storeId}>
-            {t("actions.add")}
-          </Button>
-        </div>
-      </section>
+        </div>{" "}
+      </ListToolbar>
 
       {!storesQuery.isLoading && !stores.length ? (
         <Card className="bazaar-admin-surface">

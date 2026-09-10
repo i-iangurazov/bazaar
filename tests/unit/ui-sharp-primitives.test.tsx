@@ -126,7 +126,7 @@ describe("soft-rounded UI primitives", () => {
     );
 
     expect(screen.getByTestId("card").className).toContain("rounded-xl");
-    expect(screen.getByTestId("table-container").className).toContain("rounded-md");
+    expect(screen.getByTestId("table-container").className).toContain("rounded-lg");
     expect(screen.getByTestId("popover").className).toContain("rounded-md");
     expect(screen.getByTestId("skeleton").className).toContain("rounded-md");
     expect(screen.getByText("Nothing here").className).toContain("text-sm");
@@ -160,7 +160,7 @@ describe("soft-rounded UI primitives", () => {
       </Modal>,
     );
 
-    expect(screen.getByRole("dialog", { name: "Confirm" }).className).toContain("rounded-md");
+    expect(screen.getByRole("dialog", { name: "Confirm" }).className).toContain("rounded-xl");
     const footer = screen.getByRole("button", { name: "Apply" }).parentElement;
     expect(footer?.className).toContain("flex-col-reverse");
     expect(footer?.className).toContain("sm:justify-end");
@@ -256,7 +256,12 @@ describe("soft-rounded UI primitives", () => {
             moreLabel="More actions"
             actions={[
               { key: "view", label: "View", icon: ViewIcon },
-              { key: "duplicate", label: "Duplicate", icon: CopyIcon, onSelect: () => setOpen(true) },
+              {
+                key: "duplicate",
+                label: "Duplicate",
+                icon: CopyIcon,
+                onSelect: () => setOpen(true),
+              },
             ]}
           />
           <Modal open={open} onOpenChange={setOpen} title="Duplicate product">
@@ -274,7 +279,11 @@ describe("soft-rounded UI primitives", () => {
       );
     };
 
-    render(<TooltipProvider><Harness /></TooltipProvider>);
+    render(
+      <TooltipProvider>
+        <Harness />
+      </TooltipProvider>,
+    );
     await user.click(screen.getByRole("button", { name: "More actions" }));
     await user.click(screen.getByRole("menuitem", { name: "Duplicate" }));
 

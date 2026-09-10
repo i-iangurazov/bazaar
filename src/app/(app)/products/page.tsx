@@ -14,6 +14,8 @@ import {
   ProductDescriptionGenerationSource,
 } from "@prisma/client";
 
+import { commonListFields, useScopedListState } from "@/lib/useScopedListState";
+import { ListViewOptions, ListToolbar, ListSearch, FilterField } from "@/components/list-toolbar";
 import { PageHeader } from "@/components/page-header";
 import { ColumnVisibilityMenu } from "@/components/column-visibility-menu";
 import {
@@ -172,6 +174,14 @@ const parseCategoryRemovalUsageDetails = (message: string): CategoryRemovalUsage
   }
 };
 
+const productListFields = [
+  ...commonListFields,
+  { key: "category", param: "category" },
+  { key: "productType", param: "type" },
+  { key: "readiness", param: "readiness" },
+  { key: "showArchived", param: "archived" },
+];
+
 const productTypeFilterSchema = z.enum(["all", "product", "bundle"]);
 const productReadinessFilterSchema = z.enum([
   "all",
@@ -322,6 +332,7 @@ const ProductsPage = () => {
   const t = useTranslations("products");
   const tInventory = useTranslations("inventory");
   const tCommon = useTranslations("common");
+  const tWorkspace = useTranslations("workspace");
   const tErrors = useTranslations("errors");
   const tPrinting = useTranslations("printingSettings");
   const locale = useLocale();
@@ -439,7 +450,9 @@ const ProductsPage = () => {
     setValue: setProductsTableState,
     isReady: productsTableStateReady,
     hasStoredValue: hasStoredProductsTableState,
-  } = useScopedLocalStorageState({
+  } = useScopedListState({
+    pathname: "/products",
+    fields: productListFields,
     storageKey: productsTableStorageKey,
     defaultValue: defaultProductsTableState,
     parse: parseProductsTableState,
@@ -498,7 +511,6 @@ const ProductsPage = () => {
   const productsPageSize = productsTableState.pageSize;
   const productSort = productsTableState.sort;
   const visibleProductColumns = productsTableState.visibleColumns;
-  const readinessParam = searchParams.get("readiness");
   const productsListSearch = searchParams?.toString() ?? "";
   const productsListReturnPath = productsListSearch
     ? `/products?${productsListSearch}`
@@ -547,13 +559,6 @@ const ProductsPage = () => {
       })),
     [setProductsTableState],
   );
-  useEffect(() => {
-    const parsed = productReadinessFilterSchema.safeParse(readinessParam);
-    if (!parsed.success || readiness === parsed.data) {
-      return;
-    }
-    setReadiness(parsed.data);
-  }, [readiness, readinessParam, setReadiness]);
   const setStoreId = useCallback(
     (nextValue: string) =>
       setProductsTableState((current) => ({
@@ -650,7 +655,8 @@ const ProductsPage = () => {
     enabled: productsTableStateReady,
     keepPreviousData: true,
   });
-  const storeId = rawStoreId === "all" ? "" : rawStoreId || productsBootstrapQuery.data?.selectedStoreId || "";
+  const storeId =
+    rawStoreId === "all" ? "" : rawStoreId || productsBootstrapQuery.data?.selectedStoreId || "";
   const stores = useMemo(
     () => productsBootstrapQuery.data?.stores ?? [],
     [productsBootstrapQuery.data?.stores],
@@ -1146,7 +1152,7 @@ const ProductsPage = () => {
 
   useEffect(() => {
     setSelectedIds(new Set());
-  }, [search, category, showArchived, storeId, productType]);
+  }, [search, category, showArchived, storeId, productType, readiness, productsTableStorageKey]);
 
   useEffect(() => {
     if (!assignExistingOpen) {
@@ -1214,7 +1220,6 @@ const ProductsPage = () => {
     });
     return Array.from(set.values()).sort((a, b) => a.localeCompare(b));
   }, [getProductCategories, products, productsBootstrapQuery.data?.categories]);
-  const mobileCategoryOptions = categories.slice(0, 8);
   const categoryInputKey = normalizeProductCategoryKey(categoryInputValue);
   const categoryAlreadyExists = Boolean(
     categoryInputKey &&
@@ -1376,7 +1381,9 @@ const ProductsPage = () => {
   );
 
   useSse({
-    "inventory.updated": () => { void trpcUtils.products.bootstrap.invalidate(); },
+    "inventory.updated": () => {
+      void trpcUtils.products.bootstrap.invalidate();
+    },
   });
 
   const bulkSchema = useMemo(
@@ -1527,6 +1534,14 @@ const ProductsPage = () => {
   const allSelected =
     Boolean(products.length) && products.every((product) => selectedIds.has(product.id));
   const allResultsSelected = productsTotal > 0 && selectedIds.size === productsTotal;
+  const selectionPageKey = `${productsPage}:${productsPageSize}`;
+  const previousSelectionPage = useRef(selectionPageKey);
+  useEffect(() => {
+    if (previousSelectionPage.current !== selectionPageKey && !allResultsSelected)
+      setSelectedIds(new Set());
+    previousSelectionPage.current = selectionPageKey;
+  }, [selectionPageKey, allResultsSelected]);
+
   const arrangeCategoriesProgressPercent = arrangeCategoriesProgress
     ? Math.round(
         (arrangeCategoriesProgress.processedCount /
@@ -1593,8 +1608,10 @@ const ProductsPage = () => {
     [products, selectedIds],
   );
   const hasOffPageSelected = selectedProducts.length < selectedList.length;
-  const hasActiveSelected = hasOffPageSelected || selectedProducts.some((product) => !product.isDeleted);
-  const hasArchivedSelected = hasOffPageSelected || selectedProducts.some((product) => product.isDeleted);
+  const hasActiveSelected =
+    hasOffPageSelected || selectedProducts.some((product) => !product.isDeleted);
+  const hasArchivedSelected =
+    hasOffPageSelected || selectedProducts.some((product) => product.isDeleted);
   const bulkCategorySelectValue =
     bulkCategoryMode === "custom"
       ? customCategorySelectValue
@@ -1619,19 +1636,33 @@ const ProductsPage = () => {
     });
   }, [allSelected, products]);
 
+  const selectionScope = JSON.stringify([
+    productsTableStorageKey,
+    search,
+    category,
+    productType,
+    readiness,
+    showArchived,
+    storeId,
+  ]);
+  const selectionScopeRef = useRef(selectionScope);
+  selectionScopeRef.current = selectionScope;
   const fetchFilteredProductIds = () =>
     trpcUtils.products.listIds.fetch({
       search: search || undefined,
       category: category || undefined,
       type: productType,
+      readiness: readiness === "all" ? undefined : readiness,
       includeArchived: canManageProducts ? showArchived : undefined,
       storeId: storeId || undefined,
     });
 
   const handleSelectAllResults = async () => {
+    const requestScope = selectionScopeRef.current;
     setSelectingAllResults(true);
     try {
       const ids = await fetchFilteredProductIds();
+      if (selectionScopeRef.current !== requestScope) return;
       setSelectedIds(new Set(ids));
     } catch (error) {
       toast({
@@ -1802,36 +1833,43 @@ const ProductsPage = () => {
     [stores],
   );
   const totalStores = stores.length;
-  const getBarcodeSummary = useCallback((barcodes: { value: string }[]) => {
-    const values = barcodes.map((barcode) => barcode.value).filter(Boolean);
-    if (!values.length) {
-      return { label: tCommon("notAvailable"), values };
-    }
-    if (values.length === 1) {
-      return { label: values[0], values };
-    }
-    return { label: t("barcodesCount", { count: values.length }), values };
-  }, [t, tCommon]);
-  const getStoreInfo = useCallback((storeIds: string[]) => {
-    const uniqueIds = Array.from(new Set(storeIds));
-    const names = uniqueIds
-      .map((storeId) => storeNameById.get(storeId))
-      .filter((name): name is string => Boolean(name))
-      .sort((a, b) => a.localeCompare(b));
-    const count = uniqueIds.length;
-    const summary =
-      totalStores > 0 && count === totalStores
-        ? t("allStores")
-        : count > 0
-          ? t("storesCount", { count })
-          : tCommon("notAvailable");
-    return { summary, names };
-  }, [storeNameById, t, tCommon, totalStores]);
+  const getBarcodeSummary = useCallback(
+    (barcodes: { value: string }[]) => {
+      const values = barcodes.map((barcode) => barcode.value).filter(Boolean);
+      if (!values.length) {
+        return { label: tCommon("notAvailable"), values };
+      }
+      if (values.length === 1) {
+        return { label: values[0], values };
+      }
+      return { label: t("barcodesCount", { count: values.length }), values };
+    },
+    [t, tCommon],
+  );
+  const getStoreInfo = useCallback(
+    (storeIds: string[]) => {
+      const uniqueIds = Array.from(new Set(storeIds));
+      const names = uniqueIds
+        .map((storeId) => storeNameById.get(storeId))
+        .filter((name): name is string => Boolean(name))
+        .sort((a, b) => a.localeCompare(b));
+      const count = uniqueIds.length;
+      const summary =
+        totalStores > 0 && count === totalStores
+          ? t("allStores")
+          : count > 0
+            ? t("storesCount", { count })
+            : tCommon("notAvailable");
+      return { summary, names };
+    },
+    [storeNameById, t, tCommon, totalStores],
+  );
 
-  const getProductPreviewUrl = useCallback((product: {
-    photoUrl?: string | null;
-    images?: { url: string }[];
-  }) => product.images?.[0]?.url ?? product.photoUrl ?? null, []);
+  const getProductPreviewUrl = useCallback(
+    (product: { photoUrl?: string | null; images?: { url: string }[] }) =>
+      product.images?.[0]?.url ?? product.photoUrl ?? null,
+    [],
+  );
   const hasProductImage = useCallback(
     (product: { photoUrl?: string | null; images?: { url?: string | null }[] }) =>
       [...(product.images ?? []).map((image) => image.url), product.photoUrl].some((url) => {
@@ -1841,41 +1879,47 @@ const ProductsPage = () => {
     [],
   );
   type ProductRow = NonNullable<typeof products>[number];
-  const getProductReadiness = useCallback((product: ProductRow) => {
-    const price = showEffectivePrice ? product.effectivePriceKgs : product.basePriceKgs;
-    const hasImage = hasProductImage(product);
-    return {
-      missingBarcode: enableBarcode && !product.barcodes.some((barcode) => barcode.value.trim()),
-      missingImage: !hasImage,
-      missingPrice: price === null || price === undefined,
-      negativeStock: product.onHandQty < 0,
-      outOfStock: product.onHandQty <= 0,
-      lowStock: product.onHandQty <= 0,
-    };
-  }, [enableBarcode, hasProductImage, showEffectivePrice]);
-  const getProductReadinessSummary = useCallback((
-    readinessState: ReturnType<typeof getProductReadiness>,
-  ): { label: string; variant: ProductReadinessBadgeVariant } => {
-    if (readinessState.negativeStock) {
-      return { label: t("negativeStock"), variant: "danger" };
-    }
-    if (readinessState.missingPrice) {
-      return { label: t("missingPrice"), variant: "danger" };
-    }
-    if (readinessState.missingImage) {
-      return { label: t("missingImage"), variant: "warning" };
-    }
-    if (readinessState.missingBarcode) {
-      return { label: t("missingBarcode"), variant: "warning" };
-    }
-    if (readinessState.outOfStock) {
-      return { label: t("outOfStock"), variant: "warning" };
-    }
-    if (readinessState.lowStock) {
-      return { label: t("missingStock"), variant: "warning" };
-    }
-    return { label: t("readyForSale"), variant: "muted" };
-  }, [t]);
+  const getProductReadiness = useCallback(
+    (product: ProductRow) => {
+      const price = showEffectivePrice ? product.effectivePriceKgs : product.basePriceKgs;
+      const hasImage = hasProductImage(product);
+      return {
+        missingBarcode: enableBarcode && !product.barcodes.some((barcode) => barcode.value.trim()),
+        missingImage: !hasImage,
+        missingPrice: price === null || price === undefined,
+        negativeStock: product.onHandQty < 0,
+        outOfStock: product.onHandQty <= 0,
+        lowStock: product.onHandQty <= 0,
+      };
+    },
+    [enableBarcode, hasProductImage, showEffectivePrice],
+  );
+  const getProductReadinessSummary = useCallback(
+    (
+      readinessState: ReturnType<typeof getProductReadiness>,
+    ): { label: string; variant: ProductReadinessBadgeVariant } => {
+      if (readinessState.negativeStock) {
+        return { label: t("negativeStock"), variant: "danger" };
+      }
+      if (readinessState.missingPrice) {
+        return { label: t("missingPrice"), variant: "danger" };
+      }
+      if (readinessState.missingImage) {
+        return { label: t("missingImage"), variant: "warning" };
+      }
+      if (readinessState.missingBarcode) {
+        return { label: t("missingBarcode"), variant: "warning" };
+      }
+      if (readinessState.outOfStock) {
+        return { label: t("outOfStock"), variant: "warning" };
+      }
+      if (readinessState.lowStock) {
+        return { label: t("missingStock"), variant: "warning" };
+      }
+      return { label: t("readyForSale"), variant: "muted" };
+    },
+    [t],
+  );
   const sortCollator = useMemo(
     () =>
       new Intl.Collator(locale, {
@@ -2233,525 +2277,524 @@ const ProductsPage = () => {
       trpcUtils.products.byIds,
     ],
   );
-  const getProductActions = useCallback((product: ProductRow) => {
-    if (!canManageProducts) {
-      return [
-        {
-          key: "view",
-          label: tCommon("view"),
-          icon: ViewIcon,
-          href: `/products/${product.id}`,
-          openInNewTab: false,
-        },
-      ];
-    }
-
-    const managementActions = product.isDeleted
-      ? [
+  const getProductActions = useCallback(
+    (product: ProductRow) => {
+      if (!canManageProducts) {
+        return [
           {
-            key: "restore",
-            label: t("restore"),
-            icon: RestoreIcon,
-            onSelect: async () => {
-              if (
-                !(await confirm({ description: t("confirmRestore"), confirmVariant: "danger" }))
-              ) {
-                return;
-              }
-              restoreMutation.mutate({ productId: product.id });
-            },
-          },
-        ]
-      : [
-          {
-            key: "edit",
-            label: tCommon("edit"),
-            icon: EditIcon,
-            href: buildProductListLaunchedHref(`/products/${product.id}`),
+            key: "view",
+            label: tCommon("view"),
+            icon: ViewIcon,
+            href: `/products/${product.id}`,
             openInNewTab: false,
-            onSelect: persistProductsReturnState,
-          },
-          ...(enableBarcode
-            ? [
-                {
-                  key: "print-labels",
-                  label: t("printLabels"),
-                  icon: PrintIcon,
-                  onSelect: () => {
-                    if (!hasPrintableBarcode(product as BarcodePrintProduct)) {
-                      toast({ variant: "error", description: t("printMissingBarcode") });
-                      return;
-                    }
-                    void openPrintForProducts([product.id]);
-                  },
-                },
-              ]
-            : []),
-          {
-            key: "duplicate",
-            label: t("duplicate"),
-            icon: CopyIcon,
-            disabled: quickDuplicate.isLoading,
-            onSelect: () => quickDuplicate.duplicateProduct(product.id),
-          },
-          {
-            key: "selective-duplicate",
-            label: t("selectiveDuplicate"),
-            icon: CopyIcon,
-            onSelect: () => {
-              setDuplicateTarget({ id: product.id, name: product.name });
-            },
-          },
-          {
-            key: "archive",
-            label: tCommon("archive"),
-            icon: ArchiveIcon,
-            variant: "danger" as const,
-            onSelect: async () => {
-              if (
-                !(await confirm({ description: t("confirmArchive"), confirmVariant: "danger" }))
-              ) {
-                return;
-              }
-              archiveMutation.mutate({ productId: product.id });
-            },
           },
         ];
+      }
 
-    return managementActions;
-  }, [
-    archiveMutation,
-    buildProductListLaunchedHref,
-    canManageProducts,
-    confirm,
-    enableBarcode,
-    openPrintForProducts,
-    persistProductsReturnState,
-    quickDuplicate,
-    restoreMutation,
-    t,
-    tCommon,
-    toast,
-  ]);
+      const managementActions = product.isDeleted
+        ? [
+            {
+              key: "restore",
+              label: t("restore"),
+              icon: RestoreIcon,
+              onSelect: async () => {
+                if (
+                  !(await confirm({ description: t("confirmRestore"), confirmVariant: "danger" }))
+                ) {
+                  return;
+                }
+                restoreMutation.mutate({ productId: product.id });
+              },
+            },
+          ]
+        : [
+            {
+              key: "edit",
+              label: tCommon("edit"),
+              icon: EditIcon,
+              href: buildProductListLaunchedHref(`/products/${product.id}`),
+              openInNewTab: false,
+              onSelect: persistProductsReturnState,
+            },
+            ...(enableBarcode
+              ? [
+                  {
+                    key: "print-labels",
+                    label: t("printLabels"),
+                    icon: PrintIcon,
+                    onSelect: () => {
+                      if (!hasPrintableBarcode(product as BarcodePrintProduct)) {
+                        toast({ variant: "error", description: t("printMissingBarcode") });
+                        return;
+                      }
+                      void openPrintForProducts([product.id]);
+                    },
+                  },
+                ]
+              : []),
+            {
+              key: "duplicate",
+              label: t("duplicate"),
+              icon: CopyIcon,
+              disabled: quickDuplicate.isLoading,
+              onSelect: () => quickDuplicate.duplicateProduct(product.id),
+            },
+            {
+              key: "selective-duplicate",
+              label: t("selectiveDuplicate"),
+              icon: CopyIcon,
+              onSelect: () => {
+                setDuplicateTarget({ id: product.id, name: product.name });
+              },
+            },
+            {
+              key: "archive",
+              label: tCommon("archive"),
+              icon: ArchiveIcon,
+              variant: "danger" as const,
+              onSelect: async () => {
+                if (
+                  !(await confirm({ description: t("confirmArchive"), confirmVariant: "danger" }))
+                ) {
+                  return;
+                }
+                archiveMutation.mutate({ productId: product.id });
+              },
+            },
+          ];
 
-  const productColumns = useMemo<ColumnDef<ProductRow>[]>(
-    () => {
-      const sortableColumn = (
-        key: ProductSortKey,
-        label: string,
-        cell: ColumnDef<ProductRow>["cell"],
-        options?: {
-          accessorFn?: (product: ProductRow) => string | number | boolean | null;
-          className?: string;
-          headerClassName?: string;
-          cellClassName?: string;
+      return managementActions;
+    },
+    [
+      archiveMutation,
+      buildProductListLaunchedHref,
+      canManageProducts,
+      confirm,
+      enableBarcode,
+      openPrintForProducts,
+      persistProductsReturnState,
+      quickDuplicate,
+      restoreMutation,
+      t,
+      tCommon,
+      toast,
+    ],
+  );
+
+  const productColumns = useMemo<ColumnDef<ProductRow>[]>(() => {
+    const sortableColumn = (
+      key: ProductSortKey,
+      label: string,
+      cell: ColumnDef<ProductRow>["cell"],
+      options?: {
+        accessorFn?: (product: ProductRow) => string | number | boolean | null;
+        className?: string;
+        headerClassName?: string;
+        cellClassName?: string;
+      },
+    ): ColumnDef<ProductRow> => ({
+      id: key,
+      header: label,
+      accessorFn: options?.accessorFn ?? (() => ""),
+      cell,
+      sortDescFirst: defaultSortDirectionByKey[key] === "desc",
+      meta: {
+        className: options?.className,
+        headerClassName: options?.headerClassName,
+        cellClassName: options?.cellClassName,
+      },
+    });
+
+    const columns: ColumnDef<ProductRow>[] = [];
+
+    if (canSelectProducts) {
+      columns.push({
+        id: "select",
+        header: () => (
+          <Checkbox
+            checked={allSelected}
+            onCheckedChange={toggleSelectAll}
+            aria-label={tWorkspace("selectPage")}
+          />
+        ),
+        cell: ({ row }) => {
+          const product = row.original;
+          return (
+            <Checkbox
+              checked={selectedIds.has(product.id)}
+              onCheckedChange={() => toggleSelect(product.id)}
+              aria-label={t("selectProduct", { name: product.name })}
+            />
+          );
         },
-      ): ColumnDef<ProductRow> => ({
-        id: key,
-        header: label,
-        accessorFn: options?.accessorFn ?? (() => ""),
-        cell,
-        sortDescFirst: defaultSortDirectionByKey[key] === "desc",
+        enableSorting: false,
         meta: {
-          className: options?.className,
-          headerClassName: options?.headerClassName,
-          cellClassName: options?.cellClassName,
+          className: "w-11",
         },
       });
+    }
 
-      const columns: ColumnDef<ProductRow>[] = [];
-
-      if (canSelectProducts) {
-        columns.push({
-          id: "select",
-          header: () => (
-            <Checkbox
-              checked={allSelected}
-              onCheckedChange={toggleSelectAll}
-              aria-label={t("selectAll")}
-            />
+    if (visibleProductColumnSet.has("sku")) {
+      columns.push(
+        sortableColumn(
+          "sku",
+          t("sku"),
+          ({ row }) => (
+            <span className="font-mono text-xs text-muted-foreground">{row.original.sku}</span>
           ),
-          cell: ({ row }) => {
+          {
+            accessorFn: (product) => product.sku,
+            className: "min-w-[8rem]",
+          },
+        ),
+      );
+    }
+
+    if (visibleProductColumnSet.has("image")) {
+      columns.push(
+        sortableColumn(
+          "image",
+          t("imageLabel"),
+          ({ row }) => {
             const product = row.original;
-            return (
-              <Checkbox
-                checked={selectedIds.has(product.id)}
-                onCheckedChange={() => toggleSelect(product.id)}
-                aria-label={t("selectProduct", { name: product.name })}
+            const previewImageUrl = getProductPreviewUrl(product);
+            return previewImageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={previewImageUrl}
+                alt={product.name}
+                className="h-9 w-9 rounded-md border border-border object-cover"
               />
+            ) : (
+              <div className="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-muted/40">
+                <EmptyIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
+              </div>
             );
           },
-          enableSorting: false,
-          meta: {
-            className: "w-11",
+          {
+            accessorFn: (product) => hasProductImage(product),
+            className: "w-14",
           },
-        });
-      }
+        ),
+      );
+    }
 
-      if (visibleProductColumnSet.has("sku")) {
-        columns.push(
-          sortableColumn(
-            "sku",
-            t("sku"),
-            ({ row }) => (
-              <span className="font-mono text-xs text-muted-foreground">{row.original.sku}</span>
-            ),
-            {
-              accessorFn: (product) => product.sku,
-              className: "min-w-[8rem]",
-            },
-          ),
-        );
-      }
-
-      if (visibleProductColumnSet.has("image")) {
-        columns.push(
-          sortableColumn(
-            "image",
-            t("imageLabel"),
-            ({ row }) => {
-              const product = row.original;
-              const previewImageUrl = getProductPreviewUrl(product);
-              return previewImageUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={previewImageUrl}
-                  alt={product.name}
-                  className="h-12 w-12 rounded-lg border border-border object-cover shadow-sm"
-                />
-              ) : (
-                <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-dashed border-border bg-muted/60">
-                  <EmptyIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
-                </div>
-              );
-            },
-            {
-              accessorFn: (product) => hasProductImage(product),
-              className: "w-16",
-            },
-          ),
-        );
-      }
-
-      if (visibleProductColumnSet.has("name")) {
-        columns.push(
-          sortableColumn(
-            "name",
-            t("name"),
-            ({ row }) => {
-              const product = row.original;
-              return (
-                <div className="min-w-[15rem] space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <InlineEditableCell
-                      rowId={product.id}
-                      row={product}
-                      value={product.name}
-                      definition={inlineEditRegistry.products.name}
-                      context={inlineProductsContext}
-                      role={role}
-                      locale={locale}
-                      columnLabel={t("name")}
-                      tTable={t}
-                      tCommon={tCommon}
-                      enabled={inlineEditingEnabled}
-                      executeMutation={executeInlineProductMutation}
-                      className="font-semibold text-foreground"
-                    />
-                    <Badge variant="muted">
-                      {product.isBundle ? t("typeBundle") : t("typeProduct")}
-                    </Badge>
-                    {product.isDeleted ? <Badge variant="muted">{t("archived")}</Badge> : null}
-                  </div>
-                </div>
-              );
-            },
-            {
-              accessorFn: (product) => product.name,
-              className: "min-w-[18rem]",
-            },
-          ),
-        );
-      }
-
-      if (visibleProductColumnSet.has("category")) {
-        columns.push(
-          sortableColumn(
-            "category",
-            t("category"),
-            ({ row }) => {
-              const product = row.original;
-              const productCategories = getProductCategories(product);
-              return (
-                <div className="flex min-w-[12rem] flex-wrap items-center gap-1.5">
+    if (visibleProductColumnSet.has("name")) {
+      columns.push(
+        sortableColumn(
+          "name",
+          t("name"),
+          ({ row }) => {
+            const product = row.original;
+            return (
+              <div className="min-w-[15rem] space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
                   <InlineEditableCell
                     rowId={product.id}
                     row={product}
-                    value={product.category}
-                    definition={inlineEditRegistry.products.category}
+                    value={product.name}
+                    definition={inlineEditRegistry.products.name}
                     context={inlineProductsContext}
                     role={role}
                     locale={locale}
-                    columnLabel={t("category")}
-                    tTable={t}
-                    tCommon={tCommon}
-                    enabled={inlineEditingEnabled}
-                    executeMutation={executeInlineProductMutation}
-                  />
-                  {productCategories
-                    .filter((value) => value !== product.category)
-                    .map((value) => (
-                      <Badge key={value} variant="muted">
-                        {value}
-                      </Badge>
-                    ))}
-                </div>
-              );
-            },
-            {
-              accessorFn: (product) => product.category ?? "",
-              className: "min-w-[13rem]",
-            },
-          ),
-        );
-      }
-
-      if (visibleProductColumnSet.has("unit")) {
-        columns.push(
-          sortableColumn("unit", t("unit"), ({ row }) => <span>{row.original.unit}</span>, {
-            accessorFn: (product) => product.unit ?? "",
-            className: "min-w-[7rem]",
-          }),
-        );
-      }
-
-      if (visibleProductColumnSet.has("onHandQty")) {
-        columns.push(
-          sortableColumn(
-            "onHandQty",
-            tInventory("onHand"),
-            ({ row }) => {
-              const product = row.original;
-              const readinessState = getProductReadiness(product);
-              return (
-                <InlineEditableCell
-                  rowId={product.id}
-                  row={product}
-                  value={product.onHandQty}
-                  definition={inlineEditRegistry.products.onHand}
-                  context={inlineProductsContext}
-                  role={role}
-                  locale={locale}
-                  columnLabel={tInventory("onHand")}
-                  tTable={t}
-                  tCommon={tCommon}
-                  enabled={inlineEditingEnabled}
-                  executeMutation={executeInlineProductMutation}
-                  className={
-                    readinessState.negativeStock
-                      ? "font-semibold text-danger"
-                      : "font-semibold text-foreground"
-                  }
-                />
-              );
-            },
-            {
-              accessorFn: (product) => product.onHandQty,
-              className: "min-w-[8rem]",
-              headerClassName: "text-right",
-              cellClassName: "text-right",
-            },
-          ),
-        );
-      }
-
-      if (visibleProductColumnSet.has("salePrice")) {
-        columns.push(
-          sortableColumn(
-            "salePrice",
-            t("salePrice"),
-            ({ row }) => {
-              const product = row.original;
-              return (
-                <div className="flex min-w-[8rem] flex-wrap items-center justify-end gap-2">
-                  <InlineEditableCell
-                    rowId={product.id}
-                    row={product}
-                    value={showEffectivePrice ? product.effectivePriceKgs : product.basePriceKgs}
-                    definition={inlineEditRegistry.products.salePrice}
-                    context={inlineProductsContext}
-                    role={role}
-                    locale={locale}
-                    columnLabel={t("salePrice")}
+                    columnLabel={t("name")}
                     tTable={t}
                     tCommon={tCommon}
                     enabled={inlineEditingEnabled}
                     executeMutation={executeInlineProductMutation}
                     className="font-semibold text-foreground"
                   />
-                  {showEffectivePrice && product.priceOverridden ? (
-                    <Badge variant="muted">{t("priceOverridden")}</Badge>
-                  ) : null}
+                  {product.isBundle ? <Badge variant="muted">{t("typeBundle")}</Badge> : null}
+                  {product.isDeleted ? <Badge variant="muted">{t("archived")}</Badge> : null}
                 </div>
-              );
-            },
-            {
-              accessorFn: resolveSalePriceForSort,
-              className: "min-w-[9rem]",
-              headerClassName: "text-right",
-              cellClassName: "text-right",
-            },
-          ),
-        );
-      }
+              </div>
+            );
+          },
+          {
+            accessorFn: (product) => product.name,
+            className: "min-w-[18rem]",
+          },
+        ),
+      );
+    }
 
-      if (visibleProductColumnSet.has("avgCost")) {
-        columns.push(
-          sortableColumn(
-            "avgCost",
-            t("avgCost"),
-            ({ row }) => {
-              const product = row.original;
-              return (
+    if (visibleProductColumnSet.has("category")) {
+      columns.push(
+        sortableColumn(
+          "category",
+          t("category"),
+          ({ row }) => {
+            const product = row.original;
+            const productCategories = getProductCategories(product);
+            return (
+              <div className="flex min-w-[12rem] flex-wrap items-center gap-1.5">
                 <InlineEditableCell
                   rowId={product.id}
                   row={product}
-                  value={product.avgCostKgs}
-                  definition={inlineEditRegistry.products.avgCost}
+                  value={product.category}
+                  definition={inlineEditRegistry.products.category}
                   context={inlineProductsContext}
                   role={role}
                   locale={locale}
-                  columnLabel={t("avgCost")}
+                  columnLabel={t("category")}
                   tTable={t}
                   tCommon={tCommon}
                   enabled={inlineEditingEnabled}
                   executeMutation={executeInlineProductMutation}
-                  className="justify-end font-semibold text-foreground"
                 />
-              );
-            },
-            {
-              accessorFn: (product) => product.avgCostKgs ?? Number.NEGATIVE_INFINITY,
-              className: "min-w-[8rem]",
-              headerClassName: "text-right",
-              cellClassName: "text-right",
-            },
-          ),
-        );
-      }
-
-      if (visibleProductColumnSet.has("barcodes")) {
-        columns.push(
-          sortableColumn(
-            "barcodes",
-            t("barcodes"),
-            ({ row }) => {
-              const barcodeSummary = getBarcodeSummary(row.original.barcodes);
-              return <span className="text-xs text-muted-foreground">{barcodeSummary.label}</span>;
-            },
-            {
-              accessorFn: resolveBarcodeSortValue,
-              className: "min-w-[9rem]",
-            },
-          ),
-        );
-      }
-
-      if (visibleProductColumnSet.has("readiness")) {
-        columns.push({
-          id: "readiness",
-          header: t("readinessColumn"),
-          cell: ({ row }) => {
-            const readinessSummary = getProductReadinessSummary(getProductReadiness(row.original));
-            return <Badge variant={readinessSummary.variant}>{readinessSummary.label}</Badge>;
+                {productCategories
+                  .filter((value) => value !== product.category)
+                  .map((value) => (
+                    <Badge key={value} variant="muted">
+                      {value}
+                    </Badge>
+                  ))}
+              </div>
+            );
           },
-          enableSorting: false,
-          meta: {
+          {
+            accessorFn: (product) => product.category ?? "",
+            className: "min-w-[13rem]",
+          },
+        ),
+      );
+    }
+
+    if (visibleProductColumnSet.has("unit")) {
+      columns.push(
+        sortableColumn("unit", t("unit"), ({ row }) => <span>{row.original.unit}</span>, {
+          accessorFn: (product) => product.unit ?? "",
+          className: "min-w-[7rem]",
+        }),
+      );
+    }
+
+    if (visibleProductColumnSet.has("onHandQty")) {
+      columns.push(
+        sortableColumn(
+          "onHandQty",
+          tInventory("onHand"),
+          ({ row }) => {
+            const product = row.original;
+            const readinessState = getProductReadiness(product);
+            return (
+              <InlineEditableCell
+                rowId={product.id}
+                row={product}
+                value={product.onHandQty}
+                definition={inlineEditRegistry.products.onHand}
+                context={inlineProductsContext}
+                role={role}
+                locale={locale}
+                columnLabel={tInventory("onHand")}
+                tTable={t}
+                tCommon={tCommon}
+                enabled={inlineEditingEnabled}
+                executeMutation={executeInlineProductMutation}
+                className={
+                  readinessState.negativeStock
+                    ? "font-semibold text-danger"
+                    : "font-semibold text-foreground"
+                }
+              />
+            );
+          },
+          {
+            accessorFn: (product) => product.onHandQty,
+            className: "min-w-[8rem]",
+            headerClassName: "text-right",
+            cellClassName: "text-right",
+          },
+        ),
+      );
+    }
+
+    if (visibleProductColumnSet.has("salePrice")) {
+      columns.push(
+        sortableColumn(
+          "salePrice",
+          t("salePrice"),
+          ({ row }) => {
+            const product = row.original;
+            return (
+              <div className="flex min-w-[8rem] flex-wrap items-center justify-end gap-2">
+                <InlineEditableCell
+                  rowId={product.id}
+                  row={product}
+                  value={showEffectivePrice ? product.effectivePriceKgs : product.basePriceKgs}
+                  definition={inlineEditRegistry.products.salePrice}
+                  context={inlineProductsContext}
+                  role={role}
+                  locale={locale}
+                  columnLabel={t("salePrice")}
+                  tTable={t}
+                  tCommon={tCommon}
+                  enabled={inlineEditingEnabled}
+                  executeMutation={executeInlineProductMutation}
+                  className="font-semibold text-foreground"
+                />
+                {showEffectivePrice && product.priceOverridden ? (
+                  <Badge variant="muted">{t("priceOverridden")}</Badge>
+                ) : null}
+              </div>
+            );
+          },
+          {
+            accessorFn: resolveSalePriceForSort,
+            className: "min-w-[9rem]",
+            headerClassName: "text-right",
+            cellClassName: "text-right",
+          },
+        ),
+      );
+    }
+
+    if (visibleProductColumnSet.has("avgCost")) {
+      columns.push(
+        sortableColumn(
+          "avgCost",
+          t("avgCost"),
+          ({ row }) => {
+            const product = row.original;
+            return (
+              <InlineEditableCell
+                rowId={product.id}
+                row={product}
+                value={product.avgCostKgs}
+                definition={inlineEditRegistry.products.avgCost}
+                context={inlineProductsContext}
+                role={role}
+                locale={locale}
+                columnLabel={t("avgCost")}
+                tTable={t}
+                tCommon={tCommon}
+                enabled={inlineEditingEnabled}
+                executeMutation={executeInlineProductMutation}
+                className="justify-end font-semibold text-foreground"
+              />
+            );
+          },
+          {
+            accessorFn: (product) => product.avgCostKgs ?? Number.NEGATIVE_INFINITY,
+            className: "min-w-[8rem]",
+            headerClassName: "text-right",
+            cellClassName: "text-right",
+          },
+        ),
+      );
+    }
+
+    if (visibleProductColumnSet.has("barcodes")) {
+      columns.push(
+        sortableColumn(
+          "barcodes",
+          t("barcodes"),
+          ({ row }) => {
+            const barcodeSummary = getBarcodeSummary(row.original.barcodes);
+            return <span className="text-xs text-muted-foreground">{barcodeSummary.label}</span>;
+          },
+          {
+            accessorFn: resolveBarcodeSortValue,
             className: "min-w-[9rem]",
           },
-        });
-      }
-
-      if (visibleProductColumnSet.has("stores")) {
-        columns.push(
-          sortableColumn(
-            "stores",
-            t("stores"),
-            ({ row }) => {
-              const storeInfo = getStoreInfo(
-                row.original.inventorySnapshots.map((snapshot) => snapshot.storeId),
-              );
-              return storeInfo.names.length ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="cursor-help text-foreground">{storeInfo.summary}</span>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>{storeInfo.names.join(", ")}</p>
-                  </TooltipContent>
-                </Tooltip>
-              ) : (
-                <span className="text-muted-foreground">{storeInfo.summary}</span>
-              );
-            },
-            {
-              accessorFn: resolveStoreSortValue,
-              className: "min-w-[10rem]",
-            },
-          ),
-        );
-      }
-
-      columns.push({
-        id: "actions",
-        header: tCommon("actions"),
-        cell: ({ row }) => (
-          <RowActions
-            actions={getProductActions(row.original)}
-            maxInline={1}
-            moreLabel={tCommon("tooltips.moreActions")}
-            className="justify-end"
-          />
         ),
+      );
+    }
+
+    if (visibleProductColumnSet.has("readiness")) {
+      columns.push({
+        id: "readiness",
+        header: t("readinessColumn"),
+        cell: ({ row }) => {
+          const readinessSummary = getProductReadinessSummary(getProductReadiness(row.original));
+          return <Badge variant={readinessSummary.variant}>{readinessSummary.label}</Badge>;
+        },
         enableSorting: false,
         meta: {
-          className: "w-[9rem]",
-          headerClassName: "text-right",
-          cellClassName: "text-right",
+          className: "min-w-[9rem]",
         },
       });
+    }
 
-      return columns;
-    },
-    [
-      allSelected,
-      canSelectProducts,
-      executeInlineProductMutation,
-      getBarcodeSummary,
-      getProductCategories,
-      getProductReadiness,
-      getProductReadinessSummary,
-      getProductActions,
-      getProductPreviewUrl,
-      getStoreInfo,
-      hasProductImage,
-      inlineEditingEnabled,
-      inlineProductsContext,
-      locale,
-      resolveBarcodeSortValue,
-      resolveSalePriceForSort,
-      resolveStoreSortValue,
-      role,
-      selectedIds,
-      showEffectivePrice,
-      t,
-      tCommon,
-      tInventory,
-      toggleSelect,
-      toggleSelectAll,
-      visibleProductColumnSet,
-    ],
-  );
+    if (visibleProductColumnSet.has("stores")) {
+      columns.push(
+        sortableColumn(
+          "stores",
+          t("stores"),
+          ({ row }) => {
+            const storeInfo = getStoreInfo(
+              row.original.inventorySnapshots.map((snapshot) => snapshot.storeId),
+            );
+            return storeInfo.names.length ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="cursor-help text-foreground">{storeInfo.summary}</span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{storeInfo.names.join(", ")}</p>
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <span className="text-muted-foreground">{storeInfo.summary}</span>
+            );
+          },
+          {
+            accessorFn: resolveStoreSortValue,
+            className: "min-w-[10rem]",
+          },
+        ),
+      );
+    }
+
+    columns.push({
+      id: "actions",
+      header: tCommon("actions"),
+      cell: ({ row }) => (
+        <RowActions
+          actions={getProductActions(row.original)}
+          maxInline={1}
+          moreLabel={tCommon("tooltips.moreActions")}
+          className="justify-end"
+        />
+      ),
+      enableSorting: false,
+      meta: {
+        className: "w-[9rem]",
+        headerClassName: "text-right",
+        cellClassName: "text-right",
+      },
+    });
+
+    return columns;
+  }, [
+    allSelected,
+    canSelectProducts,
+    executeInlineProductMutation,
+    getBarcodeSummary,
+    getProductCategories,
+    getProductReadiness,
+    getProductReadinessSummary,
+    getProductActions,
+    getProductPreviewUrl,
+    getStoreInfo,
+    hasProductImage,
+    inlineEditingEnabled,
+    inlineProductsContext,
+    locale,
+    resolveBarcodeSortValue,
+    resolveSalePriceForSort,
+    resolveStoreSortValue,
+    role,
+    selectedIds,
+    showEffectivePrice,
+    t,
+    tCommon,
+    tWorkspace,
+    tInventory,
+    toggleSelect,
+    toggleSelectAll,
+    visibleProductColumnSet,
+  ]);
 
   const handleExportImages = () => {
     const startedAt = Date.now();
@@ -2895,17 +2938,21 @@ const ProductsPage = () => {
     setBulkArchiveRunning(true);
     const selection = [...selectedList];
     try {
-      if (!(await confirm({
-        description: t(archived ? "confirmBulkArchive" : "confirmBulkRestore"),
-        confirmVariant: "danger",
-      }))) return;
+      if (
+        !(await confirm({
+          description: t(archived ? "confirmBulkArchive" : "confirmBulkRestore"),
+          confirmVariant: "danger",
+        }))
+      )
+        return;
       const result = await updateSelectedProductArchiveState({
         selectedIds: selection,
         archived,
         loadProducts: (ids) => trpcUtils.products.byIds.fetch({ ids }, { staleTime: 0 }),
-        updateProduct: (productId) => archived
-          ? bulkArchiveMutation.mutateAsync({ productId })
-          : bulkRestoreMutation.mutateAsync({ productId }),
+        updateProduct: (productId) =>
+          archived
+            ? bulkArchiveMutation.mutateAsync({ productId })
+            : bulkRestoreMutation.mutateAsync({ productId }),
       });
       result.succeededIds.forEach((id) => patchProductArchiveState(id, archived));
       await Promise.all([
@@ -2919,8 +2966,13 @@ const ProductsPage = () => {
       toast({
         variant: result.failedIds.length ? "error" : "success",
         description: result.failedIds.length
-          ? t("bulkActionPartial", { succeeded: result.succeededIds.length, failed: result.failedIds.length })
-          : t(archived ? "bulkArchiveSuccess" : "bulkRestoreSuccess", { count: result.succeededIds.length }),
+          ? t("bulkActionPartial", {
+              succeeded: result.succeededIds.length,
+              failed: result.failedIds.length,
+            })
+          : t(archived ? "bulkArchiveSuccess" : "bulkRestoreSuccess", {
+              count: result.succeededIds.length,
+            }),
       });
     } catch (error) {
       toast({
@@ -3225,10 +3277,10 @@ const ProductsPage = () => {
         action={
           canManageProducts ? (
             <TooltipProvider>
-              <div className="hidden w-full flex-wrap items-center gap-2 md:flex md:w-auto">
+              <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
                 <Link
                   href={newProductHref}
-                  className="w-full sm:w-auto"
+                  className="flex-1 sm:flex-none"
                   onClick={persistProductsReturnState}
                 >
                   <Button className="w-full sm:w-auto" data-tour="products-create">
@@ -3241,7 +3293,7 @@ const ProductsPage = () => {
                     <Button
                       type="button"
                       variant="secondary"
-                      className="w-full sm:w-auto"
+                      className="shrink-0"
                       aria-label={tCommon("moreActions")}
                     >
                       <MoreIcon className="h-4 w-4" aria-hidden />
@@ -3405,73 +3457,68 @@ const ProductsPage = () => {
             </TooltipProvider>
           ) : undefined
         }
-        filters={
-          <div className="hidden w-full flex-wrap items-center gap-2 md:flex">
-            <Input
-              data-tour="products-search"
-              className="h-11 min-w-[20rem] flex-[1.4_1_20rem] bg-card shadow-sm"
-              placeholder={productSearchPlaceholder}
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-            <div className="min-w-[11rem] flex-1">
-              <Select
-                value={storeId || "all"}
-                onValueChange={setStoreId}
-              >
-                <SelectTrigger className="h-11 bg-card shadow-sm">
-                  <SelectValue placeholder={tCommon("selectStore")} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">{t("allStores")}</SelectItem>
-                  {stores.map((store) => (
-                    <SelectItem key={store.id} value={store.id}>
-                      {store.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex min-w-[14rem] flex-1 items-center gap-2">
-              <Select
-                value={category || "all"}
-                onValueChange={(value) => setCategory(value === "all" ? "" : value)}
-              >
-                <SelectTrigger
-                  className="h-11 min-w-0 gap-2 bg-card shadow-sm [&>span]:min-w-0 [&>span]:truncate [&>svg]:shrink-0"
-                  title={category || t("allCategories")}
-                >
-                  <SelectValue placeholder={t("allCategories")} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">{t("allCategories")}</SelectItem>
-                  {categories.map((item) => (
-                    <SelectItem key={item} value={item}>
-                      {item}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {canManageProducts ? (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="icon"
-                  className="h-11 w-11 shrink-0"
-                  aria-label={t("manageCategories")}
-                  onClick={() => setCategoryManagerOpen(true)}
-                >
-                  <TagIcon className="h-4 w-4" aria-hidden />
-                </Button>
-              ) : null}
-            </div>
-            <div className="min-w-[10rem] flex-[0.75_1_10rem]">
+      />
+      <ListToolbar
+        total={productsTotal}
+        loading={!productsTableStateReady || productsBootstrapQuery.isFetching}
+        filters={[
+          ...(search
+            ? [
+                {
+                  key: "search",
+                  label: `${tCommon("search")}: ${search}`,
+                  onRemove: () => setSearch(""),
+                },
+              ]
+            : []),
+          ...(category
+            ? [{ key: "category", label: category, onRemove: () => setCategory("") }]
+            : []),
+          ...(productType !== "all"
+            ? [
+                {
+                  key: "type",
+                  label: t(productType === "bundle" ? "typeBundle" : "typeProduct"),
+                  onRemove: () => setProductType("all"),
+                },
+              ]
+            : []),
+          ...(readiness !== "all"
+            ? [{ key: "readiness", label: t(readiness), onRemove: () => setReadiness("all") }]
+            : []),
+          ...(showArchived
+            ? [
+                {
+                  key: "archived",
+                  label: t("showArchived"),
+                  onRemove: () => setShowArchived(false),
+                },
+              ]
+            : []),
+        ]}
+        onReset={() =>
+          setProductsTableState((current) => ({
+            ...current,
+            search: "",
+            category: "",
+            productType: "all",
+            readiness: "all",
+            showArchived: false,
+            page: 1,
+          }))
+        }
+        extraCount={
+          Number(productType !== "all") + Number(readiness !== "all") + Number(showArchived)
+        }
+        extra={
+          <>
+            <FilterField id="products-type" label={t("typeLabel")}>
               <Select
                 value={productType}
                 onValueChange={(value) => setProductType(value as "all" | "product" | "bundle")}
               >
-                <SelectTrigger className="h-11 bg-card shadow-sm">
-                  <SelectValue placeholder={t("typeLabel")} />
+                <SelectTrigger id="products-type">
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">{t("allTypes")}</SelectItem>
@@ -3479,16 +3526,16 @@ const ProductsPage = () => {
                   <SelectItem value="bundle">{t("typeBundle")}</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-            <div className="min-w-[12rem] flex-[0.9_1_12rem]">
+            </FilterField>
+            <FilterField id="products-readiness" label={t("readinessFilter")}>
               <Select
                 value={readiness}
                 onValueChange={(value) =>
                   setReadiness(value as z.infer<typeof productReadinessFilterSchema>)
                 }
               >
-                <SelectTrigger className="h-11 bg-card shadow-sm">
-                  <SelectValue placeholder={t("readinessFilter")} />
+                <SelectTrigger id="products-readiness">
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">{t("readinessAll")}</SelectItem>
@@ -3502,160 +3549,78 @@ const ProductsPage = () => {
                   <SelectItem value="negativeStock">{t("negativeStock")}</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
+            </FilterField>
             {canManageProducts ? (
-              <div className="flex h-11 shrink-0 items-center gap-2 rounded-lg border border-border/80 bg-card px-3 shadow-sm">
+              <label className="flex min-h-10 items-center gap-2 text-sm">
                 <Switch
                   checked={showArchived}
                   onCheckedChange={setShowArchived}
                   aria-label={t("showArchived")}
                 />
-                <span className="text-sm text-muted-foreground">{t("showArchived")}</span>
-              </div>
+                {t("showArchived")}
+              </label>
+            ) : null}
+          </>
+        }
+      >
+        <ListSearch
+          dataTour="products-search"
+          id="products-search"
+          label={tCommon("search")}
+          placeholder={productSearchPlaceholder}
+          value={search}
+          onChange={setSearch}
+        />
+        <FilterField id="products-store" label={tCommon("store")}>
+          <Select value={storeId || "all"} onValueChange={setStoreId}>
+            <SelectTrigger id="products-store">
+              <SelectValue placeholder={tCommon("selectStore")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t("allStores")}</SelectItem>
+              {stores.map((store) => (
+                <SelectItem key={store.id} value={store.id}>
+                  {store.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </FilterField>
+        <FilterField id="products-category" label={t("category")}>
+          <div className="flex items-center gap-2">
+            <Select
+              value={category || "all"}
+              onValueChange={(value) => setCategory(value === "all" ? "" : value)}
+            >
+              <SelectTrigger id="products-category" title={category || t("allCategories")}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t("allCategories")}</SelectItem>
+                {categories.map((item) => (
+                  <SelectItem key={item} value={item}>
+                    {item}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {canManageProducts ? (
+              <Button
+                type="button"
+                variant="secondary"
+                size="icon"
+                aria-label={t("manageCategories")}
+                onClick={() => setCategoryManagerOpen(true)}
+              >
+                <TagIcon className="h-4 w-4" aria-hidden />
+              </Button>
             ) : null}
           </div>
-        }
-        filtersClassName="hidden border-0 bg-transparent p-0 md:block"
-      />
-
-      <div
-        className="mb-4 space-y-3 rounded-xl border border-border/80 bg-card/95 p-3 shadow-sm md:hidden"
-        data-mobile-products-toolbar
-      >
-        <div className="flex items-center gap-2">
-          <Input
-            data-tour="products-search-mobile"
-            className="min-h-11 flex-1"
-            placeholder={productSearchPlaceholder}
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-          {canManageProducts ? (
-            <Link
-              href={newProductHref}
-              aria-label={t("newProduct")}
-              onClick={persistProductsReturnState}
-            >
-              <Button type="button" size="icon" className="h-11 w-11">
-                <AddIcon className="h-5 w-5" aria-hidden />
-              </Button>
-            </Link>
-          ) : null}
-        </div>
-        <Select
-          value={storeId || "all"}
-          onValueChange={setStoreId}
-        >
-          <SelectTrigger className="min-h-11">
-            <SelectValue placeholder={tCommon("selectStore")} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{t("allStores")}</SelectItem>
-            {stores.map((store) => (
-              <SelectItem key={store.id} value={store.id}>
-                {store.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <div className="scrollbar-none -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-          <Button
-            type="button"
-            size="sm"
-            variant={category ? "secondary" : "primary"}
-            className="h-10 shrink-0"
-            onClick={() => setCategory("")}
-          >
-            {t("allCategories")}
-          </Button>
-          {mobileCategoryOptions.map((item) => (
-            <Button
-              key={item}
-              type="button"
-              size="sm"
-              variant={category === item ? "primary" : "secondary"}
-              className="h-10 shrink-0"
-              onClick={() => setCategory(category === item ? "" : item)}
-            >
-              {item}
-            </Button>
-          ))}
-        </div>
-        <div className="scrollbar-none -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-          <Button
-            type="button"
-            size="sm"
-            variant={readiness === "all" ? "primary" : "secondary"}
-            className="h-10 shrink-0"
-            onClick={() => setReadiness("all")}
-          >
-            {t("readinessAll")}
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant={readiness === "missingImage" ? "primary" : "secondary"}
-            className="h-10 shrink-0"
-            onClick={() => setReadiness(readiness === "missingImage" ? "all" : "missingImage")}
-          >
-            {t("missingImage")}
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant={readiness === "missingPrice" ? "primary" : "secondary"}
-            className="h-10 shrink-0"
-            onClick={() => setReadiness(readiness === "missingPrice" ? "all" : "missingPrice")}
-          >
-            {t("missingPrice")}
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant={readiness === "outOfStock" ? "primary" : "secondary"}
-            className="h-10 shrink-0"
-            onClick={() => setReadiness(readiness === "outOfStock" ? "all" : "outOfStock")}
-          >
-            {t("outOfStock")}
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant={readiness === "lowStock" ? "primary" : "secondary"}
-            className="h-10 shrink-0"
-            onClick={() => setReadiness(readiness === "lowStock" ? "all" : "lowStock")}
-          >
-            {t("lowStock")}
-          </Button>
-          {enableBarcode ? (
-            <Button
-              type="button"
-              size="sm"
-              variant={readiness === "missingBarcode" ? "primary" : "secondary"}
-              className="h-10 shrink-0"
-              onClick={() =>
-                setReadiness(readiness === "missingBarcode" ? "all" : "missingBarcode")
-              }
-            >
-              {t("missingBarcode")}
-            </Button>
-          ) : null}
-          {canManageProducts ? (
-            <Button
-              type="button"
-              size="sm"
-              variant={showArchived ? "primary" : "secondary"}
-              className="h-10 shrink-0"
-              onClick={() => setShowArchived(!showArchived)}
-            >
-              {t("showArchived")}
-            </Button>
-          ) : null}
-        </div>
-      </div>
+        </FilterField>
+      </ListToolbar>
 
       <Card className="overflow-hidden border-border/80 bg-card/95 shadow-sm">
-        <CardHeader className="hidden flex-col gap-3 border-b border-border/70 bg-muted/20 md:flex md:flex-row md:items-center md:justify-between">
+        <CardHeader className="flex flex-col gap-3 border-b border-border bg-card md:flex-row md:items-center md:justify-between">
           <div>
             <CardTitle className="tracking-tight">{t("title")}</CardTitle>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -3668,58 +3633,65 @@ const ProductsPage = () => {
               })}
             </p>
           </div>
-          <div className="flex w-full flex-col gap-2 lg:w-auto lg:flex-row lg:flex-wrap lg:items-center lg:justify-end">
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <SavedTableViews
-                views={productsSavedViewsState.views}
-                matchingViewId={matchingProductsSavedView?.id ?? null}
-                defaultViewId={productsSavedViewsState.defaultViewId}
-                disabled={!productsSavedViewsReady || !productsTableStateReady}
-                onApplyView={applyProductsSavedView}
-                onSaveView={saveProductsView}
-                onRenameView={renameProductsView}
-                onOverwriteView={overwriteProductsView}
-                onDeleteView={deleteProductsView}
-                onSetDefaultView={setDefaultProductsView}
-              />
-              {viewMode === "table" ? (
-                <ColumnVisibilityMenu
-                  columns={productColumnOptions}
-                  visibleColumns={visibleProductColumns}
-                  onToggleColumn={(columnKey) =>
-                    toggleVisibleProductColumn(columnKey as ProductVisibleColumnKey)
-                  }
+          <ListViewOptions>
+            <div className="flex w-full flex-col gap-2 lg:w-auto lg:flex-row lg:flex-wrap lg:items-center lg:justify-end">
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <SavedTableViews
+                  views={productsSavedViewsState.views}
+                  matchingViewId={matchingProductsSavedView?.id ?? null}
+                  defaultViewId={productsSavedViewsState.defaultViewId}
+                  disabled={!productsSavedViewsReady || !productsTableStateReady}
+                  onApplyView={applyProductsSavedView}
+                  onSaveView={saveProductsView}
+                  onRenameView={renameProductsView}
+                  onOverwriteView={overwriteProductsView}
+                  onDeleteView={deleteProductsView}
+                  onSetDefaultView={setDefaultProductsView}
                 />
-              ) : null}
+                {viewMode === "table" ? (
+                  <ColumnVisibilityMenu
+                    columns={productColumnOptions}
+                    visibleColumns={visibleProductColumns}
+                    onToggleColumn={(columnKey) =>
+                      toggleVisibleProductColumn(columnKey as ProductVisibleColumnKey)
+                    }
+                  />
+                ) : null}
+              </div>
+              <div className="flex shrink-0 items-center gap-1 rounded-lg border border-border/80 bg-background/70 p-1 shadow-sm">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={viewMode === "table" ? "secondary" : "ghost"}
+                  className="flex-1 sm:flex-none"
+                  onClick={() => setViewMode("table")}
+                  aria-label={t("viewTable")}
+                >
+                  <TableViewIcon className="h-4 w-4" aria-hidden />
+                  {t("viewTable")}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={viewMode === "grid" ? "secondary" : "ghost"}
+                  className="flex-1 sm:flex-none"
+                  onClick={() => setViewMode("grid")}
+                  aria-label={t("viewGrid")}
+                >
+                  <GridViewIcon className="h-4 w-4" aria-hidden />
+                  {t("viewGrid")}
+                </Button>
+              </div>
             </div>
-            <div className="flex shrink-0 items-center gap-1 rounded-lg border border-border/80 bg-background/70 p-1 shadow-sm">
-              <Button
-                type="button"
-                size="sm"
-                variant={viewMode === "table" ? "secondary" : "ghost"}
-                className="flex-1 sm:flex-none"
-                onClick={() => setViewMode("table")}
-                aria-label={t("viewTable")}
-              >
-                <TableViewIcon className="h-4 w-4" aria-hidden />
-                {t("viewTable")}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={viewMode === "grid" ? "secondary" : "ghost"}
-                className="flex-1 sm:flex-none"
-                onClick={() => setViewMode("grid")}
-                aria-label={t("viewGrid")}
-              >
-                <GridViewIcon className="h-4 w-4" aria-hidden />
-                {t("viewGrid")}
-              </Button>
-            </div>
-          </div>
+          </ListViewOptions>
         </CardHeader>
-        <CardContent className="p-4 sm:p-5">
-          {products.length && canSelectProducts ? (
+        <CardContent className="p-0 sm:p-0">
+          {inlineEditingEnabled && canManageProducts && viewMode === "table" ? (
+            <p className="hidden border-b border-border px-4 py-2 text-xs text-muted-foreground md:block">
+              {tWorkspace("editQuantityHint")}
+            </p>
+          ) : null}
+          {products.length && canSelectProducts && selectedList.length ? (
             <div className="mb-3 sm:hidden">
               <div className="flex flex-wrap items-center gap-2">
                 {!allSelected ? (
@@ -3757,6 +3729,7 @@ const ProductsPage = () => {
                 <SelectionToolbar
                   count={selectedList.length}
                   label={tCommon("selectedCount", { count: selectedList.length })}
+                  scopeLabel={tWorkspace(allResultsSelected ? "selectionAll" : "selectionPage")}
                   clearLabel={tCommon("clearSelection")}
                   onClear={() => setSelectedIds(new Set())}
                 >
@@ -3888,104 +3861,106 @@ const ProductsPage = () => {
                       {canManageProducts ? (
                         <>
                           <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          disabled={aiFeaturesVisuallyDisabled || arrangeCategoriesRunning}
-                          onSelect={() => void handleArrangeCategoriesWithAi()}
-                        >
-                          {arrangeCategoriesRunning ? (
-                            <Spinner className="h-4 w-4" />
-                          ) : (
-                            <SparklesIcon className="h-4 w-4" aria-hidden />
-                          )}
-                          {arrangeCategoriesRunning ? tCommon("loading") : t("aiArrangeCategories")}
-                          <Badge variant="muted" className="ml-auto">
-                            {t("aiUnavailableBadge")}
-                          </Badge>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          disabled={aiDescriptionGenerationDisabled || bulkDescriptionRunning}
-                          onSelect={() => void handleBulkGenerateDescriptions()}
-                        >
-                          {bulkDescriptionRunning ? (
-                            <Spinner className="h-4 w-4" />
-                          ) : (
-                            <SparklesIcon className="h-4 w-4" aria-hidden />
-                          )}
-                          {bulkDescriptionRunning
-                            ? tCommon("loading")
-                            : t("bulkGenerateDescriptions")}
-                          {aiDescriptionGenerationDisabled ? (
+                          <DropdownMenuItem
+                            disabled={aiFeaturesVisuallyDisabled || arrangeCategoriesRunning}
+                            onSelect={() => void handleArrangeCategoriesWithAi()}
+                          >
+                            {arrangeCategoriesRunning ? (
+                              <Spinner className="h-4 w-4" />
+                            ) : (
+                              <SparklesIcon className="h-4 w-4" aria-hidden />
+                            )}
+                            {arrangeCategoriesRunning
+                              ? tCommon("loading")
+                              : t("aiArrangeCategories")}
                             <Badge variant="muted" className="ml-auto">
                               {t("aiUnavailableBadge")}
                             </Badge>
-                          ) : null}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          disabled={aiDescriptionGenerationDisabled || bulkDescriptionRunning}
-                          onSelect={() => void handleBulkGenerateMissingDescriptions()}
-                        >
-                          {bulkDescriptionRunning ? (
-                            <Spinner className="h-4 w-4" />
-                          ) : (
-                            <SparklesIcon className="h-4 w-4" aria-hidden />
-                          )}
-                          {bulkDescriptionRunning
-                            ? tCommon("loading")
-                            : t("bulkGenerateMissingDescriptions")}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          disabled={
-                            aiDescriptionGenerationDisabled ||
-                            bulkDescriptionRunning ||
-                            selectingAllResults ||
-                            productsTotal <= 0
-                          }
-                          onSelect={() => void handleBulkGenerateDescriptionsForCurrentFilter()}
-                        >
-                          {selectingAllResults || bulkDescriptionRunning ? (
-                            <Spinner className="h-4 w-4" />
-                          ) : (
-                            <SparklesIcon className="h-4 w-4" aria-hidden />
-                          )}
-                          {t("bulkGenerateDescriptions")} ({productsTotal})
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          disabled={
-                            aiDescriptionGenerationDisabled ||
-                            bulkDescriptionRunning ||
-                            selectingAllResults ||
-                            productsTotal <= 0
-                          }
-                          onSelect={() =>
-                            void handleBulkGenerateDescriptionsForCurrentFilter({
-                              overwriteExisting: false,
-                            })
-                          }
-                        >
-                          {selectingAllResults || bulkDescriptionRunning ? (
-                            <Spinner className="h-4 w-4" />
-                          ) : (
-                            <SparklesIcon className="h-4 w-4" aria-hidden />
-                          )}
-                          {t("bulkGenerateMissingDescriptions")} ({productsTotal})
-                        </DropdownMenuItem>
-                        {enableBarcode ? (
+                          </DropdownMenuItem>
                           <DropdownMenuItem
-                            disabled={
-                              bulkGenerateBarcodesMutation.isLoading || bulkDescriptionRunning
-                            }
-                            onSelect={() => void handleBulkGenerateBarcodes()}
+                            disabled={aiDescriptionGenerationDisabled || bulkDescriptionRunning}
+                            onSelect={() => void handleBulkGenerateDescriptions()}
                           >
-                            {bulkGenerateBarcodesMutation.isLoading ? (
+                            {bulkDescriptionRunning ? (
                               <Spinner className="h-4 w-4" />
                             ) : (
-                              <AddIcon className="h-4 w-4" aria-hidden />
+                              <SparklesIcon className="h-4 w-4" aria-hidden />
                             )}
-                            {bulkGenerateBarcodesMutation.isLoading
+                            {bulkDescriptionRunning
                               ? tCommon("loading")
-                              : t("bulkGenerateBarcodes")}
+                              : t("bulkGenerateDescriptions")}
+                            {aiDescriptionGenerationDisabled ? (
+                              <Badge variant="muted" className="ml-auto">
+                                {t("aiUnavailableBadge")}
+                              </Badge>
+                            ) : null}
                           </DropdownMenuItem>
-                        ) : null}
+                          <DropdownMenuItem
+                            disabled={aiDescriptionGenerationDisabled || bulkDescriptionRunning}
+                            onSelect={() => void handleBulkGenerateMissingDescriptions()}
+                          >
+                            {bulkDescriptionRunning ? (
+                              <Spinner className="h-4 w-4" />
+                            ) : (
+                              <SparklesIcon className="h-4 w-4" aria-hidden />
+                            )}
+                            {bulkDescriptionRunning
+                              ? tCommon("loading")
+                              : t("bulkGenerateMissingDescriptions")}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            disabled={
+                              aiDescriptionGenerationDisabled ||
+                              bulkDescriptionRunning ||
+                              selectingAllResults ||
+                              productsTotal <= 0
+                            }
+                            onSelect={() => void handleBulkGenerateDescriptionsForCurrentFilter()}
+                          >
+                            {selectingAllResults || bulkDescriptionRunning ? (
+                              <Spinner className="h-4 w-4" />
+                            ) : (
+                              <SparklesIcon className="h-4 w-4" aria-hidden />
+                            )}
+                            {t("bulkGenerateDescriptions")} ({productsTotal})
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            disabled={
+                              aiDescriptionGenerationDisabled ||
+                              bulkDescriptionRunning ||
+                              selectingAllResults ||
+                              productsTotal <= 0
+                            }
+                            onSelect={() =>
+                              void handleBulkGenerateDescriptionsForCurrentFilter({
+                                overwriteExisting: false,
+                              })
+                            }
+                          >
+                            {selectingAllResults || bulkDescriptionRunning ? (
+                              <Spinner className="h-4 w-4" />
+                            ) : (
+                              <SparklesIcon className="h-4 w-4" aria-hidden />
+                            )}
+                            {t("bulkGenerateMissingDescriptions")} ({productsTotal})
+                          </DropdownMenuItem>
+                          {enableBarcode ? (
+                            <DropdownMenuItem
+                              disabled={
+                                bulkGenerateBarcodesMutation.isLoading || bulkDescriptionRunning
+                              }
+                              onSelect={() => void handleBulkGenerateBarcodes()}
+                            >
+                              {bulkGenerateBarcodesMutation.isLoading ? (
+                                <Spinner className="h-4 w-4" />
+                              ) : (
+                                <AddIcon className="h-4 w-4" aria-hidden />
+                              )}
+                              {bulkGenerateBarcodesMutation.isLoading
+                                ? tCommon("loading")
+                                : t("bulkGenerateBarcodes")}
+                            </DropdownMenuItem>
+                          ) : null}
                         </>
                       ) : null}
                       {(hasActiveSelected || hasArchivedSelected) && canManageProducts ? (
@@ -4053,18 +4028,7 @@ const ProductsPage = () => {
                           : "";
                         return [selectedClass, deletedClass].filter(Boolean).join(" ") || undefined;
                       }}
-                      empty={
-                        <EmptyState
-                          icon={<EmptyIcon className="h-6 w-6" aria-hidden />}
-                          title={t("noProducts")}
-                          description={
-                            selectedStore && !hasProductFilters
-                              ? t("storeEmptySubtitle", { store: selectedStore.name })
-                              : undefined
-                          }
-                          className="min-h-[14rem]"
-                        />
-                      }
+                      empty={<></>}
                     />
                   </TooltipProvider>
                 ) : (
@@ -4511,7 +4475,7 @@ const ProductsPage = () => {
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
-          ) : productsTotal === 0 ? (
+          ) : productsTotal === 0 && !productsBootstrapQuery.isError ? (
             selectedStore && !hasProductFilters ? (
               <EmptyState
                 icon={<EmptyIcon className="h-6 w-6" aria-hidden />}
@@ -4551,8 +4515,33 @@ const ProductsPage = () => {
             ) : (
               <EmptyState
                 icon={<EmptyIcon className="h-6 w-6" aria-hidden />}
-                title={t("noProducts")}
-                className="mt-4 rounded-xl bg-muted/20"
+                title={hasProductFilters ? tWorkspace("emptyFilteredTitle") : t("noProducts")}
+                description={hasProductFilters ? tWorkspace("emptyFilteredHint") : undefined}
+                action={
+                  hasProductFilters ? (
+                    <Button
+                      variant="secondary"
+                      onClick={() =>
+                        setProductsTableState((current) => ({
+                          ...current,
+                          search: "",
+                          category: "",
+                          readiness: "all",
+                          productType: "all",
+                          showArchived: false,
+                          page: 1,
+                        }))
+                      }
+                    >
+                      {tWorkspace("resetFilters")}
+                    </Button>
+                  ) : canManageProducts ? (
+                    <Button asChild>
+                      <Link href={newProductHref}>{t("newProduct")}</Link>
+                    </Button>
+                  ) : undefined
+                }
+                className="m-4 rounded-xl bg-muted/20"
               />
             )
           ) : null}

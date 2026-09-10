@@ -194,10 +194,11 @@ export const InventoryReceivingPage = ({
   type SearchResult = NonNullable<typeof searchQuery.data>[number];
 
   useEffect(() => {
-    if (!storeId && stores[0]) {
-      setStoreId(stores[0].id);
+    if (!storeId && !isEditMode && stores.length) {
+      const requestedStore = stores.find((store) => store.id === returningStoreId);
+      setStoreId(returningStoreId ? (requestedStore?.id ?? "") : stores[0].id);
     }
-  }, [storeId, stores]);
+  }, [isEditMode, returningStoreId, storeId, stores]);
 
   useEffect(() => {
     if (
@@ -939,9 +940,9 @@ export const InventoryReceivingPage = ({
           </div>
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="space-y-2">
-              <Label>{tCommon("store")}</Label>
+              <Label htmlFor="receiving-store">{tCommon("store")}</Label>
               <Select value={storeId} onValueChange={handleStoreChange}>
-                <SelectTrigger>
+                <SelectTrigger id="receiving-store">
                   <SelectValue placeholder={tCommon("selectStore")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -1059,6 +1060,7 @@ export const InventoryReceivingPage = ({
                 }}
                 onKeyDown={handleSearchKeyDown}
                 placeholder={t("receivingSearchPlaceholderShort")}
+                aria-label={t("receivingSearchPlaceholderShort")}
                 disabled={!storeId}
                 className="pl-9"
                 autoComplete="off"
@@ -1181,7 +1183,7 @@ export const InventoryReceivingPage = ({
 
             {lines.length ? (
               <div className="space-y-3">
-                <div className="hidden px-3 text-[11px] font-medium text-muted-foreground md:grid md:grid-cols-[minmax(0,1fr)_3.75rem_5rem_4.75rem_4rem_2rem] md:gap-1.5">
+                <div className="hidden px-3 text-[11px] font-medium text-muted-foreground md:grid md:grid-cols-[minmax(0,1fr)_5rem_5.5rem_5.25rem_4.5rem_2rem] md:gap-2">
                   <span>{tCommon("product")}</span>
                   <span>{t("receiveQty")}</span>
                   <span>{t("unitCost")}</span>
@@ -1196,7 +1198,7 @@ export const InventoryReceivingPage = ({
                     <div
                       key={line.key}
                       data-receiving-line-row
-                      className="bazaar-doc-line-row grid gap-3 md:grid-cols-[minmax(0,1fr)_3.75rem_5rem_4.75rem_4rem_2rem] md:items-center md:gap-1.5"
+                      className="bazaar-doc-line-row grid gap-3 md:grid-cols-[minmax(0,1fr)_5rem_5.5rem_5.25rem_4.5rem_2rem] md:items-center md:gap-2"
                     >
                       <div className="flex min-w-0 items-center gap-2.5">
                         <span className="bazaar-doc-line-index">{lineNumber}</span>
@@ -1351,6 +1353,7 @@ export const InventoryReceivingPage = ({
                 </Button>
                 <Button
                   type="button"
+                  data-baam-obstacle="action"
                   onClick={handlePost}
                   disabled={saving || Boolean(validationMessage)}
                 >
@@ -1432,6 +1435,7 @@ export const InventoryReceivingPage = ({
             <Button
               type="button"
               className="min-h-11"
+              data-baam-obstacle="action"
               onClick={handlePost}
               disabled={saving || Boolean(validationMessage)}
             >

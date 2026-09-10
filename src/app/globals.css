@@ -111,8 +111,8 @@ html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
   --popover-foreground: 210 40% 98%;
 
   /* Bazaar brand blue, tuned for dark */
-  --primary: 217 91% 56%;
-  --primary-foreground: 0 0% 100%;
+  --primary: 217 91% 65%;
+  --primary-foreground: 222 47% 11%;
 
   --secondary: 223 28% 16%;
   --secondary-foreground: 210 40% 98%;
@@ -126,7 +126,7 @@ html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
   --border: 223 22% 24%;
   --input: 223 22% 30%;
 
-  --ring: 217 91% 56%;
+  --ring: 217 91% 65%;
 
   --success: 142 60% 45%;
   --success-foreground: 222 47% 11%;
@@ -149,12 +149,12 @@ html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
   --table-row-height: 3rem;
   --sidebar-background: 222 47% 7%;
   --sidebar-foreground: 210 40% 98%;
-  --sidebar-primary: 217 91% 56%;
-  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-primary: 217 91% 65%;
+  --sidebar-primary-foreground: 222 47% 11%;
   --sidebar-accent: 223 30% 15%;
   --sidebar-accent-foreground: 210 40% 98%;
   --sidebar-border: 223 20% 22%;
-  --sidebar-ring: 217 91% 56%;
+  --sidebar-ring: 217 91% 65%;
   color-scheme: dark;
 }
 
@@ -233,6 +233,19 @@ html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
   }
 }
 
+@layer components {
+  [data-list-toolbar] label[for] {
+    @apply mb-1.5 block text-xs font-medium text-muted-foreground;
+  }
+  [data-bazaar-app] th {
+    text-transform: none;
+    letter-spacing: normal;
+  }
+  [data-bazaar-app] td.text-right {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
 @layer utilities {
   .bazaar-mobile-card-surface {
     background-color: rgb(255 255 255 / 0.95);
@@ -277,15 +290,15 @@ html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
   }
 
   .bazaar-doc-surface {
-    @apply rounded-xl border border-border/65 bg-card/95 shadow-[0_14px_36px_rgba(15,23,42,0.055)] ring-1 ring-foreground/[0.012] dark:shadow-none;
+    @apply rounded-xl border border-border bg-card shadow-sm dark:shadow-none;
   }
 
   .bazaar-doc-toolbar {
-    @apply rounded-xl border border-border/55 bg-card/85 p-3 shadow-sm ring-1 ring-foreground/[0.012] dark:shadow-none;
+    @apply rounded-xl border border-border bg-card p-3 shadow-sm dark:shadow-none;
   }
 
   .bazaar-doc-search-list {
-    @apply relative z-[90] mt-3 max-h-[25rem] overflow-y-auto rounded-xl border border-border/65 bg-card/95 shadow-2xl;
+    @apply relative z-[90] mt-3 max-h-[25rem] overflow-y-auto rounded-xl border border-border bg-card shadow-lg;
     scrollbar-width: thin;
     scrollbar-color: hsl(var(--border)) transparent;
   }
@@ -310,31 +323,31 @@ html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
   }
 
   .bazaar-doc-search-row {
-    @apply flex items-center border-b border-border/55 last:border-b-0 hover:bg-primary/[0.045];
+    @apply flex items-center border-b border-border last:border-b-0 hover:bg-primary/[0.045];
   }
 
   .bazaar-doc-thumb {
-    @apply flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border/70 bg-muted/35;
+    @apply flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-muted/35;
   }
 
   .bazaar-doc-line-row {
-    @apply rounded-xl border border-border/65 bg-card/95 p-3 shadow-sm ring-1 ring-foreground/[0.01] transition-colors hover:border-primary/25 hover:bg-primary/[0.025] dark:shadow-none;
+    @apply rounded-xl border border-border bg-card p-3 shadow-sm transition-colors hover:border-primary/25 hover:bg-primary/[0.025] dark:shadow-none;
   }
 
   .bazaar-doc-line-index {
-    @apply flex h-7 min-w-7 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-muted/50 px-1 text-xs font-semibold tabular-nums text-muted-foreground;
+    @apply flex h-7 min-w-7 shrink-0 items-center justify-center rounded-lg border border-border bg-muted/50 px-1 text-xs font-semibold tabular-nums text-muted-foreground;
   }
 
   .bazaar-doc-line-thumb {
-    @apply flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border/70 bg-muted/35;
+    @apply flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-muted/35;
   }
 
   .bazaar-doc-empty {
-    @apply flex min-h-[16rem] flex-col items-center justify-center rounded-xl border border-dashed border-border/70 bg-muted/25 p-8 text-center text-sm text-muted-foreground;
+    @apply flex min-h-[16rem] flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/25 p-8 text-center text-sm text-muted-foreground;
   }
 
   .bazaar-doc-summary {
-    @apply rounded-xl border border-border/65 bg-card/95 p-4 shadow-sm ring-1 ring-foreground/[0.012] dark:shadow-none;
+    @apply rounded-xl border border-border bg-card p-4 shadow-sm dark:shadow-none;
   }
 
   .bazaar-doc-validation {
@@ -342,19 +355,19 @@ html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
   }
 
   .bazaar-doc-mobile-actions {
-    @apply fixed inset-x-3 z-40 rounded-2xl border border-border/80 bg-card/95 p-2.5 shadow-2xl ring-1 ring-foreground/[0.03] backdrop-blur-xl;
+    @apply fixed inset-x-3 z-40 rounded-2xl border border-border bg-card p-2.5 shadow-lg;
   }
 
   .bazaar-admin-surface {
-    @apply rounded-xl border border-border/65 bg-card/95 shadow-[0_16px_42px_rgba(15,23,42,0.06)] ring-1 ring-foreground/[0.015] backdrop-blur dark:shadow-none;
+    @apply rounded-xl border border-border bg-card shadow-sm dark:shadow-none;
   }
 
   .bazaar-admin-toolbar {
-    @apply rounded-xl border border-border/65 bg-card/90 p-3 shadow-sm ring-1 ring-foreground/[0.012] backdrop-blur dark:shadow-none;
+    @apply rounded-xl border border-border bg-card p-3 shadow-sm dark:shadow-none;
   }
 
   .bazaar-admin-table-shell {
-    @apply overflow-hidden rounded-xl border border-border/65 bg-card/95 shadow-sm ring-1 ring-foreground/[0.012] dark:shadow-none;
+    @apply overflow-hidden rounded-xl border border-border bg-card shadow-sm dark:shadow-none;
   }
 
   .bazaar-admin-table-scroll {
@@ -383,19 +396,19 @@ html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
   }
 
   .bazaar-admin-mobile-card {
-    @apply rounded-xl border border-border/65 bg-card/95 p-3 shadow-sm ring-1 ring-foreground/[0.012] transition-colors hover:border-primary/25 hover:bg-primary/[0.025] dark:shadow-none;
+    @apply rounded-xl border border-border bg-card p-3 shadow-sm transition-colors hover:border-primary/25 hover:bg-primary/[0.025] dark:shadow-none;
   }
 
   .bazaar-admin-info-tile {
-    @apply rounded-lg border border-border/60 bg-muted/35 p-3;
+    @apply rounded-lg border border-border bg-muted/35 p-3;
   }
 
   .bazaar-admin-section-header {
-    @apply border-b border-border/65 bg-muted/20;
+    @apply border-b border-border bg-muted/20;
   }
 
   .bazaar-admin-status-tile {
-    @apply rounded-xl border border-border/65 bg-muted/30 p-3 text-sm shadow-sm ring-1 ring-foreground/[0.01] dark:shadow-none;
+    @apply rounded-xl border border-border bg-muted/30 p-3 text-sm shadow-sm dark:shadow-none;
   }
 
   .bazaar-admin-status-tile-success {
@@ -411,7 +424,7 @@ html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
   }
 
   .bazaar-admin-choice-card {
-    @apply rounded-xl border border-border/65 bg-card/90 p-4 text-left shadow-sm ring-1 ring-foreground/[0.01] transition hover:border-primary/35 hover:bg-primary/[0.035] dark:shadow-none;
+    @apply rounded-xl border border-border bg-card p-4 text-left shadow-sm transition hover:border-primary/35 hover:bg-primary/[0.035] dark:shadow-none;
   }
 
   .bazaar-admin-choice-card-active {
@@ -419,15 +432,15 @@ html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
   }
 
   .bazaar-admin-preview-frame {
-    @apply overflow-auto rounded-xl border border-border/70 bg-muted/25 p-3 shadow-inner;
+    @apply overflow-auto rounded-xl border border-border bg-muted/25 p-3 shadow-inner;
   }
 
   .bazaar-admin-empty {
-    @apply flex min-h-[12rem] flex-col items-center justify-center rounded-xl border border-dashed border-border/70 bg-muted/25 p-6 text-center text-sm text-muted-foreground;
+    @apply flex min-h-[12rem] flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/25 p-6 text-center text-sm text-muted-foreground;
   }
 
   .bazaar-admin-notice {
-    @apply rounded-xl border border-border/65 bg-muted/30 p-3 text-sm text-muted-foreground;
+    @apply rounded-xl border border-border bg-muted/30 p-3 text-sm text-muted-foreground;
   }
 
   .bazaar-admin-error {
@@ -435,7 +448,7 @@ html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
   }
 
   .bazaar-admin-modal-card {
-    @apply rounded-xl border border-border/65 bg-card/95 p-3 shadow-sm ring-1 ring-foreground/[0.012] dark:shadow-none;
+    @apply rounded-xl border border-border bg-card p-3 shadow-sm dark:shadow-none;
   }
 
   html.dark .bazaar-admin-surface,
@@ -476,6 +489,13 @@ html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
   html,
   body {
     overflow-x: hidden;
+  }
+
+  /* Keep the authenticated mobile header sticky to the viewport. Hidden creates
+     a second scrolling ancestor on body even when it cannot actually scroll. */
+  html:has([data-bazaar-app]),
+  body:has([data-bazaar-app]) {
+    overflow-x: clip;
   }
 
   button,
@@ -763,11 +783,36 @@ html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
 }
 
 .product-editor-card-form {
-  background-color: #e7ebf0 !important;
-  border-color: #cfd6df !important;
+  background-color: hsl(var(--card));
+  border-color: hsl(var(--border));
 }
 
-.dark .product-editor-card-form {
-  background-color: #1f2937 !important;
-  border-color: hsl(var(--border)) !important;
+/* Adapt the overview to its actual workspace width, including sidebar and zoom. */
+[data-dashboard] {
+  container-type: inline-size;
+}
+@container (min-width: 42rem) {
+  .workspace-dashboard-grid {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+  .workspace-dashboard-grid > * {
+    grid-column: span 6;
+  }
+  .workspace-dashboard-grid > .workspace-dashboard-chart,
+  .workspace-dashboard-grid > .workspace-dashboard-attention {
+    grid-column: span 12;
+  }
+}
+@container (min-width: 54rem) {
+  .workspace-kpi-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+@container (min-width: 60rem) {
+  .workspace-dashboard-grid > .workspace-dashboard-chart {
+    grid-column: span 8;
+  }
+  .workspace-dashboard-grid > .workspace-dashboard-attention {
+    grid-column: span 4;
+  }
 }

@@ -7,17 +7,17 @@ const readSource = (relativePath: string) =>
   readFile(path.join(process.cwd(), relativePath), "utf8");
 
 describe("mobile products source", () => {
-  it("uses a mobile-only product toolbar and photo-first cards without changing desktop controls", async () => {
+  it("shares product filters while retaining mobile product cards and same-tab actions", async () => {
     const source = await readSource("src/app/(app)/products/page.tsx");
 
-    expect(source).toContain("data-mobile-products-toolbar");
-    expect(source).toContain('filtersClassName="hidden border-0 bg-transparent p-0 md:block"');
+    expect(source).toContain("<ListToolbar");
+    expect(source).toContain('id="products-category"');
     expect(source).toContain('mobileItemsClassName="grid grid-cols-1 gap-3"');
     expect(source).toContain("relative h-24 w-24");
     expect(source).toContain("Phones always use");
     expect(source).toContain('action.key === "edit" ? { ...action, openInNewTab: false } : action');
-    expect(source).toContain('variant={readiness === "missingImage" ? "primary" : "secondary"}');
-    expect(source).toContain('variant={readiness === "outOfStock" ? "primary" : "secondary"}');
+    expect(source).toContain('<SelectItem value="missingImage">');
+    expect(source).toContain('<SelectItem value="outOfStock">');
     expect(source).toContain("enableBarcode ? (");
   });
 
@@ -46,12 +46,13 @@ describe("mobile products source", () => {
 
   it("offers the same image and stock readiness filters on desktop", async () => {
     const source = await readSource("src/app/(app)/products/page.tsx");
-    const desktopFiltersStart = source.indexOf('filtersClassName="hidden border-0 bg-transparent p-0 md:block"');
-    const desktopToolbar = source.slice(Math.max(0, desktopFiltersStart - 4_000), desktopFiltersStart);
-
-    expect(desktopFiltersStart).toBeGreaterThan(-1);
-    expect(desktopToolbar).toContain('<SelectItem value="missingImage">');
-    expect(desktopToolbar).toContain('<SelectItem value="outOfStock">');
+    const toolbarStart = source.indexOf("<ListToolbar");
+    const toolbar = source.slice(toolbarStart, source.indexOf("</ListToolbar>", toolbarStart));
+    expect(toolbarStart).toBeGreaterThan(-1);
+    expect(toolbar).toContain('<SelectItem value="missingImage">');
+    expect(toolbar).toContain('<SelectItem value="outOfStock">');
+    expect(toolbar).toContain('<SelectItem value="negativeStock">');
+    expect(toolbar).toContain('id="products-readiness"');
   });
 
   it("keeps mobile product form sectioned with an in-flow mobile save action", async () => {

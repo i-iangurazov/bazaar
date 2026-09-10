@@ -7,21 +7,26 @@ export const SelectionToolbar = ({
   label,
   onClear,
   clearLabel,
+  scopeLabel,
   children,
 }: {
   count: number;
   label: string;
   onClear?: () => void;
   clearLabel?: string;
+  scopeLabel?: string;
   children?: ReactNode;
 }) => (
   <div
-    className="flex flex-col items-start gap-3 rounded-xl border border-primary/20 bg-primary/10 px-3 py-3 text-sm shadow-[0_12px_30px_hsl(var(--primary)/0.08)] sm:flex-row sm:items-center sm:justify-between"
+    className="flex flex-col items-start gap-3 rounded-lg border border-primary/25 bg-primary/5 px-3 py-2.5 text-sm sm:flex-row sm:items-center sm:justify-between"
     data-count={count}
     data-component="selection-toolbar"
   >
-    <div className="flex items-center gap-2 whitespace-nowrap text-foreground">
+    <div className="min-w-0 text-foreground" role="status" aria-live="polite">
       <span className="font-medium">{label}</span>
+      {scopeLabel ? (
+        <p className="mt-0.5 text-xs leading-5 text-muted-foreground">{scopeLabel}</p>
+      ) : null}
     </div>
     <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
       {children}

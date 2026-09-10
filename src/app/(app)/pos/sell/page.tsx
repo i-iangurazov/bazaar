@@ -5095,23 +5095,23 @@ const PosSellPage = () => {
       </header>
 
       {shiftStatePending ? (
-        <main className="grid min-h-[calc(100vh-4rem)] place-items-center p-4">
+        <section className="grid min-h-[calc(100vh-4rem)] place-items-center p-4">
           <div className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
             <Spinner className="h-4 w-4" />
             {tCommon("loading")}
           </div>
-        </main>
+        </section>
       ) : shiftStateError ? (
-        <main className="grid min-h-[calc(100vh-4rem)] place-items-center p-4">
+        <section className="grid min-h-[calc(100vh-4rem)] place-items-center p-4">
           <section className="bazaar-admin-error w-full max-w-xl">
             <p>{translateError(tErrors, shiftQuery.error)}</p>
             <Button className="mt-3" variant="secondary" onClick={() => void shiftQuery.refetch()}>
               {tCommon("tryAgain")}
             </Button>
           </section>
-        </main>
+        </section>
       ) : !hasOpenShift ? (
-        <main className="grid min-h-[calc(100vh-4rem)] place-items-center p-4">
+        <section className="grid min-h-[calc(100vh-4rem)] place-items-center p-4">
           <section className="bazaar-admin-surface w-full max-w-xl p-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
@@ -5125,9 +5125,9 @@ const PosSellPage = () => {
               ) : null}
             </div>
           </section>
-        </main>
+        </section>
       ) : (
-        <main className="grid min-h-[calc(100vh-4rem)] pb-20 lg:h-[calc(100vh-4rem)] lg:grid-cols-[minmax(0,1fr)_520px] lg:pb-0 2xl:grid-cols-[minmax(0,1fr)_600px]">
+        <section className="grid min-h-[calc(100vh-4rem)] pb-20 lg:h-[calc(100vh-4rem)] lg:grid-cols-[minmax(0,1fr)_520px] lg:pb-0 2xl:grid-cols-[minmax(0,1fr)_600px]">
           <section className="flex min-h-0 flex-col bg-muted/40">
             <div className="min-h-14 overflow-x-auto border-b border-border/70 bg-card px-4 py-3 shadow-sm">
               <div className="flex w-max min-w-full items-center justify-center gap-2">
@@ -5648,7 +5648,11 @@ const PosSellPage = () => {
                 </div>
 
                 {hasCartLines ? (
-                  <div ref={paymentsSectionRef} className="border-t border-border bg-card">
+                  <div
+                    ref={paymentsSectionRef}
+                    data-baam-obstacle="action"
+                    className="border-t border-border bg-card"
+                  >
                     <div className="space-y-2 px-4 py-2">
                       <div className="px-1">
                         <div className="space-y-1 text-[11px] leading-4">
@@ -5878,6 +5882,7 @@ const PosSellPage = () => {
                           type="button"
                           variant="secondary"
                           className="h-9 w-full rounded-md px-4 text-sm font-semibold"
+                          data-baam-obstacle="action"
                           onClick={() => void handleHoldReceipt()}
                           disabled={
                             !saleId || !hasCartLines || isLineBusy || completeMutation.isLoading
@@ -5890,6 +5895,7 @@ const PosSellPage = () => {
 
                       <Button
                         className="h-9 w-full rounded-md bg-success px-4 text-sm font-semibold text-success-foreground hover:bg-success/90 disabled:bg-success/40 disabled:text-success-foreground/70"
+                        data-baam-obstacle="action"
                         onClick={handleComplete}
                         disabled={completeDisabled}
                       >
@@ -5910,7 +5916,7 @@ const PosSellPage = () => {
               </>
             )}
           </aside>
-        </main>
+        </section>
       )}
       {CustomerEditModal()}
       {ReceiptJournalModal()}
@@ -6742,7 +6748,7 @@ const PosSellPage = () => {
       );
 
       const renderDocumentTab = () => (
-        <main className="space-y-3 pb-[calc(5.5rem_+_env(safe-area-inset-bottom))] pt-0">
+        <section className="space-y-3 pb-[calc(5.5rem_+_env(safe-area-inset-bottom))] pt-0">
           {renderRegisterPanel()}
           {renderDraftNotice()}
           {saleId && saleQuery.error ? (
@@ -6768,11 +6774,11 @@ const PosSellPage = () => {
               </button>
             </div>
           ) : null}
-        </main>
+        </section>
       );
 
       const renderPaymentTab = () => (
-        <main
+        <section
           className={cn(
             "min-h-[calc(100dvh-176px)]",
             hasCartLines
@@ -6871,6 +6877,7 @@ const PosSellPage = () => {
 
               <section
                 ref={paymentsSectionRef}
+                data-baam-obstacle="action"
                 className="border-y border-border bg-card/95 px-3 py-3"
               >
                 <div className="flex items-center justify-between gap-3">
@@ -7019,6 +7026,7 @@ const PosSellPage = () => {
                   <button
                     type="button"
                     className="min-h-11 w-full rounded-[11px] bg-secondary text-[14px] font-semibold text-secondary-foreground disabled:opacity-50"
+                    data-baam-obstacle="action"
                     onClick={() => void handleHoldReceipt()}
                     disabled={!saleId || !hasCartLines || isLineBusy || completeMutation.isLoading}
                   >
@@ -7028,6 +7036,7 @@ const PosSellPage = () => {
                 <button
                   type="button"
                   className="min-h-[50px] w-full rounded-[12px] bg-primary text-[15px] font-semibold text-primary-foreground disabled:opacity-50"
+                  data-baam-obstacle="action"
                   onClick={handleComplete}
                   disabled={completeDisabled}
                 >
@@ -7042,7 +7051,7 @@ const PosSellPage = () => {
               </div>
             </div>
           )}
-        </main>
+        </section>
       );
 
       const renderSaleScreen = () => (
@@ -7078,7 +7087,7 @@ const PosSellPage = () => {
             </div>
           </header>
 
-          <main className="pb-[calc(2rem_+_env(safe-area-inset-bottom))]">
+          <section className="pb-[calc(2rem_+_env(safe-area-inset-bottom))]">
             <div className="flex min-h-[50px] items-center gap-2.5 border-b border-border bg-muted px-3">
               <SearchIcon className="h-6 w-6 shrink-0 text-muted-foreground" aria-hidden />
               <ScanInput
@@ -7231,7 +7240,7 @@ const PosSellPage = () => {
               </div>
             ) : null}
             <div className="px-3 pb-3">{renderCatalogPagination()}</div>
-          </main>
+          </section>
         </div>
       );
 
@@ -7255,7 +7264,7 @@ const PosSellPage = () => {
               </h1>
             </div>
           </header>
-          <main className="grid min-h-[calc(100dvh-68px)] place-items-center px-5 pb-[env(safe-area-inset-bottom)]">
+          <section className="grid min-h-[calc(100dvh-68px)] place-items-center px-5 pb-[env(safe-area-inset-bottom)]">
             <section className="w-full max-w-sm text-center">
               <div className="mx-auto grid h-20 w-20 place-items-center rounded-full border border-border bg-card">
                 <BarcodeIcon className="h-9 w-9 text-primary" aria-hidden />
@@ -7289,7 +7298,7 @@ const PosSellPage = () => {
                 />
               </div>
             </section>
-          </main>
+          </section>
         </div>
       );
 
@@ -7673,7 +7682,7 @@ const PosSellPage = () => {
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-md space-y-4 px-3 pb-[calc(11rem+env(safe-area-inset-bottom))] pt-4 md:hidden">
+        <section className="mx-auto w-full max-w-md space-y-4 px-3 pb-[calc(11rem+env(safe-area-inset-bottom))] pt-4 md:hidden">
           {showMobileRegisterPanel ? (
             <section className="bazaar-admin-surface p-3">
               <div className="space-y-2">
@@ -7835,7 +7844,7 @@ const PosSellPage = () => {
             ) : null}
             {renderCatalogPagination()}
           </section>
-        </main>
+        </section>
 
         {!cartSheetOpen ? (
           <button
@@ -8349,6 +8358,7 @@ const PosSellPage = () => {
 
                         <div
                           ref={paymentsSectionRef}
+                          data-baam-obstacle="action"
                           className="rounded-md border border-border bg-card p-3"
                         >
                           <div className="flex items-center justify-between gap-3">
@@ -8491,6 +8501,7 @@ const PosSellPage = () => {
                           type="button"
                           variant="secondary"
                           className="h-11 w-full text-base font-semibold"
+                          data-baam-obstacle="action"
                           onClick={() => void handleHoldReceipt()}
                           disabled={
                             !saleId || !hasCartLines || isLineBusy || completeMutation.isLoading
@@ -8502,6 +8513,7 @@ const PosSellPage = () => {
                       ) : null}
                       <Button
                         className="h-12 w-full bg-success text-base font-semibold text-success-foreground hover:bg-success/90 disabled:bg-success/40 disabled:text-success-foreground/70"
+                        data-baam-obstacle="action"
                         onClick={handleComplete}
                         disabled={completeDisabled}
                       >

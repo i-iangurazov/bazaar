@@ -25,16 +25,16 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> &
   };
 
 export const buttonVariants = cva(
-  "button-focus-ring inline-flex items-center justify-center gap-2 rounded-md text-sm font-semibold shadow-sm transition focus:outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50",
+  "button-focus-ring inline-flex max-w-full items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors focus:outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 [&>svg]:shrink-0",
   {
     variants: {
       variant: {
         default: "bg-primary text-primary-foreground hover:bg-primary/90",
         primary: "bg-primary text-primary-foreground hover:bg-primary/90",
         secondary:
-          "border border-input bg-secondary text-secondary-foreground hover:bg-secondary/80",
+          "border border-input bg-card text-foreground hover:border-muted-foreground/50 hover:bg-muted",
         ghost:
-          "bg-secondary/70 text-secondary-foreground hover:bg-secondary data-[state=open]:bg-secondary",
+          "border border-transparent bg-transparent text-muted-foreground shadow-none hover:bg-secondary hover:text-foreground data-[state=open]:bg-secondary data-[state=open]:text-foreground",
         danger: "bg-danger text-danger-foreground hover:bg-danger/90",
         destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
         outline:
@@ -68,9 +68,30 @@ export const Button = forwardRef<HTMLButtonElement, ButtonPropsWithoutVariantCol
     return (
       <Comp
         ref={ref}
+        data-baam-obstacle={props.type === "submit" ? "action" : undefined}
         className={cn(buttonVariants({ variant, size }), className)}
         title={title}
         {...props}
+        {...(asChild && props.disabled
+          ? {
+              "aria-disabled": true,
+              tabIndex: -1,
+              onClickCapture: (event: React.MouseEvent) => {
+                event.preventDefault();
+                event.stopPropagation();
+              },
+              onAuxClickCapture: (event: React.MouseEvent) => {
+                event.preventDefault();
+                event.stopPropagation();
+              },
+              onKeyDownCapture: (event: React.KeyboardEvent) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }
+              },
+            }
+          : {})}
       />
     );
   },

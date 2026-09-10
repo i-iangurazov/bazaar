@@ -23,7 +23,11 @@ describe("index page source layout", () => {
     async (_pageName, relativePath, marker) => {
       const source = await readSource(relativePath);
       const tableHeaderStart = source.indexOf(marker);
-      const tableHeaderSource = source.slice(tableHeaderStart, tableHeaderStart + 1800);
+      expect(tableHeaderStart).toBeGreaterThanOrEqual(0);
+      const tableHeaderSource = source.slice(
+        tableHeaderStart,
+        source.indexOf("</CardHeader>", tableHeaderStart),
+      );
 
       expect(tableHeaderSource).toContain("lg:flex-row");
       expect(tableHeaderSource).toContain("lg:flex-wrap");
@@ -219,9 +223,7 @@ describe("index page source layout", () => {
     const listSource = await readSource("src/app/(app)/products/page.tsx");
     const detailSource = await readSource("src/app/(app)/products/[id]/page.tsx");
     const createSource = await readSource("src/app/(app)/products/new/page.tsx");
-    const dialogSource = await readSource(
-      "src/components/products/product-duplicate-dialog.tsx",
-    );
+    const dialogSource = await readSource("src/components/products/product-duplicate-dialog.tsx");
     const serviceSource = await readSource("src/server/services/products.ts");
 
     const listQuickAction = listSource.indexOf('key: "duplicate"');
@@ -247,10 +249,8 @@ describe("index page source layout", () => {
     );
     expect(dialogSource).toContain("setName(productName)");
     expect(dialogSource).not.toContain('setName(t("duplicateNameTemplate"');
-    expect(serviceSource).toContain(
-      "const duplicateName = input.name?.trim() || source.name;",
-    );
-    expect(serviceSource).not.toContain('`${source.name} (Copy)`');
+    expect(serviceSource).toContain("const duplicateName = input.name?.trim() || source.name;");
+    expect(serviceSource).not.toContain("`${source.name} (Copy)`");
     expect(createSource).toContain('router.push("/products");');
     expect(detailSource).toContain("router.push(productEditReturnPath);");
   });

@@ -1,6 +1,6 @@
 import type { InlineParseResult } from "@/lib/inlineEdit/registry";
 
-export type InlineEditTrigger = "doubleClick" | "mobileButton";
+export type InlineEditTrigger = "doubleClick" | "mobileButton" | "keyboard";
 
 type ShouldBeginInlineEditInput = {
   trigger: InlineEditTrigger;
@@ -25,7 +25,7 @@ export const shouldBeginInlineEdit = ({
   if (activeCellId && activeCellId !== cellId) {
     return false;
   }
-  if (trigger === "doubleClick") {
+  if (trigger === "doubleClick" || trigger === "keyboard") {
     return true;
   }
   return isTouch;

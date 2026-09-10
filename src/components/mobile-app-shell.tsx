@@ -32,6 +32,7 @@ type MobileAppShellProps = {
   closeLabel?: string;
   navigationLabel?: string;
   showTopBar?: boolean;
+  showAssistant?: boolean;
 };
 
 type MobileTopBarProps = {
@@ -41,6 +42,7 @@ type MobileTopBarProps = {
   profileLabel: string;
   moreLabel: string;
   onOpenMore: () => void;
+  showAssistant?: boolean;
 };
 
 type MobileBottomNavProps = {
@@ -94,6 +96,7 @@ export const MobileAppShell = ({
   closeLabel = "Close",
   navigationLabel = "Mobile navigation",
   showTopBar = true,
+  showAssistant = false,
 }: MobileAppShellProps) => {
   const [moreOpen, setMoreOpen] = useState(false);
   const moreActive = useMemo(() => moreItems.some((item) => item.active), [moreItems]);
@@ -108,6 +111,7 @@ export const MobileAppShell = ({
           profileLabel={profileLabel}
           moreLabel={moreLabel}
           onOpenMore={() => setMoreOpen(true)}
+          showAssistant={showAssistant}
         />
       ) : null}
       <MobileBottomNav
@@ -135,6 +139,7 @@ export const MobileTopBar = ({
   profileLabel,
   moreLabel,
   onOpenMore,
+  showAssistant = false,
 }: MobileTopBarProps) => (
   <header
     className="sticky top-0 z-40 border-b border-border/80 bg-card/95 px-4 pb-3 pt-3 shadow-sm backdrop-blur-xl md:hidden"
@@ -146,7 +151,7 @@ export const MobileTopBar = ({
           {storeName ?? "BAZAAR"}
         </p>
         <div className="mt-0.5 flex min-w-0 items-center gap-2">
-          <h1 className="truncate text-base font-semibold text-foreground">{pageTitle}</h1>
+          <p className="truncate text-base font-semibold text-foreground">{pageTitle}</p>
           {statusLabel ? (
             <span className="shrink-0 rounded-md border border-success/30 bg-success/10 px-2 py-0.5 text-[11px] font-semibold text-success">
               {statusLabel}
@@ -156,7 +161,11 @@ export const MobileTopBar = ({
       </div>
       <div className="flex shrink-0 items-center gap-1">
         <PageTipsButton className="bazaar-mobile-header-button" />
-        <PwaInstallButton className="bazaar-mobile-header-button" />
+        {showAssistant ? (
+          <div data-baam-mobile-slot className="h-11 w-11 shrink-0" />
+        ) : (
+          <PwaInstallButton className="bazaar-mobile-header-button" />
+        )}
         <Link
           href="/settings/profile"
           prefetch={false}

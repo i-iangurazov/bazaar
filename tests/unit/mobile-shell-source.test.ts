@@ -70,15 +70,16 @@ describe("mobile app shell source", () => {
     expect(bottomNavSource).toContain(
       "flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-[1.1rem]",
     );
-    expect(bottomNavSource).toContain("bg-primary text-primary-foreground shadow-lg shadow-primary/20");
+    expect(bottomNavSource).toContain(
+      "bg-primary text-primary-foreground shadow-lg shadow-primary/20",
+    );
   });
 
-  it("adds a mobile-only command center without replacing the desktop dashboard", () => {
-    expect(dashboardSource).toContain('className="space-y-4 md:hidden"');
-    expect(dashboardSource).toContain('className="hidden md:block"');
-    expect(dashboardSource).toContain("MobileTaskCard");
-    expect(dashboardSource).toContain("MobileQuickActionButton");
-    expect(dashboardSource).toContain('href: "/inventory/receiving"');
+  it("shares the same actual dashboard data and scoped actions across screen sizes", () => {
+    expect(dashboardSource).toContain("data-dashboard-kpi={kpi.key}");
+    expect(dashboardSource).toContain("grid grid-cols-2 gap-3 lg:grid-cols-4");
+    expect(dashboardSource).toContain('href: scopedHref("/inventory/receiving")');
+    expect(dashboardSource).toContain('scopedHref("/inventory", { stockFilter: "lowStock" })');
     expect(dashboardSource).toContain("dashboard.bootstrap.useQuery");
     expect(dashboardSource).toContain("dashboard.activity.useQuery");
   });

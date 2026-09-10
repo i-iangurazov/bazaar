@@ -119,9 +119,9 @@ const PeriodClosePage = () => {
         </CardHeader>
         <CardContent className="space-y-6">
           <FormGrid>
-            <Field label={t("storeLabel")}>
+            <Field htmlFor="close-storeLabel" label={t("storeLabel")}>
               <Select value={storeId} onValueChange={setStoreId}>
-                <SelectTrigger>
+                <SelectTrigger id="close-storeLabel">
                   <SelectValue placeholder={tCommon("selectStore")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -133,8 +133,9 @@ const PeriodClosePage = () => {
                 </SelectContent>
               </Select>
             </Field>
-            <Field label={t("monthLabel")}>
+            <Field htmlFor="close-monthLabel" label={t("monthLabel")}>
               <Input
+                id="close-monthLabel"
                 type="month"
                 value={month}
                 onChange={(event) => setMonth(event.target.value)}

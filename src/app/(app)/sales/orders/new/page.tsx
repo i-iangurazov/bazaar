@@ -6,6 +6,7 @@ import { useLocale, useTranslations } from "next-intl";
 
 import { AddIcon, DeleteIcon } from "@/components/icons";
 import { FormGrid } from "@/components/form-layout";
+import { resolveSafeReturnTo } from "@/lib/safeReturnTo";
 import { PageHeader } from "@/components/page-header";
 import { ProductSearchResultItem } from "@/components/product-search-result-item";
 import { SalesOrderReturnRedirect } from "@/components/sales-order-return-redirect";
@@ -62,6 +63,8 @@ const NewSalesOrderPage = () => {
   const locale = useLocale();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const requestedStoreId = searchParams.get("storeId");
+  const returnTo = resolveSafeReturnTo(searchParams.get("returnTo"), "/sales/orders");
   const utils = trpc.useUtils();
   const { toast } = useToast();
   const legacyReturnRedirect = resolveLegacySalesReturnRedirect(searchParams);
@@ -81,9 +84,12 @@ const NewSalesOrderPage = () => {
 
   useEffect(() => {
     if (!storeId && storesQuery.data?.[0]) {
-      setStoreId(storesQuery.data[0].id);
+      const available = requestedStoreId
+        ? storesQuery.data.find((store) => store.id === requestedStoreId)
+        : storesQuery.data[0];
+      if (available) setStoreId(available.id);
     }
-  }, [storeId, storesQuery.data]);
+  }, [storeId, storesQuery.data, requestedStoreId]);
 
   const selectedStore = storesQuery.data?.find((store) => store.id === storeId) ?? null;
 
@@ -96,7 +102,7 @@ const NewSalesOrderPage = () => {
     onSuccess: (order) => {
       createAttemptRef.current = null;
       toast({ variant: "success", description: t("createSuccess") });
-      router.push(`/sales/orders/${order.id}`);
+      router.push(`/sales/orders/${order.id}?returnTo=${encodeURIComponent(returnTo)}`);
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
@@ -498,7 +504,7 @@ const NewSalesOrderPage = () => {
             <Button
               variant="secondary"
               className="w-full sm:w-auto"
-              onClick={() => router.push("/sales/orders")}
+              onClick={() => router.push(returnTo)}
             >
               {tCommon("cancel")}
             </Button>

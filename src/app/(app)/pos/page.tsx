@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 
@@ -47,6 +47,8 @@ const PosEntryPage = () => {
   const tErrors = useTranslations("errors");
   const locale = useLocale();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedStoreId = searchParams.get("store") ?? "";
   const { data: session } = useSession();
   const { toast } = useToast();
   const trpcUtils = trpc.useUtils();
@@ -56,13 +58,33 @@ const PosEntryPage = () => {
   const [openingNote, setOpeningNote] = useState("");
 
   const registersQuery = trpc.pos.registers.list.useQuery();
+  const storesQuery = trpc.stores.list.useQuery();
+  const storeOptions = useMemo(
+    () =>
+      Array.from(
+        new Map(
+          [
+            ...(storesQuery.data ?? []),
+            ...(registersQuery.data ?? []).map((register) => register.store),
+          ].map((store) => [store.id, store]),
+        ).values(),
+      ),
+    [registersQuery.data, storesQuery.data],
+  );
+  const availableRegisters = useMemo(
+    () =>
+      (registersQuery.data ?? []).filter(
+        (register) => !requestedStoreId || register.store.id === requestedStoreId,
+      ),
+    [registersQuery.data, requestedStoreId],
+  );
   const {
     registerId,
     selectRegister,
     issue: registerSelectionIssue,
     isReady: registerSelectionReady,
   } = usePosRegisterSelection({
-    registers: registersQuery.data ?? [],
+    registers: availableRegisters,
     registersReady: registersQuery.data !== undefined,
   });
   const entryQuery = trpc.pos.entry.useQuery(
@@ -118,16 +140,21 @@ const PosEntryPage = () => {
   const currentCashierName = session?.user?.name || session?.user?.email || tCommon("notAvailable");
   const canManageRegisters = role === "ADMIN" || role === "MANAGER";
   const selectedRegister = useMemo(() => {
-    if (!registersQuery.data?.length) {
+    if (!availableRegisters.length) {
       return null;
     }
-    return registersQuery.data.find((item) => item.id === registerId) ?? null;
-  }, [registerId, registersQuery.data]);
+    return availableRegisters.find((item) => item.id === registerId) ?? null;
+  }, [registerId, availableRegisters]);
   const entryLoading = Boolean(selectedRegister && entryQuery.isLoading);
 
-  const openShift = entryQuery.data?.currentShift;
-  const previousClosedShift = entryQuery.data?.previousClosedShift ?? null;
-  const activeRegisterId = openShift?.registerId ?? selectedRegister?.id ?? registerId;
+  const openShift =
+    selectedRegister && entryQuery.data?.currentShift?.registerId === selectedRegister.id
+      ? entryQuery.data.currentShift
+      : null;
+  const previousClosedShift = selectedRegister
+    ? (entryQuery.data?.previousClosedShift ?? null)
+    : null;
+  const activeRegisterId = selectedRegister?.id ?? "";
   const formatStoreMoney = (amountKgs: number | string) =>
     formatKgsMoney(
       Number(amountKgs),
@@ -180,6 +207,36 @@ const PosEntryPage = () => {
         <PageHeader title={t("title")} subtitle={t("cashierSubtitle")} />
       </div>
 
+      {storeOptions.length > 1 || requestedStoreId ? (
+        <div className="max-w-sm space-y-1.5">
+          <label htmlFor="pos-entry-store" className="text-xs font-medium text-muted-foreground">
+            {tCommon("store")}
+          </label>
+          <Select
+            value={requestedStoreId || "all"}
+            onValueChange={(value) => {
+              const params = new URLSearchParams(searchParams.toString());
+              params.delete("registerId");
+              if (value === "all") params.delete("store");
+              else params.set("store", value);
+              router.replace(`/pos?${params.toString()}`, { scroll: false });
+            }}
+          >
+            <SelectTrigger id="pos-entry-store">
+              <SelectValue placeholder={tCommon("selectStore")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{tCommon("allStores")}</SelectItem>
+              {storeOptions.map((store) => (
+                <SelectItem key={store.id} value={store.id}>
+                  {store.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      ) : null}
+
       {registersQuery.isError || entryQuery.isError ? (
         <QueryErrorState
           onRetry={() => {
@@ -210,15 +267,14 @@ const PosEntryPage = () => {
             ) : null}
           </div>
 
-          {(registersQuery.data?.length ?? 0) > 1 ||
-          (!registerId && (registersQuery.data?.length ?? 0) > 0) ? (
+          {availableRegisters.length > 1 || (!registerId && availableRegisters.length > 0) ? (
             <div className="mt-4">
               <Select value={registerId} onValueChange={selectRegister}>
                 <SelectTrigger aria-label={t("entry.register")} className="h-12">
                   <SelectValue placeholder={t("entry.selectRegister")} />
                 </SelectTrigger>
                 <SelectContent>
-                  {(registersQuery.data ?? []).map((item) => (
+                  {availableRegisters.map((item) => (
                     <SelectItem key={item.id} value={item.id}>
                       {item.store.name} · {item.name} ({item.code})
                     </SelectItem>
@@ -233,9 +289,7 @@ const PosEntryPage = () => {
             </div>
           ) : null}
 
-          {!registersQuery.isLoading &&
-          !registersQuery.isError &&
-          !(registersQuery.data?.length ?? 0) ? (
+          {!registersQuery.isLoading && !registersQuery.isError && !availableRegisters.length ? (
             <div className="bazaar-admin-empty mt-4 min-h-[8rem] gap-2 text-sm">
               {t("entry.noRegisters")}
               {canManageRegisters ? (
@@ -368,15 +422,14 @@ const PosEntryPage = () => {
                     : t("entry.selectRegister")}
                 </p>
               </div>
-              {(registersQuery.data?.length ?? 0) > 1 ||
-              (!registerId && (registersQuery.data?.length ?? 0) > 0) ? (
+              {availableRegisters.length > 1 || (!registerId && availableRegisters.length > 0) ? (
                 <div className="w-full sm:max-w-xs">
                   <Select value={registerId} onValueChange={selectRegister}>
                     <SelectTrigger aria-label={t("entry.register")}>
                       <SelectValue placeholder={t("entry.selectRegister")} />
                     </SelectTrigger>
                     <SelectContent>
-                      {(registersQuery.data ?? []).map((item) => (
+                      {availableRegisters.map((item) => (
                         <SelectItem key={item.id} value={item.id}>
                           {item.store.name} · {item.name} ({item.code})
                         </SelectItem>
@@ -392,9 +445,7 @@ const PosEntryPage = () => {
               ) : null}
             </div>
 
-            {!registersQuery.isLoading &&
-            !registersQuery.isError &&
-            !(registersQuery.data?.length ?? 0) ? (
+            {!registersQuery.isLoading && !registersQuery.isError && !availableRegisters.length ? (
               <div className="bazaar-admin-empty min-h-[8rem] items-start p-4 text-left">
                 <p className="text-sm text-muted-foreground">{t("entry.noRegisters")}</p>
                 {canManageRegisters ? (
@@ -523,11 +574,7 @@ const PosEntryPage = () => {
             <CardTitle>{t("entry.quickActionsTitle")}</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-2">
-            {!openShift ? (
-              <Button asChild disabled>
-                <Link href={`/pos/sell?registerId=${activeRegisterId}`}>{t("entry.sell")}</Link>
-              </Button>
-            ) : null}
+            {!openShift ? <Button disabled>{t("entry.sell")}</Button> : null}
             <Button variant="secondary" asChild>
               <Link href={`/pos/history?registerId=${activeRegisterId}`}>{t("entry.history")}</Link>
             </Button>

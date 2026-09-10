@@ -18,6 +18,8 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
+import { commonListFields, useScopedListState } from "@/lib/useScopedListState";
+import { ListViewOptions, ListToolbar, ListSearch, FilterField } from "@/components/list-toolbar";
 import { PageHeader } from "@/components/page-header";
 import { ColumnVisibilityMenu } from "@/components/column-visibility-menu";
 import { HelpLink } from "@/components/help-link";
@@ -171,12 +173,18 @@ const defaultInventorySortDirectionByKey: Record<InventorySortKey, InventorySort
   onOrder: "desc",
   suggestedOrder: "desc",
 };
+const inventoryListFields = [
+  ...commonListFields,
+  { key: "stockFilter", param: "stockFilter" },
+  { key: "showPlanning", param: "planning", preference: true },
+];
 const inventoryTableStateSchema = z.object({
   storeId: z.string(),
   search: z.string(),
   viewMode: inventoryViewModeSchema,
   stockFilter: inventoryStockFilterSchema.optional().default("all"),
   pageSize: z.number().int().min(1).max(200),
+  page: z.number().int().min(1).optional().default(1),
   showPlanning: z.boolean(),
   sort: z
     .object({
@@ -347,6 +355,7 @@ ProductSearchSelect.displayName = "ProductSearchSelect";
 const InventoryPage = () => {
   const t = useTranslations("inventory");
   const tCommon = useTranslations("common");
+  const tWorkspace = useTranslations("workspace");
   const tErrors = useTranslations("errors");
   const tPrinting = useTranslations("printingSettings");
   const locale = useLocale();
@@ -363,7 +372,6 @@ const InventoryPage = () => {
   const storesQuery = trpc.stores.list.useQuery();
   type StoreRow = NonNullable<typeof storesQuery.data>[number] & { trackExpiryLots?: boolean };
   const stores: StoreRow[] = (storesQuery.data ?? []) as StoreRow[];
-  const [inventoryPage, setInventoryPage] = useState(1);
   const [expandedReorderId, setExpandedReorderId] = useState<string | null>(null);
   const [expiryWindow, setExpiryWindow] = useState<30 | 60 | 90>(30);
   const [activeDialog, setActiveDialog] = useState<
@@ -414,6 +422,7 @@ const InventoryPage = () => {
       viewMode: "table",
       stockFilter: "all",
       pageSize: 25,
+      page: 1,
       showPlanning: false,
       sort: {
         key: "product",
@@ -445,7 +454,9 @@ const InventoryPage = () => {
     setValue: setInventoryTableState,
     isReady: inventoryTableStateReady,
     hasStoredValue: hasStoredInventoryTableState,
-  } = useScopedLocalStorageState({
+  } = useScopedListState({
+    pathname: "/inventory",
+    fields: inventoryListFields,
     storageKey: inventoryTableStorageKey,
     defaultValue: defaultInventoryTableState,
     parse: parseInventoryTableState,
@@ -481,6 +492,11 @@ const InventoryPage = () => {
   const search = inventoryTableState.search;
   const viewMode = inventoryTableState.viewMode;
   const stockFilter = inventoryTableState.stockFilter;
+  const inventoryPage = inventoryTableState.page;
+  const setInventoryPage = useCallback(
+    (page: number) => setInventoryTableState((current) => ({ ...current, page })),
+    [setInventoryTableState],
+  );
   const inventoryPageSize = inventoryTableState.pageSize;
   const showPlanning = inventoryTableState.showPlanning;
   const inventorySort = inventoryTableState.sort;
@@ -490,6 +506,7 @@ const InventoryPage = () => {
       setInventoryTableState((current) => ({
         ...current,
         storeId: nextValue,
+        page: 1,
       })),
     [setInventoryTableState],
   );
@@ -498,6 +515,7 @@ const InventoryPage = () => {
       setInventoryTableState((current) => ({
         ...current,
         search: nextValue,
+        page: 1,
       })),
     [setInventoryTableState],
   );
@@ -506,6 +524,7 @@ const InventoryPage = () => {
       setInventoryTableState((current) => ({
         ...current,
         stockFilter: nextValue,
+        page: 1,
       })),
     [setInventoryTableState],
   );
@@ -522,6 +541,7 @@ const InventoryPage = () => {
       setInventoryTableState((current) => ({
         ...current,
         pageSize: nextValue,
+        page: 1,
       })),
     [setInventoryTableState],
   );
@@ -537,6 +557,7 @@ const InventoryPage = () => {
     (key: InventorySortKey) => {
       setInventoryTableState((current) => ({
         ...current,
+        page: 1,
         sort:
           current.sort.key === key
             ? {
@@ -548,7 +569,6 @@ const InventoryPage = () => {
                 direction: defaultInventorySortDirectionByKey[key],
               },
       }));
-      setInventoryPage(1);
     },
     [setInventoryTableState],
   );
@@ -1098,6 +1118,13 @@ const InventoryPage = () => {
     Boolean(inventoryItems.length) &&
     inventoryItems.every((item) => selectedIds.has(item.snapshot.id));
   const allResultsSelected = inventoryTotal > 0 && selectedIds.size === inventoryTotal;
+  const selectionPageKey = `${inventoryPage}:${inventoryPageSize}`;
+  const previousSelectionPage = useRef(selectionPageKey);
+  useEffect(() => {
+    if (previousSelectionPage.current !== selectionPageKey && !allResultsSelected)
+      setSelectedIds(new Set());
+    previousSelectionPage.current = selectionPageKey;
+  }, [selectionPageKey, allResultsSelected]);
 
   const toggleSelectAll = () => {
     if (!inventoryItems.length) {
@@ -1111,7 +1138,14 @@ const InventoryPage = () => {
     });
   };
 
+  const selectionScope = JSON.stringify([inventoryTableStorageKey, search, storeId, stockFilter]);
+  const selectionScopeRef = useRef(selectionScope);
+  selectionScopeRef.current = selectionScope;
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [selectionScope]);
   const handleSelectAllResults = async () => {
+    const requestScope = selectionScopeRef.current;
     if (!storeId) {
       return;
     }
@@ -1122,6 +1156,7 @@ const InventoryPage = () => {
         search: search || undefined,
         stockFilter,
       });
+      if (selectionScopeRef.current !== requestScope) return;
       setSelectedIds(new Set(ids));
     } catch (error) {
       toast({
@@ -1151,8 +1186,7 @@ const InventoryPage = () => {
       if (!view) {
         return;
       }
-      setInventoryTableState(view.state);
-      setInventoryPage(1);
+      setInventoryTableState({ ...view.state, page: 1 });
       setSelectedIds(new Set());
     },
     [inventorySavedViewsState.views, setInventoryTableState],
@@ -1213,10 +1247,10 @@ const InventoryPage = () => {
   );
 
   useEffect(() => {
-    if (!storeId && storesQuery.data?.[0]) {
+    if (inventoryTableStateReady && !storeId && storesQuery.data?.[0]) {
       setStoreId(storesQuery.data[0].id);
     }
-  }, [setStoreId, storeId, storesQuery.data]);
+  }, [inventoryTableStateReady, setStoreId, storeId, storesQuery.data]);
 
   useEffect(() => {
     if (!inventoryTableStateReady || !inventorySavedViewsReady || hasStoredInventoryTableState) {
@@ -1237,10 +1271,6 @@ const InventoryPage = () => {
     inventoryTableStateReady,
     setInventoryTableState,
   ]);
-
-  useEffect(() => {
-    setInventoryPage(1);
-  }, [inventorySort.direction, inventorySort.key, search, stockFilter, storeId]);
 
   useEffect(() => {
     if (!poDraftOpen) {
@@ -1854,8 +1884,7 @@ const InventoryPage = () => {
     };
     const signature = JSON.stringify(payload);
     const current = bulkOnHandOperationRef.current;
-    const idempotencyKey =
-      current?.signature === signature ? current.key : crypto.randomUUID();
+    const idempotencyKey = current?.signature === signature ? current.key : crypto.randomUUID();
     bulkOnHandOperationRef.current = { signature, key: idempotencyKey };
     setBulkOnHandProgress({ processed: 0, total });
 
@@ -1975,7 +2004,13 @@ const InventoryPage = () => {
       }
       await trpcUtils.inventory.list.invalidate(inventoryListInput);
     },
-    [applyInventoryListPatch, inlineMinStockMutation, inlineOnHandMutation, inventoryListInput, trpcUtils],
+    [
+      applyInventoryListPatch,
+      inlineMinStockMutation,
+      inlineOnHandMutation,
+      inventoryListInput,
+      trpcUtils,
+    ],
   );
 
   const createPoDraftMutation = trpc.purchaseOrders.createFromReorder.useMutation({
@@ -2077,7 +2112,7 @@ const InventoryPage = () => {
     >
       <button
         type="button"
-        className="inline-flex max-w-full items-center gap-1.5 text-left uppercase text-inherit"
+        className="inline-flex max-w-full items-center gap-1.5 text-left text-inherit focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
         onClick={() => toggleInventorySort(key)}
       >
         <span className="truncate">{label}</span>
@@ -2200,46 +2235,62 @@ const InventoryPage = () => {
             ) : null}
           </div>
         }
-        filters={
-          <div className="hidden md:contents">
-            <div className="w-full sm:max-w-xs">
-              <Select value={storeId} onValueChange={(value) => setStoreId(value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder={tCommon("selectStore")} />
-                </SelectTrigger>
-                <SelectContent>
-                  {storesQuery.data?.map((store) => (
-                    <SelectItem key={store.id} value={store.id}>
-                      {store.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <Input
-              className="w-full sm:max-w-xs"
-              placeholder={t("searchPlaceholder")}
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-            <div className="flex items-center gap-2 rounded-xl border border-border px-3 py-2">
-              <Switch
-                checked={showPlanning}
-                onCheckedChange={setShowPlanning}
-                aria-label={t("showPlanning")}
-              />
-              <span className="text-sm text-muted-foreground">{t("showPlanning")}</span>
-            </div>
-          </div>
-        }
-        actionClassName="hidden md:flex"
-        filtersClassName="hidden md:flex"
       />
-
-      <section data-mobile-inventory-toolbar className="mb-4 space-y-3 md:hidden">
-        <div className="space-y-3 rounded-xl border border-border bg-card p-3 shadow-sm">
-          <Select value={storeId} onValueChange={(value) => setStoreId(value)}>
-            <SelectTrigger className="min-h-11">
+      <ListToolbar
+        total={inventoryTotal}
+        loading={!inventoryTableStateReady || inventoryQuery.isFetching}
+        filters={[
+          ...(search
+            ? [
+                {
+                  key: "search",
+                  label: `${tCommon("search")}: ${search}`,
+                  onRemove: () => setSearch(""),
+                },
+              ]
+            : []),
+          ...(stockFilter !== "all"
+            ? [
+                {
+                  key: "stock",
+                  label:
+                    mobileStockFilters.find((filter) => filter.value === stockFilter)?.label ??
+                    stockFilter,
+                  onRemove: () => setStockFilter("all"),
+                },
+              ]
+            : []),
+        ]}
+        onReset={() =>
+          setInventoryTableState((current) => ({
+            ...current,
+            search: "",
+            stockFilter: "all",
+            page: 1,
+          }))
+        }
+        extraCount={Number(showPlanning)}
+        extra={
+          <label className="flex min-h-10 items-center gap-2 text-sm">
+            <Switch
+              checked={showPlanning}
+              onCheckedChange={setShowPlanning}
+              aria-label={t("showPlanning")}
+            />
+            {t("showPlanning")}
+          </label>
+        }
+      >
+        <ListSearch
+          id="inventory-search"
+          label={tCommon("search")}
+          placeholder={t("searchPlaceholder")}
+          value={search}
+          onChange={setSearch}
+        />
+        <FilterField id="inventory-store" label={tCommon("store")}>
+          <Select value={storeId} onValueChange={setStoreId}>
+            <SelectTrigger id="inventory-store">
               <SelectValue placeholder={tCommon("selectStore")} />
             </SelectTrigger>
             <SelectContent>
@@ -2250,160 +2301,34 @@ const InventoryPage = () => {
               ))}
             </SelectContent>
           </Select>
-          <div className="relative">
-            <SearchIcon
-              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-              aria-hidden
-            />
-            <Input
-              className="min-h-11 pl-9"
-              placeholder={t("searchPlaceholder")}
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-          </div>
-          <div
-            className="scrollbar-none -mx-1 flex gap-2 overflow-x-auto px-1 pb-1"
-            role="group"
-            aria-label={t("stockFilter")}
+        </FilterField>
+        <FilterField id="inventory-stock" label={t("stockFilter")}>
+          <Select
+            value={stockFilter}
+            onValueChange={(value) => setStockFilter(value as InventoryStockFilter)}
           >
-            {mobileStockFilters.map((filter) => (
-              <Button
-                key={filter.value}
-                type="button"
-                size="sm"
-                variant={stockFilter === filter.value ? "primary" : "secondary"}
-                className="min-h-10 shrink-0"
-                onClick={() => setStockFilter(filter.value)}
-              >
-                {filter.label}
-              </Button>
-            ))}
-          </div>
-        </div>
-
-        {canManage || canManageStock ? (
-          <div data-mobile-inventory-actions className="grid grid-cols-[1fr_auto] gap-2">
-            {canManageStock ? (
-              <Button asChild className="min-h-12 justify-center px-3 text-sm">
-                <Link href="/inventory/receiving" prefetch={false}>
-                  <ReceiveIcon className="h-4 w-4 shrink-0" aria-hidden />
-                  <span className="leading-tight">{t("stockReceiving")}</span>
-                </Link>
-              </Button>
-            ) : null}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="min-h-12 w-12 px-0"
-                  aria-label={tCommon("actions")}
-                >
-                  <MoreIcon className="h-5 w-5" aria-hidden />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-[220px]">
-                {canManageStock ? (
-                  <DropdownMenuItem
-                    disabled={!storeId}
-                    onSelect={() => router.push(buildTransferHref())}
-                  >
-                    <TransferIcon className="h-4 w-4" aria-hidden />
-                    {t("transferStock")}
-                  </DropdownMenuItem>
-                ) : null}
-                {canManageStock ? (
-                  <DropdownMenuItem
-                    disabled={!storeId}
-                    onSelect={() => router.push(buildWriteOffHref())}
-                  >
-                    <ArchiveIcon className="h-4 w-4" aria-hidden />
-                    {t("stockWriteOff")}
-                  </DropdownMenuItem>
-                ) : null}
-                {canManage ? (
-                  <DropdownMenuItem asChild>
-                    <Link href="/inventory/counts" prefetch={false}>
-                      <ViewIcon className="h-4 w-4" aria-hidden />
-                      {t("countAdjustAction")}
-                    </Link>
-                  </DropdownMenuItem>
-                ) : null}
-                {canManage ? (
-                  <DropdownMenuItem
-                    disabled={!storeId}
-                    onSelect={() => openActionDialog("minStock")}
-                  >
-                    <StatusSuccessIcon className="h-4 w-4" aria-hidden />
-                    {t("minStockTitle")}
-                  </DropdownMenuItem>
-                ) : null}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        ) : null}
-      </section>
-
-      <div className="mb-4 grid grid-cols-2 gap-2 text-sm md:hidden">
-        <div className="rounded-xl bg-muted/40 px-3 py-2">
-          <p className="text-xs text-muted-foreground">{t("summaryTotalSkus")}</p>
-          <p className="font-semibold text-foreground">
-            {formatNumber(inventorySummary.totalSkus, locale)}
-          </p>
-        </div>
-        <div className="rounded-xl bg-muted/40 px-3 py-2">
-          <p className="text-xs text-muted-foreground">{t("summaryLowStock")}</p>
-          <p
-            className={
-              inventorySummary.lowStockCount > 0
-                ? "font-semibold text-warning"
-                : "font-semibold text-foreground"
-            }
-          >
-            {formatNumber(inventorySummary.lowStockCount, locale)}
-          </p>
-        </div>
-      </div>
-
-      <div className="mb-5 hidden grid-cols-2 gap-2 md:mb-6 md:grid md:gap-3 xl:grid-cols-4">
-        <div className="rounded-xl border border-border bg-card p-3">
-          <p className="text-xs text-muted-foreground">{t("summaryTotalSkus")}</p>
-          <p className="mt-1 text-xl font-semibold text-foreground">
-            {formatNumber(inventorySummary.totalSkus, locale)}
-          </p>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-3">
-          <p className="text-xs text-muted-foreground">{t("summaryNegativeStock")}</p>
-          <p
-            className={
-              inventorySummary.negativeStockCount > 0
-                ? "mt-1 text-xl font-semibold text-danger"
-                : "mt-1 text-xl font-semibold text-foreground"
-            }
-          >
-            {formatNumber(inventorySummary.negativeStockCount, locale)}
-          </p>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-3">
-          <p className="text-xs text-muted-foreground">{t("summaryLowStock")}</p>
-          <p
-            className={
-              inventorySummary.lowStockCount > 0
-                ? "mt-1 text-xl font-semibold text-warning"
-                : "mt-1 text-xl font-semibold text-foreground"
-            }
-          >
-            {formatNumber(inventorySummary.lowStockCount, locale)}
-          </p>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-3">
-          <p className="text-xs text-muted-foreground">{t("summaryPendingReceive")}</p>
-          <p className="mt-1 text-xl font-semibold text-foreground">
-            {formatNumber(inventorySummary.pendingReceiveCount, locale)}
-          </p>
-        </div>
-      </div>
+            <SelectTrigger id="inventory-stock">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {mobileStockFilters.map((filter) => (
+                <SelectItem key={filter.value} value={filter.value}>
+                  {filter.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </FilterField>
+      </ListToolbar>
+      {inventoryItems.length > 0 ? (
+        <p data-inventory-page-summary className="mb-4 text-xs leading-5 text-muted-foreground">
+          {tWorkspace("currentPageSummary", {
+            negative: inventorySummary.negativeStockCount,
+            low: inventorySummary.lowStockCount,
+            pending: inventorySummary.pendingReceiveCount,
+          })}
+        </p>
+      ) : null}
 
       {trackExpiryLots ? (
         <Card className="mb-6">
@@ -2465,55 +2390,57 @@ const InventoryPage = () => {
       <Card>
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>{t("inventoryOverview")}</CardTitle>
-          <div className="hidden w-full flex-col gap-2 md:flex lg:w-auto lg:flex-row lg:flex-wrap lg:items-center lg:justify-end">
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <SavedTableViews
-                views={inventorySavedViewsState.views}
-                matchingViewId={matchingInventorySavedView?.id ?? null}
-                defaultViewId={inventorySavedViewsState.defaultViewId}
-                disabled={!inventorySavedViewsReady || !inventoryTableStateReady}
-                onApplyView={applyInventorySavedView}
-                onSaveView={saveInventoryView}
-                onRenameView={renameInventoryView}
-                onOverwriteView={overwriteInventoryView}
-                onDeleteView={deleteInventoryView}
-                onSetDefaultView={setDefaultInventoryView}
-              />
-              {viewMode === "table" ? (
-                <ColumnVisibilityMenu
-                  columns={inventoryColumnOptions}
-                  visibleColumns={visibleInventoryColumns}
-                  onToggleColumn={(columnKey) =>
-                    toggleVisibleInventoryColumn(columnKey as InventoryVisibleColumnKey)
-                  }
+          <ListViewOptions>
+            <div className="flex w-full flex-col gap-2 lg:w-auto lg:flex-row lg:flex-wrap lg:items-center lg:justify-end">
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <SavedTableViews
+                  views={inventorySavedViewsState.views}
+                  matchingViewId={matchingInventorySavedView?.id ?? null}
+                  defaultViewId={inventorySavedViewsState.defaultViewId}
+                  disabled={!inventorySavedViewsReady || !inventoryTableStateReady}
+                  onApplyView={applyInventorySavedView}
+                  onSaveView={saveInventoryView}
+                  onRenameView={renameInventoryView}
+                  onOverwriteView={overwriteInventoryView}
+                  onDeleteView={deleteInventoryView}
+                  onSetDefaultView={setDefaultInventoryView}
                 />
-              ) : null}
+                {viewMode === "table" ? (
+                  <ColumnVisibilityMenu
+                    columns={inventoryColumnOptions}
+                    visibleColumns={visibleInventoryColumns}
+                    onToggleColumn={(columnKey) =>
+                      toggleVisibleInventoryColumn(columnKey as InventoryVisibleColumnKey)
+                    }
+                  />
+                ) : null}
+              </div>
+              <div className="inline-flex w-full shrink-0 items-center gap-1 rounded-xl border border-border p-1 sm:w-auto">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={viewMode === "table" ? "secondary" : "ghost"}
+                  className="flex-1 sm:flex-none"
+                  onClick={() => setViewMode("table")}
+                  aria-label={t("viewTable")}
+                >
+                  <TableViewIcon className="h-4 w-4" aria-hidden />
+                  {t("viewTable")}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={viewMode === "grid" ? "secondary" : "ghost"}
+                  className="flex-1 sm:flex-none"
+                  onClick={() => setViewMode("grid")}
+                  aria-label={t("viewGrid")}
+                >
+                  <GridViewIcon className="h-4 w-4" aria-hidden />
+                  {t("viewGrid")}
+                </Button>
+              </div>
             </div>
-            <div className="inline-flex w-full shrink-0 items-center gap-1 rounded-xl border border-border p-1 sm:w-auto">
-              <Button
-                type="button"
-                size="sm"
-                variant={viewMode === "table" ? "secondary" : "ghost"}
-                className="flex-1 sm:flex-none"
-                onClick={() => setViewMode("table")}
-                aria-label={t("viewTable")}
-              >
-                <TableViewIcon className="h-4 w-4" aria-hidden />
-                {t("viewTable")}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={viewMode === "grid" ? "secondary" : "ghost"}
-                className="flex-1 sm:flex-none"
-                onClick={() => setViewMode("grid")}
-                aria-label={t("viewGrid")}
-              >
-                <GridViewIcon className="h-4 w-4" aria-hidden />
-                {t("viewGrid")}
-              </Button>
-            </div>
-          </div>
+          </ListViewOptions>
         </CardHeader>
         <CardContent>
           {selectedCount ? (
@@ -2522,6 +2449,7 @@ const InventoryPage = () => {
                 <SelectionToolbar
                   count={selectedCount}
                   label={tCommon("selectedCount", { count: selectedCount })}
+                  scopeLabel={tWorkspace(allResultsSelected ? "selectionAll" : "selectionPage")}
                   clearLabel={tCommon("clearSelection")}
                   onClear={() => setSelectedIds(new Set())}
                 >
@@ -2717,8 +2645,11 @@ const InventoryPage = () => {
                                         value={item.snapshot.onHand}
                                         definition={inlineEditRegistry.inventory.onHand}
                                         context={{ stockAdjustReason: t("stockAdjustment") }}
-                                        role={role} locale={locale}
-                                        columnLabel={t("onHand")} tTable={t} tCommon={tCommon}
+                                        role={role}
+                                        locale={locale}
+                                        columnLabel={t("onHand")}
+                                        tTable={t}
+                                        tCommon={tCommon}
                                         enabled={inlineEditingEnabled}
                                         executeMutation={executeInlineInventoryMutation}
                                       />
@@ -3109,19 +3040,42 @@ const InventoryPage = () => {
               <EmptyIcon className="h-4 w-4" aria-hidden />
               {t("selectStoreHint")}
             </div>
-          ) : inventoryTotal === 0 ? (
-            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-              <div className="flex items-center gap-2">
-                <EmptyIcon className="h-4 w-4" aria-hidden />
-                {t("noInventory")}
-              </div>
-              {isAdmin ? (
-                <Link href="/products/new" prefetch={false} className="w-full sm:w-auto">
-                  <Button className="w-full sm:w-auto">
+          ) : inventoryTotal === 0 && !inventoryQuery.isError ? (
+            <div className="flex min-h-44 flex-col items-center justify-center gap-2 p-5 text-center text-sm text-muted-foreground">
+              <EmptyIcon className="h-6 w-6" aria-hidden />
+              <p className="font-medium text-foreground">
+                {search || stockFilter !== "all"
+                  ? tWorkspace("emptyFilteredTitle")
+                  : t("noInventory")}
+              </p>
+              {search || stockFilter !== "all" ? (
+                <>
+                  <p>{tWorkspace("emptyFilteredHint")}</p>
+                  <Button
+                    variant="secondary"
+                    className="mt-2"
+                    onClick={() =>
+                      setInventoryTableState((current) => ({
+                        ...current,
+                        search: "",
+                        stockFilter: "all",
+                        page: 1,
+                      }))
+                    }
+                  >
+                    {tWorkspace("resetFilters")}
+                  </Button>
+                </>
+              ) : isAdmin ? (
+                <Button className="mt-2" asChild>
+                  <Link
+                    href={`/products/new?storeId=${encodeURIComponent(storeId)}`}
+                    prefetch={false}
+                  >
                     <AddIcon className="h-4 w-4" aria-hidden />
                     {t("addProduct")}
-                  </Button>
-                </Link>
+                  </Link>
+                </Button>
               ) : null}
             </div>
           ) : null}

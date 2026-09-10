@@ -7,16 +7,16 @@ const readSource = (relativePath: string) =>
   readFile(path.join(process.cwd(), relativePath), "utf8");
 
 describe("mobile inventory source", () => {
-  it("uses a mobile-only task toolbar and stock filter chips without changing desktop controls", async () => {
+  it("shares accessible stock filters and domain actions on desktop and mobile", async () => {
     const source = await readSource("src/app/(app)/inventory/page.tsx");
 
-    expect(source).toContain("data-mobile-inventory-toolbar");
-    expect(source).toContain("data-mobile-inventory-actions");
+    expect(source).toContain("<ListToolbar");
+    expect(source).toContain('id="inventory-stock"');
     expect(source).toContain(
       'const inventoryStockFilterSchema = z.enum(["all", "lowStock", "outOfStock", "negativeStock"])',
     );
     expect(source).toContain('stockFilter: "all"');
-    expect(source).toContain('className="hidden md:contents"');
+    expect(source).toContain("data-inventory-page-summary");
     expect(source).toContain('href="/inventory/receiving"');
     expect(source).toContain('href="/inventory/counts"');
     expect(source).toContain(
@@ -59,7 +59,7 @@ describe("mobile inventory source", () => {
       'className="grid items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]"',
     );
     expect(receivingSource).toContain(
-      "md:grid-cols-[minmax(0,1fr)_3.75rem_5rem_4.75rem_4rem_2rem]",
+      "md:grid-cols-[minmax(0,1fr)_5rem_5.5rem_5.25rem_4.5rem_2rem]",
     );
     expect(receivingSource).toContain("data-receiving-line-row");
     expect(receivingSource).toContain("lines.map((line, index) =>");

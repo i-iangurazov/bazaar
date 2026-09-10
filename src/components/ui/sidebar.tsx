@@ -62,7 +62,7 @@ export const SidebarProvider = ({
         className={cn("group/sidebar-wrapper flex min-h-svh w-full", className)}
         style={
           {
-            "--sidebar-width": "16rem",
+            "--sidebar-width": "15rem",
             "--sidebar-width-icon": "3.75rem",
             ...style,
           } as React.CSSProperties
@@ -96,7 +96,7 @@ export const Sidebar = React.forwardRef<
       data-state={state}
       data-collapsible={collapsible}
       className={cn(
-        "hidden min-h-svh shrink-0 border-r border-sidebar-border/80 bg-sidebar text-sidebar-foreground shadow-[18px_0_50px_rgba(15,23,42,0.08)] transition-[width] duration-200 md:flex md:flex-col dark:shadow-none",
+        "hidden min-h-svh shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-200 motion-reduce:transition-none md:flex md:flex-col",
         collapsible === "icon"
           ? "w-[var(--sidebar-width)] data-[state=collapsed]:w-[var(--sidebar-width-icon)]"
           : "w-[var(--sidebar-width)]",

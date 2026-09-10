@@ -38,11 +38,11 @@ describe("mobile sales and receipts source", () => {
   it("keeps sales orders desktop table while using mobile filters and cards", async () => {
     const source = await readSource("src/app/(app)/sales/orders/page.tsx");
 
-    expect(source).toContain('className="bazaar-admin-toolbar space-y-3 md:hidden"');
-    expect(source).toContain(
-      'className="bazaar-admin-toolbar hidden grid-cols-1 gap-3 md:grid md:grid-cols-5"',
-    );
-    expect(source).toContain("setMobileFiltersOpen(true)");
+    expect(source).toContain("<ListToolbar");
+    expect(source).toContain('id="sales-order-store"');
+    expect(source).toContain('id="sales-order-statusLabel"');
+    expect(source).toContain('tabIndex={lifecycleView === "ACTIVE" ? 0 : -1}');
+    expect(source).not.toContain('aria-modal="true"');
     expect(source).toContain("renderMobile={(order) => (");
     expect(source).toContain('<Table className="min-w-[1080px]" data-tour="sales-orders-table">');
     expect(source).toContain('<TableHead>{t("customerAddress")}</TableHead>');

@@ -159,21 +159,21 @@ export const InventoryTransfersPage = ({
   type SearchResult = NonNullable<typeof searchQuery.data>[number];
 
   useEffect(() => {
-    if (!stores.length) {
+    if (!stores.length || isEditMode) {
       return;
     }
     if (!fromStoreId) {
       const queryStore = stores.find((store) => store.id === initialFromStoreId);
-      setFromStoreId(queryStore?.id ?? stores[0]?.id ?? "");
+      setFromStoreId(initialFromStoreId ? (queryStore?.id ?? "") : (stores[0]?.id ?? ""));
     }
     if (!toStoreId) {
       const queryStore = stores.find((store) => store.id === initialToStoreId);
       const fallbackStore = stores.find(
         (store) => store.id !== (initialFromStoreId || stores[0]?.id),
       );
-      setToStoreId(queryStore?.id ?? fallbackStore?.id ?? "");
+      setToStoreId(initialToStoreId ? (queryStore?.id ?? "") : (fallbackStore?.id ?? ""));
     }
-  }, [fromStoreId, initialFromStoreId, initialToStoreId, stores, toStoreId]);
+  }, [fromStoreId, initialFromStoreId, initialToStoreId, isEditMode, stores, toStoreId]);
 
   useEffect(() => {
     if (
@@ -742,9 +742,9 @@ export const InventoryTransfersPage = ({
           </div>
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="space-y-2">
-              <Label>{t("transferSourceStore")}</Label>
+              <Label htmlFor="transfer-source">{t("transferSourceStore")}</Label>
               <Select value={fromStoreId} onValueChange={handleFromStoreChange}>
-                <SelectTrigger>
+                <SelectTrigger id="transfer-source">
                   <SelectValue placeholder={tCommon("selectStore")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -757,9 +757,9 @@ export const InventoryTransfersPage = ({
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>{t("transferDestinationStore")}</Label>
+              <Label htmlFor="transfer-destination">{t("transferDestinationStore")}</Label>
               <Select value={toStoreId} onValueChange={handleToStoreChange}>
-                <SelectTrigger>
+                <SelectTrigger id="transfer-destination">
                   <SelectValue placeholder={tCommon("selectStore")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -809,6 +809,7 @@ export const InventoryTransfersPage = ({
                 onChange={(event) => setSearch(event.target.value)}
                 onKeyDown={handleSearchKeyDown}
                 placeholder={t("transferSearchPlaceholderShort")}
+                aria-label={t("transferSearchPlaceholderShort")}
                 disabled={!canSearch}
                 className="pl-9"
                 autoComplete="off"
@@ -1040,6 +1041,7 @@ export const InventoryTransfersPage = ({
                 </Button>
                 <Button
                   type="button"
+                  data-baam-obstacle="action"
                   onClick={handlePost}
                   disabled={saving || Boolean(validationMessage)}
                 >
@@ -1122,6 +1124,7 @@ export const InventoryTransfersPage = ({
             <Button
               type="button"
               className="min-h-11"
+              data-baam-obstacle="action"
               onClick={handlePost}
               disabled={saving || Boolean(validationMessage)}
             >

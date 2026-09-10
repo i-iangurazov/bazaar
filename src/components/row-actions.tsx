@@ -70,7 +70,7 @@ export const RowActions = ({ actions, maxInline = 2, moreLabel, className }: Row
         <span>{action.label}</span>
       </div>
     );
-    const openInNewTab = Boolean(action.href && (action.openInNewTab ?? action.key === "edit"));
+    const openInNewTab = Boolean(action.href && action.openInNewTab);
 
     if (action.href && !action.disabled) {
       return (
@@ -128,7 +128,7 @@ export const RowActions = ({ actions, maxInline = 2, moreLabel, className }: Row
           variant={resolveVariant(action.variant)}
           onClick={action.onSelect}
           href={action.href}
-          openInNewTab={Boolean(action.href && (action.openInNewTab ?? action.key === "edit"))}
+          openInNewTab={Boolean(action.href && action.openInNewTab)}
           disabled={action.disabled}
         />
       ))}

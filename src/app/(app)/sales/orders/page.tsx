@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 import { CustomerOrderStatus } from "@prisma/client";
 
+import { ListToolbar, ListSearch, FilterField } from "@/components/list-toolbar";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,7 +30,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { useConfirmDialog } from "@/components/ui/use-confirm-dialog";
 import { currencySourceWithFallback, formatKgsMoney } from "@/lib/currencyDisplay";
@@ -57,7 +57,6 @@ const SalesOrdersPage = () => {
   const { data: session } = useSession();
   const { toast } = useToast();
   const { confirm, confirmDialog } = useConfirmDialog();
-  const router = useRouter();
   const pathname = usePathname() ?? "/sales/orders";
   const searchParams = useSearchParams();
   const currentQueryString = searchParams.toString();
@@ -77,12 +76,11 @@ const SalesOrdersPage = () => {
     ["asc", "desc"] as const,
     "desc",
   );
-  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const utils = trpc.useUtils();
 
   const updateListParams = useCallback(
     (updates: Record<string, string | number | null>) => {
-      const params = new URLSearchParams(currentQueryString);
+      const params = new URLSearchParams(window.location.search);
       Object.entries(updates).forEach(([key, value]) => {
         if (value === null || value === "") {
           params.delete(key);
@@ -91,9 +89,13 @@ const SalesOrdersPage = () => {
         }
       });
       const nextQuery = params.toString();
-      router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+      window.history.replaceState(
+        window.history.state,
+        "",
+        nextQuery ? `${pathname}?${nextQuery}` : pathname,
+      );
     },
-    [currentQueryString, pathname, router],
+    [pathname],
   );
   const setPage = (value: number) => updateListParams({ page: value === 1 ? null : value });
   const setPageSize = (value: number) =>
@@ -175,12 +177,6 @@ const SalesOrdersPage = () => {
 
   const items = useMemo(() => listQuery.data?.items ?? [], [listQuery.data?.items]);
   const totalItems = listQuery.data?.total ?? 0;
-  const activeMobileFilterCount = [
-    search.trim(),
-    storeId !== "all" ? storeId : "",
-    statusFilter !== "all" ? statusFilter : "",
-    sortBy !== "createdAt" || sortDirection !== "desc" ? sortBy : "",
-  ].filter(Boolean).length;
 
   const statusVariant = (
     status: CustomerOrderStatus,
@@ -224,7 +220,10 @@ const SalesOrdersPage = () => {
                 </Button>
               </Link>
             ) : null}
-            <Link href="/sales/orders/new" className="w-full sm:w-auto">
+            <Link
+              href={`/sales/orders/new?${new URLSearchParams({ returnTo: listReturnUrl, ...(storeId !== "all" ? { storeId } : {}) })}`}
+              className="w-full sm:w-auto"
+            >
               <Button className="w-full sm:w-auto" data-tour="sales-orders-create">
                 <AddIcon className="h-4 w-4" aria-hidden />
                 {t("new")}
@@ -243,11 +242,30 @@ const SalesOrdersPage = () => {
             className="grid grid-cols-2 gap-2 rounded-md border border-border bg-muted/35 p-1"
             role="tablist"
             aria-label={t("lifecycleViewLabel")}
+            onKeyDown={(event) => {
+              if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+              event.preventDefault();
+              const next =
+                event.key === "Home"
+                  ? "ACTIVE"
+                  : event.key === "End"
+                    ? "HISTORY"
+                    : lifecycleView === "ACTIVE"
+                      ? "HISTORY"
+                      : "ACTIVE";
+              updateListParams({ view: next === "ACTIVE" ? null : "history", page: null });
+              (
+                event.currentTarget.querySelectorAll('[role="tab"]')[
+                  next === "ACTIVE" ? 0 : 1
+                ] as HTMLButtonElement
+              )?.focus();
+            }}
           >
             <Button
               type="button"
               role="tab"
               aria-selected={lifecycleView === "ACTIVE"}
+              tabIndex={lifecycleView === "ACTIVE" ? 0 : -1}
               data-testid="sales-orders-active-tab"
               variant={lifecycleView === "ACTIVE" ? "default" : "ghost"}
               className="min-h-11"
@@ -259,6 +277,7 @@ const SalesOrdersPage = () => {
               type="button"
               role="tab"
               aria-selected={lifecycleView === "HISTORY"}
+              tabIndex={lifecycleView === "HISTORY" ? 0 : -1}
               data-testid="sales-orders-history-tab"
               variant={lifecycleView === "HISTORY" ? "default" : "ghost"}
               className="min-h-11"
@@ -270,134 +289,116 @@ const SalesOrdersPage = () => {
           <p className="text-xs text-muted-foreground">
             {lifecycleView === "ACTIVE" ? t("activeViewHint") : t("historyViewHint")}
           </p>
-          <div className="bazaar-admin-toolbar space-y-3 md:hidden">
-            <Input
-              value={search}
-              onChange={(event) => {
-                setFilter("search", event.target.value);
-              }}
-              placeholder={t("searchPlaceholder")}
-              aria-label={t("searchPlaceholder")}
-              className="h-11"
-            />
-            <div className="scrollbar-none flex gap-2 overflow-x-auto pb-1">
-              <Button
-                type="button"
-                size="sm"
-                variant={statusFilter === "all" ? "default" : "secondary"}
-                className="h-10 shrink-0"
-                onClick={() => {
-                  setFilter("status", null);
-                }}
-              >
-                {t("allStatuses")}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={statusFilter === CustomerOrderStatus.READY ? "default" : "secondary"}
-                className="h-10 shrink-0"
-                onClick={() => {
-                  setFilter("status", CustomerOrderStatus.READY);
-                }}
-              >
-                {getCustomerOrderStatusLabel(t, "READY")}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={activeMobileFilterCount ? "default" : "secondary"}
-                className="h-10 shrink-0"
-                onClick={() => setMobileFiltersOpen(true)}
-              >
-                {tCommon("filters")} {activeMobileFilterCount}
-              </Button>
+          <ListToolbar
+            total={totalItems}
+            loading={listQuery.isFetching}
+            filters={[
+              ...(search
+                ? [
+                    {
+                      key: "search",
+                      label: `${tCommon("search")}: ${search}`,
+                      onRemove: () => setFilter("search", null),
+                    },
+                  ]
+                : []),
+              ...(statusFilter !== "all"
+                ? [
+                    {
+                      key: "status",
+                      label: getCustomerOrderStatusLabel(t, statusFilter),
+                      onRemove: () => setFilter("status", null),
+                    },
+                  ]
+                : []),
+            ]}
+            onReset={() => updateListParams({ search: null, status: null, page: null })}
+          >
+            <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <ListSearch
+                value={search}
+                onChange={(value) => setFilter("search", value)}
+                label={tCommon("search")}
+                placeholder={t("searchPlaceholder")}
+              />
+              <FilterField id="sales-order-store" label={t("store")}>
+                <Select
+                  value={storeId}
+                  onValueChange={(value) => {
+                    setFilter("storeId", value === "all" ? null : value);
+                  }}
+                >
+                  <SelectTrigger id="sales-order-store" aria-label={t("store")}>
+                    <SelectValue placeholder={t("store")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {showAllStoresFilter ? (
+                      <SelectItem value="all">{tCommon("allStores")}</SelectItem>
+                    ) : null}
+                    {stores.map((store) => (
+                      <SelectItem key={store.id} value={store.id}>
+                        {store.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FilterField>
+              <FilterField id="sales-order-statusLabel" label={t("statusLabel")}>
+                <Select
+                  value={statusFilter}
+                  onValueChange={(value) => {
+                    setFilter("status", value === "all" ? null : value);
+                  }}
+                >
+                  <SelectTrigger id="sales-order-statusLabel" aria-label={t("statusLabel")}>
+                    <SelectValue placeholder={t("statusLabel")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">{t("allStatuses")}</SelectItem>
+                    <SelectItem value="DRAFT">{getCustomerOrderStatusLabel(t, "DRAFT")}</SelectItem>
+                    <SelectItem value="CONFIRMED">
+                      {getCustomerOrderStatusLabel(t, "CONFIRMED")}
+                    </SelectItem>
+                    <SelectItem value="READY">{getCustomerOrderStatusLabel(t, "READY")}</SelectItem>
+                    <SelectItem value="COMPLETED">
+                      {getCustomerOrderStatusLabel(t, "COMPLETED")}
+                    </SelectItem>
+                    <SelectItem value="CANCELED">
+                      {getCustomerOrderStatusLabel(t, "CANCELED")}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </FilterField>
+              <FilterField id="sales-order-sortLabel" label={t("sortLabel")}>
+                <Select
+                  value={`${sortBy}:${sortDirection}`}
+                  onValueChange={(value) => {
+                    const [nextSortBy, nextDirection] = value.split(":") as [
+                      (typeof salesOrderSortOptions)[number],
+                      "asc" | "desc",
+                    ];
+                    updateListParams({
+                      sortBy: nextSortBy === "createdAt" ? null : nextSortBy,
+                      sortDirection: nextDirection === "desc" ? null : nextDirection,
+                      page: null,
+                    });
+                  }}
+                >
+                  <SelectTrigger id="sales-order-sortLabel" aria-label={t("sortLabel")}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="createdAt:desc">{t("sortNewest")}</SelectItem>
+                    <SelectItem value="createdAt:asc">{t("sortOldest")}</SelectItem>
+                    <SelectItem value="number:asc">{t("sortNumberAsc")}</SelectItem>
+                    <SelectItem value="customerName:asc">{t("sortCustomerAsc")}</SelectItem>
+                    <SelectItem value="totalKgs:desc">{t("sortTotalDesc")}</SelectItem>
+                    <SelectItem value="totalKgs:asc">{t("sortTotalAsc")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FilterField>
             </div>
-          </div>
-
-          <div className="bazaar-admin-toolbar hidden grid-cols-1 gap-3 md:grid md:grid-cols-5">
-            <Input
-              value={search}
-              onChange={(event) => {
-                setFilter("search", event.target.value);
-              }}
-              placeholder={t("searchPlaceholder")}
-              aria-label={t("searchPlaceholder")}
-            />
-            <Select
-              value={storeId}
-              onValueChange={(value) => {
-                setFilter("storeId", value === "all" ? null : value);
-              }}
-            >
-              <SelectTrigger aria-label={t("store")}>
-                <SelectValue placeholder={t("store")} />
-              </SelectTrigger>
-              <SelectContent>
-                {showAllStoresFilter ? (
-                  <SelectItem value="all">{tCommon("allStores")}</SelectItem>
-                ) : null}
-                {stores.map((store) => (
-                  <SelectItem key={store.id} value={store.id}>
-                    {store.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select
-              value={statusFilter}
-              onValueChange={(value) => {
-                setFilter("status", value === "all" ? null : value);
-              }}
-            >
-              <SelectTrigger aria-label={t("statusLabel")}>
-                <SelectValue placeholder={t("statusLabel")} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t("allStatuses")}</SelectItem>
-                <SelectItem value="DRAFT">{getCustomerOrderStatusLabel(t, "DRAFT")}</SelectItem>
-                <SelectItem value="CONFIRMED">
-                  {getCustomerOrderStatusLabel(t, "CONFIRMED")}
-                </SelectItem>
-                <SelectItem value="READY">{getCustomerOrderStatusLabel(t, "READY")}</SelectItem>
-                <SelectItem value="COMPLETED">
-                  {getCustomerOrderStatusLabel(t, "COMPLETED")}
-                </SelectItem>
-                <SelectItem value="CANCELED">
-                  {getCustomerOrderStatusLabel(t, "CANCELED")}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            <Select
-              value={`${sortBy}:${sortDirection}`}
-              onValueChange={(value) => {
-                const [nextSortBy, nextDirection] = value.split(":") as [
-                  (typeof salesOrderSortOptions)[number],
-                  "asc" | "desc",
-                ];
-                updateListParams({
-                  sortBy: nextSortBy === "createdAt" ? null : nextSortBy,
-                  sortDirection: nextDirection === "desc" ? null : nextDirection,
-                  page: null,
-                });
-              }}
-            >
-              <SelectTrigger aria-label={t("sortLabel")}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="createdAt:desc">{t("sortNewest")}</SelectItem>
-                <SelectItem value="createdAt:asc">{t("sortOldest")}</SelectItem>
-                <SelectItem value="number:asc">{t("sortNumberAsc")}</SelectItem>
-                <SelectItem value="customerName:asc">{t("sortCustomerAsc")}</SelectItem>
-                <SelectItem value="totalKgs:desc">{t("sortTotalDesc")}</SelectItem>
-                <SelectItem value="totalKgs:asc">{t("sortTotalAsc")}</SelectItem>
-              </SelectContent>
-            </Select>
-            <div className="flex items-center text-sm text-muted-foreground">
-              {t("totalLabel", { count: totalItems })}
-            </div>
-          </div>
+          </ListToolbar>
 
           <ResponsiveDataList
             key={`sales-orders-${pageSize}`}
@@ -666,144 +667,6 @@ const SalesOrdersPage = () => {
           ) : null}
         </CardContent>
       </Card>
-      {mobileFiltersOpen ? (
-        <div className="fixed inset-0 z-[70] md:hidden">
-          <button
-            type="button"
-            className="absolute inset-0 bg-black/35"
-            onClick={() => setMobileFiltersOpen(false)}
-            aria-label={tCommon("close")}
-          />
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-label={tCommon("filters")}
-            className="absolute inset-x-0 bottom-0 max-h-[88dvh] overflow-y-auto rounded-t-2xl border-t border-border bg-background p-4 shadow-2xl"
-            style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-semibold text-foreground">{tCommon("filters")}</h2>
-                <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
-              </div>
-              <Button
-                type="button"
-                variant="secondary"
-                size="icon"
-                className="h-11 w-11 shrink-0"
-                onClick={() => setMobileFiltersOpen(false)}
-                aria-label={tCommon("close")}
-              >
-                <CloseIcon className="h-4 w-4" aria-hidden />
-              </Button>
-            </div>
-
-            <div className="mt-4 space-y-4">
-              <label className="space-y-1.5">
-                <span className="text-sm font-medium text-foreground">{t("store")}</span>
-                <Select
-                  value={storeId}
-                  onValueChange={(value) => {
-                    setFilter("storeId", value === "all" ? null : value);
-                  }}
-                >
-                  <SelectTrigger aria-label={t("store")} className="h-11">
-                    <SelectValue placeholder={t("store")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {showAllStoresFilter ? (
-                      <SelectItem value="all">{tCommon("allStores")}</SelectItem>
-                    ) : null}
-                    {stores.map((store) => (
-                      <SelectItem key={store.id} value={store.id}>
-                        {store.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </label>
-
-              <label className="space-y-1.5">
-                <span className="text-sm font-medium text-foreground">{t("statusLabel")}</span>
-                <Select
-                  value={statusFilter}
-                  onValueChange={(value) => {
-                    setFilter("status", value === "all" ? null : value);
-                  }}
-                >
-                  <SelectTrigger aria-label={t("statusLabel")} className="h-11">
-                    <SelectValue placeholder={t("statusLabel")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">{t("allStatuses")}</SelectItem>
-                    <SelectItem value="DRAFT">{getCustomerOrderStatusLabel(t, "DRAFT")}</SelectItem>
-                    <SelectItem value="CONFIRMED">
-                      {getCustomerOrderStatusLabel(t, "CONFIRMED")}
-                    </SelectItem>
-                    <SelectItem value="READY">{getCustomerOrderStatusLabel(t, "READY")}</SelectItem>
-                    <SelectItem value="COMPLETED">
-                      {getCustomerOrderStatusLabel(t, "COMPLETED")}
-                    </SelectItem>
-                    <SelectItem value="CANCELED">
-                      {getCustomerOrderStatusLabel(t, "CANCELED")}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </label>
-
-              <label className="space-y-1.5">
-                <span className="text-sm font-medium text-foreground">{t("sortLabel")}</span>
-                <Select
-                  value={`${sortBy}:${sortDirection}`}
-                  onValueChange={(value) => {
-                    const [nextSortBy, nextDirection] = value.split(":");
-                    updateListParams({
-                      sortBy: nextSortBy === "createdAt" ? null : nextSortBy,
-                      sortDirection: nextDirection === "desc" ? null : nextDirection,
-                      page: null,
-                    });
-                  }}
-                >
-                  <SelectTrigger aria-label={t("sortLabel")} className="h-11">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="createdAt:desc">{t("sortNewest")}</SelectItem>
-                    <SelectItem value="createdAt:asc">{t("sortOldest")}</SelectItem>
-                    <SelectItem value="number:asc">{t("sortNumberAsc")}</SelectItem>
-                    <SelectItem value="customerName:asc">{t("sortCustomerAsc")}</SelectItem>
-                    <SelectItem value="totalKgs:desc">{t("sortTotalDesc")}</SelectItem>
-                    <SelectItem value="totalKgs:asc">{t("sortTotalAsc")}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </label>
-            </div>
-
-            <div className="mt-5 grid grid-cols-2 gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                className="h-11"
-                onClick={() => {
-                  updateListParams({
-                    search: null,
-                    storeId: null,
-                    status: null,
-                    sortBy: null,
-                    sortDirection: null,
-                    page: null,
-                  });
-                }}
-              >
-                {tCommon("clearSelection")}
-              </Button>
-              <Button type="button" className="h-11" onClick={() => setMobileFiltersOpen(false)}>
-                {tCommon("confirm")}
-              </Button>
-            </div>
-          </section>
-        </div>
-      ) : null}
       {confirmDialog}
     </div>
   );

@@ -15,6 +15,8 @@ import {
 import { hasPermission, type RoleAccess } from "@/lib/roleAccess";
 import { baamCopy } from "@/lib/baam/copy";
 import { BaamIcon } from "@/components/icons";
+import { launcherBottom } from "@/lib/baam/launcher-position";
+import { cn } from "@/lib/utils";
 
 export const canShowBaamLauncher = (access: RoleAccess, pathname: string) =>
   hasPermission(access, "viewReports") && !pathname.startsWith("/printing/");
@@ -32,6 +34,7 @@ export function BaamLauncher({
   const [mounted, setMounted] = useState(false);
   const [open, setOpen] = useState(false);
   const [bottom, setBottom] = useState(24);
+  const [mobileSlot, setMobileSlot] = useState<HTMLElement | null>(null);
   const [viewport, setViewport] = useState<{ height: number; top: number }>();
   useEffect(() => setMounted(true), []);
   useEffect(() => setOpen(false), [pathname]);
@@ -40,16 +43,23 @@ export function BaamLauncher({
     let frame = 0;
     const measure = () => {
       frame = 0;
-      const mobile = window.innerWidth < 768;
-      let space = mobile ? 96 : 24;
-      // Only explicitly marked fixed action bars affect the anchor. Table cells never do.
-      document.querySelectorAll<HTMLElement>("[data-baam-obstacle]").forEach((el) => {
-        if (getComputedStyle(el).position !== "fixed") return;
-        const box = el.getBoundingClientRect();
-        if (box.top < innerHeight && box.bottom > 0)
-          space = Math.max(space, innerHeight - box.top + 12);
-      });
-      setBottom(Math.min(space, window.innerHeight - 116));
+      setMobileSlot(
+        innerWidth < 768 ? document.querySelector<HTMLElement>("[data-baam-mobile-slot]") : null,
+      );
+      const obstacles = [...document.querySelectorAll<HTMLElement>("[data-baam-obstacle]")].map(
+        (el) => {
+          const box = el.getBoundingClientRect();
+          return {
+            top: box.top,
+            bottom: box.bottom,
+            left: box.left,
+            right: box.right,
+            fixed: getComputedStyle(el).position === "fixed",
+            action: el.dataset.baamObstacle === "action",
+          };
+        },
+      );
+      setBottom(launcherBottom(innerWidth, innerHeight, obstacles));
       const visual = window.visualViewport;
       setViewport(visual ? { height: visual.height, top: visual.offsetTop } : undefined);
     };
@@ -59,9 +69,11 @@ export function BaamLauncher({
     const observer = new ResizeObserver(schedule);
     const mutation = new MutationObserver(schedule);
     document.querySelectorAll("[data-baam-obstacle]").forEach((el) => observer.observe(el));
+    observer.observe(document.body);
     mutation.observe(document.body, { childList: true, subtree: true });
     document.addEventListener("transitionend", schedule);
     window.addEventListener("resize", schedule);
+    document.addEventListener("scroll", schedule, true);
     window.visualViewport?.addEventListener("resize", schedule);
     window.visualViewport?.addEventListener("scroll", schedule);
     schedule();
@@ -71,6 +83,7 @@ export function BaamLauncher({
       cancelAnimationFrame(frame);
       document.removeEventListener("transitionend", schedule);
       window.removeEventListener("resize", schedule);
+      document.removeEventListener("scroll", schedule, true);
       window.visualViewport?.removeEventListener("resize", schedule);
       window.visualViewport?.removeEventListener("scroll", schedule);
     };
@@ -80,9 +93,17 @@ export function BaamLauncher({
     <button
       type="button"
       data-baam-launcher
+      data-baam-docked={mobileSlot ? "header" : undefined}
       aria-label={baamCopy(locale, "open")}
-      style={{ bottom: `calc(${bottom}px + env(safe-area-inset-bottom, 0px))` }}
-      className="button-focus-ring fixed right-[max(1rem,env(safe-area-inset-right,0px))] z-40 flex h-12 items-center gap-2 rounded-2xl border border-primary-foreground/15 bg-primary px-3 text-primary-foreground shadow-lg shadow-black/15 transition-colors hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 md:right-6 [body:has([role=alertdialog][data-state=open])_&]:invisible [body:has([role=dialog][data-state=open])_&]:invisible"
+      style={
+        mobileSlot ? undefined : { bottom: `calc(${bottom}px + env(safe-area-inset-bottom, 0px))` }
+      }
+      className={cn(
+        "button-focus-ring z-40 flex items-center justify-center gap-2 border border-primary-foreground/15 bg-primary text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 [body:has([role=alertdialog][data-state=open])_&]:invisible [body:has([role=dialog][data-state=open])_&]:invisible",
+        mobileSlot
+          ? "h-11 w-11 rounded-xl p-1"
+          : "fixed right-[max(1rem,env(safe-area-inset-right,0px))] h-12 rounded-2xl px-3 shadow-lg shadow-black/15 md:right-6",
+      )}
       onClick={
         pathname === "/baam"
           ? () => {
@@ -97,13 +118,15 @@ export function BaamLauncher({
       }
     >
       <BaamIcon className="h-8 w-8" />
-      <span className="text-xs font-bold tracking-[0.06em]">{baamCopy(locale, "name")}</span>
+      <span className={mobileSlot ? "sr-only" : "text-xs font-bold tracking-[0.06em]"}>
+        {baamCopy(locale, "name")}
+      </span>
     </button>
   );
-  if (pathname === "/baam") return createPortal(launcher, document.body);
+  if (pathname === "/baam") return createPortal(launcher, mobileSlot ?? document.body);
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      {createPortal(<DialogTrigger asChild>{launcher}</DialogTrigger>, document.body)}
+      {createPortal(<DialogTrigger asChild>{launcher}</DialogTrigger>, mobileSlot ?? document.body)}
       <DialogContent
         data-baam-drawer
         style={

@@ -146,12 +146,12 @@ export const ResponsiveDataList = <T,>({
       ? Math.min((page - 1) * pageSize + pagedItems.length, totalCount)
       : Math.min(page * pageSize, totalCount)
     : 0;
-  const showPagination = totalPages > 1;
+  const showPagination = totalCount > 0 || isServerPagination;
   const desktopVisibility = desktopBreakpoint === "lg" ? "hidden lg:block" : "hidden md:block";
   const mobileVisibility = desktopBreakpoint === "lg" ? "lg:hidden" : "md:hidden";
 
   return (
-    <div ref={containerRef}>
+    <div ref={containerRef} className="min-w-0 max-w-full">
       <div className={cn(desktopVisibility, desktopClassName)}>{renderDesktop(pagedItems)}</div>
       <div className={cn(mobileVisibility, mobileClassName)}>
         {pagedItems.length ? (
@@ -170,7 +170,7 @@ export const ResponsiveDataList = <T,>({
         )}
       </div>
       {showPagination ? (
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-border/70 pt-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-3 py-3">
           <p className="text-xs text-muted-foreground">
             {tCommon("pagination.items", { from: startItem, to: endItem, total: totalCount })}
           </p>
@@ -200,15 +200,20 @@ export const ResponsiveDataList = <T,>({
                   }
                 }}
               >
-                <SelectTrigger className="h-10 sm:h-8">
+                <SelectTrigger
+                  className="h-10 sm:h-8"
+                  aria-label={tCommon("pagination.rowsPerPage")}
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {pageSizeOptions.map((option) => (
-                    <SelectItem key={option} value={String(option)}>
-                      {option}
-                    </SelectItem>
-                  ))}
+                  {[...new Set([...pageSizeOptions, pageSize])]
+                    .sort((a, b) => a - b)
+                    .map((option) => (
+                      <SelectItem key={option} value={String(option)}>
+                        {option}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>

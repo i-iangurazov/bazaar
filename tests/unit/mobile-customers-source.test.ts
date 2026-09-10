@@ -7,13 +7,13 @@ const readSource = (relativePath: string) =>
   readFile(path.join(process.cwd(), relativePath), "utf8");
 
 describe("mobile customers source", () => {
-  it("uses a mobile-only customer toolbar and customer cards without changing the desktop table", async () => {
+  it("shares customer filters across viewports and retains the desktop table and mobile customer cards", async () => {
     const source = await readSource("src/app/(app)/customers/page.tsx");
 
-    expect(source).toContain("data-mobile-customers-toolbar");
-    expect(source).toContain('className="hidden md:contents"');
+    expect(source).toContain("<ListToolbar");
+    expect(source).toContain("onReset={() => updateListParams");
     expect(source).toContain('<TableContainer className="bazaar-admin-table-shell">');
-    expect(source).toContain("mobileSearchPlaceholder");
+    expect(source).toContain('t("filters.searchPlaceholder")');
     expect(source).toContain("customer.lastOrderAt");
     expect(source).toContain("customer.orderCount");
     expect(source).toContain("href={`tel:${customer.phone}`}");

@@ -67,7 +67,10 @@ export const InlineEditTableProvider = ({ children }: { children: ReactNode }) =
   const sessions = useRef(new Map<string, EditSession>()).current;
   const [revision, setRevision] = useState(0);
   const refresh = useCallback(() => setRevision((value) => value + 1), []);
-  const value = useMemo(() => ({ activeCellId, setActiveCellId, sessions, refresh, revision }), [activeCellId, sessions, refresh, revision]);
+  const value = useMemo(
+    () => ({ activeCellId, setActiveCellId, sessions, refresh, revision }),
+    [activeCellId, sessions, refresh, revision],
+  );
   return (
     <InlineEditTableContext.Provider value={value}>{children}</InlineEditTableContext.Provider>
   );
@@ -163,16 +166,27 @@ export const InlineEditableCell = <
   const [, renderSaving] = useState(false);
   const isSaving = sessionRef.current?.saving ?? false;
   const refreshTable = tableState?.refresh;
-  const setIsSaving = useCallback((saving: boolean) => {
-    if (sessionRef.current) sessionRef.current.saving = saving;
-    renderSaving(saving);
-    refreshTable?.();
-  }, [refreshTable]);
+  const setIsSaving = useCallback(
+    (saving: boolean) => {
+      if (sessionRef.current) sessionRef.current.saving = saving;
+      renderSaving(saving);
+      refreshTable?.();
+    },
+    [refreshTable],
+  );
   const [standaloneEditing, setStandaloneEditing] = useState(false);
   const selectEditorRef = useRef<HTMLDivElement | null>(null);
+  const cellRef = useRef<HTMLDivElement | null>(null);
+  const keyboardSessionRef = useRef(false);
 
   const activeCellId = tableState?.activeCellId ?? (standaloneEditing ? cellId : null);
   const isEditing = tableState ? activeCellId === cellId : standaloneEditing;
+  useEffect(() => {
+    if (!isEditing && keyboardSessionRef.current) {
+      keyboardSessionRef.current = false;
+      cellRef.current?.focus();
+    }
+  }, [isEditing]);
   const equals = useMemo(
     () => definition.equals ?? ((left: TValue, right: TValue) => Object.is(left, right)),
     [definition.equals],
@@ -200,14 +214,14 @@ export const InlineEditableCell = <
     if (sessionRef.current) sessionRef.current.finished = true;
     if (tableState) {
       tableState.sessions.delete(cellId);
-      tableState.setActiveCellId((active) => active === cellId ? null : active);
+      tableState.setActiveCellId((active) => (active === cellId ? null : active));
       return;
     }
     setStandaloneEditing(false);
   }, [tableState, cellId]);
 
   const beginEdit = useCallback(
-    (trigger: "doubleClick" | "mobileButton") => {
+    (trigger: "doubleClick" | "mobileButton" | "keyboard") => {
       if (
         !shouldBeginInlineEdit({
           trigger,
@@ -223,10 +237,18 @@ export const InlineEditableCell = <
       if (isEditing) {
         return;
       }
+      keyboardSessionRef.current = trigger === "keyboard";
       const draft = definition.editorValue
-          ? definition.editorValue(localValue, row, context, displayContext)
-          : toEditorValue(localValue);
-      const session: EditSession = { row, context, value: localValue, draft, saving: false, finished: false };
+        ? definition.editorValue(localValue, row, context, displayContext)
+        : toEditorValue(localValue);
+      const session: EditSession = {
+        row,
+        context,
+        value: localValue,
+        draft,
+        saving: false,
+        finished: false,
+      };
       sessionRef.current = session;
       tableState?.sessions.set(cellId, session);
       setDraftValue(draft);
@@ -289,7 +311,8 @@ export const InlineEditableCell = <
       setIsSaving(true);
       // Retain the same operation/key after a lost response. The server replays
       // it even if the first request committed before the connection failed.
-      const operation = session.operation ?? definition.mutation(editRow, draftResolution.value, editContext);
+      const operation =
+        session.operation ?? definition.mutation(editRow, draftResolution.value, editContext);
       session.operation = operation;
       const outcome = await executeOptimisticMutation({
         previousValue,
@@ -303,7 +326,8 @@ export const InlineEditableCell = <
       setIsSaving(false);
       if (!outcome.ok) {
         const error = outcome.error as { message?: string; data?: { code?: string } };
-        if (error.message === "inventoryStockConflict" || error.data?.code === "CONFLICT") closeEditor();
+        if (error.message === "inventoryStockConflict" || error.data?.code === "CONFLICT")
+          closeEditor();
         toast({
           variant: "error",
           description: translateError(tErrors, outcome.error as never),
@@ -436,7 +460,11 @@ export const InlineEditableCell = <
     }
 
     return (
-      <div className={cn("flex items-center gap-2", className)} onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
+      <div
+        className={cn("flex items-center gap-2", className)}
+        onClick={(event) => event.stopPropagation()}
+        onDoubleClick={(event) => event.stopPropagation()}
+      >
         <Input
           autoFocus
           readOnly={isSaving}
@@ -470,19 +498,42 @@ export const InlineEditableCell = <
   return (
     <div
       className={cn(
-        "flex min-h-8 items-center gap-1",
+        "flex min-h-8 items-center gap-1 rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
         canEdit ? "cursor-text select-none" : undefined,
         className,
       )}
+      ref={cellRef}
       data-inline-cell={cellId}
-      onClick={(event) => { if (canEdit) event.stopPropagation(); }}
+      tabIndex={canEdit && !isTouch ? 0 : undefined}
+      role={canEdit && !isTouch ? "button" : undefined}
+      aria-label={
+        canEdit && !isTouch
+          ? `${tInline("editButtonAria", { field: columnLabel })}: ${displayText}`
+          : undefined
+      }
+      onKeyDown={(event) => {
+        if (canEdit && ["Enter", "F2", " "].includes(event.key)) {
+          event.preventDefault();
+          event.stopPropagation();
+          beginEdit("keyboard");
+        }
+      }}
+      onClick={(event) => {
+        if (canEdit) event.stopPropagation();
+        if (canEdit && !isTouch && event.detail === 0) beginEdit("keyboard");
+      }}
       onDoubleClick={(event) => {
         event.preventDefault();
         event.stopPropagation();
         beginEdit("doubleClick");
       }}
-      title={!canEdit ? tInline(disabledHint ?? "noPermissionTooltip") :
-        definition.columnKey === "onHand" ? tInline("stockAbsoluteHint") : undefined}
+      title={
+        !canEdit
+          ? tInline(disabledHint ?? "noPermissionTooltip")
+          : definition.columnKey === "onHand"
+            ? tInline("stockAbsoluteHint")
+            : undefined
+      }
     >
       <span>{displayText}</span>
       {isSaving ? <Spinner className="h-3.5 w-3.5" aria-label={tInline("savingAria")} /> : null}
@@ -491,7 +542,7 @@ export const InlineEditableCell = <
           type="button"
           variant="ghost"
           size="icon"
-          className="h-6 w-6 shadow-none"
+          className="h-11 w-11 shrink-0 shadow-none"
           onClick={() => beginEdit("mobileButton")}
           aria-label={tInline("editButtonAria", { field: columnLabel })}
         >

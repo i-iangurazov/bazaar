@@ -1,10 +1,55 @@
+"use client";
+
 import * as React from "react";
 import * as SelectPrimitive from "@radix-ui/react-select";
 
 import { cn } from "@/lib/utils";
 import { CheckIcon, ChevronDownIcon } from "@/components/icons";
 
-const Select = SelectPrimitive.Root;
+type SelectControlAttributes = Pick<
+  React.HTMLAttributes<HTMLButtonElement>,
+  "id" | "aria-label" | "aria-labelledby" | "aria-describedby" | "aria-invalid" | "aria-required"
+>;
+const SelectControlContext = React.createContext<{
+  attributes: SelectControlAttributes;
+  controlRef: React.ForwardedRef<HTMLButtonElement>;
+}>({ attributes: {}, controlRef: null });
+// FormControl is also used around Select.Root throughout the app. Radix Root has
+// no DOM element: forward its label, validation and focus target to the trigger.
+const Select = React.forwardRef<
+  HTMLButtonElement,
+  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Root> & SelectControlAttributes
+>(
+  (
+    {
+      id,
+      "aria-label": label,
+      "aria-labelledby": labelledBy,
+      "aria-describedby": describedBy,
+      "aria-invalid": invalid,
+      "aria-required": required,
+      ...props
+    },
+    ref,
+  ) => (
+    <SelectControlContext.Provider
+      value={{
+        attributes: {
+          id,
+          "aria-label": label,
+          "aria-labelledby": labelledBy,
+          "aria-describedby": describedBy,
+          "aria-invalid": invalid,
+          "aria-required": required,
+        },
+        controlRef: ref,
+      }}
+    >
+      <SelectPrimitive.Root {...props} />
+    </SelectControlContext.Provider>
+  ),
+);
+Select.displayName = "Select";
 
 const SelectGroup = SelectPrimitive.Group;
 
@@ -13,21 +58,34 @@ const SelectValue = SelectPrimitive.Value;
 const SelectTrigger = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Trigger>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>
->(({ className, children, ...props }, ref) => (
-  <SelectPrimitive.Trigger
-    ref={ref}
-    className={cn(
-      "flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-base text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring/30 focus:ring-offset-2 focus:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm",
-      className,
-    )}
-    {...props}
-  >
-    {children}
-    <SelectPrimitive.Icon asChild>
-      <ChevronDownIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
-    </SelectPrimitive.Icon>
-  </SelectPrimitive.Trigger>
-));
+>(({ className, children, ...props }, ref) => {
+  const { attributes, controlRef } = React.useContext(SelectControlContext);
+  const mergedRef = React.useCallback(
+    (element: HTMLButtonElement | null) => {
+      for (const target of [ref, controlRef]) {
+        if (typeof target === "function") target(element);
+        else if (target) target.current = element;
+      }
+    },
+    [ref, controlRef],
+  );
+  return (
+    <SelectPrimitive.Trigger
+      ref={mergedRef}
+      {...attributes}
+      className={cn(
+        "flex h-10 w-full min-w-0 items-center justify-between gap-2 rounded-md border border-input bg-card px-3 py-2 text-base text-foreground transition-colors hover:border-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm [&>span]:min-w-0 [&>span]:truncate [&>svg]:shrink-0",
+        className,
+      )}
+      {...props}
+    >
+      {children}
+      <SelectPrimitive.Icon asChild>
+        <ChevronDownIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
+      </SelectPrimitive.Icon>
+    </SelectPrimitive.Trigger>
+  );
+});
 
 SelectTrigger.displayName = SelectPrimitive.Trigger.displayName;
 

@@ -20,20 +20,18 @@ export const FormSection = ({
     {title ? (
       <div className="space-y-1">
         <h3 className="text-base font-semibold text-foreground">{title}</h3>
-        {description ? <p className="text-sm leading-6 text-muted-foreground">{description}</p> : null}
+        {description ? (
+          <p className="text-sm leading-6 text-muted-foreground">{description}</p>
+        ) : null}
       </div>
     ) : null}
     <div className={cn("space-y-3 sm:space-y-4", contentClassName)}>{children}</div>
   </section>
 );
 
-export const FormGrid = ({
-  className,
-  children,
-}: {
-  className?: string;
-  children: ReactNode;
-}) => <div className={cn("grid grid-cols-1 gap-4 md:grid-cols-2", className)}>{children}</div>;
+export const FormGrid = ({ className, children }: { className?: string; children: ReactNode }) => (
+  <div className={cn("grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2", className)}>{children}</div>
+);
 
 export const Field = ({
   label,
@@ -42,6 +40,7 @@ export const Field = ({
   children,
   className,
   labelClassName,
+  htmlFor,
 }: {
   label?: ReactNode;
   helper?: ReactNode;
@@ -49,34 +48,34 @@ export const Field = ({
   children: ReactNode;
   className?: string;
   labelClassName?: string;
+  htmlFor?: string;
 }) => (
-  <div className={cn("flex flex-col gap-1.5", className)}>
+  <div className={cn("flex min-w-0 flex-col gap-1.5", className)}>
     {label ? (
-      <Label className={cn("text-sm font-semibold text-foreground", labelClassName)}>
+      <Label
+        htmlFor={htmlFor}
+        className={cn("text-sm font-medium text-foreground", labelClassName)}
+      >
         {label}
       </Label>
     ) : null}
     {children}
     {helper ? <p className="text-xs text-muted-foreground">{helper}</p> : null}
-    {error ? <p className="text-xs font-medium text-danger">{error}</p> : null}
+    {error ? (
+      <p role="alert" className="text-xs font-medium text-danger">
+        {error}
+      </p>
+    ) : null}
   </div>
 );
 
-export const FormStack = ({
-  className,
-  children,
-}: {
-  className?: string;
-  children: ReactNode;
-}) => <div className={cn("flex flex-col gap-3 sm:gap-4", className)}>{children}</div>;
+export const FormStack = ({ className, children }: { className?: string; children: ReactNode }) => (
+  <div className={cn("flex flex-col gap-3 sm:gap-4", className)}>{children}</div>
+);
 
-export const FormRow = ({
-  className,
-  children,
-}: {
-  className?: string;
-  children: ReactNode;
-}) => <div className={cn("flex items-end gap-2", className)}>{children}</div>;
+export const FormRow = ({ className, children }: { className?: string; children: ReactNode }) => (
+  <div className={cn("flex items-end gap-2", className)}>{children}</div>
+);
 
 export const FormActions = ({
   className,

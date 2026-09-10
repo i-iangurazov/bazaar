@@ -65,6 +65,27 @@ function Fixture({
 }
 describe("inline stock editor behavior", () => {
   afterEach(cleanup);
+  it("opens from the keyboard, cancels without saving and restores cell focus", async () => {
+    const execute = vi.fn().mockResolvedValue(undefined);
+    render(<Fixture execute={execute} />);
+    const cell = screen.getByRole("button", { name: /Stock/ });
+    cell.focus();
+    fireEvent.keyDown(cell, { key: "Enter" });
+    const input = await screen.findByRole("textbox");
+    fireEvent.change(input, { target: { value: "0" } });
+    fireEvent.keyDown(input, { key: "Escape" });
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: /Stock/ })),
+    );
+    expect(execute).not.toHaveBeenCalled();
+    expect(screen.getByText("12")).toBeTruthy();
+    fireEvent.keyDown(document.activeElement!, { key: "F2" });
+    expect(screen.getByRole("textbox")).toBeTruthy();
+    fireEvent.keyDown(screen.getByRole("textbox"), { key: "Escape" });
+    fireEvent.keyDown(document.activeElement!, { key: " " });
+    expect(screen.getByRole("textbox")).toBeTruthy();
+    expect(execute).not.toHaveBeenCalled();
+  });
   it("retains the typed draft and original stock revision across cell remounts", async () => {
     const execute = vi
       .fn<(operation: InlineMutationOperation) => Promise<void>>()

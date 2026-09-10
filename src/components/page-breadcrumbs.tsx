@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useMemo } from "react";
 import { useTranslations } from "next-intl";
 
 import { ChevronRightIcon, HomeIcon } from "@/components/icons";
+import { resolveSafeReturnTo } from "@/lib/safeReturnTo";
 import { cn } from "@/lib/utils";
 
 type Crumb = {
@@ -157,6 +158,9 @@ const segmentLabel = (
 
 export const PageBreadcrumbs = () => {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const returnTo = resolveSafeReturnTo(searchParams.get("returnTo"), "");
+  const returnPath = returnTo ? new URL(returnTo, "https://local.invalid").pathname : "";
   const tNav = useTranslations("nav");
   const tBreadcrumbs = useTranslations("breadcrumbs");
   const tPos = useTranslations("pos");
@@ -247,7 +251,7 @@ export const PageBreadcrumbs = () => {
                 </span>
               ) : (
                 <Link
-                  href={crumb.href}
+                  href={crumb.href === returnPath ? returnTo : crumb.href}
                   aria-label={index === 0 ? crumb.label : undefined}
                   className="inline-flex h-7 max-w-[44vw] items-center gap-1 rounded-md px-2.5 font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:max-w-[240px]"
                 >

@@ -23,10 +23,7 @@ type FormFieldContextValue<
 
 const FormFieldContext = React.createContext<FormFieldContextValue | null>(null);
 
-const FormField = <
-  TFieldValues extends FieldValues,
-  TName extends FieldPath<TFieldValues>,
->({
+const FormField = <TFieldValues extends FieldValues, TName extends FieldPath<TFieldValues>>({
   name,
   ...props
 }: ControllerProps<TFieldValues, TName>) => (
@@ -83,8 +80,8 @@ FormItem.displayName = "FormItem";
 
 const FormLabel = React.forwardRef<
   React.ElementRef<typeof Label>,
-  React.ComponentPropsWithoutRef<typeof Label>
->(({ className, ...props }, ref) => {
+  React.ComponentPropsWithoutRef<typeof Label> & { required?: boolean }
+>(({ className, required, children, ...props }, ref) => {
   const { error, formItemId } = useFormField();
   return (
     <Label
@@ -92,7 +89,14 @@ const FormLabel = React.forwardRef<
       className={cn(error && "text-danger", className)}
       htmlFor={formItemId}
       {...props}
-    />
+    >
+      {children}
+      {required ? (
+        <span aria-hidden className="ml-1 text-danger">
+          *
+        </span>
+      ) : null}
+    </Label>
   );
 });
 

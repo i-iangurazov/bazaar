@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 import { z } from "zod";
 import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
+import { resolveSafeReturnTo } from "@/lib/safeReturnTo";
 import { PageHeader } from "@/components/page-header";
 import { ProductSearchResultItem } from "@/components/product-search-result-item";
 import { ScanInput } from "@/components/ScanInput";
@@ -44,12 +45,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { AddIcon, DeleteIcon, EditIcon, EmptyIcon, UploadIcon } from "@/components/icons";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { RowActions } from "@/components/row-actions";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatStoreMoney } from "@/lib/currencyDisplay";
 import { formatNumber } from "@/lib/i18nFormat";
 import { trpc } from "@/lib/trpc";
@@ -60,6 +56,9 @@ import type { ScanResolvedResult } from "@/lib/scanning/scanRouter";
 
 const NewPurchaseOrderPage = () => {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedStoreId = searchParams.get("storeId");
+  const returnTo = resolveSafeReturnTo(searchParams.get("returnTo"), "/purchase-orders");
   const t = useTranslations("purchaseOrders");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
@@ -159,7 +158,9 @@ const NewPurchaseOrderPage = () => {
 
   const productSearchQuery = trpc.products.searchQuick.useQuery(
     { q: lineSearch, storeId: storeId || undefined },
-    { enabled: !isForbidden && Boolean(storeId) && lineDialogOpen && lineSearch.trim().length >= 1 },
+    {
+      enabled: !isForbidden && Boolean(storeId) && lineDialogOpen && lineSearch.trim().length >= 1,
+    },
   );
   const lineProductQuery = trpc.products.getById.useQuery(
     { productId: lineProductId },
@@ -224,11 +225,7 @@ const NewPurchaseOrderPage = () => {
   };
 
   const resolveBasePreview = useCallback(
-    (
-      product: ProductCacheEntry | null | undefined,
-      selection: string,
-      qty: number,
-    ) => {
+    (product: ProductCacheEntry | null | undefined, selection: string, qty: number) => {
       if (!product || !Number.isFinite(qty)) {
         return null;
       }
@@ -258,18 +255,18 @@ const NewPurchaseOrderPage = () => {
     variantId: line.variantId ?? undefined,
     qtyOrdered: line.qtyOrdered,
     unitCost: line.unitCost ?? undefined,
-    unitId:
-      line.unitSelection === "BASE"
-        ? productCache[line.productId]?.baseUnit?.id
-        : undefined,
+    unitId: line.unitSelection === "BASE" ? productCache[line.productId]?.baseUnit?.id : undefined,
     packId: line.unitSelection !== "BASE" ? line.unitSelection : undefined,
   });
 
   useEffect(() => {
     if (!storeId && storesQuery.data?.[0]) {
-      form.setValue("storeId", storesQuery.data[0].id, { shouldValidate: true });
+      const available = requestedStoreId
+        ? storesQuery.data.find((store) => store.id === requestedStoreId)
+        : storesQuery.data[0];
+      if (available) form.setValue("storeId", available.id, { shouldValidate: true });
     }
-  }, [storeId, storesQuery.data, form]);
+  }, [storeId, storesQuery.data, requestedStoreId, form]);
 
   useEffect(() => {
     const product = lineProductQuery.data;
@@ -338,7 +335,9 @@ const NewPurchaseOrderPage = () => {
       unitCost: line.unitCost ?? undefined,
     });
     setLineSearch(product?.name ?? "");
-    setSelectedProduct(product ? { id: line.productId, name: product.name, sku: product.sku } : null);
+    setSelectedProduct(
+      product ? { id: line.productId, name: product.name, sku: product.sku } : null,
+    );
     setShowResults(false);
     setLineDialogOpen(true);
   };
@@ -347,7 +346,7 @@ const NewPurchaseOrderPage = () => {
     onSuccess: (po) => {
       createAttemptRef.current = null;
       toast({ variant: "success", description: t("createSuccess") });
-      router.push(`/purchase-orders/${po.id}`);
+      router.push(`/purchase-orders/${po.id}?returnTo=${encodeURIComponent(returnTo)}`);
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
@@ -493,8 +492,8 @@ const NewPurchaseOrderPage = () => {
                           const unitLabel =
                             line.unitSelection === "BASE"
                               ? baseUnitLabel
-                              : product?.packs?.find((pack) => pack.id === line.unitSelection)?.packName ??
-                                baseUnitLabel;
+                              : (product?.packs?.find((pack) => pack.id === line.unitSelection)
+                                  ?.packName ?? baseUnitLabel);
                           const baseQty = resolveBasePreview(
                             product,
                             line.unitSelection,
@@ -509,7 +508,7 @@ const NewPurchaseOrderPage = () => {
                               <TableCell className="font-medium">
                                 {product?.name ?? tCommon("notAvailable")}
                               </TableCell>
-                              <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">
+                              <TableCell className="hidden text-xs text-muted-foreground sm:table-cell">
                                 {variantLabel}
                               </TableCell>
                               <TableCell>
@@ -567,7 +566,12 @@ const NewPurchaseOrderPage = () => {
                                         className="text-danger shadow-none hover:text-danger"
                                         aria-label={t("removeLine")}
                                         onClick={async () => {
-                                          if (!(await confirm({ description: t("confirmRemoveLine"), confirmVariant: "danger" }))) {
+                                          if (
+                                            !(await confirm({
+                                              description: t("confirmRemoveLine"),
+                                              confirmVariant: "danger",
+                                            }))
+                                          ) {
                                             return;
                                           }
                                           remove(absoluteIndex);
@@ -598,8 +602,8 @@ const NewPurchaseOrderPage = () => {
                 const unitLabel =
                   line.unitSelection === "BASE"
                     ? baseUnitLabel
-                    : product?.packs?.find((pack) => pack.id === line.unitSelection)?.packName ??
-                      baseUnitLabel;
+                    : (product?.packs?.find((pack) => pack.id === line.unitSelection)?.packName ??
+                      baseUnitLabel);
                 const baseQty = resolveBasePreview(product, line.unitSelection, line.qtyOrdered);
                 const variantLabel =
                   line.variantId && variantCache[line.variantId]
@@ -637,7 +641,9 @@ const NewPurchaseOrderPage = () => {
                         </p>
                         <p className="text-xs text-muted-foreground">
                           {t("lineTotal")}{" "}
-                          {lineTotal === null ? tCommon("notAvailable") : formatStoreMoney(lineTotal, locale, selectedStore)}
+                          {lineTotal === null
+                            ? tCommon("notAvailable")
+                            : formatStoreMoney(lineTotal, locale, selectedStore)}
                         </p>
                       </div>
                       <RowActions
@@ -654,7 +660,12 @@ const NewPurchaseOrderPage = () => {
                             icon: DeleteIcon,
                             variant: "danger",
                             onSelect: async () => {
-                              if (!(await confirm({ description: t("confirmRemoveLine"), confirmVariant: "danger" }))) {
+                              if (
+                                !(await confirm({
+                                  description: t("confirmRemoveLine"),
+                                  confirmVariant: "danger",
+                                }))
+                              ) {
                                 return;
                               }
                               remove(index);
@@ -816,20 +827,20 @@ const NewPurchaseOrderPage = () => {
                               </div>
                             ) : productSearchQuery.data?.length ? (
                               productSearchQuery.data.map((product) => (
-                              <ProductSearchResultItem
-                                key={product.id}
-                                product={product}
-                                currencySource={selectedStore}
-                                onMouseDown={(event) => event.preventDefault()}
-                                onPointerDown={(event) => event.preventDefault()}
-                                onClick={() => {
-                                  applySelectedProduct({
-                                    id: product.id,
-                                    name: product.name,
-                                    sku: product.sku,
-                                  });
-                                }}
-                              />
+                                <ProductSearchResultItem
+                                  key={product.id}
+                                  product={product}
+                                  currencySource={selectedStore}
+                                  onMouseDown={(event) => event.preventDefault()}
+                                  onPointerDown={(event) => event.preventDefault()}
+                                  onClick={() => {
+                                    applySelectedProduct({
+                                      id: product.id,
+                                      name: product.name,
+                                      sku: product.sku,
+                                    });
+                                  }}
+                                />
                               ))
                             ) : (
                               <div className="px-3 py-3 text-sm text-muted-foreground">
@@ -840,7 +851,9 @@ const NewPurchaseOrderPage = () => {
                         </div>
                       ) : null}
                     </div>
-                    {editingIndex === null ? <FormDescription>{t("productSearchHint")}</FormDescription> : null}
+                    {editingIndex === null ? (
+                      <FormDescription>{t("productSearchHint")}</FormDescription>
+                    ) : null}
                     <FormMessage />
                   </FormItem>
                 )}

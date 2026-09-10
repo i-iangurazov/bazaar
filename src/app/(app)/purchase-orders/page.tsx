@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PurchaseOrderStatus } from "@prisma/client";
 import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
+import { ListToolbar, ListSearch, FilterField } from "@/components/list-toolbar";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,7 +31,6 @@ import {
 } from "@/components/icons";
 import { useToast } from "@/components/ui/toast";
 import { Spinner } from "@/components/ui/spinner";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -74,7 +74,6 @@ const PurchaseOrdersPage = () => {
   const { toast } = useToast();
   const { confirm, confirmDialog } = useConfirmDialog();
   const trpcUtils = trpc.useUtils();
-  const currentQueryString = searchParams.toString();
   const page = parsePositiveInteger(searchParams.get("page"), 1, 10_000);
   const pageSize = parsePositiveInteger(searchParams.get("pageSize"), 25, 200);
   const search = searchParams.get("search") ?? "";
@@ -97,7 +96,7 @@ const PurchaseOrdersPage = () => {
   const bulkCancelAttemptRef = useRef<{ payload: string; idempotencyKey: string } | null>(null);
   const updateListParams = useCallback(
     (updates: Record<string, string | number | null>) => {
-      const params = new URLSearchParams(currentQueryString);
+      const params = new URLSearchParams(window.location.search);
       Object.entries(updates).forEach(([key, value]) => {
         if (value === null || value === "") {
           params.delete(key);
@@ -106,15 +105,23 @@ const PurchaseOrdersPage = () => {
         }
       });
       const nextQuery = params.toString();
-      router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+      window.history.replaceState(
+        window.history.state,
+        "",
+        nextQuery ? `${pathname}?${nextQuery}` : pathname,
+      );
     },
-    [currentQueryString, pathname, router],
+    [pathname],
   );
   const setPage = (value: number) => updateListParams({ page: value === 1 ? null : value });
   const setPageSize = (value: number) =>
     updateListParams({ pageSize: value === 25 ? null : value, page: null });
   const setFilter = (key: string, value: string | null) =>
     updateListParams({ [key]: value, page: null });
+  const listReturnHref = `${pathname}?${searchParams.toString()}`;
+  const detailHref = (id: string) =>
+    `/purchase-orders/${id}?returnTo=${encodeURIComponent(listReturnHref)}`;
+  const newOrderHref = `/purchase-orders/new?${new URLSearchParams({ returnTo: listReturnHref, ...(storeId !== "all" ? { storeId } : {}) })}`;
   const listFilters = {
     search: search.trim() || undefined,
     storeId: storeId === "all" ? undefined : storeId,
@@ -172,6 +179,13 @@ const PurchaseOrdersPage = () => {
   const selectedList = useMemo(() => Array.from(selectedIds), [selectedIds]);
   const allSelected = Boolean(orders.length) && orders.every((po) => selectedIds.has(po.id));
   const allResultsSelected = totalOrders > 0 && selectedIds.size === totalOrders;
+  const selectionPageKey = `${page}:${pageSize}`;
+  const previousSelectionPage = useRef(selectionPageKey);
+  useEffect(() => {
+    if (previousSelectionPage.current !== selectionPageKey && !allResultsSelected)
+      setSelectedIds(new Set());
+    previousSelectionPage.current = selectionPageKey;
+  }, [selectionPageKey, allResultsSelected]);
 
   const toggleSelectAll = () => {
     if (!orders.length) {
@@ -185,10 +199,24 @@ const PurchaseOrdersPage = () => {
     });
   };
 
+  const selectionScope = JSON.stringify([
+    session?.user?.organizationId,
+    session?.user?.id,
+    search,
+    storeId,
+    status,
+  ]);
+  const selectionScopeRef = useRef(selectionScope);
+  selectionScopeRef.current = selectionScope;
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [selectionScope]);
   const handleSelectAllResults = async () => {
+    const requestScope = selectionScopeRef.current;
     setSelectingAllResults(true);
     try {
       const ids = await trpcUtils.purchaseOrders.listIds.fetch(listFilters);
+      if (selectionScopeRef.current !== requestScope) return;
       setSelectedIds(new Set(ids));
     } catch (error) {
       toast({
@@ -259,7 +287,7 @@ const PurchaseOrdersPage = () => {
         subtitle={t("subtitle")}
         action={
           canManage ? (
-            <Link href="/purchase-orders/new" className="w-full sm:w-auto">
+            <Link href={newOrderHref} className="w-full sm:w-auto">
               <Button className="w-full sm:w-auto" data-tour="po-create">
                 <AddIcon className="h-4 w-4" aria-hidden />
                 {t("new")}
@@ -274,69 +302,100 @@ const PurchaseOrdersPage = () => {
           <CardTitle>{t("title")}</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="bazaar-admin-toolbar mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Input
-              value={search}
-              onChange={(event) => setFilter("search", event.target.value)}
-              placeholder={t("searchPlaceholder")}
-              aria-label={t("searchPlaceholder")}
-              className="min-h-11"
-            />
-            <Select
-              value={storeId}
-              onValueChange={(value) => setFilter("storeId", value === "all" ? null : value)}
-            >
-              <SelectTrigger aria-label={t("store")} className="min-h-11">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{tCommon("allStores")}</SelectItem>
-                {stores.map((store) => (
-                  <SelectItem key={store.id} value={store.id}>
-                    {store.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select
-              value={status}
-              onValueChange={(value) => setFilter("status", value === "all" ? null : value)}
-            >
-              <SelectTrigger aria-label={t("statusLabel")} className="min-h-11">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t("allStatuses")}</SelectItem>
-                {purchaseOrderStatuses.map((value) => (
-                  <SelectItem key={value} value={value}>
-                    {statusLabel(value)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select
-              value={`${sortBy}:${sortDirection}`}
-              onValueChange={(value) => {
-                const [nextSortBy, nextDirection] = value.split(":");
-                updateListParams({
-                  sortBy: nextSortBy === "createdAt" ? null : nextSortBy,
-                  sortDirection: nextDirection === "desc" ? null : nextDirection,
-                  page: null,
-                });
-              }}
-            >
-              <SelectTrigger aria-label={t("sortLabel")} className="min-h-11">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="createdAt:desc">{t("sortNewest")}</SelectItem>
-                <SelectItem value="createdAt:asc">{t("sortOldest")}</SelectItem>
-                <SelectItem value="supplier:asc">{t("sortSupplier")}</SelectItem>
-                <SelectItem value="store:asc">{t("sortStore")}</SelectItem>
-                <SelectItem value="status:asc">{t("sortStatus")}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          <ListToolbar
+            total={totalOrders}
+            loading={listQuery.isFetching}
+            filters={[
+              ...(search
+                ? [
+                    {
+                      key: "search",
+                      label: `${tCommon("search")}: ${search}`,
+                      onRemove: () => setFilter("search", null),
+                    },
+                  ]
+                : []),
+              ...(status !== "all"
+                ? [
+                    {
+                      key: "status",
+                      label: statusLabel(status),
+                      onRemove: () => setFilter("status", null),
+                    },
+                  ]
+                : []),
+            ]}
+            onReset={() => updateListParams({ search: null, status: null, page: null })}
+          >
+            <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <ListSearch
+                value={search}
+                onChange={(value) => setFilter("search", value)}
+                label={tCommon("search")}
+                placeholder={t("searchPlaceholder")}
+              />
+              <FilterField id="purchase-store" label={t("store")}>
+                <Select
+                  value={storeId}
+                  onValueChange={(value) => setFilter("storeId", value === "all" ? null : value)}
+                >
+                  <SelectTrigger id="purchase-store" aria-label={t("store")}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">{tCommon("allStores")}</SelectItem>
+                    {stores.map((store) => (
+                      <SelectItem key={store.id} value={store.id}>
+                        {store.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FilterField>
+              <FilterField id="purchase-statusLabel" label={t("statusLabel")}>
+                <Select
+                  value={status}
+                  onValueChange={(value) => setFilter("status", value === "all" ? null : value)}
+                >
+                  <SelectTrigger id="purchase-statusLabel" aria-label={t("statusLabel")}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">{t("allStatuses")}</SelectItem>
+                    {purchaseOrderStatuses.map((value) => (
+                      <SelectItem key={value} value={value}>
+                        {statusLabel(value)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FilterField>
+              <FilterField id="purchase-sortLabel" label={t("sortLabel")}>
+                <Select
+                  value={`${sortBy}:${sortDirection}`}
+                  onValueChange={(value) => {
+                    const [nextSortBy, nextDirection] = value.split(":");
+                    updateListParams({
+                      sortBy: nextSortBy === "createdAt" ? null : nextSortBy,
+                      sortDirection: nextDirection === "desc" ? null : nextDirection,
+                      page: null,
+                    });
+                  }}
+                >
+                  <SelectTrigger id="purchase-sortLabel" aria-label={t("sortLabel")}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="createdAt:desc">{t("sortNewest")}</SelectItem>
+                    <SelectItem value="createdAt:asc">{t("sortOldest")}</SelectItem>
+                    <SelectItem value="supplier:asc">{t("sortSupplier")}</SelectItem>
+                    <SelectItem value="store:asc">{t("sortStore")}</SelectItem>
+                    <SelectItem value="status:asc">{t("sortStatus")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FilterField>
+            </div>
+          </ListToolbar>
           {canManage && orders.length ? (
             <div className="mb-3 sm:hidden">
               <div className="flex flex-wrap items-center gap-2">
@@ -475,7 +534,7 @@ const PurchaseOrdersPage = () => {
                             <TableCell>
                               <Link
                                 className="font-medium text-foreground"
-                                href={`/purchase-orders/${po.id}`}
+                                href={detailHref(po.id)}
                               >
                                 {po.supplier?.name ?? tCommon("supplierUnassigned")}
                               </Link>

@@ -191,10 +191,7 @@ const ExportsPage = () => {
   const typeLabels = useMemo(
     () =>
       Object.fromEntries(
-        EXPORT_TYPES.map((type) => [
-          type,
-          t(`types.${EXPORT_TYPE_METADATA[type].titleKey}`),
-        ]),
+        EXPORT_TYPES.map((type) => [type, t(`types.${EXPORT_TYPE_METADATA[type].titleKey}`)]),
       ) as Record<ExportType, string>,
     [t],
   );
@@ -331,9 +328,9 @@ const ExportsPage = () => {
           </CardHeader>
           <CardContent className="space-y-6">
             <FormGrid className="lg:grid-cols-5">
-              <Field label={t("storeLabel")}>
+              <Field htmlFor="export-storeLabel" label={t("storeLabel")}>
                 <Select value={storeId} onValueChange={setStoreId}>
-                  <SelectTrigger>
+                  <SelectTrigger id="export-storeLabel">
                     <SelectValue placeholder={tCommon("selectStore")} />
                   </SelectTrigger>
                   <SelectContent>
@@ -345,9 +342,12 @@ const ExportsPage = () => {
                   </SelectContent>
                 </Select>
               </Field>
-              <Field label={t("typeLabel")} className="lg:col-span-2">
-                <Select value={exportType} onValueChange={(value) => selectExportType(value as ExportType)}>
-                  <SelectTrigger>
+              <Field htmlFor="export-typeLabel" label={t("typeLabel")} className="lg:col-span-2">
+                <Select
+                  value={exportType}
+                  onValueChange={(value) => selectExportType(value as ExportType)}
+                >
+                  <SelectTrigger id="export-typeLabel">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -359,9 +359,12 @@ const ExportsPage = () => {
                   </SelectContent>
                 </Select>
               </Field>
-              <Field label={t("formatLabel")}>
-                <Select value={format} onValueChange={(value) => setFormat(value as ExportFileFormat)}>
-                  <SelectTrigger>
+              <Field htmlFor="export-formatLabel" label={t("formatLabel")}>
+                <Select
+                  value={format}
+                  onValueChange={(value) => setFormat(value as ExportFileFormat)}
+                >
+                  <SelectTrigger id="export-formatLabel">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -370,15 +373,17 @@ const ExportsPage = () => {
                   </SelectContent>
                 </Select>
               </Field>
-              <Field label={t("periodStart")}>
+              <Field htmlFor="export-periodStart" label={t("periodStart")}>
                 <Input
+                  id="export-periodStart"
                   type="date"
                   value={periodStart}
                   onChange={(event) => handlePeriodDateChange("start", event.target.value)}
                 />
               </Field>
-              <Field label={t("periodEnd")}>
+              <Field htmlFor="export-periodEnd" label={t("periodEnd")}>
                 <Input
+                  id="export-periodEnd"
                   type="date"
                   value={periodEnd}
                   onChange={(event) => handlePeriodDateChange("end", event.target.value)}
@@ -387,19 +392,26 @@ const ExportsPage = () => {
             </FormGrid>
 
             <div className="flex flex-wrap gap-2">
-              {(["today", "yesterday", "last7", "last30", "thisMonth", "lastMonth"] as ExportPeriodPreset[]).map(
-                (item) => (
-                  <Button
-                    key={item}
-                    type="button"
-                    variant={periodPreset === item ? "primary" : "secondary"}
-                    size="sm"
-                    onClick={() => applyPeriodPreset(item)}
-                  >
-                    {tReports(`presets.${item}`)}
-                  </Button>
-                ),
-              )}
+              {(
+                [
+                  "today",
+                  "yesterday",
+                  "last7",
+                  "last30",
+                  "thisMonth",
+                  "lastMonth",
+                ] as ExportPeriodPreset[]
+              ).map((item) => (
+                <Button
+                  key={item}
+                  type="button"
+                  variant={periodPreset === item ? "primary" : "secondary"}
+                  size="sm"
+                  onClick={() => applyPeriodPreset(item)}
+                >
+                  {tReports(`presets.${item}`)}
+                </Button>
+              ))}
             </div>
 
             <Alert variant={selectedMetadata.periodRequired ? "info" : "default"}>
@@ -593,7 +605,8 @@ const ExportsPage = () => {
                               </div>
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground">
-                              {formatDate(job.periodStart, locale)} — {formatDate(job.periodEnd, locale)}
+                              {formatDate(job.periodStart, locale)} —{" "}
+                              {formatDate(job.periodEnd, locale)}
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground">
                               {job.fileName ? (
@@ -700,10 +713,7 @@ const ExportsPage = () => {
                       ) : null}
                     </div>
                     <div className="mt-3 flex items-center justify-end">
-                      <RowActions
-                        moreLabel={tCommon("tooltips.moreActions")}
-                        actions={actions}
-                      />
+                      <RowActions moreLabel={tCommon("tooltips.moreActions")} actions={actions} />
                     </div>
                   </div>
                 );

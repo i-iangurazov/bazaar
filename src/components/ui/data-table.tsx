@@ -89,6 +89,7 @@ export const DataTable = <TData, TValue>({
   stickyHeader = false,
   pagination,
 }: DataTableProps<TData, TValue>) => {
+  const pageSizeLabelId = React.useId();
   const [internalSorting, setInternalSorting] = React.useState<SortingState>([]);
   const resolvedSorting = sorting ?? internalSorting;
   const table = useReactTable({
@@ -113,7 +114,7 @@ export const DataTable = <TData, TValue>({
 
   return (
     <div className={cn("min-w-0", className)} data-component="data-table">
-      <div className="w-full overflow-x-auto rounded-xl border border-border/65 bg-card/95 shadow-[0_14px_36px_rgba(15,23,42,0.045)] ring-1 ring-foreground/[0.012] dark:shadow-none">
+      <div className="relative min-w-0 max-w-full overflow-x-auto rounded-lg border border-border bg-card">
         <table className={cn("w-full caption-bottom text-sm", tableClassName)}>
           <thead
             className={cn(
@@ -140,7 +141,7 @@ export const DataTable = <TData, TValue>({
                       colSpan={header.colSpan}
                       aria-sort={ariaSort}
                       className={cn(
-                        "h-12 px-3 text-left align-middle text-[11px] font-bold uppercase tracking-[0.075em] text-muted-foreground",
+                        "h-11 px-3 text-left align-middle text-xs font-semibold text-muted-foreground",
                         meta.className,
                         meta.headerClassName,
                       )}
@@ -149,7 +150,7 @@ export const DataTable = <TData, TValue>({
                         <button
                           type="button"
                           className={cn(
-                            "inline-flex max-w-full items-center gap-1.5 text-left uppercase text-inherit",
+                            "inline-flex max-w-full items-center gap-1.5 text-left text-inherit focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring",
                             meta.headerClassName?.includes("text-right") ||
                               meta.className?.includes("text-right")
                               ? "ml-auto"
@@ -189,11 +190,14 @@ export const DataTable = <TData, TValue>({
           <tbody>
             {isLoading && !rows.length ? (
               Array.from({ length: 5 }).map((_, rowIndex) => (
-                <tr key={`loading-${rowIndex}`} className="border-b border-border/55 last:border-b-0">
+                <tr
+                  key={`loading-${rowIndex}`}
+                  className="border-b border-border/55 last:border-b-0"
+                >
                   {table.getAllLeafColumns().map((column) => {
                     const meta = getColumnMeta(column);
                     return (
-                      <td key={column.id} className={cn("px-3 py-4 align-middle", meta.className)}>
+                      <td key={column.id} className={cn("px-3 py-3 align-middle", meta.className)}>
                         <Skeleton className="h-4 w-full max-w-[12rem]" />
                       </td>
                     );
@@ -216,7 +220,7 @@ export const DataTable = <TData, TValue>({
                       <td
                         key={cell.id}
                         className={cn(
-                          "px-3 py-4 align-middle text-sm text-foreground",
+                          "px-3 py-3 align-middle text-sm text-foreground",
                           meta.className,
                           meta.cellClassName,
                         )}
@@ -242,14 +246,16 @@ export const DataTable = <TData, TValue>({
           </tbody>
         </table>
       </div>
-      {pagination && totalPages > 1 ? (
-        <Pagination className="mt-4 flex-wrap border-t border-border/70 pt-3">
+      {pagination ? (
+        <Pagination className="flex-wrap border-t border-border px-3 py-3">
           <p className="text-xs text-muted-foreground">
             {pagination.labels.items(startItem, endItem, totalItems)}
           </p>
           <PaginationContent>
             <PaginationItem>
-              <span className="text-xs text-muted-foreground">{pagination.labels.rowsPerPage}</span>
+              <span id={pageSizeLabelId} className="text-xs text-muted-foreground">
+                {pagination.labels.rowsPerPage}
+              </span>
             </PaginationItem>
             <PaginationItem>
               <div className="w-[96px] sm:w-[88px]">
@@ -263,15 +269,22 @@ export const DataTable = <TData, TValue>({
                     pagination.onPageSizeChange(parsed);
                   }}
                 >
-                  <SelectTrigger className="h-10 sm:h-8">
+                  <SelectTrigger className="h-10 sm:h-8" aria-labelledby={pageSizeLabelId}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {(pagination.pageSizeOptions ?? [10, 25, 50, 100]).map((option) => (
-                      <SelectItem key={option} value={String(option)}>
-                        {option}
-                      </SelectItem>
-                    ))}
+                    {[
+                      ...new Set([
+                        ...(pagination.pageSizeOptions ?? [10, 25, 50, 100]),
+                        pagination.pageSize,
+                      ]),
+                    ]
+                      .sort((a, b) => a - b)
+                      .map((option) => (
+                        <SelectItem key={option} value={String(option)}>
+                          {option}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>

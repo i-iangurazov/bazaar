@@ -5,62 +5,123 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import messages from "../../messages/en.json";
 import { BaamLauncher } from "@/components/baam-launcher";
 
-const launcher = (role = "ADMIN", pathname = "/dashboard") => <NextIntlClientProvider
-  locale="en" messages={{ baam: { title: messages.baam.title, assistant: messages.baam.assistant }, common: { close: messages.common.close } }}
-><BaamLauncher access={{ role, isOrgOwner: true, isPlatformOwner: true }} pathname={pathname}>
-  <button type="button">Ask a supported question</button>
-</BaamLauncher></NextIntlClientProvider>;
+const launcher = (role = "ADMIN", pathname = "/dashboard") => (
+  <NextIntlClientProvider
+    locale="en"
+    messages={{
+      baam: { title: messages.baam.title, assistant: messages.baam.assistant },
+      common: { close: messages.common.close },
+    }}
+  >
+    <BaamLauncher access={{ role, isOrgOwner: true, isPlatformOwner: true }} pathname={pathname}>
+      <button type="button">Ask a supported question</button>
+    </BaamLauncher>
+  </NextIntlClientProvider>
+);
 
-vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
+vi.stubGlobal(
+  "ResizeObserver",
+  class {
+    observe() {}
+    disconnect() {}
+  },
+);
 afterEach(cleanup);
 
-describe("BAAM assistant launcher", () => {
-  it.each(["ADMIN", "MANAGER"])("lets %s open an accessible assistant dialog and full workspace link", role => {
-    render(launcher(role));
-    fireEvent.click(screen.getByRole("button", { name: "Open BAAM assistant" }));
-    expect(screen.getByRole("dialog", { name: "BAAM" })).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Open full page" }).getAttribute("href")).toBe("/baam");
-    expect(screen.getByRole("button", { name: "Ask a supported question" })).toBeTruthy();
-  });
+it("docks the single mobile launcher in the header and returns it to the viewport on desktop", async () => {
+  const previousWidth = window.innerWidth;
+  try {
+    window.innerWidth = 390;
+    const view = render(
+      <>
+        <div data-baam-mobile-slot />
+        {launcher()}
+      </>,
+    );
+    const slot = view.container.querySelector("[data-baam-mobile-slot]")!;
+    await waitFor(() => expect(slot.querySelector("[data-baam-launcher]")).toBeTruthy());
+    expect(document.querySelectorAll("[data-baam-launcher]")).toHaveLength(1);
+    window.innerWidth = 1440;
+    fireEvent(window, new Event("resize"));
+    await waitFor(() => expect(slot.querySelector("[data-baam-launcher]")).toBeNull());
+    expect(document.body.querySelector("[data-baam-launcher]")?.parentElement).toBe(document.body);
+  } finally {
+    window.innerWidth = previousWidth;
+  }
+});
 
-  it.each(["STAFF", "CASHIER", "UNKNOWN"])("does not elevate %s through ownership flags", role => {
-    render(launcher(role));
-    expect(screen.queryByRole("button", { name: "Open BAAM assistant" })).toBeNull();
-  });
+describe("BAAM assistant launcher", () => {
+  it.each(["ADMIN", "MANAGER"])(
+    "lets %s open an accessible assistant dialog and full workspace link",
+    (role) => {
+      render(launcher(role));
+      fireEvent.click(screen.getByRole("button", { name: "Open BAAM assistant" }));
+      expect(screen.getByRole("dialog", { name: "BAAM" })).toBeTruthy();
+      expect(screen.getByRole("link", { name: "Open full page" }).getAttribute("href")).toBe(
+        "/baam",
+      );
+      expect(screen.getByRole("button", { name: "Ask a supported question" })).toBeTruthy();
+    },
+  );
+
+  it.each(["STAFF", "CASHIER", "UNKNOWN"])(
+    "does not elevate %s through ownership flags",
+    (role) => {
+      render(launcher(role));
+      expect(screen.queryByRole("button", { name: "Open BAAM assistant" })).toBeNull();
+    },
+  );
 
   it.each([
-    "/pos", "/pos/sell", "/inventory", "/inventory/overview",
-    "/reports/receipts", "/cash", "/finance/income", "/finance/expense", "/help/pos",
-  ])("shows the launcher at %s", pathname => {
+    "/pos",
+    "/pos/sell",
+    "/inventory",
+    "/inventory/overview",
+    "/reports/receipts",
+    "/cash",
+    "/finance/income",
+    "/finance/expense",
+    "/help/pos",
+  ])("shows the launcher at %s", (pathname) => {
     render(launcher("ADMIN", pathname));
     expect(screen.getByRole("button", { name: "Open BAAM assistant" })).toBeTruthy();
   });
 
-  it("hides the launcher on printed documents", () => { render(launcher("ADMIN", "/printing/receipt")); expect(screen.queryByRole("button", { name: "Open BAAM assistant" })).toBeNull(); });
-
-  it.each(["ADMIN", "MANAGER"])("keeps the workspace circle visible for %s and focuses the existing question", role => {
-    render(<>
-      <section data-baam-workspace tabIndex={-1}>
-        <textarea data-baam-input aria-label="Your BAAM question" defaultValue="My draft" />
-      </section>
-      {launcher(role, "/baam")}
-    </>);
-    const question = screen.getByRole("textbox", { name: "Your BAAM question" });
-    question.scrollIntoView = vi.fn();
-    fireEvent.click(screen.getByRole("button", { name: "Open BAAM assistant" }));
-    expect(document.activeElement).toBe(question);
-    expect(question.scrollIntoView).toHaveBeenCalled();
-    expect((question as HTMLTextAreaElement).value).toBe("My draft");
-    expect(screen.queryByRole("dialog")).toBeNull();
+  it("hides the launcher on printed documents", () => {
+    render(launcher("ADMIN", "/printing/receipt"));
+    expect(screen.queryByRole("button", { name: "Open BAAM assistant" })).toBeNull();
   });
 
+  it.each(["ADMIN", "MANAGER"])(
+    "keeps the workspace circle visible for %s and focuses the existing question",
+    (role) => {
+      render(
+        <>
+          <section data-baam-workspace tabIndex={-1}>
+            <textarea data-baam-input aria-label="Your BAAM question" defaultValue="My draft" />
+          </section>
+          {launcher(role, "/baam")}
+        </>,
+      );
+      const question = screen.getByRole("textbox", { name: "Your BAAM question" });
+      question.scrollIntoView = vi.fn();
+      fireEvent.click(screen.getByRole("button", { name: "Open BAAM assistant" }));
+      expect(document.activeElement).toBe(question);
+      expect(question.scrollIntoView).toHaveBeenCalled();
+      expect((question as HTMLTextAreaElement).value).toBe("My draft");
+      expect(screen.queryByRole("dialog")).toBeNull();
+    },
+  );
+
   it("focuses the workspace when its question box is unavailable", () => {
-    render(<>
-      <section data-baam-workspace tabIndex={-1} aria-label="BAAM workspace">
-        <textarea data-baam-input aria-label="Your BAAM question" disabled />
-      </section>
-      {launcher("ADMIN", "/baam")}
-    </>);
+    render(
+      <>
+        <section data-baam-workspace tabIndex={-1} aria-label="BAAM workspace">
+          <textarea data-baam-input aria-label="Your BAAM question" disabled />
+        </section>
+        {launcher("ADMIN", "/baam")}
+      </>,
+    );
     const workspace = screen.getByRole("region", { name: "BAAM workspace" });
     workspace.scrollIntoView = vi.fn();
     fireEvent.click(screen.getByRole("button", { name: "Open BAAM assistant" }));

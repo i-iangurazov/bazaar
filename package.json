@@ -47,6 +47,7 @@
     "pretest:stabilization:unit": "pnpm prisma:generate",
     "test:stabilization:seed": "node --import tsx scripts/stabilization/seed.ts",
     "dev:stabilization": "NODE_OPTIONS=--max-old-space-size=8192 node --import tsx scripts/stabilization/dev.ts",
+    "test:ux": "node --import tsx scripts/ux/run.ts",
     "test:browser:print-navigation": "node --import tsx scripts/qa/print-and-command-panel.tsx"
   },
   "dependencies": {

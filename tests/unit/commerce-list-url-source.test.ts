@@ -18,7 +18,7 @@ describe("commerce list URL state", () => {
     expect(source).toContain('searchParams.get("search")');
     expect(source).toContain('searchParams.get("storeId")');
     expect(source).toContain('searchParams.get("sortBy")');
-    expect(source).toContain("router.replace(");
-    expect(source).toContain("{ scroll: false }");
+    expect(source).toMatch(/window\.history\.replaceState\(\s*window\.history\.state/);
+    expect(source).toContain("new URLSearchParams(window.location.search)");
   });
 });

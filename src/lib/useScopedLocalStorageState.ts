@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 
 export const buildScopedStorageKey = ({
   prefix,
@@ -33,9 +40,12 @@ export const useScopedLocalStorageState = <T>({
   isReady: boolean;
   hasStoredValue: boolean;
 } => {
-  const [value, setValue] = useState<T>(defaultValue);
-  const [isReady, setIsReady] = useState(false);
-  const [hasStoredValue, setHasStoredValue] = useState(false);
+  const [state, setState] = useState({
+    key: storageKey,
+    value: defaultValue,
+    ready: false,
+    hasStoredValue: false,
+  });
   const defaultValueRef = useRef(defaultValue);
   const parseRef = useRef(parse);
   const serializeRef = useRef(serialize);
@@ -54,9 +64,12 @@ export const useScopedLocalStorageState = <T>({
 
   useEffect(() => {
     if (!storageKey) {
-      setValue(defaultValueRef.current);
-      setIsReady(true);
-      setHasStoredValue(false);
+      setState({
+        key: storageKey,
+        value: defaultValueRef.current,
+        ready: true,
+        hasStoredValue: false,
+      });
       return;
     }
 
@@ -65,29 +78,54 @@ export const useScopedLocalStorageState = <T>({
     try {
       const raw = window.localStorage.getItem(storageKey);
       if (raw) {
-        nextValue = parseRef.current(raw) ?? defaultValueRef.current;
-        nextHasStoredValue = true;
+        const parsed = parseRef.current(raw);
+        nextValue = parsed ?? defaultValueRef.current;
+        nextHasStoredValue = parsed !== null;
       }
     } catch {
       nextValue = defaultValueRef.current;
       nextHasStoredValue = false;
     }
 
-    setValue(nextValue);
-    setHasStoredValue(nextHasStoredValue);
-    setIsReady(true);
+    setState({
+      key: storageKey,
+      value: nextValue,
+      ready: true,
+      hasStoredValue: nextHasStoredValue,
+    });
   }, [storageKey]);
 
   useEffect(() => {
-    if (!storageKey || !isReady) {
+    // During a user/organization change, the previous render still holds the old
+    // value. Never write it into the newly selected scope before hydration.
+    if (!storageKey || !state.ready || state.key !== storageKey) {
       return;
     }
     try {
-      window.localStorage.setItem(storageKey, serializeRef.current(value));
+      window.localStorage.setItem(storageKey, serializeRef.current(state.value));
     } catch {
       // ignore storage errors
     }
-  }, [isReady, storageKey, value]);
+  }, [storageKey, state]);
 
-  return { value, setValue, isReady, hasStoredValue };
+  const setValue = useCallback<Dispatch<SetStateAction<T>>>(
+    (next) => {
+      setState((current) => {
+        // A delayed response from a previous organization must not update this one.
+        if (current.key !== storageKey) return current;
+        const value =
+          typeof next === "function" ? (next as (previous: T) => T)(current.value) : next;
+        return Object.is(value, current.value) ? current : { ...current, value };
+      });
+    },
+    [storageKey],
+  );
+
+  const ownsState = state.key === storageKey;
+  return {
+    value: ownsState ? state.value : defaultValue,
+    setValue,
+    isReady: ownsState && state.ready,
+    hasStoredValue: ownsState && state.hasStoredValue,
+  };
 };

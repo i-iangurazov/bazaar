@@ -32,7 +32,7 @@ describe("pos entry navigation", () => {
     expect(source).toContain("const activeRegisterId =");
     expect(source).toContain("href={`/pos/shifts?registerId=${activeRegisterId}`}");
     expect(source).toContain('t("shifts.closeShift")');
-    expect(source).toContain("{!openShift ? (");
+    expect(source).toMatch(/!openShift\s*\?\s*<Button disabled>/);
   });
 
   it("keeps shift and receipt blocker state fresh across POS navigation", async () => {

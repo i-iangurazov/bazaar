@@ -64,9 +64,9 @@ export const Modal = ({
         className={cn(
           "fixed z-[1001] flex w-[calc(100vw-1.5rem)] flex-col overflow-hidden border border-border bg-card text-card-foreground shadow-2xl focus:outline-none",
           mobileSheet
-            ? "bottom-0 left-0 right-0 max-h-[90dvh] w-full rounded-md border-b-0 sm:bottom-auto sm:left-1/2 sm:right-auto sm:top-1/2 sm:max-h-[85dvh] sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:border-b"
-            : "left-1/2 top-1/2 max-h-[85dvh] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-md",
-          animated && "duration-250 transition-all ease-out will-change-transform",
+            ? "bottom-0 left-0 right-0 max-h-[90dvh] w-full rounded-t-xl border-b-0 sm:bottom-auto sm:left-1/2 sm:right-auto sm:top-1/2 sm:max-h-[85dvh] sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:border-b"
+            : "left-1/2 top-1/2 max-h-[85dvh] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl",
+          animated && "transition-all duration-200 ease-out motion-reduce:transition-none",
           animated &&
             (mobileSheet
               ? "data-[state=closed]:translate-y-10 data-[state=open]:translate-y-0 data-[state=closed]:opacity-0 data-[state=open]:opacity-100 sm:data-[state=closed]:translate-y-4"
@@ -76,7 +76,7 @@ export const Modal = ({
       >
         <div
           className={cn(
-            "sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-border bg-card p-6",
+            "sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-border bg-card p-4 sm:p-5",
             headerClassName,
           )}
         >
@@ -85,9 +85,7 @@ export const Modal = ({
               {title}
             </DialogPrimitive.Title>
             {subtitle ? (
-              <DialogPrimitive.Description
-                className="text-sm text-muted-foreground"
-              >
+              <DialogPrimitive.Description className="mt-1 text-sm leading-5 text-muted-foreground">
                 {subtitle}
               </DialogPrimitive.Description>
             ) : null}
@@ -104,7 +102,9 @@ export const Modal = ({
             </Button>
           </DialogPrimitive.Close>
         </div>
-        <div className={cn("flex-1 overflow-y-auto bg-card p-6", bodyClassName)}>{children}</div>
+        <div className={cn("flex-1 overflow-y-auto bg-card p-4 sm:p-5", bodyClassName)}>
+          {children}
+        </div>
       </DialogPrimitive.Content>
     </>
   );

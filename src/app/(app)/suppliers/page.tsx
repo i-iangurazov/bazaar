@@ -8,6 +8,7 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
+import { ListToolbar, ListSearch } from "@/components/list-toolbar";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -363,9 +364,9 @@ const SuppliersPage = () => {
                   name="name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{t("name")}</FormLabel>
+                      <FormLabel required>{t("name")}</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder={t("namePlaceholder")} />
+                        <Input {...field} aria-required="true" placeholder={t("namePlaceholder")} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -455,15 +456,28 @@ const SuppliersPage = () => {
           <CardTitle>{t("directory")}</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="mb-4 max-w-xl">
-            <Input
-              type="search"
+          <ListToolbar
+            total={suppliersQuery.data?.total}
+            loading={suppliersQuery.isFetching}
+            filters={
+              directorySearch
+                ? [
+                    {
+                      key: "search",
+                      label: `${tCommon("search")}: ${directorySearch}`,
+                      onRemove: () => setDirectorySearch(""),
+                    },
+                  ]
+                : []
+            }
+            onReset={() => setDirectorySearch("")}
+          >
+            <ListSearch
               value={directorySearch}
-              onChange={(event) => setDirectorySearch(event.target.value)}
-              placeholder={tCommon("search")}
-              aria-label={tCommon("search")}
+              onChange={setDirectorySearch}
+              label={tCommon("search")}
             />
-          </div>
+          </ListToolbar>
           {canManage && (suppliersQuery.data?.items.length ?? 0) > 0 ? (
             <div className="mb-3 sm:hidden">
               <div className="flex flex-wrap items-center gap-2">

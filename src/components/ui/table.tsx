@@ -243,7 +243,10 @@ export const TableContainer = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("w-full overflow-x-auto rounded-md border border-border bg-card", className)}
+    className={cn(
+      "relative min-w-0 max-w-full overflow-x-auto rounded-lg border border-border bg-card",
+      className,
+    )}
     {...props}
   />
 ));
@@ -359,7 +362,7 @@ export const TableHead = React.forwardRef<HTMLTableCellElement, TableHeadProps>(
       <th
         ref={ref}
         className={cn(
-          "h-12 px-3 text-left align-middle text-xs font-semibold uppercase text-muted-foreground",
+          "h-11 bg-muted/40 px-3 text-left align-middle text-xs font-semibold text-muted-foreground",
           className,
         )}
         onClick={onClick}
@@ -369,7 +372,7 @@ export const TableHead = React.forwardRef<HTMLTableCellElement, TableHeadProps>(
         {isSortable ? (
           <button
             type="button"
-            className="inline-flex max-w-full items-center gap-1.5 text-left uppercase text-inherit"
+            className="inline-flex max-w-full items-center gap-1.5 text-left text-inherit focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
             onClick={() =>
               sortableTable?.setSortState((current) =>
                 current?.columnIndex === sortableColumnIndex

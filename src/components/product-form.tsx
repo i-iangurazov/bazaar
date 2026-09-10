@@ -4874,9 +4874,14 @@ export const ProductForm = ({
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t("name")}</FormLabel>
+                    <FormLabel required>{t("name")}</FormLabel>
                     <FormControl>
-                      <Input {...field} value={field.value ?? ""} disabled={readOnly} />
+                      <Input
+                        aria-required
+                        {...field}
+                        value={field.value ?? ""}
+                        disabled={readOnly}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -4937,7 +4942,7 @@ export const ProductForm = ({
                   name="baseUnitId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{t("unit")}</FormLabel>
+                      <FormLabel required>{t("unit")}</FormLabel>
                       <Select
                         value={field.value}
                         onValueChange={field.onChange}
@@ -6058,9 +6063,14 @@ export const ProductForm = ({
                       name="name"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>{t("name")}</FormLabel>
+                          <FormLabel required>{t("name")}</FormLabel>
                           <FormControl>
-                            <Input {...field} value={field.value ?? ""} disabled={readOnly} />
+                            <Input
+                              aria-required
+                              {...field}
+                              value={field.value ?? ""}
+                              disabled={readOnly}
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -6261,7 +6271,7 @@ export const ProductForm = ({
                         name="baseUnitId"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>{t("unit")}</FormLabel>
+                            <FormLabel required>{t("unit")}</FormLabel>
                             <Select
                               value={field.value}
                               onValueChange={field.onChange}
