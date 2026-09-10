@@ -183,7 +183,13 @@ try {
       // skip native lazy-image activation on a busy CI runner, even after networkidle.
       for (const picture of await page.locator("main img").all()) {
         if (!(await picture.evaluate((img) => img.getClientRects().length > 0))) continue;
-        await picture.scrollIntoViewIfNeeded();
+        // Scroll only the page. scrollIntoView can also pan overflow-hidden product frames.
+        await picture.evaluate((img) =>
+          window.scrollTo({
+            top: scrollY + img.getBoundingClientRect().top - innerHeight / 3,
+            behavior: "instant",
+          }),
+        );
         const element = await picture.elementHandle();
         assert(element);
         try {
@@ -194,7 +200,20 @@ try {
         }
       }
       await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+      await page.waitForFunction(
+        () =>
+          scrollY === 0 &&
+          getComputedStyle(document.querySelector("header")).backdropFilter === "none",
+      );
       await settle(page);
+      assert.equal(
+        await page
+          .getByRole("tablist")
+          .locator("..")
+          .evaluate((el) => el.scrollLeft),
+        0,
+        "Screenshot traversal must not pan the product demonstration",
+      );
       await page.screenshot({ path: `${output}/${label}-hero.png` });
       await page.screenshot({ path: `${output}/${label}-full.png`, fullPage: true });
       assert(
