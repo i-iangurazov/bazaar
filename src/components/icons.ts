@@ -211,3 +211,5 @@ export const AlignLeftIcon = actionIcon(TextAlignLeft);
 export const AlignCenterIcon = actionIcon(TextAlignCenter);
 export const AlignRightIcon = actionIcon(TextAlignRight);
 export const FailedReceiptIcon = actionIcon(ReceiptX);
+
+export { BaamIcon } from "./baam-icon";

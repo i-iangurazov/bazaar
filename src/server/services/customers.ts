@@ -1,3 +1,4 @@
+import { assertBaamReviewedVersion } from "@/server/services/baamExecutionContext";
 import { randomUUID } from "node:crypto";
 import { CustomerOrderStatus, CustomerSource, type Customer, type Prisma } from "@prisma/client";
 
@@ -729,6 +730,7 @@ export const updateCustomer = async (input: {
   }
 
   return prisma.$transaction(async (tx) => {
+    await assertBaamReviewedVersion(tx, "Customer", input.customerId);
     const updated = await tx.customer.update({
       where: { id: existing.id },
       data: normalized,

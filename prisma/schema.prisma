@@ -510,6 +510,7 @@ model Organization {
   updatedAt           DateTime                       @updatedAt
 
   users                       User[]
+  baamConversations           BaamConversation[]
   userStoreAccesses           UserStoreAccess[]
   stores                      Store[]
   productCatalogs             ProductCatalog[]
@@ -618,6 +619,7 @@ model User {
 
   organization                  Organization?                     @relation(fields: [organizationId], references: [id])
   auditLogs                     AuditLog[]
+  baamConversations             BaamConversation[]
   idempotencyKeys               IdempotencyKey[]
   purchaseOrdersCreated         PurchaseOrder[]                   @relation("purchaseOrdersCreated")
   purchaseOrdersUpdated         PurchaseOrder[]                   @relation("purchaseOrdersUpdated")
@@ -3211,4 +3213,136 @@ model AuthToken {
   user User? @relation(fields: [userId], references: [id])
 
   @@index([email, type])
+}
+
+// BAAM histories belong to one user in one organization. Operational receipts
+// are committed by the existing domain transaction through its audit boundary.
+model BaamConversation {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  title          String
+  scopeStoreIds  String[] @default([])
+  storeId        String?
+  revision       Int      @default(0)
+  nextSequence   Int      @default(0)
+  activeTurnId   String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  deletedAt      DateTime?
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages       BaamMessage[]
+  turns          BaamTurn[]
+  actions        BaamAction[]
+  attachments    BaamAttachment[]
+  transcriptions BaamTranscription[]
+  @@index([organizationId, userId, deletedAt, updatedAt, id])
+}
+
+model BaamMessage {
+  id             String   @id @default(cuid())
+  conversationId String
+  turnId         String?
+  sequence       Int
+  role           String
+  text           String
+  parts          Json?
+  createdAt      DateTime @default(now())
+  conversation   BaamConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  turn           BaamTurn? @relation(fields: [turnId], references: [id], onDelete: SetNull)
+  @@unique([conversationId, sequence])
+  @@index([turnId])
+}
+
+model BaamTurn {
+  id              String   @id @default(cuid())
+  conversationId  String
+  clientRequestId String
+  requestHash     String
+  status          String   @default("RUNNING")
+  scopeRevision   Int
+  storeId         String?
+  locale          String
+  pageContext     Json?
+  cancelRequested Boolean  @default(false)
+  leaseUntil      DateTime
+  errorCode       String?
+  createdAt       DateTime @default(now())
+  completedAt     DateTime?
+  conversation    BaamConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  messages        BaamMessage[]
+  actions         BaamAction[]
+  @@unique([conversationId, clientRequestId])
+  @@index([status, leaseUntil])
+}
+
+model BaamAction {
+  id             String   @id @default(cuid())
+  conversationId String
+  turnId         String
+  tool           String
+  fingerprint    String
+  input          Json
+  summary        Json
+  scopeRevision  Int
+  status         String   @default("PROPOSED")
+  attemptToken   String?
+  result         Json?
+  errorCode      String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  conversation   BaamConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  turn           BaamTurn @relation(fields: [turnId], references: [id], onDelete: Cascade)
+  executions     BaamExecution[]
+  @@unique([turnId, fingerprint])
+  @@index([conversationId, status, createdAt])
+}
+
+model BaamExecution {
+  id             String   @id @default(cuid())
+  actionId       String
+  step           String
+  fingerprint    String
+  status         String   @default("PENDING")
+  attemptToken   String?
+  transactionId  String?
+  receipts       Json?
+  output         Json?
+  errorCode      String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  committedAt    DateTime?
+  action         BaamAction @relation(fields: [actionId], references: [id], onDelete: Cascade)
+  @@unique([actionId, step])
+}
+
+model BaamAttachment {
+  id             String   @id @default(cuid())
+  conversationId String
+  url            String
+  name           String
+  mimeType       String
+  createdAt      DateTime @default(now())
+  conversation   BaamConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  @@index([conversationId, createdAt])
+}
+
+model BaamTranscription {
+  id             String   @id @default(cuid())
+  conversationId String
+  audioHash      String
+  status         String   @default("PROCESSING")
+  text           String?
+  languages      Json?
+  duration       Float
+  needsReview    Boolean  @default(true)
+  usedTurnId     String?
+  errorCode      String?
+  leaseUntil     DateTime
+  createdAt      DateTime @default(now())
+  expiresAt      DateTime
+  conversation   BaamConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  @@unique([conversationId, audioHash])
+  @@index([expiresAt])
 }

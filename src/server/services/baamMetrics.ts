@@ -23,6 +23,7 @@ export const readBaamAccessScope = async (
   tx: Prisma.TransactionClient,
   actorId: string,
   storeId?: string,
+  requireAnalytics = true,
 ) => {
   const actor = await tx.user.findUnique({
     where: { id: actorId },
@@ -48,7 +49,7 @@ export const readBaamAccessScope = async (
   if (!organization || !resolveOrganizationAccessState(organization).hasAccess) {
     throw new AppError("subscriptionInactive", "FORBIDDEN", 403);
   }
-  if (!hasPlanFeature(organization.plan, "analytics")) {
+  if (requireAnalytics && !hasPlanFeature(organization.plan, "analytics")) {
     throw new AppError("featureLockedAnalytics", "FORBIDDEN", 403);
   }
   const stores = await tx.store.findMany({
@@ -89,11 +90,11 @@ export const readBaamAccessScope = async (
   };
 };
 
-export const getBaamAccessScope = async (actorId: string, storeId?: string) =>
+export const getBaamAccessScope = async (actorId: string, storeId?: string, requireAnalytics = true) =>
   prisma.$transaction(
     async (tx) => {
       await tx.$executeRaw`SET TRANSACTION READ ONLY`;
-      return readBaamAccessScope(tx, actorId, storeId);
+      return readBaamAccessScope(tx, actorId, storeId, requireAnalytics);
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, timeout: 15_000 },
   );

@@ -7,6 +7,7 @@ import { AppError } from "@/server/services/errors";
 import { withIdempotency } from "@/server/services/idempotency";
 import { applyStockMovement } from "@/server/services/inventory";
 import { writeAuditLog } from "@/server/services/audit";
+import { assertBaamReviewedVersion } from "@/server/services/baamExecutionContext";
 import { eventBus } from "@/server/events/eventBus";
 import { toJson } from "@/server/services/json";
 import { normalizeScanValue } from "@/lib/scanning/normalize";
@@ -94,7 +95,7 @@ export const createStockCount = async (input: {
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const code = generateCode();
       try {
-        return await tx.stockCount.create({
+        const created = await tx.stockCount.create({
           data: {
             organizationId: input.organizationId,
             storeId: input.storeId,
@@ -104,6 +105,8 @@ export const createStockCount = async (input: {
             createdById: input.actorId,
           },
         });
+        await writeAuditLog(tx, { organizationId: input.organizationId, actorId: input.actorId, requestId: input.requestId, action: "STOCK_COUNT_CREATE", entity: "StockCount", entityId: created.id, after: toJson(created) });
+        return created;
       } catch (error) {
         if (error && typeof error === "object" && "code" in error && error.code === "P2002") {
           continue;
@@ -153,6 +156,7 @@ export const addOrUpdateLineByScan = async (input: {
       classifyFailure: (error) => classifyDatabaseOperationFailure(error, "stockCountScanFailed"),
     },
     async (tx) => {
+      await assertBaamReviewedVersion(tx, "StockCount", input.stockCountId);
       await tx.$queryRaw`SELECT "id" FROM "StockCount" WHERE "id" = ${input.stockCountId} FOR UPDATE`;
       const count = await tx.stockCount.findUnique({ where: { id: input.stockCountId } });
       if (!count || count.organizationId !== input.organizationId) {
@@ -227,15 +231,14 @@ export const addOrUpdateLineByScan = async (input: {
         },
       });
 
-      if (count.status === StockCountStatus.DRAFT) {
-        await tx.stockCount.update({
+      await tx.stockCount.update({
           where: { id: count.id },
           data: {
             status: StockCountStatus.IN_PROGRESS,
             startedAt: count.startedAt ?? new Date(),
           },
         });
-      }
+      await writeAuditLog(tx, { organizationId: input.organizationId, actorId: input.actorId, requestId: input.requestId, action: "STOCK_COUNT_LINE_SET", entity: "StockCountLine", entityId: line.id, before: existing ? toJson(existing) : null, after: toJson(line) });
 
       return {
         response: { lineId: line.id },
@@ -278,13 +281,17 @@ export const setLineCountedQty = async (input: {
       throw new AppError("stockCountLocked", "CONFLICT", 409);
     }
 
-    return tx.stockCountLine.update({
+    await assertBaamReviewedVersion(tx, "StockCount", line.stockCountId);
+    const updated = await tx.stockCountLine.update({
       where: { id: input.lineId },
       data: {
         countedQty: input.countedQty,
         deltaQty: input.countedQty - line.expectedOnHand,
       },
     });
+    await tx.stockCount.update({ where: { id: line.stockCountId }, data: { updatedAt: new Date() } });
+    await writeAuditLog(tx, { organizationId: input.organizationId, actorId: input.actorId, requestId: input.requestId, action: "STOCK_COUNT_LINE_SET", entity: "StockCountLine", entityId: line.id, before: toJson(line), after: toJson(updated) });
+    return updated;
   });
 };
 
@@ -311,7 +318,10 @@ export const removeLine = async (input: {
       throw new AppError("stockCountLocked", "CONFLICT", 409);
     }
 
+    await assertBaamReviewedVersion(tx, "StockCount", line.stockCountId);
     await tx.stockCountLine.delete({ where: { id: input.lineId } });
+    await tx.stockCount.update({ where: { id: line.stockCountId }, data: { updatedAt: new Date() } });
+    await writeAuditLog(tx, { organizationId: input.organizationId, actorId: input.actorId, requestId: input.requestId, action: "STOCK_COUNT_LINE_REMOVE", entity: "StockCountLine", entityId: line.id, before: toJson(line) });
     return { removed: true };
   });
 };
@@ -328,6 +338,7 @@ export const applyStockCount = async (input: {
       tx,
       { key: input.idempotencyKey, route: "stockCounts.apply", userId: input.actorId },
       async () => {
+        await assertBaamReviewedVersion(tx, "StockCount", input.stockCountId);
         await tx.$queryRaw`SELECT "id" FROM "StockCount" WHERE "id" = ${input.stockCountId} FOR UPDATE`;
         const count = await tx.stockCount.findUnique({
           where: { id: input.stockCountId },
@@ -392,7 +403,7 @@ export const applyStockCount = async (input: {
           adjustments += 1;
         }
 
-        await tx.stockCount.update({
+        const applied = await tx.stockCount.update({
           where: { id: count.id },
           data: {
             status: StockCountStatus.APPLIED,
@@ -400,6 +411,7 @@ export const applyStockCount = async (input: {
             appliedById: input.actorId,
           },
         });
+        await writeAuditLog(tx, { organizationId: input.organizationId, actorId: input.actorId, requestId: input.requestId, action: "STOCK_COUNT_DOCUMENT_APPLY", entity: "StockCount", entityId: count.id, before: toJson(count), after: toJson(applied) });
 
         return { applied: true, adjustments };
       },
@@ -439,6 +451,7 @@ export const cancelStockCount = async (input: {
   requestId: string;
 }) => {
   return prisma.$transaction(async (tx) => {
+    await assertBaamReviewedVersion(tx, "StockCount", input.stockCountId);
     await tx.$queryRaw`SELECT "id" FROM "StockCount" WHERE "id" = ${input.stockCountId} FOR UPDATE`;
     const count = await tx.stockCount.findUnique({ where: { id: input.stockCountId } });
     if (!count || count.organizationId !== input.organizationId) {
@@ -448,9 +461,11 @@ export const cancelStockCount = async (input: {
       throw new AppError("stockCountLocked", "CONFLICT", 409);
     }
 
-    return tx.stockCount.update({
+    const cancelled = await tx.stockCount.update({
       where: { id: count.id },
       data: { status: StockCountStatus.CANCELLED },
     });
+    await writeAuditLog(tx, { organizationId: input.organizationId, actorId: input.actorId, requestId: input.requestId, action: "STOCK_COUNT_CANCEL", entity: "StockCount", entityId: count.id, before: toJson(count), after: toJson(cancelled) });
+    return cancelled;
   });
 };

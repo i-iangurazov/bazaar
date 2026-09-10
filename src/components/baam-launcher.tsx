@@ -1,102 +1,144 @@
 "use client";
-
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
-import { useTranslations } from "next-intl";
-
-import { ExternalLinkIcon, SparklesIcon } from "@/components/icons";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { useLocale } from "next-intl";
+import { ArrowUpRight } from "@phosphor-icons/react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "./ui/dialog";
 import { hasPermission, type RoleAccess } from "@/lib/roleAccess";
-import { baamLauncherLift } from "@/lib/baamLauncherPosition";
-
-const hiddenPrefixes = [
-  "/pos", "/inventory", "/reports/receipts", "/printing/receipt",
-  "/cash", "/finance/income", "/finance/expense", "/help/pos",
-];
+import { baamCopy } from "@/lib/baam/copy";
+import { BaamIcon } from "@/components/icons";
 
 export const canShowBaamLauncher = (access: RoleAccess, pathname: string) =>
-  hasPermission(access, "viewReports") &&
-  !hiddenPrefixes.some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`));
+  hasPermission(access, "viewReports") && !pathname.startsWith("/printing/");
 
-export function BaamLauncher({ access, pathname, children }: {
+export function BaamLauncher({
+  access,
+  pathname,
+  children,
+}: {
   access: RoleAccess;
-  /** Locale-normalized application path from AppShell. */
   pathname: string;
   children: ReactNode;
 }) {
-  const t = useTranslations("baam.assistant");
-  const tBaam = useTranslations("baam");
+  const locale = useLocale();
+  const [mounted, setMounted] = useState(false);
   const [open, setOpen] = useState(false);
-  const launcherRef = useRef<HTMLButtonElement>(null);
-  const [lift, setLift] = useState(0);
-  const liftRef = useRef(0);
-  const visible = canShowBaamLauncher(access, pathname);
+  const [bottom, setBottom] = useState(24);
+  const [viewport, setViewport] = useState<{ height: number; top: number }>();
+  useEffect(() => setMounted(true), []);
   useEffect(() => setOpen(false), [pathname]);
   useEffect(() => {
-    if (!visible) return;
+    if (!mounted) return;
     let frame = 0;
     const measure = () => {
       frame = 0;
-      const launcher = launcherRef.current;
-      if (!launcher || open) return;
-      const current = launcher.getBoundingClientRect();
-      if (!current.width || !current.height) return;
-      const base = { left: current.left, right: current.right, top: current.top + liftRef.current, bottom: current.bottom + liftRef.current };
-      const controls = Array.from(document.querySelectorAll<HTMLElement>("main button, main a[href], main input, main select, main textarea, main summary, main [role=button], main [role=combobox]"))
-        .filter(el => el !== launcher && !el.contains(launcher) && el.getClientRects().length && getComputedStyle(el).visibility !== "hidden")
-        .map(el => el.getBoundingClientRect());
-      const next = baamLauncherLift(base, controls);
-      if (next !== liftRef.current) { liftRef.current = next; setLift(next); }
+      const mobile = window.innerWidth < 768;
+      let space = mobile ? 96 : 24;
+      // Only explicitly marked fixed action bars affect the anchor. Table cells never do.
+      document.querySelectorAll<HTMLElement>("[data-baam-obstacle]").forEach((el) => {
+        if (getComputedStyle(el).position !== "fixed") return;
+        const box = el.getBoundingClientRect();
+        if (box.top < innerHeight && box.bottom > 0)
+          space = Math.max(space, innerHeight - box.top + 12);
+      });
+      setBottom(Math.min(space, window.innerHeight - 116));
+      const visual = window.visualViewport;
+      setViewport(visual ? { height: visual.height, top: visual.offsetTop } : undefined);
     };
-    const schedule = () => { if (!frame) frame = requestAnimationFrame(measure); };
-    window.addEventListener("scroll", schedule, true);
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(measure);
+    };
+    const observer = new ResizeObserver(schedule);
+    const mutation = new MutationObserver(schedule);
+    document.querySelectorAll("[data-baam-obstacle]").forEach((el) => observer.observe(el));
+    mutation.observe(document.body, { childList: true, subtree: true });
+    document.addEventListener("transitionend", schedule);
     window.addEventListener("resize", schedule);
-    const observer = new MutationObserver(schedule);
-    const main = document.querySelector("main");
-    if (main) observer.observe(main, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "style", "open", "hidden"] });
-    const resizeObserver = typeof ResizeObserver !== "undefined" ? new ResizeObserver(schedule) : null;
-    if (main) resizeObserver?.observe(main);
+    window.visualViewport?.addEventListener("resize", schedule);
+    window.visualViewport?.addEventListener("scroll", schedule);
     schedule();
-    return () => { cancelAnimationFrame(frame); observer.disconnect(); resizeObserver?.disconnect(); window.removeEventListener("scroll", schedule, true); window.removeEventListener("resize", schedule); };
-  }, [pathname, visible, open]);
-  if (!visible) return null;
-
-  const inWorkspace = pathname === "/baam" || pathname === "/baam/";
-  const focusWorkspace = () => {
-    const workspace = document.querySelector<HTMLElement>("[data-baam-workspace]");
-    const target = workspace?.querySelector<HTMLTextAreaElement>("textarea:not(:disabled)") ?? workspace;
-    target?.scrollIntoView({ block: "center" });
-    target?.focus({ preventScroll: true });
-  };
+    return () => {
+      observer.disconnect();
+      mutation.disconnect();
+      cancelAnimationFrame(frame);
+      document.removeEventListener("transitionend", schedule);
+      window.removeEventListener("resize", schedule);
+      window.visualViewport?.removeEventListener("resize", schedule);
+      window.visualViewport?.removeEventListener("scroll", schedule);
+    };
+  }, [mounted, pathname]);
+  if (!mounted || !canShowBaamLauncher(access, pathname)) return null;
   const launcher = (
     <button
-      type="button" aria-label={t("launcherLabel")} title={t("launcherLabel")} data-baam-launcher
-      ref={launcherRef} style={{ transform: lift ? `translateY(-${lift}px)` : undefined }}
-      onClick={inWorkspace ? focusWorkspace : undefined}
-      className="button-focus-ring fixed bottom-[calc(6rem+env(safe-area-inset-bottom,0px))] right-[max(1rem,env(safe-area-inset-right,0px))] z-30 flex h-14 w-14 flex-col items-center justify-center gap-0.5 rounded-full border border-primary-foreground/20 bg-primary text-primary-foreground shadow-lg shadow-primary/25 transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 md:bottom-6 md:right-6 [body:has([role=dialog][data-state=open])_&]:invisible [body:has([role=alertdialog][data-state=open])_&]:invisible"
+      type="button"
+      data-baam-launcher
+      aria-label={baamCopy(locale, "open")}
+      style={{ bottom: `calc(${bottom}px + env(safe-area-inset-bottom, 0px))` }}
+      className="button-focus-ring fixed right-[max(1rem,env(safe-area-inset-right,0px))] z-40 flex h-12 items-center gap-2 rounded-2xl border border-primary-foreground/15 bg-primary px-3 text-primary-foreground shadow-lg shadow-black/15 transition-colors hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 md:right-6 [body:has([role=alertdialog][data-state=open])_&]:invisible [body:has([role=dialog][data-state=open])_&]:invisible"
+      onClick={
+        pathname === "/baam"
+          ? () => {
+              const input = document.querySelector<HTMLTextAreaElement>(
+                "[data-baam-input]:not(:disabled)",
+              );
+              const target = input ?? document.querySelector<HTMLElement>("[data-baam-workspace]");
+              target?.focus({ preventScroll: true });
+              target?.scrollIntoView({ block: "nearest" });
+            }
+          : undefined
+      }
     >
-      <SparklesIcon className="h-5 w-5" aria-hidden />
-      <span className="text-[9px] font-bold leading-none tracking-wider" aria-hidden>{tBaam("title")}</span>
+      <BaamIcon className="h-8 w-8" />
+      <span className="text-xs font-bold tracking-[0.06em]">{baamCopy(locale, "name")}</span>
     </button>
   );
-
-  // The workspace already hosts this conversation. Focus it without mounting a second panel.
-  if (inWorkspace) return launcher;
-
-  return <Dialog open={open} onOpenChange={setOpen}>
-    <DialogTrigger asChild>{launcher}</DialogTrigger>
-    <DialogContent
-      className="bottom-0 left-0 right-0 top-auto h-[min(44rem,90dvh)] max-h-[90dvh] w-full max-w-none translate-x-0 translate-y-0 rounded-b-none rounded-t-2xl pb-[env(safe-area-inset-bottom,0px)] sm:bottom-4 sm:left-auto sm:right-4 sm:h-[min(42rem,calc(100dvh-2rem))] sm:max-h-[calc(100dvh-2rem)] sm:max-w-[26rem] sm:rounded-2xl"
-    >
-      <DialogHeader className="space-y-1">
-        <DialogTitle className="flex items-center gap-2"><SparklesIcon className="h-5 w-5 text-primary" aria-hidden />{tBaam("title")}</DialogTitle>
-        <DialogDescription className="sr-only">{t("drawerDescription")}</DialogDescription>
-        <Link href="/baam" prefetch={false} onClick={() => setOpen(false)}
-          className="button-focus-ring inline-flex min-h-8 items-center gap-1 rounded-md text-xs font-medium text-primary hover:underline">
-          {t("openWorkspace")}<ExternalLinkIcon className="h-3.5 w-3.5" aria-hidden />
-        </Link>
-      </DialogHeader>
-      <div className="min-h-0 flex-1">{open ? children : null}</div>
-    </DialogContent>
-  </Dialog>;
+  if (pathname === "/baam") return createPortal(launcher, document.body);
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      {createPortal(<DialogTrigger asChild>{launcher}</DialogTrigger>, document.body)}
+      <DialogContent
+        data-baam-drawer
+        style={
+          viewport && typeof window !== "undefined" && window.innerWidth < 640
+            ? { height: viewport.height, maxHeight: viewport.height, top: viewport.top }
+            : undefined
+        }
+        className="bottom-0 left-0 right-0 top-auto h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 rounded-none pb-[env(safe-area-inset-bottom,0px)] sm:bottom-4 sm:left-auto sm:right-4 sm:h-[min(48rem,calc(100dvh-2rem))] sm:max-h-[calc(100dvh-2rem)] sm:max-w-[29rem] sm:rounded-2xl"
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          requestAnimationFrame(() =>
+            document
+              .querySelector<HTMLTextAreaElement>("[data-baam-drawer] [data-baam-input]")
+              ?.focus({ preventScroll: true }),
+          );
+        }}
+      >
+        <DialogHeader className="py-3">
+          <DialogTitle className="flex items-center gap-2">
+            <BaamIcon className="h-8 w-8 text-primary" />
+            <span>{baamCopy(locale, "name")}</span>
+          </DialogTitle>
+          <DialogDescription className="sr-only">{baamCopy(locale, "subtitle")}</DialogDescription>
+          <Link
+            href="/baam"
+            prefetch={false}
+            onClick={() => setOpen(false)}
+            className="button-focus-ring inline-flex min-h-7 items-center gap-1 rounded text-xs text-muted-foreground hover:text-primary"
+          >
+            {baamCopy(locale, "workspace")}
+            <ArrowUpRight size={13} />
+          </Link>
+        </DialogHeader>
+        <div className="min-h-0 flex-1">{open ? children : null}</div>
+      </DialogContent>
+    </Dialog>
+  );
 }

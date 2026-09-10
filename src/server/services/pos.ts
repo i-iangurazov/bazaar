@@ -29,6 +29,7 @@ import {
 } from "@/server/metrics/metrics";
 import { processAdapterFiscalReceipt, queueFiscalReceipt } from "@/server/services/kkmConnector";
 import { writeAuditLog } from "@/server/services/audit";
+import { assertBaamReviewedVersion } from "@/server/services/baamExecutionContext";
 import { AppError } from "@/server/services/errors";
 import { applyStockMovement } from "@/server/services/inventory";
 import { withIdempotency } from "@/server/services/idempotency";
@@ -90,6 +91,7 @@ const uniqueConstraintTarget = (error: Prisma.PrismaClientKnownRequestError) => 
 type PosCheckoutClientState = {
   visibleCartLineCount?: number;
   visibleCartTotalKgs?: number;
+  reviewedLines?: Array<{ productId: string; variantId?: string | null; qty: number; unitPriceKgs: number }>;
 };
 
 const safeErrorLogFields = (error: unknown) => {
@@ -680,6 +682,7 @@ const lockCustomerOrderForUpdate = async (
   await tx.$queryRaw`
     SELECT id FROM "CustomerOrder" WHERE id = ${customerOrderId} FOR UPDATE
   `;
+  await assertBaamReviewedVersion(tx, "CustomerOrder", customerOrderId);
 };
 
 const lockPosRegisterForUpdate = async (tx: Prisma.TransactionClient, registerId: string) => {
@@ -2069,6 +2072,7 @@ export const closeRegisterShift = async (input: {
 export const createPosSaleDraft = async (input: {
   organizationId: string;
   registerId: string;
+  requireNewDraft?: boolean;
   customerId?: string | null;
   customerName?: string | null;
   customerEmail?: string | null;
@@ -2140,6 +2144,7 @@ export const createPosSaleDraft = async (input: {
       });
 
       if (existingDraft) {
+        if (input.requireNewDraft) throw new AppError("baamExistingCart", "CONFLICT", 409);
         // If an old draft is tied to a closed shift, archive it and create a fresh draft.
         if (existingDraft.shift?.status !== RegisterShiftStatus.OPEN) {
           await tx.customerOrder.update({
@@ -2297,7 +2302,7 @@ export const createPosSaleDraft = async (input: {
     return await createDraftInTransaction();
   } catch (error) {
     // If another request created the draft first, return that draft from a fresh query context.
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002" && !input.requireNewDraft) {
       const concurrentDraft = await prisma.customerOrder.findFirst({
         where: {
           organizationId: input.organizationId,
@@ -4709,6 +4714,13 @@ export const completePosSale = async (input: {
             };
           }
 
+          if (input.clientState?.reviewedLines) {
+            const signature = (lines: Array<{ productId: string; variantId?: string | null; qty: number; unitPriceKgs: number | Prisma.Decimal }>) =>
+              JSON.stringify(lines.map(line => [line.productId, line.variantId ?? "BASE", line.qty, Number(line.unitPriceKgs)]).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))));
+            if (signature(input.clientState.reviewedLines) !== signature(sale.lines)) {
+              throw new AppError("baamCartChanged", "CONFLICT", 409);
+            }
+          }
           if (sale.status !== CustomerOrderStatus.DRAFT) {
             throw new AppError("posSaleNotEditable", "CONFLICT", 409);
           }
@@ -5258,6 +5270,8 @@ export const addSaleReturnLine = async (input: {
   user: StoreAccessUser;
 }) => {
   return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT "id" FROM "SaleReturn" WHERE "id" = ${input.saleReturnId} FOR UPDATE`;
+    await assertBaamReviewedVersion(tx, "SaleReturn", input.saleReturnId);
     const saleReturn = await tx.saleReturn.findFirst({
       where: { id: input.saleReturnId, organizationId: input.organizationId },
       select: {
@@ -5349,6 +5363,11 @@ export const updateSaleReturnLine = async (input: {
   user: StoreAccessUser;
 }) => {
   return prisma.$transaction(async (tx) => {
+    const identity = await tx.saleReturnLine.findUnique({ where: { id: input.returnLineId }, select: { saleReturnId: true } });
+    if (identity) {
+      await tx.$queryRaw`SELECT "id" FROM "SaleReturn" WHERE "id" = ${identity.saleReturnId} FOR UPDATE`;
+      await assertBaamReviewedVersion(tx, "SaleReturn", identity.saleReturnId);
+    }
     const line = await tx.saleReturnLine.findUnique({
       where: { id: input.returnLineId },
       include: {
@@ -5414,6 +5433,11 @@ export const removeSaleReturnLine = async (input: {
   user: StoreAccessUser;
 }) => {
   return prisma.$transaction(async (tx) => {
+    const identity = await tx.saleReturnLine.findUnique({ where: { id: input.returnLineId }, select: { saleReturnId: true } });
+    if (identity) {
+      await tx.$queryRaw`SELECT "id" FROM "SaleReturn" WHERE "id" = ${identity.saleReturnId} FOR UPDATE`;
+      await assertBaamReviewedVersion(tx, "SaleReturn", identity.saleReturnId);
+    }
     const line = await tx.saleReturnLine.findUnique({
       where: { id: input.returnLineId },
       include: {
@@ -6074,6 +6098,7 @@ export const completeSaleReturn = async (input: {
         userId: input.actorId,
       },
       async () => {
+        await assertBaamReviewedVersion(tx, "SaleReturn", input.saleReturnId);
         await tx.$queryRaw`
           SELECT id FROM "SaleReturn" WHERE id = ${input.saleReturnId} FOR UPDATE
         `;

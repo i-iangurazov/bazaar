@@ -1,3 +1,4 @@
+import { assertBaamReviewedVersion } from "@/server/services/baamExecutionContext";
 import {
   CatalogDiscountType,
   Prisma,
@@ -946,6 +947,7 @@ export const setCustomerOrderCustomer = async (input: {
   requestId: string;
 }) => {
   return prisma.$transaction(async (tx) => {
+    await assertBaamReviewedVersion(tx, "CustomerOrder", input.customerOrderId);
     await tx.$queryRaw`SELECT "id" FROM "CustomerOrder" WHERE "id" = ${input.customerOrderId} FOR UPDATE`;
     const order = await tx.customerOrder.findUnique({ where: { id: input.customerOrderId } });
     if (!order) {
@@ -1109,6 +1111,7 @@ export const addCustomerOrderLine = async (input: {
   requestId: string;
 }) => {
   const result = await prisma.$transaction(async (tx) => {
+    await assertBaamReviewedVersion(tx, "CustomerOrder", input.customerOrderId);
     await tx.$queryRaw`SELECT "id" FROM "CustomerOrder" WHERE "id" = ${input.customerOrderId} FOR UPDATE`;
     const order = await tx.customerOrder.findUnique({ where: { id: input.customerOrderId } });
     if (!order) {
@@ -1208,6 +1211,7 @@ export const updateCustomerOrderLine = async (input: {
 }) => {
   const result = await prisma.$transaction(async (tx) => {
     const identity = await tx.customerOrderLine.findUnique({ where: { id: input.lineId }, select: { customerOrderId: true } });
+    if (identity) await assertBaamReviewedVersion(tx, "CustomerOrder", identity.customerOrderId);
     if (identity) await tx.$queryRaw`SELECT "id" FROM "CustomerOrder" WHERE "id" = ${identity.customerOrderId} FOR UPDATE`;
     const line = await tx.customerOrderLine.findUnique({
       where: { id: input.lineId },
@@ -1270,6 +1274,7 @@ export const removeCustomerOrderLine = async (input: {
 }) => {
   const result = await prisma.$transaction(async (tx) => {
     const identity = await tx.customerOrderLine.findUnique({ where: { id: input.lineId }, select: { customerOrderId: true } });
+    if (identity) await assertBaamReviewedVersion(tx, "CustomerOrder", identity.customerOrderId);
     if (identity) await tx.$queryRaw`SELECT "id" FROM "CustomerOrder" WHERE "id" = ${identity.customerOrderId} FOR UPDATE`;
     const line = await tx.customerOrderLine.findUnique({
       where: { id: input.lineId },
@@ -1317,6 +1322,7 @@ const updateOrderStatus = async (input: {
   to: CustomerOrderStatus;
 }) => {
   const result = await prisma.$transaction(async (tx) => {
+    await assertBaamReviewedVersion(tx, "CustomerOrder", input.customerOrderId);
     await tx.$queryRaw`
       SELECT id FROM "CustomerOrder" WHERE id = ${input.customerOrderId} FOR UPDATE
     `;
@@ -1500,7 +1506,8 @@ export const completeCustomerOrder = async (input: {
         userId: input.actorId,
       },
       async () => {
-        await tx.$queryRaw`
+        await assertBaamReviewedVersion(tx, "CustomerOrder", input.customerOrderId);
+    await tx.$queryRaw`
           SELECT id FROM "CustomerOrder" WHERE id = ${input.customerOrderId} FOR UPDATE
         `;
 

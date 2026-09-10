@@ -1,3 +1,4 @@
+import { assertBaamReviewedVersion } from "@/server/services/baamExecutionContext";
 import { randomUUID } from "node:crypto";
 import type { InventorySnapshot } from "@prisma/client";
 import {
@@ -152,6 +153,7 @@ const lockPurchaseOrderForLineId = async (
   if (!purchaseOrderId) {
     throw new AppError("poLineNotFound", "NOT_FOUND", 404);
   }
+  await assertBaamReviewedVersion(tx, "PurchaseOrder", purchaseOrderId);
   return purchaseOrderId;
 };
 
@@ -170,6 +172,7 @@ const lockPurchaseOrderForOrganization = async (
   if (!rows[0]) {
     throw new AppError("poNotFound", "NOT_FOUND", 404);
   }
+  await assertBaamReviewedVersion(tx, "PurchaseOrder", purchaseOrderId);
 };
 
 export type CreatePurchaseOrderInput = {
@@ -612,6 +615,7 @@ export const submitPurchaseOrder = async (input: {
 
   const result = await prisma.$transaction(async (tx) => {
     await lockPurchaseOrderIds(tx, [input.purchaseOrderId]);
+    await assertBaamReviewedVersion(tx, "PurchaseOrder", input.purchaseOrderId);
     const po = await tx.purchaseOrder.findUnique({
       where: { id: input.purchaseOrderId },
       include: { lines: { orderBy: [{ position: "asc" }, { id: "asc" }] }, store: true },
@@ -693,6 +697,7 @@ export const approvePurchaseOrder = async (input: {
 
   const result = await prisma.$transaction(async (tx) => {
     await lockPurchaseOrderIds(tx, [input.purchaseOrderId]);
+    await assertBaamReviewedVersion(tx, "PurchaseOrder", input.purchaseOrderId);
     const po = await tx.purchaseOrder.findUnique({
       where: { id: input.purchaseOrderId },
     });
@@ -761,7 +766,8 @@ export const receivePurchaseOrder = async (input: {
         userId: input.actorId,
       },
       async () => {
-        await tx.$queryRaw`
+        await assertBaamReviewedVersion(tx, "PurchaseOrder", input.purchaseOrderId);
+          await tx.$queryRaw`
           SELECT id FROM "PurchaseOrder" WHERE id = ${input.purchaseOrderId} FOR UPDATE
         `;
 
@@ -980,6 +986,7 @@ export const cancelPurchaseOrder = async (input: {
 
   const result = await prisma.$transaction(async (tx) => {
     await lockPurchaseOrderIds(tx, [input.purchaseOrderId]);
+    await assertBaamReviewedVersion(tx, "PurchaseOrder", input.purchaseOrderId);
     const po = await tx.purchaseOrder.findUnique({
       where: { id: input.purchaseOrderId },
       include: { lines: { orderBy: [{ position: "asc" }, { id: "asc" }] }, store: true },

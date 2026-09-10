@@ -1,373 +1,406 @@
 // @vitest-environment jsdom
+import { useState } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import messages from "../../messages/en.json";
 import { BaamAssistant, BaamAssistantProvider } from "@/components/baam-assistant";
+import type { BaamData } from "@/components/use-baam-companion";
 
-const mocks = vi.hoisted(() => ({ pathname: vi.fn(), session: vi.fn(), capabilities: vi.fn(), overview: vi.fn(), mutation: vi.fn(), ask: vi.fn(), retryCapabilities: vi.fn(), retryOverview: vi.fn() }));
-vi.mock("next/navigation", () => ({ usePathname: mocks.pathname }));
+const mocks = vi.hoisted(() => ({
+  pathname: vi.fn(),
+  session: vi.fn(),
+  capabilities: vi.fn(),
+  conversation: vi.fn(),
+  history: vi.fn(),
+  create: vi.fn(),
+  change: vi.fn(),
+  send: vi.fn(),
+  stop: vi.fn(),
+  execute: vi.fn(),
+  cancel: vi.fn(),
+  fetch: vi.fn(),
+  invalidate: vi.fn(),
+}));
+vi.mock("next/navigation", () => ({
+  usePathname: mocks.pathname,
+  useSearchParams: () => new URLSearchParams("registerId=register"),
+}));
 vi.mock("next-auth/react", () => ({ useSession: mocks.session }));
-vi.mock("@/lib/trpc", () => ({ trpc: { baam: {
-  capabilities: { useQuery: mocks.capabilities }, overview: { useQuery: mocks.overview }, ask: { useMutation: mocks.mutation },
-} } }));
-vi.mock("@/components/page-header", () => ({ PageHeader: ({ title }: { title: string }) => <h1>{title}</h1> }));
-import BaamPage from "@/app/(app)/baam/page";
-
-const audience = { actorId: "actor", organizationId: "org" };
-const capabilities = () => ({ data: { available: true, reason: "configured", mode: "ai", audience }, error: null, isFetching: false, refetch: mocks.retryCapabilities });
-const overview = () => ({ data: { audience, scope: { organizationId: "org", storeIds: ["store"], availableStores: [{ id: "store", name: "Authorized synthetic store" }] } }, error: null, isFetching: false, refetch: mocks.retryOverview });
-const answer = () => ({
-  status: "answer" as const,
-  scope: { dateFrom: "2026-09-01", dateTo: "2026-09-02", storeId: "store", timeZone: "Asia/Bishkek", storeNames: ["Authorized synthetic store"], reason: "Selected dates and authorized store.", source: "controls", comparison: { dateFrom: "2026-08-30", dateTo: "2026-08-31" } },
-  contextToken: "opaque-server-context",
-  actions: [], products: [], productEvidence: null,
-  analyticsHref: "/reports/analytics?dateFrom=2026-09-01&dateTo=2026-09-02&storeId=store",
-  answer: "Recorded sales after returns are -30.00 KGS. Check the completed returns before inferring a sales decline.",
-  mode: "ai", audience, followUps: ["Check recorded payments"],
-  evidence: {
-    period: { dateFrom: "2026-09-01", dateTo: "2026-09-02", timeZone: "Asia/Bishkek" },
-    comparisonPeriod: { dateFrom: "2026-08-30", dateTo: "2026-08-31", timeZone: "Asia/Bishkek" },
-    storeNames: ["Authorized synthetic store"], queriedAt: "2026-09-05T12:00:00.000Z",
-    currentQueriedAt: "2026-09-05T12:00:00.000Z", previousQueriedAt: "2026-09-05T12:00:01.000Z",
-    metricVersion: "completed-sales-kgs-v1", queryHashes: ["synthetic"],
+vi.mock("@/lib/trpc", () => ({
+  trpc: {
+    useUtils: () => ({
+      invalidate: mocks.invalidate,
+      baam: {
+        conversation: { fetch: mocks.fetch, invalidate: mocks.invalidate },
+        conversations: { invalidate: mocks.invalidate },
+      },
+    }),
+    baam: {
+      companion: { useQuery: mocks.capabilities },
+      conversation: { useQuery: mocks.conversation },
+      conversations: { useInfiniteQuery: mocks.history },
+      createConversation: { useMutation: () => ({ mutateAsync: mocks.create }) },
+      changeConversation: { useMutation: () => ({ mutateAsync: mocks.change }) },
+      send: { useMutation: () => ({ mutateAsync: mocks.send, isLoading: false }) },
+      stop: { useMutation: () => ({ mutateAsync: mocks.stop }) },
+      execute: { useMutation: () => ({ mutateAsync: mocks.execute }) },
+      cancelAction: { useMutation: () => ({ mutateAsync: mocks.cancel }) },
+    },
   },
+}));
+const capabilities = () => ({
+  data: {
+    actorId: "actor",
+    organizationId: "org",
+    configured: true,
+    voiceConfigured: true,
+    stores: [{ id: "store", name: "Test store" }],
+  },
+  error: null,
 });
-const shell = (children: React.ReactNode) => <NextIntlClientProvider locale="en" messages={{ baam: messages.baam, errors: messages.errors }}>
-  <BaamAssistantProvider>{children}</BaamAssistantProvider>
-</NextIntlClientProvider>;
-const page = () => shell(<BaamPage />);
-const input = () => screen.getByRole("textbox", { name: "Your question for BAAM" });
-const submit = (question = "Explain returns") => {
-  fireEvent.change(input(), { target: { value: question } });
-  fireEvent.click(screen.getByRole("button", { name: "Send question" }));
+const blank = (): BaamData => ({
+  conversation: {
+    id: "dialog",
+    userId: "actor",
+    organizationId: "org",
+    title: "Test dialog",
+    storeId: "store",
+    scopeStoreIds: ["store"],
+    revision: 0,
+    nextSequence: 0,
+    activeTurnId: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    deletedAt: null,
+  },
+  messages: [],
+  actions: [],
+  activeTurn: null,
+  next: null,
+});
+let saved: BaamData;
+const entry = (
+  text: string,
+  sequence: number,
+  role = "assistant",
+): BaamData["messages"][number] => ({
+  id: `m-${sequence}`,
+  conversationId: "dialog",
+  turnId: "turn",
+  text,
+  role,
+  sequence,
+  parts: [],
+  createdAt: new Date(),
+});
+const shell = (open = true) => (
+  <NextIntlClientProvider locale="en" messages={{ errors: messages.errors }}>
+    <BaamAssistantProvider>{open ? <BaamAssistant /> : null}</BaamAssistantProvider>
+  </NextIntlClientProvider>
+);
+const input = () =>
+  screen.getByRole("textbox", {
+    name: "Describe a task or ask a question…",
+  }) as HTMLTextAreaElement;
+const submit = (text = "Receive 3 boxes") => {
+  fireEvent.change(input(), { target: { value: text } });
+  fireEvent.click(screen.getByRole("button", { name: "Send message" }));
 };
-
 beforeEach(() => {
   vi.resetAllMocks();
-  mocks.pathname.mockReturnValue("/baam");
-  mocks.session.mockReturnValue({ status: "authenticated", data: { user: { id: "actor", organizationId: "org", role: "MANAGER" } } });
-  mocks.capabilities.mockReturnValue(capabilities()); mocks.overview.mockReturnValue(overview());
-  mocks.mutation.mockReturnValue({ mutateAsync: mocks.ask, isLoading: false }); mocks.ask.mockResolvedValue(answer());
+  localStorage.clear();
+  sessionStorage.clear();
+  saved = blank();
+  localStorage.setItem("baam-dialog:org:actor", "dialog");
+  mocks.pathname.mockReturnValue("/inventory");
+  mocks.session.mockReturnValue({
+    status: "authenticated",
+    data: { user: { id: "actor", organizationId: "org", role: "MANAGER" } },
+  });
+  mocks.capabilities.mockReturnValue(capabilities());
+  mocks.conversation.mockImplementation((args: { id: string }) => ({
+    data: args.id === saved.conversation.id ? saved : undefined,
+    error: null,
+    isFetching: false,
+  }));
+  mocks.fetch.mockImplementation(async () => saved);
+  mocks.invalidate.mockResolvedValue(undefined);
+  mocks.create.mockResolvedValue({ id: "new-dialog" });
+  mocks.history.mockReturnValue({
+    data: { pages: [{ items: [saved.conversation] }] },
+    isLoading: false,
+    hasNextPage: false,
+  });
+  mocks.send.mockImplementation(async (request: { text: string }) => {
+    saved = {
+      ...saved,
+      messages: [entry(request.text, 1, "user"), entry("Which supplier should I use?", 2)],
+    };
+  });
 });
 afterEach(cleanup);
 
-describe("BAAM assistant workspace", () => {
-  it("starts with questions and suggestions without a duplicate metric dashboard or automatic AI call", () => {
-    render(page());
-    expect(screen.getByText("What would you like to understand?")).toBeTruthy();
-    expect(screen.getByRole("button", { name: messages.baam.assistant.briefPrompt })).toBeTruthy();
-    expect(screen.queryByRole("table")).toBeNull(); expect(screen.queryByTestId("baam-metric-net")).toBeNull();
-    expect(mocks.ask).not.toHaveBeenCalled();
+describe("BAAM persistent companion workspace", () => {
+  it("preserves the open launcher subtree while the client session resolves", () => {
+    function Probe() {
+      const [open, setOpen] = useState(false);
+      return <button onClick={() => setOpen(true)}>{open ? "Still open" : "Open early"}</button>;
+    }
+    mocks.session.mockReturnValue({ data: null, status: "loading" });
+    const view = render(
+      <BaamAssistantProvider>
+        <Probe />
+      </BaamAssistantProvider>,
+    );
+    fireEvent.click(screen.getByText("Open early"));
+    mocks.session.mockReturnValue({
+      data: { user: { id: "actor", organizationId: "org", role: "ADMIN" } },
+      status: "authenticated",
+    });
+    view.rerender(
+      <BaamAssistantProvider>
+        <Probe />
+      </BaamAssistantProvider>,
+    );
+    expect(screen.getByText("Still open")).toBeTruthy();
   });
-
-  it("submits a scoped question and shows the real answer with expandable evidence and followups", async () => {
-    render(page());
-    fireEvent.click(screen.getByText(/Answer scope/));
-    fireEvent.change(screen.getByLabelText("From"), { target: { value: "2026-09-01" } });
-    fireEvent.change(screen.getByLabelText("To"), { target: { value: "2026-09-02" } });
-    fireEvent.change(screen.getByRole("combobox", { name: "Store" }), { target: { value: "store" } });
+  it("opens at the current input with page-specific suggestions and no automatic provider call", () => {
+    render(shell());
+    expect(document.activeElement).toBe(input());
+    expect(screen.getByRole("button", { name: "Receive stock" })).toBeTruthy();
+    expect(screen.queryByRole("table")).toBeNull();
+    expect(mocks.send).not.toHaveBeenCalled();
+  });
+  it("sends one bounded page context with a durable request ID and displays the saved current answer", async () => {
+    render(shell());
     submit();
-    await screen.findByText(answer().answer);
-    expect(mocks.ask).toHaveBeenCalledWith({ question: "Explain returns", dateFrom: "2026-09-01", dateTo: "2026-09-02", storeId: "store", locale: "en", pageContext: { kind: "section", section: "baam" } });
-    fireEvent.click(screen.getByText("Evidence and scope"));
-    expect(screen.getByText(/Applied period: 2026-09-01 to 2026-09-02/).textContent).toContain("Authorized synthetic store");
-    expect(screen.getByText(/Source completeness is unknown/)).toBeTruthy();
-    expect(screen.getByText(/Metric definitions: completed-sales-kgs-v1/)).toBeTruthy();
-    expect(screen.getByText(/Selected-period records queried at/)).toBeTruthy();
-    expect(screen.getByText(/Comparison-period records queried at/)).toBeTruthy();
-    expect(screen.getByRole("link", { name: messages.baam.assistant.openAnalytics }).getAttribute("href")).toBe(answer().analyticsHref);
-    fireEvent.click(screen.getByRole("button", { name: "Check recorded payments" }));
-    await waitFor(() => expect(mocks.ask).toHaveBeenCalledTimes(2));
-    expect(mocks.ask.mock.calls[1][0]).toMatchObject({ contextToken: "opaque-server-context", dateFrom: "2026-09-01", dateTo: "2026-09-02", storeId: "store" });
+    await waitFor(() => expect(screen.getByText("Which supplier should I use?")).toBeTruthy());
+    expect(mocks.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: "dialog",
+        revision: 0,
+        text: "Receive 3 boxes",
+        locale: "en",
+        attachmentIds: [],
+        page: { path: "/inventory", registerId: "register" },
+        clientRequestId: expect.stringMatching(/^[\da-f-]{36}$/),
+      }),
+    );
+    expect(mocks.create).not.toHaveBeenCalled();
   });
-
-  it("shows truthful unconfigured availability and sends no questions or overview requests", () => {
-    mocks.capabilities.mockReturnValue({ ...capabilities(), data: { ...capabilities().data, available: false, reason: "not_configured" } });
-    render(page());
-    expect(screen.getByText(messages.errors.baamNotConfigured)).toBeTruthy();
-    expect((input() as HTMLTextAreaElement).disabled).toBe(true);
-    expect(mocks.overview.mock.calls[0][1].enabled).toBe(false); expect(mocks.ask).not.toHaveBeenCalled();
+  it("preserves a failed request and retries with the SAME ID after closing the drawer", async () => {
+    mocks.send.mockRejectedValueOnce(new Error("network"));
+    const view = render(shell());
+    submit();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy());
+    const request = mocks.send.mock.calls[0][0];
+    view.rerender(shell(false));
+    view.rerender(shell());
+    fireEvent.click(await screen.findByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(mocks.send).toHaveBeenCalledTimes(2));
+    expect(mocks.send.mock.calls[1][0]).toEqual(request);
   });
-
-  it.each(["STAFF", "CASHIER"])("blocks %s before activating any assistant query", role => {
-    mocks.session.mockReturnValue({ status: "authenticated", data: { user: { id: "actor", organizationId: "org", role } } });
-    render(page()); expect(screen.getByRole("alert")).toBeTruthy();
-    expect(mocks.capabilities).not.toHaveBeenCalled(); expect(mocks.overview).not.toHaveBeenCalled(); expect(mocks.mutation).not.toHaveBeenCalled();
+  it("prevents duplicate sends while a request is pending and preserves a newly typed draft", async () => {
+    let finish!: () => void;
+    mocks.send.mockReturnValue(
+      new Promise<void>((r) => {
+        finish = r;
+      }),
+    );
+    render(shell());
+    submit();
+    submit();
+    await waitFor(() => expect(mocks.send).toHaveBeenCalledTimes(1));
+    fireEvent.change(input(), { target: { value: "A different question" } });
+    await act(async () => {
+      finish();
+    });
+    expect(input().value).toBe("A different question");
   });
-
-  it("rejects stale capability/store cache from another actor", () => {
-    mocks.capabilities.mockReturnValue({ ...capabilities(), data: { ...capabilities().data, audience: { ...audience, actorId: "previous" } } });
-    mocks.overview.mockReturnValue({ ...overview(), data: { ...overview().data, audience: { ...audience, actorId: "previous" } } });
-    render(page()); expect((input() as HTMLTextAreaElement).disabled).toBe(true);
-    expect(screen.queryByRole("option", { name: "Authorized synthetic store" })).toBeNull(); expect(mocks.ask).not.toHaveBeenCalled();
+  it("keeps late responses in their original dialog while a new dialog is sending", async () => {
+    let finishOld!: () => void, finishNew!: () => void;
+    mocks.send
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((r) => {
+            finishOld = r;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((r) => {
+            finishNew = r;
+          }),
+      );
+    mocks.fetch.mockImplementation(async ({ id }: { id: string }) => ({
+      ...saved,
+      conversation: { ...saved.conversation, id },
+    }));
+    render(shell());
+    submit("Old request");
+    await waitFor(() => expect(mocks.send).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole("button", { name: "New conversation" }));
+    submit("New request");
+    await waitFor(() => expect(mocks.send).toHaveBeenCalledTimes(2));
+    fireEvent.change(input(), { target: { value: "New draft" } });
+    await act(async () => {
+      finishOld();
+    });
+    expect(input().value).toBe("New draft");
+    expect(
+      (screen.getByRole("button", { name: "Send message" }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    await act(async () => {
+      finishNew();
+    });
+    expect(input().value).toBe("New draft");
+    expect(mocks.send.mock.calls.map(([r]) => r.conversationId)).toEqual(["dialog", "new-dialog"]);
   });
-
-  it("rejects a reply whose audience does not match the current actor", async () => {
-    mocks.ask.mockResolvedValue({ ...answer(), audience: { ...audience, actorId: "wrong" } });
-    render(page()); submit();
-    await screen.findByRole("alert"); expect(screen.queryByText(answer().answer)).toBeNull();
+  it("retains a draft across drawer close and full-page handoff", () => {
+    const view = render(shell());
+    fireEvent.change(input(), { target: { value: "Draft with a product name" } });
+    view.rerender(shell(false));
+    mocks.pathname.mockReturnValue("/baam");
+    view.rerender(shell());
+    expect(input().value).toBe("Draft with a product name");
+    expect(mocks.send).not.toHaveBeenCalled();
   });
-
-  it("retains a failed question and scope, then retries without inventing an answer", async () => {
-    mocks.ask.mockRejectedValueOnce({ message: "baamUnavailable" });
-    render(page()); submit("Explain the change");
-    await screen.findByText(messages.errors.baamUnavailable);
-    expect((input() as HTMLTextAreaElement).value).toBe("Explain the change"); expect(screen.queryByText(answer().answer)).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Send question" }));
-    await screen.findByText(answer().answer);
-    expect(mocks.ask.mock.calls[0][0]).toEqual(mocks.ask.mock.calls[1][0]);
+  it.each(["foreign actor", "revoked permission", "removed store", "foreign conversation"])(
+    "hides old content after %s",
+    (reason) => {
+      saved.messages = [entry("Private recorded sales", 1)];
+      const view = render(shell());
+      expect(screen.getByText("Private recorded sales")).toBeTruthy();
+      const cap = capabilities();
+      if (reason === "foreign actor") cap.data.actorId = "other";
+      if (reason === "removed store") cap.data.stores = [];
+      if (reason === "revoked permission")
+        mocks.capabilities.mockReturnValue({ ...cap, error: new Error("forbidden") });
+      else mocks.capabilities.mockReturnValue(cap);
+      if (reason === "foreign conversation")
+        saved = { ...saved, conversation: { ...saved.conversation, userId: "other" } };
+      view.rerender(shell());
+      expect(screen.queryByText("Private recorded sales")).toBeNull();
+    },
+  );
+  it.each(["STAFF", "CASHIER"])("denies %s even with ownership flags", (role) => {
+    mocks.session.mockReturnValue({
+      data: { user: { id: "actor", organizationId: "org", role, isOrgOwner: true } },
+    });
+    render(shell());
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(mocks.capabilities).not.toHaveBeenCalled();
   });
-
-  it("prevents duplicate submissions while an earlier question is pending", async () => {
-    let resolveAnswer!: (value: ReturnType<typeof answer>) => void;
-    mocks.ask.mockReturnValue(new Promise(resolve => { resolveAnswer = resolve; }));
-    render(page()); submit(); fireEvent.click(screen.getByRole("button", { name: "Send question" }));
-    expect(mocks.ask).toHaveBeenCalledTimes(1);
-    await act(async () => resolveAnswer(answer()));
+  it("clears visible history on logout, and restores only the signed-in user's server history", () => {
+    saved.messages = [entry("Private saved answer", 1)];
+    const view = render(shell());
+    mocks.session.mockReturnValue({ data: null, status: "unauthenticated" });
+    view.rerender(shell());
+    expect(screen.queryByText("Private saved answer")).toBeNull();
+    mocks.session.mockReturnValue({
+      data: { user: { id: "different", organizationId: "org", role: "ADMIN" } },
+    });
+    view.rerender(shell());
+    expect(screen.queryByText("Private saved answer")).toBeNull();
   });
-
-  it("hides previous answers after a failed permission refresh", async () => {
-    const view = render(page()); submit(); await screen.findByText(answer().answer);
-    mocks.overview.mockReturnValue({ ...overview(), error: { message: "storeAccessDenied", data: { code: "FORBIDDEN" } } });
-    view.rerender(page());
-    expect(screen.queryByText(answer().answer)).toBeNull(); expect(screen.getByRole("alert")).toBeTruthy();
+  it("opens a server history item and starts a clean separate dialog", () => {
+    saved.messages = [entry("Old answer", 1)];
+    render(shell());
+    fireEvent.click(screen.getByRole("button", { name: "Conversations" }));
+    fireEvent.click(screen.getByRole("button", { name: /Test dialog/ }));
+    expect(screen.getByText("Old answer")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "New conversation" }));
+    expect(screen.queryByText("Old answer")).toBeNull();
+    expect(input().value).toBe("");
   });
-
-  it("clears the conversation and draft when the authenticated account changes", async () => {
-    const view = render(page()); submit(); await screen.findByText(answer().answer);
-    mocks.session.mockReturnValue({ status: "authenticated", data: { user: { id: "next-actor", organizationId: "org", role: "MANAGER" } } });
-    mocks.capabilities.mockReturnValue({ ...capabilities(), data: { ...capabilities().data, audience: { ...audience, actorId: "next-actor" } } });
-    mocks.overview.mockReturnValue({ ...overview(), data: { ...overview().data, audience: { ...audience, actorId: "next-actor" } } });
-    view.rerender(page());
-    expect(screen.queryByText(answer().answer)).toBeNull(); expect((input() as HTMLTextAreaElement).value).toBe("");
+  it("renames, deletes and explicitly changes store with the server revision", async () => {
+    render(shell());
+    fireEvent.click(screen.getByRole("button", { name: "Rename" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Rename" }), {
+      target: { value: "Stock request" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(mocks.change).toHaveBeenCalledWith({
+        id: "dialog",
+        revision: 0,
+        title: "Stock request",
+      }),
+    );
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "" } });
+    await waitFor(() =>
+      expect(mocks.change).toHaveBeenCalledWith({ id: "dialog", revision: 0, storeId: null }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Delete conversation" }));
+    await waitFor(() =>
+      expect(mocks.change).toHaveBeenCalledWith({ id: "dialog", revision: 0, remove: true }),
+    );
   });
-
-  it("hides old answers after a successful refresh removes an authorized store", async () => {
-    const view = render(page()); submit(); await screen.findByText(answer().answer);
-    mocks.overview.mockReturnValue({ ...overview(), data: { ...overview().data, scope: {
-      organizationId: "org", storeIds: ["other-store"], availableStores: [{ id: "other-store", name: "Another authorized store" }],
-    } } });
-    view.rerender(page());
-    expect(screen.queryByText(answer().answer)).toBeNull();
-    expect(screen.queryByText(/Applied period:/)).toBeNull();
-    expect((input() as HTMLTextAreaElement).disabled).toBe(true);
-    fireEvent.change(screen.getByRole("combobox", { name: "Store" }), { target: { value: "other-store" } });
-    mocks.ask.mockResolvedValue({ ...answer(), scope: { ...answer().scope, storeId: "other-store", storeNames: ["Another authorized store"] }, answer: "Only the newly authorized store was queried." });
-    submit(); await screen.findByText("Only the newly authorized store was queried.");
-    expect(screen.queryByText(answer().answer)).toBeNull();
+  it("does not pull a reader away from old messages when a reply arrives", () => {
+    saved.messages = [entry("First", 1)];
+    const view = render(shell());
+    const history = document.querySelector<HTMLElement>("[data-baam-history]")!;
+    Object.defineProperties(history, {
+      scrollHeight: { configurable: true, value: 1500 },
+      clientHeight: { configurable: true, value: 400 },
+    });
+    history.scrollTop = 40;
+    fireEvent.scroll(history);
+    saved = { ...saved, messages: [...saved.messages, entry("New reply", 2)] };
+    view.rerender(shell());
+    expect(history.scrollTop).toBe(40);
+    fireEvent.click(screen.getByRole("button", { name: "Jump to latest" }));
+    expect(history.scrollTop).toBe(1500);
   });
-
-  it("keeps a pending request, draft, and scope through drawer close and full workspace handoff", async () => {
-    let resolveAnswer!: (value: ReturnType<typeof answer>) => void;
-    mocks.ask.mockReturnValue(new Promise(resolve => { resolveAnswer = resolve; }));
-    const view = render(shell(<BaamAssistant compact />));
-    fireEvent.click(screen.getByText(/Answer scope/));
-    fireEvent.change(screen.getByLabelText("From"), { target: { value: "2026-09-01" } });
-    fireEvent.change(screen.getByLabelText("To"), { target: { value: "2026-09-02" } });
-    fireEvent.change(screen.getByRole("combobox", { name: "Store" }), { target: { value: "store" } });
-    submit("Keep this question");
-    view.rerender(shell(null));
-    view.rerender(page());
-    expect((input() as HTMLTextAreaElement).value).toBe("Keep this question");
-    expect((screen.getByRole("button", { name: "Send question" }) as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByRole("status").textContent).toBe(messages.baam.assistant.thinking);
-    await act(async () => resolveAnswer(answer()));
-    await screen.findByText(answer().answer);
-    expect((screen.getByLabelText("From") as HTMLInputElement).value).toBe("2026-09-01");
-    expect((screen.getByRole("combobox", { name: "Store" }) as HTMLSelectElement).value).toBe("store");
-    expect(mocks.ask).toHaveBeenCalledTimes(1);
+  it("loads earlier history without losing the reader's position", async () => {
+    saved.messages = [entry("Latest", 42)];
+    saved.next = 42;
+    mocks.fetch.mockResolvedValue({ ...saved, messages: [entry("Earlier", 1)], next: null });
+    render(shell());
+    fireEvent.click(screen.getByRole("button", { name: "Earlier messages" }));
+    await waitFor(() => expect(screen.getByText("Earlier")).toBeTruthy());
+    expect(screen.getByText("Latest")).toBeTruthy();
+    expect(mocks.fetch).toHaveBeenCalledWith({ id: "dialog", before: 42 });
   });
-
-  it("retains the completed answer if a request finishes while the drawer is closed", async () => {
-    let resolveAnswer!: (value: ReturnType<typeof answer>) => void;
-    mocks.ask.mockReturnValue(new Promise(resolve => { resolveAnswer = resolve; }));
-    const view = render(shell(<BaamAssistant compact />)); submit();
-    view.rerender(shell(null));
-    await act(async () => resolveAnswer(answer()));
-    view.rerender(page());
-    expect(screen.getByText(answer().answer)).toBeTruthy();
-    expect(mocks.ask).toHaveBeenCalledTimes(1);
-    expect(mocks.retryCapabilities).toHaveBeenCalledTimes(1);
-    expect(mocks.retryOverview).toHaveBeenCalledTimes(1);
-  });
-
-  it("keeps reporting and capability queries dormant until the assistant first opens", () => {
-    const view = render(shell(null));
-    expect(mocks.capabilities.mock.lastCall?.[1].enabled).toBe(false);
-    expect(mocks.overview.mock.lastCall?.[1].enabled).toBe(false);
-    view.rerender(page());
-    expect(mocks.capabilities.mock.lastCall?.[1].enabled).toBe(true);
-    expect(mocks.overview.mock.lastCall?.[1].enabled).toBe(true);
-    expect(mocks.ask).not.toHaveBeenCalled();
-  });
-
-  it("offers an explicit retry when a capability or store query fails", async () => {
-    mocks.capabilities.mockReturnValue({ ...capabilities(), data: undefined, error: { message: "baamUnavailable" } });
-    const view = render(page());
-    fireEvent.click(screen.getByRole("button", { name: messages.baam.retry }));
-    expect(mocks.retryCapabilities).toHaveBeenCalledTimes(1);
-    expect(mocks.retryOverview).not.toHaveBeenCalled();
-    mocks.capabilities.mockReturnValue(capabilities());
-    mocks.overview.mockReturnValue({ ...overview(), error: { message: "baamUnavailable" } });
-    view.rerender(page());
-    fireEvent.click(screen.getByRole("button", { name: messages.baam.retry }));
-    expect(mocks.retryCapabilities).toHaveBeenCalledTimes(2);
-    expect(mocks.retryOverview).toHaveBeenCalledTimes(1);
-    mocks.overview.mockReturnValue(overview()); view.rerender(page());
-    submit(); await screen.findByText(answer().answer);
-  });
-
-  it("purges the RAM conversation on logout even if the same account signs in again", async () => {
-    const view = render(page()); submit(); await screen.findByText(answer().answer);
-    mocks.session.mockReturnValue({ status: "unauthenticated", data: null }); view.rerender(page());
-    expect(screen.queryByText(answer().answer)).toBeNull();
-    mocks.session.mockReturnValue({ status: "authenticated", data: { user: { id: "actor", organizationId: "org", role: "MANAGER" } } });
-    view.rerender(page());
-    expect(screen.queryByText(answer().answer)).toBeNull(); expect((input() as HTMLTextAreaElement).value).toBe("");
-  });
-
-  it("discards an in-flight answer when store permissions change", async () => {
-    let resolveAnswer!: (value: ReturnType<typeof answer>) => void;
-    mocks.ask.mockReturnValue(new Promise(resolve => { resolveAnswer = resolve; }));
-    const view = render(page()); submit();
-    mocks.overview.mockReturnValue({ ...overview(), data: { ...overview().data, scope: {
-      organizationId: "org", storeIds: ["other-store"], availableStores: [{ id: "other-store", name: "Another authorized store" }],
-    } } });
-    view.rerender(page()); await act(async () => resolveAnswer(answer()));
-    expect(screen.queryByText(answer().answer)).toBeNull(); expect((input() as HTMLTextAreaElement).value).toBe("");
-  });
-
-  it.each(["during", "after"])("preserves prior history and a request completing %s same-actor session revalidation", async completion => {
-    const currentSession = { user: { id: "actor", organizationId: "org", role: "MANAGER" } };
-    const view = render(page());
-    fireEvent.click(screen.getByText(/Answer scope/));
-    fireEvent.change(screen.getByLabelText("From"), { target: { value: "2026-09-01" } });
-    fireEvent.change(screen.getByLabelText("To"), { target: { value: "2026-09-02" } });
-    fireEvent.change(screen.getByRole("combobox", { name: "Store" }), { target: { value: "store" } });
-    submit("Previous question"); await screen.findByText(answer().answer);
-    let resolveAnswer!: (value: ReturnType<typeof answer>) => void;
-    mocks.ask.mockReturnValue(new Promise(resolve => { resolveAnswer = resolve; }));
-    submit("Pending question during profile update");
-    mocks.session.mockReturnValue({ status: "loading", data: currentSession }); view.rerender(page());
-    expect(screen.getByRole("status").textContent).toBe(messages.baam.loading);
-    expect(screen.queryByText(answer().answer)).toBeNull(); expect(screen.queryByRole("textbox")).toBeNull();
-    expect(mocks.capabilities.mock.lastCall?.[1].enabled).toBe(false);
-    expect(mocks.overview.mock.lastCall?.[1].enabled).toBe(false);
-    const nextAnswer = { ...answer(), answer: "Answer retained across profile update." };
-    if (completion === "during") {
-      await act(async () => resolveAnswer(nextAnswer));
-      expect(screen.queryByText(nextAnswer.answer)).toBeNull();
-    }
-    mocks.session.mockReturnValue({ status: "authenticated", data: currentSession }); view.rerender(page());
-    expect(screen.getByText(answer().answer)).toBeTruthy();
-    expect((input() as HTMLTextAreaElement).value).toBe(completion === "during" ? "" : "Pending question during profile update");
-    expect((screen.getByLabelText("From") as HTMLInputElement).value).toBe("2026-09-01");
-    expect((screen.getByRole("combobox", { name: "Store" }) as HTMLSelectElement).value).toBe("store");
-    if (completion === "after") {
-      expect((screen.getByRole("button", { name: "Send question" }) as HTMLButtonElement).disabled).toBe(true);
-      await act(async () => resolveAnswer(nextAnswer));
-    }
-    await screen.findByText(nextAnswer.answer);
-    expect(mocks.ask).toHaveBeenCalledTimes(2);
-    expect(mocks.retryCapabilities).toHaveBeenCalledTimes(1);
-    expect(mocks.retryOverview).toHaveBeenCalledTimes(1);
-  });
-
-  it("purges retained history when session revalidation confirms a role downgrade", async () => {
-    const view = render(page()); submit(); await screen.findByText(answer().answer);
-    mocks.session.mockReturnValue({ status: "loading", data: { user: { id: "actor", organizationId: "org", role: "MANAGER" } } }); view.rerender(page());
-    mocks.session.mockReturnValue({ status: "authenticated", data: { user: { id: "actor", organizationId: "org", role: "STAFF" } } }); view.rerender(page());
-    expect(screen.getByRole("alert")).toBeTruthy(); expect(screen.queryByText(answer().answer)).toBeNull();
-    mocks.session.mockReturnValue({ status: "authenticated", data: { user: { id: "actor", organizationId: "org", role: "MANAGER" } } }); view.rerender(page());
-    expect(screen.queryByText(answer().answer)).toBeNull(); expect((input() as HTMLTextAreaElement).value).toBe("");
-  });
-
-  it("applies the server-resolved period and clears context when manual filters change", async () => {
-    mocks.ask.mockResolvedValue({ ...answer(), scope: { ...answer().scope, dateFrom: "2026-07-01", dateTo: "2026-08-31", reason: "The previous two complete months.", source: "question" } });
-    render(page()); submit("Summarize the last two months");
-    await screen.findByText(answer().answer);
-    expect((screen.getByLabelText("From") as HTMLInputElement).value).toBe("2026-07-01");
-    expect((screen.getByLabelText("To") as HTMLInputElement).value).toBe("2026-08-31");
-    expect(screen.getByText(messages.baam.assistant.contextActive)).toBeTruthy();
-    fireEvent.change(screen.getByLabelText("From"), { target: { value: "2026-08-01" } });
-    expect(screen.queryByText(messages.baam.assistant.contextActive)).toBeNull();
-    submit("Compare that with the previous period");
-    await waitFor(() => expect(mocks.ask).toHaveBeenCalledTimes(2));
-    expect(mocks.ask.mock.calls[1][0]).toMatchObject({ dateFrom: "2026-08-01", dateTo: "2026-08-31" });
-    expect(mocks.ask.mock.calls[1][0]).not.toHaveProperty("contextToken");
-  });
-
-  it("keeps a clarification distinct from a measured answer and preserves the chosen dates", async () => {
-    mocks.ask.mockResolvedValue({ ...answer(), status: "clarification", answer: "Which August do you mean?", evidence: null, analyticsHref: null, contextToken: null });
-    render(page());
-    fireEvent.change(screen.getByLabelText("From"), { target: { value: "2026-07-01" } });
-    submit("Show August sales");
-    await screen.findByText("Which August do you mean?");
-    expect(screen.getByText(messages.baam.assistant.clarification)).toBeTruthy();
-    expect(screen.queryByText(messages.baam.assistant.evidence)).toBeNull();
-    expect(screen.queryByRole("link", { name: messages.baam.assistant.openAnalytics })).toBeNull();
-    expect((screen.getByLabelText("From") as HTMLInputElement).value).toBe("2026-07-01");
-    expect((input() as HTMLTextAreaElement).value).toBe("Show August sales");
-  });
-
-  it("preserves a new draft typed while the previous question completes", async () => {
-    let resolveAnswer!: (value: ReturnType<typeof answer>) => void;
-    mocks.ask.mockReturnValue(new Promise(resolve => { resolveAnswer = resolve; }));
-    render(page()); submit();
-    fireEvent.change(input(), { target: { value: "My next question" } });
-    await act(async () => resolveAnswer(answer()));
-    expect((input() as HTMLTextAreaElement).value).toBe("My next question");
-  });
-
-  it("sends with Enter while preserving Shift+Enter and IME composition", async () => {
-    render(page()); fireEvent.change(input(), { target: { value: "Explain returns" } });
+  it("preserves Shift+Enter and IME composition and sends plain Enter once", async () => {
+    render(shell());
+    fireEvent.change(input(), { target: { value: "Question" } });
     fireEvent.keyDown(input(), { key: "Enter", shiftKey: true });
     fireEvent.keyDown(input(), { key: "Enter", isComposing: true });
-    fireEvent.keyDown(input(), { key: "Enter", keyCode: 229 });
-    expect(mocks.ask).not.toHaveBeenCalled();
+    expect(mocks.send).not.toHaveBeenCalled();
     fireEvent.keyDown(input(), { key: "Enter" });
-    await screen.findByText(answer().answer);
-    expect(mocks.ask).toHaveBeenCalledTimes(1);
-    expect((input() as HTMLTextAreaElement).value).toBe("");
+    await waitFor(() => expect(mocks.send).toHaveBeenCalledTimes(1));
   });
-
-  it("resets the conversation to the top of the welcome content without a stale context token", async () => {
-    render(page()); submit(); await screen.findByText(answer().answer);
-    const history = document.querySelector<HTMLElement>("[data-baam-history]")!;
-    history.scrollTop = 300;
-    fireEvent.click(screen.getByRole("button", { name: messages.baam.assistant.newConversation }));
-    expect(history.scrollTop).toBe(0);
-    expect(screen.queryByText(answer().answer)).toBeNull();
-    expect(screen.queryByText(messages.baam.assistant.contextActive)).toBeNull();
-    submit(); await waitFor(() => expect(mocks.ask).toHaveBeenCalledTimes(2));
-    expect(mocks.ask.mock.calls[1][0]).not.toHaveProperty("contextToken");
+  it("keeps unconfigured history readable while disabling provider requests", () => {
+    saved.messages = [entry("Saved result", 1)];
+    const cap = capabilities();
+    cap.data.configured = false;
+    mocks.capabilities.mockReturnValue(cap);
+    render(shell());
+    expect(screen.getByText("Saved result")).toBeTruthy();
+    submit();
+    expect(mocks.send).not.toHaveBeenCalled();
+    expect(screen.getByText(/not configured yet/)).toBeTruthy();
   });
-
-  it("changes starter suggestions with the page and sends only a bounded product reference", async () => {
-    const view = render(page());
-    expect(screen.getByRole("button", { name: messages.baam.assistant.briefPrompt })).toBeTruthy();
-    mocks.pathname.mockReturnValue("/products/synthetic-product?private=omitted"); view.rerender(page());
-    expect(screen.queryByRole("button", { name: messages.baam.assistant.briefPrompt })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: messages.baam.assistant.productDetailsPrompt }));
-    await screen.findByText(answer().answer);
-    expect(mocks.ask.mock.calls[0][0].pageContext).toEqual({ kind: "product", id: "synthetic-product" });
-  });
-
-  it("renders product cards and their own evidence without presenting a sales snapshot", async () => {
-    mocks.ask.mockResolvedValue({ ...answer(), answer: "Two matching products in your authorized catalog.", evidence: null, analyticsHref: null,
-      products: [{ id: "one", title: "Synthetic tea", href: "/products/one", sku: "TEA-01", displayFields: [{ label: "Net units", value: "12" }] }],
-      productEvidence: { summary: "Catalog and product sales evidence", details: ["Authorized active catalog, sorted by net units."] },
-      actions: [{ id: "movements", label: "Stock movement history", href: "/inventory/movements" }],
-    });
-    render(page()); submit("Find tea");
-    await screen.findByRole("link", { name: "Synthetic tea" });
-    expect(screen.getByRole("link", { name: "Synthetic tea" }).getAttribute("href")).toBe("/products/one");
-    expect(screen.getByText("SKU: TEA-01")).toBeTruthy();
-    expect(screen.getByText("Net units")).toBeTruthy();
-    expect(screen.getByText("Catalog and product sales evidence")).toBeTruthy();
-    expect(screen.queryByText(/Selected-period records queried at/)).toBeNull();
-    expect(document.querySelector("[data-baam-answer-scope]")).toBeNull();
-    expect(screen.getByRole("link", { name: "Stock movement history" }).getAttribute("href")).toBe("/inventory/movements");
+  it("offers durable recovery for a stale running action without claiming success", async () => {
+    saved.messages = [{ ...entry("Review", 1), parts: [{ type: "action", actionId: "action" }] }];
+    saved.actions = [
+      {
+        id: "action",
+        status: "RUNNING",
+        summary: { title: "Create tea", details: ["3 units"] },
+        result: null,
+        errorCode: null,
+        scopeRevision: 0,
+        turnId: "turn",
+        updatedAt: new Date(0),
+        canRecover: true,
+      },
+    ];
+    render(shell());
+    expect(screen.queryByText("Completed")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(mocks.execute).toHaveBeenCalledWith({ actionId: "action" }));
   });
 });

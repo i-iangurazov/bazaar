@@ -181,6 +181,53 @@ jobs:
             artifacts/bazaar-stock-audit/*.png
             artifacts/bazaar-stock-audit/server.log
 
+  baam-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: bazaar_test
+          POSTGRES_PASSWORD: bazaar_test_only
+          POSTGRES_DB: bazaar_hardening_baam
+        ports:
+          - 55440:5432
+        options: >-
+          --health-cmd="pg_isready -U bazaar_test"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 56390:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm prisma:generate
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: Verify BAAM roles, first click, focus and mobile layout
+        run: node --import tsx scripts/baam/run.ts
+      - name: Upload isolated BAAM browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: baam-browser
+          path: |
+            artifacts/baam-companion/after
+            artifacts/baam-companion/server.log
+
   landing-browser:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -266,6 +313,7 @@ jobs:
       - test
       - stabilization
       - inventory-browser
+      - baam-browser
       - landing-browser
     services:
       postgres:

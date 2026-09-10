@@ -1,3 +1,4 @@
+import { assertBaamReviewedVersion } from "@/server/services/baamExecutionContext";
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
 import { writeAuditLog } from "@/server/services/audit";
@@ -52,6 +53,7 @@ export type UpdateSupplierInput = {
 
 export const updateSupplier = async (input: UpdateSupplierInput) =>
   prisma.$transaction(async (tx) => {
+    await assertBaamReviewedVersion(tx, "Supplier", input.supplierId);
     const before = await tx.supplier.findUnique({ where: { id: input.supplierId } });
     if (!before || before.organizationId !== input.organizationId) {
       throw new AppError("supplierNotFound", "NOT_FOUND", 404);

@@ -64,7 +64,7 @@ import {
   HelpIcon,
   SupportIcon,
   MetricsIcon,
-  SparklesIcon,
+  BaamIcon,
   SettingsIcon,
   ReportsIcon,
   DiagnosticsIcon,
@@ -351,7 +351,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
           {
             key: "baam",
             href: appRoutes.baam,
-            icon: SparklesIcon,
+            icon: BaamIcon,
             managerOnly: true,
             requiredPermission: "viewReports",
           },
@@ -930,7 +930,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
       key: "mobile-baam",
       label: tNav("baam"),
       href: appRoutes.baam,
-      icon: SparklesIcon,
+      icon: BaamIcon,
       managerOnly: true,
       requiredPermission: "viewReports",
     },
@@ -1039,6 +1039,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
 
   if (normalizedPath === "/pos/sell") {
     return (
+      <BaamAssistantProvider>
       <div className="min-h-screen bg-background">
         {impersonation ? (
           <div className="sticky top-0 z-50 border-b border-warning/40 bg-warning/10 px-4 py-2 text-sm text-foreground">
@@ -1058,7 +1059,9 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
           </div>
         ) : null}
         {children}
+        <BaamLauncher access={access} pathname={normalizedPath}><BaamAssistant compact /></BaamLauncher>
       </div>
+      </BaamAssistantProvider>
     );
   }
 

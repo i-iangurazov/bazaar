@@ -4,11 +4,12 @@ const HARDENING_TEST_DATABASES = [
   "bazaar_hardening_agent3_commerce",
   "bazaar_hardening_agent4_platform",
   "bazaar_hardening_ci",
+  "bazaar_hardening_baam_tests",
 ] as const;
 
 const LOCAL_TEST_DATABASE_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 const SAFE_HARDENING_DATABASE_PATTERN =
-  /^bazaar_hardening_(?:agent(?:1_pos|2_inventory|3_commerce|4_platform)|ci)$/;
+  /^bazaar_hardening_(?:agent(?:1_pos|2_inventory|3_commerce|4_platform)|ci|baam_tests)$/;
 
 export const HARDENING_TEST_DATABASE_ALLOWLIST = new Set<string>(HARDENING_TEST_DATABASES);
 

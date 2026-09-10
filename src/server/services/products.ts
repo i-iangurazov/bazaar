@@ -11,6 +11,7 @@ import { prisma } from "@/server/db/prisma";
 import { assertExternalProviderCallAllowed } from "@/server/config/runtime";
 import { AppError } from "@/server/services/errors";
 import { writeAuditLog } from "@/server/services/audit";
+import { assertBaamReviewedVersion } from "@/server/services/baamExecutionContext";
 import { toJson } from "@/server/services/json";
 import {
   resolveUniqueGeneratedBarcode,
@@ -2232,6 +2233,7 @@ export const updateProduct = async (input: UpdateProductInput) => {
         : undefined;
 
   return prisma.$transaction(async (tx) => {
+    await assertBaamReviewedVersion(tx, "Product", input.productId);
     const before = await tx.product.findUnique({ where: { id: input.productId } });
     if (!before || before.organizationId !== input.organizationId) {
       throw new AppError("productNotFound", "NOT_FOUND", 404);

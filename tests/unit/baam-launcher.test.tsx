@@ -11,6 +11,7 @@ const launcher = (role = "ADMIN", pathname = "/dashboard") => <NextIntlClientPro
   <button type="button">Ask a supported question</button>
 </BaamLauncher></NextIntlClientProvider>;
 
+vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
 afterEach(cleanup);
 
 describe("BAAM assistant launcher", () => {
@@ -18,7 +19,7 @@ describe("BAAM assistant launcher", () => {
     render(launcher(role));
     fireEvent.click(screen.getByRole("button", { name: "Open BAAM assistant" }));
     expect(screen.getByRole("dialog", { name: "BAAM" })).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Open full workspace" }).getAttribute("href")).toBe("/baam");
+    expect(screen.getByRole("link", { name: "Open full page" }).getAttribute("href")).toBe("/baam");
     expect(screen.getByRole("button", { name: "Ask a supported question" })).toBeTruthy();
   });
 
@@ -29,16 +30,18 @@ describe("BAAM assistant launcher", () => {
 
   it.each([
     "/pos", "/pos/sell", "/inventory", "/inventory/overview",
-    "/reports/receipts", "/printing/receipt", "/cash", "/finance/income", "/finance/expense", "/help/pos",
-  ])("hides the launcher at %s", pathname => {
+    "/reports/receipts", "/cash", "/finance/income", "/finance/expense", "/help/pos",
+  ])("shows the launcher at %s", pathname => {
     render(launcher("ADMIN", pathname));
-    expect(screen.queryByRole("button", { name: "Open BAAM assistant" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Open BAAM assistant" })).toBeTruthy();
   });
+
+  it("hides the launcher on printed documents", () => { render(launcher("ADMIN", "/printing/receipt")); expect(screen.queryByRole("button", { name: "Open BAAM assistant" })).toBeNull(); });
 
   it.each(["ADMIN", "MANAGER"])("keeps the workspace circle visible for %s and focuses the existing question", role => {
     render(<>
       <section data-baam-workspace tabIndex={-1}>
-        <textarea aria-label="Your BAAM question" defaultValue="My draft" />
+        <textarea data-baam-input aria-label="Your BAAM question" defaultValue="My draft" />
       </section>
       {launcher(role, "/baam")}
     </>);
@@ -54,7 +57,7 @@ describe("BAAM assistant launcher", () => {
   it("focuses the workspace when its question box is unavailable", () => {
     render(<>
       <section data-baam-workspace tabIndex={-1} aria-label="BAAM workspace">
-        <textarea aria-label="Your BAAM question" disabled />
+        <textarea data-baam-input aria-label="Your BAAM question" disabled />
       </section>
       {launcher("ADMIN", "/baam")}
     </>);

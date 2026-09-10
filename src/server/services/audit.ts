@@ -1,4 +1,5 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
+import { recordBaamExecutionReceipt } from "./baamExecutionContext";
 
 export type AuditParams = {
   organizationId: string;
@@ -15,7 +16,7 @@ export const writeAuditLog = async (
   tx: Prisma.TransactionClient | PrismaClient,
   params: AuditParams,
 ) => {
-  await tx.auditLog.create({
+  const entry = await tx.auditLog.create({
     data: {
       organizationId: params.organizationId,
       actorId: params.actorId ?? null,
@@ -27,4 +28,5 @@ export const writeAuditLog = async (
       requestId: params.requestId,
     },
   });
+  await recordBaamExecutionReceipt(tx, params, entry?.id);
 };

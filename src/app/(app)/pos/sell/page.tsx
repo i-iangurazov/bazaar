@@ -5250,6 +5250,7 @@ const PosSellPage = () => {
           </section>
 
           <aside
+            data-baam-obstacle
             className={`fixed inset-x-0 bottom-0 z-40 flex max-h-[88vh] min-h-[76px] flex-col rounded-t-2xl border border-border/70 bg-card/95 shadow-2xl ring-1 ring-foreground/[0.015] backdrop-blur transition-transform duration-200 lg:static lg:z-auto lg:max-h-none lg:min-h-0 lg:translate-y-0 lg:rounded-none lg:border-y-0 lg:border-l lg:border-r-0 lg:shadow-none lg:ring-0 ${
               mobileCheckoutOpen ? "translate-y-0" : "translate-y-[calc(100%-76px)]"
             }`}

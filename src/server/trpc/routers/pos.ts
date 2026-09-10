@@ -87,6 +87,7 @@ const posCheckoutClientStateSchema = z
   .object({
     visibleCartLineCount: z.number().int().min(0).max(1_000).optional(),
     visibleCartTotalKgs: z.number().min(0).max(10_000_000).optional(),
+    reviewedLines: z.array(z.object({ productId: z.string().min(1), variantId: z.string().nullable().optional(), qty: z.number().int().positive(), unitPriceKgs: z.number().min(0) }).strict()).max(1000).optional(),
   })
   .optional();
 
@@ -635,6 +636,7 @@ export const posRouter = router({
       .input(
         z.object({
           registerId: z.string().min(1),
+          requireNewDraft: z.boolean().optional(),
           customerId: z.string().min(1).optional().nullable(),
           customerName: z.string().max(160).optional().nullable(),
           customerEmail: z.string().max(254).optional().nullable(),
@@ -667,6 +669,7 @@ export const posRouter = router({
           return await createPosSaleDraft({
             organizationId: ctx.user.organizationId,
             registerId: input.registerId,
+            requireNewDraft: input.requireNewDraft,
             customerId: input.customerId,
             customerName: input.customerName,
             customerEmail: input.customerEmail,
