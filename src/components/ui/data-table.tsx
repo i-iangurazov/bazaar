@@ -98,6 +98,9 @@ export const DataTable = <TData, TValue>({
     state: { sorting: resolvedSorting },
     onSortingChange: onSortingChange ?? setInternalSorting,
     manualSorting,
+    // Server-backed lists have a required default order. Removing the only
+    // sorting entry leaves their controlled callbacks stuck on descending.
+    enableSortingRemoval: !manualSorting,
     getRowId,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: manualSorting ? undefined : getSortedRowModel(),

@@ -99,7 +99,10 @@ export function useScopedListState<T>(options: {
   const replace = useCallback((params: URLSearchParams) => {
     const query = params.toString();
     const href = window.location.pathname + (query ? `?${query}` : "") + window.location.hash;
-    window.history.replaceState(window.history.state, "", href);
+    // Next copies its own history state and updates useSearchParams. Passing
+    // history.state back includes __NA, which skips that synchronization and
+    // lets a later router refresh restore an obsolete URL.
+    window.history.replaceState(null, "", href);
     window.dispatchEvent(new Event(eventName));
   }, []);
   const serialized = JSON.stringify(value);

@@ -105,11 +105,7 @@ const PurchaseOrdersPage = () => {
         }
       });
       const nextQuery = params.toString();
-      window.history.replaceState(
-        window.history.state,
-        "",
-        nextQuery ? `${pathname}?${nextQuery}` : pathname,
-      );
+      window.history.replaceState(null, "", nextQuery ? `${pathname}?${nextQuery}` : pathname);
     },
     [pathname],
   );

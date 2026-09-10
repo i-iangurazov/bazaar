@@ -148,6 +148,16 @@ try {
   await dashboard.locator("#products-search").fill(f.products[0].sku);
   await stockCell(dashboard).waitFor();
   const canonical = new URL(dashboard.url()).search;
+  // The live router must see the filter before a document reload. Otherwise
+  // return links/router.refresh can restore an older search despite a correct URL.
+  const liveEdit = dashboard
+    .locator("tr")
+    .filter({ has: stockCell(dashboard) })
+    .getByRole("link", { name: "Редактировать", exact: true });
+  await until(async () => {
+    const href = new URL((await liveEdit.getAttribute("href"))!, base);
+    return href.searchParams.get("returnTo") === `/products${canonical}`;
+  }, "Router did not synchronize the live list filters");
   await dashboard.reload();
   await stockCell(dashboard).waitFor();
   assert.equal(await dashboard.locator("#products-search").inputValue(), f.products[0].sku);
@@ -512,7 +522,12 @@ try {
   await dashboard.keyboard.press("Escape");
   record("Mobile list options, modal menu focus/Escape and BAAM remain usable");
   await dashboard.setViewportSize({ width: 1440, height: 1000 });
-  await dashboard.route("**/api/trpc/dashboard.bootstrap*", (route) => route.abort("failed"));
+  let dashboardFailures = 0;
+  const dashboardEndpoint = "**/api/trpc/*dashboard.bootstrap*";
+  await dashboard.route(dashboardEndpoint, (route) => {
+    dashboardFailures += 1;
+    return route.abort("failed");
+  });
   await dashboard.goto(`${base}/dashboard?storeId=${f.storeId}`);
   const retry = dashboard.getByRole("button", { name: "Повторить", exact: true });
   await retry.waitFor({ timeout: 60_000 });
@@ -522,10 +537,49 @@ try {
     "Failure was presented as zero data",
   );
   await dashboard.screenshot({ path: `${directory}/dashboard-error.png` });
-  await dashboard.unroute("**/api/trpc/dashboard.bootstrap*");
+  assert.ok(dashboardFailures > 0, "The request failure was not injected");
+  await dashboard.unroute(dashboardEndpoint);
   await retry.click();
   await dashboard.locator("[data-dashboard-kpi]").first().waitFor();
   record("Dashboard distinguishes a failed request from zero data and recovers with retry");
+  await dashboard.goto(`${base}/inventory/movements?storeId=${f.storeId}`);
+  const dateHeader = dashboard.getByRole("columnheader", { name: "Дата", exact: true });
+  await dateHeader.waitFor();
+  for (const direction of ["ascending", "descending", "ascending", "descending"]) {
+    await dateHeader.getByRole("button").click();
+    await until(
+      async () => (await dateHeader.getAttribute("aria-sort")) === direction,
+      `Document sorting did not switch to ${direction}`,
+    );
+  }
+  await dashboard.screenshot({ path: `${directory}/movements-sorting.png` });
+  record("Document journal sorting switches both directions repeatedly without losing its store");
+  for (const [path, procedure, selector] of [
+    ["/customers", "customers.list", "#customer-search"],
+    ["/purchase-orders", "purchaseOrders.list", 'input[type="search"]'],
+    ["/sales/orders", "salesOrders.list", 'input[type="search"]'],
+  ]) {
+    await dashboard.goto(base + path);
+    const search = dashboard.locator(selector);
+    await search.waitFor();
+    const query = "no-matches-router-regression";
+    const filtered = dashboard.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        url.pathname.includes(procedure) && (url.searchParams.get("input") ?? "").includes(query)
+      );
+    });
+    await search.fill(query);
+    assert.equal((await filtered).status(), 200);
+    assert.equal(await search.inputValue(), query);
+    assert.equal(new URL(dashboard.url()).searchParams.get("search"), query);
+    await dashboard.reload();
+    await search.waitFor();
+    assert.equal(await search.inputValue(), query);
+  }
+  record(
+    "Customer, purchase and sales order search updates server results immediately and survives reload",
+  );
   assert.deepEqual(errors, []);
 } catch (error) {
   failure = error instanceof Error ? error.stack : String(error);

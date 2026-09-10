@@ -67,4 +67,15 @@ try {
   console.log("Ten dynamic page templates now have isolated document fixtures");
 } finally {
   await prisma.$disconnect();
+  // Domain operations publish inventory/POS events. Release that connection so
+  // the fixture process exits and the browser orchestrator can continue.
+  const { getRedisPublisher } = await import("../../src/server/redis");
+  const publisher = getRedisPublisher();
+  if (publisher) {
+    try {
+      await publisher.quit();
+    } finally {
+      publisher.disconnect();
+    }
+  }
 }

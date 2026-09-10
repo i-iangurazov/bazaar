@@ -204,4 +204,15 @@ try {
   console.log("UI fixture ready: 3 stores, 4 roles, 144 products; isolated domain documents only.");
 } finally {
   await prisma.$disconnect();
+  // Domain operations publish inventory/POS events. Release that connection so
+  // the fixture process exits and the browser orchestrator can continue.
+  const { getRedisPublisher } = await import("../../src/server/redis");
+  const publisher = getRedisPublisher();
+  if (publisher) {
+    try {
+      await publisher.quit();
+    } finally {
+      publisher.disconnect();
+    }
+  }
 }

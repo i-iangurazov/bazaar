@@ -4,7 +4,8 @@ import { NextIntlClientProvider } from "next-intl";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import en from "../../messages/en.json";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { createRef } from "react";
+import { createRef, useState } from "react";
+import type { SortingState } from "@tanstack/react-table";
 import { Select, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FormItem, FormLabel, FormControl, FormDescription } from "@/components/ui/form";
 import { DataTable } from "@/components/ui/data-table";
@@ -60,6 +61,31 @@ describe("workspace controls", () => {
     expect(ref.current).toBe(trigger);
     ref.current?.focus();
     expect(document.activeElement).toBe(trigger);
+  });
+  it("keeps a required server sort reversible after repeated header clicks", () => {
+    function ServerList() {
+      const [sorting, setSorting] = useState<SortingState>([{ id: "name", desc: false }]);
+      return (
+        <DataTable
+          columns={[{ accessorKey: "name", header: "Name" }]}
+          data={[{ name: "Tea" }]}
+          manualSorting
+          sorting={sorting}
+          onSortingChange={(update) => {
+            const next = typeof update === "function" ? update(sorting) : update;
+            if (next.length) setSorting(next);
+          }}
+        />
+      );
+    }
+    render(<ServerList />);
+    const header = screen.getByRole("columnheader", { name: "Name" });
+    const button = screen.getByRole("button", { name: "Name" });
+    expect(header.getAttribute("aria-sort")).toBe("ascending");
+    for (const direction of ["descending", "ascending", "descending", "ascending"]) {
+      fireEvent.click(button);
+      expect(header.getAttribute("aria-sort")).toBe(direction);
+    }
   });
   it("keeps page size and result scope available when all records fit on one page", () => {
     const changePage = vi.fn();

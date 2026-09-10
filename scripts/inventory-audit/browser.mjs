@@ -265,11 +265,18 @@ try {
   const search = first.locator('[data-tour="products-search"]:visible');
   await search.fill("");
   await first.getByRole("button", { name: "Следующая страница", exact: true }).waitFor();
-  await first.getByRole("columnheader").filter({ hasText: "Название" }).click();
-  await first.getByRole("columnheader").filter({ hasText: "Название" }).click();
+  const nameSortButton = first
+    .getByRole("columnheader")
+    .filter({ hasText: "Название" })
+    .getByRole("button");
+  await nameSortButton.click();
+  await nameSortButton.click();
   // Select ascending explicitly: the default sorting can be restored from local storage.
   const nameHeader = first.getByRole("columnheader").filter({ hasText: "Название" });
-  if ((await nameHeader.getAttribute("aria-sort")) !== "ascending") await nameHeader.click();
+  if ((await nameHeader.getAttribute("aria-sort")) !== "ascending") await nameSortButton.click();
+  assert.equal(await nameHeader.getAttribute("aria-sort"), "ascending");
+  assert.equal(new URL(first.url()).searchParams.get("sortBy"), "name");
+  assert.equal(new URL(first.url()).searchParams.get("sortDirection"), "asc");
   await first.getByRole("button", { name: "Следующая страница", exact: true }).click();
   await cell(first).waitFor();
   await edit(first, "9");
@@ -360,6 +367,7 @@ try {
   await inventory.reload();
   await blueCell.waitFor();
   assert.equal((await blueCell.innerText()).trim(), "6");
+  assert.equal(new URL(first.url()).searchParams.get("q"), "Variant Audit");
   await first.reload();
   await aggregate.waitFor();
   assert.match(await aggregate.innerText(), /8/);
@@ -409,10 +417,25 @@ try {
   evidence.failure = String(error?.stack || error);
   await fs.writeFile(`${dir}/browser.json`, JSON.stringify(evidence, null, 2));
   for (const [index, context] of contexts.entries()) {
-    for (const page of context.pages())
+    for (const [pageIndex, page] of context.pages().entries()) {
+      await fs.writeFile(
+        `${dir}/failure-${index}-${pageIndex}.json`,
+        JSON.stringify(
+          {
+            url: page.url(),
+            search: await page
+              .locator('input[data-tour="products-search"]')
+              .inputValue({ timeout: 1000 })
+              .catch(() => null),
+          },
+          null,
+          2,
+        ),
+      );
       await page
-        .screenshot({ path: `${dir}/failure-${index}.png`, fullPage: true })
+        .screenshot({ path: `${dir}/failure-${index}-${pageIndex}.png`, fullPage: true })
         .catch(() => {});
+    }
   }
   throw error;
 } finally {
