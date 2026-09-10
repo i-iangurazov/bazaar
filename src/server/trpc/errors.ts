@@ -58,6 +58,7 @@ export const toTRPCError = (error: unknown) => {
     return new TRPCError({
       code: toTRPCCode(error.code),
       message: error.message,
+      cause: error,
     });
   }
   if (error instanceof Prisma.PrismaClientKnownRequestError) {

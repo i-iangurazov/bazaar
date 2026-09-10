@@ -73,23 +73,38 @@ describeDb("B1 Agent 4 SSE store-isolation contract", () => {
           number: "SSE-DENIED-001",
         },
       });
+      for (const storeId of [unassignedStore.id, otherStore.id]) {
+        eventBus.publish({
+          type: "shift.updated",
+          payload: { storeId, registerId: "denied-register", shiftId: "denied-shift" },
+        });
+      }
       await new Promise<void>((resolve) => setTimeout(resolve, 25));
       eventBus.publish({
         type: "inventory.updated",
         payload: { storeId: store.id, productId: "allowed-product" },
       });
+      eventBus.publish({
+        type: "shift.updated",
+        payload: { storeId: store.id, registerId: "allowed-register", shiftId: "allowed-shift" },
+      });
 
       const firstChunk = await reader.read();
       const secondChunk = await reader.read();
+      const thirdChunk = await reader.read();
+      const fourthChunk = await reader.read();
       const evidence = new TextDecoder().decode(
         new Uint8Array([
           ...(firstChunk.value ?? new Uint8Array()),
           ...(secondChunk.value ?? new Uint8Array()),
+          ...(thirdChunk.value ?? new Uint8Array()),
+          ...(fourthChunk.value ?? new Uint8Array()),
         ]),
       );
 
       expect(response.status).toBe(200);
       expect(evidence).toContain("event: inventory.updated");
+      expect(evidence).toContain("event: shift.updated");
       expect(evidence).toContain(`\"storeId\":\"${store.id}\"`);
       expect(evidence).not.toContain(unassignedStore.id);
       expect(evidence).not.toContain(otherStore.id);

@@ -2429,6 +2429,10 @@
       }
     },
     "sell": {
+      "receiptNotOpened": "The requested receipt was not opened",
+      "openingReceipt": "Opening the selected receipt…",
+      "receiptAlreadyResolved": "This receipt is already completed or canceled. Return to the shift and check the current list.",
+      "openCurrentReceipt": "Open current receipt {number}",
       "title": "Sell",
       "subtitle": "Sell overview",
       "registerAndShift": "Register and shift",
@@ -2649,6 +2653,17 @@
       }
     },
     "shifts": {
+      "resumeConflict": "Complete or cancel your current receipt first. The selected receipt has not been opened yet.",
+      "receiptEmptyHint": "Empty draft. Canceling it creates no sale, payment or stock movement.",
+      "receiptDraftHint": "This sale is not complete. Continue checkout and payment, or cancel the receipt.",
+      "receiptRecordedHint": "This draft has posted records. Normal cancellation is unavailable: review the document with an administrator, then check its state again.",
+      "receiptActiveFirst": "To continue this receipt, first complete or cancel your current receipt {number}.",
+      "continueReceipt": "Continue receipt",
+      "cancelReceiptConfirm": "Cancel unfinished receipt {number}? It will remain in history; no sale or payment will be created.",
+      "refreshState": "Check status",
+      "moreBlockers": "{count} more. The next documents will appear after the displayed ones are resolved.",
+      "returnToClose": "Back to shift closing",
+      "internalShiftHint": "This closes the internal register shift. Fiscal receipt status is checked separately.",
       "title": "Shifts",
       "subtitle": "Shifts overview",
       "current": "Current",
@@ -2697,7 +2712,7 @@
       "activeReceiptsBlockCloseCount": "Active receipts: {count}",
       "returnDraftsBlockClose": "Complete or cancel return drafts before closing the shift.",
       "returnDraftsBlockCloseCount": "Return drafts: {count}",
-      "unresolvedDraftsBlockClose": "Complete, hold, or cancel all active receipts and returns first.",
+      "unresolvedDraftsBlockClose": "Complete or cancel the listed receipts and returns first. Held receipts also belong to this shift.",
       "draftOwner": "Cashier: {name}",
       "resolveReceipt": "Open receipt",
       "takeReceipt": "Take receipt",
@@ -4869,6 +4884,8 @@
     }
   },
   "errors": {
+    "posDraftHasRecordedOperations": "This receipt has payment, stock or fiscal records. It cannot be canceled as a normal draft. Review it with an administrator.",
+    "posShiftChanged": "The selected shift has changed. Check the register and totals before closing.",
     "inventoryStockConflict": "Stock changed in another session or operation. Data has been refreshed; check the quantity and try again.",
     "inventoryReconciliationRequired": "Inventory data disagrees. Source operations must be reconciled; automatic overwrite was cancelled.",
     "baamNotConfigured": "BAAM is not connected yet. An administrator needs to configure the AI connection before questions can be answered.",

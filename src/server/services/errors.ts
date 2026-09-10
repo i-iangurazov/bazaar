@@ -10,10 +10,17 @@ export type AppErrorCode =
 export class AppError extends Error {
   public readonly code: AppErrorCode;
   public readonly status: number;
+  public readonly details?: Record<string, unknown>;
 
-  constructor(message: string, code: AppErrorCode = "BAD_REQUEST", status = 400) {
+  constructor(
+    message: string,
+    code: AppErrorCode = "BAD_REQUEST",
+    status = 400,
+    details?: Record<string, unknown>,
+  ) {
     super(message);
     this.code = code;
     this.status = status;
+    this.details = details;
   }
 }

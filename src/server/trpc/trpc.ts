@@ -19,6 +19,7 @@ import {
   summarizeHotProcedureOutput,
 } from "@/server/profiling/perf";
 import { toTRPCError } from "@/server/trpc/errors";
+import { AppError } from "@/server/services/errors";
 import { getAuthTokenFromCookieHeader } from "@/server/auth/token";
 
 export type AuthUser = {
@@ -123,6 +124,7 @@ const t = initTRPC.context<Context>().create({
       data: {
         ...shape.data,
         requestId,
+        details: error.cause instanceof AppError ? error.cause.details : undefined,
       },
     };
   },

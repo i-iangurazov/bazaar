@@ -133,6 +133,7 @@ const canReceiveEvent = async (access: EventAccess, event: { type: string; paylo
     event.type === "debt.settled" ||
     event.type === "shift.opened" ||
     event.type === "shift.closed" ||
+    event.type === "shift.updated" ||
     event.type === "customerOrder.created"
   ) {
     const payload = event.payload as { storeId?: string };

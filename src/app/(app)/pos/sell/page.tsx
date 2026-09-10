@@ -1,5 +1,7 @@
 "use client";
 
+import { posShiftCloseHref } from "@/lib/posShiftClose";
+
 import {
   memo,
   useCallback,
@@ -653,6 +655,12 @@ const PosSellPage = () => {
   const mobileCommentHydratedSaleIdRef = useRef<string | null>(null);
   const receiptEditDeepLinkRef = useRef<string | null>(null);
   const heldReceiptResumeDeepLinkRef = useRef<string | null>(null);
+  const requestedReceiptId =
+    searchParams.get("mode") === "resume" ? searchParams.get("receiptId") : null;
+  const requestedReceiptIdRef = useRef(requestedReceiptId);
+  requestedReceiptIdRef.current = requestedReceiptId;
+  const [resumeError, setResumeError] = useState<{ id: string; message: string } | null>(null);
+  const fromShiftClose = searchParams.get("from") === "shift-close";
   const completedSaleEditIdRef = useRef<string | null>(null);
   const completedSaleEditHydratedRef = useRef<string | null>(null);
   const completedSaleEditIdempotencyKeyRef = useRef<string | null>(null);
@@ -757,6 +765,14 @@ const PosSellPage = () => {
     { registerId },
     { enabled: Boolean(registerId && shiftQuery.data?.id), refetchOnWindowFocus: true },
   );
+
+  const requestedReceiptQuery = trpc.pos.sales.get.useQuery(
+    { saleId: requestedReceiptId ?? "" },
+    { enabled: Boolean(requestedReceiptId), staleTime: 0, refetchOnWindowFocus: true },
+  );
+  const posReturnHref = fromShiftClose
+    ? posShiftCloseHref(registerId)
+    : `/pos${registerId ? `?registerId=${encodeURIComponent(registerId)}` : ""}`;
 
   const focusLineSearchInput = useCallback(() => {
     if (typeof window === "undefined") {
@@ -907,28 +923,7 @@ const PosSellPage = () => {
   }, []);
 
   const createDraftMutation = trpc.pos.sales.createDraft.useMutation({
-    onSuccess: async (draft, variables) => {
-      trpcUtils.pos.shifts.current.setData({ registerId: variables.registerId }, (current) => {
-        if (!current || current.activeReceipts.some((receipt) => receipt.id === draft.id)) {
-          return current;
-        }
-        const activeReceipts = [
-          ...current.activeReceipts,
-          {
-            id: draft.id,
-            number: draft.number,
-            createdAt: new Date(),
-            totalKgs: 0,
-            createdByName: session?.user?.name || session?.user?.email || "—",
-            ownedByCurrentUser: true,
-          },
-        ];
-        return {
-          ...current,
-          activeReceipts,
-          activeReceiptCount: Math.max(current.activeReceiptCount, activeReceipts.length),
-        };
-      });
+    onSuccess: async (_draft, variables) => {
       await trpcUtils.pos.shifts.current
         .invalidate({ registerId: variables.registerId })
         .catch(() => undefined);
@@ -1063,7 +1058,13 @@ const PosSellPage = () => {
   });
 
   const resumeHeldDraftMutation = trpc.pos.sales.resumeHeldDraft.useMutation({
-    onSuccess: async (result) => {
+    onMutate: () => {
+      setResumeError(null);
+    },
+    onSuccess: async (result, variables) => {
+      if (requestedReceiptIdRef.current && requestedReceiptIdRef.current !== variables.saleId)
+        return;
+      setResumeError(null);
       clearActiveDraftCache();
       setLastCompletedSale(null);
       setAutoReceiptStatus("idle");
@@ -1112,15 +1113,30 @@ const PosSellPage = () => {
         router.replace(`/pos/sell${nextParams.size ? `?${nextParams.toString()}` : ""}`);
       }
     },
-    onError: (error) => {
-      toast({ variant: "error", description: translateError(tErrors, error) });
+    onError: (error, variables) => {
+      if (requestedReceiptIdRef.current === variables.saleId) {
+        setResumeError({
+          id: variables.saleId,
+          message:
+            fromShiftClose && error.message === "posActiveDraftExists"
+              ? t("shifts.resumeConflict")
+              : translateError(tErrors, error),
+        });
+        void requestedReceiptQuery.refetch();
+      } else {
+        toast({ variant: "error", description: translateError(tErrors, error) });
+      }
     },
   });
 
   useEffect(() => {
     const receiptId = searchParams.get("receiptId");
     const mode = searchParams.get("mode");
-    if (mode !== "resume" || !receiptId || !registerId || isPhoneScreen === null) {
+    if (mode !== "resume" || !receiptId) {
+      heldReceiptResumeDeepLinkRef.current = null;
+      return;
+    }
+    if (!registerId || isPhoneScreen === null) {
       return;
     }
     const deepLinkKey = `${mode}:${registerId}:${receiptId}`;
@@ -1385,8 +1401,8 @@ const PosSellPage = () => {
   const saleMarkingEnabled = sale?.store.complianceProfile?.enableMarking ?? false;
   const saleMarkingMode = sale?.store.complianceProfile?.markingMode;
 
-  mobileNavigationRiskRef.current = hasMobileNavigationRisk;
-  mobileExitHrefRef.current = `/pos${registerId ? `?registerId=${registerId}` : ""}`;
+  mobileNavigationRiskRef.current = hasMobileNavigationRisk && !requestedReceiptId;
+  mobileExitHrefRef.current = posReturnHref;
 
   const requestMobileExit = useCallback(() => {
     if (isPhoneScreen && mobileNavigationRiskRef.current) {
@@ -1455,7 +1471,9 @@ const PosSellPage = () => {
   }, [isPhoneScreen, router]);
 
   useEffect(() => {
-    if (!isPhoneScreen || typeof window === "undefined") {
+    // Do not retain the one-shot resume URL under the mobile history guard.
+    // Its cleanup after checkout must not navigate back into a completed receipt's resume gate.
+    if (!isPhoneScreen || typeof window === "undefined" || requestedReceiptId) {
       return;
     }
     if (hasMobileNavigationRisk && !mobileHistoryGuardActiveRef.current) {
@@ -1467,7 +1485,7 @@ const PosSellPage = () => {
       mobileHistoryCleanupRef.current = true;
       window.history.back();
     }
-  }, [hasMobileNavigationRisk, isPhoneScreen]);
+  }, [hasMobileNavigationRisk, isPhoneScreen, requestedReceiptId]);
 
   useEffect(() => {
     if (!mobilePendingProductId) {
@@ -4863,11 +4881,11 @@ const PosSellPage = () => {
       <header className="sticky top-0 z-30 flex min-h-16 flex-col border-b border-border bg-background shadow-sm lg:h-16 lg:flex-row">
         <Button
           asChild
-          className="h-16 w-full rounded-md bg-primary px-5 text-base font-semibold text-primary-foreground hover:bg-primary/90 lg:w-32"
+          className="h-16 w-full rounded-md bg-primary px-5 text-base font-semibold text-primary-foreground hover:bg-primary/90 lg:w-auto"
         >
-          <Link href={`/pos${registerId ? `?registerId=${registerId}` : ""}`}>
-            <BackIcon className="h-5 w-5" aria-hidden />
-            {tCommon("back")}
+          <Link href={posReturnHref}>
+            <BackIcon className="h-5 w-5 shrink-0" aria-hidden />
+            {fromShiftClose ? t("shifts.returnToClose") : tCommon("back")}
           </Link>
         </Button>
 
@@ -6347,7 +6365,7 @@ const PosSellPage = () => {
               type="button"
               className="grid h-10 w-10 place-items-center text-foreground no-underline hover:no-underline"
               onClick={requestMobileExit}
-              aria-label={tCommon("back")}
+              aria-label={fromShiftClose ? t("shifts.returnToClose") : tCommon("back")}
             >
               <BackIcon className="h-6 w-6" aria-hidden />
             </button>
@@ -7633,7 +7651,7 @@ const PosSellPage = () => {
                 className="h-11 w-11 shrink-0"
                 aria-label={tCommon("back")}
               >
-                <Link href={`/pos${registerId ? `?registerId=${registerId}` : ""}`}>
+                <Link href={posReturnHref}>
                   <BackIcon className="h-4 w-4" aria-hidden />
                 </Link>
               </Button>
@@ -8545,6 +8563,60 @@ const PosSellPage = () => {
 
   if (isPhoneScreen === null) {
     return <div className="min-h-screen bg-background" />;
+  }
+
+  // Never present a different active cart as the receipt requested by the warning.
+  if (requestedReceiptId) {
+    const error = resumeError?.id === requestedReceiptId ? resumeError.message : null;
+    const resolved =
+      requestedReceiptQuery.data &&
+      [CustomerOrderStatus.COMPLETED, CustomerOrderStatus.CANCELED].includes(
+        requestedReceiptQuery.data.status as "COMPLETED" | "CANCELED",
+      );
+    return (
+      <main
+        data-pos-resume-gate
+        className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-4 px-5 py-10"
+      >
+        <h1 className="text-xl font-semibold">
+          {error ? t("sell.receiptNotOpened") : t("sell.openingReceipt")}
+        </h1>
+        {requestedReceiptQuery.data ? (
+          <p className="font-medium">{requestedReceiptQuery.data.number}</p>
+        ) : null}
+        {error ? (
+          <p role="alert">{resolved ? t("sell.receiptAlreadyResolved") : error}</p>
+        ) : (
+          <Spinner className="h-5 w-5" />
+        )}
+        <div className="flex flex-wrap gap-3">
+          {error && !resolved ? (
+            <Button
+              onClick={() =>
+                resumeHeldDraftMutation.mutate({ saleId: requestedReceiptId, registerId })
+              }
+              disabled={resumeHeldDraftMutation.isLoading}
+            >
+              {tCommon("tryAgain")}
+            </Button>
+          ) : null}
+          {error && activeDraft && activeDraft.id !== requestedReceiptId ? (
+            <Button variant="secondary" asChild>
+              <Link
+                href={`/pos/sell?registerId=${encodeURIComponent(registerId)}${fromShiftClose ? "&from=shift-close" : ""}`}
+              >
+                {t("sell.openCurrentReceipt", { number: activeDraft.number })}
+              </Link>
+            </Button>
+          ) : null}
+          <Button variant="secondary" asChild>
+            <Link href={posReturnHref}>
+              {fromShiftClose ? t("shifts.returnToClose") : tCommon("back")}
+            </Link>
+          </Button>
+        </div>
+      </main>
+    );
   }
 
   return isPhoneScreen ? MobilePosView() : DesktopPosSaleView();

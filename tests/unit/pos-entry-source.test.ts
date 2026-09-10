@@ -45,13 +45,17 @@ describe("pos entry navigation", () => {
     expect(entrySource).toContain(
       "trpcUtils.pos.shifts.current.fetch({ registerId: shift.registerId })",
     );
-    expect(sellSource).toContain("trpcUtils.pos.shifts.current.setData");
+    // Blocker counts come from the server; fabricated optimistic rows caused stale warnings.
+    expect(sellSource).not.toContain("trpcUtils.pos.shifts.current.setData");
     expect(sellSource).toContain(".invalidate({ registerId: variables.registerId })");
     expect(sellSource).toContain("const shiftStatePending =");
     expect(sellSource).toContain("const shiftStateError =");
     expect(shiftsSource).toContain('refetchOnMount: "always"');
-    expect(shiftsSource).toContain("const freshShiftResult = await currentShiftQuery.refetch();");
-    expect(shiftsSource).toContain("const freshUnresolvedDraftCount =");
+    expect(shiftsSource).toContain("await trpcUtils.pos.shifts.current.cancel({ registerId })");
+    expect(shiftsSource).toContain("currentShiftQuery.refetch({ cancelRefetch: true })");
+    expect(shiftsSource).toContain("const fresh = await refreshShift()");
+    expect(shiftsSource).toContain('"shift.updated":');
+    expect(shiftsSource).toContain("shiftId: targetShiftId");
     expect(shiftsSource).toContain("currentShiftQuery.isFetching ||");
   });
 
@@ -107,8 +111,10 @@ describe("pos entry navigation", () => {
     expect(serviceSource).toContain('action: "POS_RETURN_CANCEL"');
     expect(pageSource).toContain("unresolvedDraftCount");
     expect(pageSource).toContain("transferDraftMutation");
-    expect(pageSource).toContain("handleCancelActiveReceipt");
-    expect(pageSource).toContain("optimisticallyResolvedActiveReceiptIds");
+    expect(pageSource).toContain("handleCancelReceipt");
+    expect(pageSource).not.toContain("optimisticallyResolvedActiveReceiptIds");
+    expect(pageSource).toContain("await cancelDraftMutation.mutateAsync({ saleId })");
+    expect(pageSource).toContain("await refreshShift()");
     expect(pageSource).toContain("cancelDraftMutation.isLoading ||");
     expect(pageSource).toContain("cancelReturnMutation");
     expect(pageSource).toContain("parseMoneyInput(countedCash)");

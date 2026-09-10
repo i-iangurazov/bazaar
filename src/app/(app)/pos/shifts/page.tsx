@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CashDrawerMovementType } from "@prisma/client";
+import { TRPCClientError } from "@trpc/client";
+import type { AppRouter } from "@/server/trpc/routers/_app";
 import { useLocale, useTranslations } from "next-intl";
 
 import { PageHeader } from "@/components/page-header";
@@ -30,7 +32,7 @@ import {
 } from "@/lib/currencyDisplay";
 import { formatDateTime } from "@/lib/i18nFormat";
 import { parseMoneyInput } from "@/lib/moneyInput";
-import { buildHeldReceiptResumeHref } from "@/lib/mobilePosState";
+import { posShiftReceiptHref } from "@/lib/posShiftClose";
 import {
   POS_CASH_MOVEMENT_ANCHOR,
   POS_CASH_MOVEMENT_QUERY_PARAM,
@@ -39,6 +41,7 @@ import {
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { usePosRegisterSelection } from "@/lib/usePosRegisterSelection";
+import { useSse } from "@/lib/useSse";
 
 const createIdempotencyKey = () => {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -68,8 +71,9 @@ const PosShiftsPage = () => {
   const [cashOutReason, setCashOutReason] = useState("collection");
   const [cashType, setCashType] = useState<CashDrawerMovementType>(CashDrawerMovementType.PAY_IN);
   const [historyPage, setHistoryPage] = useState(1);
-  const [optimisticallyResolvedActiveReceiptIds, setOptimisticallyResolvedActiveReceiptIds] =
-    useState<ReadonlySet<string>>(() => new Set());
+  const closeInFlight = useRef(false);
+  const [checkingClose, setCheckingClose] = useState(false);
+  const closeAttempt = useRef<{ shiftId: string; payload: string; key: string } | null>(null);
 
   useEffect(() => {
     const selectedType = parsePosCashMovementType(requestedCashType);
@@ -114,12 +118,17 @@ const PosShiftsPage = () => {
       refetchOnMount: "always",
       refetchOnWindowFocus: true,
       staleTime: 0,
+      refetchInterval: 5_000,
     },
   );
 
   const reportQuery = trpc.pos.shifts.xReport.useQuery(
     { shiftId: currentShiftQuery.data?.id ?? "" },
-    { enabled: Boolean(currentShiftQuery.data?.id), refetchOnWindowFocus: true },
+    {
+      enabled: Boolean(currentShiftQuery.data?.id),
+      refetchOnWindowFocus: true,
+      refetchInterval: 5_000,
+    },
   );
 
   const historyQuery = trpc.pos.shifts.list.useQuery(
@@ -129,79 +138,89 @@ const PosShiftsPage = () => {
 
   useEffect(() => {
     setHistoryPage(1);
-    setOptimisticallyResolvedActiveReceiptIds(new Set());
-  }, [registerId]);
+    setCountedCash("");
+    setCloseNote("");
+    setCloseConfirmed(false);
+  }, [registerId, currentShiftQuery.data?.id]);
 
-  const closeShiftMutation = trpc.pos.shifts.close.useMutation({
-    onSuccess: async () => {
-      setCountedCash("");
-      setCloseNote("");
-      setCloseConfirmed(false);
-      toast({ variant: "success", description: t("shifts.closedSuccess") });
-      await Promise.all([
-        currentShiftQuery.refetch(),
-        historyQuery.refetch(),
-        reportQuery.refetch(),
-        trpcUtils.pos.entry.invalidate({ registerId }),
-      ]);
+  const refreshShift = async () => {
+    // Cancel an older in-flight response before reading the post-operation snapshot.
+    await trpcUtils.pos.shifts.current.cancel({ registerId });
+    const fresh = await currentShiftQuery.refetch({ cancelRefetch: true });
+    await Promise.all([
+      trpcUtils.pos.shifts.xReport.invalidate(),
+      historyQuery.refetch(),
+      trpcUtils.pos.entry.invalidate({ registerId }),
+      trpcUtils.pos.sales.activeDraft.invalidate({ registerId }),
+    ]);
+    return fresh;
+  };
+
+  const closeShiftMutation = trpc.pos.shifts.close.useMutation();
+
+  useSse({
+    "shift.updated": () => {
+      void refreshShift();
     },
-    onError: (error) => {
-      toast({ variant: "error", description: translateError(tErrors, error) });
-      void currentShiftQuery.refetch();
+    "sale.completed": () => {
+      void refreshShift();
+    },
+    "sale.refunded": () => {
+      void refreshShift();
+    },
+    "shift.closed": () => {
+      void refreshShift();
     },
   });
 
   const transferDraftMutation = trpc.pos.sales.transferDraft.useMutation({
-    onSuccess: async () => {
-      await currentShiftQuery.refetch();
-      router.push(`/pos/sell?registerId=${encodeURIComponent(registerId)}`);
+    onSuccess: async (result) => {
+      await refreshShift();
+      router.push(posShiftReceiptHref(registerId, result.id));
     },
     onError: (error) => {
-      toast({ variant: "error", description: translateError(tErrors, error) });
+      toast({
+        variant: "error",
+        description: translateError(
+          tErrors,
+          TRPCClientError.from<AppRouter>(
+            error instanceof Error ? error : new Error("genericMessage"),
+          ),
+        ),
+      });
+      void refreshShift();
     },
   });
 
-  const cancelDraftMutation = trpc.pos.sales.cancelDraft.useMutation({
-    onSuccess: () => {
-      toast({ variant: "success", description: t("sell.saleDiscarded") });
-    },
-    onError: (error) => {
-      toast({ variant: "error", description: translateError(tErrors, error) });
-    },
-  });
-
-  const handleCancelActiveReceipt = async (saleId: string) => {
-    setOptimisticallyResolvedActiveReceiptIds((current) => {
-      const next = new Set(current);
-      next.add(saleId);
-      return next;
-    });
-
+  const cancelDraftMutation = trpc.pos.sales.cancelDraft.useMutation();
+  const handleCancelReceipt = async (saleId: string, number: string) => {
+    if (!window.confirm(t("shifts.cancelReceiptConfirm", { number }))) return;
     try {
       await cancelDraftMutation.mutateAsync({ saleId });
-    } catch {
-      setOptimisticallyResolvedActiveReceiptIds((current) => {
-        const next = new Set(current);
-        next.delete(saleId);
-        return next;
+      toast({ variant: "success", description: t("sell.saleDiscarded") });
+    } catch (error) {
+      toast({
+        variant: "error",
+        description: translateError(
+          tErrors,
+          TRPCClientError.from<AppRouter>(
+            error instanceof Error ? error : new Error("genericMessage"),
+          ),
+        ),
       });
-      return;
-    }
-
-    try {
-      await currentShiftQuery.refetch();
-    } catch {
-      // Cancellation is authoritative; keep the receipt hidden locally.
+    } finally {
+      await refreshShift();
     }
   };
 
   const cancelReturnMutation = trpc.pos.returns.cancel.useMutation({
     onSuccess: async () => {
       toast({ variant: "success", description: t("shifts.returnDraftCanceled") });
-      await currentShiftQuery.refetch();
+      await refreshShift();
     },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
+      void refreshShift();
     },
   });
 
@@ -246,15 +265,8 @@ const PosShiftsPage = () => {
   const report = reportQuery.data;
   const heldReceipts = currentShift?.heldReceipts ?? [];
   const heldReceiptCount = currentShift?.heldReceiptCount ?? heldReceipts.length;
-  const serverActiveReceipts = currentShift?.activeReceipts ?? [];
-  const activeReceipts = serverActiveReceipts.filter(
-    (receipt) => !optimisticallyResolvedActiveReceiptIds.has(receipt.id),
-  );
-  const optimisticallyResolvedCount = serverActiveReceipts.length - activeReceipts.length;
-  const activeReceiptCount = Math.max(
-    0,
-    (currentShift?.activeReceiptCount ?? serverActiveReceipts.length) - optimisticallyResolvedCount,
-  );
+  const activeReceipts = currentShift?.activeReceipts ?? [];
+  const activeReceiptCount = currentShift?.activeReceiptCount ?? activeReceipts.length;
   const returnDrafts = currentShift?.returnDrafts ?? [];
   const returnDraftCount = currentShift?.returnDraftCount ?? returnDrafts.length;
   const unresolvedDraftCount = heldReceiptCount + activeReceiptCount + returnDraftCount;
@@ -327,60 +339,153 @@ const PosShiftsPage = () => {
   }, [currentShiftCurrencySource, report, countedCash]);
 
   const handleCloseShift = async () => {
-    if (!currentShift) {
-      return;
-    }
-
-    const freshShiftResult = await currentShiftQuery.refetch();
-    const freshShift = freshShiftResult.data;
-    if (freshShiftResult.error || !freshShift) {
-      return;
-    }
-    const freshUnresolvedDraftCount =
-      (freshShift.heldReceiptCount ?? freshShift.heldReceipts.length) +
-      (freshShift.activeReceiptCount ?? freshShift.activeReceipts.length) +
-      (freshShift.returnDraftCount ?? freshShift.returnDrafts.length);
-    if (freshUnresolvedDraftCount > 0) {
-      toast({ variant: "error", description: t("shifts.unresolvedDraftsBlockClose") });
-      return;
-    }
+    if (!currentShift || closeInFlight.current) return;
+    const targetShiftId = currentShift.id;
     const amount = parseMoneyInput(countedCash);
-    if (amount === null) {
-      toast({
-        variant: "error",
-        description: countedCashIsNegative
-          ? t("shifts.countedCashNegative")
-          : t("shifts.invalidAmount"),
-      });
-      return;
-    }
+    if (amount === null || amount < 0 || !closeConfirmed || !closeNoteValid) return;
     const amountKgs = displayMoneyToKgs(amount, currentShiftCurrencySource);
-    if (!Number.isFinite(amountKgs)) {
-      toast({
-        variant: "error",
-        description: t("shifts.invalidAmount"),
-      });
-      return;
+    if (!Number.isFinite(amountKgs)) return;
+    const notes = closeNote.trim() || null;
+    const payload = JSON.stringify([amountKgs, notes]);
+    if (
+      closeAttempt.current?.shiftId !== targetShiftId ||
+      closeAttempt.current.payload !== payload
+    ) {
+      closeAttempt.current = { shiftId: targetShiftId, payload, key: createIdempotencyKey() };
     }
-    if (!closeConfirmed) {
-      toast({ variant: "error", description: t("shifts.confirmCloseRequired") });
-      return;
-    }
-    if (!closeNoteValid) {
-      toast({ variant: "error", description: t("shifts.differenceNoteRequired") });
-      return;
-    }
-
+    closeInFlight.current = true;
+    setCheckingClose(true);
     try {
+      const fresh = await refreshShift();
+      if (fresh.error) throw fresh.error;
+      if (fresh.data && fresh.data.id !== targetShiftId) {
+        throw new Error("posShiftChanged");
+      }
+      // The server rechecks under its shift lock and reports the actual blocking IDs.
       await closeShiftMutation.mutateAsync({
-        shiftId: freshShift.id,
+        shiftId: targetShiftId,
         closingCashCountedKgs: amountKgs,
-        notes: closeNote.trim() || null,
-        idempotencyKey: createIdempotencyKey(),
+        notes,
+        idempotencyKey: closeAttempt.current.key,
       });
-    } catch {
-      // handled by mutation onError
+      setCountedCash("");
+      setCloseNote("");
+      setCloseConfirmed(false);
+      toast({ variant: "success", description: t("shifts.closedSuccess") });
+    } catch (error) {
+      // A lost response is not proof of failure. Recover the exact shift, never retry a payment.
+      // Keep recovery independent of background query invalidation and cancellation by SSE.
+      const actual = await trpcUtils.client.pos.shifts.xReport
+        .query({ shiftId: targetShiftId })
+        .catch(() => null);
+      if (actual?.shift.status === "CLOSED") {
+        setCountedCash("");
+        setCloseNote("");
+        setCloseConfirmed(false);
+        toast({ variant: "success", description: t("shifts.closedSuccess") });
+      } else {
+        toast({
+          variant: "error",
+          description: translateError(
+            tErrors,
+            TRPCClientError.from<AppRouter>(
+              error instanceof Error ? error : new Error("genericMessage"),
+            ),
+          ),
+        });
+      }
+    } finally {
+      await refreshShift();
+      closeInFlight.current = false;
+      setCheckingClose(false);
     }
+  };
+
+  const receiptRow = (
+    receipt: NonNullable<typeof currentShift>["activeReceipts"][number],
+    held: boolean,
+  ) => {
+    const otherActive =
+      currentShift?.ownActiveReceipt && currentShift.ownActiveReceipt.id !== receipt.id
+        ? currentShift.ownActiveReceipt
+        : null;
+    const busy = cancelDraftMutation.isLoading || transferDraftMutation.isLoading || checkingClose;
+    return (
+      <div
+        key={receipt.id}
+        data-shift-receipt={receipt.id}
+        className="space-y-2 rounded-lg border border-border bg-background p-3"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="font-semibold text-foreground">{receipt.number}</p>
+          <Badge variant="warning">{held ? t("sell.heldReceipt") : t("history.statusDraft")}</Badge>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {formatDateTime(receipt.heldAt ?? receipt.createdAt, locale)} ·{" "}
+          {formatCurrentShiftMoney(receipt.totalKgs)} ·{" "}
+          {t("shifts.draftOwner", { name: receipt.createdByName })}
+        </p>
+        <p className="text-sm text-foreground">
+          {receipt.hasRecordedOperations
+            ? t("shifts.receiptRecordedHint")
+            : receipt.lineCount === 0
+              ? t("shifts.receiptEmptyHint")
+              : t("shifts.receiptDraftHint")}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {!receipt.hasRecordedOperations && !otherActive ? (
+            receipt.ownedByCurrentUser || held ? (
+              <Button size="sm" variant="secondary" asChild>
+                <Link href={posShiftReceiptHref(registerId, receipt.id)}>
+                  {t("shifts.continueReceipt")}
+                </Link>
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={busy}
+                onClick={() =>
+                  transferDraftMutation.mutate({
+                    saleId: receipt.id,
+                    reason: t("shifts.shiftCloseTransferReason"),
+                    idempotencyKey: createIdempotencyKey(),
+                  })
+                }
+              >
+                {t("shifts.takeReceipt")}
+              </Button>
+            )
+          ) : null}
+          {receipt.canCancel ? (
+            <Button
+              size="sm"
+              variant="danger"
+              disabled={busy}
+              onClick={() => void handleCancelReceipt(receipt.id, receipt.number)}
+            >
+              {t("sell.discardSale")}
+            </Button>
+          ) : null}
+          {receipt.hasRecordedOperations ? (
+            <Button size="sm" variant="secondary" onClick={() => void refreshShift()}>
+              {t("shifts.refreshState")}
+            </Button>
+          ) : null}
+        </div>
+        {otherActive && !receipt.hasRecordedOperations ? (
+          <p className="text-sm text-muted-foreground">
+            {t("shifts.receiptActiveFirst", { number: otherActive.number })}{" "}
+            <Link
+              className="font-medium text-primary underline"
+              href={posShiftReceiptHref(registerId, otherActive.id)}
+            >
+              {t("shifts.resolveReceipt")}
+            </Link>
+          </p>
+        ) : null}
+      </div>
+    );
   };
 
   const handleCashMovement = async () => {
@@ -452,7 +557,16 @@ const PosShiftsPage = () => {
           <CardTitle>{t("entry.register")}</CardTitle>
         </CardHeader>
         <CardContent>
-          <Select value={registerId} onValueChange={selectRegister}>
+          <Select
+            value={registerId}
+            onValueChange={selectRegister}
+            disabled={
+              checkingClose ||
+              cancelDraftMutation.isLoading ||
+              transferDraftMutation.isLoading ||
+              cancelReturnMutation.isLoading
+            }
+          >
             <SelectTrigger aria-label={t("entry.register")}>
               <SelectValue placeholder={t("entry.selectRegister")} />
             </SelectTrigger>
@@ -664,7 +778,7 @@ const PosShiftsPage = () => {
 
               <div
                 id={POS_CASH_MOVEMENT_ANCHOR}
-                className="bazaar-admin-toolbar grid scroll-mt-24 gap-3 md:grid-cols-[180px_160px_1fr_auto]"
+                className="bazaar-admin-toolbar grid scroll-mt-24 gap-3 sm:grid-cols-2 xl:grid-cols-[180px_160px_minmax(0,1fr)_auto]"
               >
                 <Select
                   value={cashType}
@@ -682,7 +796,7 @@ const PosShiftsPage = () => {
                     </SelectItem>
                   </SelectContent>
                 </Select>
-                <div className="grid gap-2 sm:grid-cols-2">
+                <div className="min-w-0">
                   <Input
                     value={cashAmount}
                     onChange={(event) => setCashAmount(event.target.value)}
@@ -769,6 +883,20 @@ const PosShiftsPage = () => {
                   </div>
                 </div>
 
+                <div
+                  id="shift-close"
+                  className="flex scroll-mt-24 flex-wrap items-center justify-between gap-2"
+                >
+                  <p className="text-xs text-muted-foreground">{t("shifts.internalShiftHint")}</p>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={currentShiftQuery.isFetching || checkingClose}
+                    onClick={() => void refreshShift()}
+                  >
+                    {t("shifts.refreshState")}
+                  </Button>
+                </div>
                 <div className="grid gap-3 md:grid-cols-[220px_1fr]">
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-foreground">
@@ -807,24 +935,15 @@ const PosShiftsPage = () => {
                     <p className="mt-1 text-xs text-muted-foreground">
                       {t("shifts.heldReceiptsBlockCloseCount", { count: heldReceiptCount })}
                     </p>
-                    {heldReceipts.length ? (
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {heldReceipts.map((receipt) => (
-                          <Link
-                            key={receipt.id}
-                            href={buildHeldReceiptResumeHref(registerId, receipt.id)}
-                            aria-label={`${t("sell.resumeHeldReceipt")} ${receipt.number}`}
-                            className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                          >
-                            <Badge
-                              variant="warning"
-                              className="cursor-pointer transition-colors hover:bg-warning/25"
-                            >
-                              {receipt.number}
-                            </Badge>
-                          </Link>
-                        ))}
-                      </div>
+                    <div className="mt-3 space-y-2">
+                      {heldReceipts.map((receipt) => receiptRow(receipt, true))}
+                    </div>
+                    {heldReceiptCount > heldReceipts.length ? (
+                      <p className="mt-2 text-xs">
+                        {t("shifts.moreBlockers", {
+                          count: heldReceiptCount - heldReceipts.length,
+                        })}
+                      </p>
                     ) : null}
                   </div>
                 ) : null}
@@ -837,62 +956,15 @@ const PosShiftsPage = () => {
                     <p className="mt-1 text-xs text-muted-foreground">
                       {t("shifts.activeReceiptsBlockCloseCount", { count: activeReceiptCount })}
                     </p>
-                    {activeReceipts.length ? (
-                      <div className="mt-3 space-y-2">
-                        {activeReceipts.map((receipt) => (
-                          <div
-                            key={receipt.id}
-                            className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/70 bg-background/70 p-2"
-                          >
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-medium text-foreground">
-                                {receipt.number}
-                              </p>
-                              <p className="truncate text-xs text-muted-foreground">
-                                {t("shifts.draftOwner", { name: receipt.createdByName })}
-                              </p>
-                            </div>
-                            {receipt.ownedByCurrentUser ? (
-                              <div className="flex flex-wrap gap-2">
-                                <Button size="sm" variant="secondary" asChild>
-                                  <Link
-                                    href={`/pos/sell?registerId=${encodeURIComponent(registerId)}`}
-                                  >
-                                    {t("shifts.resolveReceipt")}
-                                  </Link>
-                                </Button>
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="danger"
-                                  disabled={cancelDraftMutation.isLoading}
-                                  onClick={() => void handleCancelActiveReceipt(receipt.id)}
-                                >
-                                  {cancelDraftMutation.isLoading ? (
-                                    <Spinner className="h-4 w-4" />
-                                  ) : null}
-                                  {t("sell.discardSale")}
-                                </Button>
-                              </div>
-                            ) : (
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                disabled={transferDraftMutation.isLoading}
-                                onClick={() =>
-                                  transferDraftMutation.mutate({
-                                    saleId: receipt.id,
-                                    reason: t("shifts.shiftCloseTransferReason"),
-                                    idempotencyKey: createIdempotencyKey(),
-                                  })
-                                }
-                              >
-                                {t("shifts.takeReceipt")}
-                              </Button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
+                    <div className="mt-3 space-y-2">
+                      {activeReceipts.map((receipt) => receiptRow(receipt, false))}
+                    </div>
+                    {activeReceiptCount > activeReceipts.length ? (
+                      <p className="mt-2 text-xs">
+                        {t("shifts.moreBlockers", {
+                          count: activeReceiptCount - activeReceipts.length,
+                        })}
+                      </p>
                     ) : null}
                   </div>
                 ) : null}
@@ -917,6 +989,8 @@ const PosShiftsPage = () => {
                                 {saleReturn.number}
                               </p>
                               <p className="truncate text-xs text-muted-foreground">
+                                {formatDateTime(saleReturn.createdAt, locale)} ·{" "}
+                                {formatCurrentShiftMoney(saleReturn.totalKgs)} ·{" "}
                                 {t("shifts.draftOwner", { name: saleReturn.createdByName })}
                               </p>
                             </div>
@@ -972,9 +1046,13 @@ const PosShiftsPage = () => {
                   <Button
                     onClick={handleCloseShift}
                     disabled={
+                      checkingClose ||
                       closeShiftMutation.isLoading ||
+                      cancelReturnMutation.isLoading ||
                       cancelDraftMutation.isLoading ||
                       currentShiftQuery.isFetching ||
+                      currentShiftQuery.isError ||
+                      reportQuery.isError ||
                       !countedCashValid ||
                       Boolean(closeBlockingMessage) ||
                       !closeConfirmed ||

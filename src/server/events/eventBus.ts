@@ -70,6 +70,10 @@ export type EventPayload =
       payload: { shiftId: string; storeId: string; registerId: string };
     }
   | {
+      type: "shift.updated";
+      payload: { shiftId: string; storeId: string; registerId: string };
+    }
+  | {
       type: "customerOrder.created";
       payload: { customerOrderId: string; storeId: string; source: "MANUAL" | "CATALOG" | "API" };
     }
