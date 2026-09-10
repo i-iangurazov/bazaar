@@ -179,15 +179,23 @@ try {
         "https://www.bazaar.kg/",
       );
       await noOverflow(page, label);
-      await page.screenshot({ path: `${output}/${label}-hero.png` });
-      await page.evaluate(async () => {
-        for (let y = 0; y < document.body.scrollHeight; y += 800) {
-          window.scrollTo({ top: y, behavior: "instant" });
-          await new Promise((resolve) => setTimeout(resolve, 60));
+      // Visit each visible capture and await its actual load/decode. A fast timed scroll can
+      // skip native lazy-image activation on a busy CI runner, even after networkidle.
+      for (const picture of await page.locator("main img").all()) {
+        if (!(await picture.evaluate((img) => img.getClientRects().length > 0))) continue;
+        await picture.scrollIntoViewIfNeeded();
+        const element = await picture.elementHandle();
+        assert(element);
+        try {
+          await page.waitForFunction((img) => img.complete && img.naturalWidth > 0, element);
+          await picture.evaluate((img) => img.decode());
+        } finally {
+          await element.dispose();
         }
-        window.scrollTo({ top: 0, behavior: "instant" });
-      });
+      }
+      await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
       await settle(page);
+      await page.screenshot({ path: `${output}/${label}-hero.png` });
       await page.screenshot({ path: `${output}/${label}-full.png`, fullPage: true });
       assert(
         await page
