@@ -276,6 +276,54 @@ jobs:
             artifacts/ux/flows
             artifacts/ux/server.log
 
+  reporting-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: bazaar_test
+          POSTGRES_PASSWORD: bazaar_test_only
+          POSTGRES_DB: bazaar_hardening_reporting
+        ports:
+          - 55440:5432
+        options: >-
+          --health-cmd="pg_isready -U bazaar_test"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 56390:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm prisma:generate
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: Verify reporting calculations, drilldowns, exports, roles and responsive UI
+        run: node --import tsx scripts/reporting/run.ts
+      - name: Upload isolated reporting browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reporting-browser
+          path: |
+            artifacts/reporting/after
+            artifacts/reporting/states
+            artifacts/reporting/server.log
+
   landing-browser:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -363,6 +411,7 @@ jobs:
       - inventory-browser
       - baam-browser
       - ux-browser
+      - reporting-browser
       - landing-browser
     services:
       postgres:

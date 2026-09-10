@@ -1,6 +1,9 @@
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
+import { getSalesReport, REPORT_EXPORT_LIMIT } from "@/server/services/reporting/sales";
+import { businessDateKey, addBusinessDays } from "@/lib/timezone";
+import { AppError } from "@/server/services/errors";
 
 export const adminMetricsWarningFilters = [
   "all",
@@ -144,13 +147,6 @@ type CategoryOptionRow = {
   category: string | null;
 };
 
-type SalesPeriodRow = {
-  orders: number | bigint | null;
-  revenue_kgs: Prisma.Decimal | number | string | null;
-  sold_qty: Prisma.Decimal | number | string | null;
-  line_cost_kgs: Prisma.Decimal | number | string | null;
-};
-
 const uncategorizedLabel = "Без категории";
 
 const toNumber = (value: Prisma.Decimal | number | string | bigint | null | undefined) => {
@@ -195,7 +191,7 @@ const normalizeInput = (input: AdminMetricsInput): NormalizedAdminMetricsInput =
 };
 
 const buildBaseCte = (input: NormalizedAdminMetricsInput) => {
-  const searchPattern = input.search ? `%${input.search}%` : null;
+  const searchPattern = input.search ? `%${input.search.replace(/[\\%_]/g, "\\$&")}%` : null;
 
   return Prisma.sql`
     WITH base AS (
@@ -210,7 +206,7 @@ const buildBaseCte = (input: NormalizedAdminMetricsInput) => {
         product.name AS product_name,
         product.sku AS product_sku,
         product."isDeleted" AS is_archived,
-        COALESCE(NULLIF(TRIM(product.category), ''), ${uncategorizedLabel}) AS category_name,
+        COALESCE(NULLIF(TRIM(product.category), ''), NULLIF(TRIM(product.categories[1]), ''), ${uncategorizedLabel}) AS category_name,
         variant.name AS variant_name,
         variant.sku AS variant_sku,
         cost."avgCostKgs" AS cost_price_kgs,
@@ -511,7 +507,10 @@ export const calculateInventoryValuation = (
   );
 };
 
-const addCalculatedMargin = (totals: InventoryValuationTotals, rows: InventoryValuationCalculationRow[]) => {
+const addCalculatedMargin = (
+  totals: InventoryValuationTotals,
+  rows: InventoryValuationCalculationRow[],
+) => {
   const profitRetailValueKgs = rows.reduce((sum, row) => {
     if (row.costPriceKgs === null || row.salePriceKgs === null) {
       return sum;
@@ -522,22 +521,38 @@ const addCalculatedMargin = (totals: InventoryValuationTotals, rows: InventoryVa
   return {
     ...totals,
     potentialMarginPercent:
-      profitRetailValueKgs !== 0 ? (totals.potentialGrossProfitKgs / profitRetailValueKgs) * 100 : null,
+      profitRetailValueKgs !== 0
+        ? (totals.potentialGrossProfitKgs / profitRetailValueKgs) * 100
+        : null,
   };
 };
 
-export const calculateInventoryValuationWithMargin = (
-  rows: InventoryValuationCalculationRow[],
-) => addCalculatedMargin(calculateInventoryValuation(rows), rows);
+export const calculateInventoryValuationWithMargin = (rows: InventoryValuationCalculationRow[]) =>
+  addCalculatedMargin(calculateInventoryValuation(rows), rows);
 
-export const getAdminMetrics = async (input: AdminMetricsInput) => {
+export const getAdminMetrics = async (
+  input: AdminMetricsInput,
+  client: Pick<Prisma.TransactionClient, "store" | "$queryRaw"> = prisma,
+  options: {
+    exportAll?: boolean;
+    exportView?: "products" | "stores" | "categories";
+    now?: Date;
+  } = {},
+) => {
   const normalized = normalizeInput(input);
   const startedAt = Date.now();
   const baseCte = buildBaseCte(normalized);
   const warningWhere = warningWhereSql(normalized.warning);
+  const exportProducts =
+    options.exportAll && (!options.exportView || options.exportView === "products");
+  if (exportProducts) {
+    normalized.page = 1;
+    normalized.pageSize = REPORT_EXPORT_LIMIT + 1;
+  }
   const offset = (normalized.page - 1) * normalized.pageSize;
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const selectedStoreId = normalized.storeId;
+  const now = options.now ?? new Date();
+  const dateTo = businessDateKey(now);
+  const dateFrom = addBusinessDays(dateTo, -29);
 
   const [
     stores,
@@ -547,18 +562,17 @@ export const getAdminMetrics = async (input: AdminMetricsInput) => {
     categoryRows,
     productCountRows,
     productRows,
-    salesRows,
   ] = await Promise.all([
-      prisma.store.findMany({
-        where: { organizationId: normalized.organizationId },
-        orderBy: { name: "asc" },
-        select: { id: true, name: true },
-      }),
+    client.store.findMany({
+      where: { organizationId: normalized.organizationId },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
 
-      prisma.$queryRaw<CategoryOptionRow[]>`
+    client.$queryRaw<CategoryOptionRow[]>`
         SELECT DISTINCT category
         FROM (
-          SELECT COALESCE(NULLIF(TRIM(product.category), ''), ${uncategorizedLabel}) AS category
+          SELECT COALESCE(NULLIF(TRIM(product.category), ''), NULLIF(TRIM(product.categories[1]), ''), ${uncategorizedLabel}) AS category
           FROM "Product" product
           WHERE product."organizationId" = ${normalized.organizationId}
             AND (${normalized.includeArchived} = true OR product."isDeleted" = false)
@@ -573,41 +587,44 @@ export const getAdminMetrics = async (input: AdminMetricsInput) => {
         ORDER BY category ASC
       `,
 
-      prisma.$queryRaw<SummaryRow[]>(Prisma.sql`
+    client.$queryRaw<SummaryRow[]>(Prisma.sql`
         ${baseCte}
         SELECT ${summaryProjectionSql}
         FROM base
+        ${warningWhere}
       `),
 
-      prisma.$queryRaw<StoreSummaryRow[]>(Prisma.sql`
+    client.$queryRaw<StoreSummaryRow[]>(Prisma.sql`
         ${baseCte}
         SELECT
           store_id,
           store_name,
           ${summaryProjectionSql}
         FROM base
+        ${warningWhere}
         GROUP BY store_id, store_name
         ORDER BY retail_value_kgs DESC NULLS LAST, store_name ASC
       `),
 
-      prisma.$queryRaw<CategorySummaryRow[]>(Prisma.sql`
+    client.$queryRaw<CategorySummaryRow[]>(Prisma.sql`
         ${baseCte}
         SELECT
           category_name,
           ${summaryProjectionSql}
         FROM base
+        ${warningWhere}
         GROUP BY category_name
         ORDER BY retail_value_kgs DESC NULLS LAST, category_name ASC
       `),
 
-      prisma.$queryRaw<ProductCountRow[]>(Prisma.sql`
+    client.$queryRaw<ProductCountRow[]>(Prisma.sql`
         ${baseCte}
         SELECT COUNT(*)::integer AS total_count
         FROM base
         ${warningWhere}
       `),
 
-      prisma.$queryRaw<ProductTableRow[]>(Prisma.sql`
+    client.$queryRaw<ProductTableRow[]>(Prisma.sql`
         ${baseCte}
         SELECT
           snapshot_id,
@@ -649,32 +666,76 @@ export const getAdminMetrics = async (input: AdminMetricsInput) => {
         LIMIT ${normalized.pageSize}
         OFFSET ${offset}
       `),
-
-      prisma.$queryRaw<SalesPeriodRow[]>(Prisma.sql`
-        SELECT
-          COUNT(DISTINCT orders.id)::integer AS orders,
-          COALESCE(SUM(lines."lineTotalKgs"), 0)::numeric AS revenue_kgs,
-          COALESCE(SUM(lines.qty), 0)::numeric AS sold_qty,
-          COALESCE(SUM(lines."lineCostTotalKgs"), 0)::numeric AS line_cost_kgs
-        FROM "CustomerOrder" orders
-        LEFT JOIN "CustomerOrderLine" lines ON lines."customerOrderId" = orders.id
-        WHERE orders."organizationId" = ${normalized.organizationId}
-          AND orders.status = 'COMPLETED'
-          AND orders."createdAt" >= ${thirtyDaysAgo}
-          AND (${selectedStoreId}::text IS NULL OR orders."storeId" = ${selectedStoreId})
-      `),
-    ]);
+  ]);
 
   const summary = mapTotals(summaryRows[0]);
   const totalProducts = toNumber(productCountRows[0]?.total_count);
   const totalPages = Math.max(Math.ceil(totalProducts / normalized.pageSize), 1);
-  const sales = salesRows[0];
-  const salesRevenueKgs = toNumber(sales?.revenue_kgs);
-  const salesCostKgs = toNumber(sales?.line_cost_kgs);
-  const salesProfitKgs = salesRevenueKgs - salesCostKgs;
+  if (exportProducts && totalProducts > REPORT_EXPORT_LIMIT)
+    throw new AppError("analyticsExportRowLimit", "BAD_REQUEST", 400);
+  const sortGroups = <T extends ReturnType<typeof mapTotals>>(
+    rows: T[],
+    name: (row: T) => string,
+  ) =>
+    rows.sort((a, b) => {
+      const value = (row: T) =>
+        ({
+          retailValue: row.warningCounts.noPrice ? null : row.retailValueKgs,
+          costValue: row.warningCounts.noCost ? null : row.costValueKgs,
+          profit:
+            row.warningCounts.noPrice || row.warningCounts.noCost
+              ? null
+              : row.potentialGrossProfitKgs,
+          margin:
+            row.warningCounts.noPrice || row.warningCounts.noCost
+              ? null
+              : row.potentialMarginPercent,
+          stockQty: row.totalStockQty,
+          warnings: Object.values(row.warningCounts).reduce((sum, count) => sum + count, 0),
+          product: name(row),
+          store: name(row),
+        })[normalized.sortKey];
+      const av = value(a),
+        bv = value(b);
+      if (av === null) return bv === null ? name(a).localeCompare(name(b)) : 1;
+      if (bv === null) return -1;
+      const compared =
+        typeof av === "number" && typeof bv === "number"
+          ? av - bv
+          : String(av).localeCompare(String(bv), undefined, { numeric: true });
+      return (
+        compared * (normalized.sortDirection === "asc" ? 1 : -1) || name(a).localeCompare(name(b))
+      );
+    });
+  const sales = await getSalesReport(
+    client,
+    {
+      organizationId: input.organizationId,
+      storeIds: stores
+        .filter((store) => !normalized.storeId || store.id === normalized.storeId)
+        .map((store) => store.id),
+      dateFrom,
+      dateTo,
+      category:
+        normalized.category === uncategorizedLabel
+          ? "__uncategorized__"
+          : (normalized.category ?? undefined),
+      search: normalized.search ?? undefined,
+      ...(normalized.warning === "all"
+        ? {}
+        : {
+            inventoryScope: Prisma.sql`EXISTS (
+      ${baseCte} SELECT 1 FROM base ${warningWhere} AND base.product_id = e."productId"
+      AND base.variant_key = e."variantKey" AND base.store_id = e."storeId")`,
+          }),
+      pageSize: 1,
+    },
+    { now },
+  );
 
   return {
     generatedAt: new Date(),
+    organizationName: sales.meta.organizationName,
     queryTimingMs: Date.now() - startedAt,
     filters: {
       storeId: normalized.storeId,
@@ -689,14 +750,16 @@ export const getAdminMetrics = async (input: AdminMetricsInput) => {
     },
     filterOptions: {
       stores,
-      categories: categoryOptions.map((row) => row.category).filter((category): category is string => Boolean(category)),
+      categories: categoryOptions
+        .map((row) => row.category)
+        .filter((category): category is string => Boolean(category)),
     },
     inventory: {
       summary,
       productCount: toNumber(summaryRows[0]?.product_count),
       snapshotCount: toNumber(summaryRows[0]?.snapshot_count),
-      storeSummaries: storeRows.map(mapStoreSummary),
-      categorySummaries: categoryRows.map(mapCategorySummary),
+      storeSummaries: sortGroups(storeRows.map(mapStoreSummary), (row) => row.storeName),
+      categorySummaries: sortGroups(categoryRows.map(mapCategorySummary), (row) => row.category),
       products: {
         rows: productRows.map(mapProductRow),
         pagination: {
@@ -710,11 +773,17 @@ export const getAdminMetrics = async (input: AdminMetricsInput) => {
       },
     },
     sales30d: {
-      orders: toNumber(sales?.orders),
-      revenueKgs: salesRevenueKgs,
-      soldQty: toNumber(sales?.sold_qty),
-      grossProfitKgs: salesProfitKgs,
-      grossMarginPercent: salesRevenueKgs > 0 ? (salesProfitKgs / salesRevenueKgs) * 100 : null,
+      orders: sales.totals.receiptCount,
+      revenueKgs: sales.totals.netSalesKgs,
+      soldQty: sales.totals.netQuantity,
+      costKgs: sales.totals.costKgs,
+      grossProfitKgs: sales.totals.grossProfitKgs,
+      grossMarginPercent: sales.totals.marginPercent,
+      unknownCostLines: sales.totals.unknownCostLines,
+      knownProfitKgs: sales.totals.knownProfitKgs,
+      dateFrom,
+      dateTo,
+      period: sales.period,
     },
   };
 };

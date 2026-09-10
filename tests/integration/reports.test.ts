@@ -63,6 +63,8 @@ describeDb("reports", () => {
     });
 
     const range = { from: daysAgo(30), to: new Date() };
+    // A slow-moving inventory report requires stock to exist, not an empty catalog row.
+    await prisma.inventorySnapshot.updateMany({ where: { storeId: store.id, productId: slowProduct.id }, data: { onHand: 3 } });
 
     const stockouts = await getStockoutsReport({
       organizationId: org.id,
@@ -85,9 +87,7 @@ describeDb("reports", () => {
       storeId: store.id,
       ...range,
     });
-    expect(
-      shrinkage.items.some((row) => row.productId === stockoutProduct.id && row.totalQty === 5),
-    ).toBe(true);
+    expect(shrinkage.items.some((row) => row.productId === stockoutProduct.id)).toBe(false);
 
     const [stockoutsBeyondLastPage, slowMoversBeyondLastPage, shrinkageBeyondLastPage] =
       await Promise.all([
@@ -132,6 +132,18 @@ describeDb("reports", () => {
       page: 99,
       pageSize: 10,
     });
+  });
+
+  it("counts actual write-offs and signed reversals, excluding ordinary negative adjustments", async () => {
+    const { org, store, product } = await seedBase();
+    await prisma.stockMovement.createMany({ data: [
+      { storeId: store.id, productId: product.id, type: "WRITE_OFF", qtyDelta: -5, referenceType: "WRITE_OFF" },
+      { storeId: store.id, productId: product.id, type: "WRITE_OFF", qtyDelta: 2, referenceType: "WRITE_OFF" },
+      { storeId: store.id, productId: product.id, type: "ADJUSTMENT", qtyDelta: -100 },
+    ] });
+    const report = await getShrinkageReport({ organizationId: org.id, storeId: store.id, from: daysAgo(1), to: new Date() });
+    expect(report.items).toHaveLength(1);
+    expect(report.items[0]).toMatchObject({ totalQty: 3, movementCount: 2 });
   });
 
   it("bounds report rows with deterministic server pagination", async () => {

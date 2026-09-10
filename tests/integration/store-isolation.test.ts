@@ -722,7 +722,7 @@ describeDb("store isolation", () => {
         data: {
           storeId: store.id,
           productId: product.id,
-          type: StockMovementType.ADJUSTMENT,
+          type: StockMovementType.WRITE_OFF,
           qtyDelta: -1,
           createdById: managerUser.id,
         },
@@ -731,7 +731,7 @@ describeDb("store isolation", () => {
         data: {
           storeId: storeB.id,
           productId: storeBProduct.id,
-          type: StockMovementType.ADJUSTMENT,
+          type: StockMovementType.WRITE_OFF,
           qtyDelta: -2,
           createdById: adminUser.id,
         },

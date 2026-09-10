@@ -1,6 +1,8 @@
 import { z } from "zod";
 
 import { adminProcedure, router } from "@/server/trpc/trpc";
+import { withReportRead } from "@/server/services/reporting/access";
+import { toTRPCError } from "@/server/trpc/errors";
 import {
   adminMetricsSortDirections,
   adminMetricsSortKeys,
@@ -23,10 +25,42 @@ const adminMetricsInputSchema = z
   .optional();
 
 export const adminMetricsRouter = router({
-  get: adminProcedure.input(adminMetricsInputSchema).query(async ({ ctx, input }) =>
-    getAdminMetrics({
-      organizationId: ctx.user.organizationId,
-      ...input,
+  get: adminProcedure.input(adminMetricsInputSchema).query(async ({ ctx, input }) => {
+    try {
+      return await withReportRead(
+        ctx.user,
+        { adminOnly: true, requireAnalytics: false, storeId: input?.storeId ?? undefined },
+        (tx) => getAdminMetrics({ ...input, organizationId: ctx.user.organizationId }, tx),
+      );
+    } catch (error) {
+      throw toTRPCError(error);
+    }
+  }),
+  export: adminProcedure
+    .input(
+      adminMetricsInputSchema
+        .unwrap()
+        .extend({ view: z.enum(["products", "stores", "categories"]).optional() })
+        .strict(),
+    )
+    .query(async ({ ctx, input }) => {
+      try {
+        return await withReportRead(
+          ctx.user,
+          {
+            adminOnly: true,
+            requireAnalytics: false,
+            export: true,
+            storeId: input?.storeId ?? undefined,
+          },
+          (tx) =>
+            getAdminMetrics({ ...input, organizationId: ctx.user.organizationId }, tx, {
+              exportAll: true,
+              exportView: input.view,
+            }),
+        );
+      } catch (error) {
+        throw toTRPCError(error);
+      }
     }),
-  ),
 });

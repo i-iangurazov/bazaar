@@ -359,7 +359,9 @@ describeDb("B0 Agent 4 P0 runtime verification", () => {
         data: {
           storeId: store.id,
           productId: product.id,
-          type: "ADJUSTMENT",
+          type: "WRITE_OFF",
+          referenceType: "WRITE_OFF",
+          referenceId: "bishkek-boundary-writeoff",
           qtyDelta: -1,
           createdById: adminUser.id,
           createdAt: new Date("2026-07-21T19:30:00.000Z"),

@@ -1,1060 +1,813 @@
 "use client";
 
-import { Suspense, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { useSession } from "next-auth/react";
-import { useLocale, useTranslations } from "next-intl";
-import Link from "next/link";
+import { Suspense, useState } from "react";
 import dynamic from "next/dynamic";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { TRPCClientError } from "@trpc/client";
-
+import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
+import { useSession } from "next-auth/react";
 import { PageHeader } from "@/components/page-header";
 import { ReceiptPreviewModal } from "@/components/pos/receipt-preview-modal";
-import { BackIcon, DownloadIcon, SearchIcon, ViewIcon } from "@/components/icons";
-import { Badge } from "@/components/ui/badge";
+import { QueryErrorState } from "@/components/query-error-state";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Modal } from "@/components/ui/modal";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+  ReportTable as Table,
+  ReportPagination,
+  ReportPeriodControls,
+  ReportSelect,
+  useReportScope,
+} from "@/components/reports/report-controls";
+import { ReportMetric } from "@/components/reports/report-metric";
 import { baseAccountingCurrency, formatKgsMoney } from "@/lib/currencyDisplay";
 import { downloadTableFile, type DownloadFormat } from "@/lib/fileExport";
-import { formatDate, formatDateTime, formatNumber } from "@/lib/i18nFormat";
-import { defaultTimeZone } from "@/lib/timezone";
-import { buildSoldProductsFilteredExport } from "@/lib/soldProductsExport";
+import { formatDateTime, formatNumber } from "@/lib/i18nFormat";
+import { reportHref, salesViews, type SalesView } from "@/lib/reporting";
 import { trpc } from "@/lib/trpc";
-import { translateError } from "@/lib/translateError";
-import { cn } from "@/lib/utils";
-import { parseAnalyticsReportScope } from "@/lib/analyticsReportLink";
-
-type Preset = "today" | "yesterday" | "last7" | "last30" | "thisMonth" | "lastMonth";
-type SelectedPreset = Preset | "custom";
-type SalesPoint = {
-  date: string;
-  grossSalesKgs: number;
-  returnsKgs: number;
-  netSalesKgs: number;
-  receiptCount: number;
-  averageReceiptKgs: number;
-};
-
-const paymentMethods = ["CASH", "CARD", "TRANSFER", "OTHER"] as const;
-const pageSize = 25;
+import { reportError } from "@/lib/reporting";
+import type { SalesReportInput, SalesReportRow } from "@/server/services/reporting/sales";
 
 const SalesOverviewChart = dynamic(
   () =>
-    import("@/components/reports/sales-overview-chart").then(
-      (module) => module.SalesOverviewChart,
-    ),
-  { ssr: false },
+    import("@/components/reports/sales-overview-chart").then((module) => module.SalesOverviewChart),
+  { ssr: false, loading: () => <Skeleton className="h-full w-full" /> },
 );
 
-const dateOnlyFormatter = new Intl.DateTimeFormat("en-US", {
-  timeZone: defaultTimeZone,
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-});
-
-const formatDateInput = (value: Date) => {
-  const parts = dateOnlyFormatter.formatToParts(value);
-  const year = parts.find((part) => part.type === "year")?.value ?? "1970";
-  const month = parts.find((part) => part.type === "month")?.value ?? "01";
-  const day = parts.find((part) => part.type === "day")?.value ?? "01";
-  return `${year}-${month}-${day}`;
-};
-
-const parseDateOnly = (value: string) => {
-  const [year, month, day] = value.split("-").map(Number);
-  return { year, month, day };
-};
-
-const addDays = (dateOnly: string, days: number) => {
-  const { year, month, day } = parseDateOnly(dateOnly);
-  return new Date(Date.UTC(year, month - 1, day + days, 0, 0, 0, 0)).toISOString().slice(0, 10);
-};
-
-const dateOnlyToDisplayDate = (dateOnly: string) => {
-  const { year, month, day } = parseDateOnly(dateOnly);
-  return new Date(Date.UTC(year, month - 1, day, 6, 0, 0, 0));
-};
-
-const monthBounds = (dateOnly: string, offsetMonths = 0) => {
-  const { year, month } = parseDateOnly(dateOnly);
-  const start = new Date(Date.UTC(year, month - 1 + offsetMonths, 1, 0, 0, 0, 0));
-  const end = new Date(Date.UTC(year, month + offsetMonths, 0, 0, 0, 0, 0));
-  return {
-    from: start.toISOString().slice(0, 10),
-    to: end.toISOString().slice(0, 10),
-  };
-};
-
-const buildPresetRange = (preset: Preset) => {
-  const today = formatDateInput(new Date());
-  if (preset === "today") {
-    return { from: today, to: today };
-  }
-  if (preset === "yesterday") {
-    const yesterday = addDays(today, -1);
-    return { from: yesterday, to: yesterday };
-  }
-  if (preset === "last7") {
-    return { from: addDays(today, -6), to: today };
-  }
-  if (preset === "thisMonth") {
-    return monthBounds(today);
-  }
-  if (preset === "lastMonth") {
-    return monthBounds(today, -1);
-  }
-  return { from: addDays(today, -29), to: today };
-};
-
-const AnalyticsUrlScope = () => {
-  const searchParams = useSearchParams();
-  const { data: session } = useSession();
-  const queryString = searchParams.toString();
-  // A new URL or authenticated audience gets one atomic filter initialization.
-  // Other filter controls remain local until the date/store URL changes.
-  return <AnalyticsReportContent
-    key={`${session?.user.id}:${session?.user.organizationId}:${session?.user.role}:${queryString}`}
-    queryString={queryString}
-  />;
-};
-
-const AnalyticsPage = () => <Suspense fallback={<Skeleton className="h-[28rem] w-full" />}><AnalyticsUrlScope /></Suspense>;
-
-const AnalyticsReportContent = ({ queryString }: { queryString: string }) => {
-  const t = useTranslations("analytics");
-  const tCommon = useTranslations("common");
-  const tErrors = useTranslations("errors");
-  const tPos = useTranslations("pos");
-  const tExports = useTranslations("exports");
+function AnalyticsReportContent() {
+  const scope = useReportScope("sales");
+  const { state, update, enabled } = scope;
+  const t = useTranslations("reporting"),
+    a = useTranslations("analytics"),
+    errors = useTranslations("errors");
   const locale = useLocale();
-  const router = useRouter();
-  const pathname = usePathname();
-  const { data: session, status } = useSession();
-  const role = session?.user?.role ?? "STAFF";
-  const canView = role === "ADMIN" || role === "MANAGER";
-
-  const params = useMemo(() => new URLSearchParams(queryString), [queryString]);
-  const requestedScope = useMemo(() => parseAnalyticsReportScope(params), [params]);
-  const initialRange = useMemo(() => requestedScope.kind === "default" ? buildPresetRange("last30") : {
-    from: params.get("dateFrom") ?? "", to: params.get("dateTo") ?? "",
-  }, [params, requestedScope]);
-  const storeId = params.get("storeId") ?? "all";
-  const [registerId, setRegisterId] = useState("all");
-  const [cashierId, setCashierId] = useState("all");
-  const dateFrom = initialRange.from;
-  const dateTo = initialRange.to;
-  const preset: SelectedPreset = requestedScope.kind === "default" ? "last30" :
-    (["today", "yesterday", "last7", "last30", "thisMonth", "lastMonth"] as Preset[]).find(value => {
-      const range = buildPresetRange(value);
-      return range.from === dateFrom && range.to === dateTo;
-    }) ?? "custom";
-  const [category, setCategory] = useState("all");
-  const [search, setSearch] = useState("");
-  const deferredSearch = useDeferredValue(search.trim());
-  const [productPage, setProductPage] = useState(1);
-  const [downloadFormat, setDownloadFormat] = useState<DownloadFormat>("csv");
-  const [exportingProducts, setExportingProducts] = useState(false);
-  const [exportError, setExportError] = useState<string | null>(null);
-  const trpcUtils = trpc.useUtils();
-  const exportMounted = useRef(true);
-  useEffect(() => {
-    exportMounted.current = true;
-    return () => { exportMounted.current = false; };
-  }, []);
-  const [selectedDay, setSelectedDay] = useState<string | null>(null);
-  const [selectedProduct, setSelectedProduct] = useState<{
-    productId: string;
-    variantKey: string;
-    name: string;
-  } | null>(null);
-  const [previewSaleId, setPreviewSaleId] = useState<string | null>(null);
-
-  const storesQuery = trpc.stores.list.useQuery(undefined, {
-    enabled: status === "authenticated" && canView,
-    retry: false, staleTime: 0, cacheTime: 0, refetchOnMount: "always",
-  });
-
-  const resolvedStoreId = storeId === "all" ? undefined : storeId || undefined;
-  const selectedStore = resolvedStoreId
-    ? storesQuery.data?.find((store) => store.id === resolvedStoreId) ?? null
-    : null;
-  const currencySource = selectedStore ?? baseAccountingCurrency;
-  const commonAnalyticsInput = {
-    storeId: resolvedStoreId,
-    registerId: registerId === "all" ? undefined : registerId,
-    cashierId: cashierId === "all" ? undefined : cashierId,
-    dateFrom,
-    dateTo,
+  const utils = trpc.useUtils();
+  const [format, setFormat] = useState<DownloadFormat>("csv");
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<{ fingerprint: string; text: string } | null>(
+    null,
+  );
+  const [preview, setPreview] = useState<string | null>(null);
+  const [showExtraFilters, setShowExtraFilters] = useState(false);
+  const input = {
+    dateFrom: state.dateFrom,
+    dateTo: state.dateTo,
+    storeId: state.storeId,
+    channel: state.channel,
+    registerId: state.registerId,
+    cashierId: state.cashierId,
+    category: state.category,
+    search: scope.search.trim() || undefined,
+    productId: state.productId,
+    variantKey: state.variantKey,
+    customerKey: state.customerKey,
+    documentId: state.documentId,
+    kind: state.kind,
+    view: state.view as SalesView,
+    sort: state.sort as SalesReportInput["sort"],
+    direction: state.direction,
+    page: state.page,
+    pageSize: 25,
   };
-  const storesReady = storesQuery.data !== undefined && !storesQuery.isFetching && !storesQuery.error;
-  const scopeError = requestedScope.kind === "invalid" ? tErrors("invalidInput") : storesQuery.error
-    ? translateError(tErrors, storesQuery.error)
-    : storesReady && resolvedStoreId && !selectedStore ? tErrors("storeAccessDenied") : null;
-  const analyticsEnabled = status === "authenticated" && canView && storesReady && !scopeError;
-  const exportSnapshotKey = JSON.stringify([session?.user.id, session?.user.organizationId, role, status, commonAnalyticsInput, category, search, analyticsEnabled]);
-  const exportSnapshot = useRef(exportSnapshotKey);
-  exportSnapshot.current = exportSnapshotKey;
-  useEffect(() => { setExportError(null); }, [exportSnapshotKey]);
-
-  const registersQuery = trpc.pos.registers.list.useQuery(
-    {
-      storeId: resolvedStoreId,
-      status: "all",
-    },
-    { enabled: analyticsEnabled },
-  );
-  const cashiersQuery = trpc.pos.cashiers.list.useQuery(
-    { storeId: resolvedStoreId },
-    { enabled: analyticsEnabled },
-  );
-  const overviewQuery = trpc.analytics.salesOverview.useQuery(commonAnalyticsInput, {
-    enabled: analyticsEnabled,
+  const query = trpc.reports.sales.useQuery(input, {
+    enabled,
     keepPreviousData: false,
+    staleTime: 0,
+    cacheTime: 0,
+    retry: false,
+    refetchOnWindowFocus: true,
   });
-  const filterOptionsQuery = trpc.analytics.salesFilterOptions.useQuery(commonAnalyticsInput, {
-    enabled: analyticsEnabled,
-    keepPreviousData: false,
-  });
-  const soldProductsQuery = trpc.analytics.soldProducts.useQuery(
-    {
-      ...commonAnalyticsInput,
-      category: category === "all" ? undefined : category,
-      search: deferredSearch || undefined,
-      page: productPage,
-      pageSize,
-    },
-    {
-      enabled: analyticsEnabled,
-      keepPreviousData: false,
-    },
+  const options = trpc.reports.filterOptions.useQuery(
+    { storeId: state.storeId },
+    { enabled, staleTime: 0, cacheTime: 0, retry: false },
   );
-  const dayDetailQuery = trpc.analytics.salesDayDetail.useQuery(
-    {
-      storeId: resolvedStoreId,
-      registerId: registerId === "all" ? undefined : registerId,
-      cashierId: cashierId === "all" ? undefined : cashierId,
-      date: selectedDay ?? dateFrom,
-    },
-    {
-      enabled: analyticsEnabled && Boolean(selectedDay),
-      keepPreviousData: false,
-    },
-  );
-  const productReceiptsQuery = trpc.analytics.productReceipts.useQuery(
-    {
-      ...commonAnalyticsInput,
-      productId: selectedProduct?.productId ?? "",
-      variantKey: selectedProduct?.variantKey,
-      page: 1,
-      pageSize: 100,
-    },
-    {
-      enabled: analyticsEnabled && Boolean(selectedProduct),
-      keepPreviousData: false,
-    },
-  );
-
-  useEffect(() => {
-    setRegisterId("all");
-    setCashierId("all");
-  }, [storeId]);
-
-  useEffect(() => {
-    if (registerId === "all") {
-      return;
+  const data = enabled && !query.error ? query.data : undefined;
+  const money = (value: number | null | undefined) =>
+    value === null || value === undefined
+      ? "—"
+      : formatKgsMoney(value, locale, baseAccountingCurrency);
+  const number = (value: number | null | undefined) =>
+    value === null || value === undefined
+      ? "—"
+      : formatNumber(value, locale, { maximumFractionDigits: 2 });
+  const percent = (value: number | null | undefined) =>
+    value === null || value === undefined ? "—" : `${number(value)}%`;
+  const label = (name: string | null) =>
+    name?.startsWith("__") ? t(`special.${name}`) : (name ?? "—");
+  const totals = data?.totals;
+  const detail = (patch: Record<string, string | number | undefined | null>) =>
+    update({ view: "documents", ...patch });
+  const setSelectedDay = (date: string) => detail({ dateFrom: date, dateTo: date });
+  const openRow = (row: SalesReportRow) => {
+    switch (input.view) {
+      case "products":
+        detail({ productId: row.productId ?? "__unallocated__", variantKey: row.variantKey });
+        break;
+      case "categories":
+        detail({ category: row.name });
+        break;
+      case "stores":
+        detail({ storeId: row.storeId });
+        break;
+      case "staff":
+        detail({ cashierId: row.employeeId ?? "__unknown__" });
+        break;
+      case "customers":
+        detail({ customerKey: row.customerKey });
+        break;
+      case "days":
+        if (row.date) setSelectedDay(row.date);
+        break;
+      case "documents":
+      case "costGaps":
+        if (row.kind === "return") setPreview(row.originalSaleId);
+        else if (row.channel === "pos") setPreview(row.documentId);
+        break;
     }
-    const exists = (registersQuery.data ?? []).some((register) => register.id === registerId);
-    if (!exists && registersQuery.data) {
-      setRegisterId("all");
-    }
-  }, [registerId, registersQuery.data]);
-
-  useEffect(() => {
-    setProductPage(1);
-  }, [dateFrom, dateTo, storeId, registerId, cashierId, category, deferredSearch]);
-
-  const overviewLoading = !analyticsEnabled || overviewQuery.isLoading || overviewQuery.isFetching;
-  const soldProductsLoading = !analyticsEnabled || soldProductsQuery.isLoading || soldProductsQuery.isFetching;
-  const chartData = (overviewLoading || overviewQuery.error ? [] : overviewQuery.data?.series ?? []) as SalesPoint[];
-  const totals = overviewLoading || overviewQuery.error ? undefined : overviewQuery.data?.totals;
-  const soldProducts = soldProductsLoading || soldProductsQuery.error ? [] : soldProductsQuery.data?.items ?? [];
-  const productTotal = soldProductsLoading || soldProductsQuery.error ? 0 : soldProductsQuery.data?.total ?? 0;
-  const productPages = Math.max(1, Math.ceil(productTotal / pageSize));
-  const categories = analyticsEnabled && !filterOptionsQuery.isFetching ? filterOptionsQuery.data?.categories ?? [] : [];
-
-  // Date and store controls update the URL, which is their only source of truth.
-  // Raw incomplete dates remain explicit invalid input rather than reverting to a default range.
-  const replaceScope = (patch: { dateFrom?: string; dateTo?: string; storeId?: string }) => {
-    const next = new URLSearchParams({ dateFrom: patch.dateFrom ?? dateFrom, dateTo: patch.dateTo ?? dateTo });
-    const nextStore = patch.storeId ?? storeId;
-    if (nextStore !== "all") next.set("storeId", nextStore);
-    router.replace(`${pathname}?${next.toString()}`, { scroll: false });
   };
-  const setStoreId = (nextStoreId: string) => replaceScope({ storeId: nextStoreId });
-  const applyPreset = (nextPreset: Preset) => {
-    const range = buildPresetRange(nextPreset);
-    replaceScope({ dateFrom: range.from, dateTo: range.to });
-  };
-
-  const handleCustomDate = (field: "from" | "to", value: string) => {
-    replaceScope(field === "from" ? { dateFrom: value } : { dateTo: value });
-  };
-
-  const handleExportProducts = async () => {
-    if (!analyticsEnabled || soldProductsLoading || soldProductsQuery.error || search.trim() !== deferredSearch || exportingProducts) return;
-    const snapshot = exportSnapshot.current;
-    setExportingProducts(true);
+  const exportTable = async () => {
+    if (!enabled || exporting) return;
+    const guard = scope.exportGuard();
+    setExporting(true);
     setExportError(null);
     try {
-      // Direct request deliberately avoids cached/in-flight query reuse when
-      // an authenticated audience changes. Pagination is never exported.
-      const result = await trpcUtils.client.analytics.soldProductsExport.query({
-        ...commonAnalyticsInput,
-        category: category === "all" ? undefined : category,
-        search: deferredSearch || undefined,
+      const result = await utils.client.reports.salesExport.query({
+        ...input,
+        page: undefined,
+        pageSize: undefined,
       });
-      if (!exportMounted.current || exportSnapshot.current !== snapshot) return;
+      if (!guard()) return;
+      const serialize = (row: typeof result.totals) =>
+        [
+          row.grossSalesKgs,
+          row.returnsKgs,
+          row.netSalesKgs,
+          row.costKgs,
+          row.grossProfitKgs,
+          row.marginPercent,
+          row.markupPercent,
+          row.discountKgs,
+          row.receiptCount,
+          row.returnCount,
+          row.unknownCostLines,
+          row.knownCostKgs,
+          row.knownProfitKgs,
+        ].map((value) => (value === null ? t("unknown") : String(value)));
       await downloadTableFile({
-        format: downloadFormat,
-        fileNameBase: `sold-products-all-filtered-${dateFrom}-${dateTo}`,
-        ...buildSoldProductsFilteredExport(result.items, (value) => formatKgsMoney(value, locale, currencySource)),
-        shouldDownload: () => exportMounted.current && exportSnapshot.current === snapshot,
+        format,
+        fileNameBase: `sales-${input.view}-all-filtered-${state.dateFrom}-${state.dateTo}`,
+        header: [
+          t(`views.${input.view}`),
+          t("unit"),
+          t("quantitySold"),
+          t("quantityReturned"),
+          t("quantity"),
+          `${t("grossSales")} KGS`,
+          `${t("returns")} KGS`,
+          `${t("netSales")} KGS`,
+          `${t("cost")} KGS`,
+          `${t("profit")} KGS`,
+          `${t("margin")} %`,
+          `${t("markup")} %`,
+          `${t("discount")} KGS`,
+          t("salesCount"),
+          t("returnCount"),
+          t("unknownLines"),
+          `${t("knownCost")} KGS`,
+          `${t("knownProfit")} KGS`,
+        ],
+        rows: [
+          ...result.items.map((row) => [
+            label(row.name),
+            input.view === "products" ? (row.unit ?? "") : "",
+            ...[row.quantitySold, row.quantityReturned, row.netQuantity].map((value) =>
+              input.view === "products" ? String(value) : "",
+            ),
+            ...serialize(row),
+          ]),
+          [
+            t(input.view === "costGaps" ? "filteredTotals" : "total"),
+            "",
+            "",
+            "",
+            "",
+            ...serialize(result.totals),
+          ],
+          [
+            t("context"),
+            JSON.stringify({
+              dateFrom: state.dateFrom,
+              dateTo: state.dateTo,
+              store: state.storeId ?? "all",
+              channel: state.channel,
+              category: state.category,
+              search: input.search,
+              product: state.productId,
+              customer: state.customerKey,
+              cashier: state.cashierId,
+              register: state.registerId,
+              kind: state.kind,
+              document: state.documentId,
+              generatedAt: result.meta.generatedAt,
+              timeZone: result.period.timeZone,
+            }),
+          ],
+        ],
+        shouldDownload: guard,
       });
     } catch (error) {
-      if (exportMounted.current && exportSnapshot.current === snapshot) {
-        setExportError(error instanceof TRPCClientError ? translateError(tErrors, error)
-          : error instanceof Error && tErrors.has(error.message) ? tErrors(error.message) : tErrors("genericMessage"));
-      }
+      if (guard())
+        setExportError({ fingerprint: scope.fingerprint, text: reportError(errors, error) });
     } finally {
-      if (exportMounted.current) setExportingProducts(false);
+      setExporting(false);
     }
   };
-
-  const renderMoney = (value: number) => formatKgsMoney(value, locale, currencySource);
-
-  if (status === "loading") {
-    return <Skeleton className="h-[28rem] w-full" />;
-  }
-
+  const filters = [
+    "category",
+    "registerId",
+    "cashierId",
+    "productId",
+    "customerKey",
+    "documentId",
+    "kind",
+  ] as const;
+  const activeFilters = filters.filter((key) => state[key]);
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-5">
       <PageHeader
-        title={t("title")}
-        subtitle={t("subtitle")}
+        title={t("analyticsTitle")}
+        subtitle={[data?.meta.organizationName, t("analyticsSubtitle")].filter(Boolean).join(" · ")}
         action={
-          <Button asChild variant="secondary">
-            <Link href="/reports">
-              <BackIcon className="h-4 w-4" aria-hidden />
-              {t("backToReports")}
-            </Link>
-          </Button>
+          <>
+            <Button asChild variant="secondary">
+              <Link
+                href={reportHref("/reports", {
+                  dateFrom: state.dateFrom,
+                  dateTo: state.dateTo,
+                  storeId: state.storeId,
+                  channel: "all",
+                })}
+              >
+                {t("reportCenter")}
+              </Link>
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={!enabled || query.isFetching}
+              onClick={() => void query.refetch()}
+            >
+              {t("refresh")}
+            </Button>
+          </>
         }
       />
-      {storeId === "all" ? (
-        <p className="-mt-4 text-sm text-muted-foreground">{t("baseCurrencyNotice")}</p>
-      ) : null}
-
-      {!canView ? (
-        <div className="rounded-md border border-danger/30 bg-danger/10 p-4 text-sm text-danger">
-          {tErrors("forbidden")}
-        </div>
-      ) : (
-        <>
-          <Card className="bazaar-admin-surface">
-            <CardHeader className="bazaar-admin-section-header px-4 py-3 sm:px-5">
-              <CardTitle className="text-base">{t("filters.title")}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4 p-4 sm:p-5">
-              <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,160px),1fr))] gap-3">
-                <label className="min-w-0 space-y-1.5 text-sm">
-                  <span className="text-xs font-medium text-muted-foreground">{t("filters.store")}</span>
-                  <Select value={storeId || "all"} onValueChange={setStoreId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder={tCommon("selectStore")} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">{t("allStores")}</SelectItem>
-                      {(storesReady ? storesQuery.data ?? [] : []).map((store) => (
-                        <SelectItem key={store.id} value={store.id}>
-                          {store.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </label>
-                <label className="min-w-0 space-y-1.5 text-sm">
-                  <span className="text-xs font-medium text-muted-foreground">{t("filters.register")}</span>
-                  <Select value={registerId} onValueChange={setRegisterId}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">{t("filters.allRegisters")}</SelectItem>
-                      {(analyticsEnabled && !registersQuery.isFetching ? registersQuery.data ?? [] : []).map((register) => (
-                        <SelectItem key={register.id} value={register.id}>
-                          {register.name} ({register.code})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </label>
-                <label className="min-w-0 space-y-1.5 text-sm">
-                  <span className="text-xs font-medium text-muted-foreground">{t("filters.cashier")}</span>
-                  <Select value={cashierId} onValueChange={setCashierId}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">{t("filters.allCashiers")}</SelectItem>
-                      {(analyticsEnabled && !cashiersQuery.isFetching ? cashiersQuery.data ?? [] : []).map((cashier) => (
-                        <SelectItem key={cashier.id} value={cashier.id}>
-                          {cashier.name ?? cashier.email}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </label>
-                <label className="min-w-0 space-y-1.5 text-sm">
-                  <span className="text-xs font-medium text-muted-foreground">{t("filters.category")}</span>
-                  <Select value={category} onValueChange={setCategory}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">{t("filters.allCategories")}</SelectItem>
-                      {categories.map((item) => (
-                        <SelectItem key={item} value={item}>
-                          {item}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </label>
-              </div>
-
-              <div className="grid gap-3 lg:grid-cols-[140px_140px_minmax(220px,1fr)]">
-                <label className="space-y-1.5 text-sm">
-                  <span className="text-xs font-medium text-muted-foreground">{t("filters.dateFrom")}</span>
-                  <Input
-                    type="date"
-                    value={dateFrom}
-                    onChange={(event) => handleCustomDate("from", event.target.value)}
-                  />
-                </label>
-                <label className="space-y-1.5 text-sm">
-                  <span className="text-xs font-medium text-muted-foreground">{t("filters.dateTo")}</span>
-                  <Input
-                    type="date"
-                    value={dateTo}
-                    onChange={(event) => handleCustomDate("to", event.target.value)}
-                  />
-                </label>
-                <div className="space-y-1.5">
-                  <span className="text-xs font-medium text-muted-foreground">{t("filters.presets")}</span>
-                  <div className="flex flex-wrap gap-2">
-                    {(["today", "yesterday", "last7", "last30", "thisMonth", "lastMonth"] as Preset[]).map(
-                      (item) => (
-                        <Button
-                          key={item}
-                          type="button"
-                          variant={preset === item ? "primary" : "outline"}
-                          size="sm"
-                          onClick={() => applyPreset(item)}
-                        >
-                          {t(`presets.${item}`)}
-                        </Button>
-                      ),
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                <label className="relative flex-1 space-y-1.5 text-sm">
-                  <span className="text-xs font-medium text-muted-foreground">{t("filters.productSearch")}</span>
-                  <SearchIcon className="pointer-events-none absolute bottom-3 left-3 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    placeholder={t("filters.productSearchPlaceholder")}
-                    className="pl-9"
-                  />
-                </label>
-                <div className="flex gap-2">
-                  <Select value={downloadFormat} onValueChange={(value) => setDownloadFormat(value as DownloadFormat)} disabled={exportingProducts}>
-                    <SelectTrigger className="w-[120px]" aria-label={tExports("formatLabel")}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="csv">{tExports("formats.csv")}</SelectItem>
-                      <SelectItem value="xlsx">{tExports("formats.xlsx")}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleExportProducts}
-                    disabled={!productTotal || !analyticsEnabled || soldProductsLoading || Boolean(soldProductsQuery.error) || search.trim() !== deferredSearch || exportingProducts}
-                  >
-                    {exportingProducts ? <Spinner className="h-4 w-4" /> : <DownloadIcon className="h-4 w-4" aria-hidden />}
-                    {t(exportingProducts ? "actions.exportingProducts" : "actions.exportAllProducts")}
-                  </Button>
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground">{t("exportProductsHint")}</p>
-              {exportError ? <p role="alert" className="text-sm text-danger">{exportError}</p> : null}
-            </CardContent>
-          </Card>
-
-          {scopeError ? <div role="alert" className="rounded-md border border-danger/30 bg-danger/10 p-4 text-sm text-danger">{scopeError}</div>
-            : !storesReady ? <Skeleton className="h-[28rem] w-full" /> : <>
-          {overviewQuery.error ? (
-            <div className="rounded-md border border-danger/30 bg-danger/10 p-4 text-sm text-danger">
-              {translateError(tErrors, overviewQuery.error)}
-            </div>
-          ) : null}
-
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-            {[
-              { label: t("kpis.netSales"), value: renderMoney(totals?.netSalesKgs ?? 0), emphasis: true },
-              { label: t("kpis.grossSales"), value: renderMoney(totals?.grossSalesKgs ?? 0) },
-              { label: t("kpis.returns"), value: renderMoney(totals?.returnsKgs ?? 0) },
-              { label: t("kpis.receipts"), value: formatNumber(totals?.receiptCount ?? 0, locale) },
-              { label: t("kpis.averageReceipt"), value: renderMoney(totals?.averageReceiptKgs ?? 0) },
-              { label: t("kpis.nonCash"), value: renderMoney(totals?.nonCashSalesKgs ?? 0) },
-            ].map((item) => (
-              <div
-                key={item.label}
-                className={cn(
-                  "rounded-md border border-border bg-card p-4 shadow-sm",
-                  item.emphasis ? "border-primary/35 bg-primary/5" : null,
-                )}
-              >
-                <p className="text-xs font-medium text-muted-foreground">{item.label}</p>
-                {overviewLoading ? (
-                  <Skeleton className="mt-3 h-7 w-28" />
-                ) : (
-                  <p className="mt-2 text-xl font-semibold text-foreground">{item.value}</p>
-                )}
-              </div>
-            ))}
+      <ReportPeriodControls scope={scope}>
+        <ReportSelect
+          label={t("channel")}
+          value={state.channel}
+          onChange={(channel) => update({ channel, registerId: undefined })}
+        >
+          {["all", "pos", "orders"].map((value) => (
+            <option key={value} value={value}>
+              {t(`channels.${value}`)}
+            </option>
+          ))}
+        </ReportSelect>
+      </ReportPeriodControls>
+      <section
+        className="space-y-3 rounded-xl border border-border bg-card p-4"
+        aria-label={t("refine")}
+      >
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <label className="space-y-1.5 text-xs font-medium text-muted-foreground">
+            {a("filters.productSearch")}
+            <Input
+              aria-label={a("filters.productSearch")}
+              placeholder={t("searchPlaceholder")}
+              value={scope.search}
+              onChange={(event) => scope.setSearch(event.target.value)}
+              onBlur={() => {
+                if ((state.search ?? "") !== scope.search)
+                  update({ search: scope.search || undefined });
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") update({ search: scope.search || undefined });
+              }}
+            />
+          </label>
+          <Button
+            className="sm:hidden"
+            variant="secondary"
+            aria-expanded={showExtraFilters}
+            aria-controls="report-extra-filters"
+            onClick={() => setShowExtraFilters((value) => !value)}
+          >
+            {t("refine")}
+          </Button>
+          <div
+            id="report-extra-filters"
+            className={showExtraFilters ? "contents" : "hidden sm:contents"}
+          >
+            <ReportSelect
+              label={t("category")}
+              value={state.category ?? "all"}
+              onChange={(value) => update({ category: value === "all" ? undefined : value })}
+            >
+              <option value="all">{t("allCategories")}</option>
+              <option value="__uncategorized__">{t("special.__uncategorized__")}</option>
+              {options.data?.categories.map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </ReportSelect>
+            <ReportSelect
+              label={t("register")}
+              value={state.registerId ?? "all"}
+              onChange={(value) => update({ registerId: value === "all" ? undefined : value })}
+            >
+              <option value="all">{t("allRegisters")}</option>
+              {options.data?.registers.map((value) => (
+                <option key={value.id} value={value.id}>
+                  {value.name}
+                </option>
+              ))}
+            </ReportSelect>
+            <ReportSelect
+              label={t("employee")}
+              value={state.cashierId ?? "all"}
+              onChange={(value) => update({ cashierId: value === "all" ? undefined : value })}
+            >
+              <option value="all">{t("allEmployees")}</option>
+              {options.data?.employees.map((value) => (
+                <option key={value.id} value={value.id}>
+                  {value.name}
+                </option>
+              ))}
+            </ReportSelect>
           </div>
-
-          <Card className="bazaar-admin-surface overflow-hidden">
-            <CardHeader className="bazaar-admin-section-header flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-              <div>
-                <CardTitle className="text-base">{t("chart.title")}</CardTitle>
-                <p className="text-xs text-muted-foreground">{t("chart.subtitle")}</p>
+        </div>
+        {activeFilters.length > 0 || scope.search ? (
+          <div className="flex flex-wrap items-center gap-2">
+            {activeFilters.map((key) => (
+              <Button
+                key={key}
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  update({
+                    [key]: undefined,
+                    ...(key === "productId" ? { variantKey: undefined } : {}),
+                  })
+                }
+              >
+                {t(`filterNames.${key}`)}: {key === "category" ? label(state[key]!) : t("selected")}{" "}
+                ×
+              </Button>
+            ))}
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                scope.setSearch("");
+                update({
+                  category: undefined,
+                  registerId: undefined,
+                  cashierId: undefined,
+                  productId: undefined,
+                  variantKey: undefined,
+                  customerKey: undefined,
+                  documentId: undefined,
+                  kind: undefined,
+                  search: undefined,
+                });
+              }}
+            >
+              {t("reset")}
+            </Button>
+          </div>
+        ) : null}
+      </section>
+      {scope.error && (
+        <p
+          role="alert"
+          className="rounded-lg border border-danger/30 bg-danger/5 p-4 text-sm text-danger"
+        >
+          {scope.error}
+        </p>
+      )}
+      {enabled && query.error && <QueryErrorState onRetry={() => void query.refetch()} />}
+      {scope.allowed && !scope.error && !data && !query.error && (
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4" aria-busy="true">
+          {[1, 2, 3, 4].map((key) => (
+            <Skeleton key={key} className="h-36" />
+          ))}
+        </div>
+      )}
+      {data && totals && (
+        <>
+          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+            <ReportMetric
+              title={t("netSales")}
+              value={money(totals.netSalesKgs)}
+              note={t("netSalesNote")}
+              previous={
+                data.period.comparisonAvailable === false
+                  ? undefined
+                  : money(data.previous.netSalesKgs)
+              }
+              onClick={() => detail({})}
+              accent
+            />
+            <ReportMetric
+              title={t("cost")}
+              value={money(totals.costKgs)}
+              note={
+                totals.unknownCostLines
+                  ? t("partialCost", {
+                      count: totals.unknownCostLines,
+                      amount: money(totals.knownCostKgs),
+                    })
+                  : t("costNote")
+              }
+              previous={
+                data.period.comparisonAvailable === false ? undefined : money(data.previous.costKgs)
+              }
+              onClick={() =>
+                update({ view: totals.unknownCostLines ? "costGaps" : "products", sort: "cost" })
+              }
+            />
+            <ReportMetric
+              title={t("profit")}
+              value={money(totals.grossProfitKgs)}
+              note={
+                totals.unknownCostLines
+                  ? t("partialProfit", { amount: money(totals.knownProfitKgs) })
+                  : t("profitNote")
+              }
+              previous={
+                data.period.comparisonAvailable === false
+                  ? undefined
+                  : money(data.previous.grossProfitKgs)
+              }
+              onClick={() => update({ view: "products", sort: "profit" })}
+            />
+            <ReportMetric
+              title={t("margin")}
+              value={percent(totals.marginPercent)}
+              note={t("marginNote", { markup: percent(totals.markupPercent) })}
+              previous={
+                data.period.comparisonAvailable === false
+                  ? undefined
+                  : percent(data.previous.marginPercent)
+              }
+              onClick={() => update({ view: "categories", sort: "profit" })}
+            />
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+            <p>
+              {data.period.comparisonAvailable === false
+                ? t("futurePeriod")
+                : t("comparison", {
+                    from: data.period.previousDateFrom,
+                    to: data.period.previousDateTo,
+                  })}
+              {data.period.partial ? ` · ${t("partialPeriod")}` : ""}
+            </p>
+            <p>{t("updated", { date: formatDateTime(data.meta.generatedAt, locale) })}</p>
+          </div>
+          {(totals.unknownCostLines > 0 || totals.amountConflictDocuments > 0) && (
+            <div
+              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warning/40 bg-warning/5 p-4"
+              role="status"
+            >
+              <div className="max-w-3xl">
+                <h2 className="text-sm font-semibold">{t("qualityTitle")}</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {t("qualityNote", {
+                    percent: percent(totals.coveragePercent),
+                    unknown: totals.unknownCostLines,
+                    zero: totals.zeroCostLines,
+                    conflicts: totals.amountConflictDocuments,
+                  })}
+                </p>
               </div>
-              {overviewQuery.data ? (
-                <Badge variant="muted">{overviewQuery.data.range.timeZone}</Badge>
-              ) : null}
-            </CardHeader>
-            <CardContent className="p-4 sm:p-5">
-              {overviewLoading ? (
-                <Skeleton className="h-[22rem] w-full" />
-              ) : chartData.some((point) => point.grossSalesKgs || point.returnsKgs || point.receiptCount) ? (
-                <div className="h-[22rem] w-full">
+              <Button variant="outline" onClick={() => update({ view: "costGaps" })}>
+                {t("reviewCost")}
+              </Button>
+            </div>
+          )}
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)]">
+            <section className="min-w-0 rounded-xl border border-border bg-card p-4 sm:p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="font-semibold">{t("trend")}</h2>
+                  <p className="mt-1 text-xs text-muted-foreground">{t("trendNote")}</p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => update({ view: "days", sort: "date" })}
+                >
+                  {t("table")}
+                </Button>
+              </div>
+              {totals.lineCount ? (
+                <div className="mt-5 h-64 sm:h-72">
                   <SalesOverviewChart
-                    data={chartData}
-                    labels={{
-                      netSales: t("chart.netSales"),
-                      grossSales: t("chart.grossSales"),
-                      returns: t("chart.returns"),
-                      receipts: t("chart.receipts"),
-                      averageReceipt: t("chart.averageReceipt"),
-                    }}
+                    data={data.series}
                     locale={locale}
-                    currencySource={currencySource}
+                    currencySource={baseAccountingCurrency}
+                    labels={{
+                      netSales: t("netSales"),
+                      grossSales: t("grossSales"),
+                      returns: t("returns"),
+                      receipts: t("salesCount"),
+                      averageReceipt: t("averageReceipt"),
+                      cost: t("cost"),
+                      profit: t("profit"),
+                    }}
                     onSelectDate={setSelectedDay}
                   />
                 </div>
               ) : (
-                <div className="bazaar-admin-empty min-h-[18rem]">{t("emptySales")}</div>
+                <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">
+                  {t("emptyPeriod")}
+                </div>
               )}
-            </CardContent>
-          </Card>
-
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-            <Card className="bazaar-admin-surface overflow-hidden">
-              <CardHeader className="bazaar-admin-section-header flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-                <div>
-                  <CardTitle className="text-base">{t("products.title")}</CardTitle>
-                  <p className="text-xs text-muted-foreground">{t("products.subtitle")}</p>
-                </div>
-                {!soldProductsLoading ? (
-                  <p className="text-xs text-muted-foreground">
-                    {t("products.count", { count: productTotal })}
-                  </p>
-                ) : null}
-              </CardHeader>
-              <CardContent className="p-0">
-                {soldProductsLoading ? (
-                  <div className="space-y-2 p-4 sm:p-5">
-                    {Array.from({ length: 6 }).map((_, index) => (
-                      <Skeleton key={index} className="h-12 w-full" />
-                    ))}
+            </section>
+            <section className="rounded-xl border border-border bg-card p-4 sm:p-5">
+              <h2 className="font-semibold">{t("resultDrivers")}</h2>
+              <dl className="mt-3 divide-y divide-border">
+                {[
+                  [t("grossSales"), money(totals.grossSalesKgs)],
+                  [t("returns"), money(totals.returnsKgs)],
+                  [t("discount"), money(totals.discountKgs)],
+                  [t("salesCount"), number(totals.receiptCount)],
+                  [t("averageReceipt"), money(totals.averageReceiptKgs)],
+                  [t("returnRate"), percent(totals.returnRatePercent)],
+                ].map(([name, value]) => (
+                  <div key={name} className="flex items-center justify-between gap-3 py-3 text-sm">
+                    <dt className="text-muted-foreground">{name}</dt>
+                    <dd className="whitespace-nowrap font-semibold tabular-nums">{value}</dd>
                   </div>
-                ) : soldProductsQuery.error ? (
-                  <div className="m-4 rounded-md border border-danger/30 bg-danger/10 p-4 text-sm text-danger sm:m-5">
-                    {translateError(tErrors, soldProductsQuery.error)}
-                  </div>
-                ) : soldProducts.length ? (
-                  <>
-                    <div className="overflow-x-auto">
-                      <Table className="min-w-[1080px]" sortable={false}>
-                        <TableHeader className="bg-muted/40">
-                          <TableRow>
-                            <TableHead className="px-4 py-3">{t("products.columns.product")}</TableHead>
-                            <TableHead className="px-4 py-3">{t("products.columns.sku")}</TableHead>
-                            <TableHead className="px-4 py-3 text-right">{t("products.columns.quantity")}</TableHead>
-                            <TableHead className="px-4 py-3 text-right">{t("products.columns.revenue")}</TableHead>
-                            <TableHead className="px-4 py-3 text-right">{t("products.columns.averagePrice")}</TableHead>
-                            <TableHead className="px-4 py-3 text-right">{t("products.columns.stock")}</TableHead>
-                            <TableHead className="px-4 py-3 text-right">{t("products.columns.receipts")}</TableHead>
-                            <TableHead className="px-4 py-3 text-right">{t("products.columns.actions")}</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {soldProducts.map((product) => (
-                            <TableRow key={`${product.productId}:${product.variantKey}`}>
-                              <TableCell className="px-4 py-3">
-                                <div className="font-medium text-foreground">{product.productName}</div>
-                                <div className="text-xs text-muted-foreground">
-                                  {product.variantName ?? product.category ?? tCommon("notAvailable")}
-                                </div>
-                              </TableCell>
-                              <TableCell className="px-4 py-3 text-xs text-muted-foreground">
-                                <div>{product.productSku}</div>
-                                {product.barcode ? <div>{product.barcode}</div> : null}
-                              </TableCell>
-                              <TableCell className="px-4 py-3 text-right">
-                                <div className="font-medium text-foreground">
-                                  {formatNumber(product.quantitySold, locale)}
-                                </div>
-                                {product.quantityReturned > 0 ? (
-                                  <div className="text-xs text-warning">
-                                    -{formatNumber(product.quantityReturned, locale)} {t("products.returned")}
-                                  </div>
-                                ) : null}
-                              </TableCell>
-                              <TableCell className="px-4 py-3 text-right">
-                                <div className="font-semibold text-foreground">
-                                  {renderMoney(product.netRevenueKgs)}
-                                </div>
-                                {product.returnedRevenueKgs > 0 ? (
-                                  <div className="text-xs text-warning">
-                                    {t("products.returns")}: {renderMoney(product.returnedRevenueKgs)}
-                                  </div>
-                                ) : null}
-                              </TableCell>
-                              <TableCell className="px-4 py-3 text-right">
-                                {renderMoney(product.averagePriceKgs)}
-                              </TableCell>
-                              <TableCell className="px-4 py-3 text-right">
-                                {formatNumber(product.stockRemaining, locale)}
-                              </TableCell>
-                              <TableCell className="px-4 py-3 text-right">
-                                {formatNumber(product.receiptCount, locale)}
-                              </TableCell>
-                              <TableCell className="px-4 py-3">
-                                <div className="flex justify-end gap-2">
-                                  <Button asChild variant="outline" size="sm">
-                                    <Link href={`/products/${product.productId}`}>
-                                      {t("actions.openProduct")}
-                                    </Link>
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() =>
-                                      setSelectedProduct({
-                                        productId: product.productId,
-                                        variantKey: product.variantKey,
-                                        name: product.productName,
-                                      })
-                                    }
-                                  >
-                                    <ViewIcon className="h-4 w-4" aria-hidden />
-                                    {t("actions.showReceipts")}
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                    <div className="flex flex-col gap-2 border-t border-border p-4 sm:flex-row sm:items-center sm:justify-between">
-                      <p className="text-xs text-muted-foreground">
-                        {t("products.page", { page: productPage, pages: productPages })}
-                      </p>
-                      <div className="flex gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={productPage <= 1}
-                          onClick={() => setProductPage((page) => Math.max(1, page - 1))}
-                        >
-                          {tCommon("pagination.previous")}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={productPage >= productPages}
-                          onClick={() => setProductPage((page) => Math.min(productPages, page + 1))}
-                        >
-                          {tCommon("pagination.next")}
-                        </Button>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <div className="bazaar-admin-empty m-4 min-h-[12rem] sm:m-5">
-                    {t("emptyTopProducts")}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <div className="space-y-6">
-              <Card className="bazaar-admin-surface overflow-hidden">
-                <CardHeader className="bazaar-admin-section-header px-4 py-3 sm:px-5">
-                  <CardTitle className="text-base">{t("dayTable.title")}</CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  {overviewLoading ? (
-                    <div className="space-y-2 p-4">
-                      {Array.from({ length: 5 }).map((_, index) => (
-                        <Skeleton key={index} className="h-10 w-full" />
-                      ))}
-                    </div>
-                  ) : chartData.length ? (
-                    <div className="max-h-[30rem] overflow-y-auto">
-                      <Table sortable={false}>
-                        <TableHeader className="bg-muted/40">
-                          <TableRow>
-                            <TableHead className="px-4 py-3">{t("dayTable.date")}</TableHead>
-                            <TableHead className="px-4 py-3 text-right">{t("dayTable.sales")}</TableHead>
-                            <TableHead className="px-4 py-3 text-right">{t("dayTable.receipts")}</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {chartData.map((point) => (
-                            <TableRow
-                              key={point.date}
-                              className="cursor-pointer hover:bg-muted/25"
-                              onClick={() => setSelectedDay(point.date)}
-                            >
-                              <TableCell className="px-4 py-3">
-                                {formatDate(dateOnlyToDisplayDate(point.date), locale)}
-                              </TableCell>
-                              <TableCell className="px-4 py-3 text-right font-medium">
-                                {renderMoney(point.netSalesKgs)}
-                              </TableCell>
-                              <TableCell className="px-4 py-3 text-right">
-                                {formatNumber(point.receiptCount, locale)}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  ) : (
-                    <div className="bazaar-admin-empty m-4 min-h-[8rem]">{t("emptySales")}</div>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card className="bazaar-admin-surface">
-                <CardHeader className="bazaar-admin-section-header px-4 py-3 sm:px-5">
-                  <CardTitle className="text-base">{t("dataPolicy.title")}</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3 p-4 text-xs text-muted-foreground sm:p-5">
-                  <p>{t("dataPolicy.sales")}</p>
-                  <p>{t("dataPolicy.returns")}</p>
-                  <p>{t("dataPolicy.payments")}</p>
-                  <p>{t("dataPolicy.timezone", { timezone: defaultTimeZone })}</p>
-                  {overviewQuery.data?.meta.timingsMs ? (
-                    <p className="text-foreground">
-                      {t("performance.overview")}:{" "}
-                      {Object.values(overviewQuery.data.meta.timingsMs).reduce(
-                        (sum, value) => sum + Number(value ?? 0),
-                        0,
-                      )}{" "}
-                      ms
-                    </p>
-                  ) : null}
-                  {soldProductsQuery.data?.meta.timingsMs ? (
-                    <p className="text-foreground">
-                      {t("performance.products")}:{" "}
-                      {Object.values(soldProductsQuery.data.meta.timingsMs).reduce(
-                        (sum, value) => sum + Number(value ?? 0),
-                        0,
-                      )}{" "}
-                      ms
-                    </p>
-                  ) : null}
-                </CardContent>
-              </Card>
-            </div>
+                ))}
+              </dl>
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-3 w-full"
+                onClick={() => detail({ kind: "return" })}
+              >
+                {t("inspectReturns", { count: totals.returnCount })}
+              </Button>
+            </section>
           </div>
-
-          <Modal
-            open={Boolean(selectedDay)}
-            onOpenChange={(nextOpen) => {
-              if (!nextOpen) {
-                setSelectedDay(null);
-              }
-            }}
-            title={selectedDay ? t("dayDetail.title", { date: formatDate(dateOnlyToDisplayDate(selectedDay), locale) }) : t("dayDetail.titleFallback")}
-            className="max-w-6xl"
-            bodyClassName="p-0"
-            mobileSheet
-            usePortal
-          >
-            {dayDetailQuery.isLoading ? (
-              <div className="flex min-h-[18rem] items-center justify-center gap-2 p-6 text-sm text-muted-foreground">
-                <Spinner className="h-4 w-4" />
-                {tCommon("loading")}
-              </div>
-            ) : dayDetailQuery.error ? (
-              <div className="m-4 rounded-md border border-danger/30 bg-danger/10 p-4 text-sm text-danger sm:m-6">
-                {translateError(tErrors, dayDetailQuery.error)}
-              </div>
-            ) : dayDetailQuery.data ? (
-              <div>
-                <div className="grid gap-3 border-b border-border p-4 sm:grid-cols-3 lg:p-6">
-                  <div className="rounded-md border border-border bg-muted/20 p-3">
-                    <p className="text-xs text-muted-foreground">{t("kpis.netSales")}</p>
-                    <p className="text-lg font-semibold text-foreground">
-                      {renderMoney(dayDetailQuery.data.summary?.netSalesKgs ?? 0)}
-                    </p>
-                  </div>
-                  <div className="rounded-md border border-border bg-muted/20 p-3">
-                    <p className="text-xs text-muted-foreground">{t("kpis.receipts")}</p>
-                    <p className="text-lg font-semibold text-foreground">
-                      {formatNumber(dayDetailQuery.data.summary?.receiptCount ?? 0, locale)}
-                    </p>
-                  </div>
-                  <div className="rounded-md border border-border bg-muted/20 p-3">
-                    <p className="text-xs text-muted-foreground">{t("kpis.returns")}</p>
-                    <p className="text-lg font-semibold text-foreground">
-                      {renderMoney(dayDetailQuery.data.summary?.returnsKgs ?? 0)}
-                    </p>
-                  </div>
+          <section className="min-w-0 overflow-hidden rounded-xl border border-border bg-card">
+            <div className="space-y-4 border-b border-border p-4 sm:p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h2 className="font-semibold">{t("detail")}</h2>
+                  <p className="mt-1 text-xs text-muted-foreground">{t("detailNote")}</p>
                 </div>
-                <div className="grid gap-0 lg:grid-cols-2">
-                  <div className="border-b border-border lg:border-b-0 lg:border-r">
-                    <div className="border-b border-border px-4 py-3 lg:px-6">
-                      <h3 className="text-sm font-semibold text-foreground">{t("dayDetail.products")}</h3>
-                    </div>
-                    <div className="max-h-[28rem] overflow-auto">
-                      <Table className="min-w-[600px]" sortable={false}>
-                        <TableHeader className="bg-muted/40">
-                          <TableRow>
-                            <TableHead className="px-4 py-3 lg:px-6">{t("products.columns.product")}</TableHead>
-                            <TableHead className="px-4 py-3 text-right">{t("products.columns.quantity")}</TableHead>
-                            <TableHead className="px-4 py-3 text-right lg:px-6">{t("products.columns.revenue")}</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {dayDetailQuery.data.products.map((product) => (
-                            <TableRow key={`${product.productId}:${product.variantKey}`}>
-                              <TableCell className="px-4 py-3 lg:px-6">
-                                <div className="font-medium text-foreground">{product.productName}</div>
-                                <div className="text-xs text-muted-foreground">{product.productSku}</div>
-                              </TableCell>
-                              <TableCell className="px-4 py-3 text-right">
-                                {formatNumber(product.netQuantity, locale)}
-                              </TableCell>
-                              <TableCell className="px-4 py-3 text-right font-semibold lg:px-6">
-                                {renderMoney(product.netRevenueKgs)}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                          {!dayDetailQuery.data.products.length ? (
-                            <TableRow>
-                              <TableCell colSpan={3} className="px-4 py-8 text-center text-sm text-muted-foreground">
-                                {t("emptyTopProducts")}
-                              </TableCell>
-                            </TableRow>
-                          ) : null}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </div>
-                  <div>
-                    <div className="border-b border-border px-4 py-3 lg:px-6">
-                      <h3 className="text-sm font-semibold text-foreground">{t("dayDetail.receipts")}</h3>
-                    </div>
-                    <div className="max-h-[28rem] overflow-auto">
-                      <Table className="min-w-[660px]" sortable={false}>
-                        <TableHeader className="bg-muted/40">
-                          <TableRow>
-                            <TableHead className="px-4 py-3 lg:px-6">{t("receipts.columns.number")}</TableHead>
-                            <TableHead className="px-4 py-3">{t("receipts.columns.cashier")}</TableHead>
-                            <TableHead className="px-4 py-3">{t("receipts.columns.payment")}</TableHead>
-                            <TableHead className="px-4 py-3 text-right lg:px-6">{t("receipts.columns.total")}</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {dayDetailQuery.data.receipts.map((receipt) => (
-                            <TableRow
-                              key={receipt.id}
-                              className="cursor-pointer hover:bg-muted/25"
-                              onClick={() => setPreviewSaleId(receipt.id)}
+                <div className="flex items-end gap-2">
+                  <ReportSelect
+                    label={t("format")}
+                    value={format}
+                    onChange={(value) => setFormat(value as DownloadFormat)}
+                  >
+                    <option value="csv">{"CSV"}</option>
+                    <option value="xlsx">{"XLSX"}</option>
+                  </ReportSelect>
+                  <Button
+                    variant="secondary"
+                    disabled={exporting || !enabled}
+                    onClick={() => void exportTable()}
+                  >
+                    {exporting ? a("actions.exportingProducts") : a("actions.exportAllProducts")}
+                  </Button>
+                </div>
+              </div>
+              <nav aria-label={t("dimensions")} className="flex flex-wrap gap-1.5">
+                {salesViews.map((view) => (
+                  <Button
+                    key={view}
+                    size="sm"
+                    variant={input.view === view ? "primary" : "ghost"}
+                    aria-current={input.view === view ? "page" : undefined}
+                    onClick={() =>
+                      update({
+                        view,
+                        sort: view === "days" || view === "documents" ? "date" : "revenue",
+                      })
+                    }
+                  >
+                    {t(`views.${view}`)}
+                  </Button>
+                ))}
+              </nav>
+              <div className="grid gap-3 sm:max-w-md sm:grid-cols-2">
+                <ReportSelect
+                  label={t("sort")}
+                  value={state.sort}
+                  onChange={(sort) => update({ sort })}
+                >
+                  {["revenue", "profit", "cost", "returns", "name", "date"].map((sort) => (
+                    <option key={sort} value={sort}>
+                      {t(`sorts.${sort}`)}
+                    </option>
+                  ))}
+                </ReportSelect>
+                <ReportSelect
+                  label={t("direction")}
+                  value={state.direction}
+                  onChange={(direction) => update({ direction })}
+                >
+                  <option value="desc">{t("descending")}</option>
+                  <option value="asc">{t("ascending")}</option>
+                </ReportSelect>
+              </div>
+              {input.view === "customers" && (
+                <p className="text-xs text-muted-foreground">
+                  {t("customerMethod", {
+                    count: totals.identifiedCustomers,
+                    anonymous: totals.anonymousSales,
+                  })}
+                </p>
+              )}
+              {input.view === "costGaps" && (
+                <p className="text-xs text-muted-foreground">{t("costGapMethod")}</p>
+              )}
+              {exportError?.fingerprint === scope.fingerprint && (
+                <p role="alert" className="text-sm text-danger">
+                  {exportError.text}
+                </p>
+              )}
+            </div>
+            {data.items.length ? (
+              <Table sortable={false} className="min-w-[1200px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-72 min-w-[14rem] sm:min-w-[18rem]">
+                      {t(`views.${input.view}`)}
+                    </TableHead>
+                    <TableHead className="text-right">{t("netSales")}</TableHead>
+                    <TableHead className="text-right">{t("cost")}</TableHead>
+                    <TableHead className="text-right">{t("profit")}</TableHead>
+                    <TableHead className="text-right">{t("margin")}</TableHead>
+                    <TableHead className="text-right">{t("returns")}</TableHead>
+                    <TableHead className="text-right">
+                      {input.view === "products" ? t("quantity") : t("salesCount")}
+                    </TableHead>
+                    <TableHead>{t("quality")}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.items.map((row) => (
+                    <TableRow key={row.key}>
+                      <TableCell className="w-72 min-w-[14rem] max-w-80 sm:min-w-[18rem]">
+                        <div className="flex flex-col gap-1">
+                          {row.channel === "orders" &&
+                          ["documents", "costGaps"].includes(input.view) ? (
+                            <Link
+                              className="font-medium text-primary hover:underline"
+                              href={`/sales/orders/${row.documentId}`}
                             >
-                              <TableCell className="px-4 py-3 lg:px-6">
-                                <div className="font-medium text-foreground">{receipt.number}</div>
-                                <div className="text-xs text-muted-foreground">
-                                  {formatDateTime(receipt.completedAt ?? receipt.createdAt, locale)}
-                                </div>
-                              </TableCell>
-                              <TableCell className="px-4 py-3 text-xs text-muted-foreground">
-                                {receipt.cashier?.name ?? receipt.cashier?.email ?? t("receipts.unknownCashier")}
-                              </TableCell>
-                              <TableCell className="px-4 py-3 text-xs text-muted-foreground">
-                                {paymentMethods
-                                  .filter((method) => (receipt.paymentBreakdown[method] ?? 0) > 0)
-                                  .map((method) => tPos(`payments.${method.toLowerCase()}`))
-                                  .join(", ") || tCommon("notAvailable")}
-                              </TableCell>
-                              <TableCell className="px-4 py-3 text-right font-semibold lg:px-6">
-                                {renderMoney(receipt.totalKgs)}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                          {!dayDetailQuery.data.receipts.length ? (
-                            <TableRow>
-                              <TableCell colSpan={4} className="px-4 py-8 text-center text-sm text-muted-foreground">
-                                {t("receipts.empty")}
-                              </TableCell>
-                            </TableRow>
-                          ) : null}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : null}
-          </Modal>
-
-          <Modal
-            open={Boolean(selectedProduct)}
-            onOpenChange={(nextOpen) => {
-              if (!nextOpen) {
-                setSelectedProduct(null);
-              }
-            }}
-            title={selectedProduct ? t("productReceipts.title", { product: selectedProduct.name }) : t("productReceipts.titleFallback")}
-            className="max-w-4xl"
-            bodyClassName="p-0"
-            mobileSheet
-            usePortal
-          >
-            {productReceiptsQuery.isLoading ? (
-              <div className="flex min-h-[14rem] items-center justify-center gap-2 p-6 text-sm text-muted-foreground">
-                <Spinner className="h-4 w-4" />
-                {tCommon("loading")}
-              </div>
-            ) : productReceiptsQuery.error ? (
-              <div className="m-4 rounded-md border border-danger/30 bg-danger/10 p-4 text-sm text-danger sm:m-6">
-                {translateError(tErrors, productReceiptsQuery.error)}
-              </div>
-            ) : (
-              <div className="max-h-[32rem] overflow-auto">
-                <Table className="min-w-[760px]" sortable={false}>
-                  <TableHeader className="bg-muted/40">
-                    <TableRow>
-                      <TableHead className="px-4 py-3 lg:px-6">{t("receipts.columns.number")}</TableHead>
-                      <TableHead className="px-4 py-3">{t("receipts.columns.store")}</TableHead>
-                      <TableHead className="px-4 py-3">{t("receipts.columns.cashier")}</TableHead>
-                      <TableHead className="px-4 py-3">{t("receipts.columns.payment")}</TableHead>
-                      <TableHead className="px-4 py-3 text-right lg:px-6">{t("receipts.columns.total")}</TableHead>
+                              {label(row.name)}
+                            </Link>
+                          ) : (
+                            <button
+                              className="line-clamp-2 text-left font-medium text-primary underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2"
+                              onClick={() => openRow(row)}
+                            >
+                              {label(row.name)}
+                            </button>
+                          )}
+                          <span className="text-xs text-muted-foreground">
+                            {input.view === "products"
+                              ? row.sku
+                              : ["documents", "costGaps"].includes(input.view)
+                                ? `${row.date} · ${t(row.kind === "return" ? "returnDocument" : "saleDocument")}`
+                                : ""}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {money(row.netSalesKgs)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {money(row.costKgs)}
+                      </TableCell>
+                      <TableCell className="text-right font-medium tabular-nums">
+                        {money(row.grossProfitKgs)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {percent(row.marginPercent)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {money(row.returnsKgs)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {input.view === "products"
+                          ? `${number(row.netQuantity)} ${row.unit ?? ""}`
+                          : number(row.receiptCount)}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {row.unknownCostLines ? (
+                          <span className="text-amber-700 dark:text-amber-300">
+                            {t("missingCount", { count: row.unknownCostLines })}
+                          </span>
+                        ) : row.zeroCostLines ? (
+                          t("zeroConfirmed")
+                        ) : (
+                          t("complete")
+                        )}
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(productReceiptsQuery.data?.items ?? []).map((receipt) => (
-                      <TableRow
-                        key={receipt.id}
-                        className="cursor-pointer hover:bg-muted/25"
-                        onClick={() => setPreviewSaleId(receipt.id)}
-                      >
-                        <TableCell className="px-4 py-3 lg:px-6">
-                          <div className="font-medium text-foreground">{receipt.number}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {formatDateTime(receipt.completedAt ?? receipt.createdAt, locale)}
-                          </div>
-                        </TableCell>
-                        <TableCell className="px-4 py-3 text-xs text-muted-foreground">
-                          {receipt.store.name}
-                        </TableCell>
-                        <TableCell className="px-4 py-3 text-xs text-muted-foreground">
-                          {receipt.cashier?.name ?? receipt.cashier?.email ?? t("receipts.unknownCashier")}
-                        </TableCell>
-                        <TableCell className="px-4 py-3 text-xs text-muted-foreground">
-                          {paymentMethods
-                            .filter((method) => (receipt.paymentBreakdown[method] ?? 0) > 0)
-                            .map((method) => tPos(`payments.${method.toLowerCase()}`))
-                            .join(", ") || tCommon("notAvailable")}
-                        </TableCell>
-                        <TableCell className="px-4 py-3 text-right font-semibold lg:px-6">
-                          {renderMoney(receipt.totalKgs)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    {!productReceiptsQuery.isLoading && !(productReceiptsQuery.data?.items ?? []).length ? (
-                      <TableRow>
-                        <TableCell colSpan={5} className="px-4 py-8 text-center text-sm text-muted-foreground">
-                          {t("receipts.empty")}
-                        </TableCell>
-                      </TableRow>
-                    ) : null}
-                  </TableBody>
-                </Table>
+                  ))}
+                  <TableRow className="bg-muted/40 font-semibold">
+                    <TableCell>
+                      {t(input.view === "costGaps" ? "filteredTotals" : "total")}
+                    </TableCell>
+                    <TableCell className="text-right">{money(totals.netSalesKgs)}</TableCell>
+                    <TableCell className="text-right">{money(totals.costKgs)}</TableCell>
+                    <TableCell className="text-right">{money(totals.grossProfitKgs)}</TableCell>
+                    <TableCell className="text-right">{percent(totals.marginPercent)}</TableCell>
+                    <TableCell className="text-right">{money(totals.returnsKgs)}</TableCell>
+                    <TableCell className="text-right">
+                      {input.view === "products" ? "—" : number(totals.receiptCount)}
+                    </TableCell>
+                    <TableCell>{percent(totals.coveragePercent)}</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            ) : (
+              <div className="space-y-3 p-10 text-center">
+                <h3 className="font-medium">
+                  {t(input.view === "costGaps" ? "noCostGaps" : "emptyPeriod")}
+                </h3>
+                <p className="text-sm text-muted-foreground">{t("emptyHelp")}</p>
+                <Button
+                  variant="secondary"
+                  onClick={() =>
+                    update({
+                      search: undefined,
+                      category: undefined,
+                      productId: undefined,
+                      variantKey: undefined,
+                      customerKey: undefined,
+                      documentId: undefined,
+                      kind: undefined,
+                    })
+                  }
+                >
+                  {t("reset")}
+                </Button>
               </div>
             )}
-          </Modal>
-
-          <ReceiptPreviewModal
-            saleId={previewSaleId}
-            open={Boolean(previewSaleId)}
-            onOpenChange={(nextOpen) => {
-              if (!nextOpen) {
-                setPreviewSaleId(null);
-              }
-            }}
-          />
-          </>}
+            <ReportPagination
+              page={data.page}
+              total={data.total}
+              pageSize={data.pageSize}
+              onPage={(page) => update({ page })}
+            />
+          </section>
+          <details className="rounded-xl border border-border bg-card p-4 text-sm">
+            <summary className="cursor-pointer font-medium">{t("methodology")}</summary>
+            <div className="mt-3 max-w-4xl space-y-2 leading-6 text-muted-foreground">
+              <p>{t("salesMethod")}</p>
+              <p>{t("costMethod")}</p>
+              <p>{t("profitMethod")}</p>
+              <p>{t("categoryMethod")}</p>
+              <p>{t("quantityMethod")}</p>
+            </div>
+          </details>
         </>
+      )}
+      {preview && (
+        <ReceiptPreviewModal
+          saleId={preview}
+          open
+          onOpenChange={(open) => {
+            if (!open) setPreview(null);
+          }}
+        />
       )}
     </div>
   );
-};
-
-export default AnalyticsPage;
+}
+function AnalyticsAudience() {
+  const { data: session } = useSession();
+  return (
+    <AnalyticsReportContent
+      key={`${session?.user.id}:${session?.user.organizationId}:${session?.user.role}`}
+    />
+  );
+}
+export default function AnalyticsPage() {
+  return (
+    <Suspense fallback={<Skeleton className="h-96" />}>
+      <AnalyticsAudience />
+    </Suspense>
+  );
+}

@@ -5815,15 +5815,11 @@ export const editCompletedSaleReturn = async (input: {
           }
           desiredKeys.add(key);
 
-          const unitCostKgs = originalLine.unitCostKgs
-            ? toMoney(originalLine.unitCostKgs)
-            : await resolveUnitCost({
-                tx,
-                organizationId: input.organizationId,
-                productId: originalLine.productId,
-                variantId: originalLine.variantId,
-                isBundle: originalLine.product.isBundle,
-              });
+          // A return reverses the original sale's historical cost. Today's
+          // purchasing price cannot establish an unknown historical cost.
+          const unitCostKgs = originalLine.unitCostKgs === null
+            ? null
+            : toMoney(originalLine.unitCostKgs);
 
           normalizedLines.push({
             lineId,

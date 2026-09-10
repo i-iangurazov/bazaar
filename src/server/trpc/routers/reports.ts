@@ -1,4 +1,11 @@
 import { z } from "zod";
+import {
+  withReportRead,
+  assertReportEntities,
+  reportFilterOptions,
+} from "@/server/services/reporting/access";
+import { getSalesReport, reportViews } from "@/server/services/reporting/sales";
+import { getOperationsReport, operationViews } from "@/server/services/reporting/operations";
 
 import { businessDateOnlyEndUtc, businessDateOnlyToUtc } from "@/lib/timezone";
 import { managerProcedure, router, type Context } from "@/server/trpc/trpc";
@@ -29,6 +36,37 @@ const rangeSchema = z.object({
   page: z.number().int().min(1).optional(),
   pageSize: z.number().int().min(10).max(100).optional(),
 });
+
+const periodSchema = z.object({
+  storeId: z.string().trim().min(1).optional(),
+  dateFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  dateTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  search: z.string().trim().max(200).optional(),
+  page: z.number().int().min(1).max(1_000_000).optional(),
+  pageSize: z.number().int().min(1).max(100).optional(),
+  direction: z.enum(["asc", "desc"]).optional(),
+});
+export const salesReportSchema = periodSchema
+  .extend({
+    channel: z.enum(["all", "pos", "orders"]).optional(),
+    registerId: z.string().min(1).optional(),
+    cashierId: z.string().min(1).optional(),
+    category: z.string().trim().min(1).max(200).optional(),
+    productId: z.string().min(1).optional(),
+    variantKey: z.string().min(1).optional(),
+    customerKey: z.string().max(300).optional(),
+    documentId: z.string().min(1).optional(),
+    kind: z.enum(["sale", "return"]).optional(),
+    view: z.enum(reportViews).optional(),
+    sort: z.enum(["revenue", "profit", "cost", "returns", "name", "date"]).optional(),
+  })
+  .strict();
+const operationsSchema = periodSchema
+  .extend({
+    view: z.enum(operationViews),
+    sort: z.enum(["date", "amount", "name"]).optional(),
+  })
+  .strict();
 
 const parseDateOnlyBound = (value: string, endOfDay: boolean) => {
   return endOfDay ? businessDateOnlyEndUtc(value) : businessDateOnlyToUtc(value);
@@ -74,6 +112,69 @@ const resolveReportStoreScope = async (
 };
 
 export const reportsRouter = router({
+  filterOptions: reportsProcedure
+    .input(z.object({ storeId: z.string().min(1).optional() }).strict())
+    .query(async ({ ctx, input }) => {
+      try {
+        return await withReportRead(ctx.user, input, reportFilterOptions);
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+  sales: reportsProcedure.input(salesReportSchema).query(async ({ ctx, input }) => {
+    try {
+      return await withReportRead(ctx.user, input, async (tx, access) => {
+        await assertReportEntities(tx, access, input);
+        return getSalesReport(tx, {
+          ...input,
+          organizationId: access.organizationId,
+          storeIds: access.storeIds,
+        });
+      });
+    } catch (error) {
+      throw toTRPCError(error);
+    }
+  }),
+  salesExport: reportsProcedure.input(salesReportSchema).query(async ({ ctx, input }) => {
+    try {
+      return await withReportRead(ctx.user, { ...input, export: true }, async (tx, access) => {
+        await assertReportEntities(tx, access, input);
+        return getSalesReport(
+          tx,
+          { ...input, organizationId: access.organizationId, storeIds: access.storeIds },
+          { exportAll: true },
+        );
+      });
+    } catch (error) {
+      throw toTRPCError(error);
+    }
+  }),
+  operations: reportsProcedure.input(operationsSchema).query(async ({ ctx, input }) => {
+    try {
+      return await withReportRead(ctx.user, input, (tx, access) =>
+        getOperationsReport(tx, {
+          ...input,
+          organizationId: access.organizationId,
+          storeIds: access.storeIds,
+        }),
+      );
+    } catch (error) {
+      throw toTRPCError(error);
+    }
+  }),
+  operationsExport: reportsProcedure.input(operationsSchema).query(async ({ ctx, input }) => {
+    try {
+      return await withReportRead(ctx.user, { ...input, export: true }, (tx, access) =>
+        getOperationsReport(
+          tx,
+          { ...input, organizationId: access.organizationId, storeIds: access.storeIds },
+          { exportAll: true },
+        ),
+      );
+    } catch (error) {
+      throw toTRPCError(error);
+    }
+  }),
   stockouts: reportsProcedure.input(rangeSchema).query(async ({ ctx, input }) => {
     try {
       const range = resolveRange(input);

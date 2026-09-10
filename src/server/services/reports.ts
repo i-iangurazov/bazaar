@@ -237,6 +237,7 @@ export const getSlowMoversReport = async (
         AND last_movements."variantId" IS NOT DISTINCT FROM snapshot."variantId"
       WHERE s."organizationId" = ${input.organizationId}
         ${storeScope}
+        AND snapshot."onHand" > 0
         AND (
           last_movements."lastMovementAt" IS NULL
           OR last_movements."lastMovementAt" < ${input.from}
@@ -295,14 +296,13 @@ export const getShrinkageReport = async (
         m."productId",
         m."variantId",
         m."createdById" AS "userId",
-        ABS(SUM(m."qtyDelta"))::int AS "totalQty",
+        (-SUM(m."qtyDelta"))::int AS "totalQty",
         COUNT(*)::int AS "movementCount"
       FROM "StockMovement" m
       INNER JOIN "Store" s ON s.id = m."storeId"
       WHERE s."organizationId" = ${input.organizationId}
         ${storeScope}
-        AND m.type = ${StockMovementType.ADJUSTMENT}::"StockMovementType"
-        AND m."qtyDelta" < 0
+        AND (m.type = ${StockMovementType.WRITE_OFF}::"StockMovementType" OR m."referenceType" = 'WRITE_OFF')
         AND m."createdAt" >= ${input.from}
         AND m."createdAt" <= ${input.to}
       GROUP BY m."storeId", m."productId", m."variantId", m."createdById"

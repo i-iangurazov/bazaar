@@ -7,12 +7,14 @@ const readSource = (relativePath: string) =>
   readFile(path.join(process.cwd(), relativePath), "utf8");
 
 describe("currency UI clarity", () => {
-  it("warns users when all-store reports use base accounting currency", async () => {
+  it("keeps report money in stated base currency, including a selected foreign-currency store", async () => {
     const analyticsSource = await readSource("src/app/(app)/reports/analytics/page.tsx");
     const salesMetricsSource = await readSource("src/app/(app)/sales/orders/metrics/page.tsx");
 
-    expect(analyticsSource).toContain('storeId === "all"');
-    expect(analyticsSource).toContain('t("baseCurrencyNotice")');
+    const controls = await readSource("src/components/reports/report-controls.tsx");
+    expect(analyticsSource).toContain("formatKgsMoney(value, locale, baseAccountingCurrency)");
+    expect(analyticsSource).toContain("currencySource={baseAccountingCurrency}");
+    expect(controls).toContain("KGS · Asia/Bishkek");
     expect(salesMetricsSource).toContain('storeId === "all"');
     expect(salesMetricsSource).toContain('t("metricsBaseCurrencyNotice")');
   });

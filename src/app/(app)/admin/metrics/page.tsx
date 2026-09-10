@@ -1,795 +1,705 @@
 "use client";
-
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
-
 import { PageHeader } from "@/components/page-header";
 import { QueryErrorState } from "@/components/query-error-state";
-import { Badge } from "@/components/ui/badge";
+import { ReportMetric } from "@/components/reports/report-metric";
+import {
+  ReportTable as Table,
+  ReportPagination,
+  ReportSelect,
+} from "@/components/reports/report-controls";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
-import { Switch } from "@/components/ui/switch";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { baseAccountingCurrency, formatKgsMoney } from "@/lib/currencyDisplay";
 import { formatDateTime, formatNumber } from "@/lib/i18nFormat";
+import { downloadTableFile, type DownloadFormat } from "@/lib/fileExport";
+import { reportError, reportHref } from "@/lib/reporting";
 import { trpc } from "@/lib/trpc";
-import { cn } from "@/lib/utils";
+import type {
+  AdminMetricsWarningFilter,
+  AdminMetricsSortKey,
+} from "@/server/services/adminMetrics";
 
-const allValue = "__all__";
-const pageSize = 25;
-
-type WarningFilter =
-  | "all"
-  | "noCost"
-  | "noPrice"
-  | "noImage"
-  | "negativeStock"
-  | "lowStock"
-  | "unassigned";
-
-type SortKey =
-  | "retailValue"
-  | "costValue"
-  | "profit"
-  | "stockQty"
-  | "margin"
-  | "product"
-  | "store"
-  | "warnings";
-
-type SortDirection = "asc" | "desc";
-
-const warningOptionDefs: Array<{
-  value: WarningFilter;
-}> = [
-  { value: "all" },
-  { value: "noCost" },
-  { value: "noPrice" },
-  { value: "noImage" },
-  { value: "negativeStock" },
-  { value: "lowStock" },
-  { value: "unassigned" },
-];
-
-const sortOptionDefs: Array<{ value: SortKey }> = [
-  { value: "retailValue" },
-  { value: "costValue" },
-  { value: "profit" },
-  { value: "stockQty" },
-  { value: "margin" },
-  { value: "warnings" },
-  { value: "product" },
-  { value: "store" },
-];
-
-const moneyOptions = { maximumFractionDigits: 0 };
-const priceOptions = { maximumFractionDigits: 2 };
-
-const MetricSkeleton = () => (
-  <Card>
-    <CardHeader>
-      <Skeleton className="h-4 w-32" />
-    </CardHeader>
-    <CardContent className="space-y-3">
-      <Skeleton className="h-8 w-40" />
-      <Skeleton className="h-3 w-full max-w-56" />
-    </CardContent>
-  </Card>
-);
-
-const EmptyTableRow = ({ colSpan, label }: { colSpan: number; label: string }) => (
-  <TableRow>
-    <TableCell colSpan={colSpan} className="h-24 text-center text-sm text-muted-foreground">
-      {label}
-    </TableCell>
-  </TableRow>
-);
-
-const AdminMetricsPage = () => {
-  const t = useTranslations("adminMetrics");
-  const tCommon = useTranslations("common");
-  const tErrors = useTranslations("errors");
-  const locale = useLocale();
+const warnings = [
+  "all",
+  "noCost",
+  "noPrice",
+  "noImage",
+  "negativeStock",
+  "lowStock",
+  "unassigned",
+] as const;
+const sorts = [
+  "retailValue",
+  "costValue",
+  "profit",
+  "stockQty",
+  "margin",
+  "product",
+  "store",
+  "warnings",
+] as const;
+function MetricsContent() {
+  const t = useTranslations("adminMetrics"),
+    r = useTranslations("reporting"),
+    errors = useTranslations("errors"),
+    locale = useLocale();
   const { data: session, status } = useSession();
-  const isAdmin = session?.user?.role === "ADMIN";
-  const isForbidden = status === "authenticated" && !isAdmin;
-
-  const [storeId, setStoreId] = useState(allValue);
-  const [category, setCategory] = useState(allValue);
-  const [search, setSearch] = useState("");
-  const [includeArchived, setIncludeArchived] = useState(false);
-  const [warning, setWarning] = useState<WarningFilter>("all");
-  const [sortKey, setSortKey] = useState<SortKey>("retailValue");
-  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
-  const [page, setPage] = useState(1);
-  const deferredSearch = useDeferredValue(search.trim());
-
-  const queryInput = useMemo(
-    () => ({
-      storeId: storeId === allValue ? undefined : storeId,
-      category: category === allValue ? undefined : category,
-      search: deferredSearch || undefined,
-      includeArchived,
-      warning,
-      sortKey,
-      sortDirection,
-      page,
-      pageSize,
-    }),
-    [category, deferredSearch, includeArchived, page, sortDirection, sortKey, storeId, warning],
-  );
-
-  const metricsQuery = trpc.adminMetrics.get.useQuery(queryInput, {
-    enabled: Boolean(isAdmin),
-    keepPreviousData: true,
+  const params = useSearchParams(),
+    router = useRouter(),
+    pathname = usePathname();
+  const queryString = params.toString();
+  const [draft, setDraft] = useState({ key: queryString, value: params.get("search") ?? "" });
+  const search = draft.key === queryString ? draft.value : (params.get("search") ?? "");
+  const setSearch = (value: string) => setDraft({ key: queryString, value });
+  const warning = (params.get("warning") ?? "all") as AdminMetricsWarningFilter;
+  const sortKey = (params.get("sortKey") ?? "retailValue") as AdminMetricsSortKey;
+  const sortDirection = (params.get("sortDirection") ?? "desc") as "asc" | "desc";
+  const page = Number(params.get("page") ?? 1),
+    view = params.get("view") ?? "products";
+  const input = {
+    storeId: params.get("storeId") ?? undefined,
+    category: params.get("category") ?? undefined,
+    search: search.trim() || undefined,
+    includeArchived: params.get("includeArchived") === "true",
+    warning,
+    sortKey,
+    sortDirection,
+    page,
+    pageSize: 25,
+  };
+  let valid =
+    warnings.includes(warning) &&
+    sorts.includes(sortKey) &&
+    ["asc", "desc"].includes(sortDirection) &&
+    ["products", "stores", "categories"].includes(view) &&
+    Number.isInteger(page) &&
+    page >= 1 &&
+    page <= 1_000_000;
+  params.forEach((value, key) => {
+    if (
+      ![
+        "storeId",
+        "category",
+        "search",
+        "includeArchived",
+        "warning",
+        "sortKey",
+        "sortDirection",
+        "page",
+        "view",
+      ].includes(key) ||
+      params.getAll(key).length !== 1 ||
+      !value ||
+      value.length > 200
+    )
+      valid = false;
   });
-
-  const data = metricsQuery.data;
-  const inventory = data?.inventory;
-  const summary = inventory?.summary;
-  const pagination = inventory?.products.pagination;
-
-  const warningLabels = useMemo(
-    () =>
-      ({
-        noCost: t("warnings.noCost"),
-        noPrice: t("warnings.noPrice"),
-        noImage: t("warnings.noImage"),
-        negativeStock: t("warnings.negativeStock"),
-        lowStock: t("warnings.lowStock"),
-        unassigned: t("warnings.unassigned"),
-      }) satisfies Record<Exclude<WarningFilter, "all">, string>,
-    [t],
-  );
-
-  const warningOptions = useMemo(
-    () =>
-      warningOptionDefs.map((option) => ({
-        value: option.value,
-        label:
-          option.value === "all"
-            ? t("warnings.all")
-            : warningLabels[option.value as Exclude<WarningFilter, "all">],
-        description: t(`warningDescriptions.${option.value}`),
-      })),
-    [t, warningLabels],
-  );
-
-  const sortOptions = useMemo(
-    () =>
-      sortOptionDefs.map((option) => ({
-        value: option.value,
-        label: t(`sort.${option.value}`),
-      })),
-    [t],
-  );
-
-  useEffect(() => {
-    if (pagination && page > pagination.totalPages) {
-      setPage(pagination.totalPages);
-    }
-  }, [page, pagination]);
-
-  const resetPage = () => setPage(1);
-  const selectedStoreName =
-    storeId === allValue
-      ? t("filters.allStores")
-      : data?.filterOptions.stores.find((store) => store.id === storeId)?.name ??
-        t("filters.storeFallback");
-
-  const formatMoney = (value: number) =>
-    formatKgsMoney(value, locale, baseAccountingCurrency, moneyOptions);
-  const formatPrice = (value: number | null | undefined) =>
-    value === null || value === undefined
-      ? tCommon("notAvailable")
-      : formatKgsMoney(value, locale, baseAccountingCurrency, priceOptions);
-  const formatNullableMoney = (value: number | null | undefined) =>
-    value === null || value === undefined ? tCommon("notAvailable") : formatMoney(value);
-  const formatQty = (value: number | null | undefined) =>
-    formatNumber(value ?? 0, locale, { maximumFractionDigits: 2 });
-  const formatInteger = (value: number | null | undefined) =>
-    formatNumber(value ?? 0, locale, { maximumFractionDigits: 0 });
-  const formatPercent = (value: number | null | undefined) =>
-    value === null || value === undefined
-      ? tCommon("notAvailable")
-      : `${formatNumber(value, locale, { maximumFractionDigits: 1 })}%`;
-
-  const warningCards = summary
-    ? warningOptions
-        .filter((option) => option.value !== "all")
-        .map((option) => ({
-          ...option,
-          count: summary.warningCounts[option.value as Exclude<WarningFilter, "all">],
-        }))
-    : [];
-
-  if (isForbidden) {
-    return (
-      <div>
-        <PageHeader
-          title={t("title")}
-          subtitle={t("subtitle")}
-        />
-        <p className="mt-4 text-sm text-danger">{tErrors("forbidden")}</p>
-      </div>
+  const update = (patch: Record<string, string | number | undefined>) => {
+    router.replace(
+      reportHref(pathname, {
+        ...Object.fromEntries(params),
+        search: search || undefined,
+        page: undefined,
+        ...patch,
+      }),
+      { scroll: false },
     );
-  }
-
+  };
+  const enabled = status === "authenticated" && session?.user.role === "ADMIN" && valid;
+  const query = trpc.adminMetrics.get.useQuery(input, {
+    enabled,
+    keepPreviousData: false,
+    staleTime: 0,
+    cacheTime: 0,
+    retry: false,
+  });
+  const data = enabled && !query.error ? query.data : undefined;
+  const inventory = data?.inventory,
+    summary = inventory?.summary;
+  const money = (value: number | null | undefined) =>
+    value === null || value === undefined
+      ? "—"
+      : formatKgsMoney(value, locale, baseAccountingCurrency);
+  const number = (value: number | null | undefined) =>
+    value === null || value === undefined
+      ? "—"
+      : formatNumber(value, locale, { maximumFractionDigits: 2 });
+  const percent = (value: number | null | undefined) =>
+    value === null || value === undefined ? "—" : `${number(value)}%`;
+  const categoryName = (value: string) =>
+    value === "Без категории" ? r("special.__uncategorized__") : value;
+  const [format, setFormat] = useState<DownloadFormat>("csv"),
+    [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<{ key: string; text: string } | null>(null);
+  const fingerprint = JSON.stringify([
+    session?.user.id,
+    session?.user.organizationId,
+    session?.user.role,
+    status,
+    queryString,
+    search,
+    enabled,
+  ]);
+  const current = useRef(fingerprint);
+  current.current = fingerprint;
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  const utils = trpc.useUtils();
+  const exportTable = async () => {
+    if (!enabled || exporting) return;
+    const expected = current.current,
+      guard = () => mounted.current && current.current === expected;
+    setExporting(true);
+    setExportError(null);
+    try {
+      const result = await utils.client.adminMetrics.export.query({
+        ...input,
+        view: view as "products" | "stores" | "categories",
+        page: undefined,
+        pageSize: undefined,
+      });
+      if (!guard()) return;
+      const rows =
+        view === "products"
+          ? result.inventory.products.rows.map((row) => [
+              row.productName,
+              row.variantName ?? "",
+              row.productSku ?? "",
+              row.storeName,
+              categoryName(row.category),
+              number(row.stockQty),
+              money(row.costPriceKgs),
+              money(row.salePriceKgs),
+              money(row.costValueKgs),
+              money(row.retailValueKgs),
+              money(row.potentialProfitKgs),
+              row.warnings.map((key) => t(`warnings.${key}`)).join(", "),
+            ])
+          : (view === "stores"
+              ? result.inventory.storeSummaries.map((row) => ({ ...row, name: row.storeName }))
+              : result.inventory.categorySummaries.map((row) => ({
+                  ...row,
+                  name: categoryName(row.category),
+                }))
+            ).map((row) => [
+              row.name,
+              money(row.costValueKgs),
+              money(row.retailValueKgs),
+              money(row.potentialGrossProfitKgs),
+              number(row.warningCounts.noCost),
+              number(row.warningCounts.noPrice),
+            ]);
+      await downloadTableFile({
+        format,
+        fileNameBase: `inventory-${view}-all-filtered`,
+        header:
+          view === "products"
+            ? [
+                r("name"),
+                r("variant"),
+                t("columns.skuBarcode"),
+                r("store"),
+                r("category"),
+                r("quantity"),
+                `${t("columns.cost")} KGS`,
+                `${t("columns.price")} KGS`,
+                `${r("inventoryCost")} KGS`,
+                `${t("kpi.retailValue")} KGS`,
+                `${t("kpi.profit")} KGS`,
+                r("quality"),
+              ]
+            : [
+                r(view === "stores" ? "store" : "category"),
+                `${r("inventoryCost")} KGS`,
+                `${t("kpi.retailValue")} KGS`,
+                `${t("kpi.profit")} KGS`,
+                t("warnings.noCost"),
+                t("warnings.noPrice"),
+              ],
+        rows: [
+          ...rows,
+          [
+            r("total"),
+            `${r("knownCost")}: ${money(result.inventory.summary.costValueKgs)}`,
+            `${t("kpi.retailValue")}: ${money(result.inventory.summary.retailValueKgs)}`,
+          ],
+          [
+            r("context"),
+            r("currentSnapshot"),
+            formatDateTime(result.generatedAt, locale),
+            JSON.stringify(input),
+          ],
+        ],
+        shouldDownload: guard,
+      });
+    } catch (error) {
+      if (guard()) setExportError({ key: expected, text: reportError(errors, error) });
+    } finally {
+      setExporting(false);
+    }
+  };
+  const historicalHref = data
+    ? reportHref("/reports/analytics", {
+        dateFrom: data.sales30d.dateFrom,
+        dateTo: data.sales30d.dateTo,
+        storeId: input.storeId,
+        category: input.category === "Без категории" ? "__uncategorized__" : input.category,
+        search: input.search,
+        channel: "all",
+      })
+    : "/reports/analytics";
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-5">
       <PageHeader
-        title={t("title")}
-        subtitle={t("subtitle")}
+        title={r("inventoryValuation")}
+        subtitle={[data?.organizationName, r("adminPurpose")].filter(Boolean).join(" · ")}
+        action={
+          <>
+            <Button variant="secondary" asChild>
+              <Link href="/reports">{r("reportCenter")}</Link>
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={!enabled || query.isFetching}
+              onClick={() => void query.refetch()}
+            >
+              {r("refresh")}
+            </Button>
+          </>
+        }
       />
-
-      <Card>
-        <CardContent className="grid gap-4 p-4 md:grid-cols-2 xl:grid-cols-5">
-          <div className="space-y-1">
-            <label className="text-xs font-medium uppercase text-muted-foreground">
-              {t("filters.store")}
-            </label>
-            <Select
-              value={storeId}
-              onValueChange={(value) => {
-                setStoreId(value);
-                resetPage();
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder={t("filters.allStores")} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={allValue}>{t("filters.allStores")}</SelectItem>
-                {data?.filterOptions.stores.map((store) => (
-                  <SelectItem key={store.id} value={store.id}>
-                    {store.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-xs font-medium uppercase text-muted-foreground">
-              {t("filters.category")}
-            </label>
-            <Select
-              value={category}
-              onValueChange={(value) => {
-                setCategory(value);
-                resetPage();
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder={t("filters.allCategories")} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={allValue}>{t("filters.allCategories")}</SelectItem>
-                {data?.filterOptions.categories.map((item) => (
-                  <SelectItem key={item} value={item}>
-                    {item}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1 xl:col-span-2">
-            <label className="text-xs font-medium uppercase text-muted-foreground">
-              {t("filters.productSearch")}
-            </label>
-            <Input
-              value={search}
-              onChange={(event) => {
-                setSearch(event.target.value);
-                resetPage();
-              }}
-              placeholder={t("filters.searchPlaceholder")}
-            />
-          </div>
-
-          <div className="flex items-end">
-            <label className="flex min-h-10 w-full items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-sm">
-              <span className="min-w-0">
-                <span className="block font-medium">{t("filters.archived")}</span>
-                <span className="block truncate text-xs text-muted-foreground">
-                  {t("filters.archivedDescription")}
-                </span>
-              </span>
-              <Switch
-                checked={includeArchived}
-                onCheckedChange={(checked) => {
-                  setIncludeArchived(Boolean(checked));
-                  resetPage();
-                }}
-                aria-label={t("filters.archivedAria")}
-              />
-            </label>
-          </div>
-        </CardContent>
-      </Card>
-
-      {metricsQuery.isLoading && !data ? (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-          {Array.from({ length: 5 }).map((_, index) => (
-            <MetricSkeleton key={index} />
+      <section
+        aria-label={r("filters")}
+        className="grid gap-3 rounded-xl border border-border bg-card p-4 sm:grid-cols-2 xl:grid-cols-4"
+      >
+        <ReportSelect
+          label={r("store")}
+          value={input.storeId ?? "all"}
+          onChange={(value) => update({ storeId: value === "all" ? undefined : value })}
+        >
+          <option value="all">{r("allStores")}</option>
+          {data?.filterOptions.stores.map((store) => (
+            <option key={store.id} value={store.id}>
+              {store.name}
+            </option>
+          ))}
+        </ReportSelect>
+        <ReportSelect
+          label={r("category")}
+          value={input.category ?? "all"}
+          onChange={(value) => update({ category: value === "all" ? undefined : value })}
+        >
+          <option value="all">{r("allCategories")}</option>
+          {data?.filterOptions.categories.map((category) => (
+            <option key={category} value={category}>
+              {categoryName(category)}
+            </option>
+          ))}
+        </ReportSelect>
+        <label className="space-y-1.5 text-xs font-medium text-muted-foreground">
+          {r("search")}
+          <Input
+            aria-label={r("search")}
+            value={search}
+            placeholder={r("searchPlaceholder")}
+            onChange={(event) => setSearch(event.target.value)}
+            onBlur={() => {
+              if ((params.get("search") ?? "") !== search) update({ search: search || undefined });
+            }}
+          />
+        </label>
+        <label className="flex min-h-10 items-center gap-3 self-end rounded-md border border-input px-3 py-2 text-sm">
+          <input
+            className="h-4 w-4 accent-primary"
+            type="checkbox"
+            checked={input.includeArchived}
+            onChange={(event) =>
+              update({ includeArchived: event.target.checked ? "true" : undefined })
+            }
+          />
+          {t("filters.archivedDescription")}
+        </label>
+        <p className="text-xs text-muted-foreground sm:col-span-2 xl:col-span-4">
+          {r("currentSnapshot")} · KGS · {r("immediate")}
+        </p>
+      </section>
+      {!valid && (
+        <p role="alert" className="text-sm text-danger">
+          {errors("invalidInput")}
+        </p>
+      )}
+      {enabled && query.error && <QueryErrorState onRetry={() => void query.refetch()} />}
+      {enabled && query.isLoading && (
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+          {[1, 2, 3, 4].map((key) => (
+            <Skeleton key={key} className="h-36" />
           ))}
         </div>
-      ) : metricsQuery.isError && !data ? (
-        <QueryErrorState onRetry={() => void metricsQuery.refetch()} />
-      ) : data && inventory && summary ? (
+      )}
+      {data && inventory && summary && (
         <>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">{t("kpi.totalQty")}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-semibold tracking-normal">
-                  {formatQty(summary.totalStockQty)}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {t("kpi.totalQtyHint", { store: selectedStoreName })}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">{t("kpi.costValue")}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-semibold tracking-normal">
-                  {formatMoney(summary.costValueKgs)}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {t("kpi.noCostHint", { count: formatInteger(summary.warningCounts.noCost) })}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">{t("kpi.retailValue")}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-semibold tracking-normal">
-                  {formatMoney(summary.retailValueKgs)}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {t("kpi.noPriceHint", { count: formatInteger(summary.warningCounts.noPrice) })}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">{t("kpi.profit")}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-semibold tracking-normal">
-                  {formatMoney(summary.potentialGrossProfitKgs)}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {t("kpi.profitHint")}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">{t("kpi.margin")}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-semibold tracking-normal">
-                  {formatPercent(summary.potentialMarginPercent)}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {t("kpi.marginHint", { count: formatInteger(summary.rowsWithProfitData) })}
-                </p>
-              </CardContent>
-            </Card>
+          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+            <ReportMetric
+              title={r("inventoryCost")}
+              value={summary.warningCounts.noCost ? "—" : money(summary.costValueKgs)}
+              note={
+                summary.warningCounts.noCost
+                  ? r("partialCost", {
+                      count: summary.warningCounts.noCost,
+                      amount: money(summary.costValueKgs),
+                    })
+                  : r("inventoryCostNote")
+              }
+              accent
+            />
+            <ReportMetric
+              title={t("kpi.retailValue")}
+              value={summary.warningCounts.noPrice ? "—" : money(summary.retailValueKgs)}
+              note={t("kpi.noPriceHint", { count: number(summary.warningCounts.noPrice) })}
+            />
+            <ReportMetric
+              title={t("kpi.profit")}
+              value={
+                summary.rowsWithProfitData < inventory.snapshotCount
+                  ? "—"
+                  : money(summary.potentialGrossProfitKgs)
+              }
+              note={r("potentialNote", { amount: money(summary.potentialGrossProfitKgs) })}
+            />
+            <ReportMetric
+              title={r("inventoryRows")}
+              value={number(inventory.snapshotCount)}
+              note={r("inventoryRowsNote", { count: inventory.productCount })}
+            />
           </div>
-
+          <p className="text-xs text-muted-foreground">
+            {r("updated", { date: formatDateTime(data.generatedAt, locale) })}
+          </p>
           <section className="space-y-3">
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-semibold">{t("attention.title")}</h2>
-                <p className="text-sm text-muted-foreground">
-                  {t("attention.subtitle")}
-                </p>
-              </div>
-              {metricsQuery.isFetching ? (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Spinner className="h-3.5 w-3.5" />
-                  {t("attention.updating")}
-                </div>
-              ) : null}
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-              {warningCards.map((item) => (
-                <button
-                  key={item.value}
-                  type="button"
-                  onClick={() => {
-                    setWarning(item.value);
-                    resetPage();
-                  }}
-                  className={cn(
-                    "rounded-md border bg-card p-3 text-left shadow-sm transition hover:border-primary/60 hover:bg-accent/40",
-                    warning === item.value ? "border-primary ring-2 ring-primary/15" : "border-border",
-                  )}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="font-semibold">{t("attention.title")}</h2>
+              {warning !== "all" && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => update({ warning: undefined })}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <span className="text-sm font-semibold">{item.label}</span>
-                    <Badge variant={item.count > 0 ? "warning" : "success"}>
-                      {formatInteger(item.count)}
-                    </Badge>
-                  </div>
-                  <p className="mt-2 text-xs text-muted-foreground">{item.description}</p>
-                </button>
-              ))}
+                  {r("reset")}
+                </Button>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">{r("warningScope")}</p>
+            <div className="grid grid-cols-2 gap-2 lg:grid-cols-3 xl:grid-cols-6">
+              {warnings
+                .filter((key) => key !== "all")
+                .map((key) => (
+                  <button
+                    key={key}
+                    aria-pressed={warning === key}
+                    onClick={() => update({ warning: warning === key ? undefined : key })}
+                    className={`rounded-lg border p-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring ${warning === key ? "border-primary bg-primary/5" : "border-border bg-card hover:border-primary/50"}`}
+                  >
+                    <span className="block text-xs text-muted-foreground">
+                      {t(`warnings.${key}`)}
+                    </span>
+                    <strong className="mt-2 block text-xl tabular-nums">
+                      {number(summary.warningCounts[key])}
+                    </strong>
+                  </button>
+                ))}
             </div>
           </section>
-
-          <div className="grid gap-4 xl:grid-cols-3">
-            <Card className="xl:col-span-2">
-              <CardHeader>
-                <CardTitle>{t("sections.byStores")}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="overflow-x-auto">
-                  <Table className="min-w-[760px]">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>{t("columns.store")}</TableHead>
-                        <TableHead>{t("columns.stock")}</TableHead>
-                        <TableHead>{t("columns.costValue")}</TableHead>
-                        <TableHead>{t("columns.retailValue")}</TableHead>
-                        <TableHead>{t("columns.profit")}</TableHead>
-                        <TableHead>{t("columns.issues")}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {inventory.storeSummaries.length ? (
-                        inventory.storeSummaries.map((store) => (
-                          <TableRow key={store.storeId}>
-                            <TableCell className="font-medium">{store.storeName}</TableCell>
-                            <TableCell>{formatQty(store.totalStockQty)}</TableCell>
-                            <TableCell>{formatMoney(store.costValueKgs)}</TableCell>
-                            <TableCell>{formatMoney(store.retailValueKgs)}</TableCell>
-                            <TableCell>
-                              <div className="font-medium">
-                                {formatMoney(store.potentialGrossProfitKgs)}
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                {formatPercent(store.potentialMarginPercent)}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex flex-wrap gap-1">
-                                {store.warningCounts.negativeStock > 0 ? (
-                                  <Badge variant="danger">
-                                    -{formatInteger(store.warningCounts.negativeStock)}
-                                  </Badge>
-                                ) : null}
-                                {store.warningCounts.noCost > 0 ? (
-                                  <Badge variant="warning">
-                                    {t("badges.costShort", {
-                                      count: formatInteger(store.warningCounts.noCost),
-                                    })}
-                                  </Badge>
-                                ) : null}
-                                {store.warningCounts.noPrice > 0 ? (
-                                  <Badge variant="warning">
-                                    {t("badges.priceShort", {
-                                      count: formatInteger(store.warningCounts.noPrice),
-                                    })}
-                                  </Badge>
-                                ) : null}
-                                {store.warningCounts.negativeStock === 0 &&
-                                store.warningCounts.noCost === 0 &&
-                                store.warningCounts.noPrice === 0 ? (
-                                  <Badge variant="success">{t("badges.ok")}</Badge>
-                                ) : null}
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      ) : (
-                        <EmptyTableRow colSpan={6} label={t("table.emptyStock")} />
-                      )}
-                    </TableBody>
-                  </Table>
+          <section className="grid gap-5 rounded-xl border border-border bg-card p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+            <div>
+              <h2 className="font-semibold">{t("sections.sales30d")}</h2>
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                {data.sales30d.dateFrom} — {data.sales30d.dateTo} · {r("adminSalesNote")}
+              </p>
+              {warning === "all" && (
+                <Button asChild variant="link" className="mt-3">
+                  <Link href={historicalHref}>{r("openAnalytics")} ↗</Link>
+                </Button>
+              )}
+            </div>
+            <dl className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+              {[
+                [r("netSales"), money(data.sales30d.revenueKgs)],
+                [r("cost"), money(data.sales30d.costKgs)],
+                [r("profit"), money(data.sales30d.grossProfitKgs)],
+                [r("margin"), percent(data.sales30d.grossMarginPercent)],
+              ].map(([name, value]) => (
+                <div key={name}>
+                  <dt className="text-xs text-muted-foreground">{name}</dt>
+                  <dd className="mt-2 break-words text-lg font-semibold tabular-nums">{value}</dd>
                 </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>{t("sections.sales30d")}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm text-muted-foreground">{t("sales.revenue")}</span>
-                  <span className="font-semibold">{formatMoney(data.sales30d.revenueKgs)}</span>
+              ))}
+            </dl>
+            {data.sales30d.unknownCostLines > 0 && (
+              <p className="text-sm text-amber-700 dark:text-amber-300 lg:col-span-2">
+                {r("partialProfit", { amount: money(data.sales30d.knownProfitKgs) })}{" "}
+                {r("missingCount", { count: data.sales30d.unknownCostLines })}
+              </p>
+            )}
+          </section>
+          <section className="min-w-0 overflow-hidden rounded-xl border border-border bg-card">
+            <div className="space-y-4 border-b border-border p-4">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <nav className="flex flex-wrap gap-2" aria-label={r("dimensions")}>
+                  {["products", "stores", "categories"].map((value) => (
+                    <Button
+                      size="sm"
+                      key={value}
+                      variant={view === value ? "primary" : "ghost"}
+                      aria-current={view === value ? "page" : undefined}
+                      onClick={() => update({ view: value })}
+                    >
+                      {r(`views.${value}`)}
+                    </Button>
+                  ))}
+                </nav>
+                <div className="flex items-end gap-2">
+                  <ReportSelect
+                    label={r("format")}
+                    value={format}
+                    onChange={(value) => setFormat(value as DownloadFormat)}
+                  >
+                    <option value="csv">{"CSV"}</option>
+                    <option value="xlsx">{"XLSX"}</option>
+                  </ReportSelect>
+                  <Button
+                    disabled={exporting}
+                    variant="secondary"
+                    onClick={() => void exportTable()}
+                  >
+                    {r(exporting ? "exporting" : "exportAll")}
+                  </Button>
                 </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm text-muted-foreground">{t("sales.receipts")}</span>
-                  <span className="font-semibold">{formatInteger(data.sales30d.orders)}</span>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm text-muted-foreground">{t("sales.soldQty")}</span>
-                  <span className="font-semibold">{formatQty(data.sales30d.soldQty)}</span>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm text-muted-foreground">{t("sales.grossProfit")}</span>
-                  <span className="font-semibold">{formatMoney(data.sales30d.grossProfitKgs)}</span>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm text-muted-foreground">{t("sales.margin")}</span>
-                  <span className="font-semibold">{formatPercent(data.sales30d.grossMarginPercent)}</span>
-                </div>
-                <p className="border-t border-border pt-3 text-xs text-muted-foreground">
-                  {t("sales.note")}
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>{t("sections.byCategories")}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <Table className="min-w-[820px]">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t("columns.category")}</TableHead>
-                      <TableHead>{t("columns.products")}</TableHead>
-                      <TableHead>{t("columns.stock")}</TableHead>
-                      <TableHead>{t("columns.costValue")}</TableHead>
-                      <TableHead>{t("columns.retailValue")}</TableHead>
-                      <TableHead>{t("columns.profit")}</TableHead>
-                      <TableHead>{t("columns.margin")}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {inventory.categorySummaries.length ? (
-                      inventory.categorySummaries.map((item) => (
-                        <TableRow key={item.category}>
-                          <TableCell className="font-medium">{item.category}</TableCell>
-                          <TableCell>{formatInteger(item.productCount)}</TableCell>
-                          <TableCell>{formatQty(item.totalStockQty)}</TableCell>
-                          <TableCell>{formatMoney(item.costValueKgs)}</TableCell>
-                          <TableCell>{formatMoney(item.retailValueKgs)}</TableCell>
-                          <TableCell>{formatMoney(item.potentialGrossProfitKgs)}</TableCell>
-                          <TableCell>{formatPercent(item.potentialMarginPercent)}</TableCell>
-                        </TableRow>
-                      ))
-                    ) : (
-                      <EmptyTableRow colSpan={7} label={t("table.emptyCategories")} />
-                    )}
-                  </TableBody>
-                </Table>
               </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <CardTitle>{t("sections.productValues")}</CardTitle>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {pagination
-                    ? t("table.productRowsSummary", {
-                        count: formatInteger(pagination.totalItems),
-                        page: formatInteger(pagination.page),
-                        totalPages: formatInteger(pagination.totalPages),
-                      })
-                    : t("table.productRowsFallback")}
-                </p>
-              </div>
-              <div className="grid w-full gap-2 sm:grid-cols-3 lg:w-auto">
-                <Select
+              <div className="grid gap-3 sm:grid-cols-3">
+                <ReportSelect
+                  label={r("quality")}
                   value={warning}
-                  onValueChange={(value) => {
-                    setWarning(value as WarningFilter);
-                    resetPage();
-                  }}
+                  onChange={(value) => update({ warning: value })}
                 >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {warningOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select
+                  {warnings.map((value) => (
+                    <option key={value} value={value}>
+                      {t(`warnings.${value}`)}
+                    </option>
+                  ))}
+                </ReportSelect>
+                <ReportSelect
+                  label={r("sort")}
                   value={sortKey}
-                  onValueChange={(value) => {
-                    setSortKey(value as SortKey);
-                    resetPage();
-                  }}
+                  onChange={(value) => update({ sortKey: value })}
                 >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sortOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select
+                  {sorts.map((value) => (
+                    <option key={value} value={value}>
+                      {t(`sort.${value}`)}
+                    </option>
+                  ))}
+                </ReportSelect>
+                <ReportSelect
+                  label={r("direction")}
                   value={sortDirection}
-                  onValueChange={(value) => {
-                    setSortDirection(value as SortDirection);
-                    resetPage();
+                  onChange={(value) => update({ sortDirection: value })}
+                >
+                  <option value="desc">{r("descending")}</option>
+                  <option value="asc">{r("ascending")}</option>
+                </ReportSelect>
+              </div>
+              {(search || input.category || warning !== "all" || input.includeArchived) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setSearch("");
+                    update({
+                      search: undefined,
+                      category: undefined,
+                      warning: undefined,
+                      includeArchived: undefined,
+                    });
                   }}
                 >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="desc">{t("table.descending")}</SelectItem>
-                    <SelectItem value="asc">{t("table.ascending")}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <Table className="min-w-[1180px]">
+                  {r("reset")}
+                </Button>
+              )}
+              {exportError?.key === fingerprint && (
+                <p role="alert" className="text-sm text-danger">
+                  {exportError.text}
+                </p>
+              )}
+            </div>
+            {view === "products" ? (
+              inventory.products.rows.length ? (
+                <Table sortable={false} className="min-w-[1280px]">
                   <TableHeader>
                     <TableRow>
-                      <TableHead>{t("columns.product")}</TableHead>
-                      <TableHead>{t("columns.skuBarcode")}</TableHead>
-                      <TableHead>{t("columns.store")}</TableHead>
-                      <TableHead>{t("columns.category")}</TableHead>
-                      <TableHead>{t("columns.stock")}</TableHead>
-                      <TableHead>{t("columns.cost")}</TableHead>
-                      <TableHead>{t("columns.price")}</TableHead>
-                      <TableHead>{t("columns.costValue")}</TableHead>
-                      <TableHead>{t("columns.retailValue")}</TableHead>
-                      <TableHead>{t("columns.profit")}</TableHead>
-                      <TableHead>{t("columns.margin")}</TableHead>
-                      <TableHead>{t("columns.warnings")}</TableHead>
+                      {[
+                        r("name"),
+                        r("store"),
+                        r("category"),
+                        r("quantity"),
+                        t("columns.cost"),
+                        t("columns.price"),
+                        r("inventoryCost"),
+                        t("kpi.retailValue"),
+                        r("quality"),
+                      ].map((title, index) => (
+                        <TableHead
+                          key={title}
+                          className={index >= 3 && index < 8 ? "text-right" : ""}
+                        >
+                          {title}
+                        </TableHead>
+                      ))}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {inventory.products.rows.length ? (
-                      inventory.products.rows.map((product) => (
-                        <TableRow key={product.snapshotId}>
-                          <TableCell>
-                            <div className="max-w-[240px]">
-                              <p className="truncate font-medium">{product.productName}</p>
-                              {product.variantName ? (
-                                <p className="truncate text-xs text-muted-foreground">
-                                  {product.variantName}
-                                </p>
-                              ) : null}
-                              {product.isArchived ? (
-                                <Badge variant="muted" className="mt-1">
-                                  {t("table.archive")}
-                                </Badge>
-                              ) : null}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="max-w-[160px] text-sm">
-                              <p className="truncate">
-                                {product.variantSku ?? product.productSku ?? t("table.noSku")}
-                              </p>
-                              <p className="truncate text-xs text-muted-foreground">
-                                {product.barcode ?? t("table.noBarcode")}
-                              </p>
-                            </div>
-                          </TableCell>
-                          <TableCell>{product.storeName}</TableCell>
-                          <TableCell>{product.category}</TableCell>
-                          <TableCell>
-                            <span className={product.stockQty < 0 ? "font-semibold text-danger" : ""}>
-                              {formatQty(product.stockQty)}
-                            </span>
-                          </TableCell>
-                          <TableCell>{formatPrice(product.costPriceKgs)}</TableCell>
-                          <TableCell>{formatPrice(product.salePriceKgs)}</TableCell>
-                          <TableCell>{formatNullableMoney(product.costValueKgs)}</TableCell>
-                          <TableCell>{formatNullableMoney(product.retailValueKgs)}</TableCell>
-                          <TableCell>{formatNullableMoney(product.potentialProfitKgs)}</TableCell>
-                          <TableCell>{formatPercent(product.marginPercent)}</TableCell>
-                          <TableCell>
-                            {product.warnings.length ? (
-                              <div className="flex max-w-[220px] flex-wrap gap-1">
-                                {product.warnings.map((item) =>
-                                  item === "all" ? null : (
-                                    <Badge
-                                      key={item}
-                                      variant={item === "negativeStock" ? "danger" : "warning"}
-                                    >
-                                      {warningLabels[item]}
-                                    </Badge>
-                                  ),
-                                )}
-                              </div>
-                            ) : (
-                              <Badge variant="success">{t("badges.ok")}</Badge>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    ) : (
-                      <EmptyTableRow colSpan={12} label={t("table.emptyProducts")} />
-                    )}
+                    {inventory.products.rows.map((row) => (
+                      <TableRow key={row.snapshotId}>
+                        <TableCell className="w-72 min-w-[14rem] max-w-80 sm:min-w-[18rem]">
+                          <Link
+                            className="font-medium text-primary hover:underline"
+                            href={`/products/${row.productId}`}
+                          >
+                            {row.productName}
+                          </Link>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {row.variantName} · {row.variantSku ?? row.productSku}
+                          </p>
+                        </TableCell>
+                        <TableCell>{row.storeName}</TableCell>
+                        <TableCell>{categoryName(row.category)}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {number(row.stockQty)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {money(row.costPriceKgs)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {money(row.salePriceKgs)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {money(row.costValueKgs)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {money(row.retailValueKgs)}
+                        </TableCell>
+                        <TableCell className="max-w-52 text-xs text-muted-foreground">
+                          {row.warnings.map((key) => t(`warnings.${key}`)).join(" · ") ||
+                            r("complete")}
+                        </TableCell>
+                      </TableRow>
+                    ))}
                   </TableBody>
                 </Table>
-              </div>
-
-              <div className="mt-4 flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-xs text-muted-foreground">
-                  {data?.generatedAt
-                    ? t("table.snapshotUpdated", {
-                        date: formatDateTime(data.generatedAt, locale),
-                        ms: formatInteger(data.queryTimingMs),
-                      })
-                    : t("table.dataUpdating")}
-                </p>
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={!pagination?.hasPreviousPage}
-                    onClick={() => setPage((current) => Math.max(current - 1, 1))}
-                  >
-                    {t("table.previous")}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={!pagination?.hasNextPage}
-                    onClick={() => setPage((current) => current + 1)}
-                  >
-                    {t("table.next")}
-                  </Button>
+              ) : (
+                <div className="p-10 text-center text-sm text-muted-foreground">
+                  {r("emptyPeriod")}
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              )
+            ) : (
+              <Table sortable={false} className="min-w-[960px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{r(view === "stores" ? "store" : "category")}</TableHead>
+                    <TableHead className="text-right">{r("inventoryCost")}</TableHead>
+                    <TableHead className="text-right">{t("kpi.retailValue")}</TableHead>
+                    <TableHead className="text-right">{t("kpi.profit")}</TableHead>
+                    <TableHead>{r("quality")}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(view === "stores"
+                    ? inventory.storeSummaries.map((row) => ({
+                        ...row,
+                        key: row.storeId,
+                        name: row.storeName,
+                      }))
+                    : inventory.categorySummaries.map((row) => ({
+                        ...row,
+                        key: row.category,
+                        name: categoryName(row.category),
+                      }))
+                  ).map((row) => (
+                    <TableRow key={row.key}>
+                      <TableCell>
+                        <button
+                          className="text-left font-medium text-primary hover:underline"
+                          onClick={() =>
+                            update({
+                              view: "products",
+                              [view === "stores" ? "storeId" : "category"]: row.key,
+                            })
+                          }
+                        >
+                          {row.name}
+                        </button>
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {row.warningCounts.noCost ? "—" : money(row.costValueKgs)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {row.warningCounts.noPrice ? "—" : money(row.retailValueKgs)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {row.warningCounts.noCost || row.warningCounts.noPrice
+                          ? "—"
+                          : money(row.potentialGrossProfitKgs)}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {r("missingCount", { count: row.warningCounts.noCost })}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+            {view === "products" && (
+              <ReportPagination
+                page={page}
+                pageSize={25}
+                total={inventory.products.pagination.totalItems}
+                onPage={(page) => update({ page })}
+              />
+            )}
+          </section>
+          <details className="rounded-xl border border-border bg-card p-4 text-sm">
+            <summary className="cursor-pointer font-medium">{r("methodology")}</summary>
+            <p className="mt-3 max-w-4xl leading-6 text-muted-foreground">
+              {r("operationNotes.stock")} {r("potentialMethod")}
+            </p>
+          </details>
         </>
-      ) : (
-        <p className="text-sm text-muted-foreground">{tCommon("loading")}</p>
       )}
     </div>
   );
-};
-
-export default AdminMetricsPage;
+}
+function MetricsAudience() {
+  const { data: session } = useSession();
+  return (
+    <MetricsContent
+      key={`${session?.user.id}:${session?.user.organizationId}:${session?.user.role}`}
+    />
+  );
+}
+export default function AdminMetricsPage() {
+  return (
+    <Suspense fallback={<Skeleton className="h-96" />}>
+      <MetricsAudience />
+    </Suspense>
+  );
+}

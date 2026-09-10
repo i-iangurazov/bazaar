@@ -3,7 +3,7 @@
 import React from "react";
 import {
   Bar,
-  BarChart,
+  ComposedChart,
   CartesianGrid,
   Legend,
   Line,
@@ -23,7 +23,9 @@ type SalesPoint = {
   returnsKgs: number;
   netSalesKgs: number;
   receiptCount: number;
-  averageReceiptKgs: number;
+  averageReceiptKgs: number | null;
+  costKgs?: number | null;
+  grossProfitKgs?: number | null;
 };
 
 type ChartLabels = {
@@ -32,6 +34,8 @@ type ChartLabels = {
   returns: string;
   receipts: string;
   averageReceipt: string;
+  cost?: string;
+  profit?: string;
 };
 
 const dateOnlyToDisplayDate = (dateOnly: string) => {
@@ -52,7 +56,8 @@ export const SalesOverviewChart = ({
   currencySource?: CurrencySource;
   onSelectDate: (date: string) => void;
 }) => {
-  const renderMoney = (value: number) => formatKgsMoney(value, locale, currencySource);
+  const renderMoney = (value: number | null | undefined) =>
+    value === null || value === undefined ? "—" : formatKgsMoney(value, locale, currencySource);
   const ChartTooltip = ({ active, payload, label }: TooltipProps<number, string>) => {
     if (!active || !payload?.length) {
       return null;
@@ -75,6 +80,12 @@ export const SalesOverviewChart = ({
               {labels.returns}: {renderMoney(point.returnsKgs)}
             </p>
             <p>
+              {labels.cost}: {renderMoney(point.costKgs)}
+            </p>
+            <p>
+              {labels.profit}: {renderMoney(point.grossProfitKgs)}
+            </p>
+            <p>
               {labels.receipts}: {formatNumber(point.receiptCount, locale)}
             </p>
             <p>
@@ -88,27 +99,33 @@ export const SalesOverviewChart = ({
 
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 8 }}>
-        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+      <ComposedChart
+        className="[--report-cost:#b45309] dark:[--report-cost:#fbbf24]"
+        accessibilityLayer
+        data={data}
+        margin={{ top: 8, right: 12, left: 0, bottom: 8 }}
+      >
+        <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" vertical={false} />
         <XAxis
+          tick={{ fill: "hsl(var(--muted-foreground))" }}
           dataKey="date"
           tickLine={false}
           axisLine={false}
           tickFormatter={(value) => String(value).slice(5)}
           fontSize={12}
         />
-        <YAxis yAxisId="sales" tickLine={false} axisLine={false} width={64} fontSize={12} />
         <YAxis
-          yAxisId="receipts"
-          orientation="right"
+          tick={{ fill: "hsl(var(--muted-foreground))" }}
+          yAxisId="sales"
           tickLine={false}
           axisLine={false}
-          width={42}
+          width={64}
           fontSize={12}
         />
         <Tooltip content={<ChartTooltip />} />
-        <Legend />
+        <Legend formatter={(value) => <span className="text-foreground">{value}</span>} />
         <Bar
+          isAnimationActive={false}
           yAxisId="sales"
           dataKey="netSalesKgs"
           name={labels.netSales}
@@ -123,24 +140,28 @@ export const SalesOverviewChart = ({
           }}
         />
         <Line
-          yAxisId="receipts"
-          type="monotone"
-          dataKey="receiptCount"
-          name={labels.receipts}
-          stroke="hsl(var(--warning))"
+          yAxisId="sales"
+          type="linear"
+          dataKey="costKgs"
+          name={labels.cost}
+          stroke="var(--report-cost)"
           strokeWidth={2}
           dot={{ r: 3 }}
-          activeDot={{
-            r: 6,
-            onClick: (_event: unknown, payload: unknown) => {
-              const point = payload as { payload?: { date?: string } };
-              if (point.payload?.date) {
-                onSelectDate(point.payload.date);
-              }
-            },
-          }}
+          connectNulls={false}
+          isAnimationActive={false}
         />
-      </BarChart>
+        <Line
+          yAxisId="sales"
+          type="linear"
+          dataKey="grossProfitKgs"
+          name={labels.profit}
+          stroke="hsl(var(--success))"
+          strokeWidth={2}
+          dot={{ r: 3 }}
+          connectNulls={false}
+          isAnimationActive={false}
+        />
+      </ComposedChart>
     </ResponsiveContainer>
   );
 };
