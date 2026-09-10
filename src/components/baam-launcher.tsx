@@ -15,8 +15,7 @@ import {
 import { hasPermission, type RoleAccess } from "@/lib/roleAccess";
 import { baamCopy } from "@/lib/baam/copy";
 import { BaamIcon } from "@/components/icons";
-import { launcherBottom } from "@/lib/baam/launcher-position";
-import { cn } from "@/lib/utils";
+import { Button } from "./ui/button";
 import { normalizeLocale } from "@/lib/locales";
 
 export const canShowBaamLauncher = (access: RoleAccess, pathname: string) => {
@@ -40,77 +39,39 @@ export function BaamLauncher({
   const locale = useLocale();
   const [mounted, setMounted] = useState(false);
   const [open, setOpen] = useState(false);
-  const [bottom, setBottom] = useState(24);
-  const [mobileSlot, setMobileSlot] = useState<HTMLElement | null>(null);
+  const [headerSlot, setHeaderSlot] = useState<HTMLElement | null>(null);
   const [viewport, setViewport] = useState<{ height: number; top: number }>();
   useEffect(() => setMounted(true), []);
   useEffect(() => setOpen(false), [pathname]);
   useEffect(() => {
     if (!mounted) return;
-    let frame = 0;
     const measure = () => {
-      frame = 0;
-      setMobileSlot(
-        innerWidth < 768 ? document.querySelector<HTMLElement>("[data-baam-mobile-slot]") : null,
+      setHeaderSlot(
+        document.querySelector<HTMLElement>(
+          innerWidth < 768 ? "[data-baam-mobile-slot]" : "[data-baam-desktop-slot]",
+        ),
       );
-      const obstacles = [...document.querySelectorAll<HTMLElement>("[data-baam-obstacle]")].map(
-        (el) => {
-          const box = el.getBoundingClientRect();
-          return {
-            top: box.top,
-            bottom: box.bottom,
-            left: box.left,
-            right: box.right,
-            fixed: getComputedStyle(el).position === "fixed",
-            action: el.dataset.baamObstacle === "action",
-          };
-        },
-      );
-      setBottom(launcherBottom(innerWidth, innerHeight, obstacles));
       const visual = window.visualViewport;
       setViewport(visual ? { height: visual.height, top: visual.offsetTop } : undefined);
     };
-    const schedule = () => {
-      if (!frame) frame = requestAnimationFrame(measure);
-    };
-    const observer = new ResizeObserver(schedule);
-    const mutation = new MutationObserver(schedule);
-    document.querySelectorAll("[data-baam-obstacle]").forEach((el) => observer.observe(el));
-    observer.observe(document.body);
-    mutation.observe(document.body, { childList: true, subtree: true });
-    document.addEventListener("transitionend", schedule);
-    window.addEventListener("resize", schedule);
-    document.addEventListener("scroll", schedule, true);
-    window.visualViewport?.addEventListener("resize", schedule);
-    window.visualViewport?.addEventListener("scroll", schedule);
-    schedule();
+    measure();
+    window.addEventListener("resize", measure);
+    window.visualViewport?.addEventListener("resize", measure);
+    window.visualViewport?.addEventListener("scroll", measure);
     return () => {
-      observer.disconnect();
-      mutation.disconnect();
-      cancelAnimationFrame(frame);
-      document.removeEventListener("transitionend", schedule);
-      window.removeEventListener("resize", schedule);
-      document.removeEventListener("scroll", schedule, true);
-      window.visualViewport?.removeEventListener("resize", schedule);
-      window.visualViewport?.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", measure);
+      window.visualViewport?.removeEventListener("resize", measure);
+      window.visualViewport?.removeEventListener("scroll", measure);
     };
   }, [mounted, pathname]);
-  if (!mounted || !canShowBaamLauncher(access, pathname)) return null;
+  if (!mounted || !headerSlot || !canShowBaamLauncher(access, pathname)) return null;
   const launcher = (
-    <button
+    <Button
       type="button"
       data-baam-launcher
-      data-baam-docked={mobileSlot ? "header" : undefined}
+      data-baam-docked="header"
       aria-label={baamCopy(locale, "open")}
-      style={
-        mobileSlot ? undefined : { bottom: `calc(${bottom}px + env(safe-area-inset-bottom, 0px))` }
-      }
-      className={cn(
-        "button-focus-ring z-40 flex items-center justify-center gap-2 border border-primary-foreground/15 bg-primary text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 [body:has([role=alertdialog][data-state=open])_&]:invisible [body:has([role=dialog][data-state=open])_&]:invisible",
-        mobileSlot
-          ? "h-11 w-11 rounded-xl p-1"
-          : "fixed right-[max(1rem,env(safe-area-inset-right,0px))] h-12 rounded-2xl px-3 shadow-lg shadow-black/15 md:right-6",
-      )}
+      className="h-11 w-11 shrink-0 gap-2 rounded-lg p-0 md:h-10 md:w-full md:px-3"
       onClick={
         pathname === "/baam"
           ? () => {
@@ -124,16 +85,16 @@ export function BaamLauncher({
           : undefined
       }
     >
-      <BaamIcon className="h-8 w-8" />
-      <span className={mobileSlot ? "sr-only" : "text-xs font-bold tracking-[0.06em]"}>
+      <BaamIcon className="h-6 w-6 shrink-0" />
+      <span className="hidden text-xs font-bold tracking-wide md:inline">
         {baamCopy(locale, "name")}
       </span>
-    </button>
+    </Button>
   );
-  if (pathname === "/baam") return createPortal(launcher, mobileSlot ?? document.body);
+  if (pathname === "/baam") return createPortal(launcher, headerSlot);
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      {createPortal(<DialogTrigger asChild>{launcher}</DialogTrigger>, mobileSlot ?? document.body)}
+      {createPortal(<DialogTrigger asChild>{launcher}</DialogTrigger>, headerSlot)}
       <DialogContent
         data-baam-drawer
         style={

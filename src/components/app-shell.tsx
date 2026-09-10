@@ -1034,226 +1034,225 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
   // Store scope belongs to the current page; the first accessible store is not its selection.
   const mobileStoreName = null;
 
-  if (normalizedPath === "/pos/sell") {
-    return (
-      <BaamAssistantProvider>
-        <div data-bazaar-app className="min-h-screen bg-background">
-          {impersonation ? (
-            <div className="sticky top-0 z-50 border-b border-warning/40 bg-warning/10 px-4 py-2 text-sm text-foreground">
-              <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2">
-                <span>
-                  {tSupport("impersonationActive", {
-                    user:
-                      impersonation.targetName ??
-                      impersonation.targetEmail ??
-                      tCommon("userFallback"),
-                  })}
-                </span>
-                <Button type="button" variant="secondary" size="sm" onClick={exitImpersonation}>
-                  {tSupport("exitImpersonation")}
-                </Button>
-              </div>
-            </div>
-          ) : null}
-          <main id="workspace-content" tabIndex={-1}>
-            {children}
-          </main>
-          <BaamLauncher access={access} pathname={normalizedPath}>
-            <BaamAssistant compact />
-          </BaamLauncher>
-        </div>
-      </BaamAssistantProvider>
-    );
-  }
-
   return (
     <GuidanceProvider role={guidanceRole}>
       <BaamAssistantProvider>
-        <div data-bazaar-app className="min-h-screen bg-background">
-          <a
-            href="#workspace-content"
-            className="sr-only fixed left-4 top-4 z-[1500] rounded-md bg-card px-4 py-3 text-primary shadow-md focus:not-sr-only"
-          >
-            {tWorkspace("skipToContent")}
-          </a>
-          {impersonation ? (
-            <div className="sticky top-0 z-50 border-b border-warning/40 bg-warning/10 px-4 py-2 text-sm text-foreground">
-              <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2">
-                <span>
-                  {tSupport("impersonationActive", {
-                    user:
-                      impersonation.targetName ??
-                      impersonation.targetEmail ??
-                      tCommon("userFallback"),
-                  })}
-                </span>
-                <Button type="button" variant="secondary" size="sm" onClick={exitImpersonation}>
-                  {tSupport("exitImpersonation")}
-                </Button>
+        {normalizedPath === "/pos/sell" ? (
+          <div data-bazaar-app className="min-h-screen bg-background">
+            {impersonation ? (
+              <div className="sticky top-0 z-50 border-b border-warning/40 bg-warning/10 px-4 py-2 text-sm text-foreground">
+                <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2">
+                  <span>
+                    {tSupport("impersonationActive", {
+                      user:
+                        impersonation.targetName ??
+                        impersonation.targetEmail ??
+                        tCommon("userFallback"),
+                    })}
+                  </span>
+                  <Button type="button" variant="secondary" size="sm" onClick={exitImpersonation}>
+                    {tSupport("exitImpersonation")}
+                  </Button>
+                </div>
               </div>
-            </div>
-          ) : null}
-          <MobileAppShell
-            showAssistant={hasPermission(access, "viewReports")}
-            pageTitle={mobilePageTitle}
-            storeName={mobileStoreName}
-            bottomItems={mobileBottomItems}
-            moreItems={mobileMoreItems}
-            moreLabel={tNav("more")}
-            profileLabel={tNav("profile")}
-            closeLabel={tCommon("closeMenu")}
-            navigationLabel={tNav("mobileNavigation")}
-          />
-          <SidebarProvider className="min-h-screen">
-            <Sidebar className="md:sticky md:top-0 md:h-screen">
-              <SidebarHeader className="space-y-3 p-3 group-data-[state=collapsed]/sidebar-wrapper:space-y-2 group-data-[state=collapsed]/sidebar-wrapper:px-2.5">
-                <Link
-                  href="/dashboard"
-                  prefetch={false}
-                  className="flex min-h-10 items-center rounded-lg no-underline hover:no-underline group-data-[state=collapsed]/sidebar-wrapper:justify-center"
-                  aria-label={tNav("brand")}
-                >
-                  <Image
-                    src="/brand/logo.png"
-                    alt=""
-                    width={724}
-                    height={181}
-                    className="h-auto w-[164px] max-w-full drop-shadow-sm group-data-[state=collapsed]/sidebar-wrapper:hidden"
-                    priority
-                  />
-                  <span className="hidden h-10 w-10 items-center justify-center rounded-lg group-data-[state=collapsed]/sidebar-wrapper:inline-flex">
+            ) : null}
+            <main id="workspace-content" tabIndex={-1}>
+              {children}
+            </main>
+          </div>
+        ) : (
+          <div data-bazaar-app className="min-h-screen bg-background">
+            <a
+              href="#workspace-content"
+              className="sr-only fixed left-4 top-4 z-[1500] rounded-md bg-card px-4 py-3 text-primary shadow-md focus:not-sr-only"
+            >
+              {tWorkspace("skipToContent")}
+            </a>
+            {impersonation ? (
+              <div className="sticky top-0 z-50 border-b border-warning/40 bg-warning/10 px-4 py-2 text-sm text-foreground">
+                <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2">
+                  <span>
+                    {tSupport("impersonationActive", {
+                      user:
+                        impersonation.targetName ??
+                        impersonation.targetEmail ??
+                        tCommon("userFallback"),
+                    })}
+                  </span>
+                  <Button type="button" variant="secondary" size="sm" onClick={exitImpersonation}>
+                    {tSupport("exitImpersonation")}
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+            <MobileAppShell
+              showAssistant={hasPermission(access, "viewReports")}
+              pageTitle={mobilePageTitle}
+              storeName={mobileStoreName}
+              bottomItems={mobileBottomItems}
+              moreItems={mobileMoreItems}
+              moreLabel={tNav("more")}
+              profileLabel={tNav("profile")}
+              closeLabel={tCommon("closeMenu")}
+              navigationLabel={tNav("mobileNavigation")}
+            />
+            <SidebarProvider className="min-h-screen">
+              <Sidebar className="md:sticky md:top-0 md:h-screen">
+                <SidebarHeader className="space-y-3 p-3 group-data-[state=collapsed]/sidebar-wrapper:space-y-2 group-data-[state=collapsed]/sidebar-wrapper:px-2.5">
+                  <Link
+                    href="/dashboard"
+                    prefetch={false}
+                    className="flex min-h-10 items-center rounded-lg no-underline hover:no-underline group-data-[state=collapsed]/sidebar-wrapper:justify-center"
+                    aria-label={tNav("brand")}
+                  >
                     <Image
-                      src="/brand/icon.png"
+                      src="/brand/logo.png"
                       alt=""
-                      width={96}
-                      height={96}
-                      className="h-8 w-8"
+                      width={724}
+                      height={181}
+                      className="h-auto w-[164px] max-w-full drop-shadow-sm group-data-[state=collapsed]/sidebar-wrapper:hidden"
                       priority
                     />
-                  </span>
-                </Link>
-                <Button
-                  type="button"
-                  onClick={() => setCommandPaletteOpen(true)}
-                  size="default"
-                  className="h-10 w-full rounded-lg bg-sidebar-primary text-sidebar-primary-foreground shadow-md shadow-sidebar-primary/15 hover:bg-sidebar-primary/90 group-data-[state=collapsed]/sidebar-wrapper:mx-auto group-data-[state=collapsed]/sidebar-wrapper:w-10 group-data-[state=collapsed]/sidebar-wrapper:px-0 group-data-[state=collapsed]/sidebar-wrapper:shadow-none [&>svg]:h-4 [&>svg]:w-4"
-                  aria-label={tCommand("openButton")}
-                >
-                  <CirclePlusIcon className="h-5 w-5" aria-hidden />
-                  <span className="group-data-[state=collapsed]/sidebar-wrapper:sr-only">
-                    {tWorkspace("quickActions")}
-                  </span>
-                </Button>
-              </SidebarHeader>
+                    <span className="hidden h-10 w-10 items-center justify-center rounded-lg group-data-[state=collapsed]/sidebar-wrapper:inline-flex">
+                      <Image
+                        src="/brand/icon.png"
+                        alt=""
+                        width={96}
+                        height={96}
+                        className="h-8 w-8"
+                        priority
+                      />
+                    </span>
+                  </Link>
+                  <Button
+                    type="button"
+                    onClick={() => setCommandPaletteOpen(true)}
+                    size="default"
+                    className="h-10 w-full rounded-lg bg-sidebar-primary text-sidebar-primary-foreground shadow-md shadow-sidebar-primary/15 hover:bg-sidebar-primary/90 group-data-[state=collapsed]/sidebar-wrapper:mx-auto group-data-[state=collapsed]/sidebar-wrapper:w-10 group-data-[state=collapsed]/sidebar-wrapper:px-0 group-data-[state=collapsed]/sidebar-wrapper:shadow-none [&>svg]:h-4 [&>svg]:w-4"
+                    aria-label={tCommand("openButton")}
+                  >
+                    <CirclePlusIcon className="h-5 w-5" aria-hidden />
+                    <span className="group-data-[state=collapsed]/sidebar-wrapper:sr-only">
+                      {tWorkspace("quickActions")}
+                    </span>
+                  </Button>
+                </SidebarHeader>
 
-              <SidebarContent className="scrollbar-soft p-2.5 group-data-[state=collapsed]/sidebar-wrapper:px-2">
-                <nav aria-label={tNav("brand")}>{renderNavGroups()}</nav>
-              </SidebarContent>
+                <SidebarContent className="scrollbar-soft p-2.5 group-data-[state=collapsed]/sidebar-wrapper:px-2">
+                  <nav aria-label={tNav("brand")}>{renderNavGroups()}</nav>
+                </SidebarContent>
 
-              <SidebarFooter className="p-2.5 text-sm group-data-[state=collapsed]/sidebar-wrapper:px-2.5">
-                {renderEmailVerificationNotice()}
-                <div className="rounded-2xl border border-sidebar-border/75 bg-sidebar-accent/35 p-1.5 shadow-sm ring-1 ring-sidebar-foreground/[0.015] group-data-[state=collapsed]/sidebar-wrapper:border-transparent group-data-[state=collapsed]/sidebar-wrapper:bg-transparent group-data-[state=collapsed]/sidebar-wrapper:p-0 group-data-[state=collapsed]/sidebar-wrapper:shadow-none group-data-[state=collapsed]/sidebar-wrapper:ring-0">
-                  {renderProfileShortcut()}
-                  <div className="mt-1 grid grid-cols-2 gap-1 border-t border-sidebar-border/60 pt-1 group-data-[state=collapsed]/sidebar-wrapper:mt-1 group-data-[state=collapsed]/sidebar-wrapper:flex group-data-[state=collapsed]/sidebar-wrapper:flex-col group-data-[state=collapsed]/sidebar-wrapper:border-0 group-data-[state=collapsed]/sidebar-wrapper:pt-0">
-                    {renderCustomizeNavButton()}
-                    <SignOutButton className="h-9 rounded-lg border border-transparent bg-transparent px-2 text-xs font-semibold text-sidebar-foreground/70 shadow-none hover:border-danger/20 hover:bg-danger/10 hover:text-danger group-data-[state=collapsed]/sidebar-wrapper:mx-auto group-data-[state=collapsed]/sidebar-wrapper:h-10 group-data-[state=collapsed]/sidebar-wrapper:w-10 group-data-[state=collapsed]/sidebar-wrapper:justify-center group-data-[state=collapsed]/sidebar-wrapper:px-0" />
-                  </div>
-                </div>
-              </SidebarFooter>
-            </Sidebar>
-
-            <SidebarInset className="bg-transparent">
-              <main
-                id="workspace-content"
-                tabIndex={-1}
-                className="min-w-0 flex-1 px-4 py-4 outline-none sm:px-6 lg:px-8 lg:py-5"
-              >
-                <MobilePageContainer>
-                  <div className="mx-auto max-w-[1500px]">
-                    <div className="mb-5 hidden min-w-0 items-center justify-between gap-3 border-b border-border pb-4 md:flex">
-                      <div className="flex w-full min-w-0 items-center gap-2 sm:max-w-md">
-                        <SidebarTrigger className="h-10 w-10 shrink-0 text-muted-foreground hover:text-foreground" />
-                        <div className="relative min-w-0 flex-1">
-                          <ScanInput
-                            context="global"
-                            dataTour="scan-input"
-                            placeholder={tHeader("scanPlaceholder")}
-                            ariaLabel={tHeader("scanLabel")}
-                            supportsTabSubmit
-                            enableProductSearch
-                            portalDropdown
-                            onResolved={handleScanResolved}
-                          />
-                        </div>
-                      </div>
-                      <div className="hidden md:flex md:items-center md:gap-2">
-                        <PageTipsButton />
-                        <PwaInstallButton />
-                        <LanguageSwitcher />
-                      </div>
+                <SidebarFooter className="p-2.5 text-sm group-data-[state=collapsed]/sidebar-wrapper:px-2.5">
+                  {renderEmailVerificationNotice()}
+                  <div className="rounded-2xl border border-sidebar-border/75 bg-sidebar-accent/35 p-1.5 shadow-sm ring-1 ring-sidebar-foreground/[0.015] group-data-[state=collapsed]/sidebar-wrapper:border-transparent group-data-[state=collapsed]/sidebar-wrapper:bg-transparent group-data-[state=collapsed]/sidebar-wrapper:p-0 group-data-[state=collapsed]/sidebar-wrapper:shadow-none group-data-[state=collapsed]/sidebar-wrapper:ring-0">
+                    {renderProfileShortcut()}
+                    <div className="mt-1 grid grid-cols-2 gap-1 border-t border-sidebar-border/60 pt-1 group-data-[state=collapsed]/sidebar-wrapper:mt-1 group-data-[state=collapsed]/sidebar-wrapper:flex group-data-[state=collapsed]/sidebar-wrapper:flex-col group-data-[state=collapsed]/sidebar-wrapper:border-0 group-data-[state=collapsed]/sidebar-wrapper:pt-0">
+                      {renderCustomizeNavButton()}
+                      <SignOutButton className="h-9 rounded-lg border border-transparent bg-transparent px-2 text-xs font-semibold text-sidebar-foreground/70 shadow-none hover:border-danger/20 hover:bg-danger/10 hover:text-danger group-data-[state=collapsed]/sidebar-wrapper:mx-auto group-data-[state=collapsed]/sidebar-wrapper:h-10 group-data-[state=collapsed]/sidebar-wrapper:w-10 group-data-[state=collapsed]/sidebar-wrapper:justify-center group-data-[state=collapsed]/sidebar-wrapper:px-0" />
                     </div>
-                    {children}
                   </div>
-                </MobilePageContainer>
-              </main>
-            </SidebarInset>
-          </SidebarProvider>
+                </SidebarFooter>
+              </Sidebar>
 
-          <Modal
-            open={customizeNavOpen}
-            onOpenChange={setCustomizeNavOpen}
-            title={tNav("customizeTitle")}
-            subtitle={tNav("customizeSubtitle")}
-            className="max-w-2xl"
-            usePortal
-          >
-            <div className="space-y-5">
-              {customizableNavGroups.map((group) => (
-                <div key={group.id} className="space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    {tNav(group.labelKey)}
-                  </p>
-                  <div className="divide-y divide-border border border-border">
-                    {group.items.map((item) => {
-                      const visible = !hiddenNavItemSet.has(item.key);
-                      return (
-                        <div
-                          key={item.key}
-                          className="flex items-center justify-between gap-3 bg-card px-3 py-3"
-                        >
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-foreground">
-                              {tNav(item.key)}
-                            </p>
-                            <p className="truncate text-xs text-muted-foreground">{item.href}</p>
+              <SidebarInset className="bg-transparent">
+                <main
+                  id="workspace-content"
+                  tabIndex={-1}
+                  className="min-w-0 flex-1 px-4 py-4 outline-none sm:px-6 lg:px-8 lg:py-5"
+                >
+                  <MobilePageContainer>
+                    <div className="mx-auto max-w-[1500px]">
+                      <header
+                        data-app-header
+                        className="mb-5 hidden min-w-0 items-center justify-between gap-3 border-b border-border pb-4 md:grid lg:flex"
+                      >
+                        <div className="flex w-full min-w-0 items-center gap-2 sm:max-w-md">
+                          <SidebarTrigger className="h-10 w-10 shrink-0 text-muted-foreground hover:text-foreground" />
+                          <div className="relative min-w-0 flex-1">
+                            <ScanInput
+                              context="global"
+                              dataTour="scan-input"
+                              placeholder={tHeader("scanPlaceholder")}
+                              ariaLabel={tHeader("scanLabel")}
+                              supportsTabSubmit
+                              enableProductSearch
+                              portalDropdown
+                              onResolved={handleScanResolved}
+                            />
                           </div>
-                          <Switch
-                            checked={visible}
-                            onCheckedChange={(checked) => setNavItemVisible(item.key, checked)}
-                            aria-label={tNav("customizeToggle", { item: tNav(item.key) })}
-                          />
                         </div>
-                      );
-                    })}
+                        <div className="flex shrink-0 items-center gap-2 justify-self-end">
+                          {hasPermission(access, "viewReports") ? (
+                            <div data-baam-desktop-slot className="h-10 w-[6.25rem] shrink-0" />
+                          ) : null}
+                          <PageTipsButton />
+                          <PwaInstallButton />
+                          <LanguageSwitcher />
+                        </div>
+                      </header>
+                      {children}
+                    </div>
+                  </MobilePageContainer>
+                </main>
+              </SidebarInset>
+            </SidebarProvider>
+
+            <Modal
+              open={customizeNavOpen}
+              onOpenChange={setCustomizeNavOpen}
+              title={tNav("customizeTitle")}
+              subtitle={tNav("customizeSubtitle")}
+              className="max-w-2xl"
+              usePortal
+            >
+              <div className="space-y-5">
+                {customizableNavGroups.map((group) => (
+                  <div key={group.id} className="space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      {tNav(group.labelKey)}
+                    </p>
+                    <div className="divide-y divide-border border border-border">
+                      {group.items.map((item) => {
+                        const visible = !hiddenNavItemSet.has(item.key);
+                        return (
+                          <div
+                            key={item.key}
+                            className="flex items-center justify-between gap-3 bg-card px-3 py-3"
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-semibold text-foreground">
+                                {tNav(item.key)}
+                              </p>
+                              <p className="truncate text-xs text-muted-foreground">{item.href}</p>
+                            </div>
+                            <Switch
+                              checked={visible}
+                              onCheckedChange={(checked) => setNavItemVisible(item.key, checked)}
+                              aria-label={tNav("customizeToggle", { item: tNav(item.key) })}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              ))}
-              <ModalFooter>
-                <Button type="button" variant="ghost" onClick={resetNavCustomization}>
-                  {tNav("customizeReset")}
-                </Button>
-                <Button type="button" onClick={() => setCustomizeNavOpen(false)}>
-                  {tCommon("close")}
-                </Button>
-              </ModalFooter>
-            </div>
-          </Modal>
-          <CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} />
-          <GuidanceOverlay />
-          <BaamLauncher access={access} pathname={normalizedPath}>
-            <BaamAssistant compact />
-          </BaamLauncher>
-        </div>
+                ))}
+                <ModalFooter>
+                  <Button type="button" variant="ghost" onClick={resetNavCustomization}>
+                    {tNav("customizeReset")}
+                  </Button>
+                  <Button type="button" onClick={() => setCustomizeNavOpen(false)}>
+                    {tCommon("close")}
+                  </Button>
+                </ModalFooter>
+              </div>
+            </Modal>
+            <CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} />
+            <GuidanceOverlay />
+          </div>
+        )}
+        <BaamLauncher access={access} pathname={normalizedPath}>
+          <BaamAssistant compact />
+        </BaamLauncher>
       </BaamAssistantProvider>
     </GuidanceProvider>
   );

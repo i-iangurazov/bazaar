@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/page-header";
 import { ReceiptPreviewModal } from "@/components/pos/receipt-preview-modal";
 import { QueryErrorState } from "@/components/query-error-state";
 import { Button } from "@/components/ui/button";
+import { SelectItem } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -17,6 +18,7 @@ import {
   ReportPagination,
   ReportPeriodControls,
   ReportSelect,
+  ReportField,
   useReportScope,
 } from "@/components/reports/report-controls";
 import { ReportMetric } from "@/components/reports/report-metric";
@@ -268,9 +270,9 @@ function AnalyticsReportContent() {
           onChange={(channel) => update({ channel, registerId: undefined })}
         >
           {["all", "pos", "orders"].map((value) => (
-            <option key={value} value={value}>
+            <SelectItem key={value} value={value}>
               {t(`channels.${value}`)}
-            </option>
+            </SelectItem>
           ))}
         </ReportSelect>
       </ReportPeriodControls>
@@ -279,8 +281,7 @@ function AnalyticsReportContent() {
         aria-label={t("refine")}
       >
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <label className="space-y-1.5 text-xs font-medium text-muted-foreground">
-            {a("filters.productSearch")}
+          <ReportField label={a("filters.productSearch")}>
             <Input
               aria-label={a("filters.productSearch")}
               placeholder={t("searchPlaceholder")}
@@ -294,7 +295,7 @@ function AnalyticsReportContent() {
                 if (event.key === "Enter") update({ search: scope.search || undefined });
               }}
             />
-          </label>
+          </ReportField>
           <Button
             className="sm:hidden"
             variant="secondary"
@@ -313,12 +314,12 @@ function AnalyticsReportContent() {
               value={state.category ?? "all"}
               onChange={(value) => update({ category: value === "all" ? undefined : value })}
             >
-              <option value="all">{t("allCategories")}</option>
-              <option value="__uncategorized__">{t("special.__uncategorized__")}</option>
+              <SelectItem value="all">{t("allCategories")}</SelectItem>
+              <SelectItem value="__uncategorized__">{t("special.__uncategorized__")}</SelectItem>
               {options.data?.categories.map((value) => (
-                <option key={value} value={value}>
+                <SelectItem key={value} value={value}>
                   {value}
-                </option>
+                </SelectItem>
               ))}
             </ReportSelect>
             <ReportSelect
@@ -326,11 +327,11 @@ function AnalyticsReportContent() {
               value={state.registerId ?? "all"}
               onChange={(value) => update({ registerId: value === "all" ? undefined : value })}
             >
-              <option value="all">{t("allRegisters")}</option>
+              <SelectItem value="all">{t("allRegisters")}</SelectItem>
               {options.data?.registers.map((value) => (
-                <option key={value.id} value={value.id}>
+                <SelectItem key={value.id} value={value.id}>
                   {value.name}
-                </option>
+                </SelectItem>
               ))}
             </ReportSelect>
             <ReportSelect
@@ -338,11 +339,11 @@ function AnalyticsReportContent() {
               value={state.cashierId ?? "all"}
               onChange={(value) => update({ cashierId: value === "all" ? undefined : value })}
             >
-              <option value="all">{t("allEmployees")}</option>
+              <SelectItem value="all">{t("allEmployees")}</SelectItem>
               {options.data?.employees.map((value) => (
-                <option key={value.id} value={value.id}>
+                <SelectItem key={value.id} value={value.id}>
                   {value.name}
-                </option>
+                </SelectItem>
               ))}
             </ReportSelect>
           </div>
@@ -576,8 +577,8 @@ function AnalyticsReportContent() {
                     value={format}
                     onChange={(value) => setFormat(value as DownloadFormat)}
                   >
-                    <option value="csv">{"CSV"}</option>
-                    <option value="xlsx">{"XLSX"}</option>
+                    <SelectItem value="csv">{"CSV"}</SelectItem>
+                    <SelectItem value="xlsx">{"XLSX"}</SelectItem>
                   </ReportSelect>
                   <Button
                     variant="secondary"
@@ -613,9 +614,9 @@ function AnalyticsReportContent() {
                   onChange={(sort) => update({ sort })}
                 >
                   {["revenue", "profit", "cost", "returns", "name", "date"].map((sort) => (
-                    <option key={sort} value={sort}>
+                    <SelectItem key={sort} value={sort}>
                       {t(`sorts.${sort}`)}
-                    </option>
+                    </SelectItem>
                   ))}
                 </ReportSelect>
                 <ReportSelect
@@ -623,8 +624,8 @@ function AnalyticsReportContent() {
                   value={state.direction}
                   onChange={(direction) => update({ direction })}
                 >
-                  <option value="desc">{t("descending")}</option>
-                  <option value="asc">{t("ascending")}</option>
+                  <SelectItem value="desc">{t("descending")}</SelectItem>
+                  <SelectItem value="asc">{t("ascending")}</SelectItem>
                 </ReportSelect>
               </div>
               {input.view === "customers" && (

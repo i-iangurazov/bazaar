@@ -108,6 +108,7 @@ const submit = (text = "Receive 3 boxes") => {
   fireEvent.click(screen.getByRole("button", { name: "Send message" }));
 };
 beforeEach(() => {
+  Element.prototype.scrollIntoView = vi.fn();
   vi.resetAllMocks();
   localStorage.clear();
   sessionStorage.clear();
@@ -350,7 +351,8 @@ describe("BAAM persistent companion workspace", () => {
         title: "Stock request",
       }),
     );
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "" } });
+    fireEvent.keyDown(screen.getByRole("combobox"), { key: "Enter" });
+    fireEvent.click(await screen.findByRole("option", { name: "Choose when needed" }));
     await waitFor(() =>
       expect(mocks.change).toHaveBeenCalledWith({ id: "dialog", revision: 0, storeId: null }),
     );

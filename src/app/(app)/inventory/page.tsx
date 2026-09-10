@@ -2516,6 +2516,7 @@ const InventoryPage = () => {
             totalItems={inventoryTotal}
             onPageChange={setInventoryPage}
             onPageSizeChange={setInventoryPageSize}
+            defaultPageSize={inventoryPageSize}
             renderDesktop={(visibleItems) =>
               viewMode === "table" ? (
                 <div className="overflow-x-auto">

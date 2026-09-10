@@ -9,6 +9,13 @@ import { Input } from "@/components/ui/input";
 import { Modal, ModalFooter } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   applyCatalogDiscountInputSchema,
   previewCatalogDiscountInputSchema,
   removeCatalogDiscountInputSchema,
@@ -191,20 +198,24 @@ export const CatalogDiscountDialog = ({
       <div className="space-y-5">
         <label className="block space-y-2 text-sm font-medium">
           <span>{labels.store}</span>
-          <select
+          <Select
             value={storeId}
-            onChange={(event) => {
-              setStoreId(event.target.value);
+            onValueChange={(value) => {
+              setStoreId(value);
               invalidatePreview();
             }}
-            className="h-10 w-full rounded-md border border-input bg-background px-3"
           >
-            {stores.map((store) => (
-              <option key={store.id} value={store.id}>
-                {store.name}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger aria-label={labels.store}>
+              <SelectValue placeholder={labels.store} />
+            </SelectTrigger>
+            <SelectContent>
+              {stores.map((store) => (
+                <SelectItem key={store.id} value={store.id}>
+                  {store.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </label>
 
         {mode === "APPLY" ? (

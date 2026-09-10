@@ -299,6 +299,23 @@ describe("report scope behavior", () => {
     expect(active(mocks.overview).length).toBeGreaterThan(0);
     for (const [request] of active(mocks.overview)) expect(request).toMatchObject(input);
   });
+  it("retains verified store labels during refetch without enabling reports or leaking into another organization", () => {
+    setUrl(buildAnalyticsReportHref(input));
+    const view = render(<AnalyticsPage />);
+    expect(screen.getByText("Authorized A")).toBeTruthy();
+    mocks.stores.mockReturnValue({ ...queryResult(stores), isFetching: true });
+    for (const query of queries()) query.mockClear();
+    view.rerender(<AnalyticsPage />);
+    expect(screen.getByText("Authorized A")).toBeTruthy();
+    for (const query of queries()) expect(active(query)).toHaveLength(0);
+    mocks.session.mockReturnValue({
+      status: "authenticated",
+      data: { user: { id: "actor", organizationId: "another-org", role: "MANAGER" } },
+    });
+    view.rerender(<AnalyticsPage />);
+    expect(screen.queryByText("Authorized A")).toBeNull();
+    for (const query of queries()) expect(active(query)).toHaveLength(0);
+  });
   it("rejects an unauthorized store without silently broadening to all stores or rendering results", () => {
     setUrl(buildAnalyticsReportHref({ ...input, storeId: "other-tenant-store" }));
     render(<AnalyticsPage />);

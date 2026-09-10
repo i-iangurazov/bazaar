@@ -11,8 +11,11 @@ import {
   ReportTable as Table,
   ReportPagination,
   ReportSelect,
+  ReportField,
 } from "@/components/reports/report-controls";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
+import { SelectItem } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -121,6 +124,19 @@ function MetricsContent() {
     retry: false,
   });
   const data = enabled && !query.error ? query.data : undefined;
+  // Retain only option labels while a different filtered result is loading.
+  // Inventory totals still belong exclusively to the current query above.
+  const optionScope = JSON.stringify([session?.user.id, session?.user.organizationId, enabled]);
+  const [lastOptions, setLastOptions] = useState<{
+    scope: string;
+    value: NonNullable<typeof data>["filterOptions"];
+  }>();
+  useEffect(() => {
+    if (data) setLastOptions({ scope: optionScope, value: data.filterOptions });
+  }, [data, optionScope]);
+  const filterOptions =
+    data?.filterOptions ??
+    (enabled && lastOptions?.scope === optionScope ? lastOptions.value : undefined);
   const inventory = data?.inventory,
     summary = inventory?.summary;
   const money = (value: number | null | undefined) =>
@@ -289,11 +305,11 @@ function MetricsContent() {
           value={input.storeId ?? "all"}
           onChange={(value) => update({ storeId: value === "all" ? undefined : value })}
         >
-          <option value="all">{r("allStores")}</option>
-          {data?.filterOptions.stores.map((store) => (
-            <option key={store.id} value={store.id}>
+          <SelectItem value="all">{r("allStores")}</SelectItem>
+          {filterOptions?.stores.map((store) => (
+            <SelectItem key={store.id} value={store.id}>
               {store.name}
-            </option>
+            </SelectItem>
           ))}
         </ReportSelect>
         <ReportSelect
@@ -301,15 +317,14 @@ function MetricsContent() {
           value={input.category ?? "all"}
           onChange={(value) => update({ category: value === "all" ? undefined : value })}
         >
-          <option value="all">{r("allCategories")}</option>
-          {data?.filterOptions.categories.map((category) => (
-            <option key={category} value={category}>
+          <SelectItem value="all">{r("allCategories")}</SelectItem>
+          {filterOptions?.categories.map((category) => (
+            <SelectItem key={category} value={category}>
               {categoryName(category)}
-            </option>
+            </SelectItem>
           ))}
         </ReportSelect>
-        <label className="space-y-1.5 text-xs font-medium text-muted-foreground">
-          {r("search")}
+        <ReportField label={r("search")}>
           <Input
             aria-label={r("search")}
             value={search}
@@ -319,18 +334,19 @@ function MetricsContent() {
               if ((params.get("search") ?? "") !== search) update({ search: search || undefined });
             }}
           />
-        </label>
-        <label className="flex min-h-10 items-center gap-3 self-end rounded-md border border-input px-3 py-2 text-sm">
-          <input
-            className="h-4 w-4 accent-primary"
-            type="checkbox"
-            checked={input.includeArchived}
-            onChange={(event) =>
-              update({ includeArchived: event.target.checked ? "true" : undefined })
-            }
-          />
-          {t("filters.archivedDescription")}
-        </label>
+        </ReportField>
+        <div className="grid min-w-0 content-start gap-1.5">
+          <span className="text-xs font-medium text-muted-foreground">{t("filters.archived")}</span>
+          <label className="flex min-h-10 items-center gap-3 text-sm">
+            <Checkbox
+              checked={input.includeArchived}
+              onCheckedChange={(checked) =>
+                update({ includeArchived: checked === true ? "true" : undefined })
+              }
+            />
+            <span>{t("filters.archivedDescription")}</span>
+          </label>
+        </div>
         <p className="text-xs text-muted-foreground sm:col-span-2 xl:col-span-4">
           {r("currentSnapshot")} · KGS · {r("immediate")}
         </p>
@@ -475,8 +491,8 @@ function MetricsContent() {
                     value={format}
                     onChange={(value) => setFormat(value as DownloadFormat)}
                   >
-                    <option value="csv">{"CSV"}</option>
-                    <option value="xlsx">{"XLSX"}</option>
+                    <SelectItem value="csv">{"CSV"}</SelectItem>
+                    <SelectItem value="xlsx">{"XLSX"}</SelectItem>
                   </ReportSelect>
                   <Button
                     disabled={exporting}
@@ -494,9 +510,9 @@ function MetricsContent() {
                   onChange={(value) => update({ warning: value })}
                 >
                   {warnings.map((value) => (
-                    <option key={value} value={value}>
+                    <SelectItem key={value} value={value}>
                       {t(`warnings.${value}`)}
-                    </option>
+                    </SelectItem>
                   ))}
                 </ReportSelect>
                 <ReportSelect
@@ -505,9 +521,9 @@ function MetricsContent() {
                   onChange={(value) => update({ sortKey: value })}
                 >
                   {sorts.map((value) => (
-                    <option key={value} value={value}>
+                    <SelectItem key={value} value={value}>
                       {t(`sort.${value}`)}
-                    </option>
+                    </SelectItem>
                   ))}
                 </ReportSelect>
                 <ReportSelect
@@ -515,8 +531,8 @@ function MetricsContent() {
                   value={sortDirection}
                   onChange={(value) => update({ sortDirection: value })}
                 >
-                  <option value="desc">{r("descending")}</option>
-                  <option value="asc">{r("ascending")}</option>
+                  <SelectItem value="desc">{r("descending")}</SelectItem>
+                  <SelectItem value="asc">{r("ascending")}</SelectItem>
                 </ReportSelect>
               </div>
               {(search || input.category || warning !== "all" || input.includeArchived) && (

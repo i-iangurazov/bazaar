@@ -82,6 +82,7 @@ try {
   }
   if (!ready) throw new Error("Isolated browser server did not become ready");
   await run(process.execPath, ["--import", "tsx", "scripts/ux/browser.ts"]);
+  await run(process.execPath, ["--import", "tsx", "scripts/ux/ui-controls.ts"]);
   await run(process.execPath, ["--import", "tsx", "scripts/ux/shift-close.ts"]);
   await run(process.execPath, ["--import", "tsx", "scripts/ux/details.ts"]);
   await run(process.execPath, ["--import", "tsx", "scripts/ux/capture.ts"]);

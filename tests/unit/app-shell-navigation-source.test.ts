@@ -125,11 +125,8 @@ describe("conservative app shell navigation source", () => {
   });
 
   it("keeps POS sell as a standalone cashier workspace outside the admin shell", () => {
-    const posStandaloneStart = source.indexOf('if (normalizedPath === "/pos/sell")');
-    const adminShellReturnStart = source.indexOf(
-      "  return (\n    <GuidanceProvider",
-      posStandaloneStart,
-    );
+    const posStandaloneStart = source.indexOf('{normalizedPath === "/pos/sell" ? (');
+    const adminShellReturnStart = source.indexOf(") : (", posStandaloneStart);
 
     expect(posStandaloneStart).toBeGreaterThanOrEqual(0);
     expect(adminShellReturnStart).toBeGreaterThan(posStandaloneStart);
@@ -139,5 +136,9 @@ describe("conservative app shell navigation source", () => {
     expect(posStandaloneBlock).not.toContain("isMobile === true");
     expect(posStandaloneBlock).not.toContain("<MobileAppShell");
     expect(posStandaloneBlock).not.toContain("<SidebarProvider");
+    expect(source.match(/<BaamAssistantProvider>/g)).toHaveLength(1);
+    expect(source.match(/<BaamLauncher /g)).toHaveLength(1);
+    expect(source.indexOf("<BaamAssistantProvider>")).toBeLessThan(posStandaloneStart);
+    expect(source.indexOf("<BaamLauncher ")).toBeGreaterThan(adminShellReturnStart);
   });
 });

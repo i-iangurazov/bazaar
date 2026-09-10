@@ -165,7 +165,14 @@ try {
   record("Full CSV export includes all 35 product groups and reconciled totals");
   await page
     .getByRole("combobox", { name: messages.ru.analytics.filters.store, exact: true })
-    .selectOption(f.storeId);
+    .click();
+  const stores = await api(admin, "stores.list", undefined);
+  await page
+    .getByRole("option", {
+      name: stores.find((store: { id: string }) => store.id === f.storeId).name,
+      exact: true,
+    })
+    .click();
   await ready(page);
   await until(
     async () => (await page.locator("main").innerText()).includes("780,00"),

@@ -5,6 +5,7 @@ import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
 import { Spinner } from "./ui/spinner";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import type { BaamIdentity } from "./baam-assistant";
 import { useBaamCompanion, type BaamController } from "./use-baam-companion";
 import { BaamMessageList } from "./baam-message-list";
@@ -117,21 +118,23 @@ export function BaamCompanionPanel({
             <label htmlFor="baam-store" className="sr-only">
               {c.t("store")}
             </label>
-            <select
-              id="baam-store"
-              aria-label={c.t("store")}
-              className="min-h-9 min-w-0 flex-1 rounded-lg border border-border bg-background px-2 text-xs focus-visible:outline focus-visible:outline-2"
-              value={c.data?.conversation.storeId ?? c.draftStore}
+            <Select
+              value={(c.data?.conversation.storeId ?? c.draftStore) || "all"}
               disabled={c.busy || !c.allowed || c.changing}
-              onChange={(e) => void c.changeStore(e.target.value)}
+              onValueChange={(value) => void c.changeStore(value === "all" ? "" : value)}
             >
-              <option value="">{c.t("allStores")}</option>
-              {c.capabilities.data?.stores.map((s) => (
-                <option value={s.id} key={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger id="baam-store" aria-label={c.t("store")} className="h-9 flex-1">
+                <SelectValue placeholder={c.t("allStores")} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{c.t("allStores")}</SelectItem>
+                {c.capabilities.data?.stores.map((s) => (
+                  <SelectItem value={s.id} key={s.id}>
+                    {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             {c.data ? (
               <>
                 <button

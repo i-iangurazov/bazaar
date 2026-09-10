@@ -13,9 +13,11 @@ import {
   ReportPagination,
   ReportPeriodControls,
   ReportSelect,
+  ReportField,
   useReportScope,
 } from "@/components/reports/report-controls";
 import { Button } from "@/components/ui/button";
+import { SelectItem } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -184,9 +186,9 @@ function ReportsContent() {
           onChange={(view) => update({ view, search: undefined, sort: "date" })}
         >
           {["overview", ...operationViews].map((view) => (
-            <option key={view} value={view}>
+            <SelectItem key={view} value={view}>
               {t(`operations.${view}`)}
-            </option>
+            </SelectItem>
           ))}
         </ReportSelect>
       </ReportPeriodControls>
@@ -404,8 +406,7 @@ function ReportsContent() {
           )}
           <section className="min-w-0 overflow-hidden rounded-xl border border-border bg-card">
             <div className="grid items-end gap-3 border-b border-border p-4 sm:grid-cols-2 xl:grid-cols-[minmax(180px,1fr)_180px_180px_100px_auto]">
-              <label className="space-y-1.5 text-xs font-medium text-muted-foreground">
-                {t("search")}
+              <ReportField label={t("search")}>
                 <Input
                   aria-label={t("search")}
                   value={scope.search}
@@ -416,16 +417,16 @@ function ReportsContent() {
                       update({ search: scope.search || undefined });
                   }}
                 />
-              </label>
+              </ReportField>
               <ReportSelect
                 label={t("sort")}
                 value={state.sort}
                 onChange={(sort) => update({ sort })}
               >
                 {["date", "amount", "name"].map((sort) => (
-                  <option key={sort} value={sort}>
+                  <SelectItem key={sort} value={sort}>
                     {t(`sorts.${sort}`)}
-                  </option>
+                  </SelectItem>
                 ))}
               </ReportSelect>
               <ReportSelect
@@ -433,16 +434,16 @@ function ReportsContent() {
                 value={state.direction}
                 onChange={(direction) => update({ direction })}
               >
-                <option value="desc">{t("descending")}</option>
-                <option value="asc">{t("ascending")}</option>
+                <SelectItem value="desc">{t("descending")}</SelectItem>
+                <SelectItem value="asc">{t("ascending")}</SelectItem>
               </ReportSelect>
               <ReportSelect
                 label={t("format")}
                 value={format}
                 onChange={(value) => setFormat(value as DownloadFormat)}
               >
-                <option value="csv">{"CSV"}</option>
-                <option value="xlsx">{"XLSX"}</option>
+                <SelectItem value="csv">{"CSV"}</SelectItem>
+                <SelectItem value="xlsx">{"XLSX"}</SelectItem>
               </ReportSelect>
               <Button variant="secondary" disabled={exporting} onClick={() => void exportTable()}>
                 {t(exporting ? "exporting" : "exportAll")}

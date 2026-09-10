@@ -1,0 +1,10 @@
+# Shared selectors and the BAAM header entry
+
+- `ui/select.tsx` is the styled single-value selector used by products and dashboard. `ReportSelect` only adds a `ReportField` label. Reports, analytics, inventory valuation, catalog discounts and BAAM reuse it. Searchable entity pickers and multi-selection retain their specialized components. The attributes datalist and Radix hidden form controls are not visible selectors.
+- Report labels use an explicit text element and a grid gap; text nodes cannot receive Tailwind sibling spacing. Store/category labels survive pending results within the verified user/organization scope; report totals remain tied to the current request.
+- Server `ResponsiveDataList` callers supply their current size through `defaultPageSize`. `onPageSizeChange` must update size and reset page atomically. The component must not issue another `onPageChange(1)` using an obsolete URL. Local pagination retains its internal state.
+- The movements table uses `framed={false}` inside its existing card. Horizontal scrolling stays on the table; the pagination owns its single top separator.
+- BAAM has one launcher portalled into the visible header slot and one persistent provider across route changes. Checkout hides the launcher and drawer; closing the chat preserves the existing conversation/draft storage.
+- Radix Dialog/Popover and Select/Menu must share the same dismissable-layer and focus-scope modules. The package overrides align the already used patch versions. Separate module instances create independent focus/layer stacks, making Escape dismiss the parent dialog and breaking focus restoration.
+
+`tests/unit/select-in-dialog.test.tsx` protects nested keyboard focus. `tests/unit/responsive-data-list.test.tsx` protects atomic pagination updates. `scripts/ux/ui-controls.ts`, run by the mandatory UI browser CI job, exercises filter geometry, locale/theme widths, modal selectors, pagination, BAAM history, checkout navigation and role boundaries using isolated local data.

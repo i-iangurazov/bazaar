@@ -13,6 +13,8 @@ const launcher = (role = "ADMIN", pathname = "/dashboard") => (
       common: { close: messages.common.close },
     }}
   >
+    <div data-baam-desktop-slot />
+    <div data-baam-mobile-slot />
     <BaamLauncher access={{ role, isOrgOwner: true, isPlatformOwner: true }} pathname={pathname}>
       <button type="button">Ask a supported question</button>
     </BaamLauncher>
@@ -28,23 +30,22 @@ vi.stubGlobal(
 );
 afterEach(cleanup);
 
-it("docks the single mobile launcher in the header and returns it to the viewport on desktop", async () => {
+it("keeps a single launcher in its reserved header slot at mobile and desktop widths", async () => {
   const previousWidth = window.innerWidth;
   try {
     window.innerWidth = 390;
-    const view = render(
-      <>
-        <div data-baam-mobile-slot />
-        {launcher()}
-      </>,
-    );
+    const view = render(launcher());
     const slot = view.container.querySelector("[data-baam-mobile-slot]")!;
     await waitFor(() => expect(slot.querySelector("[data-baam-launcher]")).toBeTruthy());
     expect(document.querySelectorAll("[data-baam-launcher]")).toHaveLength(1);
     window.innerWidth = 1440;
     fireEvent(window, new Event("resize"));
     await waitFor(() => expect(slot.querySelector("[data-baam-launcher]")).toBeNull());
-    expect(document.body.querySelector("[data-baam-launcher]")?.parentElement).toBe(document.body);
+    expect(document.querySelector("[data-baam-launcher]")?.parentElement).toBe(
+      view.container.querySelector("[data-baam-desktop-slot]"),
+    );
+    expect(document.querySelectorAll("[data-baam-launcher]")).toHaveLength(1);
+    expect(document.querySelector("[data-baam-launcher]")?.classList.contains("fixed")).toBe(false);
   } finally {
     window.innerWidth = previousWidth;
   }

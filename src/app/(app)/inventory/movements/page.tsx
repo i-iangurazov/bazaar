@@ -1004,6 +1004,7 @@ const ProductMovementsPage = () => {
             totalItems={totalItems}
             onPageChange={setPage}
             onPageSizeChange={setPageSize}
+            defaultPageSize={pageSize}
             paginationKey="product-movements"
             scrollToTopOnPageChange
             empty={
@@ -1015,6 +1016,7 @@ const ProductMovementsPage = () => {
             desktopClassName="min-w-0"
             renderDesktop={(visibleItems) => (
               <DataTable
+                framed={false}
                 columns={movementColumns}
                 data={visibleItems}
                 getRowId={(movement) => movement.id}

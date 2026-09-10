@@ -8,6 +8,13 @@ import { reportHref, reportUrlState } from "@/lib/reporting";
 import { addBusinessDays, businessDateKey } from "@/lib/timezone";
 import { translateError } from "@/lib/translateError";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Table as BaseTable } from "@/components/ui/table";
 
@@ -25,6 +32,14 @@ export function ReportTable(props: ComponentProps<typeof BaseTable>) {
   );
 }
 
+/** A labelled report field; controls themselves use the shared UI system. */
+export const ReportField = ({ label, children }: { label: string; children: ReactNode }) => (
+  <label className="grid min-w-0 content-start gap-1.5 text-xs font-medium text-muted-foreground">
+    <span>{label}</span>
+    {children}
+  </label>
+);
+
 export const ReportSelect = ({
   label,
   value,
@@ -38,18 +53,14 @@ export const ReportSelect = ({
   children: ReactNode;
   disabled?: boolean;
 }) => (
-  <label className="flex min-w-0 flex-col gap-1.5 text-xs font-medium text-muted-foreground">
-    {label}
-    <select
-      aria-label={label}
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      disabled={disabled}
-      className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-    >
-      {children}
-    </select>
-  </label>
+  <ReportField label={label}>
+    <Select value={value} onValueChange={onChange} disabled={disabled}>
+      <SelectTrigger aria-label={label}>
+        <SelectValue placeholder={label} />
+      </SelectTrigger>
+      <SelectContent>{children}</SelectContent>
+    </Select>
+  </ReportField>
 );
 
 export function useReportScope(mode: "sales" | "hub") {
@@ -70,6 +81,28 @@ export function useReportScope(mode: "sales" | "hub") {
     refetchOnMount: "always",
   });
   const storesReady = stores.data !== undefined && !stores.isFetching && !stores.error;
+  const storeScope = JSON.stringify([
+    session?.user.id,
+    session?.user.organizationId,
+    session?.user.role,
+    status,
+  ]);
+  const [verifiedStores, setVerifiedStores] = useState<{
+    scope: string;
+    items: NonNullable<typeof stores.data>;
+  }>();
+  useEffect(() => {
+    if (allowed && storesReady && stores.data)
+      setVerifiedStores({ scope: storeScope, items: stores.data });
+  }, [allowed, storesReady, stores.data, storeScope]);
+  const visibleStores =
+    allowed && !stores.error
+      ? storesReady
+        ? stores.data
+        : verifiedStores?.scope === storeScope
+          ? verifiedStores.items
+          : undefined
+      : undefined;
   const error = !state.valid
     ? tErrors("invalidInput")
     : stores.error
@@ -113,6 +146,7 @@ export function useReportScope(mode: "sales" | "hub") {
     update,
     stores,
     storesReady,
+    visibleStores,
     error,
     enabled,
     allowed,
@@ -151,6 +185,7 @@ export function ReportPeriodControls({
         <ReportSelect
           label={a("filters.store")}
           value={state.storeId ?? "all"}
+          disabled={!scope.storesReady}
           onChange={(value) =>
             update({
               storeId: value === "all" ? undefined : value,
@@ -159,16 +194,14 @@ export function ReportPeriodControls({
             })
           }
         >
-          <option value="all">{t("allStores")}</option>
-          {scope.storesReady &&
-            scope.stores.data?.map((store) => (
-              <option key={store.id} value={store.id}>
-                {store.name}
-              </option>
-            ))}
+          <SelectItem value="all">{t("allStores")}</SelectItem>
+          {scope.visibleStores?.map((store) => (
+            <SelectItem key={store.id} value={store.id}>
+              {store.name}
+            </SelectItem>
+          ))}
         </ReportSelect>
-        <label className="space-y-1.5 text-xs font-medium text-muted-foreground">
-          {a("filters.dateFrom")}
+        <ReportField label={a("filters.dateFrom")}>
           <Input
             aria-label={a("filters.dateFrom")}
             type="date"
@@ -176,9 +209,8 @@ export function ReportPeriodControls({
             disabled={currentSnapshot}
             onChange={(event) => update({ dateFrom: event.target.value })}
           />
-        </label>
-        <label className="space-y-1.5 text-xs font-medium text-muted-foreground">
-          {a("filters.dateTo")}
+        </ReportField>
+        <ReportField label={a("filters.dateTo")}>
           <Input
             aria-label={a("filters.dateTo")}
             type="date"
@@ -186,7 +218,7 @@ export function ReportPeriodControls({
             disabled={currentSnapshot}
             onChange={(event) => update({ dateTo: event.target.value })}
           />
-        </label>
+        </ReportField>
         {children}
       </div>
       <div className="flex flex-wrap items-center gap-2">

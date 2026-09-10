@@ -4005,6 +4005,7 @@ const ProductsPage = () => {
               totalItems={productsTotal}
               onPageChange={setProductsPage}
               onPageSizeChange={setProductsPageSize}
+              defaultPageSize={productsPageSize}
               scrollToTopOnPageChange
               mobileItemsClassName="grid grid-cols-1 gap-3"
               renderDesktop={(visibleItems) =>

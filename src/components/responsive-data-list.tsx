@@ -63,11 +63,11 @@ export const ResponsiveDataList = <T,>({
     typeof totalItems === "number";
   const storageKey = paginationKey ? `responsive-list:${paginationKey}:page-size` : null;
   const [internalPage, setInternalPage] = useState(1);
-  const [pageSize, setPageSize] = useState(defaultPageSize);
+  const [internalPageSize, setPageSize] = useState(defaultPageSize);
+  // Server pagination is controlled by its caller (including URL restoration).
+  const pageSize = isServerPagination ? defaultPageSize : internalPageSize;
   const previousPageSizeRef = useRef(pageSize);
   const page = isServerPagination ? Math.max(1, externalPage ?? 1) : internalPage;
-  const onPageChangeRef = useRef(onPageChange);
-  onPageChangeRef.current = onPageChange;
 
   useEffect(() => {
     if (isServerPagination) {
@@ -95,11 +95,7 @@ export const ResponsiveDataList = <T,>({
       return;
     }
     previousPageSizeRef.current = pageSize;
-    if (isServerPagination) {
-      onPageChangeRef.current?.(1);
-      return;
-    }
-    setInternalPage(1);
+    if (!isServerPagination) setInternalPage(1);
   }, [isServerPagination, pageSize]);
 
   const totalCount = isServerPagination ? totalItems : list.length;
@@ -186,11 +182,14 @@ export const ResponsiveDataList = <T,>({
                   if (!pageSizeOptions.includes(parsed)) {
                     return;
                   }
-                  setPageSize(parsed);
                   if (isServerPagination) {
+                    // The caller changes size and resets page in one update.
+                    // A separate onPageChange would overwrite URL parameters
+                    // from the same render with an obsolete query string.
                     onPageSizeChange?.(parsed);
                     return;
                   }
+                  setPageSize(parsed);
                   if (storageKey) {
                     try {
                       window.localStorage.setItem(storageKey, String(parsed));
