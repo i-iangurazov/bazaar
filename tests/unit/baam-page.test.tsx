@@ -165,6 +165,12 @@ describe("BAAM persistent companion workspace", () => {
     );
     expect(screen.getByText("Still open")).toBeTruthy();
   });
+  it("shows a loading state while restored history is still being fetched", () => {
+    mocks.conversation.mockReturnValue({ data: undefined, error: null, isFetching: true });
+    render(shell());
+    expect(screen.getByText("Loading…")).toBeTruthy();
+    expect(screen.queryByText("What can I help you do?")).toBeNull();
+  });
   it("opens at the current input with page-specific suggestions and no automatic provider call", () => {
     render(shell());
     expect(document.activeElement).toBe(input());

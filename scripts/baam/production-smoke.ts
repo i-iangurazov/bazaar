@@ -219,9 +219,13 @@ try {
   await page.reload();
   await page.locator("[data-baam-launcher]").click();
   await chat.getByText(name, { exact: true }).waitFor();
-  const dialogs = await api<{ items: BaamConversation[] }>(admin, "baam.conversations", {});
+  const dialogs = await api<{ items: Array<{ id: string }> }>(admin, "baam.conversations", {});
   assert.ok(dialogs.items.length);
-  const conversation = dialogs.items[0];
+  const { conversation } = await api<{ conversation: BaamConversation }>(
+    admin,
+    "baam.conversation",
+    { id: dialogs.items[0].id },
+  );
   await api(
     admin,
     "baam.changeConversation",
@@ -242,6 +246,7 @@ try {
   await page.goto(base + "/inventory");
   await page.locator("[data-baam-launcher]").click();
   await chat.waitFor();
+  await chat.getByText(name, { exact: true }).waitFor();
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
   await page.screenshot({ path: "artifacts/baam-companion/production-mobile.png" });
   await page.keyboard.press("Escape");

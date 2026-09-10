@@ -282,6 +282,12 @@ export function BaamMessageList({ c }: { c: BaamController }) {
           {c.t("latest")}
         </button>
       ) : null}
+      {!c.messages.length && c.fetching ? (
+        <p role="status" className="flex items-center gap-2 py-5 text-sm text-muted-foreground">
+          <Spinner />
+          {c.t("loading")}
+        </p>
+      ) : null}
     </>
   );
 }
