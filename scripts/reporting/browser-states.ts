@@ -101,7 +101,11 @@ try {
       : route.continue();
   await page.route("**/api/trpc/**", reject);
   await page.reload();
-  await page.getByRole("alert").waitFor();
+  await page
+    .locator("main")
+    .getByRole("alert")
+    .filter({ hasText: messages.errors.genericMessage })
+    .waitFor();
   await capture("error");
   assert.equal(
     await page.getByText(messages.reporting.netSales, { exact: true }).count(),
@@ -169,7 +173,12 @@ try {
   await page
     .getByRole("button", { name: messages.analytics.actions.exportAllProducts, exact: true })
     .click();
-  await page.getByRole("alert").waitFor();
+  // Next.js also renders a route-announcer alert outside main. Require the actual export error.
+  await page
+    .locator("main")
+    .getByRole("alert")
+    .filter({ hasText: messages.errors.analyticsExportRowLimit })
+    .waitFor();
   assert.equal(downloads, 0);
   await capture("export-failure");
   await page.unroute("**/api/trpc/**", exportFailure);
