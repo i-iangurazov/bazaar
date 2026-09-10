@@ -9,7 +9,10 @@ const browser = await chromium.launch({ channel: process.env.BAAM_BROWSER_CHANNE
 const report: unknown[] = [];
 try {
   for (const role of ["admin", "manager", "staff", "cashier"]) {
-    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, ignoreHTTPSErrors: base === "https://localhost:3121" });
+    const context = await browser.newContext({
+      viewport: { width: 1440, height: 1000 },
+      ignoreHTTPSErrors: base === "https://localhost:3121",
+    });
     await context.route("**/*", (route) => {
       const url = new URL(route.request().url());
       return ["localhost", "127.0.0.1"].includes(url.hostname) || url.protocol === "data:"
@@ -32,6 +35,17 @@ try {
     const errors: string[] = [];
     page.on("pageerror", (e) => errors.push(e.message));
     for (const path of ["/pos", "/inventory", "/products", "/baam"]) {
+      let releaseSession: (() => void) | undefined;
+      const earlyClick = role === "admin" && path === "/pos";
+      if (earlyClick) {
+        const gate = new Promise<void>((resolve) => {
+          releaseSession = resolve;
+        });
+        await page.route("**/api/auth/session", async (route) => {
+          await gate;
+          await route.continue();
+        });
+      }
       await page.goto(base + path);
       await page.waitForTimeout(1500);
       const launcher = page.locator("[data-baam-launcher]");
@@ -41,6 +55,24 @@ try {
       console.log({ role, path, count, url: page.url() });
       if (count && path !== "/baam") {
         await launcher.click();
+        if (earlyClick) {
+          const loading = page.locator("[data-baam-session-loading]");
+          await loading.waitFor();
+          assert.equal(await page.locator("[data-baam-chat]").count(), 0);
+          assert.equal(
+            await page.getByText("BAAM доступен только администратору и менеджеру.").count(),
+            0,
+          );
+          await page.screenshot({ path: `${directory}/early-session-loading.png` });
+          releaseSession!();
+          // Authentication has its own visible loading phase. The chat-open
+          // assertion below still requires the actual authorized panel.
+          await loading.waitFor({ state: "hidden" });
+          await page.unroute("**/api/auth/session");
+          report.push({ role, path, earlyClick: true, unauthorizedFlash: false });
+        } else {
+          await page.locator("[data-baam-session-loading]").waitFor({ state: "hidden" });
+        }
         console.log({
           expanded: await launcher.getAttribute("aria-expanded"),
           dialogs: await page.getByRole("dialog").count(),

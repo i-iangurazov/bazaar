@@ -21,7 +21,10 @@ await app.prepare();
 const server =
   process.env.UX_HTTPS === "1"
     ? createSecureServer(
-        { key: readFileSync("/tmp/baam-local.key"), cert: readFileSync("/tmp/baam-local.crt") },
+        {
+          key: readFileSync(process.env.UX_TLS_KEY_PATH ?? "/tmp/baam-local.key"),
+          cert: readFileSync(process.env.UX_TLS_CERT_PATH ?? "/tmp/baam-local.crt"),
+        },
         app.getRequestHandler(),
       )
     : createServer(app.getRequestHandler());

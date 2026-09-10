@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -78,12 +78,11 @@ const StoresPage = () => {
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const locale = useLocale();
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   const role = session?.user?.role;
   const canManage = role === "ADMIN" || role === "MANAGER";
   const isAdmin = role === "ADMIN";
   const canManageProductSettings = isAdmin || Boolean(session?.user?.isOrgOwner);
-  const router = useRouter();
   const pathname = usePathname() ?? "/stores";
   const searchParams = useSearchParams();
   const { toast } = useToast();
@@ -378,7 +377,7 @@ const StoresPage = () => {
   }, [storeForm]);
 
   useEffect(() => {
-    if (searchParams.get("create") !== "1") {
+    if (sessionStatus === "loading" || searchParams.get("create") !== "1") {
       return;
     }
 
@@ -389,8 +388,8 @@ const StoresPage = () => {
     const nextParams = new URLSearchParams(searchParams.toString());
     nextParams.delete("create");
     const nextQuery = nextParams.toString();
-    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
-  }, [canManage, openCreateDialog, pathname, router, searchParams]);
+    window.history.replaceState(null, "", nextQuery ? `${pathname}?${nextQuery}` : pathname);
+  }, [canManage, openCreateDialog, pathname, searchParams, sessionStatus]);
 
   const openEditDialog = (store: Store) => {
     setEditingStore(store);

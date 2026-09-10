@@ -11,9 +11,12 @@ export type BaamIdentity = {
   activeId: string | null;
   setActiveId: (id: string | null) => void;
 };
-const CompanionContext = createContext<BaamIdentity | null>(null);
+const CompanionContext = createContext<{ identity: BaamIdentity | null; loading: boolean }>({
+  identity: null,
+  loading: false,
+});
 export function BaamAssistantProvider({ children }: { children: ReactNode }) {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const user = session?.user;
   const authorized = Boolean(user && ["ADMIN", "MANAGER"].includes(user.role));
   const userId = authorized ? user!.id : "";
@@ -46,24 +49,36 @@ export function BaamAssistantProvider({ children }: { children: ReactNode }) {
   // here used to remount AppShell children and discard an early launcher click.
   return (
     <CompanionContext.Provider
-      value={
-        authorized
+      value={{
+        loading: status === "loading",
+        identity: authorized
           ? {
               userId,
               organizationId,
               activeId: selection?.key === key ? selection.id : null,
               setActiveId,
             }
-          : null
-      }
+          : null,
+      }}
     >
       {children}
     </CompanionContext.Provider>
   );
 }
 export function BaamAssistant({ compact = false }: { compact?: boolean }) {
-  const identity = useContext(CompanionContext);
+  const { identity, loading } = useContext(CompanionContext);
   const locale = useLocale();
+  if (!identity && loading)
+    return (
+      <div
+        data-baam-session-loading
+        role="status"
+        aria-busy="true"
+        className="p-6 text-sm text-muted-foreground"
+      >
+        {baamCopy(locale, "loading")}
+      </div>
+    );
   if (!identity)
     return (
       <p className="p-6 text-sm" role="alert">

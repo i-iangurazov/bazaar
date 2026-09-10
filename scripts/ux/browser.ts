@@ -117,6 +117,38 @@ async function commitStock(page: Page) {
 let failure: string | undefined;
 try {
   const admin = await login("admin");
+  for (const path of ["/stores", "/suppliers"]) {
+    const formPage = await admin.newPage();
+    let releaseSession!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      releaseSession = resolve;
+    });
+    await formPage.route("**/api/auth/session", async (route) => {
+      await gate;
+      await route.continue();
+    });
+    await formPage.goto(`${base}${path}?create=1`);
+    await formPage.locator("[data-baam-launcher]").waitFor();
+    assert.equal(
+      new URL(formPage.url()).searchParams.get("create"),
+      "1",
+      "Creation shortcut was consumed before the user's role resolved",
+    );
+    assert.equal(await formPage.getByRole("dialog").count(), 0);
+    releaseSession();
+    const dialog = formPage.getByRole("dialog");
+    await dialog.waitFor();
+    assert.equal(
+      await dialog.evaluate((element) => element.contains(document.activeElement)),
+      true,
+    );
+    await formPage.screenshot({ path: `${directory}/${path.slice(1)}-create-shortcut.png` });
+    await formPage.unroute("**/api/auth/session");
+    await formPage.keyboard.press("Escape");
+    await dialog.waitFor({ state: "hidden" });
+    await formPage.close();
+  }
+  record("Store and supplier creation shortcuts wait for the session and open focused forms");
   const dashboard = await open(admin, `/dashboard?storeId=${f.storeId}`);
   await dashboard.locator('[data-dashboard-kpi="sales"]').waitFor({ timeout: 90_000 });
   assert.equal(await dashboard.locator("[data-dashboard-kpi]").count(), 4);

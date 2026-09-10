@@ -165,6 +165,22 @@ describe("BAAM persistent companion workspace", () => {
     );
     expect(screen.getByText("Still open")).toBeTruthy();
   });
+  it("keeps an early assistant open in a loading state until the session resolves", () => {
+    mocks.session.mockReturnValue({ data: null, status: "loading" });
+    const view = render(shell());
+    expect(screen.getByRole("status").textContent).toBe("Loading…");
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(mocks.capabilities).not.toHaveBeenCalled();
+    mocks.session.mockReturnValue({
+      data: { user: { id: "actor", organizationId: "org", role: "ADMIN" } },
+      status: "authenticated",
+    });
+    view.rerender(shell());
+    expect(document.activeElement).toBe(input());
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(mocks.send).not.toHaveBeenCalled();
+  });
   it("shows a loading state while restored history is still being fetched", () => {
     mocks.conversation.mockReturnValue({ data: undefined, error: null, isFetching: true });
     render(shell());

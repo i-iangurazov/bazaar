@@ -118,6 +118,8 @@ try {
       const startErrors = errors.length;
       await page.goto(base + path, { waitUntil: "domcontentloaded", timeout: 120_000 });
       await settle(page);
+      if (role === "admin" && ["/stores/new", "/suppliers/new"].includes(path))
+        await page.getByRole("dialog").waitFor();
       const label = path
         .split("?")[0]
         .replace(f.longProductId, "detail")

@@ -52,7 +52,7 @@ const SuppliersPage = () => {
   const tErrors = useTranslations("errors");
   const tCommon = useTranslations("common");
   const locale = useLocale();
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   const role = session?.user?.role;
   const canManage = role === "ADMIN" || role === "MANAGER";
   const router = useRouter();
@@ -213,7 +213,7 @@ const SuppliersPage = () => {
   }, [directoryQuery, page, pageSize]);
 
   useEffect(() => {
-    if (searchParams.get("create") !== "1") {
+    if (sessionStatus === "loading" || searchParams.get("create") !== "1") {
       return;
     }
 
@@ -231,8 +231,8 @@ const SuppliersPage = () => {
     const nextParams = new URLSearchParams(searchParams.toString());
     nextParams.delete("create");
     const nextQuery = nextParams.toString();
-    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
-  }, [canManage, form, pathname, router, searchParams]);
+    window.history.replaceState(null, "", nextQuery ? `${pathname}?${nextQuery}` : pathname);
+  }, [canManage, form, pathname, searchParams, sessionStatus]);
 
   const handleSubmit = (values: z.infer<typeof schema>) => {
     if (editingId) {
