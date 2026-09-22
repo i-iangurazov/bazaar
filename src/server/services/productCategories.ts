@@ -1,4 +1,4 @@
-import type { Prisma, PrismaClient } from "@prisma/client";
+import { Prisma, type PrismaClient } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
@@ -43,10 +43,13 @@ export const listProductCategoriesFromDb = async (
       select: { name: true },
       orderBy: { name: "asc" },
     }),
-    db.product.findMany({
-      where: { organizationId, isDeleted: false },
-      select: { category: true, categories: true },
-    }),
+    db.$queryRaw<{ category: string }[]>(Prisma.sql`
+      SELECT DISTINCT c.value AS category
+      FROM "Product" p
+      CROSS JOIN LATERAL unnest(array_prepend(p.category, p.categories)) AS c(value)
+      WHERE p."organizationId" = ${organizationId} AND p."isDeleted" = false
+        AND c.value IS NOT NULL AND btrim(c.value) <> ''
+    `),
     db.categoryAttributeTemplate.findMany({
       where: { organizationId },
       select: { category: true },
@@ -65,9 +68,6 @@ export const listProductCategoriesFromDb = async (
     const normalized = normalizeProductCategoryName(item.category);
     if (normalized) {
       categories.add(normalized);
-    }
-    for (const value of normalizeProductCategoryNames(item.categories)) {
-      categories.add(value);
     }
   });
   templateCategories.forEach((item) => {

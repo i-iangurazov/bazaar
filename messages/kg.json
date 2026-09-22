@@ -2203,7 +2203,11 @@
     "updateRequiredTitle": "Bazaar'ды жаңыртуу керек",
     "updateRequiredDescription": "Бул версия азыркы Bazaar системасы менен мындан ары шайкеш эмес.",
     "updateAction": "Колдонмону жаңыртуу",
-    "contactSupport": "Bazaar Guide'ды ачуу"
+    "contactSupport": "Bazaar Guide'ды ачуу",
+    "scanCamera": "Камера менен сканерлөө",
+    "cameraStarting": "Камера ачылууда…",
+    "cameraSwitch": "Камераны алмаштыруу",
+    "cameraNotFound": "Камера табылган жок. Камераны туташтырыңыз же штрихкодду кол менен киргизиңиз."
   },
   "commandPalette": {
     "openButton": "Командалык панель",
@@ -2640,6 +2644,7 @@
         "search": "Издөө",
         "freePriceProduct": "Эркин баадагы товар",
         "scanner": "Сканер",
+        "cameraScannerHint": "Талаанын жанындагы камера баскычын басып, штрихкодго багыттаңыз. Кодду кол менен киргизүүгө же тышкы сканерди колдонууга болот.",
         "scannerUnavailableTitle": "Камера жеткиликсиз",
         "scannerUnavailableDescription": "Камера сканери азырынча туташкан эмес. Аппараттык сканерди колдонуңуз же штрихкодду төмөндө киргизиңиз.",
         "hardwareScannerPlaceholder": "Сканер же штрихкод",
@@ -3672,9 +3677,9 @@
     "variantOptionsEmptyHelper": "Өлчөм, түс, материал же модель сыяктуу опцияларды кошуңуз.",
     "variantAddOption": "Опция кошуу",
     "variantOptionNamePlaceholder": "Өлчөм, Түс, Модель",
-    "variantOptionValuesPlaceholder": "S, M, L же Кара, Ак, Көк",
-    "variantOptionValuesHint": "Маанилерди үтүр менен кошуңуз, мисалы: S, M, L.",
-    "variantOptionDone": "Даяр",
+    "variantOptionValuesPlaceholder": "Мисалы: 1, 2, 3, 4, 5",
+    "variantOptionValuesHint": "Маанилерди үтүр менен кошуңуз, мисалы: 1, 2, 3, 4, 5. Андан кийин ар бир саптын баасын коюңуз.",
+    "variantOptionDone": "Варианттарды түзүү",
     "variantOptionCancel": "Жокко чыгаруу",
     "variantOptionDelete": "Опцияны өчүрүү",
     "variantOptionRemoveValue": "Опция маанисин өчүрүү",
@@ -4148,7 +4153,9 @@
     "selectAttributeValue": "Маанини тандаңыз",
     "attributeRequired": "Милдеттүү атрибутту толтуруңуз: {attribute}.",
     "attributeNumberInvalid": "Туура сан киргизиңиз.",
-    "printAction": "Басып чыгаруу"
+    "printAction": "Басып чыгаруу",
+    "variantPriceStoreRequired": "Варианттын баасын өзгөртүү үчүн товардын дүкөнүн тандаңыз. Баалар ар бир дүкөн үчүн өзүнчө сакталат.",
+    "salePriceStoreHint": "«{store}» дүкөнүндөгү сатуу баасы."
   },
   "storeGroups": {
     "title": "Дүкөн топтору / ассортимент",

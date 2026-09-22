@@ -2203,7 +2203,11 @@
     "updateRequiredTitle": "Bazaar must be updated",
     "updateRequiredDescription": "This app version is no longer compatible with the current Bazaar system.",
     "updateAction": "Update app",
-    "contactSupport": "Open Bazaar Guide"
+    "contactSupport": "Open Bazaar Guide",
+    "scanCamera": "Scan with camera",
+    "cameraStarting": "Opening camera…",
+    "cameraSwitch": "Switch camera",
+    "cameraNotFound": "No camera found. Connect a camera or enter the barcode manually."
   },
   "commandPalette": {
     "openButton": "Command palette",
@@ -2640,6 +2644,7 @@
         "search": "Search",
         "freePriceProduct": "Open-price product",
         "scanner": "Scanner",
+        "cameraScannerHint": "Tap the camera button beside the field and point it at a barcode. You can also type a code or use an external scanner.",
         "scannerUnavailableTitle": "Camera unavailable",
         "scannerUnavailableDescription": "Camera scanning is not connected yet. Use a hardware scanner or enter a barcode below.",
         "hardwareScannerPlaceholder": "Scanner or barcode",
@@ -3674,9 +3679,9 @@
     "variantOptionsEmptyHelper": "Add options like size, color, material, or model.",
     "variantAddOption": "Add option",
     "variantOptionNamePlaceholder": "Size, Color, Model",
-    "variantOptionValuesPlaceholder": "Small, Medium, Large",
-    "variantOptionValuesHint": "Add values separated by commas, for example: S, M, L.",
-    "variantOptionDone": "Done",
+    "variantOptionValuesPlaceholder": "For example: 1, 2, 3, 4, 5",
+    "variantOptionValuesHint": "Separate values with commas, for example: 1, 2, 3, 4, 5. Then set a price for each row.",
+    "variantOptionDone": "Create variants",
     "variantOptionCancel": "Cancel",
     "variantOptionDelete": "Delete option",
     "variantOptionRemoveValue": "Remove option value",
@@ -4150,7 +4155,9 @@
     "selectAttributeValue": "Select attribute value",
     "attributeRequired": "Attribute required {attribute}",
     "attributeNumberInvalid": "Invalid attribute number.",
-    "printAction": "Print action"
+    "printAction": "Print action",
+    "variantPriceStoreRequired": "Select a product store to edit variant prices. Prices are saved separately for each store.",
+    "salePriceStoreHint": "Selling price in {store}."
   },
   "storeGroups": {
     "title": "Store groups / assortment",

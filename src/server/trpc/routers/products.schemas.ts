@@ -211,6 +211,7 @@ export const updateProductInputSchema = z.object({
   categories: z.array(z.string()).optional(),
   baseUnitId: z.string().min(1),
   basePriceKgs: z.number().min(0).optional(),
+  storePriceKgs: z.number().min(0).optional(),
   purchasePriceKgs: z.number().min(0).optional(),
   avgCostKgs: z.number().min(0).optional(),
   minStock: z.number().int().min(0).optional(),

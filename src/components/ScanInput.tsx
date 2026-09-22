@@ -14,15 +14,12 @@ import React, {
 import { createPortal } from "react-dom";
 import { useTranslations } from "next-intl";
 
-import { BarcodeIcon, CheckIcon, EmptyIcon } from "@/components/icons";
+import { CheckIcon, EmptyIcon } from "@/components/icons";
 import { ProductSearchResultItem } from "@/components/product-search-result-item";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
-import { useToast } from "@/components/ui/toast";
 import { nativeHaptics } from "@/lib/native/haptics";
-import { isPluginAvailable } from "@/lib/native/platform";
-import { scanBarcodeNative } from "@/lib/native/scanner";
+import { CameraScanButton } from "@/components/camera-scan-button";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { normalizeScanValue } from "@/lib/scanning/normalize";
@@ -86,55 +83,6 @@ const hasTouchKeyboard = () => {
   );
 };
 
-const NativeScannerButton = ({
-  disabled,
-  onScan,
-}: {
-  disabled: boolean;
-  onScan: (value: string) => void | Promise<void>;
-}) => {
-  const t = useTranslations("nativeApp");
-  const { toast } = useToast();
-  const [scanning, setScanning] = useState(false);
-
-  const scan = async () => {
-    if (disabled || scanning) return;
-    setScanning(true);
-    const result = await scanBarcodeNative({
-      instructions: t("scanInstructions"),
-      cancel: t("scanCancel"),
-      torchOn: t("torchOn"),
-      torchOff: t("torchOff"),
-    });
-    setScanning(false);
-    if (result.status === "scanned") {
-      void nativeHaptics.scan();
-      await onScan(result.value);
-      return;
-    }
-    if (result.status === "permission-denied") {
-      toast({ description: t("cameraPermissionDenied"), variant: "error" });
-    } else if (result.status === "error" || result.status === "unavailable") {
-      toast({ description: t("scannerUnavailable"), variant: "error" });
-    }
-  };
-
-  return (
-    <Button
-      type="button"
-      variant="secondary"
-      size="icon"
-      className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2"
-      aria-label={t("scanBarcode")}
-      title={t("scanBarcode")}
-      disabled={disabled || scanning}
-      onClick={() => void scan()}
-    >
-      {scanning ? <Spinner className="h-4 w-4" /> : <BarcodeIcon className="h-4 w-4" aria-hidden />}
-    </Button>
-  );
-};
-
 export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
   (
     {
@@ -177,7 +125,6 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
     const [showEmptyResult, setShowEmptyResult] = useState(false);
     const [activeIndex, setActiveIndex] = useState(0);
     const [lastTrigger, setLastTrigger] = useState<ScanSubmitTrigger>("enter");
-    const nativeScannerAvailable = isPluginAvailable("CapacitorBarcodeScanner");
     const [portalRect, setPortalRect] = useState<{
       top: number;
       left: number;
@@ -588,7 +535,7 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
           enterKeyHint="search"
           autoComplete="off"
           className={cn(
-            nativeScannerAvailable ? "pr-20" : "pr-9",
+            "pr-20",
             feedback === "error" ? "border-danger focus-visible:ring-danger/30" : undefined,
             inputClassName,
           )}
@@ -597,7 +544,7 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
           <span
             className={cn(
               "pointer-events-none absolute top-1/2 -translate-y-1/2 text-muted-foreground",
-              nativeScannerAvailable ? "right-12" : "right-3",
+              "right-12",
             )}
           >
             <Spinner className="h-4 w-4" />
@@ -606,22 +553,22 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
           <span
             className={cn(
               "pointer-events-none absolute top-1/2 -translate-y-1/2 text-success",
-              nativeScannerAvailable ? "right-12" : "right-3",
+              "right-12",
             )}
           >
             <CheckIcon className="h-4 w-4" aria-hidden />
           </span>
         ) : null}
 
-        {nativeScannerAvailable ? (
-          <NativeScannerButton
+        <CameraScanButton
+            iconOnly
+            className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2"
             disabled={Boolean(disabled || submitting)}
             onScan={async (scannedValue) => {
               updateValue(scannedValue);
               await handleSubmit("enter", scannedValue);
             }}
-          />
-        ) : null}
+        />
 
         {portalDropdown && dropdown && typeof document !== "undefined"
           ? createPortal(dropdown, document.body)

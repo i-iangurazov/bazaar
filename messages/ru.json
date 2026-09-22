@@ -2203,7 +2203,11 @@
     "updateRequiredTitle": "Необходимо обновить Bazaar",
     "updateRequiredDescription": "Эта версия приложения больше не совместима с текущей системой Bazaar.",
     "updateAction": "Обновить приложение",
-    "contactSupport": "Открыть Bazaar Guide"
+    "contactSupport": "Открыть Bazaar Guide",
+    "scanCamera": "Сканировать камерой",
+    "cameraStarting": "Открываем камеру…",
+    "cameraSwitch": "Сменить камеру",
+    "cameraNotFound": "Камера не найдена. Подключите камеру или введите штрихкод вручную."
   },
   "commandPalette": {
     "openButton": "Командная панель",
@@ -2640,6 +2644,7 @@
         "search": "Поиск",
         "freePriceProduct": "Товар по свободной цене",
         "scanner": "Сканер",
+        "cameraScannerHint": "Нажмите кнопку камеры рядом с полем, наведите её на штрихкод. Можно также ввести код вручную или использовать внешний сканер.",
         "scannerUnavailableTitle": "Камера недоступна",
         "scannerUnavailableDescription": "Камерный сканер пока не подключён. Используйте аппаратный сканер или введите штрихкод ниже.",
         "hardwareScannerPlaceholder": "Сканер или штрихкод",
@@ -3673,9 +3678,9 @@
     "variantOptionsEmptyHelper": "Добавьте опции: размер, цвет, материал или модель.",
     "variantAddOption": "Добавить опцию",
     "variantOptionNamePlaceholder": "Размер, Цвет, Модель",
-    "variantOptionValuesPlaceholder": "S, M, L или Черный, Белый, Синий",
-    "variantOptionValuesHint": "Добавляйте значения через запятую, например: S, M, L.",
-    "variantOptionDone": "Готово",
+    "variantOptionValuesPlaceholder": "Например: 1, 2, 3, 4, 5",
+    "variantOptionValuesHint": "Добавляйте значения через запятую, например: 1, 2, 3, 4, 5. Затем задайте цену каждой строки.",
+    "variantOptionDone": "Создать варианты",
     "variantOptionCancel": "Отмена",
     "variantOptionDelete": "Удалить опцию",
     "variantOptionRemoveValue": "Удалить значение опции",
@@ -4149,7 +4154,9 @@
     "selectAttributeValue": "Выберите значение",
     "attributeRequired": "Заполните атрибут: {attribute}.",
     "attributeNumberInvalid": "Введите корректное число.",
-    "printAction": "Печать"
+    "printAction": "Печать",
+    "variantPriceStoreRequired": "Для цен вариантов выберите магазин товара. Цена сохраняется отдельно для каждого магазина.",
+    "salePriceStoreHint": "Цена продажи в магазине «{store}»."
   },
   "storeGroups": {
     "title": "Группы магазинов / ассортимент",

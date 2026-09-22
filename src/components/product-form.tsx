@@ -66,7 +66,12 @@ import {
 } from "@/components/icons";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
-import { buildVariantMatrix, type VariantGeneratorAttribute } from "@/lib/variantGenerator";
+import { CameraScanButton } from "@/components/camera-scan-button";
+import {
+  buildVariantMatrix,
+  findVariantTemplate,
+  type VariantGeneratorAttribute,
+} from "@/lib/variantGenerator";
 import {
   convertFromKgs,
   convertToKgs,
@@ -100,6 +105,7 @@ export type ProductFormValues = {
   categories?: string[];
   baseUnitId: string;
   basePriceKgs?: number;
+  storePriceKgs?: number;
   purchasePriceKgs?: number;
   avgCostKgs?: number;
   initialOnHand?: number;
@@ -607,6 +613,7 @@ export const ProductForm = ({
   readOnly = false,
   productId,
   showBasePriceField = true,
+  priceStoreName,
   currencyCode,
   currencyRateKgsPerUnit,
   quickCreateMode = false,
@@ -629,6 +636,7 @@ export const ProductForm = ({
   readOnly?: boolean;
   productId?: string;
   showBasePriceField?: boolean;
+  priceStoreName?: string;
   currencyCode?: string | null;
   currencyRateKgsPerUnit?: number | string | null;
   quickCreateMode?: boolean;
@@ -740,6 +748,7 @@ export const ProductForm = ({
         categories: z.array(z.string()).optional(),
         baseUnitId: z.string().min(1, t("unitRequired")),
         basePriceKgs: optionalPrice,
+        storePriceKgs: optionalPrice,
         purchasePriceKgs: optionalPrice,
         avgCostKgs: optionalPrice,
         initialOnHand: optionalStockQty,
@@ -877,6 +886,7 @@ export const ProductForm = ({
         (initialValues.category?.trim() ? [initialValues.category.trim()] : []),
       baseUnitId: initialValues.baseUnitId,
       basePriceKgs: displayMoneyFromKgs(initialValues.basePriceKgs),
+      storePriceKgs: displayMoneyFromKgs(initialValues.storePriceKgs),
       purchasePriceKgs: displayMoneyFromKgs(initialValues.purchasePriceKgs),
       avgCostKgs: displayMoneyFromKgs(initialValues.avgCostKgs),
       initialOnHand: initialValues.initialOnHand,
@@ -3277,6 +3287,7 @@ export const ProductForm = ({
       categories: categoryValues,
       baseUnitId: values.baseUnitId,
       basePriceKgs: submitMoneyToKgs(values.basePriceKgs),
+      storePriceKgs: submitMoneyToKgs(values.storePriceKgs),
       purchasePriceKgs: submitMoneyToKgs(values.purchasePriceKgs),
       avgCostKgs: submitMoneyToKgs(values.avgCostKgs),
       initialOnHand: values.initialOnHand,
@@ -3620,13 +3631,18 @@ export const ProductForm = ({
       }
     });
     const usedVariantSkus = collectUsedVariantSkus();
+    const reusedRows = new Set<VariantFormRow>();
     const nextVariants = combinations.map<VariantFormRow>((combo) => {
       const attributes = normalizedOptions.map((option) => ({
         key: option.key,
         value: combo[option.key],
       }));
       const signature = buildVariantOptionSignature(attributes, optionKeys);
-      const existing = existingBySignature.get(signature);
+      const template =
+        existingBySignature.get(signature) ??
+        findVariantTemplate(existingVariants, combo, resolveVariantOptionKey);
+      const existing = template && !reusedRows.has(template) ? template : undefined;
+      if (existing) reusedRows.add(existing);
       const assignedImageValue = assignedOptionKey
         ? (normalizedOptions
             .map((option) => {
@@ -3646,12 +3662,17 @@ export const ProductForm = ({
         id: existing?.id,
         imageId: assignedImage ? (assignedImage.imageId ?? null) : (existing?.imageId ?? null),
         imageUrl: assignedImage ? assignedImage.url : (existing?.imageUrl ?? ""),
-        name: normalizedOptions
-          .map((option) => formatUnknownDisplayValue(combo[option.key]))
-          .join(" / "),
+        name: [
+          form.getValues("name").trim(),
+          ...normalizedOptions.map(
+            (option) => `${option.name} ${formatUnknownDisplayValue(combo[option.key])}`,
+          ),
+        ]
+          .filter(Boolean)
+          .join(" · "),
         sku: existing?.sku?.trim() || generateNextVariantSku(usedVariantSkus),
         initialOnHand: existing?.initialOnHand,
-        storePriceKgs: existing?.storePriceKgs,
+        storePriceKgs: template?.storePriceKgs,
         attributes,
         canDelete: existing?.canDelete ?? true,
       };
@@ -3701,6 +3722,9 @@ export const ProductForm = ({
       assignedImages.size ? { optionName: optionKey, valuesByKey: assignedImages } : undefined,
     );
     resetVariantOptionDraft();
+    requestAnimationFrame(() =>
+      variantsEditorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+    );
   };
 
   const handleRemoveVariantOption = (key: string) => {
@@ -4055,6 +4079,12 @@ export const ProductForm = ({
                   disabled={readOnly}
                 />
               </FormControl>
+              <CameraScanButton
+                disabled={readOnly}
+                onScan={(value) => {
+                  appendBarcodeValue(value);
+                }}
+              />
               <Button
                 type="button"
                 variant="secondary"
@@ -4971,13 +5001,38 @@ export const ProductForm = ({
 
             <ProductEditorCard title={t("pricingTitle")} className={editorFormCardClassName}>
               <ProductEditorFieldGrid>
+                {priceStoreName ? (
+                  <FormField
+                    control={form.control}
+                    name="storePriceKgs"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t("salePrice")}</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            value={field.value ?? ""}
+                            type="number"
+                            inputMode="decimal"
+                            step="0.01"
+                            disabled={readOnly}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t("salePriceStoreHint", { store: priceStoreName })}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ) : null}
                 {showBasePriceField ? (
                   <FormField
                     control={form.control}
                     name="basePriceKgs"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>{t("salePrice")}</FormLabel>
+                        <FormLabel>{t(priceStoreName ? "basePrice" : "salePrice")}</FormLabel>
                         <FormControl>
                           <Input
                             {...field}
@@ -4989,6 +5044,7 @@ export const ProductForm = ({
                             disabled={readOnly}
                           />
                         </FormControl>
+                        <FormDescription>{t("basePriceFallbackHint")}</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -5102,6 +5158,12 @@ export const ProductForm = ({
                             disabled={readOnly}
                           />
                         </FormControl>
+                        <CameraScanButton
+                          disabled={readOnly}
+                          onScan={(value) => {
+                            appendBarcodeValue(value);
+                          }}
+                        />
                         <Button
                           type="button"
                           variant="secondary"
@@ -5502,8 +5564,15 @@ export const ProductForm = ({
                 </Button>
               ) : null}
 
+              {!canEditVariantPrice ? (
+                <p className="text-sm text-muted-foreground">{t("variantPriceStoreRequired")}</p>
+              ) : null}
               {compactVariantRows.length ? (
-                <div className="space-y-2" data-variant-visual-anchor>
+                <div
+                  ref={variantsEditorRef}
+                  className="scroll-mt-24 space-y-2"
+                  data-variant-visual-anchor
+                >
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-medium text-foreground">
                       {t("variantGeneratedTitle", { count: compactVariantRows.length })}
@@ -6415,6 +6484,12 @@ export const ProductForm = ({
                                   disabled={readOnly}
                                 />
                               </FormControl>
+                              <CameraScanButton
+                                disabled={readOnly}
+                                onScan={(value) => {
+                                  appendBarcodeValue(value);
+                                }}
+                              />
                               <Button
                                 type="button"
                                 variant="secondary"

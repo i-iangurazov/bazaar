@@ -2,12 +2,13 @@
 
 import { useEffect, useRef, useState, type ComponentProps } from "react";
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import { httpBatchLink, loggerLink } from "@trpc/client";
+import { httpBatchLink, httpLink, splitLink, loggerLink } from "@trpc/client";
 import superjson from "superjson";
 import { SessionProvider, useSession } from "next-auth/react";
 import { NextIntlClientProvider } from "next-intl";
 import { z } from "zod";
 
+import { fetchPosRead, isInteractivePosRead } from "@/lib/pos-read-transport";
 import { trpc, getBaseUrl } from "@/lib/trpc";
 import { createAppQueryClient } from "@/lib/query-client";
 import { createMessageFallback } from "@/lib/i18nFallback";
@@ -71,24 +72,32 @@ export const Providers = ({
         loggerLink({
           enabled: () => process.env.NODE_ENV === "development",
         }),
-        httpBatchLink({
-          url: `${getBaseUrl()}/api/trpc`,
-          maxURLLength: 2_048,
-          fetch(url, options) {
-            if (
-              isNativeApp() &&
-              getConnectivitySnapshot().state !== "online" &&
-              String(options?.method ?? "GET").toUpperCase() !== "GET"
-            ) {
-              return Promise.reject(new Error("nativeOffline"));
-            }
-            return fetch(url, { ...options, credentials: "include" });
-          },
-          headers() {
-            return {
-              "x-request-id": crypto.randomUUID(),
-            };
-          },
+        splitLink({
+          condition: (op) => isInteractivePosRead(op.type, op.path),
+          true: httpLink({
+            url: `${getBaseUrl()}/api/trpc`,
+            fetch: fetchPosRead,
+            headers: () => ({ "x-request-id": crypto.randomUUID() }),
+          }),
+          false: httpBatchLink({
+            url: `${getBaseUrl()}/api/trpc`,
+            maxURLLength: 2_048,
+            fetch(url, options) {
+              if (
+                isNativeApp() &&
+                getConnectivitySnapshot().state !== "online" &&
+                String(options?.method ?? "GET").toUpperCase() !== "GET"
+              ) {
+                return Promise.reject(new Error("nativeOffline"));
+              }
+              return fetch(url, { ...options, credentials: "include" });
+            },
+            headers() {
+              return {
+                "x-request-id": crypto.randomUUID(),
+              };
+            },
+          }),
         }),
       ],
     }),

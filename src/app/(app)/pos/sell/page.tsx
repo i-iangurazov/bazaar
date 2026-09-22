@@ -813,8 +813,8 @@ const PosSellPage = () => {
     { enabled: Boolean(activeStoreId), staleTime: 60_000 },
   );
   const receiptPrintSettings = receiptPrintSettingsQuery.data?.settings;
-  const productsBootstrapQuery = trpc.products.bootstrap.useQuery(
-    { storeId: activeStoreId, page: 1, pageSize: 1 },
+  const productCategoriesQuery = trpc.productCategories.list.useQuery(
+    undefined,
     { enabled: Boolean(activeStoreId), staleTime: 60_000 },
   );
   const catalogProductsQuery = trpc.products.list.useQuery(
@@ -1555,7 +1555,7 @@ const PosSellPage = () => {
 
   useSse({
     "inventory.updated": () => {
-      void Promise.all([productsBootstrapQuery.refetch(), catalogProductsQuery.refetch()]);
+      void Promise.all([catalogProductsQuery.refetch()]);
     },
     "shift.opened": () => {
       void Promise.all([
@@ -1753,8 +1753,12 @@ const PosSellPage = () => {
   }, [sale?.id, sale?.lines]);
 
   const hasOpenShift = Boolean(shiftQuery.data?.id);
-  const shiftStatePending = shiftQuery.isLoading || (shiftQuery.isFetching && !shiftQuery.data);
-  const shiftStateError = shiftQuery.isError && !shiftQuery.data;
+  const shiftStatePending = registersQuery.isInitialLoading ||
+    (!registersQuery.isError && !registerSelectionReady) ||
+    (Boolean(registerId) && shiftQuery.isInitialLoading);
+  const shiftStateError = registersQuery.isError || (shiftQuery.isError && !shiftQuery.data);
+  const entryError = registersQuery.error ?? shiftQuery.error;
+  const retryEntry = () => registersQuery.isError ? registersQuery.refetch() : shiftQuery.refetch();
   const isLineBusy =
     removeLineMutation.isLoading ||
     updateDiscountMutation.isLoading ||
@@ -1786,7 +1790,7 @@ const PosSellPage = () => {
   const productGridLoading = Boolean(
     activeStoreId && catalogProductsQuery.isLoading && !catalogProductsQuery.data,
   );
-  const productCategories = productsBootstrapQuery.data?.categories ?? [];
+  const productCategories = productCategoriesQuery.data ?? [];
 
   useEffect(() => {
     visibleProductsRef.current = visibleProducts;
@@ -5122,8 +5126,8 @@ const PosSellPage = () => {
       ) : shiftStateError ? (
         <section className="grid min-h-[calc(100vh-4rem)] place-items-center p-4">
           <section className="bazaar-admin-error w-full max-w-xl">
-            <p>{translateError(tErrors, shiftQuery.error)}</p>
-            <Button className="mt-3" variant="secondary" onClick={() => void shiftQuery.refetch()}>
+            <p>{translateError(tErrors, entryError)}</p>
+            <Button className="mt-3" variant="secondary" onClick={() => void retryEntry()}>
               {tCommon("tryAgain")}
             </Button>
           </section>
@@ -7288,10 +7292,10 @@ const PosSellPage = () => {
                 <BarcodeIcon className="h-9 w-9 text-primary" aria-hidden />
               </div>
               <h1 className="mt-4 text-[15px] font-semibold">
-                {t("sell.mobile.scannerUnavailableTitle")}
+                {t("sell.mobile.scanner")}
               </h1>
               <p className="mt-2 text-[13px] leading-5 text-muted-foreground">
-                {t("sell.mobile.scannerUnavailableDescription")}
+                {t("sell.mobile.cameraScannerHint")}
               </p>
               <div className="mt-5 rounded-[12px] border border-border bg-card/95 px-3 py-2">
                 <ScanInput
@@ -7732,11 +7736,11 @@ const PosSellPage = () => {
                 ) : null}
                 {shiftStateError ? (
                   <div className="bazaar-admin-error w-full">
-                    <p>{translateError(tErrors, shiftQuery.error)}</p>
+                    <p>{translateError(tErrors, entryError)}</p>
                     <Button
                       className="mt-2 h-10 w-full"
                       variant="secondary"
-                      onClick={() => void shiftQuery.refetch()}
+                      onClick={() => void retryEntry()}
                     >
                       {tCommon("tryAgain")}
                     </Button>

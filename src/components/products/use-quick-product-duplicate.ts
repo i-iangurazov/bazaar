@@ -19,15 +19,15 @@ export const useQuickProductDuplicate = () => {
   const requestInFlightRef = useRef(false);
 
   const mutation = trpc.products.duplicate.useMutation({
-    onSuccess: async (result) => {
+    onSuccess: (result) => {
       requestInFlightRef.current = false;
       operationRef.current = null;
-      await Promise.all([
+      void Promise.all([
         trpcUtils.products.suggestSku.invalidate(),
         trpcUtils.products.bootstrap.invalidate(),
         trpcUtils.products.list.invalidate(),
         trpcUtils.inventory.searchProducts.invalidate(),
-      ]);
+      ]).catch(() => undefined);
       toast({
         variant: "success",
         description:

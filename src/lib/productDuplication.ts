@@ -8,7 +8,7 @@ export const QUICK_PRODUCT_DUPLICATION_PRESET = {
   copyCost: true,
   copyVariants: true,
   copyCharacteristics: true,
-  copySku: true,
+  copySku: false,
 } as const;
 
 export const buildQuickProductDuplicateInput = (input: {

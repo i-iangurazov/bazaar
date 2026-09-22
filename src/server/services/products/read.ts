@@ -2,7 +2,7 @@ import { Prisma, type PrismaClient } from "@prisma/client";
 import { TRPCError } from "@trpc/server";
 import type { Logger } from "pino";
 
-import { normalizeScanValue } from "@/lib/scanning/normalize";
+import { equivalentRetailBarcode, normalizeScanValue } from "@/lib/scanning/normalize";
 import { logProfileSection } from "@/server/profiling/perf";
 import { listProductCategoriesFromDb } from "@/server/services/productCategories";
 import { toCsv } from "@/server/services/csv";
@@ -871,10 +871,19 @@ export const lookupProductScan = async ({
 }) => {
   try {
     const accessibleStoreIds = await resolveProductStoreScopeIds(prisma, user);
-    return await lookupScanProducts(prisma, organizationId, query, {
+    const scope = {
       productWhere: productStoreAssignmentInWhere(accessibleStoreIds),
       storeIds: accessibleStoreIds,
-    });
+    };
+    const result = await lookupScanProducts(prisma, organizationId, query, scope);
+    if (result.exactMatch) return result;
+    const equivalent = equivalentRetailBarcode(normalizeScanValue(query));
+    if (equivalent) {
+      const fallback = await lookupScanProducts(prisma, organizationId, equivalent, scope);
+      if (fallback.exactMatch && fallback.items.every((item) => item.matchType === "barcode"))
+        return fallback;
+    }
+    return result;
   } catch (error) {
     throw toTRPCError(error);
   }
@@ -1953,7 +1962,10 @@ export const getProductStorePricing = async ({
             overridePriceKgs: variantOverride ?? null,
             priceOverridden: variantOverride !== undefined,
             onHand: variantOnHandByStore.get(`${store.id}:${variant.id}`) ?? 0,
-            stockVersion: variantSnapshots.find((snapshot) => snapshot.storeId === store.id && snapshot.variantId === variant.id)?.version ?? 0,
+            stockVersion:
+              variantSnapshots.find(
+                (snapshot) => snapshot.storeId === store.id && snapshot.variantId === variant.id,
+              )?.version ?? 0,
           };
         }),
       };

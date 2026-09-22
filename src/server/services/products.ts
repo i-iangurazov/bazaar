@@ -2192,6 +2192,7 @@ export type UpdateProductInput = {
   categories?: string[] | null;
   baseUnitId: string;
   basePriceKgs?: number | null;
+  storePriceKgs?: number;
   purchasePriceKgs?: number | null;
   avgCostKgs?: number | null;
   minStock?: number | null;
@@ -2315,6 +2316,19 @@ export const updateProduct = async (input: UpdateProductInput) => {
         isBundle: nextIsBundle,
       },
     });
+
+    if (input.storePriceKgs !== undefined) {
+      if (!selectedStore) throw new AppError("storeRequired", "BAD_REQUEST", 400);
+      const assignment = await tx.storeProduct.findUnique({
+        where: { storeId_productId: { storeId: selectedStore.id, productId: input.productId } },
+      });
+      if (!assignment?.isActive) throw new AppError("productNotFound", "NOT_FOUND", 404);
+      await upsertStoreVariantPrices(tx, {
+        organizationId: input.organizationId, actorId: input.actorId,
+        storeId: selectedStore.id, productId: input.productId,
+        variants: [{ id: "BASE", storePriceKgs: input.storePriceKgs }],
+      });
+    }
 
     await tx.productBarcode.deleteMany({ where: { productId: input.productId } });
     if (barcodes.length) {
@@ -2488,50 +2502,6 @@ export const updateProduct = async (input: UpdateProductInput) => {
   });
 };
 
-const resolveDuplicateSku = async (
-  tx: Prisma.TransactionClient,
-  input: {
-    organizationId: string;
-    sourceSku: string;
-    requestedSku?: string | null;
-  },
-) => {
-  const requested = input.requestedSku?.trim();
-  if (requested) {
-    const exists = await tx.product.findFirst({
-      where: {
-        organizationId: input.organizationId,
-        sku: requested,
-      },
-      select: { id: true },
-    });
-    if (exists) {
-      throw new AppError("uniqueConstraintViolation", "CONFLICT", 409);
-    }
-    return requested;
-  }
-
-  const base = `${input.sourceSku}-COPY`;
-  let suffix = 1;
-  for (;;) {
-    const candidate = suffix === 1 ? base : `${base}-${suffix}`;
-    const exists = await tx.product.findFirst({
-      where: {
-        organizationId: input.organizationId,
-        sku: candidate,
-      },
-      select: { id: true },
-    });
-    if (!exists) {
-      return candidate;
-    }
-    suffix += 1;
-    if (suffix > 5000) {
-      throw new AppError("unexpectedError", "INTERNAL_SERVER_ERROR", 500);
-    }
-  }
-};
-
 export const duplicateProduct = async (input: {
   idempotencyKey?: string;
   organizationId: string;
@@ -2642,7 +2612,6 @@ export const duplicateProduct = async (input: {
     const copyCost = input.copyCost ?? false;
     const copyVariants = input.copyVariants ?? true;
     const copyCharacteristics = input.copyCharacteristics ?? true;
-    const copySku = input.copySku ?? true;
     if (copyInventory && !copyVariants && source.variants.length) {
       throw new AppError("duplicateInventoryRequiresVariants", "BAD_REQUEST", 400);
     }
@@ -2655,14 +2624,10 @@ export const duplicateProduct = async (input: {
         })
       : source.storeProducts.map((row) => row.store);
 
-    const nextSku =
-      copySku || input.sku
-        ? await resolveDuplicateSku(tx, {
-            organizationId: input.organizationId,
-            sourceSku: source.sku,
-            requestedSku: input.sku,
-          })
-        : await resolveCreateSku(tx, { organizationId: input.organizationId });
+    const nextSku = await resolveCreateSku(tx, {
+      organizationId: input.organizationId,
+      requestedSku: input.sku,
+    });
     const duplicateName = input.name?.trim() || source.name;
 
     const duplicate = await tx.product.create({
@@ -2722,21 +2687,6 @@ export const duplicateProduct = async (input: {
       });
     }
 
-    const copiedVariantSkuSet = new Set<string>();
-    const copiedVariantSku = (sourceSku: string | null, index: number) => {
-      if (!copySku || !sourceSku?.trim()) {
-        return null;
-      }
-      const base = `${sourceSku.trim()}-COPY`;
-      let candidate = base;
-      let suffix = 2;
-      while (copiedVariantSkuSet.has(candidate)) {
-        candidate = `${base}-${suffix}`;
-        suffix += 1;
-      }
-      copiedVariantSkuSet.add(candidate);
-      return candidate || `VARIANT-COPY-${index + 1}`;
-    };
     const attributeDefinitions = await loadAttributeDefinitions(tx, input.organizationId);
     const copiedVariants =
       copyVariants && source.variants.length
@@ -2746,7 +2696,7 @@ export const duplicateProduct = async (input: {
             source.variants.map((variant, index) => ({
               imageId: copyImages ? copiedImageIdBySourceId.get(variant.imageId ?? "") : null,
               name: variant.name,
-              sku: copiedVariantSku(variant.sku, index),
+              sku: `${nextSku}-${String(index + 1).padStart(2, "0")}`,
               attributes:
                     copyCharacteristics &&
                     variant.attributes &&
@@ -2943,7 +2893,7 @@ export const duplicateProduct = async (input: {
       resource: { type: "Product", id: duplicate.id },
     };
   };
-  const operation = await runOperationRequest(
+  const runDuplicate = () => runOperationRequest(
     {
       organizationId: input.organizationId,
       storeId: input.storeId ?? null,
@@ -2987,7 +2937,15 @@ export const duplicateProduct = async (input: {
     },
     executeDuplicate,
   );
-  return operation.response;
+  for (let attempt = 0; attempt < GENERATED_SKU_MAX_RETRIES; attempt += 1) {
+    try {
+      return (await runDuplicate()).response;
+    } catch (error) {
+      if (input.sku?.trim() || !isOrganizationSkuUniqueConstraintError(error) ||
+          attempt === GENERATED_SKU_MAX_RETRIES - 1) throw error;
+    }
+  }
+  throw new AppError("unexpectedError", "INTERNAL_SERVER_ERROR", 500);
 };
 
 export const generateProductBarcode = async (input: {

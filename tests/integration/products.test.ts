@@ -58,6 +58,85 @@ describeDb("products", () => {
     expect(Number(second.sku.slice(4))).toBeGreaterThan(Number(first.sku.slice(4)));
   });
 
+  it("saves repeated/concurrent copies with fresh SKUs, independent names and POS prices", async () => {
+    const { org, store, adminUser, baseUnit } = await seedBase({
+      plan: "BUSINESS",
+      allowNegativeStock: true,
+    });
+    const caller = createTestCaller({ ...adminUser, organizationId: org.id });
+    const source = await caller.products.create({
+      idempotencyKey: "sept22-source",
+      name: "Кисточка A",
+      baseUnitId: baseUnit.id,
+      storeId: store.id,
+      basePriceKgs: 100,
+      barcodes: ["0123456789012"],
+      variants: [1, 2, 3, 4, 5].map((size) => ({
+        name: `Размер ${size}`,
+        attributes: { size: String(size) },
+        storePriceKgs: size * 10,
+      })),
+    });
+    const input = { productId: source.id, idempotencyKey: "sept22-copy-first", copySku: false };
+    const first = await caller.products.duplicate(input);
+    expect((await caller.products.duplicate(input)).productId).toBe(first.productId);
+    const copies = await Promise.all(
+      [0, 1, 2].map((i) =>
+        caller.products.duplicate({ ...input, idempotencyKey: `sept22-parallel-${i}` }),
+      ),
+    );
+    expect(new Set([first.sku, ...copies.map((copy) => copy.sku)]).size).toBe(4);
+    for (const copy of [first, ...copies]) expect(copy.sku).toMatch(/^SKU-\d{6}$/);
+    await caller.products.update({
+      productId: first.productId,
+      sku: first.sku,
+      name: "Кисточка B",
+      baseUnitId: baseUnit.id,
+      storeId: store.id,
+      basePriceKgs: 250,
+      storePriceKgs: 275,
+    });
+    const saved = await caller.products.getById({ productId: first.productId });
+    if (!saved) throw new Error("Saved copy missing");
+    expect(saved.name).toBe("Кисточка B");
+    expect(saved.basePriceKgs).toBe(250);
+    expect(saved.barcodes).toEqual([]);
+    expect((await caller.products.getById({ productId: source.id }))?.name).toBe("Кисточка A");
+    const again = await caller.products.duplicate({
+      productId: first.productId,
+      idempotencyKey: "sept22-copy-again",
+      copySku: false,
+    });
+    expect(again.sku).toMatch(/^SKU-\d{6}$/);
+    const prices = await caller.products.storePricing({ productId: first.productId });
+    expect(prices.stores[0].effectivePriceKgs).toBe(275);
+    expect(
+      prices.stores[0].variants.map((v) => v.effectivePriceKgs).sort((a, b) => (a ?? 0) - (b ?? 0)),
+    ).toEqual([10, 20, 30, 40, 50]);
+    const register = await prisma.posRegister.create({
+      data: { organizationId: org.id, storeId: store.id, name: "QA", code: "QA" },
+    });
+    await caller.pos.shifts.open({
+      registerId: register.id,
+      openingCashKgs: 0,
+      idempotencyKey: "sept22-open-shift",
+    });
+    const sale = await caller.pos.sales.createDraft({ registerId: register.id });
+    await caller.pos.sales.addLine({
+      saleId: sale.id,
+      productId: first.productId,
+      variantId: saved.variants[0].id,
+      qty: 1,
+    });
+    const receipt = await caller.pos.sales.get({ saleId: sale.id });
+    if (!receipt) throw new Error("Receipt missing");
+    expect(receipt.lines[0].variantId).toBe(saved.variants[0].id);
+    expect(Number(receipt.lines[0].unitPriceKgs)).toBe(
+      prices.stores[0].variants.find((v) => v.variantId === saved.variants[0].id)
+        ?.effectivePriceKgs,
+    );
+  });
+
   it("applies optional initial on-hand and minimum stock on store product creation", async () => {
     const { org, store, adminUser, baseUnit } = await seedBase();
 
@@ -367,7 +446,7 @@ describeDb("products", () => {
     expect(noPhotoProduct.photoUrl).toBeNull();
     expect(noPhotoProduct.images).toHaveLength(0);
     expect(noPhotoProduct.barcodes).toHaveLength(0);
-    expect(noPhotoProduct.variants[0]?.sku).toBe("DUP-SOURCE-L-COPY");
+    expect(noPhotoProduct.variants[0]?.sku).toBe(`${noPhotoProduct.sku}-01`);
     expect(noPhotoProduct.inventorySnapshots.find((row) => row.storeId === store.id)?.onHand).toBe(
       0,
     );
@@ -583,13 +662,13 @@ describeDb("products", () => {
     );
 
     expect(duplicate.name).toBe("Advanced Duplicate Copy");
-    expect(duplicate.sku).toBe("ADV-DUP-1-COPY");
+    expect(duplicate.sku).toMatch(/^SKU-\d{6}$/);
     expect(duplicate.description).toBe("Source description");
     expect(duplicate.categories).toEqual(["Footwear", "Summer"]);
     expect(duplicate.images).toHaveLength(1);
     expect(duplicate.barcodes).toHaveLength(0);
     expect(result.omittedBarcodesCount).toBe(1);
-    expect(copiedSmall.sku).toBe("ADV-DUP-S-COPY");
+    expect(copiedSmall.sku).toMatch(new RegExp(`^${duplicate.sku}-\\d{2}$`));
     expect(copiedSmall.attributes).toEqual({ size: "S" });
     expect(copiedStock.get(`${store.id}:${copiedSmall.id}`)).toBe(2);
     expect(copiedStock.get(`${store.id}:${copiedLarge.id}`)).toBe(5);

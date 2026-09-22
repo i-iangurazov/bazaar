@@ -24,7 +24,7 @@ describe("quick product duplication", () => {
       copyCost: true,
       copyVariants: true,
       copyCharacteristics: true,
-      copySku: true,
+      copySku: false,
     });
     expect(input).not.toHaveProperty("name");
     // Omitting copyInventory is the backend's safe catalog-copy default:

@@ -12,6 +12,8 @@ const { lookupFetchMock, searchQuickUseQueryMock } = vi.hoisted(() => ({
   searchQuickUseQueryMock: vi.fn(),
 }));
 
+vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
+
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     useUtils: () => ({

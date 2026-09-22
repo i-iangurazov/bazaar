@@ -134,7 +134,7 @@ describe("index page source layout", () => {
     expect(createSource).toContain('t("saveBarUnsavedProduct")');
     expect(createSource).toContain("onDirtyChange={setProductFormDirty}");
     expect(detailSource).toContain(
-      "const productEditorDirty = productFormDirty || basePriceDraftDirty;",
+      "const productEditorDirty = productFormDirty;",
     );
     expect(detailSource).toContain('t("saveBarSaved")');
     expect(detailSource).toContain('t("saveBarUnsavedChanges")');

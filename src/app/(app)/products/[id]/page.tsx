@@ -83,7 +83,6 @@ import {
   normalizeCurrencyRateKgsPerUnit,
 } from "@/lib/currency";
 import { formatMovementNote } from "@/lib/i18n/movementNote";
-import { deriveBasePriceFallbackCandidate } from "@/lib/basePriceFallback";
 import { buildBarcodeLabelPrintItems, hasPrintableBarcode } from "@/lib/barcodePrint";
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
 import { getQzTrayBinding, printPdfBlobViaQzTray, qzTrayErrorMessageKey } from "@/lib/qzTrayPrint";
@@ -200,7 +199,6 @@ const ProductDetailPage = () => {
   const [showBundle, setShowBundle] = useState(false);
   const [componentDialogOpen, setComponentDialogOpen] = useState(false);
   const [componentSearch, setComponentSearch] = useState("");
-  const [basePriceDraft, setBasePriceDraft] = useState("");
   const [storePriceDrafts, setStorePriceDrafts] = useState<Record<string, string>>({});
   const [variantPriceDrafts, setVariantPriceDrafts] = useState<Record<string, string>>({});
   const [productFormDirty, setProductFormDirty] = useState(false);
@@ -227,7 +225,6 @@ const ProductDetailPage = () => {
     actionAfterMenuCloseRef.current = null;
     queueMicrotask(action);
   };
-  const basePriceAutofillRef = useRef<string | null>(null);
 
   const productQuery = trpc.products.getById.useQuery(
     { productId },
@@ -266,7 +263,10 @@ const ProductDetailPage = () => {
     () => storePricingQuery.data?.stores ?? [],
     [storePricingQuery.data?.stores],
   );
-  const selectedPricingStore = assignedStoreRows.find((store) => store.storeId === pricingStoreId);
+  const selectedPricingStore =
+    assignedStoreRows.find((store) => store.storeId === pricingStoreId) ??
+    assignedStoreRows.find((store) => store.storeId === returnStoreId) ??
+    assignedStoreRows[0];
   const requestedStore = storesQuery.data?.find((store) => store.id === returnStoreId) ?? null;
   const requestedStoreNotAssigned = Boolean(
     returnStoreId &&
@@ -303,11 +303,6 @@ const ProductDetailPage = () => {
   const convertSelectedMoneyFromKgs = useCallback(
     (valueKgs: number) =>
       convertFromKgs(valueKgs, selectedPricingCurrencyRateKgsPerUnit, selectedPricingCurrencyCode),
-    [selectedPricingCurrencyCode, selectedPricingCurrencyRateKgsPerUnit],
-  );
-  const convertSelectedMoneyToKgs = useCallback(
-    (value: number) =>
-      convertToKgs(value, selectedPricingCurrencyRateKgsPerUnit, selectedPricingCurrencyCode),
     [selectedPricingCurrencyCode, selectedPricingCurrencyRateKgsPerUnit],
   );
   const formatSelectedMoney = useCallback(
@@ -401,21 +396,6 @@ const ProductDetailPage = () => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
   });
-  const basePriceMutation = trpc.products.inlineUpdate.useMutation({
-    onSuccess: async () => {
-      await Promise.all([
-        productQuery.refetch(),
-        storePricingQuery.refetch(),
-        pricingQuery.refetch(),
-        trpcUtils.products.bootstrap.invalidate(),
-        trpcUtils.products.list.invalidate(),
-      ]);
-      toast({ variant: "success", description: t("priceSaved") });
-    },
-    onError: (error) => {
-      toast({ variant: "error", description: translateError(tErrors, error) });
-    },
-  });
   const storePriceMutation = trpc.storePrices.upsert.useMutation({
     onSuccess: async () => {
       await Promise.all([
@@ -460,9 +440,11 @@ const ProductDetailPage = () => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
   });
-  useSse({ "inventory.updated": () => {
-    void Promise.all([storePricingQuery.refetch(), productQuery.refetch()]);
-  } });
+  useSse({
+    "inventory.updated": () => {
+      void Promise.all([storePricingQuery.refetch(), productQuery.refetch()]);
+    },
+  });
   const archiveMutation = trpc.products.archive.useMutation({
     onSuccess: async () => {
       await Promise.all([
@@ -529,19 +511,6 @@ const ProductDetailPage = () => {
     setVariantPriceDrafts(variantPriceDrafts);
   }, [convertStoreMoneyFromKgs, formatDraftMoneyAmount, storePricingQuery.data]);
 
-  useEffect(() => {
-    const basePrice =
-      storePricingQuery.data?.basePriceKgs ?? productQuery.data?.basePriceKgs ?? null;
-    setBasePriceDraft(
-      basePrice !== null ? formatDraftMoneyAmount(convertSelectedMoneyFromKgs(basePrice)) : "",
-    );
-  }, [
-    convertSelectedMoneyFromKgs,
-    formatDraftMoneyAmount,
-    productQuery.data?.basePriceKgs,
-    storePricingQuery.data?.basePriceKgs,
-  ]);
-
   const movementTypeLabel = (type: string) => {
     switch (type) {
       case "RECEIVE":
@@ -602,6 +571,7 @@ const ProductDetailPage = () => {
           : [],
       baseUnitId: productQuery.data.baseUnitId,
       basePriceKgs: productQuery.data.basePriceKgs ?? undefined,
+      storePriceKgs: selectedSettingsStore?.effectivePriceKgs ?? undefined,
       purchasePriceKgs: productQuery.data.purchasePriceKgs ?? undefined,
       avgCostKgs: productQuery.data.avgCostKgs ?? undefined,
       minStock: selectedSettingsStore?.minStock,
@@ -648,6 +618,7 @@ const ProductDetailPage = () => {
   }, [
     productQuery.data,
     selectedSettingsStore?.minStock,
+    selectedSettingsStore?.effectivePriceKgs,
     selectedSettingsStore?.variants,
     bundleComponentsQuery.data,
   ]);
@@ -710,49 +681,7 @@ const ProductDetailPage = () => {
 
   const effectivePrice = pricingQuery.data?.effectivePriceKgs ?? null;
   const avgCost = pricingQuery.data?.avgCostKgs ?? null;
-  const currentBasePrice =
-    storePricingQuery.data?.basePriceKgs ?? productQuery.data?.basePriceKgs ?? null;
-  const basePriceFallbackCandidate = useMemo(
-    () =>
-      currentBasePrice === null
-        ? deriveBasePriceFallbackCandidate(storePricingQuery.data?.stores ?? [])
-        : null,
-    [currentBasePrice, storePricingQuery.data?.stores],
-  );
-  const basePriceFallbackSource =
-    basePriceFallbackCandidate?.matchingStoreCount === 1
-      ? basePriceFallbackCandidate.sourceStoreName
-      : basePriceFallbackCandidate
-        ? t("storesCount", { count: basePriceFallbackCandidate.matchingStoreCount })
-        : "";
-  const basePriceDraftDirty = useMemo(() => {
-    const raw = basePriceDraft.trim();
-    const nextValue = raw.length
-      ? (() => {
-          const parsed = parseDraftMoney(raw);
-          return parsed === null ? Number.NaN : convertSelectedMoneyToKgs(parsed);
-        })()
-      : currentBasePrice === null
-        ? (basePriceFallbackCandidate?.priceKgs ?? null)
-        : null;
-
-    if (Number.isNaN(nextValue)) {
-      return true;
-    }
-
-    if (currentBasePrice === null || nextValue === null) {
-      return currentBasePrice !== nextValue;
-    }
-
-    return Math.abs(currentBasePrice - nextValue) >= 0.01;
-  }, [
-    basePriceDraft,
-    basePriceFallbackCandidate?.priceKgs,
-    convertSelectedMoneyToKgs,
-    currentBasePrice,
-    parseDraftMoney,
-  ]);
-  const productEditorDirty = productFormDirty || basePriceDraftDirty;
+  const productEditorDirty = productFormDirty;
   const previewImageUrl = productQuery.data?.images[0]?.url ?? productQuery.data?.photoUrl ?? null;
   const markupPct =
     avgCost && avgCost > 0 && effectivePrice !== null
@@ -762,95 +691,6 @@ const ProductDetailPage = () => {
     effectivePrice && effectivePrice > 0 && avgCost !== null
       ? ((effectivePrice - avgCost) / effectivePrice) * 100
       : null;
-
-  useEffect(() => {
-    if (!basePriceFallbackCandidate || currentBasePrice !== null) {
-      basePriceAutofillRef.current = null;
-      return;
-    }
-
-    const candidateKey = [
-      productId,
-      basePriceFallbackCandidate.sourceStoreId,
-      basePriceFallbackCandidate.priceKgs,
-      basePriceFallbackCandidate.matchingStoreCount,
-    ].join(":");
-
-    if (basePriceAutofillRef.current === candidateKey) {
-      return;
-    }
-
-    setBasePriceDraft((current) =>
-      current.trim().length > 0
-        ? current
-        : formatDraftMoneyAmount(convertSelectedMoneyFromKgs(basePriceFallbackCandidate.priceKgs)),
-    );
-    basePriceAutofillRef.current = candidateKey;
-  }, [
-    basePriceFallbackCandidate,
-    convertSelectedMoneyFromKgs,
-    currentBasePrice,
-    formatDraftMoneyAmount,
-    productId,
-  ]);
-
-  const resolveDraftBasePrice = () => {
-    const raw = basePriceDraft.trim();
-    if (!raw.length) {
-      return currentBasePrice === null ? basePriceFallbackCandidate?.priceKgs : undefined;
-    }
-    const value = parseDraftMoney(raw);
-    return value !== null ? convertSelectedMoneyToKgs(value) : undefined;
-  };
-
-  const handleSaveBasePrice = async () => {
-    const raw = basePriceDraft.trim();
-    const parsedValue = raw.length ? parseDraftMoney(raw) : null;
-    const nextValue = raw.length
-      ? parsedValue === null
-        ? Number.NaN
-        : convertSelectedMoneyToKgs(parsedValue)
-      : currentBasePrice === null
-        ? (basePriceFallbackCandidate?.priceKgs ?? null)
-        : null;
-    if (nextValue !== null && (!Number.isFinite(nextValue) || nextValue < 0)) {
-      toast({ variant: "error", description: t("priceNonNegative") });
-      return;
-    }
-    if (
-      currentBasePrice !== null &&
-      nextValue !== null &&
-      Math.abs(currentBasePrice - nextValue) < 0.01
-    ) {
-      return;
-    }
-    await basePriceMutation.mutateAsync({
-      productId,
-      patch: {
-        basePriceKgs: nextValue,
-      },
-    });
-  };
-
-  const handleApplyBasePriceFallback = async () => {
-    if (!basePriceFallbackCandidate) {
-      return;
-    }
-
-    setBasePriceDraft(
-      formatDraftMoneyAmount(convertSelectedMoneyFromKgs(basePriceFallbackCandidate.priceKgs)),
-    );
-    if (currentBasePrice === basePriceFallbackCandidate.priceKgs) {
-      return;
-    }
-
-    await basePriceMutation.mutateAsync({
-      productId,
-      patch: {
-        basePriceKgs: basePriceFallbackCandidate.priceKgs,
-      },
-    });
-  };
 
   const handleSaveStorePrice = async (storeId: string) => {
     const raw = storePriceDrafts[storeId]?.trim() ?? "";
@@ -1047,29 +887,30 @@ const ProductDetailPage = () => {
     }
   };
 
-  if (productQuery.isLoading || storePricingQuery.isLoading || !formValues) {
-    return (
-      <div>
-        <PageHeader title={t("editTitle")} subtitle={tCommon("loading")} />
-      </div>
-    );
-  }
-
-  if (productQuery.error) {
+  if (productQuery.error || storePricingQuery.error) {
     return (
       <div>
         <PageHeader title={t("editTitle")} subtitle={tErrors("genericTitle")} />
-        <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-danger">
-          <span>{translateError(tErrors, productQuery.error)}</span>
-          <Button type="button" variant="ghost" size="sm" onClick={() => productQuery.refetch()}>
-            {tErrors("tryAgain")}
-          </Button>
-        </div>
+        <p className="text-danger">
+          {translateError(tErrors, productQuery.error ?? storePricingQuery.error)}
+        </p>
+        <Button
+          onClick={() => void Promise.all([productQuery.refetch(), storePricingQuery.refetch()])}
+        >
+          {tCommon("tryAgain")}
+        </Button>
       </div>
     );
   }
+  if (
+    productQuery.isLoading ||
+    storePricingQuery.isLoading ||
+    (productQuery.data?.isBundle && bundleComponentsQuery.isLoading)
+  ) {
+    return <PageHeader title={t("editTitle")} subtitle={tCommon("loading")} />;
+  }
 
-  if (!productQuery.data) {
+  if (!productQuery.data || !formValues) {
     return (
       <div>
         <PageHeader title={t("editTitle")} subtitle={t("notFound")} />
@@ -1188,7 +1029,11 @@ const ProductDetailPage = () => {
       </ProductEditorCard>
       <ProductEditorCard title={t("productAvailabilityTitle")}>
         <div className="space-y-2">
-          <Select value={pricingStoreId} onValueChange={(value) => setPricingStoreId(value)}>
+          <Select
+            value={pricingStoreId}
+            onValueChange={(value) => setPricingStoreId(value)}
+            disabled={productFormDirty || updateMutation.isLoading}
+          >
             <SelectTrigger>
               <SelectValue placeholder={tCommon("selectStore")} />
             </SelectTrigger>
@@ -1322,14 +1167,13 @@ const ProductDetailPage = () => {
         main={
           <>
             <ProductForm
-              key={`${productId}:${selectedSettingsStore?.storeId ?? "store"}:${selectedSettingsStore?.minStock ?? "min"}:${selectedPricingCurrencyCode}:${selectedPricingCurrencyRateKgsPerUnit}:${enableSku}:${enableBarcode}:${enableSimilarProductCheck}`}
+              key={`${productId}:${selectedSettingsStore?.storeId ?? "store"}`}
               initialValues={formValues}
               onSubmit={(values) =>
                 updateMutation.mutate({
                   productId,
                   storeId: selectedSettingsStore?.storeId ?? undefined,
                   ...values,
-                  basePriceKgs: resolveDraftBasePrice(),
                 })
               }
               attributeDefinitions={attributesQuery.data ?? []}
@@ -1339,7 +1183,7 @@ const ProductDetailPage = () => {
               isSubmitting={updateMutation.isLoading}
               readOnly={!canManageProducts}
               productId={productId}
-              showBasePriceField={false}
+              priceStoreName={selectedSettingsStore?.storeName}
               currencyCode={selectedPricingCurrencyCode}
               currencyRateKgsPerUnit={selectedPricingCurrencyRateKgsPerUnit}
               formId={productEditFormId}
@@ -1387,7 +1231,9 @@ const ProductDetailPage = () => {
                       />
                     </div>
                     <div className="flex min-h-10 items-center gap-2 text-xs text-muted-foreground">
-                      {t("currentStoreStockCurrent", { qty: formatNumber(selectedPricingStore.onHand, locale) })}
+                      {t("currentStoreStockCurrent", {
+                        qty: formatNumber(selectedPricingStore.onHand, locale),
+                      })}
                     </div>
                   </div>
                 ) : (
@@ -1409,67 +1255,6 @@ const ProductDetailPage = () => {
                   </div>
                 ) : storePricingQuery.data ? (
                   <div className="space-y-3">
-                    <div className="rounded-md border border-border bg-card p-3">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-foreground">
-                            {t("basePrice")}
-                          </p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {t("basePriceFallbackHint")}
-                          </p>
-                          {currentBasePrice === null && basePriceFallbackCandidate ? (
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              {t("basePriceDerivedHint", {
-                                price: formatSelectedMoney(basePriceFallbackCandidate.priceKgs),
-                                source: basePriceFallbackSource,
-                              })}
-                            </p>
-                          ) : null}
-                        </div>
-                        {canManageProducts ? (
-                          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-                            <Input
-                              type="number"
-                              inputMode="decimal"
-                              step="0.01"
-                              className="w-full sm:w-[160px]"
-                              value={basePriceDraft}
-                              onChange={(event) => setBasePriceDraft(event.target.value)}
-                              onBlur={() => void handleSaveBasePrice()}
-                              onKeyDown={(event) => {
-                                if (event.key === "Enter") {
-                                  event.preventDefault();
-                                  event.currentTarget.blur();
-                                }
-                              }}
-                              placeholder={t("pricePlaceholder")}
-                              disabled={basePriceMutation.isLoading}
-                            />
-                            {currentBasePrice === null && basePriceFallbackCandidate ? (
-                              <Button
-                                type="button"
-                                variant="outline"
-                                onClick={() => void handleApplyBasePriceFallback()}
-                                disabled={basePriceMutation.isLoading}
-                              >
-                                {t("basePriceApplyDerived")}
-                              </Button>
-                            ) : null}
-                            {basePriceMutation.isLoading ? (
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <Spinner className="h-4 w-4" />
-                                {tCommon("saving")}
-                              </div>
-                            ) : null}
-                          </div>
-                        ) : (
-                          <div className="text-xs text-muted-foreground">
-                            {t("basePriceReadOnly")}
-                          </div>
-                        )}
-                      </div>
-                    </div>
                     {storePricingQuery.data.stores.map((storeRow) => (
                       <div
                         key={storeRow.storeId}
@@ -1645,6 +1430,7 @@ const ProductDetailPage = () => {
                 <div className="w-full sm:max-w-xs">
                   <Select
                     value={pricingStoreId}
+                    disabled={productFormDirty || updateMutation.isLoading}
                     onValueChange={(value) => setPricingStoreId(value)}
                   >
                     <SelectTrigger>
