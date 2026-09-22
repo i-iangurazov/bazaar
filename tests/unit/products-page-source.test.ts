@@ -317,6 +317,7 @@ describe("index page source layout", () => {
     expect(detailSource).toContain("const productSettingsLoaded = storePricingQuery.isSuccess;");
     expect(detailSource).toContain("const enableBarcode = productSettingsLoaded");
     expect(detailSource).toContain("? (selectedSettingsStore?.enableBarcode ?? true)");
-    expect(detailSource).toContain("storePricingQuery.isLoading || !formValues");
+    expect(detailSource).toContain("storePricingQuery.isLoading ||");
+    expect(detailSource).toContain("if (!productQuery.data || !formValues)");
   });
 });

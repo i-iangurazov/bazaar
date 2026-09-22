@@ -78,6 +78,8 @@ bootstrap 5.1 → 3.15 мс, максимум 7 → 5.7 мс. Каталог 1 0
 - Безопасный `pnpm exec next build` прошёл с явно заданной localhost БД, VERCEL=0, без prebuild/миграций. Схема не менялась.
 - Дополнительный authenticated smoke `next start` на HTTP localhost не прошёл: production auth выдаёт secure-cookie, а middleware выбирает имя cookie по HTTP NEXTAUTH_URL. Это не проверка HTTPS production; auth приложения ради локального smoke не менялся.
 - Первый GitHub Android gate остановился в setup SDK до компиляции: `Failed to find package 'tools'`. В workflow явно выбран `platform-tools` вместо устаревшего default `tools platform-tools`; [описание входа packages](https://github.com/android-actions/setup-android/blob/v3/action.yml). Остальные версии/проверки сохранены.
+- GitHub подтвердил 2 089/2 090 tests; оставшееся падение — старое строковое ожидание объединённого loading guard после разделения loading/error/not-found. Ожидание обновлено с сохранением обеих проверок. Android/iOS, UX, reporting, BAAM, stabilization и security gates прошли. Inventory один раз попал в 30-секундный timeout: dev-компиляция 28.8 с, ответ 30.005 с; первой навигации задан тот же 60-секундный лимит, что уже был у readiness assertion.
+- Дополнительный поиск POS при трёх upload/create: пять повторов, медиана 292 мс, максимум 299 мс. Добавление цвета к пяти размерам сохранило 10 комбинаций с ценами 15/30/45/60/75 для каждого цвета после reload; порядок старых и новых строк может отличаться.
 
 QA-сценарии: `scripts/qa/sept22-*`. Fixture требует строго localhost:55432/bazaar_hardening_ci;
 использовать только новую disposable БД с миграциями. Запустить dev на :3100 с той же БД/Redis и локальным image provider,

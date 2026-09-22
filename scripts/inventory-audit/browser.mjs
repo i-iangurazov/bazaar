@@ -50,7 +50,9 @@ async function login(email, hasTouch = false) {
 async function openProducts(context) {
   const page = await context.newPage();
   page.on("pageerror", (error) => evidence.errors.push(error.message));
-  await page.goto(`${base}/products`);
+  // The isolated Next dev server compiles this route on the first request.
+  // Keep the same bounded budget as the readiness assertion below.
+  await page.goto(`${base}/products`, { timeout: 60_000 });
   const store = page
     .locator('[role="combobox"]:visible')
     .filter({ hasText: /Audit Store B|Test Store/ })
