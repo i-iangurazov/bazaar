@@ -76,6 +76,8 @@ bootstrap 5.1 → 3.15 мс, максимум 7 → 5.7 мс. Каталог 1 0
 - Viewport 1024×1366 и 390 px: проверено заполнение/сохранение, на 390 нет горизонтального overflow. Это Chrome emulation, не физический Safari/iPad и не проверка экранной клавиатуры.
 - POS без касс не зависает. Искусственно зависший shift после двух попыток показывает retry за 27.4 с; повтор восстанавливает страницу.
 - Безопасный `pnpm exec next build` прошёл с явно заданной localhost БД, VERCEL=0, без prebuild/миграций. Схема не менялась.
+- Дополнительный authenticated smoke `next start` на HTTP localhost не прошёл: production auth выдаёт secure-cookie, а middleware выбирает имя cookie по HTTP NEXTAUTH_URL. Это не проверка HTTPS production; auth приложения ради локального smoke не менялся.
+- Первый GitHub Android gate остановился в setup SDK до компиляции: `Failed to find package 'tools'`. В workflow явно выбран `platform-tools` вместо устаревшего default `tools platform-tools`; [описание входа packages](https://github.com/android-actions/setup-android/blob/v3/action.yml). Остальные версии/проверки сохранены.
 
 QA-сценарии: `scripts/qa/sept22-*`. Fixture требует строго localhost:55432/bazaar_hardening_ci;
 использовать только новую disposable БД с миграциями. Запустить dev на :3100 с той же БД/Redis и локальным image provider,

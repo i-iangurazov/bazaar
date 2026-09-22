@@ -369,6 +369,9 @@ jobs:
           java-version: 21
           cache: gradle
       - uses: android-actions/setup-android@v3
+        with:
+          # The legacy SDK "tools" package is no longer in Google's repository.
+          packages: platform-tools
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Validate and sync native project
