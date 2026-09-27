@@ -21,6 +21,43 @@ describeDb("POS idempotent event publication", () => {
     await resetDatabase();
   });
 
+  it("publishes cash movement updates after commit, without duplicating replays or failed writes", async () => {
+    const { org, store, cashierUser } = await seedBase({ plan: "BUSINESS" });
+    const register = await prisma.posRegister.create({ data: {
+      organizationId: org.id, storeId: store.id, name: "Cash Realtime", code: "CASH-RT",
+    } });
+    const caller = createTestCaller({
+      id: cashierUser.id, email: cashierUser.email, role: cashierUser.role,
+      organizationId: org.id, isOrgOwner: false,
+    });
+    const shift = await caller.pos.shifts.open({
+      registerId: register.id, openingCashKgs: 0, idempotencyKey: "cash-event-open",
+    });
+    const events: EventPayload[] = [];
+    const persistedReads: Promise<number>[] = [];
+    const unsubscribe = eventBus.subscribe((event) => {
+      if (event.type === "shift.updated") {
+        events.push(event);
+        persistedReads.push(prisma.cashDrawerMovement.count({ where: { shiftId: shift.id } }));
+      }
+    });
+    try {
+      const input = { shiftId: shift.id, type: "PAY_IN" as const, amountKgs: 50,
+        reason: "test float", idempotencyKey: "cash-event-record" };
+      const first = await caller.pos.cash.record(input);
+      expect((await caller.pos.cash.record(input)).id).toBe(first.id);
+      await expect(caller.pos.cash.record({ ...input, type: "PAY_OUT", amountKgs: 100,
+        idempotencyKey: "cash-event-denied" })).rejects.toMatchObject({
+          message: "posCashOutExceedsExpectedCash",
+        });
+      expect(events).toEqual([{ type: "shift.updated", payload: {
+        storeId: store.id, registerId: register.id, shiftId: shift.id,
+      } }]);
+      expect(await Promise.all(persistedReads)).toEqual([1]);
+      expect((await caller.pos.shifts.xReport({ shiftId: shift.id })).summary.expectedCashKgs).toBe(50);
+    } finally { unsubscribe(); }
+  });
+
   it("publishes shift events and metrics only for the committed attempt", async () => {
     const { org, store, cashierUser, managerUser } = await seedBase({ plan: "BUSINESS" });
     const register = await prisma.posRegister.create({

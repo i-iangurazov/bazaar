@@ -4131,6 +4131,7 @@ export const editCompletedPosSale = async (input: {
   });
 
   if (!result.replayed) {
+    notifyPosShiftChanged(result);
     result.changedItems.forEach((item) => {
       eventBus.publish({
         type: "inventory.updated",
@@ -6178,6 +6179,7 @@ export const editCompletedSaleReturn = async (input: {
   });
 
   if (!result.replayed) {
+    notifyPosShiftChanged(result);
     result.changedItems.forEach((item) => {
       eventBus.publish({
         type: "inventory.updated",
@@ -6646,17 +6648,17 @@ export const recordCashDrawerMovement = async (input: {
   idempotencyKey: string;
   user: StoreAccessUser;
 }) => {
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const target = await tx.registerShift.findFirst({
       where: { id: input.shiftId, organizationId: input.organizationId },
-      select: { storeId: true },
+      select: { storeId: true, registerId: true },
     });
     if (!target) {
       throw new AppError("posShiftNotFound", "NOT_FOUND", 404);
     }
     await assertUserCanAccessStore(tx, input.user, target.storeId);
 
-    const { result: movement } = await withIdempotency(
+    const { result: movement, replayed } = await withIdempotency(
       tx,
       {
         key: input.idempotencyKey,
@@ -6741,6 +6743,8 @@ export const recordCashDrawerMovement = async (input: {
       },
     );
 
-    return movement;
+    return { movement, replayed, scope: { ...target, shiftId: input.shiftId } };
   });
+  if (!result.replayed) notifyPosShiftChanged(result.scope);
+  return result.movement;
 };

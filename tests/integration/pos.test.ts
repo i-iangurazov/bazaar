@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CashDrawerMovementType,
   PosPaymentMethod,
@@ -9,6 +9,7 @@ import {
 import { buildPosPaymentSubmitPayload } from "@/lib/posSaleMath";
 import { fetchAllReceiptPages } from "@/components/pos/receipt-registry-export";
 import { prisma } from "@/server/db/prisma";
+import { eventBus } from "@/server/events/eventBus";
 import { adjustStock } from "@/server/services/inventory";
 import {
   connectorPullQueue,
@@ -23,6 +24,7 @@ import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 const describeDb = shouldRunDbTests ? describe : describe.skip;
 
 describeDb("pos", () => {
+  afterEach(() => vi.restoreAllMocks());
   let originalDatabaseTimeZone: { databaseName: string; timeZone: string } | null = null;
 
   beforeAll(async () => {
@@ -1436,6 +1438,7 @@ describeDb("pos", () => {
       payments: [{ method: PosPaymentMethod.CASH, amountKgs: 1080 }],
     });
 
+    const publish = vi.spyOn(eventBus, "publish");
     const edited = await caller.pos.sales.editCompleted({
       saleId: sale.id,
       customerName: "Edited Customer",
@@ -1489,6 +1492,7 @@ describeDb("pos", () => {
     });
 
     expect(replayedEdit.totalKgs).toBe(780);
+    expect(publish.mock.calls.filter(([event]) => event.type === "shift.updated")).toHaveLength(1);
 
     const detail = await caller.pos.sales.get({ saleId: sale.id });
     expect(detail?.customerName).toBe("Edited Customer");
@@ -1852,6 +1856,7 @@ describeDb("pos", () => {
       payments: [{ method: PosPaymentMethod.CASH, amountKgs: 200 }],
     });
 
+    const publish = vi.spyOn(eventBus, "publish");
     const edited = await managerCaller.pos.returns.editCompleted({
       saleReturnId: returnDraft.id,
       notes: "Edited return",
@@ -1875,6 +1880,9 @@ describeDb("pos", () => {
     });
     expect(edited.totalKgs).toBe(130);
     expect(edited.refundDeltaKgs).toBe(-70);
+    expect(publish).toHaveBeenCalledWith({
+      type: "shift.updated", payload: { storeId: store.id, registerId: register.id, shiftId: shift.id },
+    });
 
     const returnDetail = await managerCaller.pos.returns.get({ saleReturnId: returnDraft.id });
     expect(returnDetail?.notes).toBe("Edited return");
