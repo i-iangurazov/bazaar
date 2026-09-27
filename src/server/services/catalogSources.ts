@@ -719,10 +719,26 @@ export async function saveCatalogSettings(input: {
                 })),
                 skipDuplicates: true,
               });
+              const baselineIds = r.g.sources.get(`baseline:${r.store.id}`)?.memberIds ?? [];
               await tx.storeProduct.updateMany({
-                where: { storeId: r.store.id, isDirect: false },
+                where: {
+                  storeId: r.store.id,
+                  isDirect: false,
+                  ...(baselineIds.length ? { productId: { notIn: baselineIds } } : {}),
+                },
                 data: { isActive: false, isHistorical: false },
               });
+              // Retain the baseline's existing editing permissions. Configured stores
+              // derive visibility from enabled subscriptions, never this historical flag.
+              if (baselineIds.length)
+                await tx.storeProduct.updateMany({
+                  where: {
+                    storeId: r.store.id,
+                    isDirect: false,
+                    productId: { in: baselineIds },
+                  },
+                  data: { isActive: false },
+                });
               // The BEFORE trigger computes the exact union from enabled catalogues on this update.
               const actual = await tx.storeProduct.findMany({
                 where: {

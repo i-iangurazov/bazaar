@@ -9,6 +9,7 @@ import {
 } from "@/server/services/assortmentRecovery";
 import { syncProductCatalogAssignments } from "@/server/services/productCatalogs";
 import { createProduct } from "@/server/services/products";
+import { assertUserCanAccessProducts } from "@/server/services/productAccess";
 import { createTestCaller } from "../helpers/context";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 
@@ -160,6 +161,14 @@ import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
       expect(await f.visible(f.stores[i].id)).toEqual([...f.originals[i]].sort());
     expect(await prisma.storeProduct.count({ where: { isDirect: true } })).toBe(0);
     const [a, b, c] = f.stores;
+    await prisma.userStoreAccess.updateMany({
+      where: { userId: f.managerUser.id },
+      data: { storeId: b.id },
+    });
+    const manager = { ...f.managerUser, organizationId: f.org.id };
+    const writableBaseline = () =>
+      assertUserCanAccessProducts(prisma, manager, f.originals[1], { writable: true });
+    await expect(writableBaseline()).resolves.toBeUndefined();
     const overview = await f.caller.stores.catalogSettings({ storeId: b.id });
     expect(overview.sources.find((s) => s.key === `store:${a.id}`)?.total).toBe(2);
     expect(overview.stores.find((s) => s.id === b.id)).toMatchObject({
@@ -168,6 +177,10 @@ import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
       hasBaseline: true,
     });
     await f.connect(b.id, a.id);
+    await expect(writableBaseline()).resolves.toBeUndefined();
+    await expect(
+      assertUserCanAccessProducts(prisma, manager, f.originals[0], { writable: true }),
+    ).rejects.toThrow("productAccessDenied");
     await f.connect(c.id, b.id);
     expect(await f.visible(b.id)).toEqual([...f.originals[0], ...f.originals[1]].sort());
     expect(await f.visible(c.id)).toEqual([...f.originals[1], ...f.originals[2]].sort());
@@ -183,6 +196,7 @@ import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
     expect(await f.visible(a.id)).not.toContain(next.id);
     expect(await f.visible(c.id)).toContain(next.id);
     await f.connect(b.id, a.id, false);
+    await expect(writableBaseline()).resolves.toBeUndefined();
     expect(await f.visible(b.id)).toEqual([...f.originals[1], next.id].sort());
     expect((await f.caller.stores.catalogSettings({ storeId: b.id })).total).toBe(2);
     const invalid = (await f.caller.stores.catalogSettings({ storeId: b.id })).settings!;

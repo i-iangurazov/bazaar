@@ -366,9 +366,11 @@ export default function StoreGroupsPage() {
                       </span>
                       <span
                         className="shrink-0 text-xs tabular-nums text-muted-foreground"
-                        aria-label={t("storeCount", {
-                          count: s.hasBaseline ? s.baseCount : s.availableCount,
-                        })}
+                        aria-label={
+                          s.hasBaseline
+                            ? `${t("ownCatalog")}: ${s.baseCount}`
+                            : t("storeCount", { count: s.availableCount })
+                        }
                       >
                         {(s.hasBaseline ? s.baseCount : s.availableCount).toLocaleString(locale)}
                       </span>
