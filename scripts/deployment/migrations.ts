@@ -7,6 +7,9 @@ import { PrismaClient } from "@prisma/client";
 
 // Review each additive migration before adding it to the production rollout.
 export const approvedProductionMigrations = {
+  "20260928010000_directional_assortments": "9167211cb9a8db9284f868a4ee00413fe05cbc1995e2ae3274394fffbac47ae4",
+  "20260928020000_sale_channel": "8025720884209a3ddcbf2535a1d9a413053423417dcf8351d996b9f908d586ca",
+  "20260928030000_customer_purchase_identity": "317e494cacd638de634287cf2886711776de1a2fd4119a6dd4a2780eee52b728",
   "20260911001500_baam_workflows": "c09ddb810b7bf1e7f770cbbbaf03d6b3bb034cfc18f5c3c273463ac1111f7303",
   "20260910013000_baam_companion": "875212109f6f7c66bc5b555b43a3bd3d729fb60481a5136a090faa9e3709fec5",
   "20260910000000_inventory_stock_version": "f8a60abef26b45afa0e185ba8623b4e7ab7eb353e6dec5ea42a82418742749df",

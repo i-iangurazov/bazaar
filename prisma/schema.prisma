@@ -60,6 +60,11 @@ enum CustomerOrderSource {
   API
 }
 
+enum SaleChannel {
+  IN_STORE
+  ONLINE
+}
+
 enum OperationRequestStatus {
   PROCESSING
   COMPLETED
@@ -514,6 +519,7 @@ model Organization {
   userStoreAccesses           UserStoreAccess[]
   stores                      Store[]
   productCatalogs             ProductCatalog[]
+  assortmentRules             AssortmentRule[]
   storeProducts               StoreProduct[]
   suppliers                   Supplier[]
   products                    Product[]
@@ -745,6 +751,9 @@ model MobileDevice {
 }
 
 model Store {
+  directedAssortment        Boolean          @default(false)
+  incomingAssortmentRules   AssortmentRule[]  @relation("assortmentTarget")
+  outgoingAssortmentRules   AssortmentRule[]  @relation("assortmentSource")
   id                        String           @id @default(cuid())
   organizationId            String
   productCatalogId          String?
@@ -1458,6 +1467,7 @@ model StoreCategoryPreference {
 }
 
 model Product {
+  assortmentGrants AssortmentGrant[]
   id             String   @id @default(cuid())
   organizationId String
   supplierId     String?
@@ -1519,6 +1529,8 @@ model StoreProduct {
   storeId        String
   productId      String
   isActive       Boolean  @default(true)
+  isDirect       Boolean  @default(false)
+  isHistorical   Boolean  @default(true)
   assignedById   String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -1531,6 +1543,43 @@ model StoreProduct {
   @@unique([storeId, productId])
   @@index([organizationId, storeId, isActive])
   @@index([organizationId, productId, isActive])
+}
+
+// An explicit edge. Fixed selections may contain reviewed historical products;
+// receiving a grant never adds a product to the target's eligible source pool.
+model AssortmentRule {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  sourceStoreId      String
+  targetStoreId      String
+  label              String?
+  scope              String
+  includeFuture      Boolean  @default(true)
+  selectedProductIds String[] @default([])
+  active             Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  sourceStore Store @relation("assortmentSource", fields: [sourceStoreId], references: [id], onDelete: Restrict)
+  targetStore Store @relation("assortmentTarget", fields: [targetStoreId], references: [id], onDelete: Restrict)
+  grants AssortmentGrant[]
+
+  @@unique([sourceStoreId, targetStoreId])
+  @@index([organizationId, active])
+}
+
+// Retained even when a rule is paused or its scope changes.
+model AssortmentGrant {
+  id        String   @id @default(cuid())
+  ruleId    String
+  productId String
+  createdAt DateTime @default(now())
+  rule      AssortmentRule @relation(fields: [ruleId], references: [id], onDelete: Restrict)
+  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@unique([ruleId, productId])
+  @@index([productId])
 }
 
 model ProductImage {
@@ -1842,9 +1891,12 @@ model CustomerOrder {
   number                  String
   status                  CustomerOrderStatus @default(DRAFT)
   source                  CustomerOrderSource @default(MANUAL)
+  saleChannel             SaleChannel?
   externalOrderId         String?             @db.VarChar(160)
   isPosSale               Boolean             @default(false)
   customerName            String?
+  customerId              String?
+  customer                Customer? @relation(fields: [customerId], references: [id], onDelete: Restrict)
   customerEmail           String?
   customerPhone           String?
   customerAddress         String?
@@ -1902,6 +1954,8 @@ model CustomerOrder {
   @@index([organizationId, status, createdAt])
   @@index([organizationId, storeId, source, externalOrderId], map: "CustomerOrder_external_identity_idx")
   @@index([organizationId, createdAt])
+  @@index([organizationId, saleChannel, storeId, status, completedAt], map: "CustomerOrder_commercial_channel_report_idx")
+  @@index([organizationId, customerId, storeId, status, completedAt], map: "CustomerOrder_customer_report_idx")
   @@index([organizationId, isPosSale, createdAt])
   @@index([organizationId, isPosSale, isHeld, status, createdAt])
   @@index([registerId, isHeld, status, createdAt])
@@ -1916,6 +1970,7 @@ model CustomerOrder {
 }
 
 model Customer {
+  purchases                    CustomerOrder[]
   id                           String         @id @default(cuid())
   organizationId               String
   storeId                      String
