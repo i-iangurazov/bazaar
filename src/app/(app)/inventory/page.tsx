@@ -131,7 +131,7 @@ import { isInlineEditingEnabled } from "@/lib/inlineEdit/featureFlag";
 import { inlineEditRegistry, type InlineMutationOperation } from "@/lib/inlineEdit/registry";
 
 const inventoryViewModeSchema = z.enum(["table", "grid"]);
-const inventoryStockFilterSchema = z.enum(["all", "lowStock", "outOfStock", "negativeStock"]);
+const inventoryStockFilterSchema = z.enum(["all", "lowStock", "outOfStock", "negativeStock", "notInAssortment"]);
 const inventorySortKeySchema = z.enum([
   "sku",
   "image",
@@ -628,6 +628,7 @@ const InventoryPage = () => {
     () =>
       [
         { value: "all", label: t("stockFilterAll") },
+        { value: "notInAssortment", label: t("notInAssortment") },
         { value: "lowStock", label: t("lowStock") },
         { value: "outOfStock", label: t("outOfStock") },
         { value: "negativeStock", label: t("summaryNegativeStock") },
@@ -2028,6 +2029,7 @@ const InventoryPage = () => {
 
   useSse({
     "inventory.updated": () => inventoryQuery.refetch(),
+    "assortment.updated": () => inventoryQuery.refetch(),
     "lowStock.triggered": () => inventoryQuery.refetch(),
   });
 

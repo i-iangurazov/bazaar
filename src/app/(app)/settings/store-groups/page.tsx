@@ -1,615 +1,873 @@
 "use client";
-
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useTranslations } from "next-intl";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useTranslations, useLocale } from "next-intl";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@/server/trpc/routers/_app";
-import type { AssortmentChange } from "@/server/services/storeAssortments";
+import type { CatalogSettings } from "@/server/services/catalogSources";
 import { PageHeader } from "@/components/page-header";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Modal } from "@/components/ui/modal";
+import { Switch } from "@/components/ui/switch";
 import { Spinner } from "@/components/ui/spinner";
-import { translateError } from "@/lib/translateError";
+import { QueryErrorState } from "@/components/query-error-state";
 import { trpc } from "@/lib/trpc";
+import { useSse } from "@/lib/useSse";
+import { translateError } from "@/lib/translateError";
+import { formatDateTime } from "@/lib/i18nFormat";
 
-type Preview = inferRouterOutputs<AppRouter>["stores"]["previewAssortmentShare"];
+type Output = inferRouterOutputs<AppRouter>;
+type Preview = Output["stores"]["previewCatalogSettings"];
+type Source = Output["stores"]["catalogSettings"]["sources"][number];
+type Connection = CatalogSettings["connections"][number];
 
 export default function StoreGroupsPage() {
-  const t = useTranslations("assortments"),
+  const t = useTranslations("catalogSources"),
     common = useTranslations("common"),
-    errors = useTranslations("errors");
+    errors = useTranslations("errors"),
+    locale = useLocale();
   const utils = trpc.useUtils();
-  const overview = trpc.stores.assortmentOverview.useQuery();
-  const stores = overview.data?.stores ?? [];
-  const [source, setSource] = useState("");
-  const [targets, setTargets] = useState<string[]>([]);
-  const [scope, setScope] = useState<"ALL" | "SELECTED">("ALL");
-  const [future, setFuture] = useState(true);
-  const [mutual, setMutual] = useState(false);
-  const [label, setLabel] = useState("");
-  const [selected, setSelected] = useState<string[]>([]);
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
-  const [historyPage, setHistoryPage] = useState(1);
-  const [showHistory, setShowHistory] = useState(false);
-  const [approval, setApproval] = useState<{ preview: Preview; key: string } | null>(null);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const selected = searchParams.get("storeId") || undefined;
+  const setSelected = (id: string) =>
+    router.replace(`/settings/store-groups?storeId=${encodeURIComponent(id)}`, { scroll: false });
+  const overview = trpc.stores.catalogSettings.useQuery({ storeId: selected });
+  useSse({ "assortment.updated": () => overview.refetch() });
+  const data = overview.data,
+    store = data?.store;
+  const [draft, setDraft] = useState<CatalogSettings | null>(null);
+  const [approval, setApproval] = useState<{
+    preview: Preview;
+    changeKey: string;
+    idempotencyKey: string;
+  } | null>(null);
+  const [error, setError] = useState<unknown>(null),
+    [previewLoading, setPreviewLoading] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [storeSearch, setStoreSearch] = useState(""),
+    [addOpen, setAddOpen] = useState(false),
+    [addSearch, setAddSearch] = useState("");
+  const [pendingStore, setPendingStore] = useState<string | null>(null);
+  const [detail, setDetail] = useState<Source | null>(null),
+    [detailMode, setDetailMode] = useState<"view" | "selection" | "ownership">("view");
+  const [search, setSearch] = useState(""),
+    [debouncedSearch, setDebouncedSearch] = useState(""),
+    [page, setPage] = useState(1);
+  const [ownership, setOwnership] = useState<string[]>([]),
+    [bulkLoading, setBulkLoading] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false),
+    [historyPage, setHistoryPage] = useState(1);
+  const current = draft ?? data?.settings;
   const revision = useRef(0);
-  const editor = useRef<HTMLDivElement>(null);
-  const products = trpc.stores.assortmentSourceProducts.useQuery(
-    { storeId: source, search: search || undefined, page },
-    { enabled: !!source && scope === "SELECTED", keepPreviousData: true },
-  );
-  const history = trpc.stores.assortmentHistory.useQuery(
-    { page: historyPage },
-    { enabled: showHistory },
-  );
-  const previewMutation = trpc.stores.previewAssortmentShare.useMutation();
-  const applyMutation = trpc.stores.applyAssortmentShare.useMutation({
-    onSuccess: async () => {
-      clearPreview();
-      await utils.invalidate();
+  const previewMutation = trpc.stores.previewCatalogSettings.useMutation();
+  const saveMutation = trpc.stores.saveCatalogSettings.useMutation();
+  const products = trpc.stores.catalogProducts.useQuery(
+    {
+      storeId: store?.id ?? "",
+      key: detail?.key ?? "",
+      search: debouncedSearch || undefined,
+      page,
     },
-  });
-  const clearPreview = () => {
+    { enabled: !!store && !!detail, keepPreviousData: true },
+  );
+  const history = trpc.stores.catalogSettingsHistory.useQuery(
+    { storeId: store?.id ?? "", page: historyPage },
+    { enabled: historyOpen && !!store },
+  );
+  const { mutateAsync: requestPreview } = previewMutation;
+  const draftKey = JSON.stringify(draft);
+  useEffect(() => {
+    const id = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 250);
+    return () => clearTimeout(id);
+  }, [search]);
+  useEffect(() => {
+    if (!draft) return;
+    const id = ++revision.current;
+    let active = true;
+    setPreviewLoading(true);
+    const timer = setTimeout(() => {
+      void requestPreview(draft)
+        .then((preview) => {
+          if (active && id === revision.current) {
+            setApproval({ preview, changeKey: draftKey, idempotencyKey: crypto.randomUUID() });
+            setError(null);
+          }
+        })
+        .catch((e) => {
+          if (active && id === revision.current) setError(e);
+        })
+        .finally(() => {
+          if (active && id === revision.current) setPreviewLoading(false);
+        });
+    }, 250);
+    return () => {
+      clearTimeout(timer);
+      active = false;
+    };
+  }, [draft, draftKey, requestPreview]);
+  useEffect(() => {
+    if (!draft) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [draft]);
+  function edit(next: CatalogSettings) {
     revision.current++;
     setApproval(null);
-    previewMutation.reset();
-    applyMutation.reset();
-  };
-  const storeName = (id: string) => stores.find((s) => s.id === id)?.name ?? id;
-  const toggle = (values: string[], id: string) =>
-    values.includes(id) ? values.filter((v) => v !== id) : [...values, id];
-  async function preview(change: AssortmentChange) {
-    clearPreview();
-    const current = revision.current;
+    setError(null);
+    setNotice("");
+    setDraft(next);
+  }
+  function update(key: string, patch: Partial<Connection>) {
+    if (!current) return;
+    const found = current.connections.find((c) => c.key === key);
+    const changed = {
+      key,
+      enabled: true,
+      scope: "ALL" as const,
+      productIds: [],
+      ...found,
+      ...patch,
+    };
+    edit({
+      ...current,
+      connections: found
+        ? current.connections.map((c) => (c.key === key ? changed : c))
+        : [...current.connections, changed],
+    });
+  }
+  function cancel() {
+    revision.current++;
+    setDraft(null);
+    setApproval(null);
+    setError(null);
+    setNotice("");
+    setPreviewLoading(false);
+  }
+  function selectStore(id: string) {
+    if (id === store?.id) return;
+    if (draft) {
+      setPendingStore(id);
+      return;
+    }
+    cancel();
+    setSelected(id);
+    setDetail(null);
+  }
+  async function save(switchAfter?: string) {
+    if (!draft || !approval || approval.changeKey !== draftKey || saveMutation.isLoading) return;
     try {
-      const result = await previewMutation.mutateAsync(change);
-      if (current === revision.current) setApproval({ preview: result, key: crypto.randomUUID() });
-    } catch {
-      /* Visible mutation error below. */
+      await saveMutation.mutateAsync({
+        change: draft,
+        token: approval.preview.token,
+        idempotencyKey: approval.idempotencyKey,
+      });
+      await utils.invalidate();
+      await overview.refetch();
+      cancel();
+      setNotice(t("saved"));
+      if (switchAfter) {
+        setPendingStore(null);
+        setSelected(switchAfter);
+      }
+    } catch (e) {
+      setError(e);
+      if (e instanceof Error && e.message === "assortmentPreviewStale") {
+        setApproval(null);
+        setNotice(t("stale"));
+        setDraft({ ...draft });
+      }
     }
   }
-  function editStore(storeId: string) {
-    clearPreview();
-    setSource(storeId);
-    setTargets([]);
-    setSelected([]);
-    setPage(1);
+  function openDetail(source: Source, mode: "view" | "selection" | "ownership" = "view") {
+    setDetail(source);
+    setDetailMode(mode);
     setSearch("");
-    editor.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setPage(1);
+    setOwnership([]);
+    if (mode === "selection") update(source.key, { scope: "SELECTED" });
   }
-  const error = overview.error ?? products.error ?? previewMutation.error ?? applyMutation.error;
-  const impact = approval?.preview;
-  return (
-    <div className="space-y-6">
-      <PageHeader title={t("title")} subtitle={t("subtitle")} />
-      <p className="text-sm text-muted-foreground">{t("customerNote")}</p>
-      {error ? (
-        <div role="alert" className="bazaar-admin-error">
-          {translateError(errors, error)}{" "}
-          <Button variant="secondary" onClick={() => void overview.refetch()}>
-            {t("retry")}
+  const connection = detail ? current?.connections.find((c) => c.key === detail.key) : undefined;
+  const selectedIds = detailMode === "ownership" ? ownership : (connection?.productIds ?? []);
+  function setSelection(ids: string[]) {
+    if (!detail) return;
+    if (detailMode === "ownership") setOwnership(ids);
+    else update(detail.key, { scope: "SELECTED", productIds: ids });
+  }
+  function toggleProduct(id: string) {
+    setSelection(
+      selectedIds.includes(id) ? selectedIds.filter((p) => p !== id) : [...selectedIds, id],
+    );
+  }
+  async function selectAllMatches() {
+    if (!store || !detail) return;
+    setBulkLoading(true);
+    try {
+      const r = await utils.stores.catalogProducts.fetch({
+        storeId: store.id,
+        key: detail.key,
+        search: debouncedSearch || undefined,
+        page: 1,
+        allIds: true,
+      });
+      setSelection([
+        ...new Set([
+          ...selectedIds,
+          ...r.items.filter((p) => detailMode !== "ownership" || p.available).map((p) => p.id),
+        ]),
+      ]);
+    } catch (e) {
+      setError(e);
+    } finally {
+      setBulkLoading(false);
+    }
+  }
+  const sourceByKey = (key: string) => data?.sources.find((s) => s.key === key);
+  const own = data?.sources.find((s) => s.key === `store:${store?.id}`);
+  const canSave =
+    !!draft &&
+    !!approval &&
+    approval.changeKey === draftKey &&
+    !previewLoading &&
+    !saveMutation.isLoading;
+  const availableSources = (data?.sources ?? []).filter(
+    (s) =>
+      s.key !== own?.key &&
+      !current?.connections.some((c) => c.key === s.key) &&
+      `${s.name} ${s.sourceName ?? ""}`.toLocaleLowerCase().includes(addSearch.toLocaleLowerCase()),
+  );
+  function sourceRow(source: Source, c?: Connection) {
+    return (
+      <div
+        key={source.key}
+        className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 border-t border-border py-4 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_110px_130px] md:items-center"
+        data-source-key={source.key}
+      >
+        <div className="min-w-0">
+          <p className="break-words font-medium">{c ? source.name : t("ownCatalog")}</p>
+          {c?.scope === "SELECTED" ? (
+            <p className="text-xs text-muted-foreground">
+              {t("partial", {
+                selected: c.productIds.filter((id) => !source.unavailableSelectedIds.includes(id))
+                  .length,
+                total: source.total,
+              })}
+            </p>
+          ) : null}
+          <Button
+            variant="link"
+            size="sm"
+            className="h-auto px-0 py-1"
+            onClick={() => openDetail(source)}
+          >
+            {t("details")}
           </Button>
         </div>
-      ) : null}
+        <p className="order-3 col-start-1 text-sm text-muted-foreground md:order-none md:col-start-auto">
+          {c ? (source.sourceName ?? t("sharedSource")) : t("thisStore")}
+        </p>
+        <Button
+          variant="link"
+          size="sm"
+          className="order-4 justify-end px-0 md:order-none md:justify-start"
+          onClick={() => openDetail(source)}
+          aria-label={t("viewCatalog", { name: source.name })}
+        >
+          {source.total.toLocaleString(locale)}
+        </Button>
+        {c ? (
+          <label className="order-2 flex items-center gap-2 self-start pt-1 text-sm md:order-none md:self-auto md:pt-0">
+            <Switch
+              aria-label={t("accessLabel", { name: source.name })}
+              checked={c.enabled}
+              disabled={saveMutation.isLoading}
+              onCheckedChange={(enabled) => update(c.key, { enabled })}
+            />
+            <span>{t(c.enabled ? "enabled" : "disabled")}</span>
+          </label>
+        ) : (
+          <span className="order-2 text-sm text-muted-foreground md:order-none">{t("owned")}</span>
+        )}
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-5">
+      <PageHeader title={t("title")} />
       {overview.isLoading ? (
-        <div role="status">
+        <div role="status" className="flex gap-2">
           <Spinner />
           {common("loading")}
         </div>
-      ) : null}
-      {!overview.isLoading && !stores.length ? <p>{t("empty")}</p> : null}
-      <div className="grid gap-4 lg:grid-cols-2">
-        {stores.map((store) => (
-          <Card key={store.id}>
-            <CardHeader>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <CardTitle>{store.name}</CardTitle>
-                <Badge variant="muted">{t(`modes.${store.mode}`)}</Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <p className="text-sm">
-                <strong>{t("receives")}: </strong>
-                {store.incoming.map((r) => storeName(r.sourceStoreId)).join(", ") || t("none")}
-              </p>
-              <p className="text-sm">
-                <strong>{t("shares")}: </strong>
-                {store.outgoing.map((r) => storeName(r.targetStoreId)).join(", ") || t("none")}
-              </p>
-              {store.legacyPeers.length ? (
-                <p className="text-sm text-warning">
-                  {t("legacyPeers", { stores: store.legacyPeers.map((s) => s.name).join(", ") })}
-                </p>
+      ) : overview.error ? (
+        <QueryErrorState onRetry={() => void overview.refetch()} />
+      ) : !store ? (
+        <p>{t("noStores")}</p>
+      ) : (
+        <div className="grid items-start gap-5 lg:grid-cols-[240px_minmax(0,1fr)]">
+          <aside className="rounded-xl border border-border bg-card p-3">
+            <label
+              htmlFor="assortment-store-mobile"
+              className="mb-2 block text-sm font-medium lg:hidden"
+            >
+              {t("store")}
+            </label>
+            <select
+              id="assortment-store-mobile"
+              className="h-10 w-full rounded-md border border-input bg-background px-3 lg:hidden"
+              value={store.id}
+              disabled={saveMutation.isLoading}
+              onChange={(e) => selectStore(e.target.value)}
+            >
+              {data!.stores.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+            <div className="hidden lg:block">
+              {data!.stores.length > 12 ? (
+                <Input
+                  aria-label={t("searchStores")}
+                  placeholder={t("searchStores")}
+                  value={storeSearch}
+                  onChange={(e) => setStoreSearch(e.target.value)}
+                  className="mb-2"
+                />
               ) : null}
-              <dl className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
-                {(["direct", "historical", "received", "total"] as const).map((key) => (
-                  <div key={key}>
-                    <dt className="text-muted-foreground">{t(key)}</dt>
-                    <dd className="font-semibold tabular-nums">{store.counts[key]}</dd>
-                  </div>
-                ))}
-              </dl>
-              <div className="flex flex-wrap gap-2">
-                <Button variant="secondary" asChild>
-                  <Link href={`/products?storeId=${encodeURIComponent(store.id)}`}>
-                    {t("products")}
-                  </Link>
-                </Button>
-                <Button variant="secondary" onClick={() => editStore(store.id)}>
-                  {t("manage")}
-                </Button>
+              <nav aria-label={t("store")} className="max-h-[70vh] space-y-1 overflow-y-auto">
+                {data!.stores
+                  .filter((s) =>
+                    `${s.name} ${s.code}`
+                      .toLocaleLowerCase()
+                      .includes(storeSearch.toLocaleLowerCase()),
+                  )
+                  .map((s) => (
+                    <button
+                      type="button"
+                      key={s.id}
+                      aria-current={s.id === store.id ? "page" : undefined}
+                      disabled={saveMutation.isLoading}
+                      onClick={() => selectStore(s.id)}
+                      className={`flex w-full items-center justify-between gap-2 rounded-md px-3 py-2.5 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${s.id === store.id ? "bg-primary/10 font-medium text-primary" : "hover:bg-muted"}`}
+                    >
+                      <span className="truncate" title={s.name}>
+                        {s.name}
+                      </span>
+                      {s.code.length <= 8 ? (
+                        <span className="shrink-0 text-[10px] text-muted-foreground">{s.code}</span>
+                      ) : null}
+                    </button>
+                  ))}
+              </nav>
+            </div>
+          </aside>
+          <Card>
+            <CardContent className="p-4 sm:p-6">
+              <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-semibold">{store.name}</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
+                </div>
                 <Button
                   variant="ghost"
+                  size="sm"
                   onClick={() => {
-                    setShowHistory(true);
                     setHistoryPage(1);
+                    setHistoryOpen(true);
                   }}
                 >
                   {t("history")}
                 </Button>
-                {!store.directedAssortment ? (
-                  <Button
-                    variant="ghost"
-                    disabled={applyMutation.isLoading}
-                    onClick={() => void preview({ action: "CONVERT", storeIds: [store.id] })}
-                  >
-                    {t("makeIndependent")}
-                  </Button>
-                ) : null}
               </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {overview.data?.rules.length ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("rules")}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {overview.data.rules.map((rule) => (
-              <div
-                key={rule.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3"
-              >
-                <div className="text-sm">
-                  <strong>
-                    {storeName(rule.sourceStoreId)} → {storeName(rule.targetStoreId)}
+              <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <strong className="text-2xl tabular-nums" data-testid="assortment-total">
+                    {data!.total.toLocaleString(locale)}
                   </strong>
-                  <p>
-                    {rule.label} · {t(rule.active ? "active" : "paused")} ·{" "}
-                    {t(rule.scope === "ALL" ? "allEligible" : "selection")} ·{" "}
-                    {t(rule.includeFuture ? "futureOn" : "futureOff")}
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="secondary"
-                    onClick={() => {
-                      editStore(rule.sourceStoreId);
-                      setTargets([rule.targetStoreId]);
-                      setScope(rule.scope as "ALL" | "SELECTED");
-                      setSelected(rule.scope === "SELECTED" ? rule.selectedProductIds : []);
-                      setFuture(rule.includeFuture);
-                      setLabel(rule.label ?? "");
-                      setMutual(false);
-                    }}
+                  <span className="ml-2 text-sm text-muted-foreground">
+                    {t("distinctProducts")}
+                  </span>
+                  <Link
+                    className="ml-3 text-sm text-primary underline"
+                    href={`/products?storeId=${encodeURIComponent(store.id)}`}
                   >
-                    {t("edit")}
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    disabled={applyMutation.isLoading}
-                    onClick={() =>
-                      void preview({ action: rule.active ? "PAUSE" : "RESUME", ruleIds: [rule.id] })
-                    }
-                  >
-                    {t(rule.active ? "pause" : "resume")}
-                  </Button>
+                    {t("viewProducts")}
+                  </Link>
                 </div>
-              </div>
-            ))}
-            <p className="text-xs text-muted-foreground">{t("retention")}</p>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      <div ref={editor}>
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("editor")}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <fieldset disabled={applyMutation.isLoading} className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>{t("source")}</Label>
-                  <Select
-                    value={source}
-                    onValueChange={(value) => {
-                      clearPreview();
-                      setSource(value);
-                      setTargets(targets.filter((id) => id !== value));
-                      setSelected([]);
-                      setPage(1);
-                    }}
-                  >
-                    <SelectTrigger aria-label={t("source")}>
-                      <SelectValue placeholder={t("source")} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {stores.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          {s.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="assortment-label">{t("label")}</Label>
-                  <Input
-                    id="assortment-label"
-                    maxLength={120}
-                    value={label}
-                    onChange={(e) => {
-                      clearPreview();
-                      setLabel(e.target.value);
-                    }}
-                  />
-                  <p className="text-xs text-muted-foreground">{t("labelHint")}</p>
-                </div>
-              </div>
-              <fieldset className="space-y-2">
-                <legend className="text-sm font-medium">{t("targets")}</legend>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {stores
-                    .filter((s) => s.id !== source)
-                    .map((s) => (
-                      <label key={s.id} className="flex items-center gap-2 rounded-lg border p-3">
-                        <input
-                          type="checkbox"
-                          checked={targets.includes(s.id)}
-                          onChange={() => {
-                            clearPreview();
-                            setTargets(toggle(targets, s.id));
-                          }}
-                        />
-                        {s.name}
-                      </label>
-                    ))}
-                </div>
-              </fieldset>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={mutual}
-                  onChange={(e) => {
-                    clearPreview();
-                    setMutual(e.target.checked);
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={saveMutation.isLoading}
+                  onClick={() => {
+                    setAddSearch("");
+                    setAddOpen(true);
                   }}
-                />
-                {t("mutual")}
-              </label>
-              <p className="text-sm text-muted-foreground">
-                {t(mutual ? "mutualHint" : "oneWayHint")}
-              </p>
-              <Select
-                value={scope}
-                onValueChange={(value) => {
-                  clearPreview();
-                  setScope(value as "ALL" | "SELECTED");
-                }}
+                >
+                  {t("addSource")}
+                </Button>
+              </div>
+              <div
+                className="hidden grid-cols-[minmax(0,2fr)_minmax(0,1fr)_110px_130px] gap-3 pb-2 text-xs font-medium text-muted-foreground md:grid"
+                aria-hidden="true"
               >
-                <SelectTrigger aria-label={t("scope")}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">{t("allEligible")}</SelectItem>
-                  <SelectItem value="SELECTED">{t("selection")}</SelectItem>
-                </SelectContent>
-              </Select>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  disabled={scope === "SELECTED"}
-                  checked={scope === "ALL" && future}
-                  onChange={(e) => {
-                    clearPreview();
-                    setFuture(e.target.checked);
-                  }}
-                />
-                {t("futureOn")}
-              </label>
-              <p className="text-xs text-muted-foreground">
-                {t(scope === "SELECTED" || !future ? "futureOffHint" : "futureHint")}
-              </p>
-              <p className="text-sm text-warning">{t("provenanceHint")}</p>
-              {scope === "SELECTED" && source ? (
-                <div className="space-y-3 rounded-lg border p-3">
-                  <Input
-                    aria-label={t("search")}
-                    placeholder={t("search")}
-                    value={search}
-                    onChange={(e) => {
-                      setSearch(e.target.value);
-                      setPage(1);
-                    }}
-                  />
-                  <p className="text-sm">{t("selected", { count: selected.length })}</p>
-                  {products.isLoading ? <Spinner /> : null}
-                  {products.data?.items.map((row) => (
-                    <label
-                      key={row.product.id}
-                      className="flex items-start gap-3 border-b py-2 text-sm"
-                    >
-                      <input
-                        type="checkbox"
-                        className="mt-1"
-                        checked={selected.includes(row.product.id)}
-                        onChange={() => {
-                          clearPreview();
-                          setSelected(toggle(selected, row.product.id));
-                        }}
-                      />
-                      <span>
-                        {row.product.name}{" "}
-                        <span className="text-muted-foreground">
-                          {row.product.sku} ·{" "}
-                          {t(
-                            row.isDirect ? "direct" : row.isHistorical ? "historical" : "received",
-                          )}
-                        </span>
-                      </span>
-                    </label>
-                  ))}
-                  {products.data?.total === 0 ? <p>{t("noProducts")}</p> : null}
-                  <div className="flex items-center gap-3">
-                    <Button
-                      variant="secondary"
-                      disabled={page <= 1 || products.isFetching}
-                      onClick={() => setPage(page - 1)}
-                    >
-                      {t("previous")}
+                <span>{t("catalog")}</span>
+                <span>{t("source")}</span>
+                <span>{t("products")}</span>
+                <span>{t("access")}</span>
+              </div>
+              {own && data!.ownCount > 0 ? sourceRow(own) : null}
+              {current?.connections.map((c) => {
+                const source = sourceByKey(c.key);
+                return source ? sourceRow(source, c) : null;
+              })}
+              {!data!.ownCount && !current?.connections.length ? (
+                <p className="border-t py-6 text-sm text-muted-foreground">{t("empty")}</p>
+              ) : null}
+              {notice ? (
+                <p role="status" className="mt-4 text-sm">
+                  {notice}
+                </p>
+              ) : null}
+              {error ? (
+                <div
+                  role="alert"
+                  className="mt-4 rounded-md border border-destructive/30 p-3 text-sm text-destructive"
+                >
+                  {translateError(errors, error as Parameters<typeof translateError>[1])}
+                  {draft && !saveMutation.isLoading ? (
+                    <Button variant="link" size="sm" onClick={() => setDraft({ ...draft })}>
+                      {t("retry")}
                     </Button>
-                    <span>{page}</span>
-                    <Button
-                      variant="secondary"
-                      disabled={products.isFetching || page * 25 >= (products.data?.total ?? 0)}
-                      onClick={() => setPage(page + 1)}
-                    >
-                      {t("next")}
-                    </Button>
-                  </div>
+                  ) : null}
                 </div>
               ) : null}
-              <p className="font-medium">
-                {source ? storeName(source) : t("source")} {mutual ? "↔" : "→"}{" "}
-                {targets.map(storeName).join(", ") || t("targets")}
-              </p>
-              <Button
-                disabled={
-                  !source ||
-                  !targets.length ||
-                  (scope === "SELECTED" && !selected.length) ||
-                  previewMutation.isLoading
-                }
-                onClick={() =>
-                  void preview({
-                    action: "SHARE",
-                    sourceStoreId: source,
-                    targetStoreIds: targets,
-                    scope,
-                    includeFuture: scope === "ALL" && future,
-                    productIds: selected,
-                    mutual,
-                    label: label || undefined,
-                  })
-                }
-              >
-                {previewMutation.isLoading ? <Spinner /> : null}
-                {t("preview")}
-              </Button>
-            </fieldset>
-          </CardContent>
-        </Card>
-      </div>
-
-      {impact ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("impact")}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4" aria-live="polite">
-            {impact.directions.map((edge, i) => (
-              <div key={i}>
-                <p className="font-medium">
-                  {storeName(edge.sourceStoreId)} → {storeName(edge.targetStoreId)} ·{" "}
-                  {t("productCount", { count: edge.productCount })}
-                </p>
-                <p className="text-sm">{t(edge.includeFuture ? "futureOn" : "futureOff")}</p>
-              </div>
-            ))}
-            {impact.change.action === "SHARE" && !impact.change.mutual ? (
-              <p>
-                {t("oneWayGuarantee", {
-                  source: storeName(impact.change.sourceStoreId),
-                  targets: impact.change.targetStoreIds.map(storeName).join(", "),
-                })}
-              </p>
-            ) : null}
-            <p className="text-sm">{t("integrity")}</p>
-            <p className="text-sm">{t("pricing")}</p>
-            <p className="text-sm text-muted-foreground">{t("retention")}</p>
-            {impact.impacts.map((row) => (
-              <div key={row.storeId} className="rounded-lg border p-3 text-sm">
-                <h3 className="font-semibold">{row.storeName}</h3>
-                <p>
-                  {t("counts", {
-                    current: row.currentTotal,
-                    added: row.newlyVisible,
-                    overlap: row.alreadyVisible,
-                    total: row.resultingTotal,
-                  })}
-                </p>
-                <p>
-                  {t("retained", {
-                    direct: row.retainedDirect,
-                    historical: row.retainedHistorical,
-                    received: row.retainedReceived,
-                  })}
-                </p>
-                {row.barcodeConflictCount ? (
-                  <p className="text-warning">
-                    {t("collisions", { count: row.barcodeConflictCount })}:{" "}
-                    {row.barcodeConflicts.map((c) => c.barcode).join(", ")}
-                  </p>
-                ) : null}
-              </div>
-            ))}
-            {impact.sourceReview.map((row) => (
-              <p key={row.storeId} className="text-sm">
-                {t("sourceReview", {
-                  name: row.storeName,
-                  eligible: row.eligible,
-                  unresolved: row.unresolved,
-                  reviewed: row.reviewedHistorical + row.reviewedReceived,
-                })}
-              </p>
-            ))}
-            {impact.legacyExits.map((row) => (
-              <p key={row.id} className="text-sm text-warning">
-                {t("legacyExit", {
-                  name: row.name,
-                  group: row.group ?? t("none"),
-                  peers: row.peers.join(", ") || t("none"),
-                })}
-              </p>
-            ))}
-            {impact.affectedRules.length ? (
-              <div className="text-sm">
-                <p className="font-semibold">{t("existingRules")}</p>
-                {impact.affectedRules.map((r) => (
-                  <p key={r.id}>
-                    {storeName(r.sourceStoreId)} → {storeName(r.targetStoreId)} ·{" "}
-                    {t(r.active ? "active" : "paused")}
-                  </p>
-                ))}
-              </div>
-            ) : null}
-            {impact.change.action === "PAUSE" ? <p>{t("pauseHint")}</p> : null}
-            <Button
-              disabled={applyMutation.isLoading}
-              onClick={() =>
-                approval &&
-                applyMutation.mutate({
-                  change: approval.preview.change,
-                  previewToken: approval.preview.previewToken,
-                  idempotencyKey: approval.key,
-                })
-              }
-            >
-              {applyMutation.isLoading ? <Spinner /> : null}
-              {t("apply")}
-            </Button>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {showHistory ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("history")}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {history.isLoading ? <Spinner /> : null}
-            {history.error ? <p role="alert">{translateError(errors, history.error)}</p> : null}
-            {history.data?.total === 0 ? <p>{t("noHistory")}</p> : null}
-            {history.data?.items.map((item) => (
-              <details key={item.id} className="rounded-lg border p-3 text-sm">
-                <summary>
-                  {new Date(item.createdAt).toLocaleString()} ·{" "}
-                  {item.actor?.name ?? t("unknownActor")} ·{" "}
-                  {t(`actions.${item.action.replace("ASSORTMENT_", "")}`)}
-                </summary>
-                <div className="mt-3 space-y-2">
-                  {item.previousRules.length ? (
-                    <div>
-                      <p className="font-medium">{t("previous")}</p>
-                      {item.previousRules.map((rule, i) => (
-                        <p key={i}>
-                          {storeName(rule.sourceStoreId)} → {storeName(rule.targetStoreId)} ·{" "}
-                          {t(rule.active ? "active" : "paused")} ·{" "}
-                          {t(rule.includeFuture ? "futureOn" : "futureOff")}
-                          {rule.label ? ` · ${rule.label}` : ""}
+              {draft ? (
+                <section
+                  aria-label={t("preview")}
+                  className="mt-5 space-y-3 rounded-lg border border-primary/20 bg-primary/5 p-4"
+                >
+                  {previewLoading ? (
+                    <p role="status" className="flex items-center gap-2 text-sm">
+                      <Spinner />
+                      {t("calculating")}
+                    </p>
+                  ) : approval ? (
+                    <>
+                      <p role="status" className="text-sm font-medium">
+                        {t("impact", {
+                          current: approval.preview.current,
+                          result: approval.preview.result,
+                          added: approval.preview.added,
+                          hidden: approval.preview.hidden,
+                        })}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{t("preserved")}</p>
+                      {approval.preview.stockPositions > 0 ? (
+                        <p className="text-sm">
+                          {t("stockImpact", { count: approval.preview.stockPositions })}{" "}
+                          <Link
+                            className="text-primary underline"
+                            href={`/inventory?storeId=${store.id}&stockFilter=notInAssortment`}
+                          >
+                            {t("warehouse")}
+                          </Link>
+                        </p>
+                      ) : null}
+                      {approval.preview.legacyExit ? (
+                        <p className="text-sm">
+                          {t("legacyExit")}
+                          {approval.preview.legacyPeers.length
+                            ? ` ${t("otherStores", { names: approval.preview.legacyPeers.join(", ") })}`
+                            : ""}
+                        </p>
+                      ) : null}
+                      {approval.preview.confirmed > 0 ? (
+                        <p className="text-sm">
+                          {t("confirmedImpact", { count: approval.preview.confirmed })}
+                        </p>
+                      ) : null}
+                      {approval.preview.otherImpacts.map((i) => (
+                        <p key={i.storeId} className="text-sm">
+                          {t("otherImpact", { name: i.name, count: i.added })}
                         </p>
                       ))}
-                    </div>
+                      {approval.preview.barcodeConflicts > 0 ? (
+                        <p className="text-sm">
+                          {t("barcodeConflicts", { count: approval.preview.barcodeConflicts })}
+                        </p>
+                      ) : null}
+                      {approval.preview.documents.length ? (
+                        <details className="text-sm">
+                          <summary className="cursor-pointer">
+                            {t("documents", { count: approval.preview.documents.length })}
+                          </summary>
+                          <p className="my-2 text-muted-foreground">{t("documentsPolicy")}</p>
+                          <ul className="max-h-40 list-inside list-disc overflow-y-auto">
+                            {approval.preview.documents.map((d) => (
+                              <li key={d.id}>
+                                {d.number} · {d.isPosSale ? t("receipt") : t("order")}
+                                {d.isHeld ? ` · ${t("held")}` : ""}
+                              </li>
+                            ))}
+                          </ul>
+                        </details>
+                      ) : null}
+                    </>
                   ) : null}
-                  {item.impact?.directions.map((rule, i) => (
-                    <p key={i}>
-                      {storeName(rule.sourceStoreId)} → {storeName(rule.targetStoreId)} ·{" "}
-                      {t("productCount", { count: rule.productCount })} ·{" "}
-                      {t(rule.includeFuture ? "futureOn" : "futureOff")}
-                      {rule.label ? ` · ${rule.label}` : ""}
-                    </p>
-                  ))}
-                  {item.impact?.impacts.map((row) => (
-                    <p key={row.storeId}>
-                      <strong>{row.storeName}</strong> ·{" "}
-                      {t("counts", {
-                        current: row.currentTotal,
-                        added: row.newlyVisible,
-                        overlap: row.alreadyVisible,
-                        total: row.resultingTotal,
-                      })}
-                    </p>
-                  ))}
-                  {item.impact?.legacyExits.map((row) => (
-                    <p key={row.id}>
-                      {t("legacyExit", {
-                        name: row.name,
-                        group: row.group ?? t("none"),
-                        peers: row.peers.join(", ") || t("none"),
-                      })}
-                    </p>
-                  ))}
-                  <p className="text-muted-foreground">{t("integrity")}</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button disabled={!canSave} onClick={() => void save()}>
+                      {saveMutation.isLoading ? common("loading") : t("save")}
+                    </Button>
+                    <Button variant="secondary" disabled={saveMutation.isLoading} onClick={cancel}>
+                      {t("cancel")}
+                    </Button>
+                  </div>
+                </section>
+              ) : null}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+      <Modal open={addOpen} onOpenChange={setAddOpen} title={t("addSource")}>
+        <div className="space-y-3">
+          <Input
+            aria-label={t("searchSources")}
+            placeholder={t("searchSources")}
+            value={addSearch}
+            onChange={(e) => setAddSearch(e.target.value)}
+          />
+          {availableSources.length ? (
+            availableSources.map((s) => (
+              <div
+                className="flex items-center justify-between gap-3 rounded-md border p-3"
+                key={s.key}
+              >
+                <div className="min-w-0">
+                  <p className="break-words text-sm font-medium">{s.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {s.sourceName ?? t("sharedSource")} · {s.total}
+                  </p>
+                  {s.total === 0 && s.sourceStoreId ? (
+                    <p className="mt-1 text-xs text-muted-foreground">{t("needsReview")}</p>
+                  ) : null}
                 </div>
-              </details>
-            ))}
-            <div className="flex gap-2">
-              <Button
-                variant="secondary"
-                disabled={historyPage === 1}
-                onClick={() => setHistoryPage(historyPage - 1)}
-              >
-                {t("previous")}
-              </Button>
-              <Button
-                variant="secondary"
-                disabled={historyPage * 20 >= (history.data?.total ?? 0)}
-                onClick={() => setHistoryPage(historyPage + 1)}
-              >
-                {t("next")}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
+                {s.total === 0 && s.sourceStoreId ? (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => {
+                      setAddOpen(false);
+                      selectStore(s.sourceStoreId!);
+                    }}
+                  >
+                    {t("configure")}
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => {
+                      update(s.key, { enabled: true, scope: "ALL" });
+                      setAddOpen(false);
+                    }}
+                  >
+                    {t("add")}
+                  </Button>
+                )}
+              </div>
+            ))
+          ) : (
+            <p className="text-sm text-muted-foreground">{t("noSources")}</p>
+          )}
+        </div>
+      </Modal>
+      <Modal
+        open={!!detail}
+        onOpenChange={(open) => {
+          if (!open) setDetail(null);
+        }}
+        title={detail?.name ?? t("catalog")}
+        className="sm:max-w-3xl"
+      >
+        <div className="space-y-4">
+          {detail ? (
+            <>
+              <p className="text-sm text-muted-foreground">
+                {t("source")}: {detail.sourceName ?? t("sharedSource")}
+              </p>
+              {detailMode === "view" ? (
+                <div className="flex flex-wrap gap-2">
+                  {connection ? (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        setDetailMode("selection");
+                        update(detail.key, { scope: "SELECTED" });
+                      }}
+                    >
+                      {t("chooseProducts")}
+                    </Button>
+                  ) : null}
+                  {connection?.scope === "SELECTED" ? (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => update(detail.key, { scope: "ALL", productIds: [] })}
+                    >
+                      {t("fullCatalog")}
+                    </Button>
+                  ) : null}
+                  {detail.shared &&
+                  current?.connections.some((c) => c.key === detail.key && c.enabled) ? (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        setDetailMode("ownership");
+                        setOwnership([]);
+                      }}
+                    >
+                      {t("configure")}
+                    </Button>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="text-sm">
+                  {t(detailMode === "ownership" ? "ownershipHelp" : "selectionHelp")}
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                {t(connection?.scope === "SELECTED" ? "fixedHelp" : "futureHelp")}
+              </p>
+              {detail.unavailableSelectedIds.length ? (
+                <p className="text-xs text-muted-foreground">
+                  {t("archivedSelection", { count: detail.unavailableSelectedIds.length })}
+                </p>
+              ) : null}
+              <Input
+                aria-label={t("searchProducts")}
+                placeholder={t("searchProducts")}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              {detailMode !== "view" ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={bulkLoading || products.isFetching}
+                    onClick={() => void selectAllMatches()}
+                  >
+                    {t("selectAllMatches")}
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setSelection([])}>
+                    {t("clearSelection")}
+                  </Button>
+                  <span className="text-sm">
+                    {t("selectedCount", { count: selectedIds.length })}
+                  </span>
+                </div>
+              ) : null}
+              {products.isLoading ? (
+                <Spinner />
+              ) : products.error ? (
+                <QueryErrorState onRetry={() => void products.refetch()} />
+              ) : (
+                <div className="divide-y rounded-md border">
+                  {products.data?.items.length ? (
+                    products.data.items.map((p) => (
+                      <div key={p.id} className="flex items-start gap-3 p-3">
+                        {detailMode !== "view" ? (
+                          <input
+                            type="checkbox"
+                            className="mt-1 h-4 w-4 shrink-0 accent-primary"
+                            aria-label={t("selectProduct", { name: p.name })}
+                            checked={selectedIds.includes(p.id)}
+                            disabled={
+                              products.isPreviousData ||
+                              (detailMode === "ownership" && !p.available)
+                            }
+                            onChange={() => toggleProduct(p.id)}
+                          />
+                        ) : null}
+                        <div className="min-w-0 flex-1">
+                          <p className="break-words text-sm">{p.name}</p>
+                          <p className="text-xs text-muted-foreground">{p.sku ?? p.id}</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {p.available ? t("available") : t("unavailable")}
+                            {p.reasons.length
+                              ? ` · ${p.reasons.map((r) => (r === "OWN" ? t("ownCatalog") : (sourceByKey(r)?.name ?? r))).join(", ")}`
+                              : ""}
+                          </p>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="p-4 text-sm text-muted-foreground">{t("noProducts")}</p>
+                  )}
+                </div>
+              )}
+              <div className="flex items-center justify-between gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={page === 1 || products.isFetching}
+                  onClick={() => setPage((p) => p - 1)}
+                >
+                  {t("previous")}
+                </Button>
+                <span className="text-xs">
+                  {page} / {Math.max(1, Math.ceil((products.data?.total ?? 0) / 50))}
+                </span>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={page * 50 >= (products.data?.total ?? 0) || products.isFetching}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  {t("next")}
+                </Button>
+              </div>
+              {detailMode === "ownership" ? (
+                <Button
+                  disabled={!ownership.length || !current}
+                  onClick={() => {
+                    if (current)
+                      edit({
+                        ...current,
+                        confirmProductIds: [
+                          ...new Set([...current.confirmProductIds, ...ownership]),
+                        ],
+                      });
+                    setDetail(null);
+                  }}
+                >
+                  {t("confirmOwn", { count: ownership.length })}
+                </Button>
+              ) : (
+                <Button variant="secondary" onClick={() => setDetail(null)}>
+                  {t("done")}
+                </Button>
+              )}
+            </>
+          ) : null}
+        </div>
+      </Modal>
+      <Modal
+        open={!!pendingStore}
+        onOpenChange={(open) => {
+          if (!open) setPendingStore(null);
+        }}
+        title={t("unsavedTitle")}
+      >
+        <p className="mb-4 text-sm">{t("unsavedHelp")}</p>
+        <div className="flex flex-wrap gap-2">
+          <Button disabled={!canSave} onClick={() => void save(pendingStore!)}>
+            {t("save")}
+          </Button>
+          <Button
+            variant="secondary"
+            disabled={saveMutation.isLoading}
+            onClick={() => {
+              cancel();
+              setSelected(pendingStore!);
+              setPendingStore(null);
+            }}
+          >
+            {t("discard")}
+          </Button>
+          <Button variant="ghost" onClick={() => setPendingStore(null)}>
+            {t("stay")}
+          </Button>
+        </div>
+      </Modal>
+      <Modal open={historyOpen} onOpenChange={setHistoryOpen} title={t("history")}>
+        <div className="space-y-3">
+          {history.isLoading ? (
+            <Spinner />
+          ) : history.error ? (
+            <QueryErrorState onRetry={() => void history.refetch()} />
+          ) : history.data?.items.length ? (
+            history.data.items.map((item) => {
+              const after = item.after as {
+                summary?: { added?: number; hidden?: number; confirmed?: number };
+                settings?: CatalogSettings;
+              } | null;
+              const before = item.before as CatalogSettings | null;
+              const changed =
+                after?.settings?.connections.filter((c) => {
+                  const old = before?.connections.find((p) => p.key === c.key);
+                  return (
+                    !old ||
+                    old.enabled !== c.enabled ||
+                    old.scope !== c.scope ||
+                    JSON.stringify(old.productIds) !== JSON.stringify(c.productIds)
+                  );
+                }) ?? [];
+              return (
+                <div key={item.id} className="border-b pb-3 text-sm">
+                  <p>
+                    {item.actor?.name ?? t("unknownActor")} ·{" "}
+                    {formatDateTime(item.createdAt, locale)}
+                  </p>
+                  <p className="text-muted-foreground">
+                    {t("historyImpact", {
+                      added: after?.summary?.added ?? 0,
+                      hidden: after?.summary?.hidden ?? 0,
+                    })}
+                  </p>
+                  {after?.summary?.confirmed ? (
+                    <p className="text-xs">
+                      {t("confirmedImpact", { count: after.summary.confirmed })}
+                    </p>
+                  ) : null}
+                  {changed.map((c) => (
+                    <p key={c.key} className="text-xs">
+                      {sourceByKey(c.key)?.name ?? t("catalog")}:{" "}
+                      {t(c.enabled ? "enabled" : "disabled")}
+                      {c.scope === "SELECTED"
+                        ? ` · ${t("selectedCount", { count: c.productIds.length })}`
+                        : ""}
+                    </p>
+                  ))}
+                </div>
+              );
+            })
+          ) : (
+            <p className="text-sm">{t("emptyHistory")}</p>
+          )}
+          <div className="flex justify-between">
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={historyPage === 1}
+              onClick={() => setHistoryPage((p) => p - 1)}
+            >
+              {t("previous")}
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={historyPage * 20 >= (history.data?.total ?? 0)}
+              onClick={() => setHistoryPage((p) => p + 1)}
+            >
+              {t("next")}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

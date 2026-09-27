@@ -13,7 +13,7 @@ describe("mobile inventory source", () => {
     expect(source).toContain("<ListToolbar");
     expect(source).toContain('id="inventory-stock"');
     expect(source).toContain(
-      'const inventoryStockFilterSchema = z.enum(["all", "lowStock", "outOfStock", "negativeStock"])',
+      'const inventoryStockFilterSchema = z.enum(["all", "lowStock", "outOfStock", "negativeStock", "notInAssortment"])',
     );
     expect(source).toContain('stockFilter: "all"');
     expect(source).toContain("data-inventory-page-summary");
@@ -34,7 +34,7 @@ describe("mobile inventory source", () => {
     const routerSource = await readSource("src/server/trpc/routers/inventory.ts");
 
     expect(routerSource).toContain(
-      'const inventoryStockFilterSchema = z.enum(["all", "lowStock", "outOfStock", "negativeStock"])',
+      'const inventoryStockFilterSchema = z.enum(["all", "lowStock", "outOfStock", "negativeStock", "notInAssortment"])',
     );
     expect(routerSource).toContain("normalizeInventorySearchTokens");
     expect(routerSource).toContain("buildInventoryProductSearchWhere");

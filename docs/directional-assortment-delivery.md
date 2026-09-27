@@ -1,5 +1,10 @@
 # Directional assortment, sale channel, and customer reports
 
+> The assortment UI and retained-access behavior below describe the earlier release.
+> They are superseded by [recipient catalogue settings](assortment-sources-delivery.md):
+> saving those settings makes disabled sources revoke shared-only sales access.
+> The POS sale-channel and reporting sections remain applicable.
+
 ## Baseline and plan
 
 - Started on `main`, clean working tree, HEAD and fetched `origin/main` both

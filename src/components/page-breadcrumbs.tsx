@@ -99,6 +99,8 @@ const segmentLabel = (
       return tNav("suppliers");
     case "stores":
       return tNav("stores");
+    case "store-groups":
+      return tNav("storeGroups");
     case "users":
       return tNav("users");
     case "settings":
