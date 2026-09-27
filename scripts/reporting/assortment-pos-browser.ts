@@ -103,6 +103,12 @@ try {
   };
   page.on("request", count);
   await checkbox.click();
+  assert.equal(await checkbox.isChecked(), true);
+  // Clicking the larger label target must preserve the scanner just like the square.
+  await page.getByText(m.saleChannel.checkbox, { exact: true }).click();
+  assert.equal(await checkbox.isChecked(), false);
+  assert.equal(await page.evaluate(() => document.activeElement?.outerHTML), activeBefore);
+  await page.getByText(m.saleChannel.checkbox, { exact: true }).click();
   await page.waitForTimeout(150);
   page.off("request", count);
   assert.equal(toggleRequests, 0);

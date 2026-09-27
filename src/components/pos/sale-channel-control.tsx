@@ -11,14 +11,22 @@ export function SaleChannelControl(props: {
   const t = useTranslations("saleChannel");
   if (!isPosSaleChannelEnabled()) return null;
   return (
-    <label className="inline-flex min-h-9 cursor-pointer items-center gap-2 text-sm text-foreground">
+    <label
+      className="inline-flex min-h-9 cursor-pointer items-center gap-2 text-sm text-foreground"
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={(event) => {
+        if (event.target !== event.currentTarget) return;
+        // Native label activation focuses the checkbox, taking focus from the scanner.
+        event.preventDefault();
+        if (!props.disabled) props.onChange(props.value === "ONLINE" ? "IN_STORE" : "ONLINE");
+      }}
+    >
       <input
         type="checkbox"
         className="h-4 w-4 accent-primary"
         data-testid="pos-online-sale"
         checked={props.value === "ONLINE"}
         disabled={props.disabled}
-        onMouseDown={(event) => event.preventDefault()}
         onKeyDown={(event) => event.stopPropagation()}
         onChange={(event) => props.onChange(event.target.checked ? "ONLINE" : "IN_STORE")}
       />

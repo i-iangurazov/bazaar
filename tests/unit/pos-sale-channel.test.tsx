@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, render, renderHook, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { usePosSaleChannel, type CommercialSaleChannel } from "@/lib/usePosSaleChannel";
 import { SaleChannelControl } from "@/components/pos/sale-channel-control";
@@ -51,16 +52,38 @@ describe("per-receipt channel recovery", () => {
     expect(hook.result.current.channel).toBe("ONLINE");
     const change = vi.fn();
     const fetch = vi.spyOn(globalThis, "fetch");
+    function Control() {
+      const [channel, setChannel] = useState<CommercialSaleChannel>("IN_STORE");
+      return (
+        <SaleChannelControl
+          value={channel}
+          onChange={(value) => {
+            setChannel(value);
+            change(value);
+          }}
+        />
+      );
+    }
     render(
       <>
         <input aria-label="scanner" />
-        <SaleChannelControl value="IN_STORE" onChange={change} />
+        <Control />
       </>,
     );
     screen.getByRole("textbox").focus();
     await userEvent.click(screen.getByRole("checkbox"));
     expect(change).toHaveBeenCalledWith("ONLINE");
     expect(document.activeElement).toBe(screen.getByRole("textbox"));
+    await userEvent.click(screen.getByText("checkbox"));
+    expect(document.activeElement).toBe(screen.getByRole("textbox"));
+    expect(change).toHaveBeenCalledTimes(2);
+    expect(change).toHaveBeenLastCalledWith("IN_STORE");
+    await userEvent.tab();
+    expect(document.activeElement).toBe(screen.getByRole("checkbox"));
+    await userEvent.keyboard(" ");
+    expect(change).toHaveBeenCalledTimes(3);
+    expect(change).toHaveBeenLastCalledWith("ONLINE");
+    expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(true);
     expect(fetch).not.toHaveBeenCalled();
     fetch.mockRestore();
   });
