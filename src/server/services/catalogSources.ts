@@ -270,10 +270,11 @@ async function graph(tx: Tx, organizationId: string) {
 const metadata = (s: Source, selectedIds: string[] = []) => {
   const { productIds, memberIds, ...rest } = s;
   void memberIds;
+  const available = new Set(productIds);
   return {
     ...rest,
     total: productIds.length,
-    unavailableSelectedIds: selectedIds.filter((id) => !productIds.includes(id)),
+    unavailableSelectedIds: selectedIds.filter((id) => !available.has(id)),
   };
 };
 export async function getCatalogSettings(organizationId: string, storeId?: string) {
@@ -292,16 +293,13 @@ export async function getCatalogSettings(organizationId: string, storeId?: strin
           ownCount: 0,
         };
       }
+      const settings = g.settings(store.id);
+      const selectedBySource = new Map(settings.connections.map((c) => [c.key, c.productIds]));
       return {
         stores: g.stores,
         store,
-        sources: [...g.sources.values()].map((s) =>
-          metadata(
-            s,
-            g.settings(store.id).connections.find((c) => c.key === s.key)?.productIds ?? [],
-          ),
-        ),
-        settings: g.settings(store.id),
+        sources: [...g.sources.values()].map((s) => metadata(s, selectedBySource.get(s.key) ?? [])),
+        settings,
         total: g.assignments.filter((a) => a.storeId === store.id && a.isActive).length,
         ownCount: g.sources.get(`store:${store.id}`)!.productIds.length,
       };
@@ -320,7 +318,7 @@ export async function getCatalogProducts(input: {
   return prisma.$transaction(
     async (tx) => {
       const g = await graph(tx, input.organizationId);
-      g.settings(input.storeId);
+      const settings = g.settings(input.storeId);
       const source = g.sources.get(input.key);
       if (!source) throw new AppError("productCatalogNotFound", "NOT_FOUND", 404);
       const where: Prisma.ProductWhereInput = {
@@ -346,32 +344,32 @@ export async function getCatalogProducts(input: {
         orderBy: [{ name: "asc" }, { id: "asc" }],
         ...(input.allIds ? {} : { skip: (input.page - 1) * 50, take: 50 }),
       });
-      const reasons = (id: string) => {
-        const own = g.assignments.some(
-          (a) => a.storeId === input.storeId && a.productId === id && a.isDirect && a.isActive,
-        );
-        return [
-          ...(own ? ["OWN"] : []),
-          ...g
-            .settings(input.storeId)
-            .connections.filter(
-              (c) =>
-                c.enabled &&
-                g.sources.get(c.key)?.productIds.includes(id) &&
-                (c.scope === "ALL" || c.productIds.includes(id)),
-            )
-            .map((c) => c.key),
-        ];
-      };
+      // Build membership lookups once, including for the bulk selection response.
+      const activeAssignments = g.assignments.filter(
+        (a) => a.storeId === input.storeId && a.isActive,
+      );
+      const available = new Set(activeAssignments.map((a) => a.productId));
+      const own = new Set(activeAssignments.filter((a) => a.isDirect).map((a) => a.productId));
+      const connections = settings.connections
+        .filter((c) => c.enabled)
+        .map((c) => ({
+          key: c.key,
+          members: new Set(g.sources.get(c.key)?.productIds ?? []),
+          selected: c.scope === "SELECTED" ? new Set(c.productIds) : null,
+        }));
+      const reasons = (id: string) => [
+        ...(own.has(id) ? ["OWN"] : []),
+        ...connections
+          .filter((c) => c.members.has(id) && (!c.selected || c.selected.has(id)))
+          .map((c) => c.key),
+      ];
       return {
         total,
         page: input.page,
         pageSize: 50,
         items: items.map((p) => ({
           ...p,
-          available: g.assignments.some(
-            (a) => a.storeId === input.storeId && a.productId === p.id && a.isActive,
-          ),
+          available: available.has(p.id),
           reasons: reasons(p.id),
         })),
       };
@@ -405,12 +403,14 @@ async function impact(tx: Tx, organizationId: string, raw: CatalogSettings) {
     const source = g.sources.get(c.key);
     if (!source || c.key === `store:${store.id}`)
       throw new AppError("productCatalogNotFound", "NOT_FOUND", 404);
-    if (c.scope === "SELECTED" && c.productIds.some((id) => !source.memberIds.includes(id)))
+    const members = new Set(source.memberIds);
+    const visible = new Set(source.productIds);
+    if (c.scope === "SELECTED" && c.productIds.some((id) => !members.has(id)))
       throw new AppError("productAccessDenied", "FORBIDDEN", 403);
     if (c.enabled) {
       for (const id of c.scope === "ALL" ? source.memberIds : c.productIds) {
         materializedIds.add(id);
-        if (source.productIds.includes(id)) desired.add(id);
+        if (visible.has(id)) desired.add(id);
       }
     }
   }

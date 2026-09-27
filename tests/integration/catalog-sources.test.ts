@@ -422,6 +422,8 @@ import type { CatalogSettings } from "@/server/services/catalogSources";
     await prisma.product.update({ where: { id: f.a1.id }, data: { isDeleted: false } });
     expect(await f.visible(f.b.id)).toEqual([f.b1.id]);
   });
+  // Includes 4,020 seeded rows, multiple reads, preview and a real transactional save.
+  // Match the bounded allowance used by the existing 2,000-position store clone test.
   it("paginates and bulk-selects thousands by source, shows availability reasons and respects fixed membership", async () => {
     const f = await fixture();
     const data = Array.from({ length: 2010 }, (_, i) => ({
@@ -479,5 +481,5 @@ import type { CatalogSettings } from "@/server/services/catalogSources";
       page: 1,
     });
     expect(selected.items[0]).toMatchObject({ available: true, reasons: [`store:${f.a.id}`] });
-  });
+  }, 20_000);
 });
