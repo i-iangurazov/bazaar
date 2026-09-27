@@ -87,6 +87,7 @@ try {
   if (!ready) throw new Error("Isolated browser server did not become ready");
   await run(process.execPath, ["--import", "tsx", "scripts/reporting/browser.ts"]);
   await run(process.execPath, ["--import", "tsx", "scripts/reporting/browser-states.ts"]);
+  await run(process.execPath, ["--import", "tsx", "scripts/reporting/detail-scroll-browser.ts"]);
   await run(process.execPath, ["--import", "tsx", "scripts/reporting/assortment-pos-browser.ts"]);
 } finally {
   server.kill("SIGTERM");

@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
@@ -45,6 +45,7 @@ function AnalyticsReportContent() {
     errors = useTranslations("errors");
   const channelText = useTranslations("saleChannel"), customerText = useTranslations("customerPurchases");
   const locale = useLocale();
+  const common = useTranslations("common");
   const utils = trpc.useUtils();
   const [format, setFormat] = useState<DownloadFormat>("csv");
   const [exporting, setExporting] = useState(false);
@@ -75,9 +76,13 @@ function AnalyticsReportContent() {
     page: state.page,
     pageSize: 25,
   };
+  // Grouping, sorting and pagination share the same totals/chart. Retain their
+  // layout while refreshing rows, but never reuse results for different filters.
+  const dataScope = JSON.stringify({ ...input, view: undefined, sort: undefined, direction: undefined, page: undefined });
+  const resolvedScope = useRef<string>();
   const query = trpc.reports.sales.useQuery(input, {
     enabled,
-    keepPreviousData: false,
+    keepPreviousData: true,
     staleTime: 0,
     cacheTime: 0,
     retry: false,
@@ -87,7 +92,13 @@ function AnalyticsReportContent() {
     { storeId: state.storeId },
     { enabled, staleTime: 0, cacheTime: 0, retry: false },
   );
-  const data = enabled && !query.error ? query.data : undefined;
+  useEffect(() => {
+    if (enabled && query.data && !query.isPreviousData && !query.error)
+      resolvedScope.current = dataScope;
+  }, [enabled, query.data, query.isPreviousData, query.error, dataScope]);
+  const data = enabled && !query.error && (!query.isPreviousData || resolvedScope.current === dataScope)
+    ? query.data : undefined;
+  const detailLoading = Boolean(data && query.isPreviousData);
   const money = (value: number | null | undefined) =>
     value === null || value === undefined
       ? "—"
@@ -583,7 +594,7 @@ function AnalyticsReportContent() {
               </Button>
             </section>
           </div>
-          <section className="min-w-0 overflow-hidden rounded-xl border border-border bg-card">
+          <section className="min-w-0 overflow-hidden rounded-xl border border-border bg-card" aria-busy={detailLoading}>
             <div className="space-y-4 border-b border-border p-4 sm:p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -647,7 +658,7 @@ function AnalyticsReportContent() {
                   <SelectItem value="asc">{t("ascending")}</SelectItem>
                 </ReportSelect>
               </div>
-              {input.view === "customers" && (
+              {data.view === "customers" && (
                 <p className="text-xs text-muted-foreground">
                   {t("customerMethod", {
                     count: totals.identifiedCustomers,
@@ -655,7 +666,7 @@ function AnalyticsReportContent() {
                   })}
                 </p>
               )}
-              {input.view === "costGaps" && (
+              {data.view === "costGaps" && (
                 <p className="text-xs text-muted-foreground">{t("costGapMethod")}</p>
               )}
               {exportError?.fingerprint === scope.fingerprint && (
@@ -664,12 +675,15 @@ function AnalyticsReportContent() {
                 </p>
               )}
             </div>
+            <div className="relative">
+              {detailLoading ? <p role="status" className="absolute inset-x-0 top-6 text-center text-sm text-muted-foreground">{common("loading")}</p> : null}
+              <div className={detailLoading ? "invisible" : undefined} aria-hidden={detailLoading || undefined}>
             {data.items.length ? (
               <Table sortable={false} className="min-w-[1200px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-72 min-w-[14rem] sm:min-w-[18rem]">
-                      {t(`views.${input.view}`)}
+                      {t(`views.${data.view}`)}
                     </TableHead>
                     <TableHead className="text-right">{t("netSales")}</TableHead>
                     <TableHead className="text-right">{t("cost")}</TableHead>
@@ -677,7 +691,7 @@ function AnalyticsReportContent() {
                     <TableHead className="text-right">{t("margin")}</TableHead>
                     <TableHead className="text-right">{t("returns")}</TableHead>
                     <TableHead className="text-right">
-                      {input.view === "products" ? t("quantity") : t("salesCount")}
+                      {data.view === "products" ? t("quantity") : t("salesCount")}
                     </TableHead>
                     <TableHead>{t("quality")}</TableHead>
                   </TableRow>
@@ -688,7 +702,7 @@ function AnalyticsReportContent() {
                       <TableCell className="w-72 min-w-[14rem] max-w-80 sm:min-w-[18rem]">
                         <div className="flex flex-col gap-1">
                           {row.channel === "orders" &&
-                          ["documents", "costGaps"].includes(input.view) ? (
+                          ["documents", "costGaps"].includes(data.view) ? (
                             <Link
                               className="font-medium text-primary hover:underline"
                               href={`/sales/orders/${row.documentId}`}
@@ -704,9 +718,9 @@ function AnalyticsReportContent() {
                             </button>
                           )}
                           <span className="text-xs text-muted-foreground">
-                            {input.view === "products"
+                            {data.view === "products"
                               ? row.sku
-                              : ["documents", "costGaps"].includes(input.view)
+                              : ["documents", "costGaps"].includes(data.view)
                                 ? `${row.eventAt ? formatDateTime(new Date(row.eventAt), locale) : row.date} · ${row.storeName ?? ""} · ${t(row.kind === "return" ? "returnDocument" : "saleDocument")} · ${customerText("completed")} · ${channelText(row.saleChannel ?? "UNKNOWN")}`
                                 : ""}
                           </span>
@@ -728,7 +742,7 @@ function AnalyticsReportContent() {
                         {money(row.returnsKgs)}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {input.view === "products"
+                        {data.view === "products"
                           ? `${number(row.netQuantity)} ${row.unit ?? ""}`
                           : number(row.receiptCount)}
                       </TableCell>
@@ -747,7 +761,7 @@ function AnalyticsReportContent() {
                   ))}
                   <TableRow className="bg-muted/40 font-semibold">
                     <TableCell>
-                      {t(input.view === "costGaps" ? "filteredTotals" : "total")}
+                      {t(data.view === "costGaps" ? "filteredTotals" : "total")}
                     </TableCell>
                     <TableCell className="text-right">{money(totals.netSalesKgs)}</TableCell>
                     <TableCell className="text-right">{money(totals.costKgs)}</TableCell>
@@ -755,7 +769,7 @@ function AnalyticsReportContent() {
                     <TableCell className="text-right">{percent(totals.marginPercent)}</TableCell>
                     <TableCell className="text-right">{money(totals.returnsKgs)}</TableCell>
                     <TableCell className="text-right">
-                      {input.view === "products" ? "—" : number(totals.receiptCount)}
+                      {data.view === "products" ? "—" : number(totals.receiptCount)}
                     </TableCell>
                     <TableCell>{percent(totals.coveragePercent)}</TableCell>
                   </TableRow>
@@ -764,7 +778,7 @@ function AnalyticsReportContent() {
             ) : (
               <div className="space-y-3 p-10 text-center">
                 <h3 className="font-medium">
-                  {t(input.view === "costGaps" ? "noCostGaps" : "emptyPeriod")}
+                  {t(data.view === "costGaps" ? "noCostGaps" : "emptyPeriod")}
                 </h3>
                 <p className="text-sm text-muted-foreground">{t("emptyHelp")}</p>
                 <Button
@@ -791,6 +805,8 @@ function AnalyticsReportContent() {
               pageSize={data.pageSize}
               onPage={(page) => update({ page })}
             />
+              </div>
+            </div>
           </section>
           <details className="rounded-xl border border-border bg-card p-4 text-sm">
             <summary className="cursor-pointer font-medium">{t("methodology")}</summary>
