@@ -101,6 +101,7 @@ export const assignProductToStore = async (
     storeId: string;
     productId: string;
     actorId?: string | null;
+    direct?: boolean;
   },
 ) => {
   const [store, product] = await Promise.all([
@@ -134,6 +135,8 @@ export const assignProductToStore = async (
       productId: input.productId,
       assignedById: input.actorId ?? undefined,
       isActive: true,
+      isDirect: input.direct ?? false,
+      isHistorical: !(input.direct ?? false),
     },
     update: {
       isActive: true,

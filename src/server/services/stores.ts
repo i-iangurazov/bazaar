@@ -1,3 +1,4 @@
+import { lockAssortment } from "@/server/services/assortmentPolicy";
 import { StockMovementType, type InventorySnapshot, type LegalEntityType } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 
@@ -377,10 +378,12 @@ export const updateStore = async (input: UpdateStoreInput) =>
 
 export const updateStoreProductCatalog = async (input: UpdateStoreProductCatalogInput) =>
   prisma.$transaction(async (tx) => {
+    await lockAssortment(tx, input.organizationId);
     const store = await tx.store.findUnique({ where: { id: input.storeId } });
     if (!store || store.organizationId !== input.organizationId) {
       throw new AppError("storeNotFound", "NOT_FOUND", 404);
     }
+    if (store.directedAssortment) throw new AppError("assortmentUseDirectedEditor", "CONFLICT", 409);
     const requestedCatalogId = normalizeOptional(input.productCatalogId);
     const catalog =
       requestedCatalogId !== null

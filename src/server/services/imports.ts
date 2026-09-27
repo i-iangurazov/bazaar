@@ -271,6 +271,7 @@ export const runProductImport = async (input: RunProductImportInput) => {
   };
 
   if (!operation.replayed) {
+    await publishAssortmentChange(input.organizationId);
     if (input.storeId) eventBus.publish({ type: "inventory.updated", payload: { storeId: input.storeId, productId: "*" } });
     await recordFirstEvent({
       organizationId: input.organizationId,
@@ -719,3 +720,4 @@ export const rollbackImportBatch = async (input: {
   for (const store of stores) eventBus.publish({ type: "inventory.updated", payload: { storeId: store.id, productId: "*" } });
   return result;
 };
+import { publishAssortmentChange } from "@/server/services/assortmentPolicy";

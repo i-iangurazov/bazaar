@@ -218,6 +218,7 @@ export const startProductDescriptionGenerationJob = async (input: {
   runImmediately?: boolean;
 }) => {
   const productIds = normalizeProductIds(input.productIds);
+  await assertActorCanWriteProducts(prisma, input.organizationId, input.actorId, productIds);
   if (!productIds.length) {
     throw new AppError("invalidInput", "BAD_REQUEST", 400);
   }
@@ -604,6 +605,7 @@ const generateAndPersistProductSpecs = async (input: {
   }
 
   const updated = await prisma.$transaction(async (tx) => {
+    await assertActorCanWriteProducts(tx, input.organizationId, input.actorId, [input.product.id]);
     await assertProductDescriptionLease(tx, input.jobId, input.leaseToken);
     await assertProductDescriptionItemLease(tx, {
       itemId: input.itemId,
@@ -1202,6 +1204,7 @@ const processJobItem = async (input: {
 
   if (generatedDescription) {
     await prisma.$transaction(async (tx) => {
+      await assertActorCanWriteProducts(tx, input.job.organizationId, input.job.createdById, [product.id]);
       await assertProductDescriptionLease(tx, input.job.id, input.job.leaseToken);
       await assertProductDescriptionItemLease(tx, {
         itemId: input.item.id,
@@ -1492,3 +1495,4 @@ export {
   ProductDescriptionGenerationJobStatus,
   ProductDescriptionGenerationSource,
 };
+import { assertActorCanWriteProducts } from "@/server/services/productAccess";

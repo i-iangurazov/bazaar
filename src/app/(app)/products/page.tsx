@@ -1381,6 +1381,7 @@ const ProductsPage = () => {
   );
 
   useSse({
+    "assortment.updated": () => { void trpcUtils.products.invalidate(); },
     "inventory.updated": () => {
       void trpcUtils.products.bootstrap.invalidate();
     },
@@ -5917,6 +5918,7 @@ const ProductsPage = () => {
         }}
         productId={duplicateTarget?.id ?? ""}
         productName={duplicateTarget?.name ?? ""}
+        storeId={storeId}
       />
       {confirmDialog}
     </div>

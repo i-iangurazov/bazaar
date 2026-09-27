@@ -53,11 +53,13 @@ export const ProductDuplicateDialog = ({
   onOpenChange,
   productId,
   productName,
+  storeId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   productId: string;
   productName: string;
+  storeId?: string | null;
 }) => {
   const t = useTranslations("products");
   const tCommon = useTranslations("common");
@@ -176,6 +178,7 @@ export const ProductDuplicateDialog = ({
           }
           const payload = {
             productId,
+            storeId: storeId || undefined,
             name: name.trim(),
             status,
             ...options,

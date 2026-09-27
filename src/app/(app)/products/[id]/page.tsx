@@ -2136,6 +2136,7 @@ const ProductDetailPage = () => {
         onOpenChange={setDuplicateDialogOpen}
         productId={productId}
         productName={productQuery.data.name}
+        storeId={returnStoreId || selectedSettingsStore?.storeId}
       />
       {confirmDialog}
     </ProductEditorPage>

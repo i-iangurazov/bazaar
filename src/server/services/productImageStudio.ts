@@ -1158,6 +1158,7 @@ export const saveGeneratedImageToProduct = async (input: {
   const setAsPrimary = Boolean(input.setAsPrimary);
 
   const result = await prisma.$transaction(async (tx) => {
+    await assertActorCanWriteProducts(tx, input.organizationId, input.actorId, [product.id]);
     const savedProductImageId = await attachGeneratedImageToProduct({
       tx,
       organizationId: input.organizationId,
@@ -1516,3 +1517,4 @@ export const runProductImageStudioJob = async (payload?: JobPayload) => {
       : undefined;
   return processQueuedProductImageStudioJob(requestedJobId);
 };
+import { assertActorCanWriteProducts } from "@/server/services/productAccess";

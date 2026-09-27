@@ -1,11 +1,13 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 
+import { lockAssortment } from "@/server/services/assortmentPolicy";
+
 import { AppError } from "@/server/services/errors";
 
 type CatalogTx = Prisma.TransactionClient;
 type CatalogClient = Pick<
   PrismaClient | Prisma.TransactionClient,
-  "store" | "productCatalog" | "storeProduct" | "inventorySnapshot"
+  "store" | "productCatalog" | "storeProduct" | "inventorySnapshot" | "$executeRaw"
 >;
 
 export type ProductCatalogStore = {
@@ -57,18 +59,20 @@ export const resolveProductCatalogStoresForStore = async (
     storeId: string;
   },
 ): Promise<ProductCatalogStore[]> => {
+  await lockAssortment(tx, input.organizationId);
   const selectedStore = await tx.store.findFirst({
     where: { id: input.storeId, organizationId: input.organizationId },
     select: {
       id: true,
       productCatalogId: true,
+      directedAssortment: true,
       allowNegativeStock: true,
     },
   });
   if (!selectedStore) {
     throw new AppError("storeAccessDenied", "FORBIDDEN", 403);
   }
-  if (!selectedStore.productCatalogId) {
+  if (selectedStore.directedAssortment || !selectedStore.productCatalogId) {
     return [
       {
         id: selectedStore.id,
@@ -81,6 +85,7 @@ export const resolveProductCatalogStoresForStore = async (
     where: {
       organizationId: input.organizationId,
       productCatalogId: selectedStore.productCatalogId,
+      directedAssortment: false,
     },
     select: { id: true, allowNegativeStock: true },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
@@ -131,10 +136,12 @@ export const syncProductCatalogAssignments = async (
     actorId?: string | null;
   },
 ) => {
+  await lockAssortment(tx, input.organizationId);
   const stores = await tx.store.findMany({
     where: {
       organizationId: input.organizationId,
       productCatalogId: input.productCatalogId,
+      directedAssortment: false,
     },
     select: { id: true, allowNegativeStock: true },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],

@@ -266,7 +266,7 @@ export const productsRouter = router({
   update: managerProcedure
     .input(updateProductInputSchema)
     .mutation(async ({ ctx, input }) => {
-      await assertSingleProductAccess(ctx.prisma, ctx.user, input.productId);
+      await assertSingleProductAccess(ctx.prisma, ctx.user, input.productId, { writable: true });
       if (input.storeId) {
         await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
       }
@@ -281,7 +281,7 @@ export const productsRouter = router({
   inlineUpdate: managerProcedure
     .input(inlineUpdateProductInputSchema)
     .mutation(async ({ ctx, input }) => {
-      await assertSingleProductAccess(ctx.prisma, ctx.user, input.productId);
+      await assertSingleProductAccess(ctx.prisma, ctx.user, input.productId, { writable: true });
       return inlineUpdateProductMutation({
         prisma: ctx.prisma,
         organizationId: ctx.user.organizationId,
@@ -311,7 +311,7 @@ export const productsRouter = router({
     .input(assignProductsToStoreInputSchema)
     .mutation(async ({ ctx, input }) => {
       await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
-      await assertProductAccess(ctx.prisma, ctx.user, input.productIds);
+      await assertProductAccess(ctx.prisma, ctx.user, input.productIds, { writable: true });
       return assignProductsToStoreMutation({
         organizationId: ctx.user.organizationId,
         actorId: ctx.user.id,
@@ -323,7 +323,7 @@ export const productsRouter = router({
   generateBarcode: managerProcedure
     .input(generateProductBarcodeInputSchema)
     .mutation(async ({ ctx, input }) => {
-      await assertSingleProductAccess(ctx.prisma, ctx.user, input.productId);
+      await assertSingleProductAccess(ctx.prisma, ctx.user, input.productId, { writable: true });
       return generateProductBarcodeMutation({
         organizationId: ctx.user.organizationId,
         actorId: ctx.user.id,
@@ -352,6 +352,7 @@ export const productsRouter = router({
       if (input.filter?.productIds?.length) {
         await assertProductAccess(ctx.prisma, ctx.user, input.filter.productIds, {
           includeArchived: input.filter.includeArchived,
+          writable: true,
         });
       }
       const accessibleStoreIds = userHasAllStoreAccess(ctx.user)
@@ -370,7 +371,7 @@ export const productsRouter = router({
     .use(rateLimit({ windowMs: 60_000, max: 30, prefix: "products-descriptions-bulk" }))
     .input(bulkGenerateProductDescriptionsInputSchema)
     .mutation(async ({ ctx, input }) => {
-      await assertProductAccess(ctx.prisma, ctx.user, input.productIds);
+      await assertProductAccess(ctx.prisma, ctx.user, input.productIds, { writable: true });
       return bulkGenerateProductDescriptionsMutation({
         organizationId: ctx.user.organizationId,
         actorId: ctx.user.id,
@@ -384,7 +385,7 @@ export const productsRouter = router({
     .use(rateLimit({ windowMs: 60_000, max: 10, prefix: "products-descriptions-job-start" }))
     .input(startProductDescriptionGenerationJobInputSchema)
     .mutation(async ({ ctx, input }) => {
-      await assertProductAccess(ctx.prisma, ctx.user, input.productIds);
+      await assertProductAccess(ctx.prisma, ctx.user, input.productIds, { writable: true });
       if (input.storeId) {
         await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
       }
@@ -423,7 +424,7 @@ export const productsRouter = router({
   bulkUpdateCategory: managerProcedure
     .input(bulkUpdateProductCategoryInputSchema)
     .mutation(async ({ ctx, input }) => {
-      await assertProductAccess(ctx.prisma, ctx.user, input.productIds);
+      await assertProductAccess(ctx.prisma, ctx.user, input.productIds, { writable: true });
       return bulkUpdateProductCategoryMutation({
         organizationId: ctx.user.organizationId,
         actorId: ctx.user.id,
@@ -436,7 +437,7 @@ export const productsRouter = router({
     .use(rateLimit({ windowMs: 60_000, max: 30, prefix: "products-category-arrange" }))
     .input(arrangeClothingCategoriesInputSchema)
     .mutation(async ({ ctx, input }) => {
-      await assertProductAccess(ctx.prisma, ctx.user, input.productIds);
+      await assertProductAccess(ctx.prisma, ctx.user, input.productIds, { writable: true });
       return arrangeClothingCategoriesMutation({
         organizationId: ctx.user.organizationId,
         actorId: ctx.user.id,
@@ -484,7 +485,7 @@ export const productsRouter = router({
   archive: managerProcedure
     .input(archiveProductInputSchema)
     .mutation(async ({ ctx, input }) => {
-      await assertSingleProductAccess(ctx.prisma, ctx.user, input.productId);
+      await assertSingleProductAccess(ctx.prisma, ctx.user, input.productId, { writable: true });
       return archiveProductMutation({
         organizationId: ctx.user.organizationId,
         actorId: ctx.user.id,
@@ -498,6 +499,7 @@ export const productsRouter = router({
     .mutation(async ({ ctx, input }) => {
       await assertSingleProductAccess(ctx.prisma, ctx.user, input.productId, {
         includeArchived: true,
+        writable: true,
       });
       return restoreProductMutation({
         organizationId: ctx.user.organizationId,

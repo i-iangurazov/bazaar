@@ -20,6 +20,9 @@ import {
   updateStorePolicy,
 } from "@/server/services/stores";
 import {
+  assortmentChangeSchema,
+  listAssortmentSourceProducts,
+  listAssortmentHistory,
   applyStoreAssortmentShare,
   listStoreAssortmentOverview,
   previewStoreAssortmentShare,
@@ -46,48 +49,29 @@ export const storesRouter = router({
     }
   }),
 
+  assortmentSourceProducts: adminOrOrgOwnerProcedure
+    .input(z.object({ storeId: z.string().min(1), search: z.string().trim().max(200).optional(), page: z.number().int().min(1).default(1) }))
+    .query(async ({ ctx, input }) => {
+      try { return await listAssortmentSourceProducts({ organizationId: ctx.user.organizationId, ...input }); }
+      catch (error) { throw toTRPCError(error); }
+    }),
+
+  assortmentHistory: adminOrOrgOwnerProcedure
+    .input(z.object({ page: z.number().int().min(1).default(1) }))
+    .query(async ({ ctx, input }) => listAssortmentHistory({ organizationId: ctx.user.organizationId, ...input })),
+
   previewAssortmentShare: adminOrOrgOwnerProcedure
-    .input(
-      z.object({
-        sourceStoreId: z.string().min(1),
-        targetStoreIds: z.array(z.string().min(1)).min(1),
-        groupName: z.string().nullable().optional(),
-      }),
-    )
+    .input(assortmentChangeSchema)
     .mutation(async ({ ctx, input }) => {
-      try {
-        return await previewStoreAssortmentShare({
-          organizationId: ctx.user.organizationId,
-          sourceStoreId: input.sourceStoreId,
-          targetStoreIds: input.targetStoreIds,
-          groupName: input.groupName,
-        });
-      } catch (error) {
-        throw toTRPCError(error);
-      }
+      try { return await previewStoreAssortmentShare({ organizationId: ctx.user.organizationId, actorId: ctx.user.id, change: input }); }
+      catch (error) { throw toTRPCError(error); }
     }),
 
   applyAssortmentShare: adminOrOrgOwnerProcedure
-    .input(
-      z.object({
-        sourceStoreId: z.string().min(1),
-        targetStoreIds: z.array(z.string().min(1)).min(1),
-        groupName: z.string().nullable().optional(),
-      }),
-    )
+    .input(z.object({ change: assortmentChangeSchema, previewToken: z.string().min(1).max(300), idempotencyKey: z.string().min(1).max(100) }).strict())
     .mutation(async ({ ctx, input }) => {
-      try {
-        return await applyStoreAssortmentShare({
-          organizationId: ctx.user.organizationId,
-          actorId: ctx.user.id,
-          requestId: ctx.requestId,
-          sourceStoreId: input.sourceStoreId,
-          targetStoreIds: input.targetStoreIds,
-          groupName: input.groupName,
-        });
-      } catch (error) {
-        throw toTRPCError(error);
-      }
+      try { return await applyStoreAssortmentShare({ organizationId: ctx.user.organizationId, actorId: ctx.user.id, requestId: ctx.requestId, ...input }); }
+      catch (error) { throw toTRPCError(error); }
     }),
 
   list: protectedProcedure.query(async ({ ctx }) => {

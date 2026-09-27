@@ -328,34 +328,19 @@ describeDb("store isolation", () => {
       initialOnHand: 3,
     });
 
-    const preview = await caller.stores.previewAssortmentShare({
-      sourceStoreId: store.id,
-      targetStoreIds: [branchStore.id],
-      groupName: "Explicit Branch Assortment",
-    });
-
-    expect(preview.sourceProductCount).toBeGreaterThanOrEqual(1);
-    expect(preview.totalSharedProductCount).toBe(
-      preview.sourceProductCount + preview.targetProductsSharedBackToSource,
-    );
-    expect(preview.targetProductsSharedBackToSource).toBe(1);
-    expect(preview.targetImpacts).toEqual([
-      expect.objectContaining({
-        storeId: branchStore.id,
-        productsToAdd: preview.sourceProductCount,
-        sourceProductsToAdd: preview.sourceProductCount,
-        zeroStockSnapshotsToCreate: preview.sourceProductCount,
-        existingPositiveStockRows: 1,
-      }),
-    ]);
-    expect(preview.stockWillBeCopied).toBe(false);
-    expect(preview.existingStockWillRemain).toBe(true);
-    expect(preview.customerSharingMode).toBe("ORGANIZATION_WIDE");
-
+    const change = { action: "SHARE" as const, sourceStoreId: store.id,
+      targetStoreIds: [branchStore.id], scope: "ALL" as const, includeFuture: true,
+      productIds: [], mutual: false, label: "Explicit Branch Assortment" };
+    const preview = await caller.stores.previewAssortmentShare(change);
+    expect(preview.directions).toEqual([expect.objectContaining({
+      sourceStoreId: store.id, targetStoreId: branchStore.id, productCount: 1,
+    })]);
+    expect(preview.impacts).toEqual([expect.objectContaining({
+      storeId: branchStore.id, currentTotal: 1, newlyVisible: 1, resultingTotal: 2,
+    })]);
+    expect(preview.inventoryEffect).toBe("NONE");
     const applied = await caller.stores.applyAssortmentShare({
-      sourceStoreId: store.id,
-      targetStoreIds: [branchStore.id],
-      groupName: "Explicit Branch Assortment",
+      change, previewToken: preview.previewToken, idempotencyKey: "branch-share",
     });
     const [
       sourceList,
@@ -409,10 +394,9 @@ describeDb("store isolation", () => {
       caller.stores.assortmentOverview(),
     ]);
 
-    expect(applied.catalogName).toBe("Explicit Branch Assortment");
-    expect(sourceList.items.map((item) => item.id)).toEqual(
-      expect.arrayContaining([sourceProduct.id, branchProduct.id]),
-    );
+    expect(applied.directions[0].label).toBe("Explicit Branch Assortment");
+    expect(sourceList.items.map((item) => item.id)).toContain(sourceProduct.id);
+    expect(sourceList.items.map((item) => item.id)).not.toContain(branchProduct.id);
     expect(branchList.items.map((item) => item.id)).toEqual(
       expect.arrayContaining([sourceProduct.id, branchProduct.id]),
     );
@@ -420,15 +404,11 @@ describeDb("store isolation", () => {
     expect(separateList.items.map((item) => item.id)).not.toContain(branchProduct.id);
     expect(sourceOwnSnapshot?.onHand).toBe(5);
     expect(branchOwnSnapshot?.onHand).toBe(3);
-    expect(sourceBranchSnapshot?.onHand).toBe(0);
-    expect(branchSourceSnapshot?.onHand).toBe(0);
-    const sharedGroup = overview.groups.find((group) => group.id === applied.catalogId);
-    expect(sharedGroup).toMatchObject({
-      name: "Explicit Branch Assortment",
-      isShared: true,
-      customerSharingMode: "ORGANIZATION_WIDE",
-      productCount: preview.totalSharedProductCount,
-      storeCount: 2,
+    expect(sourceBranchSnapshot).toBeNull();
+    expect(branchSourceSnapshot).toBeNull();
+    expect(overview.stores.find(row => row.id === branchStore.id)).toMatchObject({
+      directedAssortment: true, productCatalogId: null, mode: "receiving",
+      counts: { direct: 1, received: 1, historical: 0, total: 2 },
     });
   });
 

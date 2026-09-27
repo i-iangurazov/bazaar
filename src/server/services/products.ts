@@ -34,8 +34,9 @@ import {
 } from "@/server/services/productImageStorage";
 import { generateProductDescriptionFromImages } from "@/server/services/productDescriptions";
 import { normalizeScanValue } from "@/lib/scanning/normalize";
-import { assignProductToStore, productStoreAssignmentInWhere } from "@/server/services/storeAccess";
+import { assignProductToStore } from "@/server/services/storeAccess";
 import { resolveProductCatalogStoresForStore } from "@/server/services/productCatalogs";
+import { publishAssortmentChange } from "@/server/services/assortmentPolicy";
 import { getLogger } from "@/server/logging";
 import { lockStockSnapshot } from "@/server/services/inventoryLock";
 import { applyStockMovement } from "@/server/services/inventory";
@@ -1672,6 +1673,7 @@ const createInitialStoreAssignments = async (
     actorId: string;
     productId: string;
     stores: { id: string }[];
+    sourceStoreId?: string | null;
   },
 ) => {
   if (!input.stores.length) {
@@ -1684,6 +1686,8 @@ const createInitialStoreAssignments = async (
       productId: input.productId,
       assignedById: input.actorId,
       isActive: true,
+      isDirect: store.id === input.sourceStoreId,
+      isHistorical: store.id !== input.sourceStoreId,
     })),
     skipDuplicates: true,
   });
@@ -1782,10 +1786,6 @@ const resolveIncomingProductImages = async (input: {
 export const createProduct = async (input: CreateProductInput) => {
   const productId = randomUUID();
   await assertWithinLimits({ organizationId: input.organizationId, kind: "products" });
-  const assignmentStores = await resolveProductCreateStores(prisma, {
-    organizationId: input.organizationId,
-    storeId: input.storeId,
-  });
   const resolvedMedia = await resolveIncomingProductImages({
     organizationId: input.organizationId,
     productId,
@@ -1805,6 +1805,10 @@ export const createProduct = async (input: CreateProductInput) => {
 
   const runCreateTransaction = async () => {
     const executeCreate = async (tx: Prisma.TransactionClient) => {
+        const assignmentStores = await resolveProductCreateStores(tx, {
+          organizationId: input.organizationId,
+          storeId: input.storeId,
+        });
         await ensureSupplier(tx, input.organizationId, input.supplierId);
         const baseUnit = await ensureUnit(tx, input.organizationId, input.baseUnitId);
         const attributeDefinitions = await loadAttributeDefinitions(tx, input.organizationId);
@@ -1910,6 +1914,7 @@ export const createProduct = async (input: CreateProductInput) => {
           actorId: input.actorId,
           productId: product.id,
           stores: assignmentStores,
+          sourceStoreId: input.storeId ?? (assignmentStores.length === 1 ? assignmentStores[0].id : null),
         });
         await ensureBaseSnapshots(tx, input.organizationId, product.id, assignmentStores);
         await applyInitialInventorySettings(tx, {
@@ -2038,6 +2043,7 @@ export const createProduct = async (input: CreateProductInput) => {
 
   if (!shouldGenerateSku) {
     const { product, replayed } = await runCreateTransaction();
+    await publishAssortmentChange(input.organizationId);
     if (!replayed) {
       await recordFirstProductCreated(product.id);
     }
@@ -2047,6 +2053,7 @@ export const createProduct = async (input: CreateProductInput) => {
   for (let attempt = 0; attempt < GENERATED_SKU_MAX_RETRIES; attempt += 1) {
     try {
       const { product, replayed } = await runCreateTransaction();
+      await publishAssortmentChange(input.organizationId);
       if (!replayed) {
         await recordFirstProductCreated(product.id);
       }
@@ -2128,6 +2135,8 @@ export const assignExistingProductsToStore = async (input: AssignExistingProduct
               productId,
               assignedById: input.actorId,
               isActive: true,
+              isDirect: true,
+              isHistorical: false,
             })),
             skipDuplicates: true,
           })
@@ -2177,7 +2186,7 @@ export const assignExistingProductsToStore = async (input: AssignExistingProduct
     });
 
     return result;
-  });
+  }).then(async result => { await publishAssortmentChange(input.organizationId); return result; });
 };
 
 export type UpdateProductInput = {
@@ -2550,6 +2559,7 @@ export const duplicateProduct = async (input: {
               select: {
                 id: true,
                 allowNegativeStock: true,
+                directedAssortment: true,
               },
             },
           },
@@ -2617,6 +2627,9 @@ export const duplicateProduct = async (input: {
     }
 
     const requestedStoreId = input.storeId?.trim() || null;
+    if (!requestedStoreId && source.storeProducts.some(row => row.store.directedAssortment)) {
+      throw new AppError("storeRequired", "BAD_REQUEST", 400);
+    }
     const assignmentStores = requestedStoreId
       ? await resolveProductCatalogStoresForStore(tx, {
           organizationId: input.organizationId,
@@ -2734,6 +2747,7 @@ export const duplicateProduct = async (input: {
       actorId: input.actorId,
       productId: duplicate.id,
       stores: assignmentStores,
+      sourceStoreId: requestedStoreId ?? (assignmentStores.length === 1 ? assignmentStores[0].id : null),
     });
 
     const assignedStoreIds = new Set(assignmentStores.map((store) => store.id));
@@ -2939,7 +2953,9 @@ export const duplicateProduct = async (input: {
   );
   for (let attempt = 0; attempt < GENERATED_SKU_MAX_RETRIES; attempt += 1) {
     try {
-      return (await runDuplicate()).response;
+      const result = (await runDuplicate()).response;
+      await publishAssortmentChange(input.organizationId);
+      return result;
     } catch (error) {
       if (input.sku?.trim() || !isOrganizationSkuUniqueConstraintError(error) ||
           attempt === GENERATED_SKU_MAX_RETRIES - 1) throw error;
@@ -3089,7 +3105,7 @@ export const bulkGenerateProductBarcodes = async (input: {
       organizationId: input.organizationId,
       ...(input.filter?.includeArchived ? {} : { isDeleted: false }),
       ...(uniqueProductIds.length ? { id: { in: uniqueProductIds } } : {}),
-      ...(input.accessibleStoreIds ? productStoreAssignmentInWhere(input.accessibleStoreIds) : {}),
+      ...(input.accessibleStoreIds ? { storeProducts: { some: { storeId: { in: input.accessibleStoreIds }, isActive: true, OR: [{ isDirect: true }, { isHistorical: true }] } } } : {}),
       ...(filters.length ? { AND: filters } : {}),
     };
 
@@ -4479,6 +4495,7 @@ export const importProductsTx = async (
           storeId: store.id,
           productId: product.id,
           actorId: input.actorId,
+          direct: store.id === matchingStoreId,
         });
       }
       await ensureBaseSnapshots(tx, input.organizationId, product.id, stores);
@@ -4518,7 +4535,7 @@ export const importProducts = async (input: ImportProductsInput) =>
   prisma.$transaction(async (tx) => importProductsTx(tx, input), {
     maxWait: 10_000,
     timeout: resolveImportTransactionTimeout(),
-  });
+  }).then(async result => { await publishAssortmentChange(input.organizationId); return result; });
 
 export type ArchiveProductInput = {
   productId: string;

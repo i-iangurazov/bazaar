@@ -115,55 +115,52 @@ export const lookupScanProducts = async (
       }, 0) ?? null,
   });
 
-  const barcodeMatch = await client.productBarcode.findFirst({
-    where: {
-      organizationId,
-      value: exactNeedle,
-      product: { isDeleted: false, ...productWhere },
-    },
-    select: {
-      value: true,
-      product: {
-        select: scanProductSelect,
+  const [barcodeMatch, packMatch] = await Promise.all([
+    client.productBarcode.findFirst({
+      where: {
+        organizationId,
+        value: exactNeedle,
+        product: { isDeleted: false, ...productWhere },
       },
-    },
-  });
+      select: {
+        value: true,
+        product: {
+          select: scanProductSelect,
+        },
+      },
+    }),
+    client.productPack.findFirst({
+      where: {
+        organizationId,
+        packBarcode: exactNeedle,
+        product: { isDeleted: false, ...productWhere },
+      },
+      select: {
+        product: {
+          select: scanProductSelect,
+        },
+      },
+    }),
+  ]);
 
-  if (barcodeMatch?.product) {
+  const exactProducts = [
+    ...(barcodeMatch?.product
+      ? [
+          toItem({
+            ...barcodeMatch.product,
+            primaryBarcode: barcodeMatch.value,
+            matchType: "barcode",
+          }),
+        ]
+      : []),
+    ...(packMatch?.product ? [toItem({ ...packMatch.product, matchType: "barcode" })] : []),
+  ];
+  if (exactProducts.length) {
+    // Separate IDs can collide across barcode/pack namespaces in historical data.
+    // Return every match to the existing scanner chooser instead of picking one.
     return {
       exactMatch: true,
-      items: [
-        toItem({
-          ...barcodeMatch.product,
-          primaryBarcode: barcodeMatch.value,
-          matchType: "barcode",
-        }),
-      ],
-    };
-  }
-
-  const packMatch = await client.productPack.findFirst({
-    where: {
-      organizationId,
-      packBarcode: exactNeedle,
-      product: { isDeleted: false, ...productWhere },
-    },
-    select: {
-      product: {
-        select: scanProductSelect,
-      },
-    },
-  });
-
-  if (packMatch?.product) {
-    return {
-      exactMatch: true,
-      items: [
-        toItem({
-          ...packMatch.product,
-          matchType: "barcode",
-        }),
-      ],
+      items: [...new Map(exactProducts.map((item) => [item.id, item])).values()],
     };
   }
 

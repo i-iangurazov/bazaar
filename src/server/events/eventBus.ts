@@ -16,6 +16,7 @@ import {
 } from "@/server/metrics/metrics";
 
 export type EventPayload =
+  | { type: "assortment.updated"; payload: { storeId: string } }
   | {
       type: "inventory.updated";
       payload: { storeId: string; productId: string; variantId?: string | null };
