@@ -21,6 +21,28 @@ describeDb("B1 Agent 4 SSE store-isolation contract", () => {
     await resetDatabase();
   });
 
+  it("reports delivery health only when the client explicitly requests it", async () => {
+    const { org, cashierUser } = await seedBase({ plan: "BUSINESS" });
+    mockGetServerAuthToken.mockResolvedValue({
+      id: cashierUser.id, role: cashierUser.role, organizationId: org.id,
+    });
+    const health = vi.spyOn(eventBus, "isRealtimeHealthy").mockReturnValue(false);
+    const controller = new AbortController();
+    try {
+      const response = await GET(new Request("http://localhost/api/sse?health=1", {
+        signal: controller.signal,
+      }));
+      expect(response.status).toBe(200);
+      const first = await response.body!.getReader().read();
+      expect(new TextDecoder().decode(first.value)).toBe(
+        'event: connection.health\ndata: {"healthy":false}\n\n',
+      );
+    } finally {
+      controller.abort();
+      health.mockRestore();
+    }
+  });
+
   it("A4-005: assigned-store cashier receives only events from an allowed store", async () => {
     const { org, store, cashierUser } = await seedBase({ plan: "BUSINESS" });
     const unassignedStore = await prisma.store.create({

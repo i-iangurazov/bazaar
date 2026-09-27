@@ -111,6 +111,37 @@ const PosShiftsPage = () => {
     toast({ description: t("entry.registerUnavailable") });
   }, [registerSelectionIssue, t, toast]);
 
+  const realtimeConnected = useSse(
+    {
+      "shift.opened": () => {
+        void refreshShift();
+      },
+      "debt.settled": () => {
+        void refreshShift();
+      },
+      "shift.updated": () => {
+        void refreshShift();
+      },
+      "sale.completed": () => {
+        void refreshShift();
+      },
+      "sale.refunded": () => {
+        void refreshShift();
+      },
+      "shift.closed": () => {
+        void refreshShift();
+      },
+    },
+    // Recover events missed while disconnected as soon as the stream returns.
+    {
+      monitorHealth: true,
+      onConnect: () => {
+        if (canLoadRegisterScopedData) void refreshShift();
+      },
+    },
+  );
+  const fallbackRefreshMs = realtimeConnected ? 60_000 : 5_000;
+
   const currentShiftQuery = trpc.pos.shifts.current.useQuery(
     { registerId },
     {
@@ -118,7 +149,7 @@ const PosShiftsPage = () => {
       refetchOnMount: "always",
       refetchOnWindowFocus: true,
       staleTime: 0,
-      refetchInterval: 5_000,
+      refetchInterval: fallbackRefreshMs,
     },
   );
 
@@ -127,7 +158,7 @@ const PosShiftsPage = () => {
     {
       enabled: Boolean(currentShiftQuery.data?.id),
       refetchOnWindowFocus: true,
-      refetchInterval: 5_000,
+      refetchInterval: fallbackRefreshMs,
     },
   );
 
@@ -157,21 +188,6 @@ const PosShiftsPage = () => {
   };
 
   const closeShiftMutation = trpc.pos.shifts.close.useMutation();
-
-  useSse({
-    "shift.updated": () => {
-      void refreshShift();
-    },
-    "sale.completed": () => {
-      void refreshShift();
-    },
-    "sale.refunded": () => {
-      void refreshShift();
-    },
-    "shift.closed": () => {
-      void refreshShift();
-    },
-  });
 
   const transferDraftMutation = trpc.pos.sales.transferDraft.useMutation({
     onSuccess: async (result) => {

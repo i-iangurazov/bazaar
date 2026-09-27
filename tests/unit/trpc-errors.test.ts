@@ -690,6 +690,24 @@ describe("redis event bus recovery", () => {
     return { eventBus, publisher, subscriber, logger };
   };
 
+  it("reports delivery unhealthy until subscribed and during Redis recovery", async () => {
+    const { eventBus, publisher, subscriber } = await createEventBusHarness();
+    publisher.ping.mockResolvedValue("PONG");
+    subscriber.subscribe.mockResolvedValue(undefined);
+    expect(eventBus.isRealtimeHealthy()).toBe(false);
+    const unsubscribe = eventBus.subscribe(vi.fn());
+    await vi.advanceTimersByTimeAsync(0);
+    expect(eventBus.isRealtimeHealthy()).toBe(true);
+    const onEnd = subscriber.on.mock.calls.find(([event]) => event === "end")?.[1];
+    onEnd();
+    expect(eventBus.isRealtimeHealthy()).toBe(false);
+    await vi.advanceTimersByTimeAsync(1_600);
+    expect(eventBus.isRealtimeHealthy()).toBe(true);
+    subscriber.status = "reconnecting";
+    expect(eventBus.isRealtimeHealthy()).toBe(false);
+    unsubscribe();
+  });
+
   it("recovers and resumes redis publish after a transient failure", async () => {
     const { eventBus, publisher, subscriber, logger } = await createEventBusHarness();
     publisher.publish.mockRejectedValueOnce(new Error("redisDown")).mockResolvedValue(1);

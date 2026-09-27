@@ -205,11 +205,21 @@ export const GET = async (request: Request) => {
       const unsubscribe = eventBus.subscribe((event) => {
         void send(event);
       });
+      const reportHealth = new URL(request.url).searchParams.get("health") === "1";
+      const sendHealth = () => {
+        if (reportHealth && !closed) {
+          controller.enqueue(encoder.encode(
+            `event: connection.health\ndata: ${JSON.stringify({ healthy: eventBus.isRealtimeHealthy() })}\n\n`,
+          ));
+        }
+      };
+      sendHealth();
       const keepAlive = setInterval(() => {
         if (closed) {
           return;
         }
         controller.enqueue(encoder.encode(": keepalive\n\n"));
+        sendHealth();
       }, 15000);
 
       request.signal.addEventListener("abort", () => {

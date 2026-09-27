@@ -110,6 +110,10 @@ const toLogError = (error: unknown) => {
 };
 
 class InMemoryEventBus {
+  isRealtimeHealthy() {
+    return !isProductionRuntime();
+  }
+
   private listeners = new Set<Listener>();
 
   publish(event: EventPayload) {
@@ -130,6 +134,7 @@ class RedisEventBus {
   private readonly sourceId = randomUUID();
   private readonly logger = getLogger();
   private subscribed = false;
+  private subscriptionReady = false;
   private redisHealthy = true;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private subscriberWithHandlers: Redis | null = null;
@@ -186,6 +191,11 @@ class RedisEventBus {
     return () => this.listeners.delete(listener);
   }
 
+  isRealtimeHealthy() {
+    return this.redisHealthy && this.subscriptionReady &&
+      this.subscriberWithHandlers?.status === "ready";
+  }
+
   private ensureSubscription() {
     if (this.subscribed || !this.redisHealthy) {
       return;
@@ -202,6 +212,7 @@ class RedisEventBus {
         await subscriber.connect();
       }
       await subscriber.subscribe(CHANNEL);
+      this.subscriptionReady = true;
     })().catch((error) => {
       incrementCounter(eventsPublishFailuresTotal, { type: "subscribe" });
       this.subscribed = false;
@@ -257,6 +268,7 @@ class RedisEventBus {
       if (this.listeners.size) {
         await subscriber.subscribe(CHANNEL);
         this.subscribed = true;
+        this.subscriptionReady = true;
       } else {
         this.subscribed = false;
       }
@@ -277,6 +289,7 @@ class RedisEventBus {
     }
     this.redisHealthy = false;
     this.subscribed = false;
+    this.subscriptionReady = false;
     const message = isProductionRuntime()
       ? "redis event bus degraded; cross-instance realtime is unavailable"
       : "redis event bus degraded; falling back to in-memory realtime";
