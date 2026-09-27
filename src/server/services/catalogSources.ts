@@ -132,25 +132,28 @@ async function graph(tx: Tx, organizationId: string) {
   }
   for (const s of stores) {
     const key = `store:${s.id}`,
-      prior = sources.get(key);
+      prior = sources.get(key),
+      baseline = sources.get(`baseline:${s.id}`);
     sources.set(key, {
       key,
       catalogId: prior?.catalogId ?? null,
-      name: prior?.name ?? `Каталог · ${s.name}`,
+      name: s.name,
       sourceStoreId: s.id,
       sourceName: s.name,
       includeFuture: true,
       shared: false,
-      memberIds: unique(
-        allAssignments
+      memberIds: unique([
+        ...(baseline?.memberIds ?? []),
+        ...allAssignments
           .filter((a) => a.storeId === s.id && a.isDirect && a.isActive)
           .map((a) => a.productId),
-      ),
-      productIds: unique(
-        assignments
+      ]),
+      productIds: unique([
+        ...(baseline?.productIds ?? []),
+        ...assignments
           .filter((a) => a.storeId === s.id && a.isDirect && a.isActive)
           .map((a) => a.productId),
-      ),
+      ]),
     });
     if (!s.catalogSourcesConfigured && !s.productCatalogId) {
       const history = allAssignments
@@ -281,11 +284,17 @@ export async function getCatalogSettings(organizationId: string, storeId?: strin
   return prisma.$transaction(
     async (tx) => {
       const g = await graph(tx, organizationId);
+      const stores = g.stores.map((s) => ({
+        ...s,
+        baseCount: g.sources.get(`store:${s.id}`)!.productIds.length,
+        availableCount: g.assignments.filter((a) => a.storeId === s.id && a.isActive).length,
+        hasBaseline: g.sources.has(`baseline:${s.id}`),
+      }));
       const store = g.stores.find((s) => s.id === storeId) ?? (!storeId ? g.stores[0] : null);
       if (!store) {
         if (storeId) throw new AppError("storeNotFound", "NOT_FOUND", 404);
         return {
-          stores: g.stores,
+          stores,
           store: null,
           sources: [],
           settings: null,
@@ -296,7 +305,7 @@ export async function getCatalogSettings(organizationId: string, storeId?: strin
       const settings = g.settings(store.id);
       const selectedBySource = new Map(settings.connections.map((c) => [c.key, c.productIds]));
       return {
-        stores: g.stores,
+        stores,
         store,
         sources: [...g.sources.values()].map((s) => metadata(s, selectedBySource.get(s.key) ?? [])),
         settings,
@@ -383,6 +392,13 @@ async function impact(tx: Tx, organizationId: string, raw: CatalogSettings) {
     g = await graph(tx, organizationId);
   const before = g.settings(change.storeId),
     store = g.stores.find((s) => s.id === change.storeId)!;
+  // A reviewed pre-sharing snapshot is the store's base assortment. It is not
+  // inferred ownership, and incoming shares never enter this exportable set.
+  if (g.sources.has(`baseline:${store.id}`)) {
+    const baseline = change.connections.find((c) => c.key === `baseline:${store.id}`);
+    if (!baseline?.enabled || baseline.scope !== "ALL" || baseline.productIds.length)
+      throw new AppError("assortmentBaselineRequired", "BAD_REQUEST", 400);
+  }
   if (new Set(change.connections.map((c) => c.key)).size !== change.connections.length)
     throw new AppError("invalidInput", "BAD_REQUEST", 400);
   const current = new Set(
