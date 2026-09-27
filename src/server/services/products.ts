@@ -2083,7 +2083,7 @@ export const assignExistingProductsToStore = async (input: AssignExistingProduct
     const [store, products] = await Promise.all([
       tx.store.findFirst({
         where: { id: input.storeId, organizationId: input.organizationId },
-        select: { id: true, allowNegativeStock: true },
+        select: { id: true, allowNegativeStock: true, catalogSourcesConfigured: true },
       }),
       tx.product.findMany({
         where: {
@@ -2110,8 +2110,11 @@ export const assignExistingProductsToStore = async (input: AssignExistingProduct
         storeId: input.storeId,
         productId: { in: ownedProductIds },
       },
-      select: { productId: true, isActive: true },
+      select: { productId: true, isActive: true, isDirect: true },
     });
+    if (store.catalogSourcesConfigured && existingAssignments.some(a => !a.isActive && !a.isDirect)) {
+      throw new AppError("assortmentUseSourceEditor", "CONFLICT", 409);
+    }
     const activeIds = new Set(
       existingAssignments
         .filter((assignment) => assignment.isActive)

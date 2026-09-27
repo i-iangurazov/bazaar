@@ -36,6 +36,7 @@ const storeSelect = {
   code: true,
   productCatalogId: true,
   directedAssortment: true,
+  catalogSourcesConfigured: true,
   productCatalog: { select: { id: true, name: true } },
 } satisfies Prisma.StoreSelect;
 const activeProducts = { isActive: true, product: { isDeleted: false } };
@@ -187,6 +188,9 @@ async function buildPreview(tx: Tx, organizationId: string, raw: AssortmentChang
     orderBy: { id: "asc" },
   });
   if (stores.length !== storeIds.length) throw new AppError("storeNotFound", "NOT_FOUND", 404);
+  const targets = change.action === "SHARE" ? [...change.targetStoreIds, ...(change.mutual ? [change.sourceStoreId] : [])] : change.action === "CONVERT" ? change.storeIds : selectedRules.map(r => r.targetStoreId);
+  if (stores.some(s => targets.includes(s.id) && s.catalogSourcesConfigured))
+    throw new AppError("assortmentUseSourceEditor", "CONFLICT", 409);
   const assignments = await tx.storeProduct.findMany({
     where: { organizationId, storeId: { in: storeIds }, ...activeProducts },
     select: {

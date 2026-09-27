@@ -157,6 +157,14 @@ export const productStoreAssignmentWhere = (storeId?: string | null): Prisma.Pro
       }
     : {};
 
+/** Warehouse operations retain existing records when a configured source is disconnected. */
+export const inventoryProductAccessWhere = (storeId: string): Prisma.ProductWhereInput => ({
+  OR: [
+    productStoreAssignmentWhere(storeId),
+    { inventorySnapshots: { some: { storeId, store: { catalogSourcesConfigured: true } } } },
+  ],
+});
+
 export const productStoreAssignmentInWhere = (
   storeIds?: string[] | null,
 ): Prisma.ProductWhereInput =>

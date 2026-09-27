@@ -1,3 +1,4 @@
+import { assertSaleAssortment, lockAssortmentForSale } from "./assortmentPolicy";
 import { assertBaamReviewedVersion } from "@/server/services/baamExecutionContext";
 import {
   CatalogDiscountType,
@@ -1501,6 +1502,7 @@ export const completeCustomerOrder = async (input: {
   const logger = getLogger(input.requestId);
 
   const result = await prisma.$transaction(async (tx) => {
+    await lockAssortmentForSale(tx, input.organizationId);
     const { result: completion } = await withIdempotency(
       tx,
       {
@@ -1544,6 +1546,8 @@ export const completeCustomerOrder = async (input: {
         if (!order.lines.length) {
           throw new AppError("salesOrderEmpty", "BAD_REQUEST", 400);
         }
+
+        await assertSaleAssortment(tx, input.organizationId, order.storeId, order.lines.map(line => line.productId));
 
         const apiStockAlreadyApplied =
           order.source === CustomerOrderSource.API

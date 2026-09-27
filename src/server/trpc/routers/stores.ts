@@ -1,4 +1,12 @@
 import { z } from "zod";
+import {
+  catalogSettingsSchema,
+  getCatalogSettings,
+  getCatalogProducts,
+  previewCatalogSettings,
+  saveCatalogSettings,
+  catalogSettingsHistory,
+} from "@/server/services/catalogSources";
 import { LegalEntityType, PrinterPrintMode } from "@prisma/client";
 import { TRPCError } from "@trpc/server";
 
@@ -39,6 +47,70 @@ import {
 import { assertUserCanAccessStore, userHasAllStoreAccess } from "@/server/services/storeAccess";
 
 export const storesRouter = router({
+  catalogSettings: adminOrOrgOwnerProcedure
+    .input(z.object({ storeId: z.string().min(1).optional() }))
+    .query(async ({ ctx, input }) => {
+      try {
+        return await getCatalogSettings(ctx.user.organizationId, input.storeId);
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+  catalogProducts: adminOrOrgOwnerProcedure
+    .input(z.object({
+      storeId: z.string().min(1),
+      key: z.string().min(1),
+      search: z.string().trim().max(200).optional(),
+      page: z.number().int().min(1).default(1),
+      allIds: z.boolean().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      try {
+        return await getCatalogProducts({ organizationId: ctx.user.organizationId, ...input });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+  previewCatalogSettings: adminOrOrgOwnerProcedure
+    .input(catalogSettingsSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await previewCatalogSettings({
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+          change: input,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+  saveCatalogSettings: adminOrOrgOwnerProcedure
+    .input(z.object({
+      change: catalogSettingsSchema,
+      token: z.string().min(1).max(300),
+      idempotencyKey: z.string().min(1).max(100),
+    }).strict())
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await saveCatalogSettings({
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+          ...input,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+  catalogSettingsHistory: adminOrOrgOwnerProcedure
+    .input(z.object({ storeId: z.string().min(1), page: z.number().int().min(1).default(1) }))
+    .query(async ({ ctx, input }) => {
+      try {
+        return await catalogSettingsHistory(ctx.user.organizationId, input.storeId, input.page);
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
   assortmentOverview: adminOrOrgOwnerProcedure.query(async ({ ctx }) => {
     try {
       return await listStoreAssortmentOverview({

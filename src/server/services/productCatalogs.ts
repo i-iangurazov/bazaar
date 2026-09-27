@@ -43,6 +43,7 @@ export const resolveProductCatalog = async (
     where: {
       id: input.productCatalogId,
       organizationId: input.organizationId,
+      sourceKey: null,
     },
     select: { id: true, name: true },
   });

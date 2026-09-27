@@ -42,12 +42,12 @@ import { buildReorderSuggestion } from "@/server/services/reorderSuggestions";
 import { setDefaultMinStock, setMinStock } from "@/server/services/reorderPolicies";
 import {
   assertUserCanAccessStore,
-  productStoreAssignmentWhere,
+  inventoryProductAccessWhere,
   resolveAccessibleStoreIds,
 } from "@/server/services/storeAccess";
 import { WRITE_OFF_REASONS } from "@/lib/inventory/writeOff";
 
-const inventoryStockFilterSchema = z.enum(["all", "lowStock", "outOfStock", "negativeStock"]);
+const inventoryStockFilterSchema = z.enum(["all", "lowStock", "outOfStock", "negativeStock", "notInAssortment"]);
 const inventorySortKeySchema = z.enum([
   "sku",
   "image",
@@ -166,7 +166,8 @@ const buildInventorySnapshotWhere = (
     ...(input.stockFilter === "outOfStock" ? { onHand: { equals: 0 } } : {}),
     product: {
       isDeleted: false,
-      ...productStoreAssignmentWhere(input.storeId),
+      ...inventoryProductAccessWhere(input.storeId),
+      ...(input.stockFilter === "notInAssortment" ? { storeProducts: { none: { storeId: input.storeId, isActive: true } } } : {}),
       ...buildInventoryProductSearchWhere(searchTokens),
     },
   };
@@ -199,7 +200,7 @@ const buildInventorySnapshotSql = (
   return Prisma.sql`
     FROM "InventorySnapshot" s
     JOIN "Product" p ON p."id" = s."productId"
-    JOIN "StoreProduct" sp
+    LEFT JOIN "StoreProduct" sp
       ON sp."storeId" = s."storeId"
      AND sp."productId" = s."productId"
      AND sp."isActive" = true
@@ -222,7 +223,9 @@ const buildInventorySnapshotSql = (
     }
     WHERE s."storeId" = ${input.storeId}
       AND p."organizationId" = ${organizationId}
-      AND sp."organizationId" = ${organizationId}
+      AND (sp."organizationId" = ${organizationId} OR sp.id IS NULL)
+      AND (sp."isActive" = true OR EXISTS (SELECT 1 FROM "Store" ws WHERE ws.id=s."storeId" AND ws."catalogSourcesConfigured"))
+      ${input.stockFilter === "notInAssortment" ? Prisma.sql`AND sp.id IS NULL` : Prisma.empty}
       AND p."isDeleted" = false
       ${input.stockFilter === "negativeStock" ? Prisma.sql`AND s."onHand" < 0` : Prisma.empty}
       ${input.stockFilter === "outOfStock" ? Prisma.sql`AND s."onHand" = 0` : Prisma.empty}
@@ -660,7 +663,7 @@ export const inventoryRouter = router({
       const where = {
         organizationId: ctx.user.organizationId,
         isDeleted: false,
-        ...productStoreAssignmentWhere(input.storeId),
+        ...inventoryProductAccessWhere(input.storeId),
         ...(input.productId
           ? { id: input.productId }
           : buildInventoryProductSearchWhere(searchTokens, input.searchFields)),

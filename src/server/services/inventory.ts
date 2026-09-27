@@ -1,3 +1,4 @@
+import { inventoryProductAccessWhere } from "./storeAccess";
 import { randomUUID } from "node:crypto";
 import type { InventorySnapshot, Prisma } from "@prisma/client";
 import {
@@ -781,12 +782,7 @@ export const postStockReceiving = async (
             id: { in: productIds },
             organizationId: input.organizationId,
             isDeleted: false,
-            storeProducts: {
-              some: {
-                storeId: input.storeId,
-                isActive: true,
-              },
-            },
+            ...inventoryProductAccessWhere(input.storeId),
           },
           select: { id: true },
         });
@@ -995,12 +991,7 @@ export const postStockWriteOff = async (
             id: { in: productIds },
             organizationId: input.organizationId,
             isDeleted: false,
-            storeProducts: {
-              some: {
-                storeId: input.storeId,
-                isActive: true,
-              },
-            },
+            ...inventoryProductAccessWhere(input.storeId),
           },
           select: { id: true, baseUnitId: true },
         });
@@ -1268,12 +1259,7 @@ export const transferStock = async (input: TransferStockInput) => {
             id: { in: productIds },
             organizationId: input.organizationId,
             isDeleted: false,
-            storeProducts: {
-              some: {
-                storeId: input.fromStoreId,
-                isActive: true,
-              },
-            },
+            ...inventoryProductAccessWhere(input.fromStoreId),
           },
           select: { id: true, baseUnitId: true },
         });
@@ -1846,12 +1832,7 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
             id: { in: productIds },
             organizationId: input.organizationId,
             isDeleted: false,
-            storeProducts: {
-              some: {
-                storeId: sourceStoreId,
-                isActive: true,
-              },
-            },
+            ...inventoryProductAccessWhere(sourceStoreId),
           },
           select: { id: true },
         });

@@ -2,6 +2,36 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/server/db/prisma";
 import { eventBus } from "@/server/events/eventBus";
 import { getLogger } from "@/server/logging";
+import { AppError } from "./errors";
+
+/** Sale completion and source changes serialize without serializing independent sales. */
+export async function lockAssortmentForSale(tx: Prisma.TransactionClient, organizationId: string) {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock_shared(hashtextextended(${`assortment:${organizationId}`}, 0))`;
+}
+
+export async function assertSaleAssortment(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  storeId: string,
+  productIds: string[],
+) {
+  const store = await tx.store.findFirst({
+    where: { id: storeId, organizationId },
+    select: { catalogSourcesConfigured: true },
+  });
+  if (!store?.catalogSourcesConfigured) return; // Keep untouched stores' existing document policy.
+  const ids = [...new Set(productIds)];
+  const count = await tx.storeProduct.count({
+    where: {
+      organizationId,
+      storeId,
+      productId: { in: ids },
+      isActive: true,
+      product: { organizationId, isDeleted: false },
+    },
+  });
+  if (count !== ids.length) throw new AppError("productNotAvailableInStore", "FORBIDDEN", 403);
+}
 
 /** Call only after commit. Includes recipients granted by the database trigger. */
 export async function publishAssortmentChange(organizationId: string) {

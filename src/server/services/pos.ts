@@ -1,3 +1,4 @@
+import { assertSaleAssortment, lockAssortmentForSale } from "./assortmentPolicy";
 import {
   CatalogDiscountType,
   CashDrawerMovementType,
@@ -4739,6 +4740,7 @@ export const completePosSale = async (input: {
 
   const result = await prisma
     .$transaction(async (tx) => {
+      await lockAssortmentForSale(tx, input.organizationId);
       const { result: completion, replayed } = await withIdempotency(
         tx,
         {
@@ -4853,6 +4855,7 @@ export const completePosSale = async (input: {
             throw new AppError("posSaleNotEditable", "CONFLICT", 409);
           }
           assertPosSaleDraftOwner(sale, input.actorId);
+          await assertSaleAssortment(tx, input.organizationId, sale.storeId, sale.lines.map(line => line.productId));
 
           const orderTotalMinorUnits = moneyToMinorUnits(toMoney(sale.totalKgs)) ?? 0;
           const visibleCartTotalMinorUnits =
