@@ -89,6 +89,7 @@ try {
   await run(process.execPath, ["--import", "tsx", "scripts/reporting/browser-states.ts"]);
   await run(process.execPath, ["--import", "tsx", "scripts/reporting/detail-scroll-browser.ts"]);
   await run(process.execPath, ["--import", "tsx", "scripts/reporting/assortment-pos-browser.ts"]);
+  await run(process.execPath, ["--import", "tsx", "scripts/reporting/recovery-browser.ts"]);
 } finally {
   server.kill("SIGTERM");
   await log.close();

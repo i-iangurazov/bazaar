@@ -48,9 +48,7 @@ export default function StoreGroupsPage() {
   const [error, setError] = useState<unknown>(null),
     [previewLoading, setPreviewLoading] = useState(false);
   const [notice, setNotice] = useState("");
-  const [storeSearch, setStoreSearch] = useState(""),
-    [addOpen, setAddOpen] = useState(false),
-    [addSearch, setAddSearch] = useState("");
+  const [storeSearch, setStoreSearch] = useState("");
   const [pendingStore, setPendingStore] = useState<string | null>(null);
   const [detail, setDetail] = useState<Source | null>(null),
     [detailMode, setDetailMode] = useState<"view" | "selection" | "ownership">("view");
@@ -240,21 +238,24 @@ export default function StoreGroupsPage() {
     approval.changeKey === draftKey &&
     !previewLoading &&
     !saveMutation.isLoading;
-  const availableSources = (data?.sources ?? []).filter(
+  const sourceRows = (data?.sources ?? []).filter(
     (s) =>
       s.key !== own?.key &&
-      !current?.connections.some((c) => c.key === s.key) &&
-      `${s.name} ${s.sourceName ?? ""}`.toLocaleLowerCase().includes(addSearch.toLocaleLowerCase()),
+      !s.key.startsWith("baseline:") &&
+      ((s.key.startsWith("store:") && s.total > 0) ||
+        current?.connections.some((c) => c.key === s.key)),
   );
+  const displayName = (source: Source) =>
+    source.sourceName ?? `${t("sharedSource")} · ${source.name}`;
   function sourceRow(source: Source, c?: Connection) {
     return (
       <div
         key={source.key}
-        className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 border-t border-border py-4 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_110px_130px] md:items-center"
+        className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 border-t border-border py-4 md:grid-cols-[minmax(0,1fr)_110px_130px] md:items-center"
         data-source-key={source.key}
       >
         <div className="min-w-0">
-          <p className="break-words font-medium">{c ? source.name : t("ownCatalog")}</p>
+          <p className="break-words font-medium">{c ? displayName(source) : store?.name}</p>
           {c?.scope === "SELECTED" ? (
             <p className="text-xs text-muted-foreground">
               {t("partial", {
@@ -273,13 +274,10 @@ export default function StoreGroupsPage() {
             {t("details")}
           </Button>
         </div>
-        <p className="order-3 col-start-1 text-sm text-muted-foreground md:order-none md:col-start-auto">
-          {c ? (source.sourceName ?? t("sharedSource")) : t("thisStore")}
-        </p>
         <Button
           variant="link"
           size="sm"
-          className="order-4 justify-end px-0 md:order-none md:justify-start"
+          className="order-3 justify-start px-0 md:order-none"
           onClick={() => openDetail(source)}
           aria-label={t("viewCatalog", { name: source.name })}
         >
@@ -296,7 +294,9 @@ export default function StoreGroupsPage() {
             <span>{t(c.enabled ? "enabled" : "disabled")}</span>
           </label>
         ) : (
-          <span className="order-2 text-sm text-muted-foreground md:order-none">{t("owned")}</span>
+          <span className="order-2 text-sm text-muted-foreground md:order-none">
+            {t("thisStore")}
+          </span>
         )}
       </div>
     );
@@ -331,7 +331,7 @@ export default function StoreGroupsPage() {
             >
               {data!.stores.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.name}
+                  {s.name} · {s.hasBaseline ? s.baseCount : s.availableCount}
                 </option>
               ))}
             </select>
@@ -364,9 +364,14 @@ export default function StoreGroupsPage() {
                       <span className="truncate" title={s.name}>
                         {s.name}
                       </span>
-                      {s.code.length <= 8 ? (
-                        <span className="shrink-0 text-[10px] text-muted-foreground">{s.code}</span>
-                      ) : null}
+                      <span
+                        className="shrink-0 text-xs tabular-nums text-muted-foreground"
+                        aria-label={t("storeCount", {
+                          count: s.hasBaseline ? s.baseCount : s.availableCount,
+                        })}
+                      >
+                        {(s.hasBaseline ? s.baseCount : s.availableCount).toLocaleString(locale)}
+                      </span>
                     </button>
                   ))}
               </nav>
@@ -405,33 +410,28 @@ export default function StoreGroupsPage() {
                     {t("viewProducts")}
                   </Link>
                 </div>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={saveMutation.isLoading}
-                  onClick={() => {
-                    setAddSearch("");
-                    setAddOpen(true);
-                  }}
-                >
-                  {t("addSource")}
-                </Button>
               </div>
               <div
-                className="hidden grid-cols-[minmax(0,2fr)_minmax(0,1fr)_110px_130px] gap-3 pb-2 text-xs font-medium text-muted-foreground md:grid"
+                className="hidden grid-cols-[minmax(0,1fr)_110px_130px] gap-3 pb-2 text-xs font-medium text-muted-foreground md:grid"
                 aria-hidden="true"
               >
-                <span>{t("catalog")}</span>
-                <span>{t("source")}</span>
+                <span>{t("store")}</span>
                 <span>{t("products")}</span>
                 <span>{t("access")}</span>
               </div>
               {own && data!.ownCount > 0 ? sourceRow(own) : null}
-              {current?.connections.map((c) => {
-                const source = sourceByKey(c.key);
-                return source ? sourceRow(source, c) : null;
-              })}
-              {!data!.ownCount && !current?.connections.length ? (
+              {sourceRows.map((source) =>
+                sourceRow(
+                  source,
+                  current?.connections.find((c) => c.key === source.key) ?? {
+                    key: source.key,
+                    enabled: false,
+                    scope: "ALL",
+                    productIds: [],
+                  },
+                ),
+              )}
+              {!data!.ownCount && !sourceRows.length ? (
                 <p className="border-t py-6 text-sm text-muted-foreground">{t("empty")}</p>
               ) : null}
               {notice ? (
@@ -539,59 +539,6 @@ export default function StoreGroupsPage() {
           </Card>
         </div>
       )}
-      <Modal open={addOpen} onOpenChange={setAddOpen} title={t("addSource")}>
-        <div className="space-y-3">
-          <Input
-            aria-label={t("searchSources")}
-            placeholder={t("searchSources")}
-            value={addSearch}
-            onChange={(e) => setAddSearch(e.target.value)}
-          />
-          {availableSources.length ? (
-            availableSources.map((s) => (
-              <div
-                className="flex items-center justify-between gap-3 rounded-md border p-3"
-                key={s.key}
-              >
-                <div className="min-w-0">
-                  <p className="break-words text-sm font-medium">{s.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {s.sourceName ?? t("sharedSource")} · {s.total}
-                  </p>
-                  {s.total === 0 && s.sourceStoreId ? (
-                    <p className="mt-1 text-xs text-muted-foreground">{t("needsReview")}</p>
-                  ) : null}
-                </div>
-                {s.total === 0 && s.sourceStoreId ? (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => {
-                      setAddOpen(false);
-                      selectStore(s.sourceStoreId!);
-                    }}
-                  >
-                    {t("configure")}
-                  </Button>
-                ) : (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => {
-                      update(s.key, { enabled: true, scope: "ALL" });
-                      setAddOpen(false);
-                    }}
-                  >
-                    {t("add")}
-                  </Button>
-                )}
-              </div>
-            ))
-          ) : (
-            <p className="text-sm text-muted-foreground">{t("noSources")}</p>
-          )}
-        </div>
-      </Modal>
       <Modal
         open={!!detail}
         onOpenChange={(open) => {
@@ -608,7 +555,7 @@ export default function StoreGroupsPage() {
               </p>
               {detailMode === "view" ? (
                 <div className="flex flex-wrap gap-2">
-                  {connection ? (
+                  {connection && !connection.key.startsWith("baseline:") ? (
                     <Button
                       size="sm"
                       variant="secondary"

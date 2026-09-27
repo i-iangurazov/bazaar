@@ -1,15 +1,16 @@
 {
   "catalogSources": {
+    "storeCount": "Available products: {count}",
     "archivedSelection": "Archived selections retained: {count}. They become available after the product is restored, if the source is enabled.",
     "title": "Store assortment",
-    "subtitle": "Choose which catalogues are available in this store",
+    "subtitle": "Choose which stores supply products here",
     "store": "Store",
     "searchStores": "Find a store",
     "catalog": "Catalogue",
     "source": "Source",
     "products": "Products",
     "access": "Access",
-    "ownCatalog": "Own catalogue",
+    "ownCatalog": "Base assortment",
     "thisStore": "This store",
     "sharedSource": "Shared catalogue",
     "owned": "Owned",
@@ -17,7 +18,7 @@
     "disabled": "Disabled",
     "details": "View / configure",
     "viewCatalog": "View products: {name}",
-    "accessLabel": "Catalogue access: {name}",
+    "accessLabel": "Products from store: {name}",
     "partial": "Selected {selected} of {total}",
     "distinctProducts": "distinct available products",
     "viewProducts": "View products",
@@ -4970,6 +4971,7 @@
     }
   },
   "errors": {
+    "assortmentBaselineRequired": "Keep the store’s base assortment enabled. Change connections to other stores.",
     "assortmentUseSourceEditor": "Configure sources in the selected store panel.",
     "assortmentSelectionLimit": "Select up to 20,000 products at a time. Narrow your search.",
     "posDraftHasRecordedOperations": "This receipt has payment, stock or fiscal records. It cannot be canceled as a normal draft. Review it with an administrator.",

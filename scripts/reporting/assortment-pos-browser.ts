@@ -203,17 +203,15 @@ try {
   await page
     .getByRole("combobox", { name: m.catalogSources.store, exact: true })
     .selectOption(target.id);
-  await page.getByRole("button", { name: m.catalogSources.addSource, exact: true }).click();
   const source = (await api("stores.catalogSettings", { storeId: target.id })).sources.find(
     (s: { key: string }) => s.key === `store:${f.storeId}`,
   );
   assert.ok(source);
-  const addDialog = page.getByRole("dialog", { name: m.catalogSources.addSource });
-  await addDialog
-    .getByText(source.name, { exact: true })
-    .locator("..")
-    .locator("..")
-    .getByRole("button", { name: m.catalogSources.add, exact: true })
+  await page
+    .getByRole("switch", {
+      name: m.catalogSources.accessLabel.replace("{name}", source.name),
+      exact: true,
+    })
     .click();
   const save = page.getByRole("button", { name: m.catalogSources.save, exact: true });
   await until(() => save.isEnabled(), "Server preview did not arrive");
@@ -277,7 +275,9 @@ try {
   });
   await save.focus();
   const [failedResponse] = await Promise.all([
-    page.waitForResponse((response) => saveRequest.test(response.url()) && response.status() === 503),
+    page.waitForResponse(
+      (response) => saveRequest.test(response.url()) && response.status() === 503,
+    ),
     save.press("Enter"),
   ]);
   assert.equal(await failedResponse.text(), "Injected isolated network failure");
