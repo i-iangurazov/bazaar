@@ -36,6 +36,8 @@ const keys = new Set([
   "dateTo",
   "storeId",
   "channel",
+  "saleChannel",
+  "customerId",
   "view",
   "registerId",
   "cashierId",
@@ -58,7 +60,7 @@ export function reportUrlState(query: string, mode: "sales" | "hub", now = new D
   const dateFrom = params.has("dateFrom") ? params.get("dateFrom")! : addBusinessDays(today, -29);
   const dateTo = params.has("dateTo") ? params.get("dateTo")! : today;
   const storeId = optional(params, "storeId");
-  let valid = isValidAnalyticsReportScope({ dateFrom, dateTo, storeId });
+  let valid = isValidAnalyticsReportScope({ dateFrom, dateTo, storeId }, 36_600);
   params.forEach((value, key) => {
     if (!keys.has(key) || params.getAll(key).length !== 1 || !value || value.length > 300)
       valid = false;
@@ -66,6 +68,7 @@ export function reportUrlState(query: string, mode: "sales" | "hub", now = new D
   if (query && (!params.has("dateFrom") || !params.has("dateTo"))) valid = false;
   // Existing BAAM links certify POS figures. Explicit new links choose their channel.
   const channel = optional(params, "channel") ?? (mode === "sales" && query ? "pos" : "all");
+  const saleChannel = optional(params, "saleChannel") ?? "all";
   const view = optional(params, "view") ?? (mode === "sales" ? "products" : "overview");
   const sort = optional(params, "sort") ?? (mode === "sales" ? "revenue" : "date");
   const direction = optional(params, "direction") ?? "desc";
@@ -73,11 +76,12 @@ export function reportUrlState(query: string, mode: "sales" | "hub", now = new D
   const page = Number(optional(params, "page") ?? 1);
   if (
     !["all", "pos", "orders"].includes(channel) ||
+    !["all", "IN_STORE", "ONLINE", "UNKNOWN"].includes(saleChannel) ||
     !["asc", "desc"].includes(direction) ||
     !(mode === "sales" ? salesViews : ["overview", ...operationViews]).includes(view as never) ||
     !(
       mode === "sales"
-        ? ["revenue", "profit", "cost", "returns", "name", "date"]
+        ? ["quantity", "revenue", "profit", "cost", "returns", "name", "date"]
         : ["date", "amount", "name"]
     ).includes(sort) ||
     (kind !== undefined && !["sale", "return"].includes(kind)) ||
@@ -92,6 +96,8 @@ export function reportUrlState(query: string, mode: "sales" | "hub", now = new D
     dateTo,
     storeId,
     channel: channel as "all" | "pos" | "orders",
+    saleChannel: saleChannel as "all" | "IN_STORE" | "ONLINE" | "UNKNOWN",
+    customerId: optional(params, "customerId"),
     view,
     sort,
     direction: direction as "asc" | "desc",

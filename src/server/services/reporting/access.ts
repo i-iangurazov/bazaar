@@ -6,6 +6,21 @@ import { AppError } from "@/server/services/errors";
 type Actor = { id: string; organizationId: string };
 type Access = Awaited<ReturnType<typeof readBaamAccessScope>>;
 
+// Customer contacts follow the existing store access model. A customer linked to
+// a permitted receipt remains selectable even when their home store is elsewhere.
+export const reportCustomerAccessWhere = (access: Access): Prisma.CustomerWhereInput => ({
+  organizationId: access.organizationId,
+  deletedAt: null,
+  OR: [
+    { storeId: { in: access.storeIds } },
+    {
+      purchases: {
+        some: { organizationId: access.organizationId, storeId: { in: access.storeIds } },
+      },
+    },
+  ],
+});
+
 /** Fresh membership and report data are read together, never from a client-provided organization. */
 export async function withReportRead<T>(
   actor: Actor,
@@ -82,8 +97,16 @@ export async function reportFilterOptions(tx: Prisma.TransactionClient, access: 
 export async function assertReportEntities(
   tx: Prisma.TransactionClient,
   access: Access,
-  input: { registerId?: string; cashierId?: string },
+  input: { registerId?: string; cashierId?: string; customerId?: string },
 ) {
+  if (
+    input.customerId &&
+    !(await tx.customer.findFirst({
+      where: { id: input.customerId, ...reportCustomerAccessWhere(access) },
+      select: { id: true },
+    }))
+  )
+    throw new AppError("customerNotFound", "NOT_FOUND", 404);
   if (
     input.registerId &&
     !(await tx.posRegister.findFirst({

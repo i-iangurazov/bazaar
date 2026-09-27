@@ -10,11 +10,11 @@ const scopeKeys = new Set(["dateFrom", "dateTo", "storeId"]);
 const dayMs = 24 * 60 * 60 * 1000;
 
 /** The URL represents dates and one store, or explicitly all accessible stores when omitted. */
-export const isValidAnalyticsReportScope = (scope: AnalyticsReportScope) => {
+export const isValidAnalyticsReportScope = (scope: AnalyticsReportScope, maxDays = 366) => {
   try {
     const from = businessDateOnlyToUtc(scope.dateFrom).getTime();
     const to = businessDateOnlyToUtc(scope.dateTo).getTime();
-    if (to < from || (to - from) / dayMs + 1 > 366) return false;
+    if (to < from || (to - from) / dayMs + 1 > maxDays) return false;
     return scope.storeId === undefined || (
       scope.storeId !== "all" && /^[A-Za-z0-9_-]{1,128}$/.test(scope.storeId)
     );

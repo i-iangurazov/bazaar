@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { AppError } from "@/server/services/errors";
-import { REPORT_EXPORT_LIMIT, reportPeriod, type ReportingClient } from "./sales";
+import { REPORT_EXPORT_LIMIT, reportPeriod, utcReportTimestamp, type ReportingClient } from "./sales";
 
 export const operationViews = [
   "receipts",
@@ -57,7 +57,7 @@ export async function getOperationsReport(
     : Prisma.sql`false`;
   const storeScope = Prisma.sql`s."organizationId" = ${input.organizationId} AND ${stores}`;
   const dates = (field: Prisma.Sql) =>
-    Prisma.sql`${field} >= ${period.from} AND ${field} < ${period.until}`;
+    Prisma.sql`${field} >= ${utcReportTimestamp(period.from)} AND ${field} < ${utcReportTimestamp(period.until)}`;
   const movements = Prisma.sql`
     SELECT m.id, p.name || COALESCE(' · ' || v.name, '') AS name, m."createdAt" AS date, s.id AS "storeId", s.name AS "storeName",
       p.id AS "productId", m."referenceId" AS "documentId", m."referenceType", m.type::text AS kind,

@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CustomerSource } from "@prisma/client";
 import { useLocale, useTranslations } from "next-intl";
+import Link from "next/link";
+import { reportHref } from "@/lib/reporting";
+import { addBusinessDays, businessDateKey } from "@/lib/timezone";
 import { usePathname, useSearchParams } from "next/navigation";
 
 import { ListToolbar } from "@/components/list-toolbar";
@@ -84,6 +87,7 @@ const parseOption = <T extends string>(value: string | null, options: readonly T
 const CustomerDatabasePage = () => {
   const t = useTranslations("customers");
   const tCommon = useTranslations("common");
+  const purchaseText = useTranslations("customerPurchases");
   const tWorkspace = useTranslations("workspace");
   const tErrors = useTranslations("errors");
   const locale = useLocale();
@@ -843,6 +847,10 @@ const CustomerDatabasePage = () => {
           </div>
         ) : customerDetail ? (
           <div className="space-y-5">
+            <Button variant="secondary" asChild><Link href={reportHref("/reports/analytics", {
+              customerId: customerDetail.customer.id, channel: "all", view: "products",
+              dateFrom: addBusinessDays(businessDateKey(new Date()), -29), dateTo: businessDateKey(new Date()),
+            })}>{purchaseText("openReport")}</Link></Button>
             <section className="space-y-3">
               <h3 className="text-sm font-semibold text-foreground">{t("detail.contactInfo")}</h3>
               <div className="grid gap-2 text-sm">
@@ -910,7 +918,7 @@ const CustomerDatabasePage = () => {
                     <div key={order.id} className="bazaar-admin-modal-card">
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <p className="font-semibold text-foreground">{order.number}</p>
+                          <Link className="font-semibold text-primary hover:underline" href={`/reports/receipts?receiptId=${encodeURIComponent(order.id)}`}>{order.number}</Link>
                           <p className="text-xs text-muted-foreground">
                             {formatDateTime(order.completedAt ?? order.createdAt, locale)}
                           </p>

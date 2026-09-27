@@ -20,9 +20,12 @@ describe("reporting definitions", () => {
   it.each([
     ["2026-02-29", "2026-03-01"],
     ["2026-09-03", "2026-09-02"],
-    ["2025-01-01", "2026-09-02"],
+    ["1800-01-01", "2026-09-02"],
   ])("rejects invalid range %s — %s", (from, to) => {
     expect(() => reportPeriod(from, to)).toThrow("invalidInput");
+  });
+  it("accepts custom periods longer than a year", () => {
+    expect(reportPeriod("2025-01-01", "2026-09-02").days).toBe(610);
   });
   it("distinguishes known zero from missing cost and undefined ratios", () => {
     expect(

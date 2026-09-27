@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   stores: vi.fn(),
   overview: vi.fn(),
   options: vi.fn(),
+  customers: vi.fn(),
   products: vi.fn(),
   day: vi.fn(),
   receipts: vi.fn(),
@@ -62,7 +63,11 @@ vi.mock("@/lib/trpc", () => ({
   trpc: {
     useUtils: () => ({ client: { reports: { salesExport: { query: mocks.exportProducts } } } }),
     stores: { list: { useQuery: mocks.stores } },
-    reports: { sales: { useQuery: mocks.overview }, filterOptions: { useQuery: mocks.options } },
+    reports: {
+      sales: { useQuery: mocks.overview },
+      filterOptions: { useQuery: mocks.options },
+      customerOptions: { useQuery: mocks.customers },
+    },
   },
 }));
 import AnalyticsPage from "@/app/(app)/reports/analytics/page";
@@ -74,7 +79,7 @@ const stores = [
   { id: "store-b", name: "Authorized B" },
 ];
 const queryResult = (data: unknown) => ({ data, error: null, isLoading: false, isFetching: false });
-const queries = () => [mocks.overview, mocks.options];
+const queries = () => [mocks.overview, mocks.options, mocks.customers];
 const active = (query: typeof mocks.overview) =>
   query.mock.calls.filter((call) => call[1]?.enabled);
 const setUrl = (href: string) => {
@@ -128,6 +133,7 @@ beforeEach(() => {
   mocks.stores.mockReturnValue(queryResult(stores));
   mocks.overview.mockReturnValue(queryResult(report()));
   mocks.options.mockReturnValue(queryResult({ categories: [], registers: [], employees: [] }));
+  mocks.customers.mockReturnValue(queryResult({ items: [], total: 0 }));
   mocks.products.mockReturnValue(queryResult({ items: [], total: 0, meta: {} }));
   mocks.day.mockReturnValue(queryResult(null));
   mocks.receipts.mockReturnValue(queryResult(null));
@@ -168,6 +174,7 @@ describe("all-filtered report export behavior", () => {
     expect(mocks.exportProducts).toHaveBeenCalledWith({
       ...input,
       channel: "pos",
+      saleChannel: "all",
       view: "products",
       sort: "revenue",
       direction: "desc",
@@ -178,6 +185,7 @@ describe("all-filtered report export behavior", () => {
       productId: undefined,
       variantKey: undefined,
       customerKey: undefined,
+      customerId: undefined,
       documentId: undefined,
       kind: undefined,
       page: undefined,
@@ -361,7 +369,7 @@ describe("report scope behavior", () => {
       target: { value: "2024-03-02" },
     });
     expect(mocks.replace).toHaveBeenLastCalledWith(
-      "/reports/analytics?dateFrom=2024-02-29&dateTo=2024-03-02&storeId=store-a&channel=pos&view=products&sort=revenue&direction=desc",
+      "/reports/analytics?dateFrom=2024-02-29&dateTo=2024-03-02&storeId=store-a&channel=pos&saleChannel=all&view=products&sort=revenue&direction=desc",
       { scroll: false },
     );
     setUrl(mocks.replace.mock.lastCall![0]);
@@ -370,7 +378,7 @@ describe("report scope behavior", () => {
       target: { value: "all" },
     });
     expect(mocks.replace).toHaveBeenLastCalledWith(
-      "/reports/analytics?dateFrom=2024-02-29&dateTo=2024-03-02&channel=pos&view=products&sort=revenue&direction=desc",
+      "/reports/analytics?dateFrom=2024-02-29&dateTo=2024-03-02&channel=pos&saleChannel=all&view=products&sort=revenue&direction=desc",
       { scroll: false },
     );
     setUrl(mocks.replace.mock.lastCall![0]);

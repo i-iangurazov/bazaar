@@ -24,6 +24,8 @@ export type SalesReportInput = {
   dateFrom: string;
   dateTo: string;
   channel?: "all" | "pos" | "orders";
+  saleChannel?: "all" | "IN_STORE" | "ONLINE" | "UNKNOWN";
+  customerId?: string;
   registerId?: string;
   cashierId?: string;
   category?: string;
@@ -34,7 +36,7 @@ export type SalesReportInput = {
   documentId?: string;
   kind?: "sale" | "return";
   view?: ReportView;
-  sort?: "revenue" | "profit" | "cost" | "returns" | "name" | "date";
+  sort?: "quantity" | "revenue" | "profit" | "cost" | "returns" | "name" | "date";
   direction?: "asc" | "desc";
   page?: number;
   pageSize?: number;
@@ -42,6 +44,9 @@ export type SalesReportInput = {
   inventoryScope?: Prisma.Sql;
 };
 export const REPORT_EXPORT_LIMIT = 10_000;
+// Prisma raw Date parameters are timestamptz, while transaction timestamps are
+// stored as UTC timestamp without time zone. Bind UTC wall time explicitly.
+export const utcReportTimestamp = (date: Date) => Prisma.sql`${date.toISOString()}::timestamp`;
 export type ReportingClient = Pick<Prisma.TransactionClient, "$queryRaw">;
 
 export function reportPeriod(dateFrom: string, dateTo: string, now = new Date()) {
@@ -53,7 +58,7 @@ export function reportPeriod(dateFrom: string, dateTo: string, now = new Date())
     throw new AppError("invalidInput", "BAD_REQUEST", 400);
   }
   const days = (end.getTime() - from.getTime()) / 86_400_000;
-  if (days < 1 || days > 366) throw new AppError("invalidInput", "BAD_REQUEST", 400);
+  if (days < 1 || days > 36_600) throw new AppError("invalidInput", "BAD_REQUEST", 400);
   const until = new Date(Math.max(from.getTime(), Math.min(end.getTime(), now.getTime())));
   const previousFrom = new Date(from.getTime() - days * 86_400_000);
   const previousUntil = new Date(previousFrom.getTime() + until.getTime() - from.getTime());
@@ -93,18 +98,43 @@ export function salesEventsSql(
   period = reportPeriod(input.dateFrom, input.dateTo),
 ) {
   const channel = input.channel ?? "all";
+  const commercialScope =
+    input.saleChannel === "UNKNOWN"
+      ? Prisma.sql`AND o."saleChannel" IS NULL`
+      : input.saleChannel && input.saleChannel !== "all"
+        ? Prisma.sql`AND o."saleChannel"::text = ${input.saleChannel}`
+        : Prisma.empty;
+  // New links survive contact edits. Legacy contact matching is conservative:
+  // no names, no anonymous matches, and no reused/ambiguous contacts.
+  const customerScope = input.customerId
+    ? Prisma.sql`AND EXISTS (
+    SELECT 1 FROM "Customer" c WHERE c.id = ${input.customerId} AND c."organizationId" = ${input.organizationId}
+      AND (o."customerId" = c.id OR (o."customerId" IS NULL AND (
+        (NULLIF(TRIM(c.email), '') IS NOT NULL AND LOWER(TRIM(o."customerEmail")) = LOWER(TRIM(c.email))
+          AND NOT EXISTS (SELECT 1 FROM "Customer" other WHERE other."organizationId" = c."organizationId"
+            AND other.id <> c.id AND LOWER(TRIM(other.email)) = LOWER(TRIM(c.email))))
+        OR (NULLIF(TRIM(o."customerEmail"), '') IS NULL AND NULLIF(regexp_replace(c.phone, '[^0-9]', '', 'g'), '') IS NOT NULL
+          AND regexp_replace(o."customerPhone", '[^0-9]', '', 'g') = regexp_replace(c.phone, '[^0-9]', '', 'g')
+          AND NOT EXISTS (SELECT 1 FROM "Customer" other WHERE other."organizationId" = c."organizationId"
+            AND other.id <> c.id AND regexp_replace(other.phone, '[^0-9]', '', 'g') = regexp_replace(c.phone, '[^0-9]', '', 'g')))
+      )))
+  )`
+    : Prisma.empty;
   const dates = (field: Prisma.Sql) => Prisma.sql`(
-    (${field} >= ${period.from} AND ${field} < ${period.until}) OR
-    (${field} >= ${period.previousFrom} AND ${field} < ${period.previousUntil})
+    (${field} >= ${utcReportTimestamp(period.from)} AND ${field} < ${utcReportTimestamp(period.until)}) OR
+    (${field} >= ${utcReportTimestamp(period.previousFrom)} AND ${field} < ${utcReportTimestamp(period.previousUntil)})
   )`;
   const orderScope = Prisma.sql`o."organizationId" = ${input.organizationId}
     AND ${inStores(Prisma.sql`o."storeId"`, input.storeIds)}
+    ${commercialScope} ${customerScope}
     AND o.status = 'COMPLETED' AND o."isHeld" = false AND o."completedAt" IS NOT NULL
     AND (${channel} = 'all' OR o."isPosSale" = (${channel} = 'pos'))
     ${input.registerId ? Prisma.sql`AND o."registerId" = ${input.registerId}` : Prisma.empty}
     ${input.cashierId === "__unknown__" ? Prisma.sql`AND o."createdById" IS NULL` : input.cashierId ? Prisma.sql`AND o."createdById" = ${input.cashierId}` : Prisma.empty}`;
   const returnScope = Prisma.sql`r."organizationId" = ${input.organizationId}
     AND ${inStores(Prisma.sql`r."storeId"`, input.storeIds)}
+    AND ${inStores(Prisma.sql`o."storeId"`, input.storeIds)}
+    ${commercialScope} ${customerScope}
     AND r.status = 'COMPLETED' AND r."completedAt" IS NOT NULL AND ${channel} <> 'orders'
     ${input.registerId ? Prisma.sql`AND r."registerId" = ${input.registerId}` : Prisma.empty}
     ${input.cashierId === "__unknown__" ? Prisma.sql`AND COALESCE(r."completedById", r."createdById") IS NULL` : input.cashierId ? Prisma.sql`AND COALESCE(r."completedById", r."createdById") = ${input.cashierId}` : Prisma.empty}`;
@@ -137,17 +167,17 @@ export function salesEventsSql(
     WITH sale_docs AS MATERIALIZED (
       SELECT o.* FROM "CustomerOrder" o WHERE ${orderScope} AND ${dates(Prisma.sql`o."completedAt"`)}
     ), return_docs AS MATERIALIZED (
-      SELECT r.*, o."customerEmail", o."customerPhone", o."customerName", o."isPosSale"
+      SELECT r.*, o."customerEmail", o."customerPhone", o."customerName", o."isPosSale", o."customerId", o."saleChannel"
       FROM "SaleReturn" r JOIN "CustomerOrder" o ON o.id = r."originalSaleId"
         AND o."organizationId" = ${input.organizationId}
       WHERE ${returnScope} AND ${dates(Prisma.sql`r."completedAt"`)}
     ), documents AS MATERIALIZED (
       SELECT id, number, "completedAt", "storeId", "registerId", "createdById" AS "employeeId",
-        "customerEmail", "customerPhone", "customerName", "isPosSale", "totalKgs", "discountKgs",
+        "customerEmail", "customerPhone", "customerName", "customerId", "saleChannel", "isPosSale", "totalKgs", "discountKgs",
         'sale'::text AS kind, id AS "originalSaleId" FROM sale_docs
       UNION ALL
       SELECT id, number, "completedAt", "storeId", "registerId", COALESCE("completedById", "createdById"),
-        "customerEmail", "customerPhone", "customerName", "isPosSale", "totalKgs", 0::numeric,
+        "customerEmail", "customerPhone", "customerName", "customerId", "saleChannel", "isPosSale", "totalKgs", 0::numeric,
         'return'::text, "originalSaleId" FROM return_docs
     ), original_return_lines AS MATERIALIZED (
       SELECT DISTINCT l."customerOrderLineId" AS id
@@ -220,13 +250,15 @@ export function salesEventsSql(
     ), event_population AS MATERIALIZED (
       SELECT l.*, d.number AS "documentNumber", d."originalSaleId", d."completedAt" AS "eventAt", d."storeId", s.name AS "storeName",
         d."registerId", d."employeeId", COALESCE(u.name, u.email, '__unknown__') AS "employeeName",
-        CASE WHEN NULLIF(TRIM(d."customerEmail"), '') IS NOT NULL THEN 'email:' || LOWER(TRIM(d."customerEmail"))
+        d."customerId", d."saleChannel"::text AS "saleChannel",
+        CASE WHEN d."customerId" IS NOT NULL THEN 'id:' || d."customerId"
+          WHEN NULLIF(TRIM(d."customerEmail"), '') IS NOT NULL THEN 'email:' || LOWER(TRIM(d."customerEmail"))
           WHEN NULLIF(regexp_replace(COALESCE(d."customerPhone", ''), '[^0-9]', '', 'g'), '') IS NOT NULL
           THEN 'phone:' || regexp_replace(d."customerPhone", '[^0-9]', '', 'g') ELSE '__anonymous__' END AS "customerKey",
         COALESCE(NULLIF(TRIM(d."customerName"), ''), NULLIF(TRIM(d."customerEmail"), ''), NULLIF(TRIM(d."customerPhone"), ''), '__anonymous__') AS "customerName",
         CASE WHEN d."isPosSale" THEN 'pos' ELSE 'orders' END AS channel,
         to_char(d."completedAt" + interval '6 hours', 'YYYY-MM-DD') AS date,
-        CASE WHEN d."completedAt" >= ${period.from} AND d."completedAt" < ${period.until} THEN 'current' ELSE 'previous' END AS period
+        CASE WHEN d."completedAt" >= ${utcReportTimestamp(period.from)} AND d."completedAt" < ${utcReportTimestamp(period.until)} THEN 'current' ELSE 'previous' END AS period
       FROM valued_lines l JOIN documents d ON d.id = l."documentId" AND d.kind = l.kind
       JOIN "Store" s ON s.id = d."storeId" AND s."organizationId" = ${input.organizationId}
       LEFT JOIN "User" u ON u.id = d."employeeId" AND u."organizationId" = ${input.organizationId}
@@ -319,6 +351,11 @@ export type SalesReportRow = SalesTotals & {
   storeId: string | null;
   employeeId: string | null;
   customerKey: string | null;
+  customerId: string | null;
+  saleChannel: "IN_STORE" | "ONLINE" | null;
+  storeName: string | null;
+  eventAt: string | null;
+  status: "COMPLETED";
   documentId: string | null;
   originalSaleId: string | null;
   documentNumber: string | null;
@@ -359,12 +396,13 @@ export async function getSalesReport(
       ? REPORT_EXPORT_LIMIT + 1
       : Math.min(100, Math.max(1, input.pageSize ?? 25));
   const sort = {
+    quantity: Prisma.sql`"quantitySold"`,
     revenue: Prisma.sql`"netSalesKgs"`,
     profit: Prisma.sql`CASE WHEN "unknownCostLines" = 0 THEN "netSalesKgs" - "knownCostKgs" END`,
     cost: Prisma.sql`CASE WHEN "unknownCostLines" = 0 THEN "knownCostKgs" END`,
     returns: Prisma.sql`"returnsKgs"`,
     name: Prisma.sql`name`,
-    date: Prisma.sql`date`,
+    date: Prisma.sql`"eventAt"`,
   }[input.sort ?? "revenue"];
   const direction = Prisma.raw(input.direction === "asc" ? "ASC" : "DESC");
   type RawRow = RawTotals & Omit<SalesReportRow, keyof SalesTotals>;
@@ -372,6 +410,7 @@ export async function getSalesReport(
     Array<{
       summary: RawTotals;
       organizationName: string;
+      customer: { id: string; name: string; email: string | null; phone: string | null } | null;
       previous: RawTotals;
       days: Array<RawTotals & { date: string }>;
       items: RawRow[];
@@ -383,11 +422,15 @@ export async function getSalesReport(
         MIN("productId") AS "productId", MIN("variantKey") AS "variantKey", MIN(sku) AS sku, MIN(unit) AS unit,
         MIN(category) AS category, MIN("storeId") AS "storeId", MIN("employeeId") AS "employeeId", MIN("customerKey") AS "customerKey",
         MIN("documentId") AS "documentId", MIN("originalSaleId") AS "originalSaleId", MIN("documentNumber") AS "documentNumber", MIN(kind) AS kind,
-        MIN(channel) AS channel, MAX(date) AS date, ${salesTotalsSql}
+        MIN(channel) AS channel, MIN("saleChannel") AS "saleChannel", MIN("customerId") AS "customerId",
+        MIN("storeName") AS "storeName", to_char(MAX("eventAt"), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "eventAt",
+        'COMPLETED'::text AS status, MAX(date) AS date, ${salesTotalsSql}
       FROM events WHERE period = 'current' ${view === "costGaps" ? Prisma.sql`AND cost IS NULL` : Prisma.empty}
       GROUP BY ${grouping[view]}
     )
     SELECT
+      (SELECT row_to_json(c) FROM (SELECT id, name, email, phone FROM "Customer"
+        WHERE id = ${input.customerId ?? null} AND "organizationId" = ${input.organizationId}) c) AS customer,
       (SELECT name FROM "Organization" WHERE id = ${input.organizationId}) AS "organizationName",
       (SELECT row_to_json(t) FROM (SELECT ${salesTotalsSql} FROM events WHERE period = 'current') t) AS summary,
       (SELECT row_to_json(t) FROM (SELECT ${salesTotalsSql} FROM events WHERE period = 'previous') t) AS previous,
@@ -400,15 +443,19 @@ export async function getSalesReport(
     throw new AppError("analyticsExportRowLimit", "BAD_REQUEST", 400);
   const dayMap = new Map(result.days.map((day) => [day.date, day]));
   const series = [];
-  for (let i = 0; i < period.days; i++) {
+  for (let i = 0; i < (period.days <= 366 ? period.days : 0); i++) {
     const date = addBusinessDays(input.dateFrom, i);
     if (businessDateOnlyToUtc(date) >= period.until) break;
     series.push({ date, ...mapSalesTotals(dayMap.get(date)) });
   }
   return {
+    customer: result.customer,
     totals: mapSalesTotals(result.summary),
     previous: mapSalesTotals(result.previous),
-    series,
+    series:
+      period.days <= 366
+        ? series
+        : result.days.map((day) => ({ date: day.date, ...mapSalesTotals(day) })),
     items: result.items.map((row) => ({ ...row, ...mapSalesTotals(row) })) as SalesReportRow[],
     total: result.total,
     page: options.exportAll ? 1 : page,
@@ -436,6 +483,10 @@ export async function getSalesReport(
       currency: "KGS" as const,
       population: "all-filtered" as const,
       channel: input.channel ?? "all",
+      saleChannel: input.saleChannel ?? "all",
+      customerId: input.customerId ?? null,
+      refundDatePolicy: "REFUND_COMPLETION" as const,
+      legacyCustomerPolicy: "UNAMBIGUOUS_CONTACT_ONLY" as const,
       cache: "none" as const,
       exportLimit: REPORT_EXPORT_LIMIT,
     },

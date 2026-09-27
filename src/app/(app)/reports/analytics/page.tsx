@@ -21,6 +21,7 @@ import {
   ReportField,
   useReportScope,
 } from "@/components/reports/report-controls";
+import { CustomerReportFilter } from "@/components/reports/customer-report-filter";
 import { ReportMetric } from "@/components/reports/report-metric";
 import { baseAccountingCurrency, formatKgsMoney } from "@/lib/currencyDisplay";
 import { downloadTableFile, type DownloadFormat } from "@/lib/fileExport";
@@ -42,6 +43,7 @@ function AnalyticsReportContent() {
   const t = useTranslations("reporting"),
     a = useTranslations("analytics"),
     errors = useTranslations("errors");
+  const channelText = useTranslations("saleChannel"), customerText = useTranslations("customerPurchases");
   const locale = useLocale();
   const utils = trpc.useUtils();
   const [format, setFormat] = useState<DownloadFormat>("csv");
@@ -56,6 +58,8 @@ function AnalyticsReportContent() {
     dateTo: state.dateTo,
     storeId: state.storeId,
     channel: state.channel,
+    saleChannel: state.saleChannel,
+    customerId: state.customerId,
     registerId: state.registerId,
     cashierId: state.cashierId,
     category: state.category,
@@ -115,7 +119,7 @@ function AnalyticsReportContent() {
         detail({ cashierId: row.employeeId ?? "__unknown__" });
         break;
       case "customers":
-        detail({ customerKey: row.customerKey });
+        detail(row.customerId ? { customerId: row.customerId, customerKey: undefined } : { customerKey: row.customerKey });
         break;
       case "days":
         if (row.date) setSelectedDay(row.date);
@@ -160,6 +164,7 @@ function AnalyticsReportContent() {
         fileNameBase: `sales-${input.view}-all-filtered-${state.dateFrom}-${state.dateTo}`,
         header: [
           t(`views.${input.view}`),
+          customerText("dateTime"), customerText("store"), customerText("status"), channelText("label"),
           t("unit"),
           t("quantitySold"),
           t("quantityReturned"),
@@ -181,6 +186,7 @@ function AnalyticsReportContent() {
         rows: [
           ...result.items.map((row) => [
             label(row.name),
+            ...(["documents", "costGaps"].includes(input.view) ? [row.eventAt ?? "", row.storeName ?? "", customerText("completed"), channelText(row.saleChannel ?? "UNKNOWN")] : ["", "", "", ""]),
             input.view === "products" ? (row.unit ?? "") : "",
             ...[row.quantitySold, row.quantityReturned, row.netQuantity].map((value) =>
               input.view === "products" ? String(value) : "",
@@ -193,6 +199,7 @@ function AnalyticsReportContent() {
             "",
             "",
             "",
+            "", "", "", "",
             ...serialize(result.totals),
           ],
           [
@@ -205,7 +212,8 @@ function AnalyticsReportContent() {
               category: state.category,
               search: input.search,
               product: state.productId,
-              customer: state.customerKey,
+              customer: state.customerId ?? state.customerKey,
+              saleChannel: state.saleChannel,
               cashier: state.cashierId,
               register: state.registerId,
               kind: state.kind,
@@ -275,7 +283,18 @@ function AnalyticsReportContent() {
             </SelectItem>
           ))}
         </ReportSelect>
+        <ReportSelect label={channelText("label")} value={state.saleChannel} onChange={saleChannel => update({ saleChannel })}>
+          {["all", "IN_STORE", "ONLINE", "UNKNOWN"].map(value => <SelectItem key={value} value={value}>{channelText(value)}</SelectItem>)}
+        </ReportSelect>
       </ReportPeriodControls>
+      <CustomerReportFilter enabled={enabled} storeId={state.storeId} customerId={state.customerId} customerName={data?.customer?.name}
+        onChange={customerId => update({ customerId, customerKey: undefined, productId: undefined, variantKey: undefined, documentId: undefined, kind: undefined, view: "products" })} />
+      {state.customerId ? <section className="space-y-2 rounded-xl border border-border bg-card p-4">
+        <h2 className="font-semibold">{data?.customer?.name ?? customerText("selected")}</h2>
+        <p className="text-sm text-muted-foreground">{state.dateFrom} — {state.dateTo} · {scope.visibleStores?.find(store => store.id === state.storeId)?.name ?? customerText("permittedStores")} · {channelText(state.saleChannel)}</p>
+        <p className="text-xs text-muted-foreground">{customerText("legacyHint")}</p>
+        <div className="flex flex-wrap gap-2"><Button variant="secondary" onClick={() => update({ view: "products", productId: undefined, variantKey: undefined, documentId: undefined, kind: undefined })}>{customerText("products")}</Button><Button variant="secondary" onClick={() => update({ view: "documents", productId: undefined, variantKey: undefined, documentId: undefined, kind: undefined, sort: "date" })}>{customerText("receipts")}</Button></div>
+      </section> : null}
       <section
         className="space-y-3 rounded-xl border border-border bg-card p-4"
         aria-label={t("refine")}
@@ -613,7 +632,7 @@ function AnalyticsReportContent() {
                   value={state.sort}
                   onChange={(sort) => update({ sort })}
                 >
-                  {["revenue", "profit", "cost", "returns", "name", "date"].map((sort) => (
+                  {["quantity", "revenue", "profit", "cost", "returns", "name", "date"].map((sort) => (
                     <SelectItem key={sort} value={sort}>
                       {t(`sorts.${sort}`)}
                     </SelectItem>
@@ -688,7 +707,7 @@ function AnalyticsReportContent() {
                             {input.view === "products"
                               ? row.sku
                               : ["documents", "costGaps"].includes(input.view)
-                                ? `${row.date} · ${t(row.kind === "return" ? "returnDocument" : "saleDocument")}`
+                                ? `${row.eventAt ? formatDateTime(new Date(row.eventAt), locale) : row.date} · ${row.storeName ?? ""} · ${t(row.kind === "return" ? "returnDocument" : "saleDocument")} · ${customerText("completed")} · ${channelText(row.saleChannel ?? "UNKNOWN")}`
                                 : ""}
                           </span>
                         </div>

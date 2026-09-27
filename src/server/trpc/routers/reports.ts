@@ -1,8 +1,10 @@
 import { z } from "zod";
+import { buildCustomerListWhere } from "@/server/services/customers";
 import {
   withReportRead,
   assertReportEntities,
   reportFilterOptions,
+  reportCustomerAccessWhere,
 } from "@/server/services/reporting/access";
 import { getSalesReport, reportViews } from "@/server/services/reporting/sales";
 import { getOperationsReport, operationViews } from "@/server/services/reporting/operations";
@@ -49,6 +51,8 @@ const periodSchema = z.object({
 export const salesReportSchema = periodSchema
   .extend({
     channel: z.enum(["all", "pos", "orders"]).optional(),
+    saleChannel: z.enum(["all", "IN_STORE", "ONLINE", "UNKNOWN"]).optional(),
+    customerId: z.string().min(1).max(100).optional(),
     registerId: z.string().min(1).optional(),
     cashierId: z.string().min(1).optional(),
     category: z.string().trim().min(1).max(200).optional(),
@@ -58,7 +62,7 @@ export const salesReportSchema = periodSchema
     documentId: z.string().min(1).optional(),
     kind: z.enum(["sale", "return"]).optional(),
     view: z.enum(reportViews).optional(),
-    sort: z.enum(["revenue", "profit", "cost", "returns", "name", "date"]).optional(),
+    sort: z.enum(["quantity", "revenue", "profit", "cost", "returns", "name", "date"]).optional(),
   })
   .strict();
 const operationsSchema = periodSchema
@@ -117,6 +121,42 @@ export const reportsRouter = router({
     .query(async ({ ctx, input }) => {
       try {
         return await withReportRead(ctx.user, input, reportFilterOptions);
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+  customerOptions: reportsProcedure
+    .input(
+      z
+        .object({
+          storeId: z.string().optional(),
+          search: z.string().trim().max(200).optional(),
+          page: z.number().int().min(1).default(1),
+        })
+        .strict(),
+    )
+    .query(async ({ ctx, input }) => {
+      try {
+        return await withReportRead(ctx.user, input, async (tx, access) => {
+          const searchWhere = buildCustomerListWhere({
+            organizationId: access.organizationId,
+            storeIds: access.storeIds,
+            search: input.search,
+          });
+          delete searchWhere.storeId;
+          const where = { AND: [searchWhere, reportCustomerAccessWhere(access)] };
+          const [items, total] = await Promise.all([
+            tx.customer.findMany({
+              where,
+              select: { id: true, name: true, email: true, phone: true },
+              orderBy: [{ name: "asc" }, { id: "asc" }],
+              skip: (input.page - 1) * 25,
+              take: 25,
+            }),
+            tx.customer.count({ where }),
+          ]);
+          return { items, total };
+        });
       } catch (error) {
         throw toTRPCError(error);
       }
