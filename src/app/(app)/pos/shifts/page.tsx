@@ -140,7 +140,7 @@ const PosShiftsPage = () => {
       },
     },
   );
-  const fallbackRefreshMs = realtimeConnected ? 60_000 : 5_000;
+  const reportRefreshMs = realtimeConnected ? 60_000 : 5_000;
 
   const currentShiftQuery = trpc.pos.shifts.current.useQuery(
     { registerId },
@@ -149,7 +149,8 @@ const PosShiftsPage = () => {
       refetchOnMount: "always",
       refetchOnWindowFocus: true,
       staleTime: 0,
-      refetchInterval: fallbackRefreshMs,
+      // Draft changes can happen without an event; keep closing blockers current.
+      refetchInterval: 5_000,
     },
   );
 
@@ -158,7 +159,7 @@ const PosShiftsPage = () => {
     {
       enabled: Boolean(currentShiftQuery.data?.id),
       refetchOnWindowFocus: true,
-      refetchInterval: fallbackRefreshMs,
+      refetchInterval: reportRefreshMs,
     },
   );
 
