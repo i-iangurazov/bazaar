@@ -411,6 +411,7 @@ const resolvePosCustomerSelectionTx = async (
         deletedAt: null,
       },
       select: {
+        id: true,
         name: true,
         email: true,
         phone: true,
@@ -421,6 +422,7 @@ const resolvePosCustomerSelectionTx = async (
       throw new AppError("customerNotFound", "NOT_FOUND", 404);
     }
     return {
+      customerId: customer.id,
       customerName: customer.name,
       customerEmail: customer.email,
       customerPhone: customer.phone,
@@ -429,6 +431,7 @@ const resolvePosCustomerSelectionTx = async (
   }
 
   return {
+    customerId: null,
     customerName: input.customerName?.trim() || null,
     customerEmail: input.customerEmail?.trim().toLowerCase() || null,
     customerPhone: normalizeOptionalCustomerPhone(input.customerPhone),
@@ -758,6 +761,7 @@ const notifyPosShiftChanged = (scope: { storeId: string; registerId: string | nu
 
 const selectPosSaleDraftSummary = {
   id: true,
+  saleChannel: true,
   number: true,
   status: true,
   storeId: true,
@@ -2123,6 +2127,7 @@ export const closeRegisterShift = async (input: {
 
 export const createPosSaleDraft = async (input: {
   organizationId: string;
+  saleChannel?: "IN_STORE" | "ONLINE";
   registerId: string;
   requireNewDraft?: boolean;
   customerId?: string | null;
@@ -2187,6 +2192,7 @@ export const createPosSaleDraft = async (input: {
           customerAddress: true,
           isHeld: true,
           heldAt: true,
+          saleChannel: true,
           shift: {
             select: {
               status: true,
@@ -2211,6 +2217,7 @@ export const createPosSaleDraft = async (input: {
             const updated = await tx.customerOrder.update({
               where: { id: existingDraft.id },
               data: {
+                customerId: selectedCustomer.customerId,
                 customerName: selectedCustomer.customerName,
                 customerEmail: selectedCustomer.customerEmail,
                 customerPhone: selectedCustomer.customerPhone,
@@ -2230,6 +2237,7 @@ export const createPosSaleDraft = async (input: {
                 customerAddress: true,
                 isHeld: true,
                 heldAt: true,
+          saleChannel: true,
               },
             });
             return updated;
@@ -2247,6 +2255,7 @@ export const createPosSaleDraft = async (input: {
             customerAddress: existingDraft.customerAddress,
             isHeld: existingDraft.isHeld,
             heldAt: existingDraft.heldAt,
+            saleChannel: existingDraft.saleChannel,
           };
         }
       }
@@ -2265,6 +2274,8 @@ export const createPosSaleDraft = async (input: {
           isPosSale: true,
           status: CustomerOrderStatus.DRAFT,
           isHeld: false,
+          saleChannel: input.saleChannel ?? "IN_STORE",
+          customerId: selectedCustomer?.customerId ?? null,
           customerName: selectedCustomer?.customerName ?? null,
           customerEmail: selectedCustomer?.customerEmail ?? null,
           customerPhone: selectedCustomer?.customerPhone ?? null,
@@ -2277,6 +2288,7 @@ export const createPosSaleDraft = async (input: {
       });
 
       await upsertCustomerFromOrderTx(tx, {
+        orderId: order.id,
         organizationId: input.organizationId,
         storeId: shift.storeId,
         customerName: selectedCustomer?.customerName,
@@ -2347,6 +2359,7 @@ export const createPosSaleDraft = async (input: {
         customerPhone: order.customerPhone,
         isHeld: order.isHeld,
         heldAt: order.heldAt,
+        saleChannel: order.saleChannel,
       };
     });
 
@@ -2381,6 +2394,7 @@ export const createPosSaleDraft = async (input: {
           customerAddress: true,
           isHeld: true,
           heldAt: true,
+          saleChannel: true,
         },
       });
       if (concurrentDraft) {
@@ -2449,6 +2463,7 @@ export const getActivePosSaleDraft = async (input: {
       notes: true,
       isHeld: true,
       heldAt: true,
+      saleChannel: true,
     },
   });
   return draft;
@@ -2456,6 +2471,7 @@ export const getActivePosSaleDraft = async (input: {
 
 export const holdPosSaleDraft = async (input: {
   organizationId: string;
+  saleChannel?: "IN_STORE" | "ONLINE";
   saleId: string;
   actorId: string;
   user?: StoreAccessUser;
@@ -2500,6 +2516,7 @@ export const holdPosSaleDraft = async (input: {
       where: { id: sale.id },
       data: {
         isHeld: true,
+        saleChannel: input.saleChannel,
         heldAt: new Date(),
         heldById: input.actorId,
         updatedById: input.actorId,
@@ -2513,8 +2530,8 @@ export const holdPosSaleDraft = async (input: {
       action: "POS_SALE_HOLD",
       entity: "CustomerOrder",
       entityId: sale.id,
-      before: toJson({ isHeld: sale.isHeld, lineCount: sale.lines.length }),
-      after: toJson({ isHeld: updated.isHeld, heldAt: updated.heldAt }),
+      before: toJson({ isHeld: sale.isHeld, lineCount: sale.lines.length, saleChannel: sale.saleChannel }),
+      after: toJson({ isHeld: updated.isHeld, heldAt: updated.heldAt, saleChannel: updated.saleChannel }),
       requestId: input.requestId,
     });
 
@@ -2850,6 +2867,7 @@ export const updatePosSaleCustomer = async (input: {
           customerId: input.customerId,
         })
       : {
+          customerId: null,
           customerName: null,
           customerEmail: null,
           customerPhone: null,
@@ -2859,6 +2877,7 @@ export const updatePosSaleCustomer = async (input: {
     const updated = await tx.customerOrder.update({
       where: { id: sale.id },
       data: {
+        customerId: selectedCustomer.customerId,
         customerName: selectedCustomer.customerName,
         customerEmail: selectedCustomer.customerEmail,
         customerPhone: selectedCustomer.customerPhone,
@@ -4702,6 +4721,7 @@ export const listPosReceipts = async (input: {
 
 export const completePosSale = async (input: {
   organizationId: string;
+  saleChannel?: "IN_STORE" | "ONLINE";
   saleId: string;
   actorId: string;
   user?: StoreAccessUser;
@@ -4974,6 +4994,7 @@ export const completePosSale = async (input: {
             where: { id: sale.id },
             data: {
               status: CustomerOrderStatus.COMPLETED,
+              saleChannel: input.saleChannel,
               completedAt: new Date(),
               completedEventId: input.idempotencyKey,
               isDebt: Boolean(debtCustomerName),
@@ -4985,6 +5006,7 @@ export const completePosSale = async (input: {
           });
 
           await upsertCustomerFromOrderTx(tx, {
+            orderId: updated.id,
             organizationId: input.organizationId,
             storeId: sale.storeId,
             customerName: updated.customerName,

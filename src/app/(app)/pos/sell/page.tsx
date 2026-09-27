@@ -110,6 +110,8 @@ import {
   type PosCartLinePatch,
 } from "@/lib/posSaleMath";
 import { normalizeScanValue } from "@/lib/scanning/normalize";
+import { usePosSaleChannel } from "@/lib/usePosSaleChannel";
+import { SaleChannelControl } from "@/components/pos/sale-channel-control";
 import { useSse } from "@/lib/useSse";
 import {
   resolveScanResult,
@@ -893,6 +895,11 @@ const PosSellPage = () => {
       refetchOnWindowFocus: false,
     },
   );
+  const saleChannel = usePosSaleChannel({
+    userId: session?.user?.id, registerId,
+    saleId: saleId ?? activeDraftQuery.data?.id,
+    saved: saleId ? (saleQuery.data?.id === saleId ? saleQuery.data.saleChannel : activeDraftQuery.data?.id === saleId ? activeDraftQuery.data.saleChannel : undefined) : activeDraftQuery.data?.saleChannel,
+  });
   const clearActiveDraftCache = useCallback(
     (targetRegisterId = registerId) => {
       if (!targetRegisterId) {
@@ -971,6 +978,7 @@ const PosSellPage = () => {
 
   const cancelDraftMutation = trpc.pos.sales.cancelDraft.useMutation({
     onSuccess: async () => {
+      saleChannel.reset();
       clearActiveDraftCache();
       setSaleId(null);
       setLineSearch("");
@@ -1011,6 +1019,7 @@ const PosSellPage = () => {
 
   const holdDraftMutation = trpc.pos.sales.holdDraft.useMutation({
     onSuccess: async (result) => {
+      saleChannel.reset();
       clearActiveDraftCache();
       toast({
         variant: "success",
@@ -1263,6 +1272,7 @@ const PosSellPage = () => {
     kkmStatus: "NOT_SENT" | "SENT" | "FAILED";
   }) => {
     void nativeHaptics.success();
+    saleChannel.reset();
     clearActiveDraftCache();
     setLastCompletedSale(result);
     setAutoReceiptStatus("idle");
@@ -1554,6 +1564,7 @@ const PosSellPage = () => {
   ]);
 
   useSse({
+    "assortment.updated": () => { void trpcUtils.products.invalidate(); },
     "inventory.updated": () => {
       void Promise.all([catalogProductsQuery.refetch()]);
     },
@@ -2028,6 +2039,7 @@ const PosSellPage = () => {
       draftCreationRef.current = createDraftMutation
         .mutateAsync({
           registerId,
+          saleChannel: saleChannel.get() ?? "IN_STORE",
           customerId: selectedCustomer?.id || undefined,
           customerName:
             selectedCustomer && !selectedCustomer.id ? selectedCustomer.name : undefined,
@@ -2038,7 +2050,7 @@ const PosSellPage = () => {
           customerAddress:
             selectedCustomer && !selectedCustomer.id ? selectedCustomer.address : undefined,
         })
-        .then((draft) => ({ id: draft.id }))
+        .then((draft) => { saleChannel.adopt(draft.id); return { id: draft.id }; })
         .finally(() => {
           draftCreationRef.current = null;
         });
@@ -2050,7 +2062,7 @@ const PosSellPage = () => {
     }
     setSaleId(draft.id);
     return draft.id;
-  }, [activeDraft?.id, createDraftMutation, registerId, saleId, selectedCustomer]);
+  }, [activeDraft?.id, createDraftMutation, registerId, saleId, selectedCustomer, saleChannel]);
 
   const handleAddLine = useCallback(
     async (
@@ -3032,6 +3044,7 @@ const PosSellPage = () => {
         }
         await completeMutation.mutateAsync({
           saleId: targetSaleId,
+          saleChannel: saleChannel.get(targetSaleId),
           idempotencyKey: completionAttempt.idempotencyKey,
           debtCustomerName: normalizedDebtName,
           payments: [],
@@ -3082,6 +3095,7 @@ const PosSellPage = () => {
 
       await completeMutation.mutateAsync({
         saleId: targetSaleId,
+        saleChannel: saleChannel.get(targetSaleId),
         idempotencyKey: completionAttempt.idempotencyKey,
         debtCustomerName: null,
         payments: paymentPayload.payments,
@@ -3146,7 +3160,7 @@ const PosSellPage = () => {
     }
 
     try {
-      await holdDraftMutation.mutateAsync({ saleId });
+      await holdDraftMutation.mutateAsync({ saleId, saleChannel: saleChannel.get(saleId) });
     } catch {
       // handled by mutation onError
     }
@@ -3876,6 +3890,10 @@ const PosSellPage = () => {
   });
   const showCompletedSale = Boolean(lastCompletedSale && !saleId);
   const isCompletedSaleEdit = Boolean(journalEditSaleId && saleId === journalEditSaleId);
+  const saleChannelControl = !isCompletedSaleEdit ? <SaleChannelControl
+    value={saleChannel.channel} onChange={saleChannel.set}
+    disabled={completeMutation.isLoading || holdDraftMutation.isLoading || activeDraftQuery.isInitialLoading || (Boolean(saleId) && saleQuery.isInitialLoading)}
+  /> : null;
   const checkoutPanelTitle = showCompletedSale
     ? t("sell.saleCompletedTitle")
     : isCompletedSaleEdit
@@ -5676,6 +5694,7 @@ const PosSellPage = () => {
                     className="border-t border-border bg-card"
                   >
                     <div className="space-y-2 px-4 py-2">
+                      {saleChannelControl}
                       <div className="px-1">
                         <div className="space-y-1 text-[11px] leading-4">
                           <div className="flex items-center justify-between gap-3">
@@ -6597,6 +6616,7 @@ const PosSellPage = () => {
 
       const renderPropertiesSection = () => (
         <section className="border-y border-border bg-card/95">
+          <div className="px-3">{saleChannelControl}</div>
           <button
             type="button"
             className="flex min-h-[48px] w-full items-center justify-between px-3 text-left"
@@ -8383,6 +8403,7 @@ const PosSellPage = () => {
                           data-baam-obstacle="action"
                           className="rounded-md border border-border bg-card p-3"
                         >
+                          {saleChannelControl}
                           <div className="flex items-center justify-between gap-3">
                             <p className="text-sm font-semibold text-foreground">
                               {t("sell.paymentsTitle")}

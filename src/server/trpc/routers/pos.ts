@@ -635,6 +635,7 @@ export const posRouter = router({
     createDraft: cashierProcedure
       .input(
         z.object({
+          saleChannel: z.enum(["IN_STORE", "ONLINE"]).optional(),
           registerId: z.string().min(1),
           requireNewDraft: z.boolean().optional(),
           customerId: z.string().min(1).optional().nullable(),
@@ -668,6 +669,7 @@ export const posRouter = router({
         try {
           return await createPosSaleDraft({
             organizationId: ctx.user.organizationId,
+            saleChannel: input.saleChannel,
             registerId: input.registerId,
             requireNewDraft: input.requireNewDraft,
             customerId: input.customerId,
@@ -863,11 +865,12 @@ export const posRouter = router({
       }),
 
     holdDraft: cashierProcedure
-      .input(z.object({ saleId: z.string().min(1) }))
+      .input(z.object({ saleId: z.string().min(1), saleChannel: z.enum(["IN_STORE", "ONLINE"]).optional() }))
       .mutation(async ({ ctx, input }) => {
         try {
           return await holdPosSaleDraft({
             organizationId: ctx.user.organizationId,
+            saleChannel: input.saleChannel,
             saleId: input.saleId,
             actorId: ctx.user.id,
             user: ctx.user,
@@ -929,6 +932,7 @@ export const posRouter = router({
       .use(rateLimit({ windowMs: 10_000, max: 30, prefix: "pos-sales-complete" }))
       .input(
         z.object({
+          saleChannel: z.enum(["IN_STORE", "ONLINE"]).optional(),
           saleId: z.string().min(1),
           idempotencyKey: z.string().min(8),
           debtCustomerName: z.string().max(160).optional().nullable(),
@@ -940,6 +944,7 @@ export const posRouter = router({
         try {
           return await completePosSale({
             organizationId: ctx.user.organizationId,
+            saleChannel: input.saleChannel,
             saleId: input.saleId,
             actorId: ctx.user.id,
             user: ctx.user,

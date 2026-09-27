@@ -1598,6 +1598,7 @@ const createBazaarApiOrderTx = async (
     order,
   });
   await upsertCustomerFromOrderTx(tx, {
+    orderId: order.id,
     organizationId: input.organizationId,
     storeId: input.storeId,
     customerName: input.customerName,

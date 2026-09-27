@@ -34,6 +34,7 @@ const paymentMethods = ["CASH", "CARD", "TRANSFER", "OTHER"] as const;
 export const ReceiptPreviewModal = ({ saleId, open, onOpenChange }: ReceiptPreviewModalProps) => {
   const t = useTranslations("pos.receiptPreview");
   const tCommon = useTranslations("common");
+  const channelText = useTranslations("saleChannel");
   const tPos = useTranslations("pos");
   const locale = useLocale();
   const { toast } = useToast();
@@ -113,6 +114,7 @@ export const ReceiptPreviewModal = ({ saleId, open, onOpenChange }: ReceiptPrevi
         <div className="p-6 text-sm text-muted-foreground">{t("notFound")}</div>
       ) : (
         <div className="space-y-0">
+          <p className="px-4 py-2 text-xs text-muted-foreground lg:px-6">{channelText("label")}: {channelText(sale.saleChannel ?? "UNKNOWN")}</p>
           <div className="grid gap-3 border-b border-border p-4 sm:grid-cols-2 lg:grid-cols-4 lg:p-6">
             <div>
               <p className="text-xs text-muted-foreground">{t("store")}</p>

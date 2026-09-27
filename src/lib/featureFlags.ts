@@ -23,3 +23,7 @@ export const isAiDescriptionGenerationEnabled = () =>
   parseOptionalFlag(process.env.NEXT_PUBLIC_AI_DESCRIPTION_GENERATION_ENABLED, true);
 
 export const isProductPacksEnabled = () => parseFlag(process.env.NEXT_PUBLIC_PRODUCT_PACKS_ENABLED);
+
+// Hide only the optional control; recorded channel metadata and defaults remain valid.
+export const isPosSaleChannelEnabled = () =>
+  parseOptionalFlag(process.env.NEXT_PUBLIC_POS_SALE_CHANNEL_ENABLED, true);

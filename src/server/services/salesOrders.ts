@@ -768,6 +768,7 @@ const createCustomerOrderDraftTx = async (
   });
 
   await upsertCustomerFromOrderTx(tx, {
+    orderId: order.id,
     organizationId: input.organizationId,
     storeId: input.storeId,
     customerName: input.customerName,
@@ -981,6 +982,8 @@ export const setCustomerOrderCustomer = async (input: {
     });
 
     await upsertCustomerFromOrderTx(tx, {
+      orderId: updated.id,
+      replaceCustomerIdentity: true,
       organizationId: input.organizationId,
       storeId: updated.storeId,
       customerName: updated.customerName,

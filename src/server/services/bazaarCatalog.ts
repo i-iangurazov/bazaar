@@ -1361,6 +1361,7 @@ const createCatalogCheckoutOrderTx = async (
       number,
       status: CustomerOrderStatus.CONFIRMED,
       source: CustomerOrderSource.CATALOG,
+      saleChannel: "ONLINE",
       confirmedAt: new Date(),
       customerName,
       customerEmail,
@@ -1382,6 +1383,7 @@ const createCatalogCheckoutOrderTx = async (
   });
 
   await upsertCustomerFromOrderTx(tx, {
+    orderId: order.id,
     organizationId: catalog.organizationId,
     storeId: catalog.storeId,
     customerName,

@@ -514,14 +514,15 @@ export const listCustomers = async (input: {
 
 // Customer records are store-scoped. Keep list and export filtering here so the downloaded file
 // always matches the UI without exposing another assigned or unassigned store.
-const buildCustomerListWhere = (input: {
+export const buildCustomerListWhere = (input: {
   organizationId: string;
-  storeId: string;
+  storeId?: string;
+  storeIds?: string[];
   search?: string | null;
   source?: CustomerSource | null;
 }): Prisma.CustomerWhereInput => ({
   organizationId: input.organizationId,
-  storeId: input.storeId,
+  storeId: input.storeId ?? { in: input.storeIds ?? [] },
   deletedAt: null,
   ...(input.source ? { source: input.source } : {}),
   ...(input.search
@@ -603,13 +604,11 @@ export const getCustomerDetail = async (input: { user: StoreAccessUser; customer
   }
   await assertUserCanAccessStore(prisma, input.user, customer.storeId);
 
-  const customerMatches: Prisma.CustomerOrderWhereInput[] = [
-    ...(customer.email ? [{ customerEmail: customer.email }] : []),
-    ...(customer.phone ? [{ customerPhone: customer.phone }] : []),
-  ];
-  if (!customerMatches.length) {
-    customerMatches.push({ customerName: customer.name });
-  }
+  const customerMatches: Prisma.CustomerOrderWhereInput[] = [];
+  if (customer.email && await prisma.customer.count({ where: { organizationId: input.user.organizationId, email: { equals: customer.email, mode: "insensitive" } } }) === 1)
+    customerMatches.push({ customerEmail: { equals: customer.email, mode: "insensitive" } });
+  if (customer.phone && await prisma.customer.count({ where: { organizationId: input.user.organizationId, phone: customer.phone } }) === 1)
+    customerMatches.push({ customerPhone: customer.phone, customerEmail: null });
 
   const recentOrders = await prisma.customerOrder.findMany({
     where: {
@@ -617,11 +616,13 @@ export const getCustomerDetail = async (input: { user: StoreAccessUser; customer
       storeId: customer.storeId,
       isPosSale: true,
       status: CustomerOrderStatus.COMPLETED,
-      OR: customerMatches,
+      isHeld: false,
+      OR: [{ customerId: customer.id }, ...(customerMatches.length ? [{ customerId: null, OR: customerMatches }] : [])],
     },
     select: {
       id: true,
       number: true,
+      saleChannel: true,
       customerName: true,
       customerEmail: true,
       customerPhone: true,
@@ -1147,6 +1148,8 @@ export const upsertCustomerFromOrderTx = async (
   tx: Prisma.TransactionClient,
   input: {
     organizationId: string;
+    orderId?: string;
+    replaceCustomerIdentity?: boolean;
     storeId: string;
     customerName?: string | null;
     customerEmail?: string | null;
@@ -1157,6 +1160,13 @@ export const upsertCustomerFromOrderTx = async (
     allowLegacyContact?: boolean;
   },
 ) => {
+  const link = async (customer: { id: string } | null) => {
+    if (input.orderId) await tx.customerOrder.updateMany({
+      where: { id: input.orderId, organizationId: input.organizationId, storeId: input.storeId,
+        ...(input.replaceCustomerIdentity ? {} : { customerId: null }) },
+      data: { customerId: customer?.id ?? null },
+    });
+  };
   const email = normalizeCustomerEmail(input.customerEmail);
   let phone: string | null = null;
   let address: string | null = null;
@@ -1175,6 +1185,7 @@ export const upsertCustomerFromOrderTx = async (
     }
   }
   if (!email && !phone) {
+    if (input.replaceCustomerIdentity) await link(null);
     return null;
   }
   const name = normalizeOptionalText(input.customerName) ?? email ?? phone ?? "Customer";
@@ -1189,6 +1200,7 @@ export const upsertCustomerFromOrderTx = async (
   });
 
   if (existing) {
+    await link(existing);
     return tx.customer.update({
       where: { id: existing.id },
       data: missingOnlyCustomerData(existing, {
@@ -1202,7 +1214,7 @@ export const upsertCustomerFromOrderTx = async (
     });
   }
 
-  return tx.customer.create({
+  const created = await tx.customer.create({
     data: {
       organizationId: input.organizationId,
       storeId: input.storeId,
@@ -1215,6 +1227,8 @@ export const upsertCustomerFromOrderTx = async (
       orderCount: countOrder ? 1 : 0,
     },
   });
+  await link(created);
+  return created;
 };
 
 export const countEmailReachableCustomers = async (input: {
