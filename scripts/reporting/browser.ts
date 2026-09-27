@@ -164,6 +164,46 @@ try {
   await file.saveAs(`${output}/sales-all-filtered.csv`);
   record("Full CSV export includes all 35 product groups and reconciled totals");
   await page
+    .getByRole("button", { name: messages.ru.customerPurchases.select, exact: true })
+    .click();
+  await page
+    .getByRole("textbox", { name: messages.ru.customerPurchases.search, exact: true })
+    .fill("Покупатель для отчёта");
+  await page.getByRole("button", { name: /Покупатель для отчёта.*report@example/ }).click();
+  await ready(page);
+  await until(
+    async () => new URL(page.url()).searchParams.get("customerId") === f.customerId,
+    "Customer ID filter missing",
+  );
+  const customerReport = await api(admin, "reports.sales", {
+    dateFrom: "2026-07-16",
+    dateTo: f.dateTo,
+    channel: "all",
+    customerId: f.customerId,
+  });
+  assert.equal(customerReport.totals.netSalesKgs, 460);
+  assert.equal(customerReport.totals.receiptCount, 2);
+  await page
+    .getByRole("button", { name: messages.ru.customerPurchases.receipts, exact: true })
+    .click();
+  await ready(page);
+  await page.getByRole("button", { name: "REPORT-POS-1", exact: true }).click();
+  await page.getByRole("dialog").waitFor();
+  await page
+    .getByRole("dialog")
+    .getByText(messages.ru.saleChannel.ONLINE, { exact: false })
+    .waitFor();
+  await page.keyboard.press("Escape");
+  await page.getByRole("dialog").waitFor({ state: "hidden" });
+  await page.getByRole("combobox", { name: messages.ru.saleChannel.label, exact: true }).click();
+  await page.getByRole("option", { name: messages.ru.saleChannel.ONLINE, exact: true }).click();
+  await ready(page);
+  await capture(page, "customer-online-receipts");
+  assert.equal(new URL(page.url()).searchParams.get("saleChannel"), "ONLINE");
+  record("Real customer search, 50-day totals, receipt drilldown and saved online channel");
+  await page.goto(base + paths[1]);
+  await ready(page);
+  await page
     .getByRole("combobox", { name: messages.ru.analytics.filters.store, exact: true })
     .click();
   const stores = await api(admin, "stores.list", undefined);

@@ -327,6 +327,7 @@ jobs:
             artifacts/reporting/after
             artifacts/reporting/states
             artifacts/reporting/server.log
+            artifacts/directional/after
 
   landing-browser:
     runs-on: ubuntu-latest

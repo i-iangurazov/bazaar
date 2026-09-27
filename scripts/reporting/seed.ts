@@ -9,6 +9,22 @@ try {
   const { seedReportingFixture } = await import("../../tests/helpers/reportingFixture");
   const { default: bcrypt } = await import("bcryptjs");
   const f = await seedReportingFixture(prisma);
+  const customer = await prisma.customer.create({
+    data: {
+      organizationId: f.org.id,
+      storeId: f.store.id,
+      name: "Покупатель для отчёта",
+      email: "report@example.invalid",
+    },
+  });
+  await prisma.customerOrder.update({
+    where: { id: f.sale.id },
+    data: { customerId: customer.id, saleChannel: "ONLINE" },
+  });
+  await prisma.customerOrder.update({
+    where: { id: f.order.id },
+    data: { saleChannel: "IN_STORE" },
+  });
   await prisma.user.updateMany({
     where: { organizationId: f.org.id },
     data: {
@@ -131,6 +147,7 @@ try {
         foreignStoreId: f.foreignStore.id,
         teaId: f.tea.id,
         saleId: f.sale.id,
+        customerId: customer.id,
         purchaseOrderId: po.id,
         ...f.input,
         expected: {
