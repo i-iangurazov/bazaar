@@ -1,5 +1,9 @@
 import { assertSaleAssortment, lockAssortmentForSale } from "./assortmentPolicy";
-import { confirmLoyaltyForOrder, reverseLoyaltyForReturn } from "@/server/services/loyalty/apply";
+import {
+  confirmLoyaltyForOrder,
+  releaseLoyaltyForOrder,
+  reverseLoyaltyForReturn,
+} from "@/server/services/loyalty/apply";
 import {
   CatalogDiscountType,
   CashDrawerMovementType,
@@ -3044,6 +3048,9 @@ export const cancelPosSaleDraft = async (input: {
         updatedById: input.actorId,
       },
     });
+
+    // Cancelling the draft frees any reserved loyalty points.
+    await releaseLoyaltyForOrder(tx, { customerOrderId: sale.id });
 
     await writeAuditLog(tx, {
       organizationId: input.organizationId,

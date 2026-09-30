@@ -19,6 +19,18 @@ import {
 
 const decimal = (value: Prisma.Decimal | number | string) => new Prisma.Decimal(value as never);
 
+const snapshotOf = (
+  lines: Array<{ lineId: string; baseKgs: number; promoDiscountKgs: number }>,
+) =>
+  lines.map((line) => ({
+    ...line,
+    originalLineTotalKgs: Number(
+      decimal(line.baseKgs)
+        .minus(line.promoDiscountKgs)
+        .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP),
+    ),
+  }));
+
 export const reserveKey = (customerOrderId: string) => `loyalty:reserve:${customerOrderId}`;
 export const redeemKey = (customerOrderId: string) => `loyalty:redeem:${customerOrderId}`;
 export const earnKey = (customerOrderId: string) => `loyalty:earn:${customerOrderId}`;
@@ -144,6 +156,7 @@ export const applyLoyaltyToOrder = async (
       eventKey: reserveKey(input.customerOrderId),
     });
   }
+  const snapshotLines = snapshotOf(quote.lines);
   const application = await tx.loyaltyOrderApplication.upsert({
     where: { customerOrderId: input.customerOrderId },
     create: {
@@ -158,7 +171,7 @@ export const applyLoyaltyToOrder = async (
       pointsEarned: quote.earnPoints,
       eligibleKgs: decimal(quote.eligibleKgs),
       rulesSnapshot: quote.rules as unknown as Prisma.InputJsonValue,
-      lineDistribution: quote.lines as unknown as Prisma.InputJsonValue,
+      lineDistribution: snapshotLines,
     },
     update: {
       status: "APPLIED",
@@ -167,7 +180,7 @@ export const applyLoyaltyToOrder = async (
       pointsEarned: quote.earnPoints,
       eligibleKgs: decimal(quote.eligibleKgs),
       rulesSnapshot: quote.rules as unknown as Prisma.InputJsonValue,
-      lineDistribution: quote.lines as unknown as Prisma.InputJsonValue,
+      lineDistribution: snapshotLines,
     },
   });
 
@@ -268,6 +281,40 @@ export const releaseLoyaltyForOrder = async (
   tx: LoyaltyTx,
   input: { customerOrderId: string; now?: Date },
 ) => {
+  const application = await tx.loyaltyOrderApplication.findUnique({
+    where: { customerOrderId: input.customerOrderId },
+  });
+  if (application && application.status === "APPLIED") {
+    // Restore the cart exactly as it was before the bonus was applied.
+    const rules = (application.rulesSnapshot ?? {}) as { pointValueKgs?: number };
+    const redeemValue = decimal(application.pointsSpent).mul(Number(rules.pointValueKgs ?? 1));
+    const reduction = decimal(application.memberDiscountKgs).plus(redeemValue);
+    const snapshot = (application.lineDistribution ?? []) as Array<{
+      lineId: string;
+      originalLineTotalKgs?: number;
+    }>;
+    const rows = await tx.customerOrderLine.findMany({
+      where: { customerOrderId: input.customerOrderId },
+      select: { id: true, qty: true },
+    });
+    const qtyById = new Map(rows.map((row) => [row.id, row.qty]));
+    for (const line of snapshot) {
+      const original = line.originalLineTotalKgs;
+      const qty = qtyById.get(line.lineId);
+      if (original === undefined || !qty) continue;
+      await tx.customerOrderLine.update({
+        where: { id: line.lineId },
+        data: {
+          lineTotalKgs: decimal(original),
+          unitPriceKgs: decimal(original).div(qty).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP),
+        },
+      });
+    }
+    await tx.customerOrder.update({
+      where: { id: input.customerOrderId },
+      data: { discountKgs: { decrement: reduction }, totalKgs: { increment: reduction } },
+    });
+  }
   const reservation = await tx.loyaltyReservation.findUnique({
     where: { eventKey: reserveKey(input.customerOrderId) },
   });

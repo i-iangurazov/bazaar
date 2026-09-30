@@ -52,6 +52,13 @@ async function main() {
     where: { programId: program.id, storeId: store.id },
   });
 
+  // A dedicated register for the demo so scripted runs never collide with other drafts.
+  const register = await prisma.posRegister.upsert({
+    where: { storeId_code: { storeId: store.id, code: "LOYALTY-DEMO" } },
+    create: { organizationId, storeId: store.id, name: "Демо касса (лояльность)", code: "LOYALTY-DEMO" },
+    update: { name: "Демо касса (лояльность)" },
+  });
+
   // Demo product at exactly 1000 KGS.
   const product = await prisma.product.upsert({
     where: { organizationId_sku: { organizationId, sku: "DEMO-1000" } },
@@ -78,10 +85,20 @@ async function main() {
 
   const ensureMember = async (email: string, openingPoints: number) => {
     const contactKey = `email:${email}`;
+    // A POS-selectable CRM contact so the cashier can open the customer dialog.
+    const customerName = email.startsWith("demo-points") ? "Демо Покупатель (1000 баллов)" : "Демо Покупатель (0 баллов)";
+    const existingCustomer = await prisma.customer.findFirst({
+      where: { organizationId, storeId: store.id, email, deletedAt: null },
+    });
+    const customer =
+      existingCustomer ??
+      (await prisma.customer.create({
+        data: { organizationId, storeId: store.id, name: customerName, email },
+      }));
     const member = await prisma.loyaltyMember.upsert({
       where: { programId_contactKey: { programId: program.id, contactKey } },
-      create: { organizationId, programId: program.id, contactKey, email },
-      update: { email },
+      create: { organizationId, programId: program.id, contactKey, email, customerId: customer.id, displayName: customerName },
+      update: { email, customerId: customer.id, displayName: customerName },
     });
     const account = await prisma.loyaltyAccount.upsert({
       where: { memberId: member.id },
@@ -127,6 +144,7 @@ async function main() {
         host,
         organizationId,
         store: { id: store.id, name: store.name },
+        register: { id: register.id, name: register.name },
         product: { id: product.id, sku: product.sku, priceKgs: 1000 },
         joinPath: `/loyalty/join/${link.id}`,
         members: {
