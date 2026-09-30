@@ -81,6 +81,9 @@ current POS UI unchanged.
   `tmp/online-sales-report.png` (tmp is gitignored).
 - Chart fix: the online chart no longer shows empty `costKgs`/`grossProfitKgs`
   legend entries (opt-out prop, sales page unchanged).
+- URL fix: default `report`/`source`/`onlineChannel` values are omitted from the
+  report URL, so existing analytics links are byte-identical
+  (`tests/unit/baam-report-link.test.tsx` caught the regression).
 
 ### saleChannel downgrade fix (done)
 

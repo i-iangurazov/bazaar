@@ -115,11 +115,18 @@ export function useReportScope(mode: "sales" | "hub") {
   const search = draft.query === query ? draft.value : (state.search ?? "");
   const setSearch = (value: string) => setDraft({ query, value });
   const update = (patch: Record<string, string | number | undefined | null>) => {
-    const values = { ...state, valid: undefined };
-    router.replace(
-      reportHref(pathname, { ...values, search: search || undefined, page: undefined, ...patch }),
-      { scroll: false },
-    );
+    const values: Record<string, string | number | undefined | null> = {
+      ...state,
+      valid: undefined,
+      search: search || undefined,
+      page: undefined,
+      ...patch,
+    };
+    // Keep default values out of the URL so existing report links stay unchanged.
+    if (values.report === "sales") values.report = undefined;
+    if (values.source === "all") values.source = undefined;
+    if (values.onlineChannel === "ONLINE") values.onlineChannel = undefined;
+    router.replace(reportHref(pathname, values), { scroll: false });
   };
   const fingerprint = JSON.stringify([
     session?.user.id,
