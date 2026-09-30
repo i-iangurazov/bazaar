@@ -1,197 +1,129 @@
-# Online sales + loyalty progress
+# Online sales + loyalty programme — status
 
-Owner request (2026-09-30): add an "Online sales" analytics report and a
-UDS-style loyalty programme. Work locally in `main`, never push/deploy, keep the
-current POS UI unchanged.
+Owner request (2026-09-30). Everything is local `main` only: no push, no deploy,
+no preview, no Vercel/Neon or production database changes.
 
-## Environment check
+## How to run and demo locally
 
-- Repo: `/Users/ilias_iangurazov/Commercial/bazaar`, branch `main`.
-- HEAD at start: `71154371196c1429c6e7099a8872dc63518e12f6` (matches the task's
-  reference commit).
-- No project-level `AGENTS.md` found.
-- Available tooling: shell, editor, pnpm, prisma, vitest, docker (only for an
-  isolated local test DB). No Vercel/Neon MCP or deploy tooling is used.
-- Local Postgres/Redis were not running at session start; they are started only
-  for isolated local verification.
+```bash
+pnpm db:up                     # local docker Postgres + Redis only
+pnpm prisma:migrate            # apply additive migrations to the local DB
+pnpm prisma:seed               # demo users (admin@example.com / Admin123!)
+pnpm loyalty:demo              # repeatable demo org/store/product/customers
+LOYALTY_OTP_DEV_OUTBOX=1 pnpm dev
+```
 
-## Stage log
+`pnpm loyalty:demo` refuses any non-local database host and never resets data.
+It creates the 1000 KGS demo product, `demo-points@example.invalid` (1000 opening
+points written through the journal) and `demo-nopoints@example.invalid` (0), and
+enables the programme only for the demo organization.
 
-### Stage 1 — Online sales report (done, pending owner review)
+Local OTP codes are written to `tmp/loyalty-otp-outbox.log` (one line:
+`timestamp`, `email`, `code`). This outbox is enabled only with
+`LOYALTY_OTP_DEV_OUTBOX=1` and is refused in production / on Vercel. The code is
+never returned by the normal API and there is no universal OTP.
 
-- Status: implemented locally; awaiting owner review.
-- Facts established:
-  - `CustomerOrder.saleChannel` (`IN_STORE`/`ONLINE`, nullable) is the commercial
-    channel. `source` (`MANUAL`/`CATALOG`/`API`) and `isPosSale` are separate.
-  - Catalog checkout creates `CONFIRMED` + `saleChannel=ONLINE` +
-    `source=CATALOG` with no `SalePayment` rows
-    (`src/server/services/bazaarCatalog.ts`).
-  - `SalePayment.shiftId` is required, so online orders generally have no
-    payment rows — payment evidence must be treated as "unknown", never "unpaid".
-  - `completePosSale` currently writes `saleChannel: input.saleChannel`, which
-    can relabel an ONLINE order as IN_STORE when completed at a register.
-    Flagged for Stage 5; not changed yet.
-- What changed:
-  - New server report `src/server/services/reporting/onlineSales.ts`
-    (`getOnlineSalesReport`): two separate result blocks — orders created in the
-    period (`createdAt`) and completed sales/returns (`completedAt`), a daily
-    series, and a paginated orders table. Uses `reportPeriod` for Bishkek
-    `[start; next-day-start)` boundaries and existing indexes.
-  - Router procedures `reports.onlineSales` and `reports.onlineSalesExport`
-    (`src/server/trpc/routers/reports.ts`), both behind `withReportRead`
-    (server-side org/store scoping and the analytics feature gate).
-  - URL state extended with `report`, `onlineChannel`, `source`
-    (`src/lib/reporting.ts`).
-  - Analytics tab "Продажи / Онлайн-продажи" plus the report UI
-    (`src/components/reports/online-sales-report.tsx`,
-    `src/app/(app)/reports/analytics/page.tsx`).
-  - i18n keys (`onlineSales` namespace + `reporting.tabs`) in ru/kg/en.
-  - Tests: `tests/integration/online-sales-report.test.ts`,
-    `tests/unit/report-url-state.test.ts`.
-- Deliberate interpretations:
-  - `saleChannel=ONLINE` is the definition of an online sale; `isPosSale=false`
-    is not used as the criterion. Unknown channel is a separate filter and a
-    note, never merged into ONLINE.
-  - Money received is `SalePayment`-based and only shown when payment rows
-    exist; otherwise the UI states "Нет данных о платеже".
-  - Returns decrease the period in which the return completed.
-- Not done in Stage 1 (per task): no historical reclassification of old
-  unknown-channel orders (needs a dry-run + count report; not implemented yet).
-- Next step: Stage 2 (loyalty data model + settings, disabled by default).
+Manual walkthrough: sign in as owner → **Настройки → Бонусы (Программа лояльности)**
+→ open a store's registration QR → customer opens that link, requests a code, reads
+it from the outbox file, confirms → lands on the card with balance, rules, history
+and a short-lived QR with a countdown → show that QR at the register.
 
-## Verification
+## Stage 1 — Online sales report — DONE
 
-- `pnpm exec tsc --noEmit` — pass.
-- `pnpm lint` — pass.
-- `node --import tsx scripts/i18n-check.ts` — pass.
-- `pnpm exec vitest run tests/unit/report-url-state.test.ts` — 8/8 pass.
-- Integration (isolated local DB `bazaar_hardening_agent4_platform`):
-  - `tests/integration/online-sales-report.test.ts` — pass.
-  - Regression set `reporting-sales`, `reporting-operations`,
-    `reporting-access-cost`, `reports`, `customer-purchase-report`,
-    `sale-channel`, `analytics` — 24/24 pass.
-  - `sale-channel` after the downgrade fix — 4/4 pass.
-- Safe local build: `CRON_SECRET=… pnpm exec next build` — pass
-  (`/reports/analytics` 9.45 kB / 274 kB). Note: plain `pnpm build` fails locally
-  only because `env:check:build` requires `CRON_SECRET`, which is not set in the
-  local `.env`; the production migration step is a no-op locally.
-- Browser check (headless Chromium, local dev server, seeded demo data):
-  `?report=online` renders the tab, both blocks, daily chart, orders table and
-  "Нет данных о платеже"; 0 console/page errors. Screenshot:
-  `tmp/online-sales-report.png` (tmp is gitignored).
-- Chart fix: the online chart no longer shows empty `costKgs`/`grossProfitKgs`
-  legend entries (opt-out prop, sales page unchanged).
-- URL fix: default `report`/`source`/`onlineChannel` values are omitted from the
-  report URL, so existing analytics links are byte-identical
-  (`tests/unit/baam-report-link.test.tsx` caught the regression).
+- "Онлайн-продажи" tab in existing analytics; two separate blocks (orders created
+  vs completed sales/money), daily chart, server-paginated orders table, export.
+- Online = `saleChannel=ONLINE`; unknown channel is a separate filter, never merged.
+  Money received is shown only from real `SalePayment` rows, otherwise
+  "Нет данных о платеже".
+- Fixed `completePosSale`/`holdPosSaleDraft` so a register default can never
+  downgrade a recorded ONLINE sale.
+- Verified: local build, browser check, unit + reporting integration suites.
 
-### saleChannel downgrade fix (done)
+## Stage 2 — Programme rules + settings — DONE
 
-- Reproduced: an order recorded with `saleChannel=ONLINE` was rewritten to
-  `IN_STORE` when the register completed/held it with its own in-store default
-  (`completePosSale`/`holdPosSaleDraft` wrote `input.saleChannel` verbatim).
-- Fixed in `src/server/services/pos.ts` with `resolveSaleChannelUpdate`: an
-  existing `ONLINE` sale is never downgraded; a missing value preserves the saved
-  channel; upgrades remain allowed. No POS UI file changed.
-- Regression test added to `tests/integration/sale-channel.test.ts`.
+- Rules: member discount 5%, earn 5%, 1 point = 1 KGS, max spend 50% after the
+  member discount, promo positions excluded by default, larger-of member/promo.
+  Disabled by default; only an explicit admin activation enables it.
+- Admin UI at `/settings/loyalty`: enable switch, discount, earn rate, spend limit,
+  min redeem, reservation TTL, promo options, participating stores.
 
-### Stage 2 — Programme rules (done)
+## Stage 3 — Accounts, calculation, journal — DONE
 
-- Rules fixed in code and in the schema, programme disabled by default
-  (`LoyaltyProgram.enabled = false`; existing organizations are never auto-enrolled):
-  member discount 5% (configurable), earn 5% (configurable, owner confirms),
-  1 point = 1 KGS, max spend 50% of the eligible amount after the member discount,
-  within the available balance.
-- Points are whole and rounded down; money uses `Prisma.Decimal`, never JS float.
-  `maxRedeemPoints = min(availablePoints, floor(eligibleAfterDiscount * 50%))`.
-- Delivery/services are excluded; promo lines are excluded by default; the member
-  discount keeps the larger of member vs promo, never the sum. Manual cashier
-  discount combined with the programme is out of scope for v1.
-- `loyaltyRulesText()` states the 52.5% total-benefit example in plain language and
-  avoids calling it a "50% total discount".
-- Owner settings API: `loyalty.settings`, `loyalty.updateSettings`, `loyalty.rules`
-  (ADMIN) in `src/server/trpc/routers/loyalty.ts`. No settings page UI yet.
+- Schema + additive migrations: program, program stores, member, account,
+  append-only ledger (`eventKey` unique), reservation, per-order snapshot.
+- One shared server calculation (`calc.ts`); money via `Prisma.Decimal`, whole
+  points rounded down.
+- Atomic reservation guard on `LoyaltyAccount.reservedPoints`; expired reservations
+  are swept and never reduce availability.
 
-### Stage 3 — Accounts, calculation and journal (done, core)
+## Stage 4 — Registration, sessions, QR card — DONE
 
-- Schema + additive migration `20260930120000_loyalty_foundation`:
-  `LoyaltyProgram`, `LoyaltyProgramStore`, `LoyaltyMember`, `LoyaltyAccount`,
-  `LoyaltyLedgerEntry` (append-only, unique `eventKey`), `LoyaltyReservation`,
-  `LoyaltyOrderApplication` (per-order rules/amount/line snapshot).
-- One server calculation for POS and web: `src/server/services/loyalty/calc.ts`.
-- Journal + atomic balance + idempotency + reservations:
-  `src/server/services/loyalty/ledger.ts`.
-  - Balance moves only together with a ledger row; debits use a conditional update
-    (`balancePoints >= needed`), so two parallel redemptions cannot spend the same
-    points.
-  - `eventKey` makes earn/spend idempotent (a replay returns the original row).
-  - Reservations do not touch the balance; availability = balance − live
-    reservations; expired reservations never reduce availability; confirmation
-    converts a reservation into exactly one REDEEM; reversal entries may push the
-    accounting balance negative while spendable stays ≥ 0.
-- Tests: `tests/unit/loyalty-calc.test.ts` (6, incl. the exact 1000 KGS examples:
-  pay 950 / earn 47; spend 475 / pay 475 / earn 23; balance 100 → pay 850 / earn 42)
-  and `tests/integration/loyalty-ledger.test.ts` (5: disabled by default, idempotent
-  earn, parallel-redemption guard, reservation expiry, single conversion).
+- Visible path: desktop sidebar **Администрирование → Программа лояльности** and
+  mobile **Ещё → Программа лояльности**; new `/settings` index lists implemented
+  sections for the current role; the loyalty page has "Назад в настройки".
+- Store QR ("Регистрация покупателей") per participating store with store name and
+  Открыть страницу / Скопировать ссылку / Скачать QR. The link is generated
+  automatically — no manual slug.
+- Customer identity is separate from staff auth: email OTP (hashed, TTL, attempt and
+  rate limits), dedicated revocable httpOnly session cookie, no `User` row.
+- Customer card: balance, available points, rules, history, large short-lived QR
+  ("Показать кассиру") with countdown and refresh, plus a "У меня уже есть карта"
+  re-entry link.
+- QRs are rendered server-side and verified by decoding: a real scanner library
+  decodes the store QR to the join URL and the customer QR to the opaque token, and
+  `verifyCardToken` accepts that decoded value
+  (`tests/integration/loyalty-qr.test.ts`).
 
-### Stage 4 — Registration and QR card (done, server + pages)
+## Stage 5 — Register and online-order integration — REGISTER DONE, ONLINE NOT
 
-- Separate customer identity, never a staff role: email one-time code (hashed,
-  10-minute TTL, attempt + rate limits, delivery skipped in test runtime), a
-  dedicated `loyalty_session` httpOnly cookie (30 days, revocable), and no User row.
-- Two QR types: the store QR is the public join link `/loyalty/join/<programStoreId>`
-  (opening it earns/spends nothing); the customer QR is a short-lived (120 s) opaque
-  token, server-verified, single-use and organization-bound.
-- Pages: `/loyalty/join/[programStoreId]` (registration/sign-in) and `/loyalty/card`
-  (balance, available, discount rules, history, QR). API under `/api/loyalty/*`.
-- Admin settings page `/settings/loyalty`: stores, member discount, earn rate,
-  spend limit, min redeem, reservation TTL, promo options and an explicit
-  enable switch (`updateSettings` alone was not enough).
-- Tests: `tests/integration/loyalty-member-auth.test.ts` (5).
+- Register: a single compact "Бонусы" button inside the existing customer dialog
+  opens a separate dialog (scan card QR, member discount, available/max points,
+  points to redeem, payable, will-earn, apply/remove). The shared server quote,
+  reservation and confirmation are wired into the real completion
+  (`completePosSale`), and the earning is granted only on a fully paid money part.
+- Verified end-to-end through the real sale services
+  (`tests/integration/loyalty-pos.test.ts`): 1000 → pay 950 / earn 47; balance 1000
+  → redeem 475 / pay 475 / earn 23; insufficient balance fails loudly; a repeated
+  completion changes nothing. Parallel orders on one account cannot spend the same
+  points (`tests/integration/loyalty-orders.test.ts`).
+- POS base screen unchanged: `tmp/pos-{desktop,tablet,mobile}-before.png` and
+  `...-after.png` are byte-identical.
+- NOT DONE: binding the customer card to the online catalogue order.
 
-### Stage 5 — Register and online-order integration (server done; UI NOT started)
+## Stage 6 — Returns and loyalty reporting — REVERSALS DONE, WIRING NOT
 
-- One shared quote (`quoteLoyaltyForOrder`) and order application
-  (`applyLoyaltyToOrder`) that snapshot the rules, amounts and line distribution.
-- `confirmLoyaltyForOrder` converts a reservation into exactly one redemption and
-  grants the earning only when the money part is fully paid.
-- Reservation concurrency: availability is guarded by an atomic conditional update
-  on `LoyaltyAccount.reservedPoints`; two parallel orders on one account cannot
-  spend the same points, and a partially available request fails loudly instead of
-  silently re-pricing (verified in `tests/integration/loyalty-orders.test.ts`).
-- NOT DONE: the register UI action/dialog and the online catalogue checkout hook.
-  The register UI is intentionally untouched so the working POS is preserved.
-
-### Stage 6 — Returns and loyalty reporting (reversals done; reporting partially)
-
-- `reverseLoyaltyForReturn` reverses spend and earnings cumulatively and
-  proportionally, so successive partial returns can never over-reverse; a full
-  return lands exactly on the original amounts. Reversal earnings may push the
-  accounting balance negative while spendable stays ≥ 0.
-- NOT DONE: wiring reversals into the POS `completeSaleReturn` transaction, showing
+- Cumulative proportional reversals exist and are tested (partial + full return
+  land exactly on the original amounts; reversal earnings may push the accounting
+  balance negative while spendable stays ≥ 0).
+- NOT DONE: calling the reversal from the POS return transaction, and showing
   loyalty lines (member discount, points spent/earned/reversed) in analytics and the
-  customer/order cards.
+  order/customer views.
 
-### Stage 7 — Local acceptance (NOT STARTED)
+## Stage 7 — Local acceptance — PARTIAL
 
-- POS baseline captured before any register work:
-  `tmp/pos-desktop-before.png`, `tmp/pos-tablet-before.png`,
-  `tmp/pos-mobile-before.png` (closed-shift state; a filled-cart/customer/payment
-  baseline still needs capturing).
+Verified: owner navigation → settings with QR; customer registration via the local
+outbox → card with 1000 points and a decodable QR; QR decoding + handler
+acceptance; the register acceptance numbers through real services; POS before/after
+equality.
+
+Not yet verified by me in the browser: the full click-through of the register
+Бонусы dialog (shift → cart → customer → dialog → payment), the online order path,
+and returns — the services and tests exist, the manual UI pass still needs doing.
 
 ## Exact continuation point
 
-1. Register UI: add ONE compact "Бонусы" action inside the existing customer
-   dialog/menu in `src/app/(app)/pos/sell/page.tsx` (no layout/geometry change),
-   opening a separate dialog that calls `loyalty.*` procedures; then wire
-   `applyLoyaltyToOrder`/`confirmLoyaltyForOrder` into `completePosSale`.
-2. Online checkout: bind the customer card to the catalogue order and reuse
-   `quoteLoyaltyForOrder`.
-3. Call `reverseLoyaltyForReturn` from the POS return completion transaction.
-4. Show loyalty lines in analytics/order/customer views.
-5. Run the full customer + cashier walkthrough and compare POS screenshots with the
-   baseline above.
+1. Online catalogue checkout: bind the customer card and reuse
+   `quoteLoyaltyForOrder` / `applyLoyaltyToOrder` / `confirmLoyaltyForOrder`.
+2. Call `reverseLoyaltyForReturn` from the POS return completion transaction.
+3. Show loyalty lines in analytics/order/customer views.
+4. Manual browser pass of the register dialog and the online/return flows.
 
 ## Blockers
 
-- None technical. Remaining work is scope, not access.
+- None technical.
+
+## Screenshots (tmp is gitignored)
+
+- `tmp/loyalty-settings-index.png`, `tmp/loyalty-settings.png` (settings + QRs)
+- `tmp/loyalty-card.png` (customer card with QR)
+- `tmp/pos-{desktop,tablet,mobile}-{before,after}.png`
