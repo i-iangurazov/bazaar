@@ -70,8 +70,27 @@ current POS UI unchanged.
   - Regression set `reporting-sales`, `reporting-operations`,
     `reporting-access-cost`, `reports`, `customer-purchase-report`,
     `sale-channel`, `analytics` — 24/24 pass.
-- Not yet verified: full `next build` and visual check of the analytics page in a
-  browser (the new report tab was not opened in a running app).
+  - `sale-channel` after the downgrade fix — 4/4 pass.
+- Safe local build: `CRON_SECRET=… pnpm exec next build` — pass
+  (`/reports/analytics` 9.45 kB / 274 kB). Note: plain `pnpm build` fails locally
+  only because `env:check:build` requires `CRON_SECRET`, which is not set in the
+  local `.env`; the production migration step is a no-op locally.
+- Browser check (headless Chromium, local dev server, seeded demo data):
+  `?report=online` renders the tab, both blocks, daily chart, orders table and
+  "Нет данных о платеже"; 0 console/page errors. Screenshot:
+  `tmp/online-sales-report.png` (tmp is gitignored).
+- Chart fix: the online chart no longer shows empty `costKgs`/`grossProfitKgs`
+  legend entries (opt-out prop, sales page unchanged).
+
+### saleChannel downgrade fix (done)
+
+- Reproduced: an order recorded with `saleChannel=ONLINE` was rewritten to
+  `IN_STORE` when the register completed/held it with its own in-store default
+  (`completePosSale`/`holdPosSaleDraft` wrote `input.saleChannel` verbatim).
+- Fixed in `src/server/services/pos.ts` with `resolveSaleChannelUpdate`: an
+  existing `ONLINE` sale is never downgraded; a missing value preserves the saved
+  channel; upgrades remain allowed. No POS UI file changed.
+- Regression test added to `tests/integration/sale-channel.test.ts`.
 
 ## Blockers
 

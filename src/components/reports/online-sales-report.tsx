@@ -344,6 +344,7 @@ export function OnlineSalesReport({ scope }: { scope: ReportScope }) {
                     averageReceipt: r("averageReceipt"),
                   }}
                   onSelectDate={(date) => update({ dateFrom: date, dateTo: date, page: undefined })}
+                  hideCostProfit
                 />
               </div>
             ) : (

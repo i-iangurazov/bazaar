@@ -49,12 +49,15 @@ export const SalesOverviewChart = ({
   locale,
   currencySource,
   onSelectDate,
+  hideCostProfit = false,
 }: {
   data: SalesPoint[];
   labels: ChartLabels;
   locale: string;
   currencySource?: CurrencySource;
   onSelectDate: (date: string) => void;
+  /** Online-sales series carry no cost/profit; hide those lines and legend entries. */
+  hideCostProfit?: boolean;
 }) => {
   const renderMoney = (value: number | null | undefined) =>
     value === null || value === undefined ? "—" : formatKgsMoney(value, locale, currencySource);
@@ -79,12 +82,16 @@ export const SalesOverviewChart = ({
             <p>
               {labels.returns}: {renderMoney(point.returnsKgs)}
             </p>
-            <p>
-              {labels.cost}: {renderMoney(point.costKgs)}
-            </p>
-            <p>
-              {labels.profit}: {renderMoney(point.grossProfitKgs)}
-            </p>
+            {!hideCostProfit && (
+              <>
+                <p>
+                  {labels.cost}: {renderMoney(point.costKgs)}
+                </p>
+                <p>
+                  {labels.profit}: {renderMoney(point.grossProfitKgs)}
+                </p>
+              </>
+            )}
             <p>
               {labels.receipts}: {formatNumber(point.receiptCount, locale)}
             </p>
@@ -139,28 +146,32 @@ export const SalesOverviewChart = ({
             }
           }}
         />
-        <Line
-          yAxisId="sales"
-          type="linear"
-          dataKey="costKgs"
-          name={labels.cost}
-          stroke="var(--report-cost)"
-          strokeWidth={2}
-          dot={{ r: 3 }}
-          connectNulls={false}
-          isAnimationActive={false}
-        />
-        <Line
-          yAxisId="sales"
-          type="linear"
-          dataKey="grossProfitKgs"
-          name={labels.profit}
-          stroke="hsl(var(--success))"
-          strokeWidth={2}
-          dot={{ r: 3 }}
-          connectNulls={false}
-          isAnimationActive={false}
-        />
+        {!hideCostProfit && (
+          <Line
+            yAxisId="sales"
+            type="linear"
+            dataKey="costKgs"
+            name={labels.cost}
+            stroke="var(--report-cost)"
+            strokeWidth={2}
+            dot={{ r: 3 }}
+            connectNulls={false}
+            isAnimationActive={false}
+          />
+        )}
+        {!hideCostProfit && (
+          <Line
+            yAxisId="sales"
+            type="linear"
+            dataKey="grossProfitKgs"
+            name={labels.profit}
+            stroke="hsl(var(--success))"
+            strokeWidth={2}
+            dot={{ r: 3 }}
+            connectNulls={false}
+            isAnimationActive={false}
+          />
+        )}
       </ComposedChart>
     </ResponsiveContainer>
   );

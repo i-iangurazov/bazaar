@@ -105,4 +105,28 @@ import { createTestCaller } from "../helpers/context";
       (await prisma.customerOrder.findUniqueOrThrow({ where: { id: sale.id } })).customerId,
     ).toBeNull();
   });
+
+  it("never lets a register downgrade a recorded online sale to in-store", async () => {
+    const f = await fixture();
+    const sale = await f.draft("ONLINE");
+    expect(sale.saleChannel).toBe("ONLINE");
+
+    // A client that falls back to its own in-store default must not rewrite the channel.
+    await f.caller.pos.sales.complete({
+      saleId: sale.id,
+      saleChannel: "IN_STORE",
+      idempotencyKey: "channel-no-downgrade",
+      payments: [{ method: "CASH", amountKgs: 200 }],
+    });
+    expect(
+      (await prisma.customerOrder.findUniqueOrThrow({ where: { id: sale.id } })).saleChannel,
+    ).toBe("ONLINE");
+
+    // Holding a resumed online receipt with the in-store default is also a no-op.
+    const held = await f.draft("ONLINE");
+    await f.caller.pos.sales.holdDraft({ saleId: held.id, saleChannel: "IN_STORE" });
+    expect(
+      (await prisma.customerOrder.findUniqueOrThrow({ where: { id: held.id } })).saleChannel,
+    ).toBe("ONLINE");
+  });
 });

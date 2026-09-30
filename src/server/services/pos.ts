@@ -61,6 +61,16 @@ const toMoney = (value: Prisma.Decimal | number | null | undefined) =>
 const roundMoney = roundCashAmount;
 const variantKeyFrom = (variantId?: string | null) => variantId ?? "BASE";
 
+/**
+ * A recorded `ONLINE` commercial channel must survive register edits. Clients send
+ * their own default (`IN_STORE`), so the server never lets a register downgrade an
+ * online sale; a missing value keeps the saved channel, and upgrades stay allowed.
+ */
+const resolveSaleChannelUpdate = (
+  existing: "IN_STORE" | "ONLINE" | null | undefined,
+  incoming: "IN_STORE" | "ONLINE" | undefined,
+) => (existing === "ONLINE" ? "ONLINE" : (incoming ?? existing ?? undefined));
+
 const canSupervisePos = (user: StoreAccessUser) =>
   Boolean(
     user.isOrgOwner ||
@@ -2517,7 +2527,7 @@ export const holdPosSaleDraft = async (input: {
       where: { id: sale.id },
       data: {
         isHeld: true,
-        saleChannel: input.saleChannel,
+        saleChannel: resolveSaleChannelUpdate(sale.saleChannel, input.saleChannel),
         heldAt: new Date(),
         heldById: input.actorId,
         updatedById: input.actorId,
@@ -4998,7 +5008,7 @@ export const completePosSale = async (input: {
             where: { id: sale.id },
             data: {
               status: CustomerOrderStatus.COMPLETED,
-              saleChannel: input.saleChannel,
+              saleChannel: resolveSaleChannelUpdate(sale.saleChannel, input.saleChannel),
               completedAt: new Date(),
               completedEventId: input.idempotencyKey,
               isDebt: Boolean(debtCustomerName),
