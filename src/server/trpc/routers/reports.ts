@@ -8,6 +8,7 @@ import {
 } from "@/server/services/reporting/access";
 import { getSalesReport, reportViews } from "@/server/services/reporting/sales";
 import { getOnlineSalesReport } from "@/server/services/reporting/onlineSales";
+import { getLoyaltyActivity } from "@/server/services/reporting/onlineSales";
 import { getOperationsReport, operationViews } from "@/server/services/reporting/operations";
 
 import { businessDateOnlyEndUtc, businessDateOnlyToUtc } from "@/lib/timezone";
@@ -218,6 +219,30 @@ export const reportsRouter = router({
       throw toTRPCError(error);
     }
   }),
+  loyaltyActivity: reportsProcedure
+    .input(
+      z
+        .object({
+          storeId: z.string().trim().min(1).optional(),
+          dateFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+          dateTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        })
+        .strict(),
+    )
+    .query(async ({ ctx, input }) => {
+      try {
+        return await withReportRead(ctx.user, input, (tx, access) =>
+          getLoyaltyActivity(tx, {
+            organizationId: access.organizationId,
+            storeIds: access.storeIds,
+            dateFrom: input.dateFrom,
+            dateTo: input.dateTo,
+          }),
+        );
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
   onlineSalesExport: reportsProcedure.input(onlineSalesSchema).query(async ({ ctx, input }) => {
     try {
       return await withReportRead(ctx.user, { ...input, export: true }, (tx, access) =>

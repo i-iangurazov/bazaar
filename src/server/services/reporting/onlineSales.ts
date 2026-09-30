@@ -410,3 +410,55 @@ export async function getOnlineSalesReport(
 }
 
 export type OnlineSalesReport = Awaited<ReturnType<typeof getOnlineSalesReport>>;
+
+/**
+ * Loyalty activity for a period: member discount on completed sales, and the points
+ * journal grouped by type. Store-scoped through the order that produced each entry.
+ */
+export async function getLoyaltyActivity(
+  client: ReportingClient,
+  input: {
+    organizationId: string;
+    storeIds: string[];
+    dateFrom: string;
+    dateTo: string;
+  },
+) {
+  const period = reportPeriod(input.dateFrom, input.dateTo);
+  const inStores = (field: Prisma.Sql) =>
+    input.storeIds.length
+      ? Prisma.sql`${field} IN (${Prisma.join(input.storeIds)})`
+      : Prisma.sql`false`;
+  const rows = await client.$queryRaw<
+    Array<{ type: string; points: number | string; entries: number | string }>
+  >(Prisma.sql`
+    SELECT e.type::text AS type, COALESCE(SUM(e.points), 0)::float8 AS points, COUNT(*)::int AS entries
+    FROM "LoyaltyLedgerEntry" e
+    LEFT JOIN "CustomerOrder" o ON o.id = e."customerOrderId"
+    WHERE e."organizationId" = ${input.organizationId}
+      AND e."createdAt" >= ${utcReportTimestamp(period.from)}
+      AND e."createdAt" < ${utcReportTimestamp(period.until)}
+      AND (e."customerOrderId" IS NULL OR ${inStores(Prisma.sql`o."storeId"`)})
+    GROUP BY e.type
+  `);
+  const [discount] = await client.$queryRaw<Array<{ member_discount: number | string }>>(Prisma.sql`
+    SELECT COALESCE(SUM(a."memberDiscountKgs"), 0)::float8 AS member_discount
+    FROM "LoyaltyOrderApplication" a
+    JOIN "CustomerOrder" o ON o.id = a."customerOrderId"
+    WHERE a."organizationId" = ${input.organizationId}
+      AND o.status = 'COMPLETED' AND o."completedAt" IS NOT NULL
+      AND o."completedAt" >= ${utcReportTimestamp(period.from)}
+      AND o."completedAt" < ${utcReportTimestamp(period.until)}
+      AND ${inStores(Prisma.sql`o."storeId"`)}
+  `);
+  const byType = new Map(rows.map((row) => [row.type, numberOrZero(row.points)]));
+  return {
+    memberDiscountKgs: round(numberOrZero(discount?.member_discount)),
+    pointsSpent: Math.abs(byType.get("REDEEM") ?? 0),
+    pointsEarned: byType.get("EARN") ?? 0,
+    pointsRestored: (byType.get("REVERSAL_REDEEM") ?? 0),
+    pointsCancelled: Math.abs(byType.get("REVERSAL_EARN") ?? 0),
+    adjusted: byType.get("ADJUSTMENT") ?? 0,
+    period: { dateFrom: input.dateFrom, dateTo: input.dateTo, timeZone: period.timeZone },
+  };
+}

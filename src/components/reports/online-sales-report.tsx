@@ -66,6 +66,10 @@ export function OnlineSalesReport({ scope }: { scope: ReportScope }) {
     refetchOnWindowFocus: true,
   });
   const data = query.data;
+  const loyalty = trpc.reports.loyaltyActivity.useQuery(
+    { dateFrom: state.dateFrom, dateTo: state.dateTo, storeId: state.storeId },
+    { enabled, retry: false, staleTime: 30_000 },
+  );
 
   const money = (value: number | null | undefined) =>
     value === null || value === undefined
@@ -353,6 +357,31 @@ export function OnlineSalesReport({ scope }: { scope: ReportScope }) {
               </div>
             )}
           </section>
+
+          {loyalty.data ? (
+            <section className="space-y-3 rounded-xl border border-border bg-card p-4 sm:p-5">
+              <div>
+                <h2 className="font-semibold">{t("loyaltyTitle")}</h2>
+                <p className="mt-1 text-xs text-muted-foreground">{t("loyaltyNote")}</p>
+              </div>
+              <dl className="grid gap-3 sm:grid-cols-3 xl:grid-cols-5">
+                {(
+                  [
+                    [t("loyaltyMemberDiscount"), money(loyalty.data.memberDiscountKgs)],
+                    [t("loyaltySpent"), number(loyalty.data.pointsSpent)],
+                    [t("loyaltyEarned"), number(loyalty.data.pointsEarned)],
+                    [t("loyaltyRestored"), number(loyalty.data.pointsRestored)],
+                    [t("loyaltyCancelled"), number(loyalty.data.pointsCancelled)],
+                  ] as const
+                ).map(([name, value]) => (
+                  <div key={name} className="rounded-lg border border-border p-3">
+                    <dt className="text-xs text-muted-foreground">{name}</dt>
+                    <dd className="mt-1 font-semibold tabular-nums">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+          ) : null}
 
           <section className="min-w-0 overflow-hidden rounded-xl border border-border bg-card">
             <div className="space-y-4 border-b border-border p-4 sm:p-5">

@@ -7168,7 +7168,14 @@
       "amount": "By amount",
       "number": "By number"
     },
-    "method": "An online sale is defined by the commercial channel saleChannel=ONLINE. Orders are counted by creation date, sales by completion date, returns by return completion date. A missing payment record does not mean unpaid."
+    "method": "An online sale is defined by the commercial channel saleChannel=ONLINE. Orders are counted by creation date, sales by completion date, returns by return completion date. A missing payment record does not mean unpaid.",
+    "loyaltyTitle": "Bonuses for the period",
+    "loyaltyNote": "Member discount and points movement from the journal. Counted once and never subtracted from money totals again.",
+    "loyaltyMemberDiscount": "Member discount",
+    "loyaltySpent": "Points redeemed",
+    "loyaltyEarned": "Points earned",
+    "loyaltyRestored": "Restored on return",
+    "loyaltyCancelled": "Earnings cancelled"
   },
   "reporting": {
     "tabs": {
