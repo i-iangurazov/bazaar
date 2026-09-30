@@ -51,6 +51,9 @@ const keys = new Set([
   "sort",
   "direction",
   "page",
+  "report",
+  "source",
+  "onlineChannel",
 ]);
 const optional = (params: URLSearchParams, key: string) => params.get(key) || undefined;
 
@@ -74,14 +77,20 @@ export function reportUrlState(query: string, mode: "sales" | "hub", now = new D
   const direction = optional(params, "direction") ?? "desc";
   const kind = optional(params, "kind");
   const page = Number(optional(params, "page") ?? 1);
+  const report = optional(params, "report") ?? "sales";
+  const source = optional(params, "source") ?? "all";
+  const onlineChannel = optional(params, "onlineChannel") ?? "ONLINE";
   if (
     !["all", "pos", "orders"].includes(channel) ||
     !["all", "IN_STORE", "ONLINE", "UNKNOWN"].includes(saleChannel) ||
     !["asc", "desc"].includes(direction) ||
+    !["sales", "online"].includes(report) ||
+    !["all", "CATALOG", "API", "MANUAL"].includes(source) ||
+    !["ONLINE", "UNKNOWN"].includes(onlineChannel) ||
     !(mode === "sales" ? salesViews : ["overview", ...operationViews]).includes(view as never) ||
     !(
       mode === "sales"
-        ? ["quantity", "revenue", "profit", "cost", "returns", "name", "date"]
+        ? ["quantity", "revenue", "profit", "cost", "returns", "name", "date", "amount", "number"]
         : ["date", "amount", "name"]
     ).includes(sort) ||
     (kind !== undefined && !["sale", "return"].includes(kind)) ||
@@ -92,6 +101,9 @@ export function reportUrlState(query: string, mode: "sales" | "hub", now = new D
     valid = false;
   return {
     valid,
+    report: report as "sales" | "online",
+    source: source as "all" | "CATALOG" | "API" | "MANUAL",
+    onlineChannel: onlineChannel as "ONLINE" | "UNKNOWN",
     dateFrom,
     dateTo,
     storeId,

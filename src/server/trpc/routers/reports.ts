@@ -7,6 +7,7 @@ import {
   reportCustomerAccessWhere,
 } from "@/server/services/reporting/access";
 import { getSalesReport, reportViews } from "@/server/services/reporting/sales";
+import { getOnlineSalesReport } from "@/server/services/reporting/onlineSales";
 import { getOperationsReport, operationViews } from "@/server/services/reporting/operations";
 
 import { businessDateOnlyEndUtc, businessDateOnlyToUtc } from "@/lib/timezone";
@@ -69,6 +70,14 @@ const operationsSchema = periodSchema
   .extend({
     view: z.enum(operationViews),
     sort: z.enum(["date", "amount", "name"]).optional(),
+  })
+  .strict();
+
+const onlineSalesSchema = periodSchema
+  .extend({
+    channel: z.enum(["ONLINE", "UNKNOWN"]).optional(),
+    source: z.enum(["all", "CATALOG", "API", "MANUAL"]).optional(),
+    sort: z.enum(["date", "amount", "number"]).optional(),
   })
   .strict();
 
@@ -185,6 +194,48 @@ export const reportsRouter = router({
           { exportAll: true },
         );
       });
+    } catch (error) {
+      throw toTRPCError(error);
+    }
+  }),
+  onlineSales: reportsProcedure.input(onlineSalesSchema).query(async ({ ctx, input }) => {
+    try {
+      return await withReportRead(ctx.user, input, (tx, access) =>
+        getOnlineSalesReport(tx, {
+          organizationId: access.organizationId,
+          storeIds: access.storeIds,
+          dateFrom: input.dateFrom,
+          dateTo: input.dateTo,
+          channel: input.channel,
+          source: input.source,
+          page: input.page,
+          pageSize: input.pageSize,
+          sort: input.sort,
+          direction: input.direction,
+        }),
+      );
+    } catch (error) {
+      throw toTRPCError(error);
+    }
+  }),
+  onlineSalesExport: reportsProcedure.input(onlineSalesSchema).query(async ({ ctx, input }) => {
+    try {
+      return await withReportRead(ctx.user, { ...input, export: true }, (tx, access) =>
+        getOnlineSalesReport(
+          tx,
+          {
+            organizationId: access.organizationId,
+            storeIds: access.storeIds,
+            dateFrom: input.dateFrom,
+            dateTo: input.dateTo,
+            channel: input.channel,
+            source: input.source,
+            sort: input.sort,
+            direction: input.direction,
+          },
+          { exportAll: true },
+        ),
+      );
     } catch (error) {
       throw toTRPCError(error);
     }

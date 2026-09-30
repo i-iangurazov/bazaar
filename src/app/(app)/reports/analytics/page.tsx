@@ -23,6 +23,7 @@ import {
 } from "@/components/reports/report-controls";
 import { CustomerReportFilter } from "@/components/reports/customer-report-filter";
 import { ReportMetric } from "@/components/reports/report-metric";
+import { OnlineSalesReport } from "@/components/reports/online-sales-report";
 import { baseAccountingCurrency, formatKgsMoney } from "@/lib/currencyDisplay";
 import { downloadTableFile, type DownloadFormat } from "@/lib/fileExport";
 import { formatDateTime, formatNumber } from "@/lib/i18nFormat";
@@ -36,6 +37,8 @@ const SalesOverviewChart = dynamic(
     import("@/components/reports/sales-overview-chart").then((module) => module.SalesOverviewChart),
   { ssr: false, loading: () => <Skeleton className="h-full w-full" /> },
 );
+
+const salesSortValues = ["quantity", "revenue", "profit", "cost", "returns", "name", "date"] as const;
 
 function AnalyticsReportContent() {
   const scope = useReportScope("sales");
@@ -71,7 +74,9 @@ function AnalyticsReportContent() {
     documentId: state.documentId,
     kind: state.kind,
     view: state.view as SalesView,
-    sort: state.sort as SalesReportInput["sort"],
+    sort: (salesSortValues as readonly string[]).includes(state.sort)
+      ? (state.sort as SalesReportInput["sort"])
+      : "revenue",
     direction: state.direction,
     page: state.page,
     pageSize: 25,
@@ -282,6 +287,34 @@ function AnalyticsReportContent() {
           </>
         }
       />
+      <nav
+        aria-label={t("tabs.label")}
+        className="flex flex-wrap gap-1.5 border-b border-border pb-2"
+      >
+        {(["sales", "online"] as const).map((tab) => (
+          <Button
+            key={tab}
+            size="sm"
+            variant={state.report === tab ? "primary" : "ghost"}
+            aria-current={state.report === tab ? "page" : undefined}
+            onClick={() =>
+              update({
+                report: tab,
+                page: undefined,
+                ...(tab === "online"
+                  ? { sort: "date", direction: "desc" }
+                  : { sort: "revenue", direction: "desc" }),
+              })
+            }
+          >
+            {t(`tabs.${tab}`)}
+          </Button>
+        ))}
+      </nav>
+      {state.report === "online" ? (
+        <OnlineSalesReport scope={scope} />
+      ) : (
+        <>
       <ReportPeriodControls scope={scope}>
         <ReportSelect
           label={t("channel")}
@@ -818,6 +851,8 @@ function AnalyticsReportContent() {
               <p>{t("quantityMethod")}</p>
             </div>
           </details>
+        </>
+      )}
         </>
       )}
       {preview && (

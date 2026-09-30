@@ -6993,7 +6993,98 @@
     "formRequiredHint": "Fields marked with an asterisk are required",
     "required": "Required field"
   },
+  "onlineSales": {
+    "channelLabel": "Channel",
+    "sourceLabel": "Order source",
+    "channel": {
+      "ONLINE": "Online",
+      "UNKNOWN": "Not recorded"
+    },
+    "source": {
+      "all": "All sources",
+      "CATALOG": "Catalogue",
+      "API": "API",
+      "MANUAL": "Manual"
+    },
+    "status": {
+      "DRAFT": "Draft",
+      "CONFIRMED": "Confirmed",
+      "READY": "Ready",
+      "COMPLETED": "Completed",
+      "CANCELED": "Canceled"
+    },
+    "payment": {
+      "PAID": "Paid",
+      "PARTIAL": "Partially paid",
+      "DEBT": "Debt",
+      "NO_DATA": "No payment data"
+    },
+    "created": {
+      "title": "Orders created in the period",
+      "note": "Created in the selected period. Statuses are shown as of now.",
+      "count": "Orders created",
+      "countNote": "By creation date",
+      "amount": "Created amount",
+      "amountNote": "Order value, not money received",
+      "inProgress": "In progress",
+      "inProgressNote": "Draft {draft} · Confirmed {confirmed} · Ready {ready}",
+      "completedCanceled": "Completed from created",
+      "completedCanceledNote": "Canceled: {canceled}",
+      "unknownNote": "{count} order(s) in the period have no recorded channel — switch to “Not recorded” to see them."
+    },
+    "sales": {
+      "title": "Sales and money in the period",
+      "note": "Completed online sales by completion date; returns by return completion date.",
+      "gross": "Completed sales",
+      "grossNote": "Orders: {count}",
+      "returns": "Returns",
+      "returnsNote": "Reduce the month the return completed in",
+      "net": "Sales net of returns",
+      "netNote": "Total after discounts minus returns",
+      "average": "Average order",
+      "discountNote": "Discount: {amount}",
+      "paid": "Money received",
+      "paidNote": "Confirmed payment records",
+      "noPaymentData": "No payment data",
+      "noPaymentDataNote": "Online orders do not create register payment records",
+      "debt": "Debt",
+      "debtNote": "Unsettled debt on completed sales",
+      "returnCount": "Returns",
+      "returnCountNote": "Completed returns in the period"
+    },
+    "chart": {
+      "title": "Daily trend",
+      "note": "Completed sales and returns by day"
+    },
+    "table": {
+      "title": "Orders",
+      "note": "Online orders created in the period",
+      "export": "Export",
+      "exporting": "Exporting…",
+      "order": "Number",
+      "createdAt": "Created",
+      "customer": "Customer",
+      "store": "Store",
+      "source": "Source",
+      "status": "Order status",
+      "paymentStatus": "Payment status",
+      "total": "Total",
+      "discount": "Discount",
+      "returned": "Returned"
+    },
+    "sort": {
+      "date": "By date",
+      "amount": "By amount",
+      "number": "By number"
+    },
+    "method": "An online sale is defined by the commercial channel saleChannel=ONLINE. Orders are counted by creation date, sales by completion date, returns by return completion date. A missing payment record does not mean unpaid."
+  },
   "reporting": {
+    "tabs": {
+      "label": "Report sections",
+      "sales": "Sales",
+      "online": "Online sales"
+    },
     "analyticsTitle": "Business performance",
     "analyticsSubtitle": "Sales, cost and gross profit. Trace the overall result to each transaction.",
     "reportCenter": "Report center",
