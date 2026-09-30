@@ -37,6 +37,7 @@ import {
   FileXls,
   Gauge,
   GearSix,
+  Gift,
   GridFour,
   Handshake,
   House,
@@ -189,6 +190,8 @@ export const PlatformIcon = navIcon(IdentificationCard);
 export const JobsIcon = navIcon(Database);
 export const BillingIcon = navIcon(CreditCard);
 export const WhatsNewIcon = navIcon(Megaphone);
+/** Loyalty programme: a bonus/reward gift, deliberately distinct from every other nav icon. */
+export const LoyaltyIcon = navIcon(Gift);
 export const SearchIcon = actionIcon(MagnifyingGlass);
 export const TagIcon = actionIcon(Tag);
 export const PriceIcon = actionIcon(CurrencyDollar);
