@@ -15,6 +15,9 @@ import { AppError } from "@/server/services/errors";
 import { normalizeOptionalCustomerPhone } from "@/server/services/customerContact";
 import { writeAuditLog } from "@/server/services/audit";
 import { upsertCustomerFromOrderTx } from "@/server/services/customers";
+import { applyLoyaltyToOrder } from "@/server/services/loyalty/apply";
+import { getSessionMember } from "@/server/services/loyalty/memberAuth";
+import { isStoreParticipating } from "@/server/services/loyalty/program";
 import { toJson } from "@/server/services/json";
 import {
   OPERATION_FAILURE_AMBIGUOUS,
@@ -1097,6 +1100,9 @@ export type CreateCatalogCheckoutOrderInput = {
   customerPhone: string;
   comment?: string | null;
   lines: CatalogCheckoutLineInput[];
+  /** Loyalty: optional verified customer session and the points they chose to redeem. */
+  loyaltySessionToken?: string | null;
+  loyaltyPoints?: number;
 };
 
 type NormalizedCatalogCheckoutLine = {
@@ -1402,6 +1408,26 @@ const createCatalogCheckoutOrderTx = async (
     customerOrderId: order.id,
   });
 
+  // Loyalty: only a verified customer session can attach a card, and the server
+  // computes the discount/points itself — the browser never supplies balances.
+  if (input.loyaltySessionToken) {
+    const session = await getSessionMember(input.loyaltySessionToken);
+    if (
+      session &&
+      session.program.organizationId === catalog.organizationId &&
+      session.program.enabled &&
+      (await isStoreParticipating(tx, session.program.id, catalog.storeId))
+    ) {
+      await applyLoyaltyToOrder(tx, {
+        organizationId: catalog.organizationId,
+        storeId: catalog.storeId,
+        customerOrderId: order.id,
+        memberId: session.member.id,
+        requestedPoints: Math.max(0, Math.trunc(input.loyaltyPoints ?? 0)),
+      });
+    }
+  }
+
   return order;
 };
 
@@ -1502,6 +1528,7 @@ export const createCatalogCheckoutOrderOperationForTrustedScope = async (
           customerEmail: input.customerEmail,
           customerPhone: input.customerPhone,
           comment: input.comment ?? null,
+          loyaltyPoints: Math.max(0, Math.trunc(input.loyaltyPoints ?? 0)),
           lines: normalizedLines.map((line) => ({
             productId: line.productId,
             variantId: line.variantId ?? null,

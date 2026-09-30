@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { isCompleteInternationalPhone } from "@/lib/phoneCountries";
 import { createCatalogCheckoutOrderOperation } from "@/server/services/bazaarCatalog";
+import { LOYALTY_SESSION_COOKIE } from "@/server/services/loyalty/memberAuth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,6 +22,7 @@ const checkoutSchema = z.object({
       }),
     )
     .min(1),
+  loyaltyPoints: z.number().int().min(0).max(1_000_000).optional(),
 });
 
 const toMessage = (value: unknown) => (value instanceof Error ? value.message : "genericMessage");
@@ -37,6 +39,12 @@ export const POST = async (request: Request, context: { params: { slug: string }
     if (!idempotencyKey) {
       return Response.json({ message: "idempotencyKeyRequired" }, { status: 400 });
     }
+    const loyaltySessionToken =
+      request.headers
+        .get("cookie")
+        ?.split(";")
+        .map((pair) => pair.trim().split("="))
+        .find(([name]) => name === LOYALTY_SESSION_COOKIE)?.[1] ?? null;
     const operation = await createCatalogCheckoutOrderOperation({
       slug: context.params.slug,
       idempotencyKey,
@@ -45,6 +53,8 @@ export const POST = async (request: Request, context: { params: { slug: string }
       customerPhone: parsed.data.customerPhone,
       comment: parsed.data.comment ?? null,
       lines: parsed.data.lines,
+      loyaltyPoints: parsed.data.loyaltyPoints ?? 0,
+      loyaltySessionToken: loyaltySessionToken ? decodeURIComponent(loyaltySessionToken) : null,
     });
     return Response.json(operation.response, {
       status: operation.responseStatus,

@@ -254,6 +254,12 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
   const [checkoutComment, setCheckoutComment] = useState("");
   const [orderNumber, setOrderNumber] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [loyalty, setLoyalty] = useState<{
+    availablePoints: number;
+    memberDiscountPercent: number;
+    maxSpendPercent: number;
+  } | null>(null);
+  const [loyaltyPoints, setLoyaltyPoints] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const checkoutAttemptRef = useRef<{ payload: string; idempotencyKey: string } | null>(null);
   const loadMoreControllerRef = useRef<AbortController | null>(null);
@@ -478,6 +484,40 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
     () => cartItems.reduce((sum, item) => sum + item.lineTotal, 0),
     [cartItems],
   );
+  // Display-only estimate; the server recomputes the real quote at checkout.
+  const loyaltyEligible = catalogCurrencyCode === "KGS" ? cartTotal : 0;
+  const loyaltyMaxPoints = loyalty
+    ? Math.max(
+        0,
+        Math.min(
+          loyalty.availablePoints,
+          Math.floor(
+            (loyaltyEligible * (1 - loyalty.memberDiscountPercent / 100) * loyalty.maxSpendPercent) / 100,
+          ),
+        ),
+      )
+    : 0;
+  const loyaltyAppliedPoints = Math.min(loyaltyPoints, loyaltyMaxPoints);
+  const loyaltyPayable = loyalty
+    ? Math.max(0, loyaltyEligible * (1 - loyalty.memberDiscountPercent / 100) - loyaltyAppliedPoints)
+    : cartTotal;
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/loyalty/card", { credentials: "include" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (cancelled || !data?.rules) return;
+        setLoyalty({
+          availablePoints: data.availablePoints,
+          memberDiscountPercent: data.rules.memberDiscountPercent,
+          maxSpendPercent: data.rules.maxSpendPercent,
+        });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const setLineQty = (lineKey: string, nextQty: number) => {
     setCart((prev) => {
@@ -587,6 +627,7 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
           qty: item.qty,
           quotedUnitPriceKgs: item.quotedUnitPriceKgs,
         })),
+        ...(loyaltyAppliedPoints > 0 ? { loyaltyPoints: loyaltyAppliedPoints } : {}),
       };
       const serializedPayload = JSON.stringify(checkoutPayload);
       const existingAttempt = checkoutAttemptRef.current;
@@ -1195,6 +1236,34 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
               />
             </div>
             {submitError ? <p className="text-sm text-danger">{submitError}</p> : null}
+            {loyalty ? (
+              <div className="space-y-2 rounded-md border border-border p-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold">{t("loyaltyTitle")}</span>
+                  <span className="text-muted-foreground">
+                    {t("loyaltyAvailable", { points: loyalty.availablePoints })}
+                  </span>
+                </div>
+                <p className="text-muted-foreground">
+                  {t("loyaltyDiscount", { percent: loyalty.memberDiscountPercent })}
+                </p>
+                <Input
+                  type="number"
+                  min={0}
+                  max={loyaltyMaxPoints}
+                  value={loyaltyPoints}
+                  aria-label={t("loyaltyPointsLabel")}
+                  onChange={(event) => {
+                    const next = Math.max(0, Math.min(loyaltyMaxPoints, Math.floor(Number(event.target.value) || 0)));
+                    setLoyaltyPoints(next);
+                  }}
+                />
+                <div className="flex items-center justify-between font-semibold">
+                  <span>{t("loyaltyPayable")}</span>
+                  <span>{formatCatalogCurrency(loyaltyPayable, locale, catalogCurrencyCode)}</span>
+                </div>
+              </div>
+            ) : null}
             <div className="flex items-center justify-between gap-2">
               <Button
                 type="button"

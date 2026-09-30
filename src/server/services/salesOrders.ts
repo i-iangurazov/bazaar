@@ -23,6 +23,7 @@ import { resolveCurrencySnapshot } from "@/lib/currencyDisplay";
 import type { SalesOrderLifecycleView } from "@/lib/salesOrderLifecycle";
 import { upsertCustomerFromOrderTx } from "@/server/services/customers";
 import { processEmailAutomationTrigger } from "@/server/services/emailMarketing";
+import { confirmLoyaltyForOrder } from "@/server/services/loyalty/apply";
 import { getEffectiveProductPrice } from "@/server/services/effectiveProductPrice";
 import { assertUserCanAccessStore } from "@/server/services/storeAccess";
 import { classifyDatabaseOperationFailure } from "@/server/services/databaseOperationFailure";
@@ -1588,6 +1589,20 @@ export const completeCustomerOrder = async (input: {
             ...(order.currencyCode ? {} : resolveCurrencySnapshot(order.store)),
             updatedById: input.actorId,
           },
+        });
+
+        // Loyalty: confirm the redemption; earn only when real payment evidence covers
+        // the total. A CONFIRMED online order alone is not proof of payment.
+        const paid = await tx.salePayment.aggregate({
+          where: { customerOrderId: order.id, isRefund: false },
+          _sum: { amountKgs: true },
+        });
+        const paidKgs = Number(paid._sum.amountKgs ?? 0);
+        await confirmLoyaltyForOrder(tx, {
+          organizationId: input.organizationId,
+          customerOrderId: order.id,
+          paidInFull: paidKgs + 0.005 >= Number(updated.totalKgs) && Number(updated.totalKgs) > 0,
+          actorId: input.actorId,
         });
 
         await writeAuditLog(tx, {
