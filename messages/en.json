@@ -7031,6 +7031,9 @@
     "enableNote": "Disabled by default. Enable it only for the stores you choose.",
     "needStore": "Select at least one store, otherwise the programme does not apply.",
     "memberDiscount": "Member discount, %",
+    "orderBlockTitle": "Bonuses on this order",
+    "loyaltySpent": "Points redeemed",
+    "loyaltyEarned": "Points earned",
     "earnPercent": "Earn rate per purchase, %",
     "maxSpend": "Maximum redemption, %",
     "minRedeem": "Minimum points to redeem",
@@ -7180,7 +7183,8 @@
     "loyaltySpent": "Points redeemed",
     "loyaltyEarned": "Points earned",
     "loyaltyRestored": "Restored on return",
-    "loyaltyCancelled": "Earnings cancelled"
+    "loyaltyCancelled": "Earnings cancelled",
+    "orderBlockTitle": "Bonuses on this order"
   },
   "reporting": {
     "tabs": {

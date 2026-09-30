@@ -129,6 +129,7 @@ const SalesOrderDetailPage = () => {
   const t = useTranslations("salesOrders");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
+  const tLoyalty = useTranslations("loyalty");
   const locale = useLocale();
   const { data: session } = useSession();
   const { toast } = useToast();
@@ -182,6 +183,10 @@ const SalesOrderDetailPage = () => {
   );
 
   const order = orderQuery.data;
+  const loyaltyQuery = trpc.loyalty.orderSummary.useQuery(
+    { customerOrderId: String(params.id ?? "") },
+    { enabled: Boolean(params.id), retry: false },
+  );
   const lines = useMemo(() => order?.lines ?? [], [order?.lines]);
 
   const isEditable =
@@ -763,6 +768,46 @@ const SalesOrderDetailPage = () => {
               </FormGrid>
             </CardContent>
           </Card>
+
+          {loyaltyQuery.data ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>{tLoyalty("orderBlockTitle")}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <FormGrid>
+                  <div>
+                    <p className="text-xs text-muted-foreground">{tLoyalty("memberDiscount")}</p>
+                    <p className="text-sm font-medium">
+                      {formatKgsMoney(loyaltyQuery.data.memberDiscountKgs, locale, orderCurrencySource)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">{tLoyalty("loyaltySpent")}</p>
+                    <p className="text-sm font-medium tabular-nums">{loyaltyQuery.data.pointsSpent}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">{tLoyalty("loyaltyEarned")}</p>
+                    <p className="text-sm font-medium tabular-nums">{loyaltyQuery.data.pointsEarned}</p>
+                  </div>
+                </FormGrid>
+                {loyaltyQuery.data.entries.length ? (
+                  <ul className="divide-y divide-border text-sm">
+                    {loyaltyQuery.data.entries.map((entry) => (
+                      <li key={entry.id} className="flex items-center justify-between gap-3 py-2">
+                        <span className="text-muted-foreground">
+                          {tLoyalty(`ledger.${entry.type}` as never)}
+                        </span>
+                        <span className={entry.points < 0 ? "text-danger tabular-nums" : "text-success tabular-nums"}>
+                          {entry.points > 0 ? `+${entry.points}` : entry.points}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </CardContent>
+            </Card>
+          ) : null}
 
           <Card>
             <CardHeader>

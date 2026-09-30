@@ -225,4 +225,37 @@ export const loyaltyRouter = router({
         throw toTRPCError(error);
       }
     }),
+
+  /** Order/customer view: the bonus history attached to one order. */
+  orderSummary: cashierProcedure
+    .input(z.object({ customerOrderId: z.string().min(1) }).strict())
+    .query(async ({ ctx, input }) => {
+      try {
+        const application = await ctx.prisma.loyaltyOrderApplication.findFirst({
+          where: { customerOrderId: input.customerOrderId, organizationId: ctx.user.organizationId },
+        });
+        const entries = await ctx.prisma.loyaltyLedgerEntry.findMany({
+          where: {
+            customerOrderId: input.customerOrderId,
+            organizationId: ctx.user.organizationId,
+          },
+          orderBy: { createdAt: "asc" },
+          select: { id: true, type: true, points: true, createdAt: true },
+        });
+        if (!application && entries.length === 0) return null;
+        return {
+          memberDiscountKgs: application ? Number(application.memberDiscountKgs) : 0,
+          pointsSpent: application?.pointsSpent ?? 0,
+          pointsEarned: application?.pointsEarned ?? 0,
+          entries: entries.map((entry) => ({
+            id: entry.id,
+            type: entry.type,
+            points: entry.points,
+            createdAt: entry.createdAt.toISOString(),
+          })),
+        };
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
 });
