@@ -3500,6 +3500,11 @@ enum LoyaltyReservationStatus {
   EXPIRED
 }
 
+enum LoyaltyOtpPurpose {
+  JOIN
+  SIGN_IN
+}
+
 /// One programme per organization. Disabled by default; existing organizations
 /// are never auto-enrolled.
 model LoyaltyProgram {
@@ -3542,16 +3547,65 @@ model LoyaltyMember {
   organizationId  String
   programId       String
   customerId      String?
-  phoneNormalized String
+  /// Normalized contact identity: `email:<lowercase>` or `phone:<digits>`.
+  contactKey      String
+  phoneNormalized String?
   email           String?
   displayName     String?
   status          LoyaltyMemberStatus @default(ACTIVE)
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
 
-  @@unique([programId, phoneNormalized])
-  @@index([organizationId, phoneNormalized])
+  @@unique([programId, contactKey])
+  @@index([organizationId, contactKey])
   @@index([organizationId, customerId])
+}
+
+/// One-time codes for the customer web card. Codes are stored hashed only.
+model LoyaltyOtpChallenge {
+  id             String             @id @default(cuid())
+  organizationId String
+  programId      String
+  contactKey     String
+  email          String
+  purpose        LoyaltyOtpPurpose
+  codeHash       String
+  attempts       Int                @default(0)
+  expiresAt      DateTime
+  consumedAt     DateTime?
+  createdAt      DateTime           @default(now())
+
+  @@index([contactKey, createdAt])
+  @@index([expiresAt])
+}
+
+/// Customer web-card session. Completely separate from staff authentication.
+model LoyaltySession {
+  id             String    @id @default(cuid())
+  organizationId String
+  programId      String
+  memberId       String
+  tokenHash      String    @unique
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  lastSeenAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([memberId, expiresAt])
+}
+
+/// Short-lived, opaque customer QR token. Never contains phone, email or balance.
+model LoyaltyCardToken {
+  id             String    @id @default(cuid())
+  organizationId String
+  programId      String
+  memberId       String
+  tokenHash      String    @unique
+  expiresAt      DateTime
+  usedAt         DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([memberId, expiresAt])
 }
 
 /// Cached balance, always changed atomically together with a ledger entry.

@@ -32,7 +32,7 @@ export const loyaltyRouter = router({
         getLoyaltyProgram(ctx.prisma, ctx.user.organizationId),
         ctx.prisma.loyaltyProgramStore.findMany({
           where: { organizationId: ctx.user.organizationId },
-          select: { storeId: true },
+          select: { id: true, storeId: true },
         }),
       ]);
       return {
@@ -40,6 +40,7 @@ export const loyaltyRouter = router({
           ? { ...program, rules: toLoyaltyRules(program) }
           : null,
         storeIds: stores.map((store) => store.storeId),
+        links: stores.map((store) => ({ storeId: store.storeId, slug: store.id })),
       };
     } catch (error) {
       throw toTRPCError(error);

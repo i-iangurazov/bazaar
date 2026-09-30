@@ -30,6 +30,7 @@ describeDb("loyalty ledger", () => {
       data: {
         organizationId: base.org.id,
         programId: program.id,
+        contactKey: "phone:996700000001",
         phoneNormalized: "996700000001",
         displayName: "Loyalty QA",
       },
