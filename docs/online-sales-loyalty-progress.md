@@ -5,13 +5,42 @@ no preview, no Vercel/Neon or production database changes.
 
 ## How to run and demo locally
 
+First deployment (only against the confirmed local database):
+
 ```bash
 pnpm db:up                     # local docker Postgres + Redis only
-pnpm prisma:migrate            # apply additive migrations to the local DB
+pnpm prisma:migrate            # apply additive migrations
 pnpm prisma:seed               # demo users (admin@example.com / Admin123!)
-pnpm loyalty:demo              # repeatable demo org/store/product/customers
+pnpm loyalty:demo              # demo store/product/customers
+```
+
+Repeat runs (no migrations, no seed):
+
+```bash
 LOYALTY_OTP_DEV_OUTBOX=1 pnpm dev
 ```
+
+`pnpm dev` does not need `CRON_SECRET`; only `pnpm build` does (its preflight
+requires it). `pnpm prisma:migrate` and `pnpm prisma:seed` are NOT protected by the
+demo guard — they act on whatever `DATABASE_URL` points at, so confirm the local
+`DATABASE_URL` (localhost, docker) before running them. `pnpm loyalty:demo` itself
+refuses any non-local host and never resets data.
+
+Demo customers (dev database, current state):
+
+- `demo-points@example.invalid` — **1000** points (opening balance written through
+  the journal; untouched by my test runs, which use a separate test database).
+- `demo-nopoints@example.invalid` — **0** points.
+
+A newly registered account always starts at 0; only the prepared demo account has
+1000.
+
+Navigation path (one actual route each):
+
+- Desktop: sidebar group **Администрирование → Программа лояльности**.
+- Mobile: bottom bar **Ещё → Программа лояльности**.
+- `/settings` is a section index page reached from the breadcrumb/back button; it is
+  not a separate parallel menu.
 
 `pnpm loyalty:demo` refuses any non-local database host and never resets data.
 It creates the 1000 KGS demo product, `demo-points@example.invalid` (1000 opening
@@ -90,33 +119,45 @@ and a short-lived QR with a countdown → show that QR at the register.
   `...-after.png` are byte-identical.
 - NOT DONE: binding the customer card to the online catalogue order.
 
-## Stage 6 — Returns and loyalty reporting — REVERSALS DONE, WIRING NOT
+## Stage 6 — Returns — DONE (reporting display NOT)
 
-- Cumulative proportional reversals exist and are tested (partial + full return
-  land exactly on the original amounts; reversal earnings may push the accounting
-  balance negative while spendable stays ≥ 0).
-- NOT DONE: calling the reversal from the POS return transaction, and showing
-  loyalty lines (member discount, points spent/earned/reversed) in analytics and the
-  order/customer views.
+- `reverseLoyaltyForReturn` now runs inside the same transaction as the money return
+  (`completeSaleReturn`), using the original sale's saved rules and line
+  distribution.
+- Applying loyalty now writes the reduced price onto the order lines, so a full
+  return refunds the money actually paid (475, not 1000) and the loyalty reversal
+  lands exactly on the original amounts.
+- Verified end-to-end through the real return services: 1000 start → redeem 475 /
+  earn 23 → 548; full return → refund 475 KGS, +475 points, −23 points, balance
+  1000; repeating the return changes nothing.
+- NOT DONE: loyalty lines (member discount, points spent/earned/reversed) in
+  analytics / order / customer card.
 
 ## Stage 7 — Local acceptance — PARTIAL
 
-Verified: owner navigation → settings with QR; customer registration via the local
-outbox → card with 1000 points and a decodable QR; QR decoding + handler
-acceptance; the register acceptance numbers through real services; POS before/after
-equality.
+Verified by me in a browser: owner navigation → settings with a per-store
+registration QR; customer registration through the local OTP outbox → card with the
+balance, rules, history and a decodable QR; and the QRs decode with a real scanner
+library into a token the register handler accepts.
 
-Not yet verified by me in the browser: the full click-through of the register
-Бонусы dialog (shift → cart → customer → dialog → payment), the online order path,
-and returns — the services and tests exist, the manual UI pass still needs doing.
+Verified by tests only (services, not clicks): the register acceptance numbers
+(950/47; redeem 475 → 475/23; insufficient balance fails; idempotent completion)
+and the full/partial return control example.
+
+NOT verified by me: the click-through of the register «Бонусы» dialog up to
+payment, the online-order path, and the loyalty lines in analytics/order/customer.
+POS base screen is byte-identical before/after
+(`tmp/pos-{desktop,tablet,mobile}-{before,after}.png`).
 
 ## Exact continuation point
 
-1. Online catalogue checkout: bind the customer card and reuse
+1. Browser pass of the register «Бонусы» dialog up to payment (open shift on `/pos`,
+   add the demo product, customer dialog → Бонусы → scan/enter the card token →
+   apply → pay).
+2. Online catalogue checkout: bind the customer card and reuse
    `quoteLoyaltyForOrder` / `applyLoyaltyToOrder` / `confirmLoyaltyForOrder`.
-2. Call `reverseLoyaltyForReturn` from the POS return completion transaction.
-3. Show loyalty lines in analytics/order/customer views.
-4. Manual browser pass of the register dialog and the online/return flows.
+3. Show loyalty lines (member discount, spent, earned, reversed) in analytics /
+   order / customer card.
 
 ## Blockers
 
