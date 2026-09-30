@@ -3479,3 +3479,158 @@ model BaamTranscription {
   @@unique([conversationId, audioHash])
   @@index([expiresAt])
 }
+
+enum LoyaltyMemberStatus {
+  ACTIVE
+  BLOCKED
+}
+
+enum LoyaltyLedgerType {
+  EARN
+  REDEEM
+  REVERSAL_REDEEM
+  REVERSAL_EARN
+  ADJUSTMENT
+}
+
+enum LoyaltyReservationStatus {
+  ACTIVE
+  CONFIRMED
+  RELEASED
+  EXPIRED
+}
+
+/// One programme per organization. Disabled by default; existing organizations
+/// are never auto-enrolled.
+model LoyaltyProgram {
+  id                    String   @id @default(cuid())
+  organizationId        String   @unique
+  enabled               Boolean  @default(false)
+  currencyCode          String   @default("KGS")
+  memberDiscountPercent Decimal  @default(5) @db.Decimal(5, 2)
+  earnPercent           Decimal  @default(5) @db.Decimal(5, 2)
+  maxSpendPercent       Decimal  @default(50) @db.Decimal(5, 2)
+  pointValueKgs         Decimal  @default(1) @db.Decimal(12, 4)
+  minRedeemPoints       Int      @default(0)
+  reservationTtlMinutes Int      @default(30)
+  /// Promo lines are excluded from discount/redeem/earn by default.
+  excludePromoItems     Boolean  @default(true)
+  /// Default keeps the larger of member vs promo discount, never the sum.
+  combinePromoDiscount  Boolean  @default(false)
+  rulesText             String?
+  rulesVersion          Int      @default(1)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([organizationId])
+}
+
+model LoyaltyProgramStore {
+  id             String   @id @default(cuid())
+  organizationId String
+  programId      String
+  storeId        String
+  createdAt      DateTime @default(now())
+
+  @@unique([programId, storeId])
+  @@index([organizationId, storeId])
+}
+
+/// A verified customer identity inside one programme. Never a staff role.
+model LoyaltyMember {
+  id              String              @id @default(cuid())
+  organizationId  String
+  programId       String
+  customerId      String?
+  phoneNormalized String
+  email           String?
+  displayName     String?
+  status          LoyaltyMemberStatus @default(ACTIVE)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@unique([programId, phoneNormalized])
+  @@index([organizationId, phoneNormalized])
+  @@index([organizationId, customerId])
+}
+
+/// Cached balance, always changed atomically together with a ledger entry.
+model LoyaltyAccount {
+  id             String   @id @default(cuid())
+  organizationId String
+  programId      String
+  memberId       String   @unique
+  balancePoints  Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
+}
+
+/// Append-only journal. Rows are never updated or deleted.
+model LoyaltyLedgerEntry {
+  id              String            @id @default(cuid())
+  organizationId  String
+  programId       String
+  accountId       String
+  memberId        String
+  type            LoyaltyLedgerType
+  points          Int
+  balanceAfter    Int
+  reason          String?
+  customerOrderId String?
+  saleReturnId    String?
+  actorId         String?
+  actorType       String?
+  eventKey        String            @unique
+  note            String?
+  createdAt       DateTime          @default(now())
+
+  @@index([accountId, createdAt])
+  @@index([organizationId, customerOrderId])
+  @@index([organizationId, saleReturnId])
+}
+
+/// A pending redemption for an unfinished checkout. Expired reservations do not
+/// reduce the available balance, even before a cleanup job runs.
+model LoyaltyReservation {
+  id              String                    @id @default(cuid())
+  organizationId  String
+  programId       String
+  accountId       String
+  memberId        String
+  customerOrderId String?
+  points          Int
+  status          LoyaltyReservationStatus  @default(ACTIVE)
+  eventKey        String                    @unique
+  expiresAt       DateTime
+  createdAt       DateTime                  @default(now())
+  confirmedAt     DateTime?
+  releasedAt      DateTime?
+
+  @@index([accountId, status])
+  @@index([status, expiresAt])
+  @@index([organizationId, customerOrderId])
+}
+
+/// Immutable per-order snapshot of loyalty rules, amounts and line distribution.
+/// A later rule change never rewrites a completed sale or its return amounts.
+model LoyaltyOrderApplication {
+  id                String   @id @default(cuid())
+  organizationId    String
+  programId         String
+  memberId          String
+  accountId         String
+  customerOrderId   String   @unique
+  status            String   @default("APPLIED")
+  memberDiscountKgs Decimal  @default(0) @db.Decimal(12, 2)
+  pointsSpent       Int      @default(0)
+  pointsEarned      Int      @default(0)
+  eligibleKgs       Decimal  @default(0) @db.Decimal(12, 2)
+  rulesSnapshot     Json?
+  lineDistribution  Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([organizationId, memberId])
+}

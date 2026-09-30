@@ -47,6 +47,7 @@ import { bakaiStoreRouter } from "@/server/trpc/routers/bakaiStore";
 import { oMarketRouter } from "@/server/trpc/routers/oMarket";
 import { productImageStudioRouter } from "@/server/trpc/routers/productImageStudio";
 import { emailMarketingRouter } from "@/server/trpc/routers/emailMarketing";
+import { loyaltyRouter } from "@/server/trpc/routers/loyalty";
 
 export const appRouter = router({
   baam: baamRouter,
@@ -97,6 +98,7 @@ export const appRouter = router({
   oMarket: oMarketRouter,
   productImageStudio: productImageStudioRouter,
   emailMarketing: emailMarketingRouter,
+  loyalty: loyaltyRouter,
 });
 
 export type AppRouter = typeof appRouter;

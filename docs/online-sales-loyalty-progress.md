@@ -92,7 +92,63 @@ current POS UI unchanged.
   channel; upgrades remain allowed. No POS UI file changed.
 - Regression test added to `tests/integration/sale-channel.test.ts`.
 
+### Stage 2 — Programme rules (done)
+
+- Rules fixed in code and in the schema, programme disabled by default
+  (`LoyaltyProgram.enabled = false`; existing organizations are never auto-enrolled):
+  member discount 5% (configurable), earn 5% (configurable, owner confirms),
+  1 point = 1 KGS, max spend 50% of the eligible amount after the member discount,
+  within the available balance.
+- Points are whole and rounded down; money uses `Prisma.Decimal`, never JS float.
+  `maxRedeemPoints = min(availablePoints, floor(eligibleAfterDiscount * 50%))`.
+- Delivery/services are excluded; promo lines are excluded by default; the member
+  discount keeps the larger of member vs promo, never the sum. Manual cashier
+  discount combined with the programme is out of scope for v1.
+- `loyaltyRulesText()` states the 52.5% total-benefit example in plain language and
+  avoids calling it a "50% total discount".
+- Owner settings API: `loyalty.settings`, `loyalty.updateSettings`, `loyalty.rules`
+  (ADMIN) in `src/server/trpc/routers/loyalty.ts`. No settings page UI yet.
+
+### Stage 3 — Accounts, calculation and journal (done, core)
+
+- Schema + additive migration `20260930120000_loyalty_foundation`:
+  `LoyaltyProgram`, `LoyaltyProgramStore`, `LoyaltyMember`, `LoyaltyAccount`,
+  `LoyaltyLedgerEntry` (append-only, unique `eventKey`), `LoyaltyReservation`,
+  `LoyaltyOrderApplication` (per-order rules/amount/line snapshot).
+- One server calculation for POS and web: `src/server/services/loyalty/calc.ts`.
+- Journal + atomic balance + idempotency + reservations:
+  `src/server/services/loyalty/ledger.ts`.
+  - Balance moves only together with a ledger row; debits use a conditional update
+    (`balancePoints >= needed`), so two parallel redemptions cannot spend the same
+    points.
+  - `eventKey` makes earn/spend idempotent (a replay returns the original row).
+  - Reservations do not touch the balance; availability = balance − live
+    reservations; expired reservations never reduce availability; confirmation
+    converts a reservation into exactly one REDEEM; reversal entries may push the
+    accounting balance negative while spendable stays ≥ 0.
+- Tests: `tests/unit/loyalty-calc.test.ts` (6, incl. the exact 1000 KGS examples:
+  pay 950 / earn 47; spend 475 / pay 475 / earn 23; balance 100 → pay 850 / earn 42)
+  and `tests/integration/loyalty-ledger.test.ts` (5: disabled by default, idempotent
+  earn, parallel-redemption guard, reservation expiry, single conversion).
+
+### Stage 4 — Registration and QR card (NOT STARTED — exact continuation point)
+
+1. Member registration + session (OTP via the existing transactional email, else an
+   SMS provider interface with isolated tests and an explicit launch blocker) and a
+   mobile web card route.
+2. Two QR types: store "get card" public link, and a short-lived customer token;
+   opaque/expiring server-verified token; QR distinguishable from product barcodes.
+3. Customer-facing balance, discount, rules and history view.
+
+### Stage 5 — Register and online-order integration (NOT STARTED)
+
+### Stage 6 — Returns and loyalty reporting (NOT STARTED)
+
+### Stage 7 — Local acceptance (NOT STARTED)
+
 ## Blockers
 
-- None. Registration channel for loyalty (Stage 4) depends on an existing
-  SMS/email provider; to be confirmed when that stage starts.
+- None. The Stage 4 registration channel depends on an existing SMS/email provider;
+  to be confirmed when that stage starts.
+- POS baseline screenshots are still to be captured before any stage that touches
+  the register UI (Stages 5–6).
