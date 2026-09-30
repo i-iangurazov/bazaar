@@ -103,7 +103,7 @@ and a short-lived QR with a countdown → show that QR at the register.
   `verifyCardToken` accepts that decoded value
   (`tests/integration/loyalty-qr.test.ts`).
 
-## Stage 5 — Register and online-order integration — DONE (catalogue UI unverified)
+## Stage 5 — Register and online-order integration — DONE
 
 - Register: a single compact "Бонусы" button inside the existing customer dialog
   opens a separate dialog (scan card QR, member discount, available/max points,
@@ -123,12 +123,22 @@ and a short-lived QR with a countdown → show that QR at the register.
   catalogue form shows the member discount, available points, chosen points and the
   expected payable. Staff completion confirms the redemption and grants the earning
   only with real `SalePayment` evidence — a CONFIRMED order alone earns nothing.
-  Verified by `tests/integration/loyalty-online-order.test.ts`.
+  Verified by `tests/integration/loyalty-online-order.test.ts` **and end to end in
+  the browser**: the catalogue form showed the bonus block, submitting created
+  `SO-000003` (subtotal 670 → member discount 33.5 → 636.5, `saleChannel=ONLINE`),
+  and the order screen shows the bonus card (33.50 KGS member discount, 31 points
+  pending payment evidence).
 - Verified in the browser: the register flow (open shift → add the 1000 KGS demo
   product → customer dialog → «Бонусы» → scan the customer card QR → redeem 475 →
   pay 475 → sale completed → card balance **1000 → 548**).
-- NOT verified in the browser: the catalogue checkout interaction (the page check
-  could not drive the cart in the time available). The server path is tested.
+- Verified in the browser: the catalogue checkout block and the order bonus card
+  (`tmp/catalog-loyalty.png`, `tmp/catalog-loyalty-success.png`,
+  `tmp/order-loyalty.png`).
+- Verified in the browser: the **POS return** — the history dialog for S-000253
+  offered a 475,00 KGS refund (the money actually paid, not 1000), completing it
+  created SR-000007 and returned the card balance to **1000** (+475 restored,
+  −23 cancelled). Screenshots: `tmp/pos-return-dialog.png`,
+  `tmp/pos-return-after.png`.
 
 ## Stage 6 — Returns and loyalty reporting — DONE
 
@@ -159,17 +169,17 @@ Verified by tests (services, not clicks): remove-bonus restore, stale-cart guard
 disabled-programme sale, repeated completion, the return control example, and the
 online-order application/earning rules.
 
-NOT verified by me: the catalogue checkout click-through, and physical
-phone/camera scanning. POS base screen is byte-identical before/after
+Verified in the browser: the POS return flow (dialog → 475,00 KGS refund →
+SR-000007 → balance 1000).
+
+NOT verified by me: physical phone/camera scanning of either QR (only viewport
+emulation and decoded image data were checked). POS base screen is byte-identical
+before/after
 (`tmp/pos-{desktop,tablet,mobile}-{before,after}.png`).
 
 ## Exact continuation point
 
-1. Browser pass of the catalogue checkout with the loyalty block (add to cart →
-   checkout form → points → submit).
-2. Optional: a points breakdown on the order/receipt screen (the money discount is
-   already reflected in the order totals).
-3. Physical phone/camera verification of both QRs.
+1. Physical phone/camera verification of both QRs — the only item not verified.
 
 ## Blockers
 
