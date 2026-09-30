@@ -195,4 +195,22 @@ describeDb("loyalty at the register", () => {
       }),
     ).rejects.toMatchObject({ message: "loyaltyCartChanged" });
   });
+
+  it("leaves an ordinary sale untouched when the programme is disabled", async () => {
+    const f = await fixture(0);
+    await prisma.loyaltyProgram.update({
+      where: { id: f.program.id },
+      data: { enabled: false },
+    });
+    const sale = await draft(f.caller, f.register.id, f.product.id);
+    await f.caller.pos.sales.complete({
+      saleId: sale.id,
+      idempotencyKey: "no-loyalty-sale",
+      payments: [{ method: "CASH", amountKgs: 1000 }],
+    });
+    const stored = await prisma.customerOrder.findUniqueOrThrow({ where: { id: sale.id } });
+    expect(Number(stored.totalKgs)).toBe(1000);
+    expect(Number(stored.discountKgs)).toBe(0);
+    expect(await prisma.loyaltyLedgerEntry.count({ where: { customerOrderId: sale.id } })).toBe(0);
+  });
 });

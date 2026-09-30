@@ -103,7 +103,7 @@ and a short-lived QR with a countdown → show that QR at the register.
   `verifyCardToken` accepts that decoded value
   (`tests/integration/loyalty-qr.test.ts`).
 
-## Stage 5 — Register and online-order integration — REGISTER DONE, ONLINE NOT
+## Stage 5 — Register and online-order integration — DONE (catalogue UI unverified)
 
 - Register: a single compact "Бонусы" button inside the existing customer dialog
   opens a separate dialog (scan card QR, member discount, available/max points,
@@ -117,9 +117,20 @@ and a short-lived QR with a countdown → show that QR at the register.
   points (`tests/integration/loyalty-orders.test.ts`).
 - POS base screen unchanged: `tmp/pos-{desktop,tablet,mobile}-before.png` and
   `...-after.png` are byte-identical.
-- NOT DONE: binding the customer card to the online catalogue order.
+- Online catalogue order: the public checkout reads the verified loyalty session
+  server-side, applies the member discount and reserves the chosen points on the
+  created order, and rejects a client that asks for more points than it has. The
+  catalogue form shows the member discount, available points, chosen points and the
+  expected payable. Staff completion confirms the redemption and grants the earning
+  only with real `SalePayment` evidence — a CONFIRMED order alone earns nothing.
+  Verified by `tests/integration/loyalty-online-order.test.ts`.
+- Verified in the browser: the register flow (open shift → add the 1000 KGS demo
+  product → customer dialog → «Бонусы» → scan the customer card QR → redeem 475 →
+  pay 475 → sale completed → card balance **1000 → 548**).
+- NOT verified in the browser: the catalogue checkout interaction (the page check
+  could not drive the cart in the time available). The server path is tested.
 
-## Stage 6 — Returns — DONE (reporting display NOT)
+## Stage 6 — Returns and loyalty reporting — DONE
 
 - `reverseLoyaltyForReturn` now runs inside the same transaction as the money return
   (`completeSaleReturn`), using the original sale's saved rules and line
@@ -130,34 +141,35 @@ and a short-lived QR with a countdown → show that QR at the register.
 - Verified end-to-end through the real return services: 1000 start → redeem 475 /
   earn 23 → 548; full return → refund 475 KGS, +475 points, −23 points, balance
   1000; repeating the return changes nothing.
-- NOT DONE: loyalty lines (member discount, points spent/earned/reversed) in
-  analytics / order / customer card.
+- Reporting: the online report has a store-scoped "Бонусы за период" block (member
+  discount, points spent/earned/restored/cancelled) from the journal and per-order
+  snapshots; verified in the browser. The customer card shows the points history.
+  The order/receipt shows the discounted amount through the line totals, without a
+  separate points breakdown.
 
-## Stage 7 — Local acceptance — PARTIAL
+## Stage 7 — Local acceptance — MOSTLY DONE
 
 Verified by me in a browser: owner navigation → settings with a per-store
 registration QR; customer registration through the local OTP outbox → card with the
-balance, rules, history and a decodable QR; and the QRs decode with a real scanner
-library into a token the register handler accepts.
+balance, rules, history and a decodable QR; the QRs decode with a real scanner
+library into a token the register handler accepts; the full register purchase with
+a bonus redemption; and the loyalty block in the online report.
 
-Verified by tests only (services, not clicks): the register acceptance numbers
-(950/47; redeem 475 → 475/23; insufficient balance fails; idempotent completion)
-and the full/partial return control example.
+Verified by tests (services, not clicks): remove-bonus restore, stale-cart guard,
+disabled-programme sale, repeated completion, the return control example, and the
+online-order application/earning rules.
 
-NOT verified by me: the click-through of the register «Бонусы» dialog up to
-payment, the online-order path, and the loyalty lines in analytics/order/customer.
-POS base screen is byte-identical before/after
+NOT verified by me: the catalogue checkout click-through, and physical
+phone/camera scanning. POS base screen is byte-identical before/after
 (`tmp/pos-{desktop,tablet,mobile}-{before,after}.png`).
 
 ## Exact continuation point
 
-1. Browser pass of the register «Бонусы» dialog up to payment (open shift on `/pos`,
-   add the demo product, customer dialog → Бонусы → scan/enter the card token →
-   apply → pay).
-2. Online catalogue checkout: bind the customer card and reuse
-   `quoteLoyaltyForOrder` / `applyLoyaltyToOrder` / `confirmLoyaltyForOrder`.
-3. Show loyalty lines (member discount, spent, earned, reversed) in analytics /
-   order / customer card.
+1. Browser pass of the catalogue checkout with the loyalty block (add to cart →
+   checkout form → points → submit).
+2. Optional: a points breakdown on the order/receipt screen (the money discount is
+   already reflected in the order totals).
+3. Physical phone/camera verification of both QRs.
 
 ## Blockers
 

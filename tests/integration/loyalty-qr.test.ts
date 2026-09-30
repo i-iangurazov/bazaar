@@ -12,23 +12,29 @@ const describeDb = shouldRunDbTests ? describe : describe.skip;
 
 /** Decodes a rendered QR PNG back to its text, exactly like a scanner would. */
 const decodeQr = async (png: Buffer) => {
-  const { data, info } = await sharp(png)
-    .flatten({ background: "#ffffff" })
-    .resize(360, 360, { kernel: "nearest" })
-    .ensureAlpha()
-    .raw()
-    .toBuffer({ resolveWithObject: true });
-  const luminances = new Int32Array(info.width * info.height);
-  for (let index = 0; index < luminances.length; index += 1) {
-    const r = data[index * 4] ?? 0;
-    const g = data[index * 4 + 1] ?? 0;
-    const b = data[index * 4 + 2] ?? 0;
-    luminances[index] = Math.round((r + g + b) / 3);
+  const sizes = [null, 400, 300, 600, 800];
+  let lastError: unknown;
+  for (const size of sizes) {
+    try {
+      let pipeline = sharp(png).flatten({ background: "#ffffff" });
+      if (size) pipeline = pipeline.resize(size, size, { kernel: "nearest" });
+      const { data, info } = await pipeline.ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      const luminances = new Int32Array(info.width * info.height);
+      for (let index = 0; index < luminances.length; index += 1) {
+        const r = data[index * 4] ?? 0;
+        const g = data[index * 4 + 1] ?? 0;
+        const b = data[index * 4 + 2] ?? 0;
+        luminances[index] = Math.round((r + g + b) / 3);
+      }
+      const bitmap = new BinaryBitmap(
+        new HybridBinarizer(new RGBLuminanceSource(luminances, info.width, info.height)),
+      );
+      return new QRCodeReader().decode(bitmap).getText();
+    } catch (error) {
+      lastError = error;
+    }
   }
-  const bitmap = new BinaryBitmap(
-    new HybridBinarizer(new RGBLuminanceSource(luminances, info.width, info.height)),
-  );
-  return new QRCodeReader().decode(bitmap).getText();
+  throw lastError;
 };
 
 describeDb("loyalty QR codes", () => {
