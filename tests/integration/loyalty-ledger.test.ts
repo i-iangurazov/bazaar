@@ -143,7 +143,7 @@ describeDb("loyalty ledger", () => {
       }),
     );
 
-    const past = new Date(Date.now() - 60_000);
+    const past = new Date(Date.now() - 60 * 60_000);
     await prisma.$transaction((tx) =>
       reservePoints(tx, {
         organizationId: program.organizationId,
@@ -161,23 +161,27 @@ describeDb("loyalty ledger", () => {
     ).resolves.toBe(20);
 
     // An already expired reservation never reduces availability, even before cleanup.
-    const expired = await prisma.loyaltyReservation.create({
-      data: {
+    await prisma.$transaction((tx) =>
+      reservePoints(tx, {
         organizationId: program.organizationId,
         programId: program.id,
         accountId: account.id,
         memberId: member.id,
-        points: 80,
-        status: "ACTIVE",
+        points: 20,
+        ttlMinutes: 30,
         eventKey: "reserve:expired",
-        expiresAt: past,
-      },
+        now: past,
+      }),
+    );
+    const expired = await prisma.loyaltyReservation.findUniqueOrThrow({
+      where: { eventKey: "reserve:expired" },
     });
     expect(expired.expiresAt.getTime()).toBeLessThan(Date.now());
     await expect(
       prisma.$transaction((tx) => availablePoints(tx, account.id)),
     ).resolves.toBe(20); // only the live reservation counts
-    expect((await prisma.$transaction((tx) => expireReservations(tx))).count).toBe(1);
+    // The availability read already swept it, so a later cleanup is idempotent.
+    expect((await prisma.$transaction((tx) => expireReservations(tx))).count).toBe(0);
   });
 
   it("converts a live reservation into exactly one redemption", async () => {

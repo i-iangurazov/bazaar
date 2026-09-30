@@ -3615,6 +3615,8 @@ model LoyaltyAccount {
   programId      String
   memberId       String   @unique
   balancePoints  Int      @default(0)
+  /// Live reservations, changed with the same conditional update that guards them.
+  reservedPoints Int      @default(0)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
