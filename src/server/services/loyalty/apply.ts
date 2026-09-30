@@ -174,6 +174,31 @@ export const applyLoyaltyToOrder = async (
   // The member discount and the redeemed points both reduce the price; record them
   // once, never subtract them again later.
   const priceReduction = decimal(quote.memberDiscountKgs).plus(quote.redeemValueKgs);
+  // Write the reduction onto the lines so receipts, returns and reports all use the
+  // amount the customer actually pays. Allocation is sequential and exact.
+  let remainingRedeem = decimal(quote.redeemValueKgs);
+  const lineRows = await tx.customerOrderLine.findMany({
+    where: { customerOrderId: input.customerOrderId },
+    select: { id: true, qty: true },
+  });
+  const qtyByLine = new Map(lineRows.map((row) => [row.id, row.qty]));
+  for (const line of quote.lines) {
+    const qty = qtyByLine.get(line.lineId);
+    if (!qty || qty <= 0) continue;
+    let target = decimal(line.afterDiscountKgs);
+    if (line.participates && !remainingRedeem.isZero()) {
+      const applied = Prisma.Decimal.min(target, remainingRedeem).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+      target = target.minus(applied);
+      remainingRedeem = remainingRedeem.minus(applied);
+    }
+    await tx.customerOrderLine.update({
+      where: { id: line.lineId },
+      data: {
+        lineTotalKgs: target,
+        unitPriceKgs: target.div(qty).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP),
+      },
+    });
+  }
   const order = await tx.customerOrder.update({
     where: { id: input.customerOrderId },
     data: {

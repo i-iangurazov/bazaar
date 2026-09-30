@@ -1,5 +1,5 @@
 import { assertSaleAssortment, lockAssortmentForSale } from "./assortmentPolicy";
-import { confirmLoyaltyForOrder } from "@/server/services/loyalty/apply";
+import { confirmLoyaltyForOrder, reverseLoyaltyForReturn } from "@/server/services/loyalty/apply";
 import {
   CatalogDiscountType,
   CashDrawerMovementType,
@@ -6459,6 +6459,14 @@ export const completeSaleReturn = async (input: {
             ...transactionCurrency,
             completedById: input.actorId,
           },
+        });
+
+        // Loyalty is reversed inside the same transaction as the money return, using
+        // the original sale's saved rules and line distribution.
+        await reverseLoyaltyForReturn(tx, {
+          organizationId: input.organizationId,
+          customerOrderId: saleReturn.originalSaleId,
+          saleReturnId: saleReturn.id,
         });
 
         await writeAuditLog(tx, {

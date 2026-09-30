@@ -58,8 +58,12 @@ describeDb("loyalty at the register", () => {
       data: { organizationId: base.org.id, storeId: base.store.id, name: "Loyalty register", code: "LOY" },
     });
     const caller = createTestCaller({ ...base.cashierUser, organizationId: base.org.id });
-    await caller.pos.shifts.open({ registerId: register.id, openingCashKgs: 0, idempotencyKey: "loyalty-shift" });
-    return { ...base, program, member, account, register, caller };
+    const shift = await caller.pos.shifts.open({
+      registerId: register.id,
+      openingCashKgs: 0,
+      idempotencyKey: "loyalty-shift",
+    });
+    return { ...base, program, member, account, register, shift, caller };
   };
 
   const draft = (caller: ReturnType<typeof createTestCaller>, registerId: string, productId: string) =>
@@ -121,5 +125,38 @@ describeDb("loyalty at the register", () => {
     await expect(
       f.caller.loyalty.posApply({ saleId: sale.id, memberId: f.member.id, points: 475 }),
     ).rejects.toBeTruthy();
+  });
+
+  it("refunds the paid money and restores points on a full return, exactly once", async () => {
+    const f = await fixture(1000);
+    const sale = await draft(f.caller, f.register.id, f.product.id);
+    await f.caller.loyalty.posApply({ saleId: sale.id, memberId: f.member.id, points: 475 });
+    await f.caller.pos.sales.complete({
+      saleId: sale.id,
+      idempotencyKey: "loyalty-return-sale",
+      payments: [{ method: "CARD", amountKgs: 475 }],
+    });
+    expect((await prisma.loyaltyAccount.findUniqueOrThrow({ where: { id: f.account.id } })).balancePoints).toBe(548);
+
+    const line = await prisma.customerOrderLine.findFirstOrThrow({ where: { customerOrderId: sale.id } });
+    // The line now carries the price actually paid, so the money refund is 475.
+    expect(Number(line.lineTotalKgs)).toBe(475);
+
+    const returnDraft = await f.caller.pos.returns.createDraft({
+      shiftId: f.shift.id,
+      originalSaleId: sale.id,
+    });
+    await f.caller.pos.returns.addLine({
+      saleReturnId: returnDraft.id,
+      customerOrderLineId: line.id,
+      qty: 1,
+    });
+    const payment = { saleReturnId: returnDraft.id, idempotencyKey: "loyalty-return-1", payments: [{ method: "CARD" as const, amountKgs: 475 }] };
+    await f.caller.pos.returns.complete(payment);
+    expect((await prisma.loyaltyAccount.findUniqueOrThrow({ where: { id: f.account.id } })).balancePoints).toBe(1000);
+
+    // Repeating the same return changes nothing.
+    await f.caller.pos.returns.complete(payment);
+    expect((await prisma.loyaltyAccount.findUniqueOrThrow({ where: { id: f.account.id } })).balancePoints).toBe(1000);
   });
 });
