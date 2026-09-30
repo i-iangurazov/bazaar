@@ -159,4 +159,40 @@ describeDb("loyalty at the register", () => {
     await f.caller.pos.returns.complete(payment);
     expect((await prisma.loyaltyAccount.findUniqueOrThrow({ where: { id: f.account.id } })).balancePoints).toBe(1000);
   });
+
+  it("restores the cart and frees the reservation when the bonus is removed", async () => {
+    const f = await fixture(1000);
+    const sale = await draft(f.caller, f.register.id, f.product.id);
+    await f.caller.loyalty.posApply({ saleId: sale.id, memberId: f.member.id, points: 475 });
+    expect(await prisma.loyaltyAccount.findUniqueOrThrow({ where: { id: f.account.id } })).toMatchObject({
+      balancePoints: 1000,
+      reservedPoints: 475,
+    });
+
+    await f.caller.loyalty.posRelease({ saleId: sale.id });
+    const account = await prisma.loyaltyAccount.findUniqueOrThrow({ where: { id: f.account.id } });
+    expect(account).toMatchObject({ balancePoints: 1000, reservedPoints: 0 });
+    const line = await prisma.customerOrderLine.findFirstOrThrow({ where: { customerOrderId: sale.id } });
+    expect(Number(line.lineTotalKgs)).toBe(1000);
+    expect(Number((await prisma.customerOrder.findUniqueOrThrow({ where: { id: sale.id } })).totalKgs)).toBe(1000);
+  });
+
+  it("refuses to complete with a stale bonus after the cart changed", async () => {
+    const f = await fixture(1000);
+    const sale = await draft(f.caller, f.register.id, f.product.id);
+    const line = await prisma.customerOrderLine.findFirstOrThrow({ where: { customerOrderId: sale.id } });
+    await f.caller.loyalty.posApply({ saleId: sale.id, memberId: f.member.id, points: 475 });
+    // Add a second unit after the bonus was priced.
+    await f.caller.pos.sales.updateLine({ lineId: line.id, qty: 2 });
+    const currentTotal = Number(
+      (await prisma.customerOrder.findUniqueOrThrow({ where: { id: sale.id } })).totalKgs,
+    );
+    await expect(
+      f.caller.pos.sales.complete({
+        saleId: sale.id,
+        idempotencyKey: "loyalty-stale-cart",
+        payments: [{ method: "CASH", amountKgs: currentTotal }],
+      }),
+    ).rejects.toMatchObject({ message: "loyaltyCartChanged" });
+  });
 });

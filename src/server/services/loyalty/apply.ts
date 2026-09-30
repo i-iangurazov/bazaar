@@ -157,39 +157,10 @@ export const applyLoyaltyToOrder = async (
     });
   }
   const snapshotLines = snapshotOf(quote.lines);
-  const application = await tx.loyaltyOrderApplication.upsert({
-    where: { customerOrderId: input.customerOrderId },
-    create: {
-      organizationId: input.organizationId,
-      programId: quote.programId,
-      memberId: quote.memberId,
-      accountId: quote.accountId,
-      customerOrderId: input.customerOrderId,
-      status: "APPLIED",
-      memberDiscountKgs: decimal(quote.memberDiscountKgs),
-      pointsSpent: quote.redeemPoints,
-      pointsEarned: quote.earnPoints,
-      eligibleKgs: decimal(quote.eligibleKgs),
-      rulesSnapshot: quote.rules as unknown as Prisma.InputJsonValue,
-      lineDistribution: snapshotLines,
-    },
-    update: {
-      status: "APPLIED",
-      memberDiscountKgs: decimal(quote.memberDiscountKgs),
-      pointsSpent: quote.redeemPoints,
-      pointsEarned: quote.earnPoints,
-      eligibleKgs: decimal(quote.eligibleKgs),
-      rulesSnapshot: quote.rules as unknown as Prisma.InputJsonValue,
-      lineDistribution: snapshotLines,
-    },
-  });
-
-  // The member discount and the redeemed points both reduce the price; record them
-  // once, never subtract them again later.
-  const priceReduction = decimal(quote.memberDiscountKgs).plus(quote.redeemValueKgs);
   // Write the reduction onto the lines so receipts, returns and reports all use the
   // amount the customer actually pays. Allocation is sequential and exact.
   let remainingRedeem = decimal(quote.redeemValueKgs);
+  let appliedLineTotal = decimal(0);
   const lineRows = await tx.customerOrderLine.findMany({
     where: { customerOrderId: input.customerOrderId },
     select: { id: true, qty: true },
@@ -211,7 +182,44 @@ export const applyLoyaltyToOrder = async (
         unitPriceKgs: target.div(qty).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP),
       },
     });
+    appliedLineTotal = appliedLineTotal.plus(target);
   }
+  // Snapshot the rules plus the exact line total captured at apply time, so a later
+  // cart change can be detected instead of confirming a stale quote.
+  const rulesSnapshot = {
+    ...quote.rules,
+    appliedLineTotalKgs: Number(appliedLineTotal.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)),
+  };
+  const application = await tx.loyaltyOrderApplication.upsert({
+    where: { customerOrderId: input.customerOrderId },
+    create: {
+      organizationId: input.organizationId,
+      programId: quote.programId,
+      memberId: quote.memberId,
+      accountId: quote.accountId,
+      customerOrderId: input.customerOrderId,
+      status: "APPLIED",
+      memberDiscountKgs: decimal(quote.memberDiscountKgs),
+      pointsSpent: quote.redeemPoints,
+      pointsEarned: quote.earnPoints,
+      eligibleKgs: decimal(quote.eligibleKgs),
+      rulesSnapshot: rulesSnapshot as unknown as Prisma.InputJsonValue,
+      lineDistribution: snapshotLines,
+    },
+    update: {
+      status: "APPLIED",
+      memberDiscountKgs: decimal(quote.memberDiscountKgs),
+      pointsSpent: quote.redeemPoints,
+      pointsEarned: quote.earnPoints,
+      eligibleKgs: decimal(quote.eligibleKgs),
+      rulesSnapshot: rulesSnapshot as unknown as Prisma.InputJsonValue,
+      lineDistribution: snapshotLines,
+    },
+  });
+
+  // The member discount and the redeemed points both reduce the price; record them
+  // once, never subtract them again later.
+  const priceReduction = decimal(quote.memberDiscountKgs).plus(quote.redeemValueKgs);
   const order = await tx.customerOrder.update({
     where: { id: input.customerOrderId },
     data: {
@@ -238,6 +246,22 @@ export const confirmLoyaltyForOrder = async (
     where: { customerOrderId: input.customerOrderId },
   });
   if (!application || application.status === "REVERSED") return { applied: false, earned: false };
+  // The receipt may have changed after the bonus was applied. Compare the current
+  // line totals with the amount captured when the bonus was applied and refuse to
+  // confirm a stale quote instead of silently keeping a discount for a different cart.
+  if (application.status === "APPLIED") {
+    const snapshot = (application.rulesSnapshot ?? {}) as { appliedLineTotalKgs?: number };
+    const current = await tx.customerOrderLine.aggregate({
+      where: { customerOrderId: input.customerOrderId },
+      _sum: { lineTotalKgs: true },
+    });
+    if (
+      snapshot.appliedLineTotalKgs !== undefined &&
+      Math.abs(Number(current._sum.lineTotalKgs ?? 0) - Number(snapshot.appliedLineTotalKgs)) > 0.005
+    ) {
+      throw new AppError("loyaltyCartChanged", "CONFLICT", 409);
+    }
+  }
   if (application.pointsSpent > 0) {
     const reservation = await tx.loyaltyReservation.findUnique({
       where: { eventKey: reserveKey(input.customerOrderId) },
