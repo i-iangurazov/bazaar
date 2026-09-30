@@ -134,24 +134,64 @@ current POS UI unchanged.
   and `tests/integration/loyalty-ledger.test.ts` (5: disabled by default, idempotent
   earn, parallel-redemption guard, reservation expiry, single conversion).
 
-### Stage 4 — Registration and QR card (NOT STARTED — exact continuation point)
+### Stage 4 — Registration and QR card (done, server + pages)
 
-1. Member registration + session (OTP via the existing transactional email, else an
-   SMS provider interface with isolated tests and an explicit launch blocker) and a
-   mobile web card route.
-2. Two QR types: store "get card" public link, and a short-lived customer token;
-   opaque/expiring server-verified token; QR distinguishable from product barcodes.
-3. Customer-facing balance, discount, rules and history view.
+- Separate customer identity, never a staff role: email one-time code (hashed,
+  10-minute TTL, attempt + rate limits, delivery skipped in test runtime), a
+  dedicated `loyalty_session` httpOnly cookie (30 days, revocable), and no User row.
+- Two QR types: the store QR is the public join link `/loyalty/join/<programStoreId>`
+  (opening it earns/spends nothing); the customer QR is a short-lived (120 s) opaque
+  token, server-verified, single-use and organization-bound.
+- Pages: `/loyalty/join/[programStoreId]` (registration/sign-in) and `/loyalty/card`
+  (balance, available, discount rules, history, QR). API under `/api/loyalty/*`.
+- Admin settings page `/settings/loyalty`: stores, member discount, earn rate,
+  spend limit, min redeem, reservation TTL, promo options and an explicit
+  enable switch (`updateSettings` alone was not enough).
+- Tests: `tests/integration/loyalty-member-auth.test.ts` (5).
 
-### Stage 5 — Register and online-order integration (NOT STARTED)
+### Stage 5 — Register and online-order integration (server done; UI NOT started)
 
-### Stage 6 — Returns and loyalty reporting (NOT STARTED)
+- One shared quote (`quoteLoyaltyForOrder`) and order application
+  (`applyLoyaltyToOrder`) that snapshot the rules, amounts and line distribution.
+- `confirmLoyaltyForOrder` converts a reservation into exactly one redemption and
+  grants the earning only when the money part is fully paid.
+- Reservation concurrency: availability is guarded by an atomic conditional update
+  on `LoyaltyAccount.reservedPoints`; two parallel orders on one account cannot
+  spend the same points, and a partially available request fails loudly instead of
+  silently re-pricing (verified in `tests/integration/loyalty-orders.test.ts`).
+- NOT DONE: the register UI action/dialog and the online catalogue checkout hook.
+  The register UI is intentionally untouched so the working POS is preserved.
+
+### Stage 6 — Returns and loyalty reporting (reversals done; reporting partially)
+
+- `reverseLoyaltyForReturn` reverses spend and earnings cumulatively and
+  proportionally, so successive partial returns can never over-reverse; a full
+  return lands exactly on the original amounts. Reversal earnings may push the
+  accounting balance negative while spendable stays ≥ 0.
+- NOT DONE: wiring reversals into the POS `completeSaleReturn` transaction, showing
+  loyalty lines (member discount, points spent/earned/reversed) in analytics and the
+  customer/order cards.
 
 ### Stage 7 — Local acceptance (NOT STARTED)
 
+- POS baseline captured before any register work:
+  `tmp/pos-desktop-before.png`, `tmp/pos-tablet-before.png`,
+  `tmp/pos-mobile-before.png` (closed-shift state; a filled-cart/customer/payment
+  baseline still needs capturing).
+
+## Exact continuation point
+
+1. Register UI: add ONE compact "Бонусы" action inside the existing customer
+   dialog/menu in `src/app/(app)/pos/sell/page.tsx` (no layout/geometry change),
+   opening a separate dialog that calls `loyalty.*` procedures; then wire
+   `applyLoyaltyToOrder`/`confirmLoyaltyForOrder` into `completePosSale`.
+2. Online checkout: bind the customer card to the catalogue order and reuse
+   `quoteLoyaltyForOrder`.
+3. Call `reverseLoyaltyForReturn` from the POS return completion transaction.
+4. Show loyalty lines in analytics/order/customer views.
+5. Run the full customer + cashier walkthrough and compare POS screenshots with the
+   baseline above.
+
 ## Blockers
 
-- None. The Stage 4 registration channel depends on an existing SMS/email provider;
-  to be confirmed when that stage starts.
-- POS baseline screenshots are still to be captured before any stage that touches
-  the register UI (Stages 5–6).
+- None technical. Remaining work is scope, not access.
