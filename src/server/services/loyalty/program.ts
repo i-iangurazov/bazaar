@@ -102,7 +102,8 @@ export const upsertLoyaltyProgram = async (
       where: { organizationId },
       create: {
         organizationId,
-        enabled: false,
+        // Never enabled implicitly: only an explicit admin activation turns it on.
+        enabled: input.enabled ?? false,
         memberDiscountPercent: input.memberDiscountPercent ?? defaults.memberDiscountPercent,
         earnPercent: input.earnPercent ?? defaults.earnPercent,
         maxSpendPercent: input.maxSpendPercent ?? defaults.maxSpendPercent,
