@@ -1,4 +1,5 @@
 import { getTranslations } from "next-intl/server";
+import Link from "next/link";
 
 import { LoyaltyJoinForm } from "./join-form";
 import { resolveJoinTarget } from "@/server/services/loyalty/memberAuth";
@@ -23,6 +24,12 @@ const JoinPage = async ({ params }: { params: { programStoreId: string } }) => {
         <div className="rounded-xl border border-border bg-card p-5">
           <LoyaltyJoinForm programStoreId={target.programStoreId} />
           <p className="mt-4 text-xs text-muted-foreground">{t("joinHint")}</p>
+          <Link
+            href="/loyalty/card"
+            className="mt-3 inline-block text-sm font-medium text-primary hover:underline"
+          >
+            {t("haveCard")}
+          </Link>
         </div>
       ) : null}
     </main>

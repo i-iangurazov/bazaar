@@ -47,6 +47,7 @@ import {
   BarcodeIcon,
 } from "@/components/icons";
 import { ScanInput } from "@/components/ScanInput";
+import { LoyaltyDialog } from "@/components/pos/loyalty-dialog";
 import { ContextualHelpButton } from "@/components/help/ContextualHelpButton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -550,6 +551,7 @@ const PosSellPage = () => {
   const [sellInDebt, setSellInDebt] = useState(false);
   const [debtFullName, setDebtFullName] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<PosCustomerSelection | null>(null);
+  const [loyaltyOpen, setLoyaltyOpen] = useState(false);
   const [customerSelectorOpen, setCustomerSelectorOpen] = useState(false);
   const [customerSearch, setCustomerSearch] = useState("");
   const [customerCreateOpen, setCustomerCreateOpen] = useState(false);
@@ -3999,6 +4001,13 @@ const PosSellPage = () => {
     focusLineSearchInput();
   };
 
+  const loyaltyStatus = trpc.loyalty.posStatus.useQuery(undefined, {
+    enabled: customerEditOpen && Boolean(saleId),
+    retry: false,
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+  });
+
   const CustomerEditModal = () => (
     <Modal
       open={customerEditOpen}
@@ -4044,6 +4053,11 @@ const PosSellPage = () => {
           </label>
         </div>
         <ModalFooter>
+          {loyaltyStatus.data?.enabled && saleId ? (
+            <Button type="button" variant="secondary" onClick={() => setLoyaltyOpen(true)}>
+              {t("sell.loyalty")}
+            </Button>
+          ) : null}
           <Button
             type="button"
             variant="secondary"
@@ -5960,6 +5974,15 @@ const PosSellPage = () => {
         </section>
       )}
       {CustomerEditModal()}
+      <LoyaltyDialog
+        open={loyaltyOpen}
+        onOpenChange={setLoyaltyOpen}
+        saleId={saleId}
+        onApplied={() => {
+          void saleQuery.refetch();
+          void activeDraftQuery.refetch();
+        }}
+      />
       {ReceiptJournalModal()}
       {JournalSaleDetailModal()}
       {JournalReturnModal()}
@@ -8579,6 +8602,15 @@ const PosSellPage = () => {
 
         {MobileCustomerSheet()}
         {CustomerEditModal()}
+        <LoyaltyDialog
+          open={loyaltyOpen}
+          onOpenChange={setLoyaltyOpen}
+          saleId={saleId}
+          onApplied={() => {
+            void saleQuery.refetch();
+            void activeDraftQuery.refetch();
+          }}
+        />
         {ReceiptJournalModal()}
         {JournalSaleDetailModal()}
         {JournalReturnModal()}

@@ -24,6 +24,7 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:push": "prisma db push",
     "prisma:seed": "tsx prisma/seed.ts",
+    "loyalty:demo": "node --import tsx scripts/loyalty-demo.ts",
     "env:check:build": "node --import tsx scripts/ops-preflight.ts --env-only",
     "ops:preflight": "node --import tsx scripts/ops-preflight.ts",
     "ops:email-check": "node --import tsx scripts/ops-email-flow-check.ts",

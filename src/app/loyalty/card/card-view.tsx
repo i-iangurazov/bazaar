@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
@@ -26,17 +26,28 @@ export function LoyaltyCard({ view }: { view: CardView }) {
   const router = useRouter();
   const [qr, setQr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [expiresAt, setExpiresAt] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const secondsLeft = expiresAt ? Math.max(0, Math.ceil((expiresAt - now) / 1000)) : 0;
+  const expired = Boolean(expiresAt && secondsLeft <= 0);
 
   const showQr = async () => {
     setBusy(true);
     try {
       const response = await fetch("/api/loyalty/card/qr", { method: "POST" });
       if (!response.ok) throw new Error("loyaltyQrFailed");
-      const { token } = (await response.json()) as { token: string };
+      const { token, expiresAt: expiry } = (await response.json()) as { token: string; expiresAt: string };
       const bwip = (await import("bwip-js")).default;
       setQr(bwip.toDataURL({ bcid: "qrcode", text: token, scale: 4, height: 12, includetext: false }));
+      setExpiresAt(new Date(expiry).getTime());
     } catch {
       setQr(null);
+      setExpiresAt(null);
     } finally {
       setBusy(false);
     }
@@ -59,13 +70,18 @@ export function LoyaltyCard({ view }: { view: CardView }) {
           </p>
         )}
         <div className="mt-4 flex flex-col items-center gap-3">
-          {qr ? (
+          {qr && !expired ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={qr} alt={t("qrAlt")} className="h-56 w-56" />
           ) : null}
+          {qr && !expired ? (
+            <p className="text-xs text-muted-foreground">{t("qrExpiresIn", { seconds: secondsLeft })}</p>
+          ) : null}
+          {expired ? <p className="text-xs text-warning">{t("qrExpiredHint")}</p> : null}
           <Button onClick={() => void showQr()} disabled={busy}>
-            {qr ? t("refreshQr") : t("showQr")}
+            {qr && !expired ? t("refreshQr") : t("showQr")}
           </Button>
+          <p className="max-w-xs text-xs text-muted-foreground">{t("qrNote")}</p>
         </div>
       </div>
 

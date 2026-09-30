@@ -1,4 +1,5 @@
 import { assertSaleAssortment, lockAssortmentForSale } from "./assortmentPolicy";
+import { confirmLoyaltyForOrder } from "@/server/services/loyalty/apply";
 import {
   CatalogDiscountType,
   CashDrawerMovementType,
@@ -5029,6 +5030,15 @@ export const completePosSale = async (input: {
             orderedAt: updated.completedAt,
             countOrder: true,
             allowLegacyContact: true,
+          });
+
+          // Loyalty (when applied to this draft): convert the reservation into one
+          // redemption and grant the earning only for a fully paid money part.
+          await confirmLoyaltyForOrder(tx, {
+            organizationId: input.organizationId,
+            customerOrderId: sale.id,
+            paidInFull: !debtCustomerName,
+            actorId: input.actorId,
           });
 
           await writeAuditLog(tx, {

@@ -72,6 +72,7 @@ import {
   JobsIcon,
   BillingIcon,
   WhatsNewIcon,
+  SparklesIcon,
   PrintIcon,
   ReceiveIcon,
   TransferIcon,
@@ -388,6 +389,13 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
             key: "storeGroups",
             href: "/settings/store-groups",
             icon: StoreGroupsIcon,
+            adminOnly: true,
+            requiredPermission: "manageSettings",
+          },
+          {
+            key: "loyalty",
+            href: "/settings/loyalty",
+            icon: SparklesIcon,
             adminOnly: true,
             requiredPermission: "manageSettings",
           },
@@ -981,6 +989,15 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
       href: "/help",
       icon: HelpIcon,
       requiredPermission: "viewHelp",
+    },
+    {
+      key: "mobile-loyalty",
+      label: tNav("loyalty"),
+      href: "/settings/loyalty",
+      activePath: "/settings/loyalty",
+      icon: SparklesIcon,
+      adminOnly: true,
+      requiredPermission: "manageSettings",
     },
   ];
 

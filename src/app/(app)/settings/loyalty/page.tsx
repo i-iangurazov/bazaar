@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 
 import { PageHeader } from "@/components/page-header";
@@ -46,6 +47,32 @@ export default function LoyaltySettingsPage() {
   const stores = trpc.stores.list.useQuery(undefined, { retry: false });
   const [draft, setDraft] = useState<Draft>(DEFAULTS);
   const [error, setError] = useState<string | null>(null);
+  const [origin, setOrigin] = useState("");
+  const [qrs, setQrs] = useState<Record<string, string>>({});
+  const [copied, setCopied] = useState<string | null>(null);
+
+  useEffect(() => setOrigin(window.location.origin), []);
+  useEffect(() => {
+    if (!origin || !query.data) return;
+    let cancelled = false;
+    void (async () => {
+      const bwip = (await import("bwip-js")).default;
+      const next: Record<string, string> = {};
+      for (const link of query.data.links) {
+        next[link.storeId] = bwip.toDataURL({
+          bcid: "qrcode",
+          text: `${origin}/loyalty/join/${link.slug}`,
+          scale: 4,
+          height: 12,
+          includetext: false,
+        });
+      }
+      if (!cancelled) setQrs(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [origin, query.data]);
 
   useEffect(() => {
     if (!query.data) return;
@@ -75,10 +102,29 @@ export default function LoyaltySettingsPage() {
   const number = (value: number, patch: Partial<Draft>) =>
     setDraft((current) => ({ ...current, ...patch }));
   const links = useMemo(() => new Map(query.data?.links.map((link) => [link.storeId, link.slug]) ?? []), [query.data]);
+  const joinUrl = (storeId: string) => {
+    const slug = links.get(storeId);
+    return slug && origin ? `${origin}/loyalty/join/${slug}` : "";
+  };
+  const copy = async (storeId: string) => {
+    const url = joinUrl(storeId);
+    if (!url) return;
+    await navigator.clipboard.writeText(url).catch(() => undefined);
+    setCopied(storeId);
+    window.setTimeout(() => setCopied(null), 2000);
+  };
 
   return (
     <div className="min-w-0 space-y-5">
-      <PageHeader title={t("settingsTitle")} subtitle={t("settingsSubtitle")} />
+      <PageHeader
+        title={t("settingsTitle")}
+        subtitle={t("settingsSubtitle")}
+        action={
+          <Button asChild variant="secondary">
+            <Link href="/settings">{t("backToSettings")}</Link>
+          </Button>
+        }
+      />
       {query.error ? (
         <QueryErrorState onRetry={() => void query.refetch()} />
       ) : !query.data ? (
@@ -145,14 +191,7 @@ export default function LoyaltySettingsPage() {
             <div className="grid gap-2 sm:grid-cols-2">
               {(stores.data ?? []).map((store) => (
                 <label key={store.id} className="flex items-start justify-between gap-3 rounded-lg border border-border p-3 text-sm">
-                  <span className="min-w-0">
-                    <span className="block font-medium">{store.name}</span>
-                    {links.get(store.id) && (
-                      <span className="mt-1 block truncate text-xs text-muted-foreground">
-                        /loyalty/join/{links.get(store.id)}
-                      </span>
-                    )}
-                  </span>
+                  <span className="min-w-0 font-medium">{store.name}</span>
                   <Switch
                     checked={draft.storeIds.includes(store.id)}
                     onCheckedChange={(checked) =>
@@ -167,6 +206,55 @@ export default function LoyaltySettingsPage() {
                 </label>
               ))}
             </div>
+          </section>
+
+          <section className="space-y-4 rounded-xl border border-border bg-card p-4 sm:p-5">
+            <div>
+              <h2 className="font-semibold">{t("qrRegistrationTitle")}</h2>
+              <p className="mt-1 text-xs text-muted-foreground">{t("qrRegistrationNote")}</p>
+            </div>
+            {draft.storeIds.length === 0 ? (
+              <p className="text-sm text-muted-foreground">{t("needStore")}</p>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {draft.storeIds.map((storeId) => {
+                  const store = stores.data?.find((item) => item.id === storeId);
+                  const url = joinUrl(storeId);
+                  return (
+                    <div key={storeId} className="flex flex-col items-center gap-3 rounded-lg border border-border p-4">
+                      <p className="text-sm font-medium">{store?.name ?? storeId}</p>
+                      {qrs[storeId] ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={qrs[storeId]} alt={t("qrAltStore")} className="h-40 w-40" />
+                      ) : (
+                        <Skeleton className="h-40 w-40" />
+                      )}
+                      <div className="flex w-full flex-col gap-2">
+                        <Button asChild variant="secondary" size="sm" disabled={!url}>
+                          <a href={url} target="_blank" rel="noreferrer">
+                            {t("openPage")}
+                          </a>
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => void copy(storeId)}
+                          disabled={!url}
+                        >
+                          {copied === storeId ? t("copied") : t("copyLink")}
+                        </Button>
+                        <Button asChild variant="secondary" size="sm" disabled={!qrs[storeId]}>
+                          <a href={qrs[storeId]} download={`loyalty-${storeId}.png`}>
+                            {t("downloadQr")}
+                          </a>
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </section>
 
           <p className="rounded-lg border border-warning/40 bg-warning/5 p-4 text-sm text-muted-foreground">

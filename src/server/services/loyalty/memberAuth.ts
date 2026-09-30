@@ -1,4 +1,6 @@
 import { createHash, randomBytes, randomInt } from "node:crypto";
+import { appendFile, mkdir } from "node:fs/promises";
+import { join } from "node:path";
 
 import { prisma } from "@/server/db/prisma";
 import { isProductionRuntime } from "@/server/config/runtime";
@@ -22,6 +24,22 @@ const otpLimiter = createRateLimiter({ windowMs: 60_000, max: 6, prefix: "loyalt
 const verifyLimiter = createRateLimiter({ windowMs: 60_000, max: 20, prefix: "loyalty-otp-verify" });
 
 const isTestRuntime = () => process.env.NODE_ENV === "test";
+
+/**
+ * Local-only mail catcher for the demo. Disabled in production and on Vercel, and
+ * it never returns the code over the API — the owner reads it from the local file.
+ */
+export const isLocalOtpOutboxEnabled = () =>
+  process.env.LOYALTY_OTP_DEV_OUTBOX === "1" &&
+  !isProductionRuntime() &&
+  process.env.VERCEL !== "1";
+
+const writeLocalOutbox = async (email: string, code: string) => {
+  const path = process.env.LOYALTY_OTP_OUTBOX_PATH?.trim() || join(process.cwd(), "tmp", "loyalty-otp-outbox.log");
+  await mkdir(join(process.cwd(), "tmp"), { recursive: true }).catch(() => undefined);
+  await appendFile(path, `${new Date().toISOString()}\t${email}\t${code}\n`, "utf8");
+  return path;
+};
 
 export const normalizeEmail = (value: string) => value.trim().toLowerCase();
 export const emailContactKey = (value: string) => `email:${normalizeEmail(value)}`;
@@ -91,7 +109,9 @@ export const requestJoinOtp = async (input: { programStoreId: string; email: str
     },
   });
 
-  if (!isTestRuntime()) {
+  if (!isTestRuntime() && isLocalOtpOutboxEnabled()) {
+    await writeLocalOutbox(email, code);
+  } else if (!isTestRuntime()) {
     await sendTransactionalEmail({
       to: email,
       subject: "Код подтверждения BAZAAR",
