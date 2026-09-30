@@ -777,7 +777,7 @@ const SalesOrderDetailPage = () => {
               <CardContent className="space-y-3">
                 <FormGrid>
                   <div>
-                    <p className="text-xs text-muted-foreground">{tLoyalty("memberDiscount")}</p>
+                    <p className="text-xs text-muted-foreground">{tLoyalty("loyaltyMemberDiscount")}</p>
                     <p className="text-sm font-medium">
                       {formatKgsMoney(loyaltyQuery.data.memberDiscountKgs, locale, orderCurrencySource)}
                     </p>

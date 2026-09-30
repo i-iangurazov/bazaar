@@ -7094,6 +7094,7 @@
     "needStore": "Выберите хотя бы один магазин, иначе программа не действует.",
     "memberDiscount": "Постоянная скидка участника, %",
     "orderBlockTitle": "Бонусы по заказу",
+    "loyaltyMemberDiscount": "Скидка участника",
     "loyaltySpent": "Списано баллов",
     "loyaltyEarned": "Начислено баллов",
     "earnPercent": "Начисление за покупку, %",
