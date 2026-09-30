@@ -41,9 +41,11 @@ export function LoyaltyCard({ view }: { view: CardView }) {
     try {
       const response = await fetch("/api/loyalty/card/qr", { method: "POST" });
       if (!response.ok) throw new Error("loyaltyQrFailed");
-      const { token, expiresAt: expiry } = (await response.json()) as { token: string; expiresAt: string };
-      const bwip = (await import("bwip-js")).default;
-      setQr(bwip.toDataURL({ bcid: "qrcode", text: token, scale: 4, height: 12, includetext: false }));
+      const { qrDataUrl, expiresAt: expiry } = (await response.json()) as {
+        qrDataUrl: string;
+        expiresAt: string;
+      };
+      setQr(qrDataUrl);
       setExpiresAt(new Date(expiry).getTime());
     } catch {
       setQr(null);

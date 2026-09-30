@@ -47,32 +47,9 @@ export default function LoyaltySettingsPage() {
   const stores = trpc.stores.list.useQuery(undefined, { retry: false });
   const [draft, setDraft] = useState<Draft>(DEFAULTS);
   const [error, setError] = useState<string | null>(null);
-  const [origin, setOrigin] = useState("");
-  const [qrs, setQrs] = useState<Record<string, string>>({});
   const [copied, setCopied] = useState<string | null>(null);
-
+  const [origin, setOrigin] = useState("");
   useEffect(() => setOrigin(window.location.origin), []);
-  useEffect(() => {
-    if (!origin || !query.data) return;
-    let cancelled = false;
-    void (async () => {
-      const bwip = (await import("bwip-js")).default;
-      const next: Record<string, string> = {};
-      for (const link of query.data.links) {
-        next[link.storeId] = bwip.toDataURL({
-          bcid: "qrcode",
-          text: `${origin}/loyalty/join/${link.slug}`,
-          scale: 4,
-          height: 12,
-          includetext: false,
-        });
-      }
-      if (!cancelled) setQrs(next);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [origin, query.data]);
 
   useEffect(() => {
     if (!query.data) return;
@@ -223,9 +200,13 @@ export default function LoyaltySettingsPage() {
                   return (
                     <div key={storeId} className="flex flex-col items-center gap-3 rounded-lg border border-border p-4">
                       <p className="text-sm font-medium">{store?.name ?? storeId}</p>
-                      {qrs[storeId] ? (
+                      {links.get(storeId) ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={qrs[storeId]} alt={t("qrAltStore")} className="h-40 w-40" />
+                        <img
+                          src={`/api/loyalty/qr/store/${links.get(storeId)}`}
+                          alt={t("qrAltStore")}
+                          className="h-40 w-40"
+                        />
                       ) : (
                         <Skeleton className="h-40 w-40" />
                       )}
@@ -244,8 +225,11 @@ export default function LoyaltySettingsPage() {
                         >
                           {copied === storeId ? t("copied") : t("copyLink")}
                         </Button>
-                        <Button asChild variant="secondary" size="sm" disabled={!qrs[storeId]}>
-                          <a href={qrs[storeId]} download={`loyalty-${storeId}.png`}>
+                        <Button asChild variant="secondary" size="sm" disabled={!links.get(storeId)}>
+                          <a
+                            href={`/api/loyalty/qr/store/${links.get(storeId)}`}
+                            download={`loyalty-${storeId}.png`}
+                          >
                             {t("downloadQr")}
                           </a>
                         </Button>
