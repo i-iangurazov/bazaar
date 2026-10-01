@@ -61,6 +61,7 @@ import {
   RestoreIcon,
   StatusDangerIcon,
   StatusSuccessIcon,
+  TransferIcon,
 } from "@/components/icons";
 import { IconButton } from "@/components/ui/icon-button";
 import { defaultLocale, locales, normalizeLocale } from "@/lib/locales";
@@ -87,7 +88,12 @@ const UsersPage = () => {
   const { confirm, confirmDialog } = useConfirmDialog();
   const trpcUtils = trpc.useUtils();
   const isForbidden = status === "authenticated" && !isAdmin;
-  const transferPermission = trpc.users.setTransferPermission.useMutation({ onSuccess: () => { void usersQuery.refetch(); } });
+  const transferPermission = trpc.users.setTransferPermission.useMutation({
+    onSuccess: () => { void usersQuery.refetch(); },
+    onError: (error) => {
+      toast({ variant: "error", description: translateError(tErrors, error) });
+    },
+  });
   const usersQuery = trpc.users.list.useQuery(undefined, { enabled: isAdmin });
   const storesQuery = trpc.stores.list.useQuery(undefined, { enabled: isAdmin });
   const inlineEditingEnabled = isInlineEditingEnabled();
@@ -616,6 +622,13 @@ const UsersPage = () => {
                     icon: EditIcon,
                     onSelect: () => openEditDialog(user),
                     disabled: isUpdating,
+                  },
+                  {
+                    key: "transfer",
+                    label: t(user.canTransferStock ? "disableTransfer" : "enableTransfer"),
+                    icon: TransferIcon,
+                    onSelect: () => transferPermission.mutate({ userId: user.id, enabled: !user.canTransferStock }),
+                    disabled: isUpdating || transferPermission.isLoading,
                   },
                   {
                     key: "reset",

@@ -4895,8 +4895,6 @@
         "description": "Printers, receipts, and print templates."
       },
       "users": {
-        "enableTransfer": "Allow POS stock transfers",
-        "disableTransfer": "Disallow POS stock transfers",
         "title": "Users and roles",
         "description": "Staff access and permissions."
       },
@@ -4988,6 +4986,8 @@
     }
   },
   "users": {
+    "enableTransfer": "Allow POS stock transfers",
+    "disableTransfer": "Disallow POS stock transfers",
     "title": "Users",
     "subtitle": "Organization access.",
     "addUser": "Add user",
