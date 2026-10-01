@@ -12,6 +12,8 @@ export const workflowLabels: Record<string, [string, string, string]> = {
   sourceStoreId: ["Откуда", "From store", "Кайсы дүкөндөн"],
   destinationStoreId: ["Куда", "To store", "Кайсы дүкөнгө"],
   baseUnitId: ["Единица измерения", "Unit", "Өлчөө бирдиги"],
+  retailPriceKgs: ["Розничная цена, KGS", "Retail price, KGS", "Чекене баа, KGS"],
+  wholesalePriceKgs: ["Оптовая цена, KGS", "Wholesale price, KGS", "Дүң баа, KGS"],
   basePriceKgs: ["Цена продажи, KGS", "Selling price, KGS", "Сатуу баасы, KGS"],
   purchasePriceKgs: ["Закупочная цена, KGS", "Purchase price, KGS", "Сатып алуу баасы, KGS"],
   avgCostKgs: ["Себестоимость, KGS", "Unit cost, KGS", "Өздүк нарк, KGS"],

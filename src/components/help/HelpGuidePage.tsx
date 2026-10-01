@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { ArrowRightIcon, CheckIcon, ExternalLinkIcon } from "@/components/icons";
 import { getHelpCategory, getHelpGuideById } from "@/content/help/catalog";
+import { loyaltyPaths } from "@/content/help/loyalty-paths";
 import type { HelpGuide } from "@/content/help/types";
 import { formatHelpCount, localize, localizedUi } from "@/content/help/ui";
 import { defaultLocale, normalizeLocale } from "@/lib/locales";
@@ -60,9 +61,7 @@ export const HelpGuidePage = ({
           <span>
             {guide.estimatedMinutes} {ui.minutes}
           </span>
-          <span>
-            {formatHelpCount(guide.steps.length, "step", locale)}
-          </span>
+          <span>{formatHelpCount(guide.steps.length, "step", locale)}</span>
         </div>
         <h1>{localize(guide.title, locale)}</h1>
         <p>{localize(guide.summary, locale)}</p>
@@ -72,6 +71,19 @@ export const HelpGuidePage = ({
         </small>
       </header>
 
+      {guide.category === "loyalty" ? (
+        <nav className={styles.homeContents} aria-label={ui.guides}>
+          {loyaltyPaths.map((path) => (
+            <Link
+              key={path.guideId}
+              href={`/help/${path.guideId}`}
+              aria-current={path.guideId === guideId ? "page" : undefined}
+            >
+              {localize(path.audience, locale)} · {localize(path.title, locale)}
+            </Link>
+          ))}
+        </nav>
+      ) : null}
       <div className={styles.articleLayout}>
         <aside className={styles.articleToc}>
           <strong>{ui.onThisPage}</strong>

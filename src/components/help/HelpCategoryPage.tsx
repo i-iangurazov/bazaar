@@ -8,6 +8,7 @@ import { getGuidesForCategory, helpGuideId, helpJourney } from "@/content/help/c
 import type { HelpCategory } from "@/content/help/types";
 import { formatHelpCount, localize, localizedUi } from "@/content/help/ui";
 import { defaultLocale, normalizeLocale } from "@/lib/locales";
+import { HelpLoyaltyPaths } from "./HelpLoyaltyPaths";
 import { HelpIcon } from "./HelpIcon";
 import styles from "./help.module.css";
 
@@ -33,7 +34,9 @@ export const HelpCategoryPage = ({ category }: { category: HelpCategory }) => {
           <span>{localize(category.description, locale)}</span>
         </div>
       </header>
-      {category.slug === "getting-started" ? (
+      {category.slug === "loyalty" ? (
+        <HelpLoyaltyPaths locale={locale} />
+      ) : category.slug === "getting-started" ? (
         <section className={styles.categoryJourney}>
           {helpJourney.map((item, index) => (
             <Link key={`${item.guideId}-${index}`} href={`/help/${item.guideId}`}>
@@ -64,7 +67,8 @@ export const HelpCategoryPage = ({ category }: { category: HelpCategory }) => {
                 <strong>{localize(guide.title, locale)}</strong>
                 <small>{localize(guide.summary, locale)}</small>
                 <em>
-                  {guide.estimatedMinutes} {ui.minutes} · {formatHelpCount(guide.steps.length, "step", locale)}
+                  {guide.estimatedMinutes} {ui.minutes} ·{" "}
+                  {formatHelpCount(guide.steps.length, "step", locale)}
                 </em>
               </span>
               <ArrowRightIcon aria-hidden />

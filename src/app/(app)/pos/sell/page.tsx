@@ -50,6 +50,7 @@ import {
 } from "@/components/icons";
 import { ScanInput } from "@/components/ScanInput";
 import { LoyaltyDialog } from "@/components/pos/loyalty-dialog";
+import { LoyaltyButton, CompletedLoyaltySummary } from "@/components/pos/loyalty-panel";
 import { ContextualHelpButton } from "@/components/help/ContextualHelpButton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -538,6 +539,7 @@ const PosSellPage = () => {
   const t = useTranslations("pos");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
+  const tLoyalty = useTranslations("loyalty");
   const tMovementJournal = useTranslations("inventory.movementJournal");
   const locale = useLocale();
   const router = useRouter();
@@ -560,6 +562,7 @@ const PosSellPage = () => {
   const [debtFullName, setDebtFullName] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<PosCustomerSelection | null>(null);
   const [loyaltyOpen, setLoyaltyOpen] = useState(false);
+  const reconcileLoyaltyCartRef = useRef<() => void>(() => undefined);
   const [transferOpen, setTransferOpen] = useState(false);
   const [variantChoice, setVariantChoice] = useState<{ product: PosCartProduct; variants: Array<{ id: string; name: string | null; sku: string | null }>; decrement?: boolean } | null>(null);
   const [priceMode, setPriceMode] = useState<"RETAIL" | "WHOLESALE">("RETAIL");
@@ -962,24 +965,28 @@ const PosSellPage = () => {
   });
 
   const addLineMutation = trpc.pos.sales.addLine.useMutation({
+    onSuccess: () => { reconcileLoyaltyCartRef.current(); },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
   });
 
   const updateLineMutation = trpc.pos.sales.updateLine.useMutation({
+    onSuccess: () => { reconcileLoyaltyCartRef.current(); },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
   });
 
   const removeLineMutation = trpc.pos.sales.removeLine.useMutation({
+    onSuccess: () => { reconcileLoyaltyCartRef.current(); },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
   });
 
   const updateDiscountMutation = trpc.pos.sales.updateDiscount.useMutation({
+    onSuccess: () => { reconcileLoyaltyCartRef.current(); },
     onError: (error) => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
@@ -4051,19 +4058,20 @@ const PosSellPage = () => {
   };
 
   const loyaltyStatus = trpc.loyalty.posStatus.useQuery({ storeId: activeStoreId }, {
-    enabled: customerEditOpen && Boolean(saleId),
+    enabled: Boolean(activeStoreId),
     retry: false,
-    staleTime: 5 * 60_000,
-    refetchOnWindowFocus: false,
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
   });
 
   const openLoyalty = async () => {
-    if (!saleId || cartPriceSyncRef.current || isLineBusy) return;
+    if (!saleId || cartPriceSyncRef.current || isLineBusy || completeMutation.isLoading || isCompletedSaleEdit) return;
     cartPriceSyncRef.current = true;
     setCartPriceSync({ saleId: null, error: null });
     try {
       // Finish manual edits before loyalty snapshots the receipt prices.
       await flushAllPendingCartSync();
+      setCustomerEditOpen(false);
       setLoyaltyOpen(true);
     } catch (error) {
       toast({ variant: "error", description: translateError(tErrors, error as never) });
@@ -4072,6 +4080,20 @@ const PosSellPage = () => {
       setCartPriceSync(null);
     }
   };
+
+  const saleOptions = !isCompletedSaleEdit ? (
+    <div className="flex min-h-9 items-center justify-between gap-2" data-testid="pos-sale-options">
+      {saleChannelControl}
+      {loyaltyStatus.data?.enabled && hasCartLines ? <LoyaltyButton
+        disabled={!saleId || isLineBusy || Boolean(cartPriceSync) || completeMutation.isLoading || saleQuery.isFetching}
+        onOpen={() => void openLoyalty()} /> : null}
+    </div>
+  ) : null;
+  const completedLoyalty = lastCompletedSale ? <CompletedLoyaltySummary saleId={lastCompletedSale.id} /> : null;
+  const loyaltyDialog = <LoyaltyDialog key={saleId ?? "empty"} open={loyaltyOpen} onOpenChange={setLoyaltyOpen}
+    saleId={saleId} storeId={activeStoreId} signupId={loyaltyStatus.data?.signupId} summary={sale?.loyalty}
+    currencySource={currencySource} customerContact={selectedCustomer?.email ?? selectedCustomer?.phone}
+    onApplied={() => { if (saleId) void refreshCartPrices(saleId); }} />;
 
   const CustomerEditModal = () => (
     <Modal
@@ -4118,11 +4140,7 @@ const PosSellPage = () => {
           </label>
         </div>
         <ModalFooter>
-          {loyaltyStatus.data?.enabled && saleId ? (
-            <Button type="button" variant="secondary" disabled={isLineBusy} onClick={() => void openLoyalty()}>
-              {t("sell.loyalty")}
-            </Button>
-          ) : null}
+
           <Button
             type="button"
             variant="secondary"
@@ -4988,6 +5006,8 @@ const PosSellPage = () => {
     cartPriceSyncRef.current = true;
     setCartPriceSync({ saleId: targetSaleId, error: null });
     try {
+      const previousLoyalty = trpcUtils.pos.sales.get.getData({ saleId: targetSaleId })?.loyalty;
+      await flushAllPendingCartSync();
       // A GET started before the price mutation must not hydrate the new cart.
       // Fetch the explicit ID: the sale query can still refer to a previous draft.
       await trpcUtils.pos.sales.get.cancel({ saleId: targetSaleId });
@@ -5000,9 +5020,12 @@ const PosSellPage = () => {
       }
       setOptimisticSaleLines(fresh.lines as PosCartLine[]);
       setLineInputDrafts({});
-      setDiscountDraft("");
+      setDiscountDraft(fresh.discountKgs > 0 ? String(displayMoneyFromKgs(fresh.discountKgs, currencySource)) : "");
       setPriceMode(fresh.priceMode);
       finishCartPriceSync();
+      if (previousLoyalty?.status === "APPLIED" && fresh.loyalty?.status === "RELEASED") {
+        toast({ description: tLoyalty("posReleased") });
+      }
       void activeDraftQuery.refetch();
     } catch (error) {
       // Keep the visible cart and scanner lock until a fresh server read succeeds.
@@ -5017,8 +5040,13 @@ const PosSellPage = () => {
     }
   };
 
-  const handleLoyaltyApplied = () => {
-    if (saleId) void refreshCartPrices(saleId);
+
+  reconcileLoyaltyCartRef.current = () => {
+    // A cart mutation restores every loyalty-adjusted line on the server. Reload
+    // all prices after queued edits settle, and keep checkout locked until then.
+    if (saleId && sale?.loyalty?.status === "APPLIED" && !isCompletedSaleEdit) {
+      void refreshCartPrices(saleId);
+    }
   };
 
   const changePriceMode = async (mode: "RETAIL" | "WHOLESALE", approval?: typeof priceConfirmation) => {
@@ -5534,6 +5562,7 @@ const PosSellPage = () => {
                 </div>
                 <div className="flex min-h-0 flex-1 flex-col justify-between gap-5 overflow-y-auto p-5">
                   <div className="space-y-3">
+                    {completedLoyalty}
                     <Button type="button" className="h-12 w-full" onClick={handleStartNewSale}>
                       {t("sell.newSale")}
                     </Button>
@@ -5890,7 +5919,7 @@ const PosSellPage = () => {
                     className="border-t border-border bg-card"
                   >
                     <div className="space-y-2 px-4 py-2">
-                      {saleChannelControl}
+                      {saleOptions}
                       <div className="px-1">
                         <div className="space-y-1 text-[11px] leading-4">
                           <div className="flex items-center justify-between gap-3">
@@ -6157,12 +6186,6 @@ const PosSellPage = () => {
       )}
       {PosToolsDialogs()}
       {CustomerEditModal()}
-      <LoyaltyDialog
-        open={loyaltyOpen}
-        onOpenChange={setLoyaltyOpen}
-        saleId={saleId}
-        onApplied={handleLoyaltyApplied}
-      />
       {ReceiptJournalModal()}
       {JournalSaleDetailModal()}
       {JournalReturnModal()}
@@ -6821,7 +6844,7 @@ const PosSellPage = () => {
 
       const renderPropertiesSection = () => (
         <section className="border-y border-border bg-card/95">
-          <div className="px-3">{saleChannelControl}</div>
+          <div className="px-3">{saleOptions}</div>
           <button
             type="button"
             className="flex min-h-[48px] w-full items-center justify-between px-3 text-left"
@@ -7043,6 +7066,7 @@ const PosSellPage = () => {
                   {t("sell.completeSuccess", { number: lastCompletedSale.number })}
                 </p>
                 <div className="mt-4 grid gap-2">
+                  {completedLoyalty}
                   <Button
                     type="button"
                     className="h-12"
@@ -7084,6 +7108,7 @@ const PosSellPage = () => {
           ) : (
             <div className="space-y-3 pt-3">
               {renderOrderSection()}
+              <div className="px-3">{saleOptions}</div>
               <section className="border-y border-border bg-card/95 px-3 py-3">
                 <h2 className="text-[15px] font-semibold leading-none text-primary">
                   {t("sell.mobile.paymentSummary")}
@@ -7835,8 +7860,7 @@ const PosSellPage = () => {
           {PosToolsDialogs()}
           {MobileCustomerSheet()}
           {CustomerEditModal()}
-          <LoyaltyDialog open={loyaltyOpen} onOpenChange={setLoyaltyOpen} saleId={saleId} onApplied={handleLoyaltyApplied} />
-          {ReceiptJournalModal()}
+              {ReceiptJournalModal()}
           {JournalSaleDetailModal()}
           {JournalReturnModal()}
           {CartPriceSyncDialog()}
@@ -8152,6 +8176,7 @@ const PosSellPage = () => {
                   </div>
                   <div className="min-h-0 flex-1 overflow-y-auto p-4">
                     <div className="grid gap-2">
+                      {completedLoyalty}
                       <Button type="button" className="h-12 w-full" onClick={handleStartNewSale}>
                         {t("sell.newSale")}
                       </Button>
@@ -8612,7 +8637,7 @@ const PosSellPage = () => {
                           data-baam-obstacle="action"
                           className="rounded-md border border-border bg-card p-3"
                         >
-                          {saleChannelControl}
+                          {saleOptions}
                           <div className="flex items-center justify-between gap-3">
                             <p className="text-sm font-semibold text-foreground">
                               {t("sell.paymentsTitle")}
@@ -8788,13 +8813,7 @@ const PosSellPage = () => {
 
         {MobileCustomerSheet()}
         {CustomerEditModal()}
-        <LoyaltyDialog
-          open={loyaltyOpen}
-          onOpenChange={setLoyaltyOpen}
-          saleId={saleId}
-          onApplied={handleLoyaltyApplied}
-        />
-        {ReceiptJournalModal()}
+          {ReceiptJournalModal()}
         {JournalSaleDetailModal()}
         {JournalReturnModal()}
         {CartPriceSyncDialog()}
@@ -8860,7 +8879,10 @@ const PosSellPage = () => {
     );
   }
 
-  return isPhoneScreen ? MobilePosView() : DesktopPosSaleView();
+  return <>
+    {isPhoneScreen ? MobilePosView() : DesktopPosSaleView()}
+    {loyaltyDialog}
+  </>;
 };
 
 export default PosSellPage;

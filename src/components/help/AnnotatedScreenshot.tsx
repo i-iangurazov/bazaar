@@ -40,6 +40,7 @@ export const AnnotatedScreenshot = ({
   const image = (fullscreen = false) => (
     <div
       className={`${styles.annotatedCanvas} ${isPortrait ? styles.annotatedPortrait : ""} ${fullscreen ? styles.annotatedFullscreen : ""}`}
+      style={media.aspectRatio ? { aspectRatio: media.aspectRatio } : undefined}
     >
       <Image
         src={source}

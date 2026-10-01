@@ -1,3 +1,4 @@
+import { saveProductPriceTypes, type ProductPriceTypeValues } from "@/server/services/productPriceTypes";
 import { randomUUID } from "node:crypto";
 import {
   OperationRequestPrincipalType,
@@ -51,7 +52,7 @@ import {
   resolveProductImportMatch,
 } from "@/server/services/products/importMatching";
 
-export type CreateProductInput = {
+export type CreateProductInput = ProductPriceTypeValues & {
   idempotencyKey?: string;
   organizationId: string;
   actorId: string;
@@ -93,6 +94,8 @@ export type CreateProductInput = {
     attributes?: Record<string, unknown>;
     initialOnHand?: number | null;
     storePriceKgs?: number | null;
+    retailPriceKgs?: number | null;
+    wholesalePriceKgs?: number | null;
   }[];
   isBundle?: boolean;
   bundleComponents?: {
@@ -1946,6 +1949,18 @@ export const createProduct = async (input: CreateProductInput) => {
             storePriceKgs: input.variants?.[index]?.storePriceKgs,
           })),
         });
+        await saveProductPriceTypes(tx, {
+          organizationId: input.organizationId, actorId: input.actorId, requestId: input.requestId,
+          storeId: input.storeId ?? (assignmentStores.length === 1 ? assignmentStores[0]?.id : undefined), productId: product.id,
+          prices: [
+            { retailPriceKgs: input.retailPriceKgs, wholesalePriceKgs: input.wholesalePriceKgs },
+            ...createdVariants.map((variant, index) => ({
+              variantId: variant.id,
+              retailPriceKgs: input.variants?.[index]?.retailPriceKgs,
+              wholesalePriceKgs: input.variants?.[index]?.wholesalePriceKgs,
+            })),
+          ],
+        });
         if (resolvedBaseCost !== undefined) {
           await upsertBaseProductCost(tx, {
             organizationId: input.organizationId,
@@ -2192,7 +2207,7 @@ export const assignExistingProductsToStore = async (input: AssignExistingProduct
   }).then(async result => { await publishAssortmentChange(input.organizationId); return result; });
 };
 
-export type UpdateProductInput = {
+export type UpdateProductInput = ProductPriceTypeValues & {
   productId: string;
   organizationId: string;
   actorId: string;
@@ -2222,6 +2237,8 @@ export type UpdateProductInput = {
     sku?: string | null;
     attributes?: Record<string, unknown>;
     storePriceKgs?: number | null;
+    retailPriceKgs?: number | null;
+    wholesalePriceKgs?: number | null;
   }[];
   isBundle?: boolean;
   bundleComponents?: CreateProductInput["bundleComponents"];
@@ -2358,6 +2375,9 @@ export const updateProduct = async (input: UpdateProductInput) => {
       await syncProductImages(tx, input.organizationId, input.productId, normalizedImages);
     }
 
+    const additionalPrices: Array<ProductPriceTypeValues & { variantId?: string }> = [
+      { retailPriceKgs: input.retailPriceKgs, wholesalePriceKgs: input.wholesalePriceKgs },
+    ];
     if (input.variants) {
       const incomingIds = new Set(
         input.variants.map((variant) => variant.id).filter(Boolean) as string[],
@@ -2430,6 +2450,7 @@ export const updateProduct = async (input: UpdateProductInput) => {
             },
             definitionMap,
           );
+          additionalPrices.push({ variantId: variant.id, retailPriceKgs: variant.retailPriceKgs, wholesalePriceKgs: variant.wholesalePriceKgs });
           variantPriceInputs.push({ id: variant.id, storePriceKgs: variant.storePriceKgs });
         } else {
           const createdVariant = await tx.productVariant.create({
@@ -2451,6 +2472,7 @@ export const updateProduct = async (input: UpdateProductInput) => {
             },
             definitionMap,
           );
+          additionalPrices.push({ variantId: createdVariant.id, retailPriceKgs: variant.retailPriceKgs, wholesalePriceKgs: variant.wholesalePriceKgs });
           variantPriceInputs.push({
             id: createdVariant.id,
             storePriceKgs: variant.storePriceKgs,
@@ -2465,6 +2487,11 @@ export const updateProduct = async (input: UpdateProductInput) => {
         variants: variantPriceInputs,
       });
     }
+
+    await saveProductPriceTypes(tx, {
+      organizationId: input.organizationId, actorId: input.actorId, requestId: input.requestId,
+      storeId: input.storeId, productId: input.productId, prices: additionalPrices,
+    });
 
     if (!nextIsBundle) {
       await tx.productBundleComponent.deleteMany({ where: { bundleProductId: input.productId } });

@@ -1,3 +1,5 @@
+import { getLoyaltyOrderSummary } from "@/server/services/loyalty/orderSummary";
+import { assertLoyaltyEnabled } from "@/server/services/loyalty/program";
 import { getLoyaltyHistory } from "@/server/services/loyalty/history";
 import { availablePoints } from "@/server/services/loyalty/ledger";
 import type { Prisma } from "@prisma/client";
@@ -20,7 +22,7 @@ import {
   quoteLoyaltyForOrder,
   releaseLoyaltyForOrder,
 } from "@/server/services/loyalty/apply";
-import { phoneContactKey, verifyCardToken } from "@/server/services/loyalty/memberAuth";
+import { emailContactKey, phoneContactKey, verifyCardToken } from "@/server/services/loyalty/memberAuth";
 
 const settingsSchema = z
   .object({
@@ -99,12 +101,38 @@ export const loyaltyRouter = router({
 
   /** Register: resolve a scanned customer QR to a member and their balance. */
   posStatus: cashierProcedure.input(z.object({ storeId: z.string().optional() }).optional()).query(async ({ ctx, input }) => {
-    if (!input?.storeId) return { enabled: false };
-    await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
-    const program = await getLoyaltyProgram(ctx.prisma, ctx.user.organizationId);
-    const store = program ? await ctx.prisma.loyaltyProgramStore.findFirst({ where: { programId: program.id, storeId: input.storeId } }) : null;
-    return { enabled: Boolean(program?.enabled && store) };
+    try {
+      if (!input?.storeId) return { enabled: false, signupId: null };
+      await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+      const program = await getLoyaltyProgram(ctx.prisma, ctx.user.organizationId);
+      const store = program ? await ctx.prisma.loyaltyProgramStore.findFirst({ where: { programId: program.id, storeId: input.storeId } }) : null;
+      const enabled = Boolean(program?.enabled && store);
+      return { enabled, signupId: enabled ? store!.id : null };
+    } catch (error) { throw toTRPCError(error); }
   }),
+  /** Exact contact lookup within a participating store. Spending still requires customer consent. */
+  posLookupMember: cashierProcedure
+    .input(z.object({ storeId: z.string().min(1), contact: z.string().trim().min(4).max(254) }).strict())
+    .mutation(async ({ ctx, input }) => {
+      try {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+        const program = await assertLoyaltyEnabled(ctx.prisma, ctx.user.organizationId, input.storeId);
+        const isEmail = input.contact.includes("@");
+        const digits = input.contact.replace(/[^0-9]/g, "");
+        if (isEmail ? !z.string().email().safeParse(input.contact).success : !/^[+()\d\s.-]+$/.test(input.contact) || digits.length < 7) return [];
+        const members = await ctx.prisma.loyaltyMember.findMany({
+          where: {
+            organizationId: ctx.user.organizationId, programId: program.id, status: "ACTIVE",
+            OR: isEmail
+              ? [{ contactKey: emailContactKey(input.contact) }, { email: input.contact.toLowerCase() }]
+              : [{ contactKey: phoneContactKey(input.contact) }, { phoneNormalized: digits }, { phoneNormalized: `+${digits}` }],
+          },
+          select: { id: true, displayName: true, email: true, phoneNormalized: true },
+          take: 5,
+        });
+        return members.map(member => ({ memberId: member.id, displayName: member.displayName ?? member.email ?? member.phoneNormalized, email: member.email, phone: member.phoneNormalized }));
+      } catch (error) { throw toTRPCError(error); }
+    }),
   posResolveCard: cashierProcedure
     .input(z.object({ token: z.string().min(1).max(200) }).strict())
     .mutation(async ({ ctx, input }) => {
@@ -112,6 +140,8 @@ export const loyaltyRouter = router({
         const card = await verifyCardToken(input.token, ctx.user.organizationId);
         return {
           memberId: card.member.id,
+          email: card.member.email,
+          phone: card.member.phoneNormalized,
           displayName:
             card.member.displayName ?? card.member.email ?? card.member.phoneNormalized ?? null,
           balancePoints: card.account.balancePoints,
@@ -289,31 +319,7 @@ export const loyaltyRouter = router({
         const order = await ctx.prisma.customerOrder.findFirst({ where: { id: input.customerOrderId, organizationId: ctx.user.organizationId }, select: { storeId: true } });
         if (!order) throw new AppError("posSaleNotFound", "NOT_FOUND", 404);
         await assertUserCanAccessStore(ctx.prisma, ctx.user, order.storeId);
-        const application = await ctx.prisma.loyaltyOrderApplication.findFirst({
-          where: { customerOrderId: input.customerOrderId, organizationId: ctx.user.organizationId },
-        });
-        const entries = await ctx.prisma.loyaltyLedgerEntry.findMany({
-          where: {
-            customerOrderId: input.customerOrderId,
-            organizationId: ctx.user.organizationId,
-          },
-          orderBy: { createdAt: "asc" },
-          select: { id: true, type: true, points: true, createdAt: true },
-        });
-        if (!application && entries.length === 0) return null;
-        return {
-          memberDiscountKgs: application ? Number(application.memberDiscountKgs) : 0,
-          pointsSpent: application?.pointsSpent ?? 0,
-          pointsEarned: entries.filter(entry => entry.type === "EARN").reduce((sum, entry) => sum + entry.points, 0),
-          plannedPoints: application?.status === "RELEASED" ? 0 : application?.pointsEarned ?? 0,
-          hasEarned: entries.some(entry => entry.type === "EARN"),
-          entries: entries.map((entry) => ({
-            id: entry.id,
-            type: entry.type,
-            points: entry.points,
-            createdAt: entry.createdAt.toISOString(),
-          })),
-        };
+        return await getLoyaltyOrderSummary(ctx.prisma, ctx.user.organizationId, input.customerOrderId);
       } catch (error) {
         throw toTRPCError(error);
       }

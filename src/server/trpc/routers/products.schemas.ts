@@ -101,6 +101,8 @@ export const productVariantInputSchema = z.object({
   attributes: z.record(z.unknown()).optional(),
   initialOnHand: z.number().int().min(0).optional(),
   storePriceKgs: z.number().min(0).optional(),
+  retailPriceKgs: z.number().min(0).nullable().optional(),
+  wholesalePriceKgs: z.number().min(0).nullable().optional(),
 });
 
 export const productListInputSchema = z
@@ -185,6 +187,8 @@ export const createProductInputSchema = z.object({
   categories: z.array(z.string()).optional(),
   baseUnitId: z.string().min(1),
   basePriceKgs: z.number().min(0).optional(),
+  retailPriceKgs: z.number().min(0).nullable().optional(),
+  wholesalePriceKgs: z.number().min(0).nullable().optional(),
   purchasePriceKgs: z.number().min(0).optional(),
   avgCostKgs: z.number().min(0).optional(),
   initialOnHand: z.number().int().min(0).optional(),
@@ -210,6 +214,8 @@ export const updateProductInputSchema = z.object({
   baseUnitId: z.string().min(1),
   basePriceKgs: z.number().min(0).optional(),
   storePriceKgs: z.number().min(0).optional(),
+  retailPriceKgs: z.number().min(0).nullable().optional(),
+  wholesalePriceKgs: z.number().min(0).nullable().optional(),
   purchasePriceKgs: z.number().min(0).optional(),
   avgCostKgs: z.number().min(0).optional(),
   minStock: z.number().int().min(0).optional(),

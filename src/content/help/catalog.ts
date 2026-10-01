@@ -46,6 +46,22 @@ const step = (
 
 const guide = (value: HelpGuide) => value;
 
+const productPriceTypesStep = step(
+  t("Укажите розничную и оптовую цены", "Чекене жана дүң бааларды коюңуз", "Set retail and wholesale prices"),
+  t(
+    "Если в профиле организации включены «Розничные и оптовые цены», в блоке «Цены» заполните эти поля для выбранного магазина. У вариантов товара есть свои поля цен. Все изменения сохраняются общей кнопкой «Сохранить». На кассе выберите «Розница» или «Опт», чтобы применить нужную цену.",
+    "Уюмдун профилинде «Чекене жана дүң баалар» күйгүзүлсө, «Баалар» бөлүмүндө тандалган дүкөн үчүн бул талааларды толтуруңуз. Товардын варианттарында өзүнчө баа талаалары бар. Бардык өзгөртүүлөр «Сактоо» баскычы менен сакталат. Керектүү бааны колдонуу үчүн кассада «Чекене» же «Дүң» режимин тандаңыз.",
+    "When Retail and wholesale prices is enabled in the business profile, fill in these fields under Pricing for the selected store. Product variants have their own price fields. The main Save button saves all changes. Choose Retail or Wholesale at checkout to apply that price.",
+  ),
+  {
+    note: t(
+      "Пустое поле означает, что цена не задана; 0 — настоящая нулевая цена. Если выбранная цена не задана, касса использует другую, а если обе пустые — обычную цену продажи. Выключение функции сохраняет введённые цены.",
+      "Бош талаа баа коюлбаганын билдирет; 0 — чыныгы нөл баа. Тандалган баа бош болсо, касса башкасын, экөө тең бош болсо кадимки сатуу баасын колдонот. Функцияны өчүргөндө киргизилген баалар сакталат.",
+      "An empty field means no price is set; 0 is a real zero price. If the selected price is empty, checkout uses the other price; if both are empty, it uses the regular sale price. Turning the feature off keeps saved prices.",
+    ),
+  },
+);
+
 const productScreen = (label: LocalizedText, x = 83, y = 13) =>
   media(
     captures.products,
@@ -243,6 +259,7 @@ export const helpGuides: HelpGuide[] = [
           ],
         },
       ),
+      productPriceTypesStep,
       step(
         t("Сохраните", "Сактаңыз", "Save"),
         t(
@@ -328,6 +345,7 @@ export const helpGuides: HelpGuide[] = [
           "Avoid changing SKU and barcode unless needed; POS search uses them.",
         ),
       ),
+      productPriceTypesStep,
       step(
         t("Сохраните", "Сактаңыз", "Save"),
         t(

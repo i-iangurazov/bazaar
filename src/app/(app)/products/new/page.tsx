@@ -261,6 +261,8 @@ const NewProductPage = () => {
             : [],
         baseUnitId: duplicateProduct.baseUnitId,
         basePriceKgs: duplicateProduct.basePriceKgs ?? undefined,
+        retailPriceKgs: duplicateSourceStore?.storeId === selectedStoreId ? duplicateSourceStore.retailPriceKgs : null,
+        wholesalePriceKgs: duplicateSourceStore?.storeId === selectedStoreId ? duplicateSourceStore.wholesalePriceKgs : null,
         purchasePriceKgs: duplicateProduct.purchasePriceKgs ?? undefined,
         avgCostKgs: duplicateProduct.avgCostKgs ?? undefined,
         initialOnHand: undefined,
@@ -297,6 +299,10 @@ const NewProductPage = () => {
           sku: "",
           initialOnHand: undefined,
           storePriceKgs: undefined,
+          retailPriceKgs: duplicateSourceStore?.storeId === selectedStoreId
+            ? duplicateSourceStore.variants.find((row) => row.variantId === variant.id)?.retailPriceKgs ?? null : null,
+          wholesalePriceKgs: duplicateSourceStore?.storeId === selectedStoreId
+            ? duplicateSourceStore.variants.find((row) => row.variantId === variant.id)?.wholesalePriceKgs ?? null : null,
           attributes: (variant.attributes as Record<string, unknown>) ?? {},
           canDelete: true,
         })),
@@ -459,6 +465,7 @@ const NewProductPage = () => {
               isSubmitting={createMutation.isLoading}
               currencyCode={selectedStore.currencyCode ?? null}
               currencyRateKgsPerUnit={selectedCurrencyRate}
+              retailWholesaleEnabled={selectedStore.organization.retailWholesaleEnabled}
               quickCreateMode
               canEditInitialStock={canEditInitialStock}
               enableSku={enableSku}

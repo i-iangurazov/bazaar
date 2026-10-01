@@ -322,6 +322,7 @@ const ProfilePage = () => {
       });
       await Promise.all([
         trpcUtils.orgSettings.getBusinessProfile.invalidate(),
+        trpcUtils.stores.list.invalidate(),
         trpcUtils.posTools.options.invalidate(),
         trpcUtils.products.invalidate(),
       ]);
@@ -692,6 +693,11 @@ const ProfilePage = () => {
                         <div>
                           <FormLabel>{t("business.retailWholesaleEnabled")}</FormLabel>
                           <FormDescription>{t("business.retailWholesaleHint")}</FormDescription>
+                          {businessData?.organization.retailWholesaleEnabled ? (
+                            <Link href="/products" className="mt-2 inline-block text-sm text-primary underline underline-offset-4">
+                              {t("business.editProductPrices")}
+                            </Link>
+                          ) : null}
                         </div>
                         <FormControl>
                           <Switch checked={field.value} onCheckedChange={field.onChange} />

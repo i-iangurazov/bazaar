@@ -573,6 +573,8 @@ const ProductDetailPage = () => {
       baseUnitId: productQuery.data.baseUnitId,
       basePriceKgs: productQuery.data.basePriceKgs ?? undefined,
       storePriceKgs: selectedSettingsStore?.effectivePriceKgs ?? undefined,
+      retailPriceKgs: selectedSettingsStore?.retailPriceKgs ?? null,
+      wholesalePriceKgs: selectedSettingsStore?.wholesalePriceKgs ?? null,
       purchasePriceKgs: productQuery.data.purchasePriceKgs ?? undefined,
       avgCostKgs: productQuery.data.avgCostKgs ?? undefined,
       minStock: selectedSettingsStore?.minStock,
@@ -605,6 +607,8 @@ const ProductDetailPage = () => {
         name: variant.name ?? "",
         sku: variant.sku ?? "",
         storePriceKgs: selectedVariantPriceById.get(variant.id),
+        retailPriceKgs: selectedSettingsStore?.variants.find((row) => row.variantId === variant.id)?.retailPriceKgs ?? null,
+        wholesalePriceKgs: selectedSettingsStore?.variants.find((row) => row.variantId === variant.id)?.wholesalePriceKgs ?? null,
         attributes: (variant.attributes as Record<string, unknown>) ?? {},
         canDelete: variant.canDelete ?? true,
       })),
@@ -620,6 +624,8 @@ const ProductDetailPage = () => {
     productQuery.data,
     selectedSettingsStore?.minStock,
     selectedSettingsStore?.effectivePriceKgs,
+    selectedSettingsStore?.retailPriceKgs,
+    selectedSettingsStore?.wholesalePriceKgs,
     selectedSettingsStore?.variants,
     bundleComponentsQuery.data,
   ]);
@@ -1185,6 +1191,7 @@ const ProductDetailPage = () => {
               readOnly={!canManageProducts}
               productId={productId}
               priceStoreName={selectedSettingsStore?.storeName}
+              retailWholesaleEnabled={selectedSettingsStore?.retailWholesaleEnabled ?? false}
               currencyCode={selectedPricingCurrencyCode}
               currencyRateKgsPerUnit={selectedPricingCurrencyRateKgsPerUnit}
               formId={productEditFormId}
@@ -1333,7 +1340,7 @@ const ProductDetailPage = () => {
                             </div>
                           )}
                         </div>
-                        {canManageStorePrices && storeRow.retailWholesaleEnabled ? <StoreExtraPrices storeId={storeRow.storeId} productId={productId} standard={storeRow.effectivePriceKgs} retail={storeRow.retailPriceKgs} wholesale={storeRow.wholesalePriceKgs} onSaved={() => { void storePricingQuery.refetch(); }} /> : null}
+                        {canManageStorePrices && storeRow.retailWholesaleEnabled && storeRow.storeId !== selectedSettingsStore?.storeId ? <StoreExtraPrices storeId={storeRow.storeId} productId={productId} currencyCode={storeRow.currencyCode} currencyRateKgsPerUnit={Number(storeRow.currencyRateKgsPerUnit)} retail={storeRow.retailPriceKgs} wholesale={storeRow.wholesalePriceKgs} onSaved={() => { void storePricingQuery.refetch(); }} /> : null}
                         {storeRow.variants.length ? (
                           <div className="mt-3 border-t border-border/70 pt-3">
                             <p className="mb-2 text-xs font-medium text-muted-foreground">
@@ -1350,7 +1357,7 @@ const ProductDetailPage = () => {
                                     <p className="truncate text-xs font-medium text-foreground">
                                       {resolveVariantLabel(variant)}
                                     </p>
-                                    {canManageStorePrices && storeRow.retailWholesaleEnabled ? <StoreExtraPrices storeId={storeRow.storeId} productId={productId} variantId={variant.variantId} standard={variant.effectivePriceKgs} retail={variant.retailPriceKgs} wholesale={variant.wholesalePriceKgs} onSaved={() => { void storePricingQuery.refetch(); }} /> : null}
+                                    {canManageStorePrices && storeRow.retailWholesaleEnabled && storeRow.storeId !== selectedSettingsStore?.storeId ? <StoreExtraPrices storeId={storeRow.storeId} productId={productId} variantId={variant.variantId} currencyCode={storeRow.currencyCode} currencyRateKgsPerUnit={Number(storeRow.currencyRateKgsPerUnit)} retail={variant.retailPriceKgs} wholesale={variant.wholesalePriceKgs} onSaved={() => { void storePricingQuery.refetch(); }} /> : null}
                                     <div className="mt-2 grid gap-2">
                                       {canManageStorePrices ? (
                                         <div className="flex items-center gap-2">

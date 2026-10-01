@@ -1,3 +1,4 @@
+import { getLoyaltyOrderSummary } from "./loyalty/orderSummary";
 import { resolveStoreSellingPrice, type StorePriceMode } from "@/server/services/storeSellingPrice";
 import { assertSaleAssortment, lockAssortmentForSale } from "./assortmentPolicy";
 import {
@@ -3592,6 +3593,7 @@ export const getPosSale = async (input: {
 
   return {
     ...sale,
+    loyalty: await getLoyaltyOrderSummary(prisma, input.organizationId, sale.id),
     cashier: sale.createdBy,
     subtotalKgs: toMoney(sale.subtotalKgs),
     discountKgs: toMoney(sale.discountKgs),

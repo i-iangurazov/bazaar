@@ -9,6 +9,7 @@ import type { HelpHomeData } from "@/content/help/home-data";
 import { searchHelpDocuments } from "@/content/help/search-core";
 import type { HelpLocale } from "@/content/help/types";
 import { formatHelpCount, localize, localizedUi } from "@/content/help/ui";
+import { HelpLoyaltyPaths } from "./HelpLoyaltyPaths";
 import { HelpIcon } from "./HelpIcon";
 import { trackHelpEvent } from "./help-analytics";
 import styles from "./help.module.css";
@@ -197,9 +198,113 @@ export const HelpHome = ({ locale, data }: { locale: HelpLocale; data: HelpHomeD
         </div>
       </section>
 
-      <section id="tasks" className={styles.section}>
+      <nav className={styles.homeContents} aria-label={ui.onThisPage}>
+        <a href="#roles">{ui.roleTitle}</a>
+        <a href="#loyalty">
+          {localize(
+            { ru: "Бонусная программа", kg: "Бонус программасы", en: "Loyalty program" },
+            locale,
+          )}
+        </a>
+        <a href="#tasks">{ui.tasksTitle}</a>
+        <a href="#getting-started">{ui.journeyTitle}</a>
+        <a href="#categories">{ui.categoriesTitle}</a>
+      </nav>
+
+      <section id="roles" className={styles.section}>
         <div className={styles.sectionHeading}>
           <span>01</span>
+          <div>
+            <h2>{ui.roleTitle}</h2>
+            <p>{ui.roleSubtitle}</p>
+          </div>
+        </div>
+        <div className={styles.roleTabs} role="tablist" aria-label={ui.roleTitle}>
+          {data.roles.map((track) => (
+            <button
+              key={track.role}
+              type="button"
+              role="tab"
+              id={`help-role-${track.role}`}
+              aria-controls="help-role-panel"
+              aria-selected={track.role === selectedRole}
+              className={track.role === selectedRole ? styles.roleTabActive : styles.roleTab}
+              onClick={() => setSelectedRole(track.role)}
+            >
+              {track.title}
+            </button>
+          ))}
+        </div>
+        {roleTrack ? (
+          <div
+            className={styles.rolePanel}
+            role="tabpanel"
+            id="help-role-panel"
+            aria-labelledby={`help-role-${roleTrack.role}`}
+          >
+            <div>
+              <span className={styles.roleOrb}>
+                <HelpIcon
+                  name={
+                    roleTrack.role === "cashier"
+                      ? "register"
+                      : roleTrack.role === "stockkeeper"
+                        ? "inventory"
+                        : roleTrack.role === "manager"
+                          ? "products"
+                          : "dashboard"
+                  }
+                />
+              </span>
+              <h3>{roleTrack.title}</h3>
+              <p>{roleTrack.description}</p>
+            </div>
+            <div className={styles.roleLinks}>
+              {roleTrack.guides.map((guide) => {
+                return (
+                  <Link key={guide.id} href={`/help/${guide.id}`}>
+                    <CheckIcon aria-hidden />
+                    {guide.title}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+      </section>
+
+      <section id="loyalty" className={styles.section}>
+        <div className={styles.sectionHeading}>
+          <span>02</span>
+          <div>
+            <h2>
+              {localize(
+                {
+                  ru: "Бонусная программа: от запуска до покупки",
+                  kg: "Бонус программасы: баштоодон сатып алууга чейин",
+                  en: "Loyalty: from setup to checkout",
+                },
+                locale,
+              )}
+            </h2>
+            <p>
+              {localize(
+                {
+                  ru: "Выберите свою задачу. Для владельца, кассира и покупателя — отдельные инструкции.",
+                  kg: "Өз милдетиңизди тандаңыз. Дүкөн ээси, кассир жана кардар үчүн өзүнчө нускамалар.",
+                  en: "Choose your task. Separate instructions for owners, cashiers and customers.",
+                },
+                locale,
+              )}
+            </p>
+          </div>
+        </div>
+        <HelpLoyaltyPaths locale={locale} />
+      </section>
+
+      <section id="tasks" className={styles.section}>
+        <div className={styles.sectionHeading}>
+          <span>03</span>
           <div>
             <h2>{ui.tasksTitle}</h2>
             <p>{ui.tasksSubtitle}</p>
@@ -228,7 +333,7 @@ export const HelpHome = ({ locale, data }: { locale: HelpLocale; data: HelpHomeD
 
       <section id="getting-started" className={`${styles.section} ${styles.journeySection}`}>
         <div className={styles.sectionHeading}>
-          <span>02</span>
+          <span>04</span>
           <div>
             <h2>{ui.journeyTitle}</h2>
             <p>{ui.journeySubtitle}</p>
@@ -279,64 +384,9 @@ export const HelpHome = ({ locale, data }: { locale: HelpLocale; data: HelpHomeD
         ) : null}
       </section>
 
-      <section id="roles" className={styles.section}>
+      <section id="categories" className={`${styles.section} ${styles.categoriesSection}`}>
         <div className={styles.sectionHeading}>
-          <span>03</span>
-          <div>
-            <h2>{ui.roleTitle}</h2>
-            <p>{ui.roleSubtitle}</p>
-          </div>
-        </div>
-        <div className={styles.roleTabs} role="tablist" aria-label={ui.roleTitle}>
-          {data.roles.map((track) => (
-            <button
-              key={track.role}
-              type="button"
-              role="tab"
-              aria-selected={track.role === selectedRole}
-              className={track.role === selectedRole ? styles.roleTabActive : styles.roleTab}
-              onClick={() => setSelectedRole(track.role)}
-            >
-              {track.title}
-            </button>
-          ))}
-        </div>
-        {roleTrack ? (
-          <div className={styles.rolePanel} role="tabpanel">
-            <div>
-              <span className={styles.roleOrb}>
-                <HelpIcon
-                  name={
-                    roleTrack.role === "cashier"
-                      ? "register"
-                      : roleTrack.role === "stockkeeper"
-                        ? "inventory"
-                        : roleTrack.role === "manager"
-                          ? "products"
-                          : "dashboard"
-                  }
-                />
-              </span>
-              <h3>{roleTrack.title}</h3>
-              <p>{roleTrack.description}</p>
-            </div>
-            <div className={styles.roleLinks}>
-              {roleTrack.guides.map((guide) => {
-                return (
-                  <Link key={guide.id} href={`/help/${guide.id}`}>
-                    <CheckIcon aria-hidden />
-                    {guide.title}
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        ) : null}
-      </section>
-
-      <section className={`${styles.section} ${styles.categoriesSection}`}>
-        <div className={styles.sectionHeading}>
-          <span>04</span>
+          <span>05</span>
           <div>
             <h2>{ui.categoriesTitle}</h2>
             <p>
@@ -363,9 +413,7 @@ export const HelpHome = ({ locale, data }: { locale: HelpLocale; data: HelpHomeD
                 <span>
                   <strong>{category.title}</strong>
                   <small>{category.description}</small>
-                  <em>
-                    {formatHelpCount(category.count, "guide", locale)}
-                  </em>
+                  <em>{formatHelpCount(category.count, "guide", locale)}</em>
                 </span>
                 <ArrowRightIcon aria-hidden />
               </Link>

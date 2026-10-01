@@ -269,7 +269,7 @@ describe("pos entry navigation", () => {
     expect(pageSource).toContain('window.matchMedia("(max-width: 767px)")');
     expect(pageSource).toContain("const DesktopPosSaleView = () => (");
     expect(pageSource).toContain("const MobilePosView = () => {");
-    expect(pageSource).toContain("return isPhoneScreen ? MobilePosView() : DesktopPosSaleView();");
+    expect(pageSource).toContain("{isPhoneScreen ? MobilePosView() : DesktopPosSaleView()}");
     expect(pageSource).toContain("const MobileCustomerSheet = () => {");
     expect(pageSource).toContain("{MobileCustomerSheet()}");
     expect(pageSource).not.toContain("<MobileCustomerSheet />");
@@ -470,7 +470,7 @@ describe("pos entry navigation", () => {
     expect(pageSource).toContain("open={mobileExitConfirmationOpen}");
     expect(pageSource).toContain('title={t("sell.mobile.exitTitle")}');
     expect(pageSource).toContain("onClick={requestMobileExit}");
-    expect(pageSource).toContain("return isPhoneScreen ? MobilePosView() : DesktopPosSaleView();");
+    expect(pageSource).toContain("{isPhoneScreen ? MobilePosView() : DesktopPosSaleView()}");
   });
 
   it("renders cashier products as readable rows with in-cart quantity controls", async () => {

@@ -317,76 +317,147 @@ export const loyaltyGuides: HelpGuide[] = [
     appRoute: "/pos/sell",
     steps: [
       {
-        title: t("Соберите корзину", "Себетти толтуруңуз", "Prepare the cart"),
+        title: t(
+          "Соберите чек и откройте «Бонусы»",
+          "Чекти түзүп, «Бонустар» бөлүмүн ачыңыз",
+          "Build the receipt and open Rewards",
+        ),
         body: t(
-          "Выберите магазин с включённой программой и откройте смену. Добавьте товары, проверьте количество, тип цены и ручные изменения. Завершите редактирование цен до применения бонусов: расчёт зависит от текущего состава корзины.",
-          "Программа күйгүзүлгөн дүкөндү тандап, сменаны ачыңыз. Товарларды кошуп, санын, баа түрүн жана кол менен өзгөртүүлөрдү текшериңиз. Бонус колдонуудан мурун бааларды түзөтүүнү бүтүрүңүз: эсеп учурдагы себетке жараша болот.",
-          "Select a participating store and open a shift. Add products and check quantities, price mode, and manual changes. Finish editing prices before applying loyalty; the calculation depends on the current cart.",
+          "Откройте смену в магазине программы и добавьте товары. Нажмите компактную кнопку «Бонусы» справа от флажка «Онлайн-продажа». На телефоне этот блок есть в документе и на вкладке оплаты.",
+          "Программадагы дүкөндө сменаны ачып, товарларды кошуңуз. «Онлайн сатуу» белгисинин оң жагындагы «Бонустар» баскычын басыңыз. Телефондо бул бөлүм документте жана төлөм өтмөгүндө бар.",
+          "Open a shift in a participating store and add products. Select the compact Rewards button to the right of the Online sale checkbox. On a phone, the block is available in the document and payment tabs.",
+        ),
+        media: {
+          src: "/guide/loyalty-pos-entry.webp",
+          aspectRatio: 1440 / 1000,
+          alt: t(
+            "Кнопка «Бонусы» справа от «Онлайн-продажа»",
+            "«Онлайн сатуу» белгисинин оң жагындагы «Бонустар» баскычы",
+            "Rewards button to the right of Online sale",
+          ),
+          annotations: [{ number: 1, x: 94, y: 68, label: t("Бонусы в одной строке с онлайн-продажей", "Бонустар онлайн сатуу менен бир сапта", "Rewards on the same row as Online sale") }],
+        },
+      },
+      {
+        title: t(
+          "Найдите карту или зарегистрируйте покупателя",
+          "Картаны табыңыз же кардарды каттаңыз",
+          "Find a card or register the customer",
+        ),
+        body: t(
+          "Введите email регистрации и нажмите «Найти». Либо выберите «QR карты» и отсканируйте личный QR сканером или камерой. Сверьте найденного участника с покупателем.",
+          "Катталган email дарегин киргизип, «Табуу» баскычын басыңыз. Же «Картанын QR коду» бөлүмүнөн жеке QR кодду сканер же камера менен скандаңыз. Табылган катышуучуну кардар менен салыштырыңыз.",
+          "Enter the registration email and select Find. Or choose Card QR and scan the personal QR with a scanner or camera. Check that the member matches the customer.",
+        ),
+        checklist: [
+          t(
+            "Телефон работает, если полный номер сохранён в карте.",
+            "Толук телефон номери картада сакталса, издөө иштейт.",
+            "Phone lookup works when the full number is saved on the card.",
+          ),
+          t(
+            "Нет карты: нажмите «Нет карты? Показать QR регистрации». Покупатель сканирует его своим телефоном и подтверждает email. Затем найдите его карту в том же окне кассы.",
+            "Карта жок болсо, «Карта жокпу? Катталуу QR кодун көрсөтүү» баскычын басыңыз. Кардар аны өз телефону менен скандап, email дарегин ырастайт. Андан кийин ошол эле касса терезесинен картасын табыңыз.",
+            "No card: select No card? Show registration QR. The customer scans it on their phone and verifies their email. Then find their card in the same POS window.",
+          ),
+        ],
+      },
+      {
+        title: t(
+          "Выберите накопление или списание",
+          "Топтоону же упай колдонууну тандаңыз",
+          "Choose earning or redemption",
+        ),
+        body: t(
+          "Проверьте доступный баланс, скидку участника и максимум списания. Объясните покупателю сумму к оплате и баллы после полной оплаты.",
+          "Жеткиликтүү балансты, катышуучунун арзандатуусун жана колдонуу чегин текшериңиз. Кардарга төлөнчү сумманы жана толук төлөгөндөн кийин топтолуучу упайларды түшүндүрүңүз.",
+          "Check available points, the member discount and the redemption limit. Explain the money due and points earned after full payment.",
+        ),
+        media: {
+          src: "/guide/loyalty-pos-card.webp",
+          aspectRatio: 512 / 644,
+          alt: t(
+            "Учебная карта покупателя в окне бонусов POS",
+            "POS бонус терезесиндеги окуу кардар картасы",
+            "Demo customer card in POS rewards",
+          ),
+          annotations: [
+            {
+              number: 1,
+              x: 55,
+              y: 32,
+              label: t(
+                "Сверьте баланс и максимум списания",
+                "Балансты жана колдонуу чегин салыштырыңыз",
+                "Check the balance and redemption limit",
+              ),
+            },
+            {
+              number: 2,
+              x: 83,
+              y: 60,
+              label: t(
+                "Выберите баллы или накопление без списания",
+                "Упай колдонууну же колдонбостон топтоону тандаңыз",
+                "Choose points or earning without redemption",
+              ),
+            },
+          ],
+        },
+        checklist: [
+          t(
+            "Накопить: нажмите «Без списания», затем «Применить».",
+            "Топтоо: «Упай колдонбостон», андан кийин «Колдонуу» баскычын басыңыз.",
+            "Earn: choose Earn only, then Apply.",
+          ),
+          t(
+            "Потратить: введите число баллов или нажмите «Списать максимум». Затем получите подтверждение, как описано ниже.",
+            "Колдонуу: упай санын киргизиңиз же «Эң көбүн колдонуу» баскычын басыңыз. Андан кийин төмөндө көрсөтүлгөндөй ырастоо алыңыз.",
+            "Redeem: enter a point amount or choose Use maximum. Then obtain approval as described below.",
+          ),
+        ],
+      },
+      {
+        title: t(
+          "Дождитесь подтверждения списания",
+          "Упай колдонуунун ырасталышын күтүңүз",
+          "Wait for redemption approval",
+        ),
+        body: t(
+          "Нажмите «Запросить подтверждение». Покупатель открывает свою карту на телефоне, проверяет баллы и сумму и нажимает «Подтвердить списание». Кассир остаётся в POS. Когда появится «Покупатель подтвердил», нажмите «Применить».",
+          "«Ырастоону суроо» баскычын басыңыз. Кардар телефондо картасын ачып, упайларды жана сумманы текшерип, «Упай колдонууну ырастоо» баскычын басат. Кассир POS ичинде калат. «Кардар ырастады» чыкканда «Колдонуу» баскычын басыңыз.",
+          "Select Request approval. The customer opens their card on their phone, checks the points and total, and confirms redemption. The cashier stays in POS. When Customer approved appears, select Apply.",
+        ),
+        checklist: [
+          t(
+            "Запрос истёк: отправьте его снова. Без подтверждения списать баллы нельзя.",
+            "Суроонун мөөнөтү өтсө, кайра жөнөтүңүз. Ырастоосуз упай колдонууга болбойт.",
+            "Request expired: send it again. Points cannot be spent without approval.",
+          ),
+        ],
+      },
+      {
+        title: t(
+          "Проверьте итог и примите оплату",
+          "Жыйынтыкты текшерип, төлөмдү алыңыз",
+          "Check the total and take payment",
+        ),
+        body: t(
+          "В окне «Бонусы» видны участник, баллы к списанию и ожидаемое начисление. Примите оставшуюся сумму обычным способом и завершите чек. После оплаты касса покажет фактически списанные и начисленные баллы. При продаже в долг начисление ждёт полной оплаты.",
+          "«Бонустар» терезесинде катышуучу, колдонула турган упайлар жана күтүлгөн топтоо көрүнөт. Калган сумманы кадимки ыкма менен алып, чекти бүтүрүңүз. Төлөгөндөн кийин касса иш жүзүндө колдонулган жана топтолгон упайларды көрсөтөт. Карызга сатууда топтоо толук төлөмдү күтөт.",
+          "The Rewards window shows the member, points to redeem and expected earnings. Take the remaining payment normally and complete the receipt. The POS then shows actual redeemed and earned points. A credit sale earns points after full payment.",
         ),
       },
       {
         title: t(
-          "Найдите покупателя по личному QR",
-          "Кардарды жеке QR аркылуу табыңыз",
-          "Find the customer using their personal QR",
+          "Если чек изменился или покупка отменена",
+          "Чек өзгөрсө же сатып алуу жокко чыгарылса",
+          "If the receipt changes or the purchase is cancelled",
         ),
         body: t(
-          "Откройте выбор покупателя в верхней части кассы и раздел «Бонусы». Если покупатель уже выбран, откройте его редактирование. Попросите показать QR с личной карты, отсканируйте его в окне бонусов и найдите участника. Сверьте покупателя перед применением.",
-          "Кассанын жогору жагындагы кардар тандоону жана «Бонустар» бөлүмүн ачыңыз. Кардар тандалган болсо, аны түзөтүүнү ачыңыз. Жеке картадан QR көрсөтүүнү сурап, бонус терезесинен сканерлеп, катышуучуну табыңыз. Колдонуудан мурун кардарды салыштырыңыз.",
-          "Open the customer selector at the top of the POS and the Bonuses section. If a customer is already selected, open their edit control. Ask for the QR from their personal card, scan it in the loyalty window, and find the member. Verify the customer before applying.",
-        ),
-      },
-      {
-        title: t(
-          "Объясните сумму и выберите баллы",
-          "Сумманы түшүндүрүп, упайларды тандаңыз",
-          "Explain the total and choose points",
-        ),
-        body: t(
-          "Проверьте исходную сумму, скидку участника, доступные баллы, максимум списания, итог к оплате и ожидаемое начисление. Для накопления укажите 0 к списанию. Для использования баллов согласуйте число в пределах показанного максимума. При изменении скидок и состава корзины ориентируйтесь на новый расчёт Bazaar.",
-          "Баштапкы сумманы, катышуучунун арзандатуусун, жеткиликтүү упайларды, колдонуу чегин, төлөмдү жана күтүлгөн топтоону текшериңиз. Топтоо үчүн колдонууга 0 жазыңыз. Упай колдонууда көрсөтүлгөн чектеги санды макулдашыңыз. Арзандатуу же себет өзгөрсө, Bazaar'дын жаңы эсебин колдонуңуз.",
-          "Check the original amount, member discount, available points, redemption maximum, money due, and expected earnings. Enter 0 to earn without redeeming. Agree on a redemption amount within the displayed limit. When discounts or cart contents change, use Bazaar's refreshed calculation.",
-        ),
-        note: t(
-          "Пример без акций: товар 1 000 сом, скидка 5%, начисление 5%, лимит 50%, баланс 1 000 баллов. После скидки — 950 сом; можно списать 475 баллов, оплатить 475 сом и получить 23 балла. Новый баланс — 548 баллов при отсутствии других операций.",
-          "Акциясыз мисал: товар 1 000 сом, арзандатуу 5%, топтоо 5%, чек 50%, баланс 1 000 упай. Арзандатуудан кийин — 950 сом; 475 упай колдонуп, 475 сом төлөп, 23 упай алууга болот. Башка операция жок болсо жаңы баланс — 548 упай.",
-          "Example without promotions: a 1,000 som item, 5% discount, 5% earning rate, 50% cap, and a 1,000-point balance. After discount the total is 950 som; redeem 475 points, pay 475 som, and earn 23 points. The new balance is 548 points if there are no other transactions.",
-        ),
-      },
-      {
-        title: t(
-          "Получите подтверждение покупателя",
-          "Кардардын ырастоосун алыңыз",
-          "Get customer approval",
-        ),
-        body: t(
-          "При списании отправьте запрос на подтверждение из окна бонусов. Покупатель открывает свою карту и подтверждает именно эту покупку и количество баллов. Дождитесь подтверждения и примените бонусы. Если запрос истёк или корзина изменилась, отправьте новый запрос с актуальным расчётом.",
-          "Упай колдонууда бонус терезесинен ырастоо суроосун жөнөтүңүз. Кардар өз картасын ачып, ушул сатып алууну жана упай санын ырастайт. Ырастоону күтүп, бонустарды колдонуңуз. Суроонун мөөнөтү өтсө же себет өзгөрсө, жаңы эсеп менен кайра сураңыз.",
-          "For redemption, send an approval request from the loyalty window. The customer opens their card and approves this purchase and point amount. Wait for approval and apply loyalty. If the request expires or the cart changes, send a new request with the updated calculation.",
-        ),
-      },
-      {
-        title: t(
-          "Примите деньги и завершите чек",
-          "Акчаны кабыл алып, чекти бүтүрүңүз",
-          "Take payment and complete the receipt",
-        ),
-        body: t(
-          "Вернувшись в корзину, сверьте итог и перейдите к оплате. Примите оставшуюся сумму выбранным способом и завершите чек. Списанные баллы не являются оплатой наличными или картой. Начисление появляется после полной оплаты; незавершённый или отложенный чек сам по себе баллов не начисляет.",
-          "Себетке кайтып, жыйынтыкты салыштырып, төлөмгө өтүңүз. Калган сумманы тандалган ыкма менен алып, чекти бүтүрүңүз. Колдонулган упайлар накталай же карта төлөмү болуп эсептелбейт. Упай толук төлөгөндөн кийин түшөт; бүтпөгөн же жылдырылган чек өзү упай бербейт.",
-          "Back in the cart, verify the total and proceed to payment. Collect the remaining amount using the selected method and complete the receipt. Redeemed points are not cash or card payments. Points are earned after full payment; an unfinished or held receipt does not itself earn points.",
-        ),
-      },
-      {
-        title: t(
-          "Сверьте результат с покупателем",
-          "Жыйынтыкты кардар менен салыштырыңыз",
-          "Check the result with the customer",
-        ),
-        body: t(
-          "Попросите покупателя обновить карту и проверить запись покупки. Для повторного обращения используйте номер чека и историю карты. Если покупка отменяется, отмените чек обычным действием в Bazaar: удержанные баллы освободятся. Не создавайте второй чек только для исправления баланса.",
-          "Кардардан картаны жаңыртып, сатып алуу жазуусун текшерүүнү сураңыз. Кайра кайрылганда чек номерин жана карта тарыхын колдонуңуз. Сатып алуу токтотулса, Bazaar'дагы кадимки аракет менен чекти жокко чыгарыңыз: кармалган упайлар бошотулат. Балансты оңдоо үчүн гана экинчи чек түзбөңүз.",
-          "Ask the customer to refresh their card and check the purchase entry. Use the receipt reference and card history for later questions. If the purchase is cancelled, cancel the receipt through Bazaar to release held points. Do not create a second receipt just to correct the balance.",
+          "Изменение товаров, количества или цены снимает ранее применённые бонусы. Снова откройте «Бонусы»: карта останется выбранной, но для нового списания нужно новое подтверждение. Чтобы продать без бонусов, откройте «Бонусы» и нажмите «Убрать бонусы». Отмена всего чека освобождает удержанные баллы.",
+          "Товарлар, саны же баасы өзгөрсө, мурда колдонулган бонустар алынат. «Бонустар» бөлүмүн кайра ачыңыз: карта тандалган бойдон калат, бирок жаңы колдонуу үчүн жаңы ырастоо керек. Бонуссуз сатуу үчүн «Бонустар» бөлүмүн ачып, «Бонустарды алып салуу» баскычын басыңыз. Чекти толугу менен жокко чыгаруу кармалган упайларды бошотот.",
+          "Changing products, quantities or prices removes applied rewards. Open Rewards again: the member stays selected, but new redemption needs fresh approval. To sell without rewards, open Rewards and select Remove rewards. Cancelling the whole receipt frees held points.",
         ),
       },
     ],

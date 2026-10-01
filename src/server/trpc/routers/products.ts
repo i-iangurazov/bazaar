@@ -103,6 +103,14 @@ const assertSingleProductAccess = async (
   }
 };
 
+const assertProductStoreAccess = async (...args: Parameters<typeof assertUserCanAccessStore>) => {
+  try {
+    await assertUserCanAccessStore(...args);
+  } catch (error) {
+    throw toTRPCError(error);
+  }
+};
+
 export const productsRouter = router({
   descriptionGenerationAvailability: protectedProcedure.query(() => ({
     enabled: isAiDescriptionGenerationEnabled(),
@@ -253,7 +261,7 @@ export const productsRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "inventoryAdminRequired" });
       }
       if (input.storeId) {
-        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+        await assertProductStoreAccess(ctx.prisma, ctx.user, input.storeId);
       }
       return createProductMutation({
         organizationId: ctx.user.organizationId,
@@ -268,7 +276,7 @@ export const productsRouter = router({
     .mutation(async ({ ctx, input }) => {
       await assertSingleProductAccess(ctx.prisma, ctx.user, input.productId, { writable: true });
       if (input.storeId) {
-        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+        await assertProductStoreAccess(ctx.prisma, ctx.user, input.storeId);
       }
       return updateProductMutation({
         organizationId: ctx.user.organizationId,

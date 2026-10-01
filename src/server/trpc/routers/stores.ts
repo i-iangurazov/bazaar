@@ -164,6 +164,7 @@ export const storesRouter = router({
       enableSku: true,
       enableBarcode: true,
       enableSimilarProductCheck: true,
+      organization: { select: { retailWholesaleEnabled: true } },
       productCatalogId: true,
       productCatalog: {
         select: {

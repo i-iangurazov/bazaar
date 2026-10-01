@@ -29,6 +29,7 @@ export type HelpAnnotation = {
 export type HelpMedia = {
   src: string;
   mobileSrc?: string;
+  aspectRatio?: number;
   alt: LocalizedText;
   annotations: HelpAnnotation[];
 };
