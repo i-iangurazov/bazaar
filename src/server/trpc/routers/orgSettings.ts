@@ -47,6 +47,7 @@ export const orgSettingsRouter = router({
           actorId: ctx.user.id,
           requestId: ctx.requestId,
           organizationName: input.organizationName,
+          retailWholesaleEnabled: input.retailWholesaleEnabled,
           storeId: input.storeId,
           legalEntityType: input.legalEntityType ?? null,
           legalName: input.legalName ?? null,

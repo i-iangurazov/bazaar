@@ -553,9 +553,9 @@ const resolveUnitPrice = async (input: {
     },
   });
 
-  const store = await tx.store.findFirstOrThrow({ where: { id: storeId, organizationId }, select: { retailWholesaleEnabled: true } });
-  const extras = store.retailWholesaleEnabled ? await tx.storePriceTypes.findUnique({ where: { organizationId_storeId_productId_variantKey: { organizationId, storeId, productId, variantKey } } }) : null;
-  const selected = resolveStoreSellingPrice({ enabled: store.retailWholesaleEnabled, mode: input.priceMode ?? "RETAIL", standard: override?.priceKgs ?? product.basePriceKgs ?? new Prisma.Decimal(0), retail: extras?.retailPriceKgs, wholesale: extras?.wholesalePriceKgs });
+  const organization = await tx.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { retailWholesaleEnabled: true } });
+  const extras = organization.retailWholesaleEnabled ? await tx.storePriceTypes.findUnique({ where: { organizationId_storeId_productId_variantKey: { organizationId, storeId, productId, variantKey } } }) : null;
+  const selected = resolveStoreSellingPrice({ enabled: organization.retailWholesaleEnabled, mode: input.priceMode ?? "RETAIL", standard: override?.priceKgs ?? product.basePriceKgs ?? new Prisma.Decimal(0), retail: extras?.retailPriceKgs, wholesale: extras?.wholesalePriceKgs });
   const effective = getEffectiveProductPrice({
     basePrice: selected.price,
     discount:

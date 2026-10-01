@@ -4940,7 +4940,7 @@
     },
     "business": {
       "retailWholesaleEnabled": "Retail and wholesale prices",
-      "retailWholesaleHint": "For the selected store only. Turning off keeps saved prices.",
+      "retailWholesaleHint": "Applies to the entire organization and all its stores. Turning it off keeps saved prices.",
       "title": "Business details",
       "organizationName": "Business name",
       "store": "Store",

@@ -13,7 +13,7 @@ describeDb("feature acceptance across money, prices, stock and exports", () => {
   const fixture = async () => {
     const f = await seedBase({ plan: "ENTERPRISE" });
     await prisma.product.update({ where: { id: f.product.id }, data: { basePriceKgs: 1000 } });
-    await prisma.store.update({ where: { id: f.store.id }, data: { retailWholesaleEnabled: true } });
+    await prisma.organization.update({ where: { id: f.org.id }, data: { retailWholesaleEnabled: true } });
     const caller = createTestCaller({ ...f.adminUser, organizationId: f.org.id });
     const cashier = createTestCaller({ ...f.cashierUser, organizationId: f.org.id });
     const register = await caller.pos.registers.create({ storeId: f.store.id, code: "FEATURE", name: "Acceptance" });
@@ -96,7 +96,7 @@ describeDb("feature acceptance across money, prices, stock and exports", () => {
     expect(Number((await prisma.customerOrder.findUniqueOrThrow({ where: { id: sale.id } })).totalKgs)).toBe(80);
     expect(result.application.pointsEarned).toBe(0);
   });
-  it("selects variant prices without changing base lines and keeps disabled stores on standard prices", async () => {
+  it("selects variant prices without changing base lines and uses standard prices when disabled organization-wide", async () => {
     const f = await fixture();
     const variant = await prisma.productVariant.create({ data: { productId: f.product.id, name: "Black", attributes: {} } });
     await f.caller.storePrices.upsert({ storeId: f.store.id, productId: f.product.id, variantId: variant.id, retailPriceKgs: 1200, wholesalePriceKgs: 0 });
@@ -105,9 +105,10 @@ describeDb("feature acceptance across money, prices, stock and exports", () => {
     expect(lines.find(l => !l.variantId)?.unitPriceKgs.toNumber()).toBe(1000);
     expect(lines.find(l => l.variantId)?.unitPriceKgs.toNumber()).toBe(0);
     await f.cashier.pos.sales.cancelDraft({ saleId: sale.id });
-    await prisma.store.update({ where: { id: f.store.id }, data: { retailWholesaleEnabled: false } });
+    await prisma.organization.update({ where: { id: f.org.id }, data: { retailWholesaleEnabled: false } });
     const disabled = await f.cashier.pos.sales.createDraft({ registerId: f.register.id, priceMode: "WHOLESALE", lines: [{ productId: f.product.id, variantId: variant.id, qty: 1 }] });
     expect(Number((await prisma.customerOrder.findUniqueOrThrow({ where: { id: disabled.id } })).totalKgs)).toBe(1000);
+    await expect(f.cashier.posTools.changePriceMode({ saleId: disabled.id, mode: "RETAIL" })).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
   it("requires transfer permission, preserves the sale, and posts only one OUT/IN pair on replay", async () => {
     const f = await fixture();

@@ -21,10 +21,10 @@ async function main() {
     const organizationId = "local-feature-acceptance-20261001";
     const existing = await prisma.organization.findUnique({ where: { id: organizationId } });
     if (existing && existing.name !== "Bazaar · учебная приёмка 01.10.2026") throw new Error("Fixture organization identity mismatch.");
-    await prisma.organization.upsert({ where: { id: organizationId }, create: { id: organizationId, name: "Bazaar · учебная приёмка 01.10.2026", plan: "ENTERPRISE" }, update: {} });
+    await prisma.organization.upsert({ where: { id: organizationId }, create: { id: organizationId, name: "Bazaar · учебная приёмка 01.10.2026", plan: "ENTERPRISE", retailWholesaleEnabled: true }, update: {} });
     const stores = [];
-    for (const [code, name, enabled] of [["DEMO-A", "Учебный · Центр", true], ["DEMO-B", "Учебный · Склад", false]] as const) {
-      stores.push(await prisma.store.upsert({ where: { organizationId_code: { organizationId, code } }, create: { organizationId, code, name, retailWholesaleEnabled: enabled }, update: {} }));
+    for (const [code, name] of [["DEMO-A", "Учебный · Центр"], ["DEMO-B", "Учебный · Склад"]] as const) {
+      stores.push(await prisma.store.upsert({ where: { organizationId_code: { organizationId, code } }, create: { organizationId, code, name }, update: {} }));
     }
     const users = [];
     for (const [login, role, transfer] of [["owner", "ADMIN", true], ["manager", "MANAGER", true], ["cashier", "CASHIER", true], ["limited", "CASHIER", false]] as const) {

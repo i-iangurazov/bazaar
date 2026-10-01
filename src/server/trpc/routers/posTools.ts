@@ -10,14 +10,14 @@ import { assertFeatureEnabled } from "@/server/services/planLimits";
 export const posToolsRouter = router({
   options: cashierProcedure.input(z.object({storeId: z.string()})).query(async ({ctx,input}) => {
     await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
-    const [store, actor, ids] = await Promise.all([
-      ctx.prisma.store.findUniqueOrThrow({where: {id: input.storeId}, select: {retailWholesaleEnabled: true}}),
+    const [organization, actor, ids] = await Promise.all([
+      ctx.prisma.organization.findUniqueOrThrow({where: {id: ctx.user.organizationId}, select: {retailWholesaleEnabled: true}}),
       ctx.prisma.user.findUniqueOrThrow({where: {id: ctx.user.id}, select: {canTransferStock: true, isActive: true}}),
       resolveAccessibleStoreIds(ctx.prisma, ctx.user),
     ]);
     const canTransfer = actor.isActive && (["ADMIN","MANAGER"].includes(ctx.user.role) || actor.canTransferStock);
     const stores = canTransfer ? await ctx.prisma.store.findMany({where: {organizationId: ctx.user.organizationId, id: {in: ids, not: input.storeId}}, select: {id: true, name: true}, orderBy: {name: "asc"}}) : [];
-    return {priceTypesEnabled: store.retailWholesaleEnabled, canTransfer, stores};
+    return {priceTypesEnabled: organization.retailWholesaleEnabled, canTransfer, stores};
   }),
   changePriceMode: cashierProcedure.input(z.object({saleId: z.string(), mode: z.enum(["RETAIL","WHOLESALE"]), confirmation: z.string().optional(), expectedTotal: z.number().optional()})).mutation(async ({ctx,input}) => {
     try { await assertFeatureEnabled({organizationId: ctx.user.organizationId, feature: "pos"}); return await changePosPriceMode({...input,user:ctx.user,requestId:ctx.requestId}); }

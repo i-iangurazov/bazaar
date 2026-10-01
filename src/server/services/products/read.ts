@@ -1138,7 +1138,7 @@ export const listProducts = async ({
   const advancedSqlPaginated = !paginatedOrderBy && !imageSortDbPaginated;
   const visibleSnapshotStoreIds = input?.storeId ? [input.storeId] : accessibleStoreIds;
   const pricingTime = new Date();
-  const priceTypesEnabled = Boolean(input?.priceMode && input.storeId && (await prisma.store.findUnique({where:{id:input.storeId},select:{retailWholesaleEnabled:true}}))?.retailWholesaleEnabled);
+  const priceTypesEnabled = Boolean(input?.priceMode && input.storeId && (await prisma.organization.findUnique({where:{id:organizationId},select:{retailWholesaleEnabled:true}}))?.retailWholesaleEnabled);
 
   const baseReadStartedAt = Date.now();
   const [total, products] = advancedSqlPaginated
@@ -1716,6 +1716,11 @@ export const getProductStorePricing = async ({
     throw new TRPCError({ code: "NOT_FOUND", message: "productNotFound" });
   }
 
+  const organization = await prisma.organization.findUniqueOrThrow({
+    where: { id: organizationId },
+    select: { retailWholesaleEnabled: true },
+  });
+
   const stores = await prisma.store.findMany({
     where: {
       organizationId,
@@ -1734,7 +1739,6 @@ export const getProductStorePricing = async ({
       trackExpiryLots: true,
       currencyCode: true,
       currencyRateKgsPerUnit: true,
-      retailWholesaleEnabled: true,
       enableSku: true,
       enableBarcode: true,
       enableSimilarProductCheck: true,
@@ -1871,7 +1875,7 @@ export const getProductStorePricing = async ({
       return {
         storeId: store.id,
         storeName: store.name,
-        retailWholesaleEnabled: store.retailWholesaleEnabled,
+        retailWholesaleEnabled: organization.retailWholesaleEnabled,
         retailPriceKgs: decimalToNumber(extraByKey.get(`${store.id}:BASE`)?.retailPriceKgs),
         wholesalePriceKgs: decimalToNumber(extraByKey.get(`${store.id}:BASE`)?.wholesalePriceKgs),
         trackExpiryLots: store.trackExpiryLots,

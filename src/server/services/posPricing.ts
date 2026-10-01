@@ -13,8 +13,8 @@ import type { StoreAccessUser } from "@/server/services/storeAccess";
 export async function changePosPriceMode(input: { saleId: string; mode: StorePriceMode; confirmation?: string; expectedTotal?: number; user: StoreAccessUser; requestId: string }) {
   return prisma.$transaction(async (tx) => {
     const sale = await lockPosSaleDraftForEdit(tx, { saleId: input.saleId, organizationId: input.user.organizationId, actorId: input.user.id, user: input.user });
-    const store = await tx.store.findUniqueOrThrow({ where: { id: sale.storeId } });
-    if (!store.retailWholesaleEnabled) throw new AppError("forbidden", "FORBIDDEN", 403);
+    const organization = await tx.organization.findUniqueOrThrow({ where: { id: input.user.organizationId }, select: { retailWholesaleEnabled: true } });
+    if (!organization.retailWholesaleEnabled) throw new AppError("forbidden", "FORBIDDEN", 403);
     if (sale.priceMode === input.mode) return { needsConfirmation: false, totalKgs: Number(sale.totalKgs), fingerprint: "", pointsReleased: false };
     const rows = await tx.customerOrderLine.findMany({ where: { customerOrderId: sale.id }, include: { product: { select: { basePriceKgs: true } } } });
     const prices = await tx.storePrice.findMany({ where: { organizationId: input.user.organizationId, storeId: sale.storeId, productId: { in: rows.map((row) => row.productId) } } });

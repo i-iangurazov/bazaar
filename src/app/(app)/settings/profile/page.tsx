@@ -215,8 +215,12 @@ const ProfilePage = () => {
         ? current
         : (businessData.selectedStore?.id ?? undefined),
     );
+    // Organization fields must survive switching the store whose details are being edited.
+    const pendingOrganizationFields = (["organizationName", "retailWholesaleEnabled"] as const)
+      .filter((name) => businessForm.getFieldState(name).isDirty)
+      .map((name) => ({ name, value: businessForm.getValues(name) }));
     businessForm.reset({
-      retailWholesaleEnabled: businessData.selectedStore.retailWholesaleEnabled,
+      retailWholesaleEnabled: businessData.organization.retailWholesaleEnabled,
       organizationName: businessData.organization.name,
       storeId: businessData.selectedStore.id,
       currencyCode: businessData.selectedStore.currencyCode ?? "KGS",
@@ -228,6 +232,9 @@ const ProfilePage = () => {
       address: businessData.selectedStore.address ?? "",
       phone: businessData.selectedStore.phone ?? "",
     });
+    for (const { name, value } of pendingOrganizationFields) {
+      businessForm.setValue(name, value, { shouldDirty: true });
+    }
     productSettingsForm.reset({
       storeId: businessData.selectedStore.id,
       enableSku: businessData.selectedStore.enableSku ?? true,
@@ -299,10 +306,9 @@ const ProfilePage = () => {
   });
 
   const updateBusinessMutation = trpc.orgSettings.updateBusinessProfile.useMutation({
-    onSuccess: (result) => {
-      businessQuery.refetch();
+    onSuccess: async (result) => {
       businessForm.reset({
-        retailWholesaleEnabled: result.selectedStore.retailWholesaleEnabled,
+        retailWholesaleEnabled: result.organization.retailWholesaleEnabled,
         organizationName: result.organization.name,
         storeId: result.selectedStore.id,
         currencyCode: result.selectedStore.currencyCode ?? "KGS",
@@ -314,6 +320,11 @@ const ProfilePage = () => {
         address: result.selectedStore.address ?? "",
         phone: result.selectedStore.phone ?? "",
       });
+      await Promise.all([
+        trpcUtils.orgSettings.getBusinessProfile.invalidate(),
+        trpcUtils.posTools.options.invalidate(),
+        trpcUtils.products.invalidate(),
+      ]);
       toast({ variant: "success", description: t("business.saved") });
     },
     onError: (error) => {
@@ -675,6 +686,21 @@ const ProfilePage = () => {
                   />
                   <FormField
                     control={businessForm.control}
+                    name="retailWholesaleEnabled"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
+                        <div>
+                          <FormLabel>{t("business.retailWholesaleEnabled")}</FormLabel>
+                          <FormDescription>{t("business.retailWholesaleHint")}</FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch checked={field.value} onCheckedChange={field.onChange} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={businessForm.control}
                     name="storeId"
                     render={({ field }) => (
                       <FormItem>
@@ -703,12 +729,6 @@ const ProfilePage = () => {
                       </FormItem>
                     )}
                   />
-                  <FormField control={businessForm.control} name="retailWholesaleEnabled" render={({field}) => (
-                    <FormItem className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
-                      <div><FormLabel>{t("business.retailWholesaleEnabled")}</FormLabel><FormDescription>{t("business.retailWholesaleHint")}</FormDescription></div>
-                      <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
-                    </FormItem>
-                  )} />
                   <FormField
                     control={businessForm.control}
                     name="currencyCode"

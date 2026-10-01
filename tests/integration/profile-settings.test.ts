@@ -25,6 +25,7 @@ describeDb("profile settings", () => {
     await expect(
       caller.orgSettings.updateBusinessProfile({
         organizationName: "Blocked Org",
+        retailWholesaleEnabled: true,
         storeId: store.id,
         legalEntityType: "IP",
         legalName: "Blocked Legal",
@@ -88,6 +89,78 @@ describeDb("profile settings", () => {
     const profile = await caller.userSettings.getMyProfile();
     expect(profile.preferredLocale).toBe("kg");
     expect(profile.themePreference).toBe("DARK");
+  });
+
+  it("saves price types through the profile API for all stores and keeps prices on disable", async () => {
+    const { org, store, adminUser, product } = await seedBase({ plan: "BUSINESS" });
+    const caller = createTestCaller({ ...adminUser, organizationId: org.id });
+    const secondStore = await prisma.store.create({
+      data: { organizationId: org.id, name: "Second Store", code: "SECOND" },
+    });
+    const otherOrg = await prisma.organization.create({ data: { name: "Other Org" } });
+    const otherStore = await prisma.store.create({
+      data: { organizationId: otherOrg.id, name: "Other Store", code: "OTHER" },
+    });
+    await prisma.storeProduct.create({
+      data: { organizationId: org.id, storeId: secondStore.id, productId: product.id, isActive: true, isDirect: true },
+    });
+    await prisma.product.update({ where: { id: product.id }, data: { basePriceKgs: 1000 } });
+    for (const storeId of [store.id, secondStore.id]) {
+      await caller.storePrices.upsert({ storeId, productId: product.id, retailPriceKgs: 0, wholesalePriceKgs: 800 });
+      expect((await caller.posTools.options({ storeId })).priceTypesEnabled).toBe(false);
+    }
+
+    const enabled = await caller.orgSettings.updateBusinessProfile({
+      organizationName: org.name, storeId: store.id, retailWholesaleEnabled: true,
+    });
+    expect(enabled.organization.retailWholesaleEnabled).toBe(true);
+    const pricing = await caller.products.storePricing({ productId: product.id });
+    expect(pricing.stores).toHaveLength(2);
+    expect(pricing.stores.every((row) => row.retailWholesaleEnabled)).toBe(true);
+    for (const storeId of [store.id, secondStore.id]) {
+      expect((await caller.orgSettings.getBusinessProfile({ storeId })).organization.retailWholesaleEnabled).toBe(true);
+      expect((await caller.posTools.options({ storeId })).priceTypesEnabled).toBe(true);
+      const prices = await caller.products.list({ storeId, priceMode: "WHOLESALE" });
+      expect(prices.items.find((item) => item.id === product.id)?.effectivePriceKgs).toBe(800);
+      const retail = await caller.products.list({ storeId, priceMode: "RETAIL" });
+      expect(retail.items.find((item) => item.id === product.id)?.effectivePriceKgs).toBe(0);
+    }
+    // The legacy column follows the organization, including stores created later.
+    const laterStore = await prisma.store.create({
+      data: { organizationId: org.id, name: "Later Store", code: "LATER" },
+    });
+    expect(laterStore.retailWholesaleEnabled).toBe(true);
+    const oldWriter = await prisma.store.update({ where: { id: secondStore.id }, data: { retailWholesaleEnabled: false } });
+    expect(oldWriter.retailWholesaleEnabled).toBe(true);
+    expect((await prisma.organization.findUniqueOrThrow({ where: { id: otherOrg.id } })).retailWholesaleEnabled).toBe(false);
+    expect((await prisma.store.findUniqueOrThrow({ where: { id: otherStore.id } })).retailWholesaleEnabled).toBe(false);
+    await expect(caller.orgSettings.updateBusinessProfile({
+      organizationName: org.name, storeId: otherStore.id, retailWholesaleEnabled: false,
+    })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect((await caller.orgSettings.getBusinessProfile()).organization.retailWholesaleEnabled).toBe(true);
+
+    // An older client that omits the optional field must not disable the setting.
+    await caller.orgSettings.updateBusinessProfile({ organizationName: org.name, storeId: secondStore.id });
+    expect((await caller.orgSettings.getBusinessProfile()).organization.retailWholesaleEnabled).toBe(true);
+    await caller.orgSettings.updateBusinessProfile({
+      organizationName: org.name, storeId: secondStore.id, retailWholesaleEnabled: false,
+    });
+    for (const storeId of [store.id, secondStore.id, laterStore.id]) {
+      expect((await caller.posTools.options({ storeId })).priceTypesEnabled).toBe(false);
+      expect((await prisma.store.findUniqueOrThrow({ where: { id: storeId } })).retailWholesaleEnabled).toBe(false);
+    }
+    const disabled = await caller.products.list({ storeId: secondStore.id, priceMode: "WHOLESALE" });
+    expect(disabled.items.find((item) => item.id === product.id)?.effectivePriceKgs).toBe(1000);
+    const savedPrices = await prisma.storePriceTypes.findMany({ where: { organizationId: org.id } });
+    expect(savedPrices).toHaveLength(2);
+    for (const prices of savedPrices) {
+      expect(prices.retailPriceKgs?.toNumber()).toBe(0);
+      expect(prices.wholesalePriceKgs?.toNumber()).toBe(800);
+    }
+    const audit = await prisma.auditLog.findFirstOrThrow({
+      where: { organizationId: org.id, action: "BUSINESS_PROFILE_UPDATE" }, orderBy: { createdAt: "desc" },
+    });
+    expect(audit.after).toMatchObject({ organization: { retailWholesaleEnabled: false } });
   });
 
   it("keeps product customization settings scoped to the selected store and organization", async () => {

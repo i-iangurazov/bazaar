@@ -43,7 +43,7 @@ const normalizeOptional = (value?: string | null) => {
 export const getBusinessProfile = async (input: GetBusinessProfileInput) => {
   const organization = await prisma.organization.findUnique({
     where: { id: input.organizationId },
-    select: { id: true, name: true },
+    select: { id: true, name: true, retailWholesaleEnabled: true },
   });
 
   if (!organization) {
@@ -63,7 +63,6 @@ export const getBusinessProfile = async (input: GetBusinessProfileInput) => {
       phone: true,
       currencyCode: true,
       currencyRateKgsPerUnit: true,
-      retailWholesaleEnabled: true,
       enableSku: true,
       enableBarcode: true,
       enableSimilarProductCheck: true,
@@ -83,6 +82,8 @@ export const getBusinessProfile = async (input: GetBusinessProfileInput) => {
   const serializedSelectedStore = selectedStore
     ? {
         ...selectedStore,
+        // Retain the response field for already-open clients; the organization owns it.
+        retailWholesaleEnabled: organization.retailWholesaleEnabled,
         currencyCode: normalizeCurrencyCode(selectedStore.currencyCode),
         currencyRateKgsPerUnit: Number(selectedStore.currencyRateKgsPerUnit),
       }
@@ -99,7 +100,7 @@ export const updateBusinessProfile = async (input: UpdateBusinessProfileInput) =
   const result = await prisma.$transaction(async (tx) => {
     const organization = await tx.organization.findUnique({
       where: { id: input.organizationId },
-      select: { id: true, name: true },
+      select: { id: true, name: true, retailWholesaleEnabled: true },
     });
     if (!organization) {
       throw new AppError("organizationNotFound", "NOT_FOUND", 404);
@@ -117,8 +118,7 @@ export const updateBusinessProfile = async (input: UpdateBusinessProfileInput) =
         phone: true,
         currencyCode: true,
         currencyRateKgsPerUnit: true,
-        retailWholesaleEnabled: true,
-      enableSku: true,
+        enableSku: true,
         enableBarcode: true,
         enableSimilarProductCheck: true,
       },
@@ -134,8 +134,13 @@ export const updateBusinessProfile = async (input: UpdateBusinessProfileInput) =
 
     const updatedOrganization = await tx.organization.update({
       where: { id: input.organizationId },
-      data: { name: input.organizationName.trim() },
-      select: { id: true, name: true },
+      data: {
+        name: input.organizationName.trim(),
+        ...(input.retailWholesaleEnabled === undefined
+          ? {}
+          : { retailWholesaleEnabled: input.retailWholesaleEnabled }),
+      },
+      select: { id: true, name: true, retailWholesaleEnabled: true },
     });
 
     const currencyCode = normalizeCurrencyCode(input.currencyCode);
@@ -150,7 +155,6 @@ export const updateBusinessProfile = async (input: UpdateBusinessProfileInput) =
     const updatedStore = await tx.store.update({
       where: { id: input.storeId },
       data: {
-        ...(input.retailWholesaleEnabled === undefined ? {} : { retailWholesaleEnabled: input.retailWholesaleEnabled }),
         legalEntityType: input.legalEntityType ?? null,
         legalName: normalizeOptional(input.legalName),
         inn,
@@ -170,8 +174,7 @@ export const updateBusinessProfile = async (input: UpdateBusinessProfileInput) =
         phone: true,
         currencyCode: true,
         currencyRateKgsPerUnit: true,
-        retailWholesaleEnabled: true,
-      enableSku: true,
+        enableSku: true,
         enableBarcode: true,
         enableSimilarProductCheck: true,
       },
@@ -179,6 +182,7 @@ export const updateBusinessProfile = async (input: UpdateBusinessProfileInput) =
 
     const serializedUpdatedStore = {
       ...updatedStore,
+      retailWholesaleEnabled: updatedOrganization.retailWholesaleEnabled,
       currencyCode: normalizeCurrencyCode(updatedStore.currencyCode),
       currencyRateKgsPerUnit: Number(updatedStore.currencyRateKgsPerUnit),
     };
