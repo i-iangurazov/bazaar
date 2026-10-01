@@ -1,3 +1,4 @@
+import { resolveLabelTextStyles, type LabelTextStyles } from "@/lib/labelTextStyles";
 import { PrinterPrintMode } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
@@ -121,6 +122,7 @@ export const getStorePrinterSettings = async (input: {
         labelShowStoreName: true,
         labelBarcodeHeightMm: true,
         labelFontSize: true,
+        labelTextStyles: true,
         labelRollGapMm: true,
         labelRollXOffsetMm: true,
         labelRollYOffsetMm: true,
@@ -212,6 +214,7 @@ export const getStorePrinterSettings = async (input: {
           labelShowStoreName: settings.labelShowStoreName,
           labelBarcodeHeightMm: settings.labelBarcodeHeightMm ?? defaultLabelBarcodeHeightMm,
           labelFontSize: settings.labelFontSize ?? defaultLabelFontSize,
+          labelTextStyles: resolveLabelTextStyles(settings.labelTextStyles, settings.labelFontSize),
           labelRollGapMm: settings.labelRollGapMm ?? defaultLabelRollGapMm,
           labelRollXOffsetMm: settings.labelRollXOffsetMm ?? defaultLabelRollXOffsetMm,
           labelRollYOffsetMm: settings.labelRollYOffsetMm ?? defaultLabelRollYOffsetMm,
@@ -273,6 +276,7 @@ export const getStorePrinterSettings = async (input: {
           labelShowStoreName: false,
           labelBarcodeHeightMm: defaultLabelBarcodeHeightMm,
           labelFontSize: defaultLabelFontSize,
+          labelTextStyles: resolveLabelTextStyles(null),
           labelRollGapMm: defaultLabelRollGapMm,
           labelRollXOffsetMm: defaultLabelRollXOffsetMm,
           labelRollYOffsetMm: defaultLabelRollYOffsetMm,
@@ -345,6 +349,7 @@ export const updateStorePrinterSettings = async (input: {
   labelShowStoreName?: boolean;
   labelBarcodeHeightMm?: number | null;
   labelFontSize?: number | null;
+  labelTextStyles?: LabelTextStyles;
   labelRollGapMm?: number | null;
   labelRollXOffsetMm?: number | null;
   labelRollYOffsetMm?: number | null;
@@ -454,6 +459,7 @@ export const updateStorePrinterSettings = async (input: {
         labelShowStoreName: input.labelShowStoreName ?? false,
         labelBarcodeHeightMm: input.labelBarcodeHeightMm ?? defaultLabelBarcodeHeightMm,
         labelFontSize: input.labelFontSize ?? defaultLabelFontSize,
+        labelTextStyles: input.labelTextStyles,
         labelRollGapMm: input.labelRollGapMm ?? defaultLabelRollGapMm,
         labelRollXOffsetMm: input.labelRollXOffsetMm ?? defaultLabelRollXOffsetMm,
         labelRollYOffsetMm: input.labelRollYOffsetMm ?? defaultLabelRollYOffsetMm,
@@ -524,6 +530,7 @@ export const updateStorePrinterSettings = async (input: {
         labelShowStoreName: input.labelShowStoreName,
         labelBarcodeHeightMm: input.labelBarcodeHeightMm ?? undefined,
         labelFontSize: input.labelFontSize ?? undefined,
+        labelTextStyles: input.labelTextStyles,
         labelRollGapMm: input.labelRollGapMm ?? undefined,
         labelRollXOffsetMm: input.labelRollXOffsetMm ?? undefined,
         labelRollYOffsetMm: input.labelRollYOffsetMm ?? undefined,
@@ -587,6 +594,7 @@ export const updateStorePrinterSettings = async (input: {
         labelShowStoreName: true,
         labelBarcodeHeightMm: true,
         labelFontSize: true,
+        labelTextStyles: true,
         labelRollGapMm: true,
         labelRollXOffsetMm: true,
         labelRollYOffsetMm: true,
@@ -638,6 +646,7 @@ export const updateStorePrinterSettings = async (input: {
       labelDefaultCopies: updated.labelDefaultCopies ?? defaultLabelCopies,
       labelBarcodeHeightMm: updated.labelBarcodeHeightMm ?? defaultLabelBarcodeHeightMm,
       labelFontSize: updated.labelFontSize ?? defaultLabelFontSize,
+      labelTextStyles: resolveLabelTextStyles(updated.labelTextStyles, updated.labelFontSize),
       labelRollGapMm: updated.labelRollGapMm ?? defaultLabelRollGapMm,
       labelRollXOffsetMm: updated.labelRollXOffsetMm ?? defaultLabelRollXOffsetMm,
       labelRollYOffsetMm: updated.labelRollYOffsetMm ?? defaultLabelRollYOffsetMm,

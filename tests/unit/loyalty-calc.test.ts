@@ -23,6 +23,9 @@ const oneThousandLine = (overrides: Partial<{ participates: boolean; promoDiscou
 ];
 
 describe("loyalty calculation", () => {
+  it.each([0, 0.00001, 0.0001, 0.001, 1.001])("rejects point value %s that could debit points with no money value", pointValueKgs => {
+    expect(() => calculateLoyalty({ rules: { ...rules, pointValueKgs }, lines: oneThousandLine(), availablePoints: 1000, requestedPoints: 1 })).toThrow("loyaltyInvalidPointValue");
+  });
   it("matches the 1000 KGS example: 5% member discount, 50% redeem cap, 5% earn", () => {
     const base = calculateLoyalty({ rules, lines: oneThousandLine(), availablePoints: 100000 });
     expect(base.memberDiscountKgs).toBe(50);

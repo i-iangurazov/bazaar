@@ -29,6 +29,7 @@ export const orgSettingsRouter = router({
     .input(
       z.object({
         organizationName: z.string().min(2),
+        retailWholesaleEnabled: z.boolean().optional(),
         storeId: z.string(),
         legalEntityType: z.nativeEnum(LegalEntityType).nullable().optional(),
         legalName: z.string().max(240).nullable().optional(),

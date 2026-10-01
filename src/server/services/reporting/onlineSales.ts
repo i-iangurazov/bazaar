@@ -138,7 +138,8 @@ export async function getOnlineSalesReport(
   const returnScope = Prisma.sql`r."organizationId" = ${input.organizationId}
     AND ${inStores(Prisma.sql`r."storeId"`, input.storeIds)}
     AND o."organizationId" = ${input.organizationId}
-    AND ${channelScope("o", channel)}`;
+    AND ${channelScope("o", channel)}
+    ${sourceScope("o", input.source ?? "all")}`;
 
   type SummaryRow = Record<string, unknown>;
   const [summary] = await client.$queryRaw<SummaryRow[]>(Prisma.sql`
@@ -187,12 +188,12 @@ export async function getOnlineSalesReport(
       (SELECT COALESCE(SUM(r."totalKgs"), 0)::float8 FROM returns_prev r) AS "prevReturnsKgs",
       (SELECT count(*)::int FROM completed_prev) AS "prevCompletedCount",
       (SELECT COALESCE(SUM(o."totalKgs"), 0)::float8 FROM completed_prev o) AS "prevCompletedGrossKgs",
-      (SELECT count(*)::int FROM "SalePayment" p WHERE p."organizationId" = ${input.organizationId}
+      (SELECT count(DISTINCT p."customerOrderId")::int FROM "SalePayment" p WHERE p."organizationId" = ${input.organizationId}
         AND p."isRefund" = false AND p."customerOrderId" IN (SELECT id FROM completed)) AS "paidOrderCount",
       (SELECT COALESCE(SUM(p."amountKgs"), 0)::float8 FROM "SalePayment" p WHERE p."organizationId" = ${input.organizationId}
         AND p."isRefund" = false AND p."customerOrderId" IN (SELECT id FROM completed)) AS "paidKgs",
       (SELECT COALESCE(SUM(o."totalKgs"), 0)::float8 FROM completed o WHERE o."isDebt" = true AND o."debtSettledAt" IS NULL) AS "debtKgs",
-      (SELECT count(*)::int FROM unknown_created) AS "unknownCreatedCount",
+      (SELECT count::int FROM unknown_created) AS "unknownCreatedCount",
       COALESCE((SELECT json_agg(json_build_object('source', source, 'count', count, 'totalKgs', total) ORDER BY source) FROM sources), '[]') AS "sources"
   `);
 

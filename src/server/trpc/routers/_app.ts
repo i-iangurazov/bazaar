@@ -1,3 +1,4 @@
+import { posToolsRouter } from "./posTools";
 import { router } from "@/server/trpc/trpc";
 import { inventoryRouter } from "@/server/trpc/routers/inventory";
 import { productsRouter } from "@/server/trpc/routers/products";
@@ -90,6 +91,7 @@ export const appRouter = router({
   userSettings: userSettingsRouter,
   orgSettings: orgSettingsRouter,
   pos: posRouter,
+  posTools: posToolsRouter,
   taxReferences: taxReferencesRouter,
   bazaarCatalog: bazaarCatalogRouter,
   bazaarApi: bazaarApiRouter,

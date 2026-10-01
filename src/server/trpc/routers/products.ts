@@ -479,6 +479,8 @@ export const productsRouter = router({
       user: ctx.user,
       storeId: input?.storeId,
       columns: input?.columns,
+      input,
+      ids: input?.ids,
     }),
   ),
 

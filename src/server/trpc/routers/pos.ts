@@ -637,6 +637,7 @@ export const posRouter = router({
         z.object({
           saleChannel: z.enum(["IN_STORE", "ONLINE"]).optional(),
           registerId: z.string().min(1),
+          priceMode: z.enum(["RETAIL", "WHOLESALE"]).optional(),
           requireNewDraft: z.boolean().optional(),
           customerId: z.string().min(1).optional().nullable(),
           customerName: z.string().max(160).optional().nullable(),
@@ -671,6 +672,7 @@ export const posRouter = router({
             organizationId: ctx.user.organizationId,
             saleChannel: input.saleChannel,
             registerId: input.registerId,
+            priceMode: input.priceMode,
             requireNewDraft: input.requireNewDraft,
             customerId: input.customerId,
             customerName: input.customerName,
@@ -1063,6 +1065,7 @@ export const posRouter = router({
     createDraft: cashierProcedure
       .input(
         z.object({
+          idempotencyKey: z.string().min(8).optional(),
           shiftId: z.string().min(1),
           originalSaleId: z.string().min(1),
           notes: z.string().max(2_000).optional().nullable(),
@@ -1072,6 +1075,7 @@ export const posRouter = router({
         try {
           return await createSaleReturnDraft({
             organizationId: ctx.user.organizationId,
+            idempotencyKey: input.idempotencyKey,
             shiftId: input.shiftId,
             originalSaleId: input.originalSaleId,
             notes: input.notes,
@@ -1175,7 +1179,7 @@ export const posRouter = router({
         z.object({
           saleReturnId: z.string().min(1),
           idempotencyKey: z.string().min(8),
-          payments: z.array(paymentSchema).min(1),
+          payments: z.array(paymentSchema),
         }),
       )
       .mutation(async ({ ctx, input }) => {

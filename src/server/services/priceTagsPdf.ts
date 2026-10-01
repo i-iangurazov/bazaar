@@ -17,9 +17,11 @@ import {
 import { resolveBarcodeRenderSpec } from "@/server/services/barcodes";
 import {
   buildPriceTagLayout,
-  clampPriceTagTextLines,
   mmToPoints,
 } from "@/server/services/priceTagsLayout";
+
+import { resolveLabelTextStyles, type LabelMargins, type LabelTextField } from "@/lib/labelTextStyles";
+import { AppError } from "@/server/services/errors";
 
 const PRINT_BLACK = "#000000";
 const PRINT_WHITE = "#FFFFFF";
@@ -31,7 +33,7 @@ export type PriceTagLabel = {
   price: number | null;
 };
 
-type PriceTagsPdfInput = {
+export type PriceTagsPdfInput = {
   labels: PriceTagLabel[];
   template: PriceTagsTemplate;
   locale: string;
@@ -52,6 +54,10 @@ type PriceTagsPdfInput = {
   labelLayoutOrder?: string;
   barcodeHeightMm?: number;
   labelFontSize?: number;
+  labelTextStyles?: unknown;
+  labelMargins?: LabelMargins;
+  layoutWarnings?: string[];
+  allowOverflowPreview?: boolean;
 };
 type BwipModule = { toBuffer: (options: Record<string, unknown>) => Promise<Buffer> };
 
@@ -79,38 +85,14 @@ const formatPriceTagAmount = (
   return new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(displayAmount);
 };
 
-const truncateLine = (
-  doc: InstanceType<typeof PDFDocument>,
-  text: string,
-  maxWidth: number,
-  fontSize: number,
-) => {
-  doc.fontSize(fontSize);
-  if (doc.widthOfString(text) <= maxWidth) {
-    return text;
-  }
-  const ellipsis = "…";
-  let low = 0;
-  let high = text.length;
-  while (low < high) {
-    const mid = Math.ceil((low + high) / 2);
-    const candidate = `${text.slice(0, mid)}${ellipsis}`;
-    if (doc.widthOfString(candidate) <= maxWidth) {
-      low = mid;
-    } else {
-      high = mid - 1;
-    }
-  }
-  return `${text.slice(0, low)}${ellipsis}`;
-};
-
 const createBarcodePng = async (spec: { bcid: "ean13" | "code128"; text: string }) => {
   const bwipModule = (await import("bwip-js")) as unknown as BwipModule & { default?: BwipModule };
   const bwip = bwipModule.default ?? bwipModule;
   return bwip.toBuffer({
     bcid: spec.bcid,
     text: spec.text,
-    scale: 2,
+    scale: 3,
+    paddingwidth: 10,
     height: 10,
     includetext: false,
     barcolor: PRINT_BLACK.replace("#", ""),
@@ -140,315 +122,176 @@ const resolveBarcodeSpec = (value: string, barcodeType: "auto" | "ean13" | "code
   return resolveBarcodeRenderSpec(text);
 };
 
-export const buildPriceTagsPdf = async ({
-  labels,
-  template,
-  locale,
-  currencyCode,
-  currencyRateKgsPerUnit,
-  storeName,
-  noPriceLabel,
-  noBarcodeLabel,
-  skuLabel,
-  rollCalibration,
-  showProductName = true,
-  showPrice = true,
-  showSku = true,
-  showBarcodeText = true,
-  showCurrency = true,
-  showStoreName = true,
-  barcodeType = "auto",
-  labelLayoutOrder = "NAME_BARCODE_PRICE",
-  barcodeHeightMm,
-  labelFontSize,
-}: PriceTagsPdfInput) => {
-  const isRollTemplate = template === ROLL_PRICE_TAG_TEMPLATE;
-  const resolvedRollCalibration = toRollCalibration(rollCalibration);
-  const layout = buildPriceTagLayout(template, {
-    storeName,
-    rollDimensionsMm: isRollTemplate
-      ? {
-          width: resolvedRollCalibration.widthMm ?? PRICE_TAG_ROLL_DEFAULTS.widthMm,
-          height: resolvedRollCalibration.heightMm ?? PRICE_TAG_ROLL_DEFAULTS.heightMm,
-        }
-      : undefined,
-  });
-
-  const doc = new PDFDocument(
-    isRollTemplate
-      ? {
-          size: [layout.pageWidth, layout.pageHeight],
-          margin: 0,
-        }
-      : {
-          size: "A4",
-          margin: layout.margin,
-        },
-  );
+export const buildPriceTagsPdf = async (input: PriceTagsPdfInput) => {
+  const { labels, template, locale, currencyCode, currencyRateKgsPerUnit, storeName,
+    noPriceLabel, noBarcodeLabel, skuLabel, barcodeType = "auto" } = input;
+  const isRoll = template === ROLL_PRICE_TAG_TEMPLATE;
+  const calibration = toRollCalibration(input.rollCalibration);
+  const layout = buildPriceTagLayout(template, { storeName, rollDimensionsMm: isRoll ? {
+    width: calibration.widthMm ?? 58, height: calibration.heightMm ?? 40,
+  } : undefined });
+  const styles = resolveLabelTextStyles(input.labelTextStyles, input.labelFontSize);
+  const warnings = input.layoutWarnings ?? [];
+  const doc = new PDFDocument({ size: [layout.pageWidth, layout.pageHeight], margin: 0 });
   const fontPath = join(process.cwd(), "assets", "fonts", "NotoSans-Regular.ttf");
   const fallbackPath = join(process.cwd(), "assets", "fonts", "ArialUnicode.ttf");
-  const resolvedFont = existsSync(fontPath)
-    ? fontPath
-    : existsSync(fallbackPath)
-      ? fallbackPath
-      : null;
-  if (resolvedFont) {
-    doc.registerFont("Body", resolvedFont);
-    doc.font("Body");
-  }
-
+  doc.registerFont("Body", existsSync(fontPath) ? fontPath : fallbackPath).font("Body");
   const chunks: Buffer[] = [];
   doc.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
-
-  const barcodeCache = new Map<string, { image: Buffer; text: string }>();
-
-  for (let index = 0; index < labels.length; index += 1) {
-    const label = labels[index];
-    if (!label) {
-      continue;
-    }
-
-    if (isRollTemplate) {
-      if (index > 0) {
-        doc.addPage({ size: [layout.pageWidth, layout.pageHeight], margin: 0 });
+  const ended = new Promise<void>((resolve, reject) => { doc.on("end", resolve); doc.on("error", reject); });
+  const cache = new Map<string, Buffer>();
+  const margins = { top: input.labelMargins?.top ?? 0, right: input.labelMargins?.right ?? 0, bottom: input.labelMargins?.bottom ?? 0, left: input.labelMargins?.left ?? 0 };
+  const order: Array<"name" | "price" | "barcode"> = input.labelLayoutOrder === "PRICE_NAME_BARCODE"
+    ? ["price", "name", "barcode"] : input.labelLayoutOrder === "BARCODE_ONLY" ? ["barcode"]
+    : input.labelLayoutOrder === "NAME_BARCODE" ? ["name", "barcode"]
+    : input.labelLayoutOrder === "PRICE_BARCODE" ? ["price", "barcode"] : ["name", "barcode", "price"];
+  const visibility = { name: input.showProductName ?? true, price: input.showPrice ?? true,
+    currency: input.showCurrency ?? true, sku: input.showSku ?? true,
+    barcodeText: input.showBarcodeText ?? true, storeName: input.showStoreName ?? true };
+  for (let index = 0; index < labels.length; index++) {
+    const label = labels[index]!;
+    const perPage = layout.cols * layout.rows;
+    if (index && index % perPage === 0) doc.addPage({ size: [layout.pageWidth, layout.pageHeight], margin: 0 });
+    const position = index % perPage;
+    const x = layout.margin + (position % layout.cols) * layout.labelWidth + (isRoll ? mmToPoints(calibration.xOffsetMm) : 0);
+    const y = layout.margin + Math.floor(position / layout.cols) * layout.labelHeight + (isRoll ? mmToPoints(calibration.yOffsetMm) : 0);
+    const left = x + layout.padding + mmToPoints(margins.left);
+    const width = layout.contentWidth - mmToPoints(margins.left + margins.right);
+    const bottom = y + layout.labelHeight - layout.padding - mmToPoints(margins.bottom);
+    let cursor = y + layout.padding + mmToPoints(margins.top);
+    const warn = (field: string) => warnings.push(`${index + 1}:${field}`);
+    if (width <= 0 || cursor >= bottom || x < 0 || y < 0 || x + layout.labelWidth > layout.pageWidth + 0.1 || y + layout.labelHeight > layout.pageHeight + 0.1) warn("margins");
+    // Clip only the diagnostic preview. Printing is rejected below if a block overflows.
+    doc.save().rect(Math.max(0, x), Math.max(0, y), layout.labelWidth, layout.labelHeight).clip();
+    const text = (field: LabelTextField, value: string) => {
+      if (!visibility[field] || !value) return;
+      const style = styles[field];
+      const padding = mmToPoints(style.paddingMm);
+      const blockWidth = Math.max(1, width * style.widthPercent / 100 - 2 * padding);
+      const targetX = left + (width - blockWidth) / 2;
+      let size = style.fontSize;
+      const linesFor = (fontSize: number) => {
+        doc.fontSize(fontSize);
+        if (style.overflow !== "wrap") return [value];
+        const lines: string[] = []; let current = "";
+        // Wrap at words where possible, including long SKUs without spaces.
+        for (const part of value.split(/(\s+)/).filter(Boolean)) {
+          if (doc.widthOfString(current + part) <= blockWidth) { current += part; continue; }
+          if (current.trim()) { lines.push(current.trimEnd()); current = ""; }
+          for (const char of part.trimStart()) {
+            if (current && doc.widthOfString(current + char) > blockWidth) { lines.push(current); current = ""; }
+            current += char;
+          }
+        }
+        if (current.trim()) lines.push(current.trimEnd());
+        return lines.length ? lines : [value];
+      };
+      if (style.overflow === "shrink") {
+        while (size > style.minFontSize && doc.fontSize(size).widthOfString(value) > blockWidth) size = Math.max(style.minFontSize, size - 0.25);
       }
-    } else {
-      const position = index % (layout.cols * layout.rows);
-      if (position === 0 && index > 0) {
-        doc.addPage();
-      }
-    }
-
-    const position = isRollTemplate ? 0 : index % (layout.cols * layout.rows);
-    const row = isRollTemplate ? 0 : Math.floor(position / layout.cols);
-    const col = isRollTemplate ? 0 : position % layout.cols;
-
-    const x = isRollTemplate ? 0 : doc.page.margins.left + col * layout.labelWidth;
-    const y = isRollTemplate ? 0 : doc.page.margins.top + row * layout.labelHeight;
-
-    if (!isRollTemplate) {
-      doc
-        .rect(x, y, layout.labelWidth, layout.labelHeight)
-        .strokeColor(PRINT_BLACK)
-        .lineWidth(0.5)
-        .stroke();
-    }
-
-    const contentX = x + layout.name.x;
-    const contentWidth = layout.name.width;
-    const nameFont = labelFontSize ?? layout.config.nameFont;
-    const metaFont = Math.max(6, (labelFontSize ?? layout.config.metaFont) - 1);
-    const barcodeHeight = barcodeHeightMm ? mmToPoints(barcodeHeightMm) : layout.barcode.height;
-    const drawNoBarcode = () => {
-      const fallback = truncateLine(doc, noBarcodeLabel, contentWidth, metaFont);
-      doc.fontSize(metaFont).fillColor(PRINT_BLACK);
-      doc.text(fallback, contentX, y + layout.barcodeValue.y, {
-        width: contentWidth,
-        align: "center",
-        lineBreak: false,
+      let lines = linesFor(size);
+      if (style.overflow === "truncate") {
+        let line = value;
+        if (doc.widthOfString(line) > blockWidth) {
+          while (line.length && doc.widthOfString(`${line}…`) > blockWidth) line = line.slice(0, -1);
+          line += "…";
+        }
+        lines = [line];
+      } else if (lines.length > style.maxLines || lines.some((line) => doc.widthOfString(line) > blockWidth + 0.1)) warn(field);
+      const lineHeight = size * 1.2;
+      const height = Math.min(lines.length, style.maxLines) * lineHeight + 2 * padding;
+      if (cursor + height > bottom + 0.1) warn(field);
+      doc.fontSize(size).fillColor(PRINT_BLACK).strokeColor(PRINT_BLACK).lineWidth(size / 55);
+      lines.slice(0, style.maxLines).forEach((line, i) => {
+        const measured = doc.widthOfString(line);
+        const lineX = style.align === "left" ? targetX : style.align === "right" ? targetX + blockWidth - measured : targetX + (blockWidth - measured) / 2;
+        doc.text(line, lineX, cursor + padding + i * lineHeight, { lineBreak: false, fill: true, stroke: style.weight === "bold" });
       });
+      cursor += height + mmToPoints(field === "currency" ? 0 : styles.spacing[field]);
     };
-    const priceText =
-      label.price !== null
-        ? showCurrency
-          ? formatPriceTagCurrency(label.price, locale, currencyCode, currencyRateKgsPerUnit)
-          : formatPriceTagAmount(label.price, locale, currencyCode, currencyRateKgsPerUnit)
-        : noPriceLabel;
-    const renderPriceAt = (targetY: number, fontSize = layout.config.priceFont) => {
-      if (!showPrice) {
-        return;
+    const priceRow = () => {
+      if (!visibility.price) return;
+      if (label.price === null) { text("price", noPriceLabel); return; }
+      // The amount and its currency are one indivisible row. A narrow label must
+      // report overflow (or use the chosen shrink/truncate policy), never wrap
+      // a currency onto a different line or split a grouped monetary amount.
+      const fields = ["price", ...(visibility.currency ? ["currency"] : [])] as Array<"price" | "currency">;
+      const runs = fields.map((field) => ({
+        field, style: styles[field], size: styles[field].fontSize,
+        value: field === "price"
+          ? formatPriceTagAmount(label.price!, locale, currencyCode, currencyRateKgsPerUnit)
+          : normalizeCurrencyCode(currencyCode),
+        padding: mmToPoints(styles[field].paddingMm),
+      }));
+      const measure = (run: typeof runs[number]) => doc.fontSize(run.size).widthOfString(run.value);
+      const gap = visibility.currency ? mmToPoints(1) : 0;
+      const rowWidth = Math.max(1, width * styles.price.widthPercent / 100);
+      const fit = (run: typeof runs[number], limit: number, truncate: boolean) => {
+        const available = Math.max(0, limit - 2 * run.padding);
+        if (run.style.overflow === "shrink") {
+          while (run.size > run.style.minFontSize && measure(run) > available) {
+            run.size = Math.max(run.style.minFontSize, run.size - 0.25);
+          }
+        }
+        if (truncate && run.style.overflow === "truncate" && measure(run) > available) {
+          while (run.value && doc.fontSize(run.size).widthOfString(`${run.value}…`) > available) run.value = run.value.slice(0, -1);
+          run.value += "…";
+        }
+      };
+      const occupied = () => runs.reduce((sum, run) => sum + measure(run) + 2 * run.padding, gap);
+      for (const run of runs) fit(run, width * run.style.widthPercent / 100, true);
+      // Only settings that explicitly permit shrinking/truncation may reduce text.
+      for (const truncate of [false, true]) {
+        for (const run of runs) {
+          if (occupied() > rowWidth) fit(run, measure(run) + 2 * run.padding - (occupied() - rowWidth), truncate);
+        }
       }
-      const priceFont = label.price !== null ? fontSize : Math.max(fontSize - 2, 9);
-      const priceLine = truncateLine(doc, priceText, contentWidth, priceFont);
-      doc.fontSize(priceFont).fillColor(PRINT_BLACK);
-      doc.text(priceLine, contentX, targetY, {
-        width: contentWidth,
-        lineBreak: false,
-        align: "center",
-      });
+      for (const run of runs) {
+        if (measure(run) + 2 * run.padding > width * run.style.widthPercent / 100 + 0.1) warn(run.field);
+      }
+      const totalWidth = occupied();
+      if (totalWidth > rowWidth + 0.1) warn("price");
+      const verticalPadding = Math.max(...runs.map((run) => run.padding));
+      const rowHeight = Math.max(...runs.map((run) => doc.fontSize(run.size).currentLineHeight(false))) + 2 * verticalPadding;
+      if (cursor + rowHeight > bottom + 0.1) warn("price");
+      const rowLeft = left + (width - rowWidth) / 2;
+      let runX = styles.price.align === "left" ? rowLeft : styles.price.align === "right" ? rowLeft + rowWidth - totalWidth : rowLeft + (rowWidth - totalWidth) / 2;
+      const baseline = cursor + verticalPadding + Math.max(...runs.map((run) => run.size));
+      for (const run of runs) {
+        doc.fontSize(run.size).fillColor(PRINT_BLACK).strokeColor(PRINT_BLACK).lineWidth(run.size / 55);
+        doc.text(run.value, runX + run.padding, baseline, { lineBreak: false, baseline: "alphabetic", fill: true, stroke: run.style.weight === "bold" });
+        runX += measure(run) + 2 * run.padding + gap;
+      }
+      cursor += rowHeight + mmToPoints(styles.spacing.price);
     };
-    const renderNameAt = (targetY: number) => {
-      if (!showProductName) {
-        return 0;
+    for (const block of order) {
+      if (block === "name") text("name", label.name);
+      if (block === "price") priceRow();
+      if (block === "barcode") {
+        const spec = resolveBarcodeSpec(label.barcode, barcodeType);
+        if (!spec) { text("barcodeText", noBarcodeLabel); continue; }
+        try {
+          const key = `${spec.bcid}:${spec.text}`;
+          let png = cache.get(key);
+          if (!png) { png = await createBarcodePng(spec); cache.set(key, png); }
+          const naturalWidth = png.readUInt32BE(16), naturalHeight = png.readUInt32BE(20);
+          const maxHeight = input.barcodeHeightMm ? mmToPoints(input.barcodeHeightMm) : layout.config.barcodeHeight;
+          const scale = Math.min(Math.max(1, width) / naturalWidth, maxHeight / naturalHeight);
+          const imageWidth = naturalWidth * scale, imageHeight = naturalHeight * scale;
+          // bwip uses three pixels per narrow module; reject sub-0.19 mm modules.
+          if (scale * 3 < mmToPoints(0.19)) warn("barcode");
+          if (cursor + imageHeight > bottom + 0.1) warn("barcode");
+          doc.image(png, left + (width - imageWidth) / 2, cursor, { width: imageWidth });
+          cursor += imageHeight + mmToPoints(styles.spacing.barcode);
+          text("barcodeText", spec.text);
+        } catch { warn("barcode"); text("barcodeText", noBarcodeLabel); }
       }
-      doc.fontSize(nameFont);
-      const nameLines = clampPriceTagTextLines({
-        text: label.name,
-        maxLines: layout.config.nameLines,
-        canFit: (candidate) => doc.widthOfString(candidate) <= contentWidth,
-      });
-      doc.fillColor(PRINT_BLACK);
-      nameLines.forEach((line, lineIndex) => {
-        doc.text(line, contentX, targetY + lineIndex * layout.config.nameLineHeight, {
-          width: contentWidth,
-          lineBreak: false,
-          align: "center",
-        });
-      });
-      return nameLines.length * layout.config.nameLineHeight;
-    };
-
-    const drawBarcodeAt = async (targetY: number) => {
-      const spec = resolveBarcodeSpec(label.barcode, barcodeType);
-      if (!spec) {
-        drawNoBarcode();
-        return;
-      }
-      try {
-        const cacheKey = `${spec.bcid}:${spec.text}`;
-        let barcodeEntry = barcodeCache.get(cacheKey);
-        if (!barcodeEntry) {
-          const image = await createBarcodePng(spec);
-          barcodeEntry = { image, text: spec.text };
-          barcodeCache.set(cacheKey, barcodeEntry);
-        }
-        const quiet = layout.config.quietZone;
-        const maxBarcodeWidth = layout.barcode.width - quiet * 2;
-        const imageWidth = Math.max(30, Math.min(maxBarcodeWidth, maxBarcodeWidth * 0.98));
-        const imageHeight = Math.max(mmToPoints(8), barcodeHeight - quiet * 2);
-        const imageX = contentX + (layout.barcode.width - imageWidth) / 2;
-        const imageY = targetY + quiet;
-        doc.image(barcodeEntry.image, imageX, imageY, {
-          width: imageWidth,
-          height: imageHeight,
-        });
-        if (showBarcodeText) {
-          const valueLine = truncateLine(doc, barcodeEntry.text, contentWidth, metaFont);
-          doc.fontSize(metaFont).fillColor(PRINT_BLACK);
-          doc.text(valueLine, contentX, targetY + barcodeHeight + 2, {
-            width: contentWidth,
-            align: "center",
-            lineBreak: false,
-          });
-        }
-      } catch {
-        drawNoBarcode();
-      }
-    };
-
-    if (isRollTemplate) {
-      const order =
-        labelLayoutOrder === "PRICE_NAME_BARCODE"
-          ? ["price", "name", "barcode"]
-          : labelLayoutOrder === "BARCODE_ONLY"
-            ? ["barcode"]
-            : labelLayoutOrder === "NAME_BARCODE"
-              ? ["name", "barcode"]
-              : labelLayoutOrder === "PRICE_BARCODE"
-                ? ["price", "barcode"]
-                : ["name", "barcode", "price"];
-      let cursor = y + mmToPoints(3);
-      for (const block of order) {
-        if (block === "price" && showPrice) {
-          renderPriceAt(cursor, Math.max(10, layout.config.priceFont - 1));
-          cursor += Math.max(13, layout.config.priceFont + 3);
-        }
-        if (block === "name" && showProductName) {
-          cursor += renderNameAt(cursor) + 2;
-        }
-        if (block === "barcode") {
-          await drawBarcodeAt(cursor);
-          cursor += barcodeHeight + (showBarcodeText ? metaFont + 4 : 2);
-        }
-      }
-      if (showSku && label.sku.trim()) {
-        const skuText = truncateLine(doc, `${skuLabel}: ${label.sku}`, contentWidth, metaFont);
-        doc.fontSize(metaFont).fillColor(PRINT_BLACK);
-        doc.text(skuText, contentX, Math.min(cursor, y + layout.labelHeight - metaFont - 2), {
-          width: contentWidth,
-          align: "center",
-          lineBreak: false,
-        });
-      }
-      continue;
     }
-
-    if (showProductName) {
-      doc.fontSize(nameFont);
-      const nameLines = clampPriceTagTextLines({
-        text: label.name,
-        maxLines: layout.config.nameLines,
-        canFit: (candidate) => doc.widthOfString(candidate) <= contentWidth,
-      });
-      doc.fillColor(PRINT_BLACK);
-      nameLines.forEach((line, lineIndex) => {
-        doc.text(line, contentX, y + layout.name.y + lineIndex * layout.config.nameLineHeight, {
-          width: contentWidth,
-          lineBreak: false,
-        });
-      });
-    }
-
-    if (showPrice) {
-      const priceFont =
-        label.price !== null ? layout.config.priceFont : Math.max(layout.config.priceFont - 2, 9);
-      const priceLine = truncateLine(doc, priceText, contentWidth, priceFont);
-      doc.fontSize(priceFont).fillColor(PRINT_BLACK);
-      doc.text(priceLine, contentX, y + layout.price.y, {
-        width: contentWidth,
-        lineBreak: false,
-      });
-    }
-
-    doc.fontSize(metaFont).fillColor(PRINT_BLACK);
-    if (showSku && label.sku.trim()) {
-      const skuText = truncateLine(doc, `${skuLabel}: ${label.sku}`, contentWidth, metaFont);
-      doc.text(skuText, contentX, y + layout.meta.y, {
-        width: contentWidth,
-        lineBreak: false,
-      });
-    }
-    if (showStoreName && !isRollTemplate && storeName && layout.config.metaLines > 1) {
-      const storeLine = truncateLine(doc, storeName, contentWidth, layout.config.metaFont);
-      doc.text(storeLine, contentX, y + layout.meta.y + layout.config.metaLineHeight, {
-        width: contentWidth,
-        lineBreak: false,
-      });
-    }
-
-    const spec = resolveBarcodeSpec(label.barcode, barcodeType);
-    if (spec) {
-      try {
-        const cacheKey = `${spec.bcid}:${spec.text}`;
-        let barcodeEntry = barcodeCache.get(cacheKey);
-        if (!barcodeEntry) {
-          const image = await createBarcodePng(spec);
-          barcodeEntry = { image, text: spec.text };
-          barcodeCache.set(cacheKey, barcodeEntry);
-        }
-
-        const quiet = layout.config.quietZone;
-        const maxBarcodeWidth = layout.barcode.width - quiet * 2;
-        const preferredBarcodeWidth = isRollTemplate ? maxBarcodeWidth * 0.98 : maxBarcodeWidth;
-        const imageWidth = Math.max(30, Math.min(maxBarcodeWidth, preferredBarcodeWidth));
-        const imageHeight = Math.max(mmToPoints(8), barcodeHeight - quiet * 2);
-        const imageX = contentX + (layout.barcode.width - imageWidth) / 2;
-        const imageY = y + layout.barcode.y + quiet;
-        doc.image(barcodeEntry.image, imageX, imageY, {
-          width: imageWidth,
-          height: imageHeight,
-        });
-
-        if (showBarcodeText) {
-          const valueLine = truncateLine(doc, barcodeEntry.text, contentWidth, metaFont);
-          doc.fontSize(metaFont).fillColor(PRINT_BLACK);
-          doc.text(valueLine, contentX, y + layout.barcodeValue.y, {
-            width: contentWidth,
-            align: "center",
-            lineBreak: false,
-          });
-        }
-      } catch {
-        drawNoBarcode();
-      }
-    } else {
-      drawNoBarcode();
-    }
+    text("sku", label.sku.trim() ? `${skuLabel}: ${label.sku}` : "");
+    text("storeName", storeName ?? "");
+    doc.restore();
   }
-
-  doc.end();
-
-  await new Promise<void>((resolve) => doc.on("end", resolve));
-
+  doc.end(); await ended;
+  if (warnings.length && !input.allowOverflowPreview) throw new AppError("labelLayoutOverflow", "BAD_REQUEST", 400);
   return Buffer.concat(chunks);
 };

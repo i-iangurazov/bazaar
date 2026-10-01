@@ -87,7 +87,7 @@ import {
   TagIcon,
   ViewIcon,
 } from "@/components/icons";
-import { downloadTableFile, parseCsvTextRows, type DownloadFormat } from "@/lib/fileExport";
+import { type DownloadFormat } from "@/lib/fileExport";
 import {
   buildBarcodeLabelPrintItems,
   hasPrintableBarcode,
@@ -188,6 +188,7 @@ const productReadinessFilterSchema = z.enum([
   "missingBarcode",
   "missingImage",
   "missingPrice",
+  "missingCost",
   "lowStock",
   "outOfStock",
   "negativeStock",
@@ -281,6 +282,8 @@ const productExportColumnKeys = [
   "purchasePriceKgs",
   "avgCostKgs",
   "minStock",
+  "onHandQty",
+  "stockScope",
   "images",
   "variants",
   "barcodes",
@@ -719,11 +722,11 @@ const ProductsPage = () => {
   );
   const productExportColumns = useMemo(
     () =>
-      productExportColumnKeys.map((key) => ({
+      productExportColumnKeys.filter((key) => canManageProducts || !["avgCostKgs", "purchasePriceKgs"].includes(key)).map((key) => ({
         key,
         label: t(`exportColumns.${key}`),
       })),
-    [t],
+    [t, canManageProducts],
   );
   const selectedExportColumnSet = useMemo(
     () => new Set(selectedExportColumns),
@@ -839,13 +842,6 @@ const ProductsPage = () => {
       toast({ variant: "error", description: translateError(tErrors, error) });
     },
   });
-  const exportQuery = trpc.products.exportCsv.useQuery(
-    {
-      storeId: storeId || undefined,
-      columns: selectedExportColumns.length ? selectedExportColumns : undefined,
-    },
-    { enabled: false },
-  );
   const patchProductArchiveState = useCallback(
     (productId: string, isDeleted: boolean) => {
       trpcUtils.products.bootstrap.setData(productsBootstrapInput, (current) => {
@@ -2898,25 +2894,17 @@ const ProductsPage = () => {
       toast({ variant: "error", description: t("exportSelectColumnsRequired") });
       return;
     }
-    const { data, error } = await exportQuery.refetch();
-    if (error) {
-      toast({ variant: "error", description: translateError(tErrors, error) });
-      return;
+    // Native form download keeps large exports out of application/browser memory.
+    const form = document.createElement("form");
+    form.method = "POST"; form.action = "/api/products/export";
+    form.target = "_blank";
+    const payload = { search: search || undefined, category: category || undefined, type: productType === "all" ? undefined : productType, readiness: readiness === "all" ? undefined : readiness, includeArchived: showArchived, storeId: storeId || undefined,
+      columns: selectedColumns.filter((key) => canManageProducts || !["avgCostKgs", "purchasePriceKgs"].includes(key)),
+      ids: selectedIds.size && !allResultsSelected ? Array.from(selectedIds) : undefined };
+    for (const [name, value] of Object.entries({ payload: JSON.stringify(payload), format: exportFormat })) {
+      const input = document.createElement("input"); input.type = "hidden"; input.name = name; input.value = value; form.appendChild(input);
     }
-    if (!data) {
-      return;
-    }
-    const rows = parseCsvTextRows(data);
-    const [header, ...body] = rows;
-    if (!header) {
-      return;
-    }
-    downloadTableFile({
-      format: exportFormat,
-      fileNameBase: `products-${locale}`,
-      header,
-      rows: body,
-    });
+    document.body.appendChild(form); form.submit(); form.remove();
     setExportDialogOpen(false);
   };
 
@@ -3414,29 +3402,19 @@ const ProductsPage = () => {
                     ) : null}
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
-                      disabled={exportQuery.isFetching}
                       onSelect={() => {
                         openExportDialog("csv");
                       }}
                     >
-                      {exportQuery.isFetching ? (
-                        <Spinner className="h-4 w-4" />
-                      ) : (
-                        <DownloadIcon className="h-4 w-4" aria-hidden />
-                      )}
+                      <DownloadIcon className="h-4 w-4" aria-hidden />
                       {t("exportCsv")}
                     </DropdownMenuItem>
                     <DropdownMenuItem
-                      disabled={exportQuery.isFetching}
                       onSelect={() => {
                         openExportDialog("xlsx");
                       }}
                     >
-                      {exportQuery.isFetching ? (
-                        <Spinner className="h-4 w-4" />
-                      ) : (
-                        <DownloadIcon className="h-4 w-4" aria-hidden />
-                      )}
+                      <DownloadIcon className="h-4 w-4" aria-hidden />
                       {t("exportXlsx")}
                     </DropdownMenuItem>
                     <DropdownMenuItem
@@ -3545,6 +3523,7 @@ const ProductsPage = () => {
                   ) : null}
                   <SelectItem value="missingImage">{t("missingImage")}</SelectItem>
                   <SelectItem value="missingPrice">{t("missingPrice")}</SelectItem>
+                  {canManageProducts ? <SelectItem value="missingCost">{t("missingCost")}</SelectItem> : null}
                   <SelectItem value="outOfStock">{t("outOfStock")}</SelectItem>
                   <SelectItem value="lowStock">{t("lowStock")}</SelectItem>
                   <SelectItem value="negativeStock">{t("negativeStock")}</SelectItem>
@@ -3838,25 +3817,15 @@ const ProductsPage = () => {
                       }}
                     >
                       <DropdownMenuItem
-                        disabled={exportQuery.isFetching}
                         onSelect={() => openExportDialog("csv")}
                       >
-                        {exportQuery.isFetching ? (
-                          <Spinner className="h-4 w-4" />
-                        ) : (
-                          <DownloadIcon className="h-4 w-4" aria-hidden />
-                        )}
+                        <DownloadIcon className="h-4 w-4" aria-hidden />
                         {t("exportCsv")}
                       </DropdownMenuItem>
                       <DropdownMenuItem
-                        disabled={exportQuery.isFetching}
                         onSelect={() => openExportDialog("xlsx")}
                       >
-                        {exportQuery.isFetching ? (
-                          <Spinner className="h-4 w-4" />
-                        ) : (
-                          <DownloadIcon className="h-4 w-4" aria-hidden />
-                        )}
+                        <DownloadIcon className="h-4 w-4" aria-hidden />
                         {t("exportXlsx")}
                       </DropdownMenuItem>
                       {canManageProducts ? (
@@ -5089,7 +5058,7 @@ const ProductsPage = () => {
           }
         }}
         title={t("exportModalTitle")}
-        subtitle={t("exportModalSubtitle")}
+        subtitle={selectedIds.size ? t("exportSelected", { count: selectedIds.size }) : t("exportFiltered", { count: productsTotal })}
       >
         <div className="space-y-5">
           <div className="space-y-2">
@@ -5158,14 +5127,10 @@ const ProductsPage = () => {
             <Button
               type="button"
               onClick={() => void handleExport()}
-              disabled={exportQuery.isFetching || !selectedExportColumns.length}
+              disabled={!selectedExportColumns.length}
             >
-              {exportQuery.isFetching ? (
-                <Spinner className="h-4 w-4" />
-              ) : (
-                <DownloadIcon className="h-4 w-4" aria-hidden />
-              )}
-              {exportQuery.isFetching ? tCommon("loading") : t("exportDownload")}
+              <DownloadIcon className="h-4 w-4" aria-hidden />
+              {selectedIds.size ? t("exportSelected", { count: selectedIds.size }) : t("exportFiltered", { count: productsTotal })}
             </Button>
           </ModalFooter>
         </div>

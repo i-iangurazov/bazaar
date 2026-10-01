@@ -51,8 +51,12 @@ const resolveStoreSettings = async (storeId: string) => {
       labelShowBarcodeText: true,
       labelShowCurrency: true,
       labelShowStoreName: true,
+      labelBarcodeType: true,
+      labelWidthMm: true, labelHeightMm: true, labelRollGapMm: true, labelRollXOffsetMm: true, labelRollYOffsetMm: true,
       labelBarcodeHeightMm: true,
       labelFontSize: true,
+      labelTextStyles: true,
+      labelMarginTopMm: true, labelMarginRightMm: true, labelMarginBottomMm: true, labelMarginLeftMm: true,
       connectorDeviceId: true,
     },
   });
@@ -129,6 +133,8 @@ export const printLabels = async (input: {
       noPriceLabel: input.job.noPriceLabel,
       noBarcodeLabel: input.job.noBarcodeLabel,
       skuLabel: input.job.skuLabel,
+      rollCalibration: settings ? { widthMm: settings.labelWidthMm, heightMm: settings.labelHeightMm, gapMm: settings.labelRollGapMm, xOffsetMm: settings.labelRollXOffsetMm, yOffsetMm: settings.labelRollYOffsetMm } : undefined,
+      barcodeType: settings?.labelBarcodeType === "ean13" || settings?.labelBarcodeType === "code128" ? settings.labelBarcodeType : "auto",
       labelLayoutOrder: settings?.labelLayoutOrder ?? undefined,
       showProductName: settings?.labelShowProductName ?? undefined,
       showPrice: settings?.labelShowPrice ?? undefined,
@@ -138,6 +144,8 @@ export const printLabels = async (input: {
       showStoreName: settings?.labelShowStoreName ?? undefined,
       barcodeHeightMm: settings?.labelBarcodeHeightMm ?? undefined,
       labelFontSize: settings?.labelFontSize ?? undefined,
+      labelTextStyles: settings?.labelTextStyles,
+      labelMargins: settings ? { top: settings.labelMarginTopMm, right: settings.labelMarginRightMm, bottom: settings.labelMarginBottomMm, left: settings.labelMarginLeftMm } : undefined,
     });
 
     return {

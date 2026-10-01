@@ -5,7 +5,7 @@ export const renderQrPng = async (text: string) => {
   const bwipModule = (await import("bwip-js")) as unknown as BwipModule & { default?: BwipModule };
   const bwip = bwipModule.default ?? bwipModule;
   // A square QR: passing `height` for a 2D barcode distorts the module grid.
-  return bwip.toBuffer({ bcid: "qrcode", text, scale: 4, includetext: false });
+  return bwip.toBuffer({ bcid: "qrcode", text, scale: 4, includetext: false, backgroundcolor: "FFFFFF", padding: 4 });
 };
 
 export const renderQrDataUrl = async (text: string) =>

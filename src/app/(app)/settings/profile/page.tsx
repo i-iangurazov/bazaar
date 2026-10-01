@@ -92,6 +92,7 @@ const ProfilePage = () => {
   const businessSchema = useMemo(
     () =>
       z.object({
+        retailWholesaleEnabled: z.boolean(),
         organizationName: z.string().min(2, t("business.validation.organizationNameRequired")),
         storeId: z.string().min(1, t("business.validation.storeRequired")),
         currencyCode: z.enum(supportedCurrencyCodes),
@@ -166,6 +167,7 @@ const ProfilePage = () => {
   const businessForm = useForm<z.infer<typeof businessSchema>>({
     resolver: zodResolver(businessSchema),
     defaultValues: {
+      retailWholesaleEnabled: false,
       organizationName: "",
       storeId: "",
       currencyCode: "KGS",
@@ -214,6 +216,7 @@ const ProfilePage = () => {
         : (businessData.selectedStore?.id ?? undefined),
     );
     businessForm.reset({
+      retailWholesaleEnabled: businessData.selectedStore.retailWholesaleEnabled,
       organizationName: businessData.organization.name,
       storeId: businessData.selectedStore.id,
       currencyCode: businessData.selectedStore.currencyCode ?? "KGS",
@@ -299,6 +302,7 @@ const ProfilePage = () => {
     onSuccess: (result) => {
       businessQuery.refetch();
       businessForm.reset({
+        retailWholesaleEnabled: result.selectedStore.retailWholesaleEnabled,
         organizationName: result.organization.name,
         storeId: result.selectedStore.id,
         currencyCode: result.selectedStore.currencyCode ?? "KGS",
@@ -638,6 +642,7 @@ const ProfilePage = () => {
                 className="space-y-4"
                 onSubmit={businessForm.handleSubmit((values) => {
                   updateBusinessMutation.mutate({
+                    retailWholesaleEnabled: values.retailWholesaleEnabled,
                     organizationName: values.organizationName,
                     storeId: values.storeId,
                     currencyCode: values.currencyCode,
@@ -698,6 +703,12 @@ const ProfilePage = () => {
                       </FormItem>
                     )}
                   />
+                  <FormField control={businessForm.control} name="retailWholesaleEnabled" render={({field}) => (
+                    <FormItem className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
+                      <div><FormLabel>{t("business.retailWholesaleEnabled")}</FormLabel><FormDescription>{t("business.retailWholesaleHint")}</FormDescription></div>
+                      <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                    </FormItem>
+                  )} />
                   <FormField
                     control={businessForm.control}
                     name="currencyCode"

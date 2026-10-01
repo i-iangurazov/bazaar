@@ -1,4 +1,4 @@
-import type { Prisma, PrismaClient } from "@prisma/client";
+import { Prisma, type PrismaClient } from "@prisma/client";
 
 import { AppError } from "@/server/services/errors";
 import type { LoyaltyRules } from "@/server/services/loyalty/calc";
@@ -97,6 +97,7 @@ export const upsertLoyaltyProgram = async (
   input: LoyaltySettingsInput,
 ) =>
   client.$transaction(async (tx) => {
+    if (input.pointValueKgs !== undefined && (!Number.isFinite(input.pointValueKgs) || input.pointValueKgs < 0.01 || new Prisma.Decimal(input.pointValueKgs).decimalPlaces() > 2)) throw new AppError("loyaltyInvalidPointValue", "BAD_REQUEST", 400);
     const defaults = DEFAULT_LOYALTY_RULES;
     const program = await tx.loyaltyProgram.upsert({
       where: { organizationId },
@@ -143,8 +144,10 @@ export const upsertLoyaltyProgram = async (
       },
     });
     if (input.storeIds) {
-      const storeIds = input.storeIds.filter(Boolean);
-      await tx.loyaltyProgramStore.deleteMany({ where: { programId: program.id } });
+      const storeIds = [...new Set(input.storeIds.filter(Boolean))];
+      await tx.loyaltyProgramStore.deleteMany({
+        where: { programId: program.id, storeId: { notIn: storeIds } },
+      });
       if (storeIds.length) {
         await tx.loyaltyProgramStore.createMany({
           data: storeIds.map((storeId) => ({
@@ -155,8 +158,9 @@ export const upsertLoyaltyProgram = async (
           skipDuplicates: true,
         });
       }
-      const fresh = await tx.loyaltyProgram.findUniqueOrThrow({ where: { id: program.id } });
-      return fresh;
     }
-    return program;
+    return tx.loyaltyProgram.update({
+      where: { id: program.id },
+      data: { rulesText: loyaltyRulesText(toLoyaltyRules(program)) },
+    });
   });

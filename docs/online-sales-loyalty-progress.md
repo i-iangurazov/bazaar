@@ -1,192 +1,176 @@
-# Online sales + loyalty programme — status
+# Bazaar — локальная приёмка, 01.10.2026
 
-Owner request (2026-09-30). Everything is local `main` only: no push, no deploy,
-no preview, no Vercel/Neon or production database changes.
+## Границы и состояние
 
-## How to run and demo locally
+Работа в существующем `main`; ветки/worktree/PR не создавались. Начальный HEAD
+`e33b2a9b65c17af242e8d9b0fc968924e3fc5cda`, upstream
+`71154371196c1429c6e7099a8872dc63518e12f6`, 22 сохранённых локальных коммита.
+Начальное дерево было чистым. Публикация разрешена после локальной приёмки.
+Точный опубликованный SHA, CI, deployment и результат production smoke записываются
+в итоговом сообщении и локальном `tmp/feature-audit/release.json`.
 
-First deployment (only against the confirmed local database):
+Scripts/hooks проверены до запуска. Default vitest setup с fallback reset не
+использовался. Docker inspect подтвердил `bazaar-stabilization-postgres-1`, label
+`bazaar.test-purpose=disposable-stabilization`, tmpfs и порт 127.0.0.1:55432.
+Все записи идут в новую `bazaar_feature_20261001` либо собственные временные
+копии пустого шаблона `bazaar_feature_test_template`. Внешние провайдеры выключены,
+почта — log, Redis — отдельный localhost:56379/9. Production не изменялся.
 
-```bash
-pnpm db:up                     # local docker Postgres + Redis only
-pnpm prisma:migrate            # apply additive migrations
-pnpm prisma:seed               # demo users (admin@example.com / Admin123!)
-pnpm loyalty:demo              # demo store/product/customers
+Тесты создают новую БД на каждый кейс без reset/truncate. После первого большого
+прогона свои копии заполнили tmpfs. Ограничение временно увеличено через namespace
+контейнера, копии удалены штатным DROP DATABASE, исходный лимит восстановлен.
+Файлы PostgreSQL не перемещались. Теперь harness удаляет свои копии после файла.
+
+## Подтверждённые дефекты и исправления
+
+| Приоритет | Дефект | Исправление |
+| --- | --- | --- |
+| P0 | POS loyalty принимает чужой/неподходящий чек | Общие проверки организации, магазина, владельца, DRAFT и блокировка |
+| P0 | Списание по memberId без согласия покупателя | Одноразовое согласие на точную корзину/сумму/баллы; подтверждение в карте |
+| P1 | Скидка одновременно в строках и discountKgs; повторный apply снижает цену повторно | Единый итог строк, неизменяемый snapshot, идемпотентность и восстановление до редактирования |
+| P1 | Параллельное освобождение/расход резервов | Единый порядок блокировок, условные переходы, доступный баланс учитывает активные резервы |
+| P1 | Возврат зависит от текущих правил/округлённой unit price | Исходные распределения, накопительный возврат, точные рациональные веса баллов, предел реально полученных денег |
+| P1 | Чек 100−20 возвращал 100 вместо 80 | Распределение скидки чека по возвратным суммам строк |
+| P1 | Онлайн-заказ не имел поздней оплаты/возврата в UI | Запись фактически полученных денег в открытую смену, возврат оплаченного заказа; интеграция в сменные суммы |
+| P1 | Mobile не рендерил бонусный диалог | Подключён в активной mobile-ветке, сканер при диалогах приостановлен |
+| P1 | Экспорт игнорирует фильтры/выбор/остатки | Общая серверная выборка, страницы по 500, CSV/XLSX, проверка прав себестоимости |
+| P1 | Автоматическая цена POS перезаписывалась старой optimistic ценой | Серверный ответ авторитетен, ручная цена отмечена и сохраняется |
+| P1 | Варианты не выбирались при продаже | Отдельный выбор варианта, отдельные строки и магазинные цены |
+| P1 | Пустой standard price нарушал чтение старым Prisma при откате | Дополнительные цены вынесены в StorePriceTypes, стандартный контракт NOT NULL восстановлен следующей миграцией |
+| P2 | UNKNOWN/paid order counts и источник возвратов неверны | Исправлены SQL-предикаты и DISTINCT заказов |
+| P2 | Сохранение программы пересоздавало QR | Стабильные ссылки, обновление rulesText |
+| P2 | QR имел прозрачный фон без свободных полей | Белый фон и padding, проверка декодирования PNG |
+| P2 | Preview этикетки не соответствовал печати | Общий PDF renderer, отдельные стили полей, явные предупреждения переполнения |
+
+Независимые ревью финансовой логики и POS выполнены повторно после исправлений.
+Дополнительно исправлены: двойное применение optimistic updater в StrictMode;
+устаревшие поля цены после бонусов; загрузка старого возврата из query cache;
+расчёт денег после исправления чека; ручная цена от старого клиента при выкладке.
+Legacy-промо сохраняет базовую цену, признаки скидки и точный итог строки.
+По просьбе владельца убрана зелёная плашка открытой смены, журнал стал квадратной
+кнопкой с иконкой, aria-label и подсказкой. Закрытая/недоступная смена остаётся видимой.
+
+## Выполненные проверки
+
+- Unit: 227 файлов / 1579 тестов; интеграция: 89 файлов / 618 тестов — прошли.
+- Включены 48 прежних POS-тестов, 8 бонусных POS и 12 межмодульных финансовых
+  сценариев; отрицательные права, повторы, конкуренция, legacy writers и промо.
+- TypeScript, lint, i18n, production build и offline release-smoke transport — прошли.
+- A4 movement print browser/PDF проверка из CI выполнена отдельно. Локальная
+  сборка предупредила о старых Chrome symlink в gitignored tmp; они не входят
+  в Git→Vercel release.
+- Проверены сервисами null/0/fallback, ручная цена, отложенный чек, варианты,
+  выключенный флаг, разрешение/повтор перемещения, нехватка остатка, экспорт 501
+  товара/выбор/cost RBAC, поздняя оплата 200+275 в разных сменах, конкурентная
+  переплата, онлайн частичный/полный возврат и ручная скидка.
+- Браузер: OTP → карта с 1000 → реальное декодирование QR → запрос списания 475 →
+  согласие в покупательской карте → касса 475 → оплата 475 → баланс 548 → полный возврат 475 → баланс 1000. Есть traces.
+- Через UI: покупатель без стартовых баллов → 1000−5%=950 → начислено 47.
+- Через каталог: заказ 4000 → скидка 200 → списание 1000 → фактическая оплата 2800
+  → начислено 140; возврат 700 → баланс 355; возврат 2100 → баланс 1000.
+  Онлайн-отчёт показывает 2800 продаж/2800 возвратов/0 чистой выручки.
+- CSV/XLSX через UI: фильтр магазина+поиска, выделенная строка, отрицательный
+  остаток−3, отсутствие себестоимости, reload. Проверены файлы и колонки
+  остатка/магазина. Переход 500→501 и ограничения cost проверены интеграцией.
+- POS: вариант с ручной 777 + обычная 1000; опт меняет только обычную на 800.
+  Hold→resume сохраняет обе строки. Перемещение сохраняет корзину, повторный
+  scan в диалоге увеличивает только количество перемещения. Сбой GET после
+  смены цены блокирует действия до успешного повтора. Ручная 777→бонус 738,15;
+  focus/blur не отправляет старую цену.
+- PDF 58×40 и 40×30: физические размеры проверены, EAN-13 декодирован как
+  `0001234567895`. По замечанию владельца цена и валюта объединены в одну строку
+  с общей базовой линией; независимые размеры шрифтов сохранены. Оба PDF заново
+  отрендерены, координаты текста проверены. Добавлены независимые промежутки
+  после названия, штрихкода, подписи, строки цены, SKU и магазина (0–20 мм).
+  Все шесть шрифтов независимо изменены и восстановлены после reload.
+  Реальные preview/print endpoints дали попиксельно одинаковые изображения
+  обоих форматов, без предупреждений переполнения.
+  1 мм подтверждён координатами PDF; UI 1/0,5/1,5/2 мм сохранён и восстановлен
+  после reload. Выбор магазина запоминается, ввод ждёт загрузки его настроек.
+  Артефакты: `label-spacing-trace.zip`, `label-spacing-after-reload.png`,
+  `label-spacing-1mm.pdf`, `label-spacing-measurements.json`.
+- Оба исходных SHA и текущее состояние: пустая/полная касса при 1440/834/390/320px,
+  без горизонтального переполнения и ошибок браузера. Базовые высоты шапки
+  совпали. Дополнительные customer/payment/variant/bonus/recovery состояния
+  проверены на текущей версии; полного визуального сравнения этих состояний
+  с обеими старыми версиями нет. Финальная шапка проверена также при 1280/1024px.
+- Локальный прогретый Next dev, медиана 5 проб: upstream search25/scan15,5/add25 мс;
+  initialHEAD20,4/16,8/26,7; current28,4/22/35,1. Это не production benchmark: на
+  current могла влиять параллельная нагрузка. Новые сценарии подтверждены traces;
+  сопоставимого production-замера оплаты/экспорта/preview нет.
+
+## Локальные данные и артефакты
+
+`tmp/feature-audit/demo.json` — идентификаторы и публичные локальные пути.
+Отдельная организация: **Bazaar · учебная приёмка 01.10.2026**.
+Магазины: Учебный · Центр (типы цен/бонусы включены), Учебный · Склад (выключены).
+Учётные записи: `demo.owner@bazaar.invalid`, `demo.manager@bazaar.invalid`,
+`demo.cashier@bazaar.invalid`, `demo.limited@bazaar.invalid`. Последний кассир без
+права перемещения. Локальный пароль: `BazaarLocal2026!`.
+Покупатели: `buyer.points@bazaar.invalid` — баланс 1000 после возвратов;
+`buyer.zero@bazaar.invalid` — баланс 47 после покупки. Для нового нулевого счёта
+зарегистрируйте другой адрес `@bazaar.invalid` через публичную форму.
+Свежий OTP: `tmp/loyalty-otp-outbox.log`; публичный API код не возвращает.
+
+Seed `scripts/loyalty-demo.ts` проверяет точную БД и Docker identity, создаёт только
+эту организацию, проводит остатки сервисом приёмки, баллы журналом. Повторный запуск
+не сбрасывает пароли/балансы/остатки. Команды из корня репозитория:
+
+```sh
+# Только первое создание учебных данных; не включать в production scripts.
+NODE_OPTIONS='--require ./tmp/feature-audit/env.cjs' BAZAAR_DEMO_PASSWORD='BazaarLocal2026!' pnpm loyalty:demo
+# Обычный запуск, без seed/reset.
+NODE_OPTIONS='--require ./tmp/feature-audit/env.cjs' pnpm exec next dev --hostname 127.0.0.1 --port 3130
 ```
 
-Repeat runs (no migrations, no seed):
+Один dev-server: http://localhost:3130. `tmp/feature-audit/` содержит локальный
+wrapper, фикстуру, логи, PNG/PDF и Playwright traces; каталог не коммитится.
+Контрольные артефакты: `buyer-registration-trace.zip`, `pos-bonus-trace.zip`,
+`buyer-consent-trace.zip`, `pos-payment-trace.zip`, `buyer-balance-after-payment.png`,
+`label-58x40.pdf`. Полный список будет зафиксирован после приёмки.
 
-```bash
-LOYALTY_OTP_DEV_OUTBOX=1 pnpm dev
-```
+## Ручная приёмка владельцем
 
-`pnpm dev` does not need `CRON_SECRET`; only `pnpm build` does (its preflight
-requires it). `pnpm prisma:migrate` and `pnpm prisma:seed` are NOT protected by the
-demo guard — they act on whatever `DATABASE_URL` points at, so confirm the local
-`DATABASE_URL` (localhost, docker) before running them. `pnpm loyalty:demo` itself
-refuses any non-local host and never resets data.
+1. Войти владельцем → **Настройки → Программа лояльности**: выбрать магазин,
+   проверить правила и QR. Программа и типы цен у реальных магазинов по умолчанию выключены.
+2. **Настройки → Профиль организации**: включить типы цен только нужному магазину.
+   **Товары → карточка товара → Цены по магазинам**: задать Розницу/Опт; пусто означает наследование,0 — реальная нулевая цена.
+3. **Настройки → Пользователи**: право перемещения включается отдельному кассиру.
+   **Касса → Учебный · Центр**: добавить товар, изменить тип цены, открыть перемещение.
+   **Учебный · Склад**: переключателя цен нет.
+4. **Товары → Ещё фильтры → Отрицательный остаток / Нет себестоимости**;
+   **Действия → CSV/XLSX**: проверить остаток и магазин, затем выделить одну строку.
+5. **Настройки → Печать**: выбрать магазин, изменить шрифты/промежутки в мм,
+   сохранить, перезагрузить. Цена и валюта остаются рядом. Переполнение требует
+   исправить макет или явно выбрать уменьшение шрифта.
+6. В форме покупателя зарегистрировать учебный email, взять OTP из outbox,
+   показать QR кассиру. Для списания подтвердить запрос в карте покупателя.
+   В журнале чеков открыть возврат; в онлайн-заказе — подтвердить фактически
+   полученную оплату в открытой смене, затем рассчитать и подтвердить возврат.
 
-Demo customers (dev database, current state):
+## Запуск и релиз
 
-- `demo-points@example.invalid` — **1000** points (opening balance written through
-  the journal; untouched by my test runs, which use a separate test database).
-- `demo-nopoints@example.invalid` — **0** points.
+Обычный повторный запуск приведён выше: только dev, без seed/reset. При первом
+создании окружения нужен disposable Docker из `docker-compose.stabilization.yml`,
+отдельная новая БД `bazaar_feature_20261001` и `prisma migrate deploy` через local
+wrapper; после миграций — явный `loyalty:demo`. Seed проверяет Docker identity,
+точную БД, отключённых провайдеров и не сбрасывает существующие данные.
 
-A newly registered account always starts at 0; only the prepared demo account has
-1000.
+Релиз использует существующий Git→Vercel проект `bazaar`, production
+`https://www.bazaar.kg`. Десять миграций после upstream проверены и внесены в
+`approvedProductionMigrations` с SHA256; штатный Vercel prebuild сверяет историю.
+Новые поля не нарушают старый Prisma; trigger сохраняет ручные legacy цены.
+Возврат на 7115437 после использования новых финансовых функций требует отдельной
+проверки данных/совместимого recovery deployment: старая версия не учитывает новые
+online payments и loyalty. База и схема не откатываются разрушительными командами.
+Предыдущий успешный deployment: `dpl_HGEYiCYYQP56KuBYEG72JQaGDPgi`, SHA7115437.
 
-Navigation path (one actual route each):
+Артефакты: `header-final-1280.png`, `header-final-trace.zip`,
+`pos-tools-trace.zip`, `pos-recovery-trace.zip`, `pos-loyalty-price-trace.zip`,
+`online-payments-returns-trace.zip`, `export-browser-trace.zip`,
+`label-all-fonts-trace.zip`, `label-preview-print-pixels.json`,
+`route-preview-40.pdf`, `route-print-58.pdf`, `all-integration-release.log`,
+`unit-release.log`, `build-release.log`. Всё в `tmp/feature-audit/`.
 
-- Desktop: sidebar group **Администрирование → Программа лояльности**.
-- Mobile: bottom bar **Ещё → Программа лояльности**.
-- `/settings` is a section index page reached from the breadcrumb/back button; it is
-  not a separate parallel menu.
-
-`pnpm loyalty:demo` refuses any non-local database host and never resets data.
-It creates the 1000 KGS demo product, `demo-points@example.invalid` (1000 opening
-points written through the journal) and `demo-nopoints@example.invalid` (0), and
-enables the programme only for the demo organization.
-
-Local OTP codes are written to `tmp/loyalty-otp-outbox.log` (one line:
-`timestamp`, `email`, `code`). This outbox is enabled only with
-`LOYALTY_OTP_DEV_OUTBOX=1` and is refused in production / on Vercel. The code is
-never returned by the normal API and there is no universal OTP.
-
-Manual walkthrough: sign in as owner → **Настройки → Бонусы (Программа лояльности)**
-→ open a store's registration QR → customer opens that link, requests a code, reads
-it from the outbox file, confirms → lands on the card with balance, rules, history
-and a short-lived QR with a countdown → show that QR at the register.
-
-## Stage 1 — Online sales report — DONE
-
-- "Онлайн-продажи" tab in existing analytics; two separate blocks (orders created
-  vs completed sales/money), daily chart, server-paginated orders table, export.
-- Online = `saleChannel=ONLINE`; unknown channel is a separate filter, never merged.
-  Money received is shown only from real `SalePayment` rows, otherwise
-  "Нет данных о платеже".
-- Fixed `completePosSale`/`holdPosSaleDraft` so a register default can never
-  downgrade a recorded ONLINE sale.
-- Verified: local build, browser check, unit + reporting integration suites.
-
-## Stage 2 — Programme rules + settings — DONE
-
-- Rules: member discount 5%, earn 5%, 1 point = 1 KGS, max spend 50% after the
-  member discount, promo positions excluded by default, larger-of member/promo.
-  Disabled by default; only an explicit admin activation enables it.
-- Admin UI at `/settings/loyalty`: enable switch, discount, earn rate, spend limit,
-  min redeem, reservation TTL, promo options, participating stores.
-
-## Stage 3 — Accounts, calculation, journal — DONE
-
-- Schema + additive migrations: program, program stores, member, account,
-  append-only ledger (`eventKey` unique), reservation, per-order snapshot.
-- One shared server calculation (`calc.ts`); money via `Prisma.Decimal`, whole
-  points rounded down.
-- Atomic reservation guard on `LoyaltyAccount.reservedPoints`; expired reservations
-  are swept and never reduce availability.
-
-## Stage 4 — Registration, sessions, QR card — DONE
-
-- Visible path: desktop sidebar **Администрирование → Программа лояльности** and
-  mobile **Ещё → Программа лояльности**; new `/settings` index lists implemented
-  sections for the current role; the loyalty page has "Назад в настройки".
-- Store QR ("Регистрация покупателей") per participating store with store name and
-  Открыть страницу / Скопировать ссылку / Скачать QR. The link is generated
-  automatically — no manual slug.
-- Customer identity is separate from staff auth: email OTP (hashed, TTL, attempt and
-  rate limits), dedicated revocable httpOnly session cookie, no `User` row.
-- Customer card: balance, available points, rules, history, large short-lived QR
-  ("Показать кассиру") with countdown and refresh, plus a "У меня уже есть карта"
-  re-entry link.
-- QRs are rendered server-side and verified by decoding: a real scanner library
-  decodes the store QR to the join URL and the customer QR to the opaque token, and
-  `verifyCardToken` accepts that decoded value
-  (`tests/integration/loyalty-qr.test.ts`).
-
-## Stage 5 — Register and online-order integration — DONE
-
-- Register: a single compact "Бонусы" button inside the existing customer dialog
-  opens a separate dialog (scan card QR, member discount, available/max points,
-  points to redeem, payable, will-earn, apply/remove). The shared server quote,
-  reservation and confirmation are wired into the real completion
-  (`completePosSale`), and the earning is granted only on a fully paid money part.
-- Verified end-to-end through the real sale services
-  (`tests/integration/loyalty-pos.test.ts`): 1000 → pay 950 / earn 47; balance 1000
-  → redeem 475 / pay 475 / earn 23; insufficient balance fails loudly; a repeated
-  completion changes nothing. Parallel orders on one account cannot spend the same
-  points (`tests/integration/loyalty-orders.test.ts`).
-- POS base screen unchanged: `tmp/pos-{desktop,tablet,mobile}-before.png` and
-  `...-after.png` are byte-identical.
-- Online catalogue order: the public checkout reads the verified loyalty session
-  server-side, applies the member discount and reserves the chosen points on the
-  created order, and rejects a client that asks for more points than it has. The
-  catalogue form shows the member discount, available points, chosen points and the
-  expected payable. Staff completion confirms the redemption and grants the earning
-  only with real `SalePayment` evidence — a CONFIRMED order alone earns nothing.
-  Verified by `tests/integration/loyalty-online-order.test.ts` **and end to end in
-  the browser**: the catalogue form showed the bonus block, submitting created
-  `SO-000003` (subtotal 670 → member discount 33.5 → 636.5, `saleChannel=ONLINE`),
-  and the order screen shows the bonus card (33.50 KGS member discount, 31 points
-  pending payment evidence).
-- Verified in the browser: the register flow (open shift → add the 1000 KGS demo
-  product → customer dialog → «Бонусы» → scan the customer card QR → redeem 475 →
-  pay 475 → sale completed → card balance **1000 → 548**).
-- Verified in the browser: the catalogue checkout block and the order bonus card
-  (`tmp/catalog-loyalty.png`, `tmp/catalog-loyalty-success.png`,
-  `tmp/order-loyalty.png`).
-- Verified in the browser: the **POS return** — the history dialog for S-000253
-  offered a 475,00 KGS refund (the money actually paid, not 1000), completing it
-  created SR-000007 and returned the card balance to **1000** (+475 restored,
-  −23 cancelled). Screenshots: `tmp/pos-return-dialog.png`,
-  `tmp/pos-return-after.png`.
-
-## Stage 6 — Returns and loyalty reporting — DONE
-
-- `reverseLoyaltyForReturn` now runs inside the same transaction as the money return
-  (`completeSaleReturn`), using the original sale's saved rules and line
-  distribution.
-- Applying loyalty now writes the reduced price onto the order lines, so a full
-  return refunds the money actually paid (475, not 1000) and the loyalty reversal
-  lands exactly on the original amounts.
-- Verified end-to-end through the real return services: 1000 start → redeem 475 /
-  earn 23 → 548; full return → refund 475 KGS, +475 points, −23 points, balance
-  1000; repeating the return changes nothing.
-- Reporting: the online report has a store-scoped "Бонусы за период" block (member
-  discount, points spent/earned/restored/cancelled) from the journal and per-order
-  snapshots; verified in the browser. The customer card shows the points history.
-  The order/receipt shows the discounted amount through the line totals, without a
-  separate points breakdown.
-
-## Stage 7 — Local acceptance — MOSTLY DONE
-
-Verified by me in a browser: owner navigation → settings with a per-store
-registration QR; customer registration through the local OTP outbox → card with the
-balance, rules, history and a decodable QR; the QRs decode with a real scanner
-library into a token the register handler accepts; the full register purchase with
-a bonus redemption; and the loyalty block in the online report.
-
-Verified by tests (services, not clicks): remove-bonus restore, stale-cart guard,
-disabled-programme sale, repeated completion, the return control example, and the
-online-order application/earning rules.
-
-Verified in the browser: the POS return flow (dialog → 475,00 KGS refund →
-SR-000007 → balance 1000).
-
-NOT verified by me: physical phone/camera scanning of either QR (only viewport
-emulation and decoded image data were checked). POS base screen is byte-identical
-before/after
-(`tmp/pos-{desktop,tablet,mobile}-{before,after}.png`).
-
-## Exact continuation point
-
-1. Physical phone/camera verification of both QRs — the only item not verified.
-
-## Blockers
-
-- None technical.
-
-## Screenshots (tmp is gitignored)
-
-- `tmp/loyalty-settings-index.png`, `tmp/loyalty-settings.png` (settings + QRs)
-- `tmp/loyalty-card.png` (customer card with QR)
-- `tmp/pos-{desktop,tablet,mobile}-{before,after}.png`
+Ограничения: физические телефон/камера/принтер не проверялись. Эмуляция viewport,
+декодирование изображения и PDF не выдаются за проверку этих устройств.

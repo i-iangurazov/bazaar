@@ -1,4 +1,5 @@
 "use client";
+import { StoreExtraPrices } from "@/components/products/store-extra-prices";
 
 import { StockQuantityCell } from "@/components/inventory/stock-quantity-cell";
 import { useSse } from "@/lib/useSse";
@@ -1332,6 +1333,7 @@ const ProductDetailPage = () => {
                             </div>
                           )}
                         </div>
+                        {canManageStorePrices && storeRow.retailWholesaleEnabled ? <StoreExtraPrices storeId={storeRow.storeId} productId={productId} standard={storeRow.effectivePriceKgs} retail={storeRow.retailPriceKgs} wholesale={storeRow.wholesalePriceKgs} onSaved={() => { void storePricingQuery.refetch(); }} /> : null}
                         {storeRow.variants.length ? (
                           <div className="mt-3 border-t border-border/70 pt-3">
                             <p className="mb-2 text-xs font-medium text-muted-foreground">
@@ -1348,6 +1350,7 @@ const ProductDetailPage = () => {
                                     <p className="truncate text-xs font-medium text-foreground">
                                       {resolveVariantLabel(variant)}
                                     </p>
+                                    {canManageStorePrices && storeRow.retailWholesaleEnabled ? <StoreExtraPrices storeId={storeRow.storeId} productId={productId} variantId={variant.variantId} standard={variant.effectivePriceKgs} retail={variant.retailPriceKgs} wholesale={variant.wholesalePriceKgs} onSaved={() => { void storePricingQuery.refetch(); }} /> : null}
                                     <div className="mt-2 grid gap-2">
                                       {canManageStorePrices ? (
                                         <div className="flex items-center gap-2">

@@ -1,3 +1,4 @@
+import { getOrderPaymentInfo, recordOrderPayment } from "@/server/services/salesOrderPayments";
 import { CustomerOrderEmailType, CustomerOrderStatus, type PrismaClient } from "@prisma/client";
 import { z } from "zod";
 
@@ -6,7 +7,7 @@ import {
   isValidOptionalCustomerPhone,
 } from "@/lib/customerContact";
 
-import { managerProcedure, protectedProcedure, rateLimit, router } from "@/server/trpc/trpc";
+import { cashierProcedure, managerProcedure, protectedProcedure, rateLimit, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
 import { AppError } from "@/server/services/errors";
 import { salesOrderLifecycleViews } from "@/lib/salesOrderLifecycle";
@@ -112,6 +113,12 @@ const assertCustomerOrderLineStoreAccess = async (ctx: SalesOrdersContext, lineI
 };
 
 export const salesOrdersRouter = router({
+  paymentInfo: salesOrdersProtectedProcedure.input(z.object({ customerOrderId: z.string() })).query(async ({ ctx, input }) => {
+    try { return await getOrderPaymentInfo(ctx.user, input.customerOrderId); } catch (error) { throw toTRPCError(error); }
+  }),
+  recordPayment: cashierProcedure.input(z.object({ customerOrderId: z.string(), shiftId: z.string(), amountKgs: z.number().positive(), method: z.enum(["CASH", "CARD", "TRANSFER", "OTHER"]), idempotencyKey: z.string().min(8) })).mutation(async ({ctx,input}) => {
+    try { await assertFeatureEnabled({ organizationId: ctx.user.organizationId, feature: "customerOrders" }); return await recordOrderPayment({ ...input, user: ctx.user, requestId: ctx.requestId }); } catch (error) { throw toTRPCError(error); }
+  }),
   metrics: salesOrdersManagerProcedure
     .input(
       z.object({

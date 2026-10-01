@@ -596,7 +596,7 @@ const loadPriceMap = async (storeId: string, productIds: string[]) => {
     select: { productId: true, variantId: true, priceKgs: true },
   });
   return new Map(
-    prices.map((price) => [buildKey(price.productId, price.variantId), Number(price.priceKgs)]),
+    prices.filter((price) => price.priceKgs != null).map((price) => [buildKey(price.productId, price.variantId), Number(price.priceKgs)]),
   );
 };
 
@@ -785,7 +785,7 @@ const buildInventoryRows = async (
           (price.variantId ?? null) === (snapshot.variantId ?? null),
       ) ?? storePrices.find((price) => price.productId === snapshot.product.id && !price.variantId);
     const basePrice = snapshot.product.basePriceKgs ? Number(snapshot.product.basePriceKgs) : null;
-    const effectivePrice = priceOverride ? Number(priceOverride.priceKgs) : basePrice;
+    const effectivePrice = priceOverride?.priceKgs != null ? Number(priceOverride.priceKgs) : basePrice;
     const flags = flagsMap.get(snapshot.product.id);
 
     const row: Record<string, unknown> = {
@@ -1027,15 +1027,15 @@ const buildShiftReportRows = async (
           {
             isRefund: false,
             customerOrder: {
-              isPosSale: true,
               status: CustomerOrderStatus.COMPLETED,
             },
           },
           {
             isRefund: true,
-            saleReturn: {
-              status: PosReturnStatus.COMPLETED,
-            },
+            OR: [
+              { saleReturn: { status: PosReturnStatus.COMPLETED } },
+              { saleReturnId: null, customerOrder: { status: CustomerOrderStatus.COMPLETED } },
+            ],
           },
         ],
       },

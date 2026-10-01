@@ -5,6 +5,9 @@ import { PrinterPrintMode } from "@prisma/client";
 import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
 
+import { LabelTextEditor, LabelPdfPreview } from "@/components/products/label-text-editor";
+import { resolveLabelTextStyles, type LabelTextStyles } from "@/lib/labelTextStyles";
+import { fetchLabelPreview, type LabelPreviewInput } from "@/lib/labelPreview";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,6 +37,7 @@ import {
   getQzTrustStatus,
   listQzPrinters,
   printHtmlViaQzTray,
+  printPdfBlobViaQzTray,
   qzTrayErrorMessageKey,
   saveQzTrayBinding,
   type QzTrayBinding,
@@ -107,6 +111,7 @@ type PrintingFormValues = {
   labelShowStoreName: boolean;
   labelBarcodeHeightMm: number;
   labelFontSize: number;
+  labelTextStyles: LabelTextStyles;
   labelRollGapMm: number;
   labelRollXOffsetMm: number;
   labelRollYOffsetMm: number;
@@ -194,6 +199,7 @@ const defaultFormValues: PrintingFormValues = {
   labelShowStoreName: false,
   labelBarcodeHeightMm: 12,
   labelFontSize: 8,
+  labelTextStyles: resolveLabelTextStyles(null),
   labelRollGapMm: PRICE_TAG_ROLL_DEFAULTS.gapMm,
   labelRollXOffsetMm: PRICE_TAG_ROLL_DEFAULTS.xOffsetMm,
   labelRollYOffsetMm: PRICE_TAG_ROLL_DEFAULTS.yOffsetMm,
@@ -263,52 +269,6 @@ const buildReceiptTestHtml = (values: PrintingFormValues, sample: PrintingPrevie
   </div>
 </body>
 </html>`;
-
-const buildBarcodeTestHtml = (values: PrintingFormValues, sample: PrintingPreviewSample) => {
-  const blocks =
-    values.labelLayoutOrder === "PRICE_NAME_BARCODE"
-      ? ["price", "name", "barcode"]
-      : values.labelLayoutOrder === "BARCODE_ONLY"
-        ? ["barcode"]
-        : values.labelLayoutOrder === "NAME_BARCODE"
-          ? ["name", "barcode"]
-          : values.labelLayoutOrder === "PRICE_BARCODE"
-            ? ["price", "barcode"]
-            : ["name", "barcode", "price"];
-  const content = blocks
-    .map((block) => {
-      if (block === "name" && values.labelShowProductName) {
-        return `<div>${sample.productName}</div>`;
-      }
-      if (block === "price" && values.labelShowPrice) {
-        return `<div class="price">${sample.price}</div>`;
-      }
-      if (block === "barcode") {
-        return `<div class="barcode"></div>${values.labelShowBarcodeText ? `<div>${sample.barcode}</div>` : ""}`;
-      }
-      return "";
-    })
-    .join("");
-  return `
-<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <style>
-    body { margin: 0; font-family: Arial, sans-serif; }
-    .label { width: ${values.labelWidthMm}mm; height: ${values.labelHeightMm}mm; padding: 2mm; box-sizing: border-box; text-align: center; font-size: ${values.labelFontSize}px; }
-    .barcode { height: ${values.labelBarcodeHeightMm}mm; margin: 2mm 0; background: repeating-linear-gradient(90deg, #000 0 1px, #fff 1px 3px, #000 3px 5px, #fff 5px 7px); }
-    .price { font-size: ${Math.max(values.labelFontSize + 5, 12)}px; font-weight: 700; }
-  </style>
-</head>
-<body>
-  <div class="label">
-    ${content}
-    ${values.labelShowSku ? `<div>${sample.sku}</div>` : ""}
-  </div>
-</body>
-</html>`;
-};
 
 const ToggleRow = ({
   label,
@@ -422,6 +382,11 @@ const PrintingSettingsPage = () => {
   const trpcUtils = trpc.useUtils();
   const storesQuery = trpc.stores.list.useQuery();
   const [storeId, setStoreId] = useState("");
+  const storePreferenceKey = session?.user?.id ? `bazaar:printing-store:${session.user.id}` : null;
+  const selectStore = (id: string) => {
+    setStoreId(id);
+    if (storePreferenceKey) { try { localStorage.setItem(storePreferenceKey, id); } catch { /* Storage can be disabled in a browser. */ } }
+  };
   const [values, setValues] = useState<PrintingFormValues>(defaultFormValues);
   const [binding, setBinding] = useState<QzTrayBinding>({
     receiptPrinterName: "",
@@ -436,11 +401,13 @@ const PrintingSettingsPage = () => {
   const [testAction, setTestAction] = useState<"receipt" | "barcode" | null>(null);
 
   useEffect(() => {
-    if (storeId || !storesQuery.data?.[0]) {
+    if (storeId || !storesQuery.data?.[0] || !storePreferenceKey) {
       return;
     }
-    setStoreId(storesQuery.data[0].id);
-  }, [storeId, storesQuery.data]);
+    let saved: string | null = null;
+    try { saved = localStorage.getItem(storePreferenceKey); } catch { /* Use the first accessible store. */ }
+    setStoreId(storesQuery.data.some(store => store.id === saved) ? saved! : storesQuery.data[0].id);
+  }, [storeId, storesQuery.data, storePreferenceKey]);
 
   const settingsQuery = trpc.stores.hardware.useQuery(
     { storeId },
@@ -518,6 +485,7 @@ const PrintingSettingsPage = () => {
       labelShowStoreName: settings.labelShowStoreName,
       labelBarcodeHeightMm: settings.labelBarcodeHeightMm,
       labelFontSize: settings.labelFontSize,
+      labelTextStyles: settings.labelTextStyles,
       labelRollGapMm: settings.labelRollGapMm,
       labelRollXOffsetMm: settings.labelRollXOffsetMm,
       labelRollYOffsetMm: settings.labelRollYOffsetMm,
@@ -533,8 +501,15 @@ const PrintingSettingsPage = () => {
 
   const selectedStore = (storesQuery.data ?? []).find((store) => store.id === storeId);
   const receiptPreviewWidth = Math.min(360, receiptWidthMm(values) * 4);
-  const labelPreviewWidth = Math.min(320, values.labelWidthMm * 5);
-  const labelPreviewHeight = Math.min(220, values.labelHeightMm * 5);
+  const labelPreviewInput: LabelPreviewInput = {
+    storeId, template: values.labelTemplate as LabelPreviewInput["template"], widthMm: values.labelWidthMm, heightMm: values.labelHeightMm,
+    xOffsetMm: values.labelRollXOffsetMm, yOffsetMm: values.labelRollYOffsetMm,
+    barcodeHeightMm: values.labelBarcodeHeightMm, barcodeType: values.labelBarcodeType,
+    labelLayoutOrder: values.labelLayoutOrder, labelTextStyles: values.labelTextStyles,
+    labelMargins: { top: values.labelMarginTopMm, right: values.labelMarginRightMm, bottom: values.labelMarginBottomMm, left: values.labelMarginLeftMm },
+    showProductName: values.labelShowProductName, showPrice: values.labelShowPrice, showSku: values.labelShowSku,
+    showBarcodeText: values.labelShowBarcodeText, showCurrency: values.labelShowCurrency, showStoreName: values.labelShowStoreName,
+  };
   const sample: PrintingPreviewSample = {
     receiptTestTitle: t("sampleReceiptTestTitle"),
     receiptHeading: t("sampleReceiptHeading"),
@@ -559,17 +534,6 @@ const PrintingSettingsPage = () => {
     changeAmount: t("sampleChangeAmount"),
     price: values.labelShowCurrency ? t("samplePriceWithCurrency") : t("samplePrice"),
   };
-  const barcodePreviewBlocks =
-    values.labelLayoutOrder === "PRICE_NAME_BARCODE"
-      ? (["price", "name", "barcode"] as const)
-      : values.labelLayoutOrder === "BARCODE_ONLY"
-        ? (["barcode"] as const)
-        : values.labelLayoutOrder === "NAME_BARCODE"
-          ? (["name", "barcode"] as const)
-          : values.labelLayoutOrder === "PRICE_BARCODE"
-            ? (["price", "barcode"] as const)
-            : (["name", "barcode", "price"] as const);
-
   const updateMutation = trpc.stores.updateHardware.useMutation({
     onSuccess: async () => {
       saveQzTrayBinding(storeId, binding);
@@ -653,13 +617,10 @@ const PrintingSettingsPage = () => {
     }
     setTestAction(kind);
     try {
-      const result = await printHtmlViaQzTray({
-        printerName,
-        html:
-          kind === "receipt"
-            ? buildReceiptTestHtml(values, sample)
-            : buildBarcodeTestHtml(values, sample),
-      });
+      const preview = kind === "barcode" ? await fetchLabelPreview(labelPreviewInput) : null;
+      if (preview?.warnings.length) throw new Error("labelLayoutOverflow");
+      const result = preview ? await printPdfBlobViaQzTray({ printerName, blob: preview.blob })
+        : await printHtmlViaQzTray({ printerName, html: buildReceiptTestHtml(values, sample) });
       setQzTrustStatus(result.trustStatus);
       toast({
         variant: result.trustStatus === "trusted" ? "success" : "info",
@@ -669,6 +630,7 @@ const PrintingSettingsPage = () => {
             : t(qzTrustMessageKeyFor(result.trustStatus)),
       });
     } catch (error) {
+      if (error instanceof Error && error.message === "labelLayoutOverflow") { toast({ variant: "error", description: tErrors("labelLayoutOverflow") }); return; }
       const key = qzTrayErrorMessageKey(error);
       setQzErrorKey(key);
       setQzTrustStatus(getQzTrustStatus());
@@ -738,6 +700,7 @@ const PrintingSettingsPage = () => {
       labelShowStoreName: values.labelShowStoreName,
       labelBarcodeHeightMm: Number(values.labelBarcodeHeightMm),
       labelFontSize: Number(values.labelFontSize),
+      labelTextStyles: values.labelTextStyles,
       labelRollGapMm: Number(values.labelRollGapMm),
       labelRollXOffsetMm: Number(values.labelRollXOffsetMm),
       labelRollYOffsetMm: Number(values.labelRollYOffsetMm),
@@ -829,7 +792,7 @@ const PrintingSettingsPage = () => {
           <CardContent className="space-y-3 px-4 py-4">
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">{tCommon("store")}</label>
-              <Select value={storeId} onValueChange={setStoreId}>
+              <Select value={storeId} onValueChange={selectStore}>
                 <SelectTrigger className="h-11">
                   <SelectValue placeholder={tCommon("selectStore")} />
                 </SelectTrigger>
@@ -1157,6 +1120,10 @@ const PrintingSettingsPage = () => {
                 {([
                   ["labelWidthMm", "widthMm"],
                   ["labelHeightMm", "heightMm"],
+                  ["labelMarginTopMm", "marginTop"],
+                  ["labelMarginRightMm", "marginRight"],
+                  ["labelMarginBottomMm", "marginBottom"],
+                  ["labelMarginLeftMm", "marginLeft"],
                   ["labelBarcodeHeightMm", "barcodeHeight"],
                   ["labelDefaultCopies", "labelDefaultCopies"],
                 ] as const).map(([key, label]) => (
@@ -1187,35 +1154,8 @@ const PrintingSettingsPage = () => {
                   />
                 ))}
               </div>
-              <div
-                className="flex items-center justify-center border border-border bg-white p-3 text-center text-xs text-black shadow-sm"
-                style={{ minHeight: 120 }}
-              >
-                <div className="w-full">
-                  {barcodePreviewBlocks.map((block) => {
-                    if (block === "name" && values.labelShowProductName) {
-                      return <div key={block}>{sample.productName}</div>;
-                    }
-                    if (block === "price" && values.labelShowPrice) {
-                      return (
-                        <div key={block} className="text-base font-bold">
-                          {sample.price}
-                        </div>
-                      );
-                    }
-                    if (block === "barcode") {
-                      return (
-                        <div key={block}>
-                          <div className="my-2 h-8 w-full bg-[repeating-linear-gradient(90deg,#000_0_2px,#fff_2px_4px,#000_4px_7px,#fff_7px_10px)]" />
-                          {values.labelShowBarcodeText ? <div>{sample.barcode}</div> : null}
-                        </div>
-                      );
-                    }
-                    return null;
-                  })}
-                  {values.labelShowSku ? <div>{sample.sku}</div> : null}
-                </div>
-              </div>
+              <LabelTextEditor value={values.labelTextStyles} onChange={(value) => updateValue("labelTextStyles", value)} disabled={!canEdit || settingsQuery.isFetching} />
+              <LabelPdfPreview input={labelPreviewInput} />
             </MobileWizardStep>
 
             <MobileWizardStep
@@ -1327,7 +1267,7 @@ const PrintingSettingsPage = () => {
         <CardContent className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">{tCommon("store")}</label>
-            <Select value={storeId} onValueChange={setStoreId}>
+            <Select value={storeId} onValueChange={selectStore}>
               <SelectTrigger>
                 <SelectValue placeholder={tCommon("selectStore")} />
               </SelectTrigger>
@@ -1945,8 +1885,11 @@ const PrintingSettingsPage = () => {
                   {([
                     ["labelWidthMm", "widthMm", PRICE_TAG_ROLL_LIMITS.widthMm.step],
                     ["labelHeightMm", "heightMm", PRICE_TAG_ROLL_LIMITS.heightMm.step],
+                    ["labelMarginTopMm", "marginTop", 0.5],
+                    ["labelMarginRightMm", "marginRight", 0.5],
+                    ["labelMarginBottomMm", "marginBottom", 0.5],
+                    ["labelMarginLeftMm", "marginLeft", 0.5],
                     ["labelBarcodeHeightMm", "barcodeHeight", 0.5],
-                    ["labelFontSize", "fontSize", 0.5],
                     ["labelRollGapMm", "labelRollGapMm", PRICE_TAG_ROLL_LIMITS.gapMm.step],
                     ["labelRollXOffsetMm", "labelRollXOffsetMm", PRICE_TAG_ROLL_LIMITS.offsetMm.step],
                     ["labelRollYOffsetMm", "labelRollYOffsetMm", PRICE_TAG_ROLL_LIMITS.offsetMm.step],
@@ -1982,6 +1925,7 @@ const PrintingSettingsPage = () => {
                     />
                   ))}
                 </div>
+                <LabelTextEditor value={values.labelTextStyles} onChange={(value) => updateValue("labelTextStyles", value)} disabled={!canEdit || settingsQuery.isFetching} />
                 <Button
                   type="button"
                   variant="secondary"
@@ -2002,42 +1946,7 @@ const PrintingSettingsPage = () => {
                 <CardTitle>{t("barcodePreview")}</CardTitle>
               </CardHeader>
               <CardContent>
-                <div
-                  className="flex items-center justify-center rounded-lg border border-border bg-white p-3 text-center text-black shadow-sm"
-                  style={{ width: labelPreviewWidth, minHeight: labelPreviewHeight }}
-                >
-                  <div className="w-full">
-                    {barcodePreviewBlocks.map((block) => {
-                      if (block === "name" && values.labelShowProductName) {
-                        return <div key={block}>{sample.productName}</div>;
-                      }
-                      if (block === "price" && values.labelShowPrice) {
-                        return (
-                          <div key={block} className="text-lg font-bold">
-                            {sample.price}
-                          </div>
-                        );
-                      }
-                      if (block === "barcode") {
-                        return (
-                          <div key={block}>
-                            <div
-                              className="my-2 w-full"
-                              style={{
-                                height: Math.max(28, values.labelBarcodeHeightMm * 3),
-                                background:
-                                  "repeating-linear-gradient(90deg, #000 0 2px, #fff 2px 4px, #000 4px 7px, #fff 7px 10px)",
-                              }}
-                            />
-                            {values.labelShowBarcodeText ? <div>{sample.barcode}</div> : null}
-                          </div>
-                        );
-                      }
-                      return null;
-                    })}
-                    {values.labelShowSku ? <div>{sample.sku}</div> : null}
-                  </div>
-                </div>
+                <LabelPdfPreview input={labelPreviewInput} />
               </CardContent>
             </Card>
           </div>

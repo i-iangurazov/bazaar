@@ -1,4 +1,5 @@
 "use client";
+import { PosTransferDialog } from "@/components/pos/transfer-dialog";
 
 import { posShiftCloseHref } from "@/lib/posShiftClose";
 
@@ -43,6 +44,7 @@ import {
   StoresIcon,
   StatusWarningIcon,
   TagIcon,
+  TransferIcon,
   ViewIcon,
   BarcodeIcon,
 } from "@/components/icons";
@@ -255,6 +257,9 @@ const CustomerCreatePanel = ({
 );
 
 type PosCartProduct = {
+  variantCount?: number;
+  variantId?: string | null;
+  variantName?: string | null;
   id: string;
   sku?: string | null;
   name: string;
@@ -281,8 +286,10 @@ type PosCartLine = {
   productId?: string;
   variantId?: string | null;
   variantKey?: string | null;
+  variant?: { name: string | null } | null;
   qty: number;
   unitPriceKgs: number;
+  manualPrice?: boolean;
   lineTotalKgs: number;
   unitCostKgs?: number | null;
   lineCostTotalKgs?: number | null;
@@ -329,10 +336,11 @@ const buildOptimisticLine = (product: PosCartProduct): PosCartLine => {
   const primaryImage = product.primaryImage ?? product.images?.[0]?.url ?? product.photoUrl ?? null;
 
   return {
-    id: optimisticLineIdForProduct(product.id),
+    id: optimisticLineIdForProduct(product.id, product.variantId ?? "BASE"),
     productId: product.id,
-    variantId: null,
-    variantKey: "BASE",
+    variantId: product.variantId ?? null,
+    variantKey: product.variantId ?? "BASE",
+    variant: product.variantId ? { name: product.variantName ?? null } : null,
     qty: 1,
     unitPriceKgs,
     lineTotalKgs: roundMoney(unitPriceKgs),
@@ -552,6 +560,14 @@ const PosSellPage = () => {
   const [debtFullName, setDebtFullName] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<PosCustomerSelection | null>(null);
   const [loyaltyOpen, setLoyaltyOpen] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [variantChoice, setVariantChoice] = useState<{ product: PosCartProduct; variants: Array<{ id: string; name: string | null; sku: string | null }>; decrement?: boolean } | null>(null);
+  const [priceMode, setPriceMode] = useState<"RETAIL" | "WHOLESALE">("RETAIL");
+  const [priceConfirmation, setPriceConfirmation] = useState<{mode:"RETAIL"|"WHOLESALE";totalKgs:number;fingerprint:string;pointsReleased:boolean}|null>(null);
+  const [cartPriceSync, setCartPriceSync] = useState<{ saleId: string | null; error: string | null } | null>(null);
+  const cartPriceSyncRef = useRef(false);
+  const cartPriceRefreshInFlightRef = useRef(false);
+  const changePriceMutation = trpc.posTools.changePriceMode.useMutation();
   const [customerSelectorOpen, setCustomerSelectorOpen] = useState(false);
   const [customerSearch, setCustomerSearch] = useState("");
   const [customerCreateOpen, setCustomerCreateOpen] = useState(false);
@@ -810,6 +826,8 @@ const PosSellPage = () => {
   const searchTerm = useImmediateCatalogSearch ? lineSearch.trim() : debouncedLineSearch;
   const hasSearchTerm = lineSearch.trim().length >= 1;
   const activeStoreId = shiftQuery.data?.store.id;
+  const posToolsQuery = trpc.posTools.options.useQuery({storeId:activeStoreId ?? ""},{enabled:Boolean(activeStoreId),refetchOnWindowFocus:false});
+  useEffect(() => { setPriceMode("RETAIL"); setTransferOpen(false); setPriceConfirmation(null); }, [activeStoreId]);
   const journalStoreId = activeStoreId ?? selectedRegister?.store.id;
   const journalSelectedSaleId = journalReturnSaleId ?? journalDetailSaleId ?? journalEditSaleId;
   const receiptPrintSettingsQuery = trpc.stores.hardware.useQuery(
@@ -826,6 +844,7 @@ const PosSellPage = () => {
       search: searchTerm || undefined,
       category: selectedCategory || undefined,
       storeId: activeStoreId,
+      priceMode: posToolsQuery.data?.priceTypesEnabled ? priceMode : undefined,
       page: catalogPage,
       pageSize: catalogPageSize,
       sortKey: "name",
@@ -1233,11 +1252,11 @@ const PosSellPage = () => {
 
   const setOptimisticSaleLines = useCallback(
     (updater: PosCartLine[] | null | ((current: PosCartLine[] | null) => PosCartLine[] | null)) => {
-      setOptimisticSaleLinesState((current) => {
-        const next = typeof updater === "function" ? updater(current) : updater;
-        optimisticSaleLinesRef.current = next;
-        return next;
-      });
+      // Resolve once against the synchronous cart. React can replay a state
+      // updater; mutating this ref inside it could add the same item twice.
+      const next = typeof updater === "function" ? updater(optimisticSaleLinesRef.current) : updater;
+      optimisticSaleLinesRef.current = next;
+      setOptimisticSaleLinesState(next);
     },
     [],
   );
@@ -1354,6 +1373,7 @@ const PosSellPage = () => {
   });
 
   const sale = saleQuery.data;
+  useEffect(() => { if (sale?.priceMode === "RETAIL" || sale?.priceMode === "WHOLESALE") setPriceMode(sale.priceMode); }, [sale?.id, sale?.priceMode]);
   const activeDraft = activeDraftQuery.data;
   const currencySource = currencySourceWithFallback(
     journalEditSaleId ? journalSaleDetailQuery.data : sale,
@@ -1773,6 +1793,7 @@ const PosSellPage = () => {
   const entryError = registersQuery.error ?? shiftQuery.error;
   const retryEntry = () => registersQuery.isError ? registersQuery.refetch() : shiftQuery.refetch();
   const isLineBusy =
+    Boolean(cartPriceSync) ||
     removeLineMutation.isLoading ||
     updateDiscountMutation.isLoading ||
     updateCustomerMutation.isLoading ||
@@ -1877,7 +1898,7 @@ const PosSellPage = () => {
     (product: PosCartProduct, options: { incrementExisting?: boolean } = {}) => {
       setOptimisticSaleLines((current) => {
         const baseLines = current ?? getCurrentCartLines();
-        const existingLine = findCartLineForProduct(baseLines, product.id);
+        const existingLine = findCartLineForProduct(baseLines, product.id, product.variantId ?? "BASE");
         const existingIndex = existingLine ? baseLines.indexOf(existingLine) : -1;
 
         if (existingIndex >= 0) {
@@ -2041,6 +2062,7 @@ const PosSellPage = () => {
       draftCreationRef.current = createDraftMutation
         .mutateAsync({
           registerId,
+          priceMode,
           saleChannel: saleChannel.get() ?? "IN_STORE",
           customerId: selectedCustomer?.id || undefined,
           customerName:
@@ -2064,15 +2086,15 @@ const PosSellPage = () => {
     }
     setSaleId(draft.id);
     return draft.id;
-  }, [activeDraft?.id, createDraftMutation, registerId, saleId, selectedCustomer, saleChannel]);
+  }, [activeDraft?.id, createDraftMutation, registerId, saleId, selectedCustomer, saleChannel, priceMode]);
 
   const handleAddLine = useCallback(
     async (
       productId: string,
       product?: PosCartProduct,
-      options: { refocusSearch?: boolean; incrementExisting?: boolean } = {},
+      options: { refocusSearch?: boolean; incrementExisting?: boolean; variantId?: string | null; variantName?: string | null } = {},
     ): Promise<boolean> => {
-      if (!registerId) {
+      if (!registerId || cartPriceSyncRef.current) {
         return false;
       }
 
@@ -2081,13 +2103,23 @@ const PosSellPage = () => {
       }
 
       const cartSessionVersion = cartSessionVersionRef.current;
-      const productForCart =
+      let productForCart =
         product ??
         visibleProductsRef.current.find((visibleProduct) => visibleProduct.id === productId);
-      const optimisticLineId = optimisticLineIdForProduct(productId);
+      if (options.variantId === undefined && productForCart?.variantCount) {
+        try {
+          const detail = await trpcUtils.products.getById.fetch({ productId });
+          setVariantChoice({ product: productForCart, variants: (detail?.variants ?? []).filter(variant => variant.isActive) });
+          setMobilePendingProductId(null);
+        } catch (error) { toast({ variant: "error", description: error instanceof Error && tErrors.has(error.message) ? tErrors(error.message) : tErrors("unexpectedError") }); }
+        return false;
+      }
+      const variantKey = options.variantId ?? "BASE";
+      if (productForCart) productForCart = { ...productForCart, variantId: options.variantId, variantName: options.variantName };
+      const optimisticLineId = optimisticLineIdForProduct(productId, variantKey);
       const linesBeforeOptimisticAdd = getCurrentCartLines();
       const existingLineBeforeAdd = productForCart
-        ? findCartLineForProduct(linesBeforeOptimisticAdd, productId)
+        ? findCartLineForProduct(linesBeforeOptimisticAdd, productId, variantKey)
         : null;
       const shouldIncrementExisting = options.incrementExisting ?? true;
       if (productForCart) {
@@ -2125,7 +2157,7 @@ const PosSellPage = () => {
           return false;
         }
         setSaleId(targetSaleId);
-        const currentLineBeforeServerAdd = findCartLineForProduct(getCurrentCartLines(), productId);
+        const currentLineBeforeServerAdd = findCartLineForProduct(getCurrentCartLines(), productId, variantKey);
         if (
           !shouldIncrementExisting &&
           currentLineBeforeServerAdd &&
@@ -2139,6 +2171,7 @@ const PosSellPage = () => {
           addLineMutation.mutateAsync({
             saleId: targetSaleId,
             productId,
+            variantId: options.variantId,
             qty: 1,
           }),
         );
@@ -2149,6 +2182,7 @@ const PosSellPage = () => {
         const currentLocalLine = findCartLineForProduct(
           optimisticSaleLinesRef.current ?? [],
           productId,
+          variantKey,
         );
         const localLineId = currentLocalLine?.id ?? optimisticLineId;
         optimisticLineServerIdsRef.current[localLineId] = updatedLine.id;
@@ -2165,7 +2199,7 @@ const PosSellPage = () => {
         setOptimisticSaleLines((current) =>
           current
             ? current.map((line) => {
-                if (line.id !== localLineId && getCartLineProductId(line) !== productId) {
+                if (line.id !== localLineId) {
                   return line;
                 }
                 return {
@@ -2174,6 +2208,9 @@ const PosSellPage = () => {
                   productId: updatedLine.productId,
                   variantId: updatedLine.variantId,
                   variantKey: updatedLine.variantKey,
+                  unitPriceKgs: lineSyncDraftsRef.current[localLineId]?.unitPriceKgs ?? updatedLine.unitPriceKgs,
+                  lineTotalKgs: roundMoney((lineSyncDraftsRef.current[localLineId]?.unitPriceKgs ?? updatedLine.unitPriceKgs) * line.qty),
+                  manualPrice: lineSyncDraftsRef.current[localLineId]?.unitPriceKgs !== undefined || updatedLine.manualPrice,
                 };
               })
             : current,
@@ -2184,12 +2221,8 @@ const PosSellPage = () => {
         if (localLine?.qty && localLine.qty !== updatedLine.qty) {
           patch.qty = localLine.qty;
         }
-        if (
-          localLine &&
-          Math.abs(roundMoney(localLine.unitPriceKgs - updatedLine.unitPriceKgs)) > 0.009
-        ) {
-          patch.unitPriceKgs = localLine.unitPriceKgs;
-        }
+        const manualDraftPrice = lineSyncDraftsRef.current[localLineId]?.unitPriceKgs;
+        if (manualDraftPrice !== undefined) patch.unitPriceKgs = manualDraftPrice;
         if (patch.qty !== undefined || patch.unitPriceKgs !== undefined) {
           scheduleLineSync(localLineId, patch);
         } else {
@@ -2206,7 +2239,7 @@ const PosSellPage = () => {
             if (!current) {
               return current;
             }
-            const currentLine = findCartLineForProduct(current, productId);
+            const currentLine = findCartLineForProduct(current, productId, variantKey);
             if (!currentLine || currentLine.serverLineId) {
               return current;
             }
@@ -2225,6 +2258,9 @@ const PosSellPage = () => {
       }
     },
     [
+      trpcUtils.products.getById,
+      tErrors,
+      toast,
       addLineMutation,
       applyOptimisticAdd,
       beginCartSync,
@@ -2251,6 +2287,7 @@ const PosSellPage = () => {
 
   const handleScanResolved = useCallback(
     async (result: ScanResolvedResult): Promise<boolean> => {
+      if (cartPriceSyncRef.current) return false;
       if (result.kind === "notFound") {
         toast({ variant: "info", description: t("sell.noSearchResults") });
         return false;
@@ -2276,7 +2313,7 @@ const PosSellPage = () => {
   }, []);
 
   useEffect(() => {
-    if (!hasOpenShift || typeof window === "undefined") {
+    if (!hasOpenShift || loyaltyOpen || transferOpen || variantChoice || priceConfirmation || cartPriceSync || typeof window === "undefined") {
       return;
     }
 
@@ -2299,6 +2336,7 @@ const PosSellPage = () => {
     };
 
     const handleGlobalScannerInput = (event: KeyboardEvent) => {
+      if (cartPriceSyncRef.current) return;
       if (event.defaultPrevented || event.isComposing) {
         return;
       }
@@ -2375,9 +2413,10 @@ const PosSellPage = () => {
       window.removeEventListener("keydown", handleGlobalScannerInput);
       resetKeyboardScanBuffer();
     };
-  }, [hasOpenShift, handleScanResolved, tErrors, toast, trpcUtils.products.lookupScan]);
+  }, [hasOpenShift, loyaltyOpen, transferOpen, variantChoice, priceConfirmation, cartPriceSync, handleScanResolved, tErrors, toast, trpcUtils.products.lookupScan]);
 
   const handleUpdateQty = (lineId: string, raw: string) => {
+    if (cartPriceSyncRef.current) return;
     setLineInputDrafts((current) => ({
       ...current,
       [lineId]: { ...current[lineId], qty: raw },
@@ -2393,6 +2432,7 @@ const PosSellPage = () => {
   };
 
   const handleQtyBlur = (line: PosCartLine) => {
+    if (cartPriceSyncRef.current) return;
     const raw = lineInputDrafts[line.id]?.qty ?? String(line.qty);
     const qty = Math.trunc(Number(raw));
     if (!Number.isFinite(qty) || qty <= 0) {
@@ -2419,6 +2459,7 @@ const PosSellPage = () => {
   };
 
   const handleUpdateLinePrice = (lineId: string, raw: string) => {
+    if (cartPriceSyncRef.current) return;
     setLineInputDrafts((current) => ({
       ...current,
       [lineId]: { ...current[lineId], price: raw },
@@ -2431,10 +2472,13 @@ const PosSellPage = () => {
 
     const unitPriceKgs = roundMoney(displayMoneyToKgs(amount, currencySource));
     patchOptimisticLine(lineId, { unitPriceKgs });
+    setOptimisticSaleLines(current => current?.map(line => line.id === lineId ? { ...line, manualPrice: true } : line) ?? null);
     scheduleLineSync(lineId, { unitPriceKgs });
   };
 
   const handleLinePriceBlur = (line: PosCartLine) => {
+    if (cartPriceSyncRef.current) return;
+    if (lineInputDrafts[line.id]?.price === undefined) return;
     const raw = lineInputDrafts[line.id]?.price ?? formatSaleMoneyDraft(line.unitPriceKgs);
     const amount = parseSaleMoneyDraft(raw);
     if (amount === null) {
@@ -2456,6 +2500,7 @@ const PosSellPage = () => {
   };
 
   const handleRemoveLine = async (lineId: string) => {
+    if (cartPriceSyncRef.current) return;
     const currentLines = getCurrentCartLines();
     const lineToRemove = currentLines.find((line) => line.id === lineId);
     if (!lineToRemove) {
@@ -2503,7 +2548,7 @@ const PosSellPage = () => {
   };
 
   const handleUpdateDiscount = async () => {
-    if (!saleId) {
+    if (!saleId || cartPriceSyncRef.current) {
       return false;
     }
     const raw = discountDraft.trim();
@@ -2877,6 +2922,7 @@ const PosSellPage = () => {
     const targetSaleId = saleId;
     if (
       !targetSaleId ||
+      cartPriceSyncRef.current ||
       completeSubmitInFlightRef.current ||
       completeMutation.isLoading ||
       editCompletedSaleMutation.isLoading ||
@@ -3128,7 +3174,7 @@ const PosSellPage = () => {
   };
 
   const handleHoldReceipt = async () => {
-    if (!saleId || completedSaleEditIdRef.current || !hasCartLines || holdDraftMutation.isLoading) {
+    if (!saleId || cartPriceSyncRef.current || completedSaleEditIdRef.current || !hasCartLines || holdDraftMutation.isLoading) {
       return;
     }
 
@@ -3326,7 +3372,7 @@ const PosSellPage = () => {
       0,
     ),
   );
-  const hasJournalReturnSelection = journalReturnTotal > 0;
+  const hasJournalReturnSelection = journalReturnLineStates.some((state) => state.selectedQty > 0);
   const isJournalReturnBusy =
     createReturnMutation.isLoading ||
     addReturnLineMutation.isLoading ||
@@ -3541,7 +3587,7 @@ const PosSellPage = () => {
       toast({ variant: "error", description: t("history.returnNotAvailable") });
       return;
     }
-    if (!selectedLines.length || journalReturnTotal <= 0) {
+    if (!selectedLines.length) {
       toast({ variant: "error", description: t("history.returnQtyRequired") });
       return;
     }
@@ -3561,15 +3607,12 @@ const PosSellPage = () => {
         });
       }
 
+      const serverReturn = await trpcUtils.pos.returns.get.fetch({saleReturnId:draft.id});
+      const refundTotal = serverReturn?.totalKgs ?? journalReturnTotal;
       const completion = await completeReturnMutation.mutateAsync({
         saleReturnId: draft.id,
         idempotencyKey: createIdempotencyKey(),
-        payments: [
-          {
-            method: journalRefundMethod,
-            amountKgs: roundMoney(journalReturnTotal),
-          },
-        ],
+        payments: refundTotal > 0 ? [{method: journalRefundMethod, amountKgs: refundTotal}] : [],
       });
 
       if (completion.manualRequired) {
@@ -3988,6 +4031,12 @@ const PosSellPage = () => {
     [handleAddLine, trackCartSyncPromise],
   );
   const handleProductDecrement = (product: PosCatalogProduct) => {
+    if (cartPriceSyncRef.current) return;
+    const variantLines = getCurrentCartLines().filter(line => getCartLineProductId(line) === product.id && line.variantId);
+    if (variantLines.length) {
+      setVariantChoice({ product, decrement: true, variants: variantLines.map(line => ({ id: line.variantId!, name: line.variant?.name ?? null, sku: line.product.sku ?? null })) });
+      return;
+    }
     const line = findCartLineForProduct(getCurrentCartLines(), product.id);
     if (!line) {
       return;
@@ -4001,12 +4050,28 @@ const PosSellPage = () => {
     focusLineSearchInput();
   };
 
-  const loyaltyStatus = trpc.loyalty.posStatus.useQuery(undefined, {
+  const loyaltyStatus = trpc.loyalty.posStatus.useQuery({ storeId: activeStoreId }, {
     enabled: customerEditOpen && Boolean(saleId),
     retry: false,
     staleTime: 5 * 60_000,
     refetchOnWindowFocus: false,
   });
+
+  const openLoyalty = async () => {
+    if (!saleId || cartPriceSyncRef.current || isLineBusy) return;
+    cartPriceSyncRef.current = true;
+    setCartPriceSync({ saleId: null, error: null });
+    try {
+      // Finish manual edits before loyalty snapshots the receipt prices.
+      await flushAllPendingCartSync();
+      setLoyaltyOpen(true);
+    } catch (error) {
+      toast({ variant: "error", description: translateError(tErrors, error as never) });
+    } finally {
+      cartPriceSyncRef.current = false;
+      setCartPriceSync(null);
+    }
+  };
 
   const CustomerEditModal = () => (
     <Modal
@@ -4054,7 +4119,7 @@ const PosSellPage = () => {
         </div>
         <ModalFooter>
           {loyaltyStatus.data?.enabled && saleId ? (
-            <Button type="button" variant="secondary" onClick={() => setLoyaltyOpen(true)}>
+            <Button type="button" variant="secondary" disabled={isLineBusy} onClick={() => void openLoyalty()}>
               {t("sell.loyalty")}
             </Button>
           ) : null}
@@ -4810,7 +4875,7 @@ const PosSellPage = () => {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-foreground">
-                        {line.product.name}
+                        {line.product.name}{line.variant?.name ? ` · ${line.variant.name}` : ""}{line.manualPrice ? <span className="ml-1 text-xs text-muted-foreground" title={t("tools.manualPrice")} aria-label={t("tools.manualPrice")}>*</span> : null}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {line.qty} x{" "}
@@ -4912,6 +4977,121 @@ const PosSellPage = () => {
     </Modal>
   );
 
+  const finishCartPriceSync = () => {
+    cartPriceSyncRef.current = false;
+    setCartPriceSync(null);
+  };
+
+  const refreshCartPrices = async (targetSaleId: string) => {
+    if (cartPriceRefreshInFlightRef.current) return;
+    cartPriceRefreshInFlightRef.current = true;
+    cartPriceSyncRef.current = true;
+    setCartPriceSync({ saleId: targetSaleId, error: null });
+    try {
+      // A GET started before the price mutation must not hydrate the new cart.
+      // Fetch the explicit ID: the sale query can still refer to a previous draft.
+      await trpcUtils.pos.sales.get.cancel({ saleId: targetSaleId });
+      const fresh = await trpcUtils.pos.sales.get.fetch(
+        { saleId: targetSaleId },
+        { staleTime: 0, retry: false },
+      );
+      if (!fresh || fresh.id !== targetSaleId || (fresh.priceMode !== "RETAIL" && fresh.priceMode !== "WHOLESALE")) {
+        throw new Error("unexpectedError");
+      }
+      setOptimisticSaleLines(fresh.lines as PosCartLine[]);
+      setLineInputDrafts({});
+      setDiscountDraft("");
+      setPriceMode(fresh.priceMode);
+      finishCartPriceSync();
+      void activeDraftQuery.refetch();
+    } catch (error) {
+      // Keep the visible cart and scanner lock until a fresh server read succeeds.
+      setCartPriceSync({
+        saleId: targetSaleId,
+        error: error instanceof Error && tErrors.has(error.message)
+          ? tErrors(error.message)
+          : tErrors("genericMessage"),
+      });
+    } finally {
+      cartPriceRefreshInFlightRef.current = false;
+    }
+  };
+
+  const handleLoyaltyApplied = () => {
+    if (saleId) void refreshCartPrices(saleId);
+  };
+
+  const changePriceMode = async (mode: "RETAIL" | "WHOLESALE", approval?: typeof priceConfirmation) => {
+    if (cartPriceSyncRef.current || isLineBusy || completeSubmitInFlightRef.current) return;
+    cartPriceSyncRef.current = true;
+    setCartPriceSync({ saleId: null, error: null });
+    let targetSaleId: string | null = null;
+    try {
+      await flushAllPendingCartSync();
+      if (!saleId && !activeDraft?.id) {
+        setPriceMode(mode);
+        finishCartPriceSync();
+        return;
+      }
+      targetSaleId = await ensureSaleDraftId();
+      const result = await trackCartSyncPromise(changePriceMutation.mutateAsync({saleId:targetSaleId,mode,confirmation:approval?.fingerprint,expectedTotal:approval?.totalKgs}));
+      if (result.needsConfirmation) {
+        setPriceConfirmation({mode,...result});
+        finishCartPriceSync();
+        return;
+      }
+      setPriceConfirmation(null);
+      await refreshCartPrices(targetSaleId);
+    } catch (error) {
+      toast({variant:"error",description:error instanceof Error && tErrors.has(error.message) ? tErrors(error.message) : tErrors("unexpectedError")});
+      setPriceConfirmation(null);
+      // A lost mutation response can still mean the price changed on the server.
+      if (targetSaleId) await refreshCartPrices(targetSaleId);
+      else finishCartPriceSync();
+    }
+  };
+  const PosHeaderTools = () => posToolsQuery.data?.priceTypesEnabled || posToolsQuery.data?.canTransfer ? (
+    <div className="flex shrink-0 items-center gap-1">
+      {posToolsQuery.data.priceTypesEnabled ? <select aria-label={t("tools.priceType")} value={priceMode} onChange={event=>void changePriceMode(event.target.value as "RETAIL"|"WHOLESALE")} disabled={isLineBusy || completeMutation.isLoading || !hasOpenShift} className="h-11 w-[76px] rounded-md border border-border bg-background px-1 text-xs min-[360px]:w-[88px] sm:w-[96px] sm:text-sm">
+        <option value="RETAIL">{t("tools.retail")}</option><option value="WHOLESALE">{t("tools.wholesale")}</option>
+      </select> : null}
+      {posToolsQuery.data.canTransfer ? <Button variant="secondary" className="h-11 min-w-11 shrink-0 px-2" aria-label={t("tools.transferTitle")} title={t("tools.transferTitle")} disabled={!hasOpenShift || Boolean(cartPriceSync)} onClick={()=>setTransferOpen(true)}><TransferIcon className="h-5 w-5" aria-hidden /><span className="hidden xl:inline">{t("tools.transfer")}</span></Button> : null}
+    </div>
+  ) : null;
+  const PosToolsDialogs = () => <>
+    <Modal open={Boolean(variantChoice)} onOpenChange={open => { if (!open) { setVariantChoice(null); focusLineSearchInput(); } }} title={t("tools.chooseVariant")}>
+      <div className="grid gap-2">
+        {variantChoice ? [{ id: null, name: t("tools.baseVariant"), sku: null }, ...variantChoice.variants].filter(variant => !variantChoice.decrement || findCartLineForProduct(getCurrentCartLines(), variantChoice.product.id, variant.id ?? "BASE")).map(variant => <Button key={variant.id ?? "BASE"} variant="secondary" onClick={async () => {
+          const product = variantChoice.product;
+          const decrement = variantChoice.decrement;
+          setVariantChoice(null);
+          if (decrement) {
+            const line = findCartLineForProduct(getCurrentCartLines(), product.id, variant.id ?? "BASE");
+            if (line && line.qty <= 1) await trackCartSyncPromise(handleRemoveLine(line.id));
+            else if (line) handleUpdateQty(line.id, String(line.qty - 1));
+            focusLineSearchInput(); return;
+          }
+          await handleAddLine(product.id, product, { variantId: variant.id, variantName: variant.name, refocusSearch: true });
+        }}>{variant.name ?? variant.sku ?? t("tools.baseVariant")}</Button>) : null}
+      </div>
+    </Modal>
+    {activeStoreId && posToolsQuery.data?.canTransfer ? <PosTransferDialog open={transferOpen} onOpenChange={open=>{setTransferOpen(open);if(!open)focusLineSearchInput();}} storeId={activeStoreId} registerId={registerId} stores={posToolsQuery.data.stores} onSuccess={()=>{void catalogProductsQuery.refetch();void trpcUtils.inventory.invalidate();}}/> : null}
+    <Modal open={Boolean(priceConfirmation)} onOpenChange={open=>{if(!open && !cartPriceSyncRef.current)setPriceConfirmation(null);}} title={t("tools.repriceTitle")}>
+      <p className="text-sm">{t("tools.repriceDescription",{amount:formatKgsMoney(priceConfirmation?.totalKgs ?? 0,locale,currencySource)})}</p>
+      {priceConfirmation?.pointsReleased ? <p className="mt-2 text-sm">{t("tools.pointsReapproval")}</p> : null}
+      <ModalFooter><Button variant="ghost" disabled={Boolean(cartPriceSync)} onClick={()=>setPriceConfirmation(null)}>{tCommon("cancel")}</Button><Button disabled={Boolean(cartPriceSync)} onClick={()=>priceConfirmation&&void changePriceMode(priceConfirmation.mode,priceConfirmation)}>{t("tools.repriceConfirm")}</Button></ModalFooter>
+    </Modal>
+  </>;
+
+  const CartPriceSyncDialog = () => (
+    <Modal open={Boolean(cartPriceSync)} onOpenChange={() => {}} title={cartPriceSync?.error ? tErrors("genericTitle") : tCommon("loading")}>
+      {cartPriceSync?.error ? <div className="space-y-4">
+        <p role="alert" className="text-sm">{cartPriceSync.error}</p>
+        <Button onClick={() => { if (cartPriceSync.saleId) void refreshCartPrices(cartPriceSync.saleId); }}>{tCommon("tryAgain")}</Button>
+      </div> : <Spinner className="h-5 w-5" />}
+    </Modal>
+  );
+
   const DesktopPosSaleView = () => (
     <div className="min-h-screen bg-muted/40 text-foreground">
       <header className="sticky top-0 z-30 flex min-h-16 flex-col border-b border-border bg-background shadow-sm lg:h-16 lg:flex-row">
@@ -4939,28 +5119,28 @@ const PosSellPage = () => {
             autoFocus={hasOpenShift}
             showDropdown={false}
             disabled={!hasOpenShift}
-            className="w-full"
+            className="min-w-0 flex-1"
             inputClassName="h-12 border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-0"
           />
+          {PosHeaderTools()}
         </div>
 
         <div className="grid min-h-12 gap-0 border-t border-border bg-muted/30 lg:w-[520px] lg:border-l lg:border-t-0 2xl:w-[600px]">
           <div className="flex min-w-0 items-center gap-2 px-3 py-2">
-            <Badge
-              variant={hasOpenShift ? "success" : "warning"}
+            {!hasOpenShift ? <Badge
+              variant="warning"
               className="h-8 shrink-0 px-3 text-xs font-semibold"
             >
               {shiftStatePending
                 ? tCommon("loading")
                 : shiftStateError
                   ? tCommon("notAvailable")
-                  : hasOpenShift
-                    ? t("entry.shiftOpen")
-                    : t("entry.shiftClosed")}
-            </Badge>
+                  : t("entry.shiftClosed")}
+            </Badge> : null}
             <Select value={registerId} onValueChange={handleRegisterChange}>
               <SelectTrigger
                 aria-label={t("entry.changeRegister")}
+                title={selectedRegisterLabel}
                 className="h-8 min-w-0 flex-1 border-0 bg-transparent px-0 text-left text-sm font-semibold shadow-none focus:ring-0"
               >
                 <SelectValue placeholder={selectedRegisterLabel} />
@@ -5135,13 +5315,15 @@ const PosSellPage = () => {
             <Button
               type="button"
               variant="secondary"
-              className="h-8 shrink-0 gap-1.5 px-2 text-xs"
+              size="icon"
+              className="h-8 w-8 shrink-0"
+              aria-label={t("sell.receiptJournal")}
+              title={t("sell.receiptJournal")}
               onClick={() => setReceiptJournalOpen(true)}
               disabled={!journalStoreId}
               data-testid="pos-receipt-journal-open"
             >
               <SalesOrdersIcon className="h-3.5 w-3.5" aria-hidden />
-              <span className="hidden xl:inline">{t("sell.receiptJournal")}</span>
             </Button>
             <ContextualHelpButton className="h-8 w-8 shrink-0" />
           </div>
@@ -5522,7 +5704,7 @@ const PosSellPage = () => {
                                 <div className="flex items-start justify-between gap-2">
                                   <div className="min-w-0">
                                     <p className="line-clamp-2 break-words text-sm font-medium leading-5 text-foreground">
-                                      {line.product.name}
+                                      {line.product.name}{line.variant?.name ? ` · ${line.variant.name}` : ""}{line.manualPrice ? <span className="ml-1 text-xs text-muted-foreground" title={t("tools.manualPrice")} aria-label={t("tools.manualPrice")}>*</span> : null}
                                       {line.product.isBundle ? ` · ${t("sell.bundle")}` : ""}
                                     </p>
                                     {enableSku ? (
@@ -5973,19 +6155,18 @@ const PosSellPage = () => {
           </aside>
         </section>
       )}
+      {PosToolsDialogs()}
       {CustomerEditModal()}
       <LoyaltyDialog
         open={loyaltyOpen}
         onOpenChange={setLoyaltyOpen}
         saleId={saleId}
-        onApplied={() => {
-          void saleQuery.refetch();
-          void activeDraftQuery.refetch();
-        }}
+        onApplied={handleLoyaltyApplied}
       />
       {ReceiptJournalModal()}
       {JournalSaleDetailModal()}
       {JournalReturnModal()}
+      {CartPriceSyncDialog()}
     </div>
   );
 
@@ -6214,6 +6395,7 @@ const PosSellPage = () => {
       };
 
       const handleMobileProductSelect = (product: PosCatalogProduct) => {
+        if (product.variantCount) { void handleAddLine(product.id, product); return; }
         const now = Date.now();
         if (
           pendingAddProductIdsRef.current.has(product.id) ||
@@ -6777,7 +6959,7 @@ const PosSellPage = () => {
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="line-clamp-2 text-[14px] font-semibold leading-tight text-foreground">
-                        {line.product.name}
+                        {line.product.name}{line.variant?.name ? ` · ${line.variant.name}` : ""}{line.manualPrice ? <span className="ml-1 text-xs text-muted-foreground" title={t("tools.manualPrice")} aria-label={t("tools.manualPrice")}>*</span> : null}
                       </span>
                       <span className="mt-0.5 block text-[12px] text-muted-foreground">
                         {line.qty} x {formatSaleMoney(line.unitPriceKgs)}
@@ -7169,6 +7351,7 @@ const PosSellPage = () => {
                 className="min-w-0 flex-1"
                 inputClassName="h-10 border-0 bg-transparent px-0 text-[15px] text-foreground shadow-none placeholder:text-muted-foreground focus-visible:ring-0"
               />
+              {PosHeaderTools()}
             </div>
 
             <div className="flex min-h-[46px] w-full items-center gap-2.5 border-b border-border bg-muted px-3 text-left">
@@ -7649,11 +7832,14 @@ const PosSellPage = () => {
               </Button>
             </ModalFooter>
           </Modal>
+          {PosToolsDialogs()}
           {MobileCustomerSheet()}
           {CustomerEditModal()}
+          <LoyaltyDialog open={loyaltyOpen} onOpenChange={setLoyaltyOpen} saleId={saleId} onApplied={handleLoyaltyApplied} />
           {ReceiptJournalModal()}
           {JournalSaleDetailModal()}
           {JournalReturnModal()}
+          {CartPriceSyncDialog()}
         </>
       );
     }
@@ -7677,15 +7863,13 @@ const PosSellPage = () => {
                 <h1 className="truncate text-lg font-semibold text-foreground">
                   {t("sell.title")}
                 </h1>
-                <Badge variant={hasOpenShift ? "success" : "warning"} className="shrink-0">
+                {!hasOpenShift ? <Badge variant="warning" className="shrink-0">
                   {shiftStatePending
                     ? tCommon("loading")
                     : shiftStateError
                       ? tCommon("notAvailable")
-                      : hasOpenShift
-                        ? t("entry.shiftOpen")
-                        : t("entry.shiftClosed")}
-                </Badge>
+                      : t("entry.shiftClosed")}
+                </Badge> : null}
               </div>
             </div>
             <div className="flex shrink-0 gap-2">
@@ -7718,13 +7902,15 @@ const PosSellPage = () => {
             <Button
               type="button"
               variant="secondary"
-              className="h-11 flex-1 justify-start"
+              size="icon"
+              className="h-11 w-11 shrink-0"
+              aria-label={t("sell.receiptJournal")}
+              title={t("sell.receiptJournal")}
               onClick={() => setReceiptJournalOpen(true)}
               disabled={!journalStoreId}
               data-testid="pos-receipt-journal-open"
             >
               <SalesOrdersIcon className="h-4 w-4" aria-hidden />
-              {t("sell.receiptJournal")}
             </Button>
           </div>
 
@@ -8190,7 +8376,7 @@ const PosSellPage = () => {
                                   <div className="flex items-start justify-between gap-2">
                                     <div className="min-w-0">
                                       <p className="line-clamp-2 text-sm font-semibold text-foreground">
-                                        {line.product.name}
+                                        {line.product.name}{line.variant?.name ? ` · ${line.variant.name}` : ""}{line.manualPrice ? <span className="ml-1 text-xs text-muted-foreground" title={t("tools.manualPrice")} aria-label={t("tools.manualPrice")}>*</span> : null}
                                         {line.product.isBundle ? ` · ${t("sell.bundle")}` : ""}
                                       </p>
                                       {enableSku ? (
@@ -8606,14 +8792,12 @@ const PosSellPage = () => {
           open={loyaltyOpen}
           onOpenChange={setLoyaltyOpen}
           saleId={saleId}
-          onApplied={() => {
-            void saleQuery.refetch();
-            void activeDraftQuery.refetch();
-          }}
+          onApplied={handleLoyaltyApplied}
         />
         {ReceiptJournalModal()}
         {JournalSaleDetailModal()}
         {JournalReturnModal()}
+        {CartPriceSyncDialog()}
       </div>
     );
   };

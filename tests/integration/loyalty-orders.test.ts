@@ -103,7 +103,8 @@ describeDb("loyalty order application", () => {
       }),
     );
     expect(applied.totalKgs).toBe(475);
-    expect(applied.discountKgs).toBe(525);
+    expect(applied.discountKgs).toBe(0);
+    expect(Number((await prisma.customerOrder.findUniqueOrThrow({where:{id:order.id}})).subtotalKgs)).toBe(475);
 
     const confirmed = await prisma.$transaction((tx) =>
       confirmLoyaltyForOrder(tx, { organizationId: f.org.id, customerOrderId: order.id, paidInFull: true }),
@@ -171,8 +172,8 @@ describeDb("loyalty order application", () => {
         requestedPoints: 475,
       }),
     );
-    await prisma.loyaltyReservation.update({
-      where: { eventKey: `loyalty:reserve:${order.id}` },
+    await prisma.loyaltyReservation.updateMany({
+      where: { customerOrderId: order.id, status: "ACTIVE" },
       data: { expiresAt: new Date(Date.now() - 60_000) },
     });
     await expect(
@@ -187,6 +188,7 @@ describeDb("loyalty order application", () => {
   it("reverses spend and earnings proportionally and exactly on full return", async () => {
     const f = await fixture(500);
     const order = await f.order(1000, "L-4");
+    await prisma.customerOrderLine.updateMany({ where: { customerOrderId: order.id }, data: { qty: 4, unitPriceKgs: 250, baseUnitPriceKgs: 250 } });
     await prisma.$transaction((tx) =>
       applyLoyaltyToOrder(tx, {
         organizationId: f.org.id,
@@ -199,6 +201,7 @@ describeDb("loyalty order application", () => {
     await prisma.$transaction((tx) =>
       confirmLoyaltyForOrder(tx, { organizationId: f.org.id, customerOrderId: order.id, paidInFull: true }),
     );
+    await prisma.customerOrder.update({ where: { id: order.id }, data: { status: "COMPLETED", completedAt: new Date() } });
     const line = await prisma.customerOrderLine.findFirstOrThrow({ where: { customerOrderId: order.id } });
     const register = await prisma.posRegister.create({
       data: { organizationId: f.org.id, storeId: f.store.id, name: "R", code: "R" },
@@ -206,7 +209,7 @@ describeDb("loyalty order application", () => {
     const shift = await prisma.registerShift.create({
       data: { organizationId: f.org.id, storeId: f.store.id, registerId: register.id, openedById: f.adminUser.id },
     });
-    const makeReturn = async (number: string, amountKgs: number) => {
+    const makeReturn = async (number: string, amountKgs: number, qty: number) => {
       const saleReturn = await prisma.saleReturn.create({
         data: {
           organizationId: f.org.id,
@@ -225,8 +228,8 @@ describeDb("loyalty order application", () => {
             create: {
               customerOrderLineId: line.id,
               productId: f.product.id,
-              qty: 1,
-              unitPriceKgs: new Prisma.Decimal(amountKgs),
+              qty,
+              unitPriceKgs: new Prisma.Decimal(118.75),
               lineTotalKgs: new Prisma.Decimal(amountKgs),
             },
           },
@@ -235,7 +238,7 @@ describeDb("loyalty order application", () => {
       return saleReturn;
     };
 
-    const first = await makeReturn("RET-1", 118);
+    const first = await makeReturn("RET-1", 118.75, 1);
     const firstReversal = await prisma.$transaction((tx) =>
       reverseLoyaltyForReturn(tx, {
         organizationId: f.org.id,
@@ -248,7 +251,7 @@ describeDb("loyalty order application", () => {
 
     // A second, larger partial return completes the coverage; successive returns
     // must not reverse more than the original amounts.
-    const second = await makeReturn("RET-2", 357);
+    const second = await makeReturn("RET-2", 356.25, 3);
     const full = await prisma.$transaction((tx) =>
       reverseLoyaltyForReturn(tx, {
         organizationId: f.org.id,

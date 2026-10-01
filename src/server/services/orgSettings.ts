@@ -24,6 +24,7 @@ type GetBusinessProfileInput = OrgSettingsScope & {
 
 type UpdateBusinessProfileInput = OrgSettingsScope & {
   organizationName: string;
+  retailWholesaleEnabled?: boolean;
   storeId: string;
   legalEntityType?: LegalEntityType | null;
   legalName?: string | null;
@@ -62,6 +63,7 @@ export const getBusinessProfile = async (input: GetBusinessProfileInput) => {
       phone: true,
       currencyCode: true,
       currencyRateKgsPerUnit: true,
+      retailWholesaleEnabled: true,
       enableSku: true,
       enableBarcode: true,
       enableSimilarProductCheck: true,
@@ -115,7 +117,8 @@ export const updateBusinessProfile = async (input: UpdateBusinessProfileInput) =
         phone: true,
         currencyCode: true,
         currencyRateKgsPerUnit: true,
-        enableSku: true,
+        retailWholesaleEnabled: true,
+      enableSku: true,
         enableBarcode: true,
         enableSimilarProductCheck: true,
       },
@@ -147,6 +150,7 @@ export const updateBusinessProfile = async (input: UpdateBusinessProfileInput) =
     const updatedStore = await tx.store.update({
       where: { id: input.storeId },
       data: {
+        ...(input.retailWholesaleEnabled === undefined ? {} : { retailWholesaleEnabled: input.retailWholesaleEnabled }),
         legalEntityType: input.legalEntityType ?? null,
         legalName: normalizeOptional(input.legalName),
         inn,
@@ -166,7 +170,8 @@ export const updateBusinessProfile = async (input: UpdateBusinessProfileInput) =
         phone: true,
         currencyCode: true,
         currencyRateKgsPerUnit: true,
-        enableSku: true,
+        retailWholesaleEnabled: true,
+      enableSku: true,
         enableBarcode: true,
         enableSimilarProductCheck: true,
       },

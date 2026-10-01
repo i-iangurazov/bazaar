@@ -1,3 +1,5 @@
+import { writeAuditLog } from "@/server/services/audit";
+import { AppError } from "@/server/services/errors";
 import { z } from "zod";
 import { adminProcedure, protectedProcedure, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
@@ -16,6 +18,7 @@ export const usersRouter = router({
         name: true,
         role: true,
         isActive: true,
+        canTransferStock: true,
         preferredLocale: true,
         createdAt: true,
         storeAccesses: {
@@ -92,6 +95,18 @@ export const usersRouter = router({
         throw toTRPCError(error);
       }
     }),
+
+  setTransferPermission: adminProcedure.input(z.object({userId:z.string(),enabled:z.boolean()})).mutation(async ({ctx,input}) => {
+    try {
+      return await ctx.prisma.$transaction(async tx => {
+        const before = await tx.user.findFirst({ where: { id: input.userId, organizationId: ctx.user.organizationId }, select: { canTransferStock: true } });
+        if (!before) throw new AppError("userNotFound", "NOT_FOUND", 404);
+        await tx.user.update({ where: { id: input.userId }, data: { canTransferStock: input.enabled } });
+        await writeAuditLog(tx, { organizationId: ctx.user.organizationId, actorId: ctx.user.id, requestId: ctx.requestId, action: "USER_TRANSFER_PERMISSION", entity: "User", entityId: input.userId, before, after: { canTransferStock: input.enabled } });
+        return { ok: true };
+      });
+    } catch(error) { throw toTRPCError(error); }
+  }),
 
   setActive: adminProcedure
     .input(z.object({ userId: z.string(), isActive: z.boolean() }))

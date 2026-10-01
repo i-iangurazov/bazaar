@@ -265,6 +265,26 @@
         "description": "Product cards, categories, units, variants, barcodes, images, store assignment, and readiness status."
       },
       "pos": {
+        "tools": {
+          "priceType": "Price type",
+          "retail": "Retail",
+          "wholesale": "Wholesale",
+          "transfer": "Transfer",
+          "transferTitle": "Transfer stock",
+          "transferPolicy": "The current transfer posts stock out of the source and into the destination immediately. The sale is kept.",
+          "recipient": "Destination store",
+          "chooseStore": "Choose store",
+          "productSearch": "Name, SKU or barcode",
+          "quantity": "Quantity",
+          "removeLine": "Remove line",
+          "close": "Close",
+          "transferConfirm": "Confirm transfer",
+          "transferSuccess": "Transfer #{number} completed",
+          "repriceTitle": "Recalculate prices?",
+          "repriceDescription": "New payable amount: {amount}. Manual prices are kept.",
+          "pointsReapproval": "The points reservation will be released. The customer must approve redemption for the new amount.",
+          "repriceConfirm": "Recalculate"
+        },
         "title": "POS and shifts",
         "description": "Registers, cashier shifts, sales, receipts, payment flow, returns, and POS history."
       },
@@ -938,7 +958,42 @@
     "samplePrice": "450",
     "samplePriceWithCurrency": "450 KGS",
     "receipt": "Receipt",
-    "barcode": "Barcode"
+    "barcode": "Barcode",
+    "textStyles": {
+      "singleLine": "Single line",
+      "spacingTitle": "Vertical spacing",
+      "spacingHint": "Space after each element in millimetres. 0 adds no extra gap. Hidden elements add no space.",
+      "gapAfter": "After {field}, mm",
+      "priceCurrencyHint": "Price and currency always share one line. Price alignment moves them together; font sizes are independent.",
+      "scope": "Text settings are saved for the selected store. Margins are added to the template safe area.",
+      "name": "Name",
+      "price": "Price",
+      "currency": "Currency",
+      "sku": "SKU",
+      "barcodeText": "Barcode caption",
+      "storeName": "Store",
+      "fontSize": "Size, pt",
+      "minFontSize": "Minimum, pt",
+      "maxLines": "Maximum lines",
+      "paddingMm": "Padding, mm",
+      "widthPercent": "Area width, %",
+      "weight": "Weight",
+      "align": "Alignment",
+      "overflow": "Overflow",
+      "normal": "Regular",
+      "bold": "Bold",
+      "left": "Left",
+      "center": "Center",
+      "right": "Right",
+      "wrap": "Wrap",
+      "truncate": "Truncate with …",
+      "shrink": "Shrink to minimum",
+      "previewHint": "Preview uses the same PDF as printing. Print at 100% scale.",
+      "pdfPreview": "PDF preview",
+      "download": "Download PDF",
+      "barcode": "Barcode",
+      "margins": "Margins"
+    }
   },
   "breadcrumbs": {
     "ariaLabel": "Breadcrumbs",
@@ -1998,6 +2053,10 @@
       "uploadCta": "Upload cta",
       "uploadHint": "Upload hint",
       "errors": {
+        "posPriceConflict": "This item already has a different price in the receipt. Edit its existing line before adding.",
+        "posReturnAmountChanged": "Another return changed the refund amount. Reopen the return.",
+        "loyaltyManualDiscount": "Remove the manual discount before applying loyalty.",
+        "loyaltyConsentRequired": "The customer must approve redemption for this receipt and amount.",
         "unsupportedFileType": "Unsupported file type",
         "imageTooLarge": "Image too large {size}",
         "imageTooLargeInput": "Image too large input {size}",
@@ -3022,6 +3081,30 @@
       "payments": "Payments",
       "change": "Change",
       "footer": "Thank you for your purchase!"
+    },
+    "tools": {
+      "priceType": "Price type",
+      "retail": "Retail",
+      "wholesale": "Wholesale",
+      "transfer": "Transfer",
+      "transferTitle": "Stock transfer",
+      "transferPolicy": "Items leave the current store and arrive at the receiving store immediately. The sale cart is preserved.",
+      "recipient": "Receiving store",
+      "chooseStore": "Choose a store",
+      "productSearch": "Name, SKU or barcode",
+      "quantity": "Quantity",
+      "removeLine": "Remove line",
+      "close": "Close",
+      "transferConfirm": "Transfer",
+      "transferSuccess": "Transfer to “{store}” completed",
+      "repriceTitle": "Change price type?",
+      "repriceDescription": "New amount payable: {amount}.",
+      "repriceConfirm": "Confirm prices",
+      "pointsReapproval": "Reserved points will be released. Redeeming again requires customer approval.",
+      "retrySameTransfer": "Retry sends the same transfer. Fields stay locked until the result is confirmed.",
+      "manualPrice": "Manual price",
+      "chooseVariant": "Choose variant",
+      "baseVariant": "Base product"
     }
   },
   "dashboard": {
@@ -3176,7 +3259,7 @@
     "transferValidationInvalidQuantity": "Quantity must be greater than 0.",
     "transferCostNotSpecified": "Not specified",
     "transferPostFailed": "Could not post transfer. Check the data and try again.",
-    "transferSuccess": "Transfer posted. Stock was updated.",
+    "transferSuccess": "Transfer completed.",
     "transferPermissionDenied": "You do not have permission to transfer stock.",
     "transferEmptyState": "Add products for transfer. Search uses the source store products.",
     "transferSummaryTitle": "Summary",
@@ -3359,7 +3442,6 @@
     "noteHint": "Note hint",
     "receiveSuccess": "Receive completed.",
     "adjustSuccess": "Adjust completed.",
-    "transferSuccess": "Transfer completed.",
     "minStockSaved": "Min stock saved.",
     "minStockAppliedAll": "Min stock applied all {count}",
     "viewMovements": "View movements",
@@ -3591,6 +3673,13 @@
     "printAction": "Print action"
   },
   "products": {
+    "retailPrice": "Retail price",
+    "wholesalePrice": "Wholesale price",
+    "additionalPricesHint": "Empty means unset. 0 is a zero price.",
+    "saveAdditionalPrices": "Save additional prices",
+    "exportFiltered": "Export filtered ({count})",
+    "exportSelected": "Export selected ({count})",
+    "missingCost": "Missing cost",
     "title": "Products",
     "subtitle": "Products overview",
     "newTitle": "New product",
@@ -4002,6 +4091,8 @@
     "exportSelectColumnsRequired": "Select at least one column to export.",
     "exportDownload": "Export",
     "exportColumns": {
+      "onHandQty": "Stock",
+      "stockScope": "Store / stock aggregation",
       "sku": "SKU",
       "name": "Name",
       "unit": "Unit",
@@ -4679,6 +4770,41 @@
       "ready": "Ready for pickup",
       "completed": "Completed",
       "canceled": "Canceled"
+    },
+    "payment": {
+      "title": "Order payment",
+      "received": "Received: {amount} KGS",
+      "unknown": "No payment information",
+      "actualMoney": "Confirm only money actually received. Points are earned after full payment.",
+      "openShiftRequired": "Open a shift in this store to record payment.",
+      "register": "Register with an open shift",
+      "method": "Payment method",
+      "amountKgs": "Amount, KGS",
+      "CASH": "Cash",
+      "CARD": "Card",
+      "TRANSFER": "Transfer",
+      "OTHER": "Other",
+      "confirm": "Confirm receipt",
+      "retry": "Retry confirmation"
+    },
+    "refund": {
+      "title": "Return order",
+      "openShiftRequired": "Open a shift in the order store.",
+      "register": "Register",
+      "available": "available {qty}",
+      "actualRefund": "Refund: {amount} KGS",
+      "moneyHint": "Confirm only money actually returned to the buyer. Points are restored from the original order.",
+      "method": "Refund method",
+      "CASH": "Cash",
+      "CARD": "Card",
+      "TRANSFER": "Transfer",
+      "OTHER": "Other",
+      "cancel": "Cancel",
+      "confirm": "Confirm refund",
+      "calculate": "Calculate refund",
+      "retry": "Retry request",
+      "success": "Return recorded.",
+      "manualRequired": "Check the money refund in your banking app and the manual refund request in the receipt journal."
     }
   },
   "suppliers": {
@@ -4769,6 +4895,8 @@
         "description": "Printers, receipts, and print templates."
       },
       "users": {
+        "enableTransfer": "Allow POS stock transfers",
+        "disableTransfer": "Disallow POS stock transfers",
         "title": "Users and roles",
         "description": "Staff access and permissions."
       },
@@ -4813,6 +4941,8 @@
       "saved": "Settings saved."
     },
     "business": {
+      "retailWholesaleEnabled": "Retail and wholesale prices",
+      "retailWholesaleHint": "For the selected store only. Turning off keeps saved prices.",
       "title": "Business details",
       "organizationName": "Business name",
       "store": "Store",
@@ -5340,7 +5470,12 @@
     "analyticsExportScopeChanged": "Your access changed while preparing the export. Reload and try again.",
     "assortmentPreviewStale": "Data changed or the preview expired. Refresh the impact preview.",
     "assortmentRuleNotFound": "Sharing rule not found.",
-    "assortmentUseDirectedEditor": "Use Store assortments. Rejoining a legacy group is disabled."
+    "assortmentUseDirectedEditor": "Use Store assortments. Rejoining a legacy group is disabled.",
+    "labelLayoutOverflow": "Content does not fit the label. Adjust size, lines, margins or overflow before printing.",
+    "onlineReturnFinancialEdit": "A completed online return’s financial details cannot be changed. You can edit its note.",
+    "loyaltyReceiptFinancialEdit": "Items and amounts on a loyalty receipt cannot be changed after completion. Create a return and a new sale.",
+    "loyaltyInvalidPointValue": "Point value must be at least 0.01 KGS with no more than two decimal places. Check loyalty settings.",
+    "onlineReturnRequiresPayment": "The order must be fully paid before a return."
   },
   "adminJobs": {
     "title": "Admin jobs",
@@ -6283,37 +6418,65 @@
       "gettingStarted": {
         "title": "Getting started",
         "summary": "Summary",
-        "body": ["Getting started body", "Getting started body", "Getting started body"]
+        "body": [
+          "Getting started body",
+          "Getting started body",
+          "Getting started body"
+        ]
       },
       "importProducts": {
         "title": "Import products",
         "summary": "Summary",
-        "body": ["Import products body", "Import products body", "Import products body"]
+        "body": [
+          "Import products body",
+          "Import products body",
+          "Import products body"
+        ]
       },
       "barcodeWorkflow": {
         "title": "Barcode workflow",
         "summary": "Summary",
-        "body": ["Barcode workflow body", "Barcode workflow body", "Barcode workflow body"]
+        "body": [
+          "Barcode workflow body",
+          "Barcode workflow body",
+          "Barcode workflow body"
+        ]
       },
       "inventoryFlows": {
         "title": "Inventory flows",
         "summary": "Summary",
-        "body": ["Inventory flows body", "Inventory flows body", "Inventory flows body"]
+        "body": [
+          "Inventory flows body",
+          "Inventory flows body",
+          "Inventory flows body"
+        ]
       },
       "stockCounts": {
         "title": "Stock counts",
         "summary": "Summary",
-        "body": ["Stock counts body", "Stock counts body", "Stock counts body"]
+        "body": [
+          "Stock counts body",
+          "Stock counts body",
+          "Stock counts body"
+        ]
       },
       "purchaseOrders": {
         "title": "Purchase orders",
         "summary": "Summary",
-        "body": ["Purchase orders body", "Purchase orders body", "Purchase orders body"]
+        "body": [
+          "Purchase orders body",
+          "Purchase orders body",
+          "Purchase orders body"
+        ]
       },
       "storePrices": {
         "title": "Store prices",
         "summary": "Summary",
-        "body": ["Store prices body", "Store prices body", "Store prices body"]
+        "body": [
+          "Store prices body",
+          "Store prices body",
+          "Store prices body"
+        ]
       },
       "mMarketIntegration": {
         "title": "M market integration",
@@ -6342,17 +6505,29 @@
       "priceTags": {
         "title": "Price tags",
         "summary": "Summary",
-        "body": ["Price tags body", "Price tags body", "Price tags body"]
+        "body": [
+          "Price tags body",
+          "Price tags body",
+          "Price tags body"
+        ]
       },
       "reorder": {
         "title": "Reorder",
         "summary": "Summary",
-        "body": ["Reorder body", "Reorder body", "Reorder body"]
+        "body": [
+          "Reorder body",
+          "Reorder body",
+          "Reorder body"
+        ]
       },
       "troubleshooting": {
         "title": "Troubleshooting",
         "summary": "Summary",
-        "body": ["Troubleshooting body", "Troubleshooting body", "Troubleshooting body"]
+        "body": [
+          "Troubleshooting body",
+          "Troubleshooting body",
+          "Troubleshooting body"
+        ]
       }
     }
   },
@@ -6362,15 +6537,27 @@
     "sections": {
       "v14": {
         "title": "V14",
-        "items": ["Items", "Items", "Items"]
+        "items": [
+          "Items",
+          "Items",
+          "Items"
+        ]
       },
       "v15": {
         "title": "V15",
-        "items": ["Items", "Items", "Items"]
+        "items": [
+          "Items",
+          "Items",
+          "Items"
+        ]
       },
       "v16": {
         "title": "V16",
-        "items": ["Items", "Items", "Items"]
+        "items": [
+          "Items",
+          "Items",
+          "Items"
+        ]
       }
     }
   },
@@ -6545,22 +6732,35 @@
       "kkmModes": {
         "title": "KKM modes",
         "summary": "Summary",
-        "body": ["KKM modes body", "KKM modes body", "KKM modes body"]
+        "body": [
+          "KKM modes body",
+          "KKM modes body",
+          "KKM modes body"
+        ]
       },
       "exports": {
         "title": "Exports",
         "summary": "Summary",
-        "body": ["Exports body", "Exports body"]
+        "body": [
+          "Exports body",
+          "Exports body"
+        ]
       },
       "ettnMarking": {
         "title": "ETTN marking",
         "summary": "Summary",
-        "body": ["ETTN marking body", "ETTN marking body"]
+        "body": [
+          "ETTN marking body",
+          "ETTN marking body"
+        ]
       },
       "periodClose": {
         "title": "Period close",
         "summary": "Summary",
-        "body": ["Period close body", "Period close body"]
+        "body": [
+          "Period close body",
+          "Period close body"
+        ]
       }
     }
   },
@@ -6568,7 +6768,6 @@
     "stockStoreHint": "Select a store to edit stock.",
     "stockVariantHint": "Total across variants. Edit a specific variant in inventory or product details.",
     "stockAbsoluteHint": "Double-click to enter the new absolute quantity in base units.",
-
     "saved": "Change saved",
     "editorAria": "Editor aria {field}",
     "savingAria": "Saving aria",
@@ -7015,6 +7214,15 @@
     "required": "Required field"
   },
   "loyalty": {
+    "consentExpired": "Request expired. Request approval again.",
+    "consentWaiting": "Waiting for approval on the customer card",
+    "consentRequest": "Request approval",
+    "consentHint": "The customer approves the exact redemption on their card.",
+    "consentFailed": "The amount changed or the request expired. Ask the cashier to request approval again.",
+    "consentApproved": "Customer approved",
+    "consentApprove": "Approve redemption",
+    "consentAmounts": "Redeem {points} points. Pay: {amount}.",
+    "consentTitle": "Approve points redemption",
     "settingsTitle": "Loyalty programme",
     "settingsSubtitle": "Bazaar's own loyalty programme",
     "settingsIndexTitle": "Settings",
@@ -7090,8 +7298,13 @@
       "REDEEM": "Redeemed",
       "REVERSAL_REDEEM": "Redemption returned",
       "REVERSAL_EARN": "Earning cancelled",
-      "ADJUSTMENT": "Adjustment"
-    }
+      "ADJUSTMENT": "Adjustment",
+      "RESERVE": "Points reserved",
+      "RELEASE": "Reservation released",
+      "EXPIRE": "Reservation expired"
+    },
+    "balance": "Balance",
+    "originalTotal": "Total before loyalty"
   },
   "onlineSales": {
     "channelLabel": "Channel",

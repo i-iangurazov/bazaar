@@ -1,3 +1,5 @@
+import { labelTextStylesSchema, labelMarginsSchema } from "@/lib/labelTextStyles";
+import type { Prisma } from "@prisma/client";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { PrinterPrintMode } from "@prisma/client";
@@ -87,6 +89,8 @@ const priceTagRequestSchema = z
           .optional(),
         barcodeHeightMm: z.coerce.number().min(6).max(40).optional(),
         labelFontSize: z.coerce.number().min(6).max(14).optional(),
+        labelTextStyles: labelTextStylesSchema.optional(),
+        labelMargins: labelMarginsSchema.optional(),
       })
       .optional(),
     items: z
@@ -231,6 +235,8 @@ export const POST = async (request: Request) => {
         labelLayoutOrder: string;
         labelBarcodeHeightMm: number;
         labelFontSize: number;
+        labelTextStyles: Prisma.JsonValue;
+        labelMarginTopMm: number; labelMarginRightMm: number; labelMarginBottomMm: number; labelMarginLeftMm: number;
       }
     | null = null;
   if (storeId) {
@@ -254,6 +260,8 @@ export const POST = async (request: Request) => {
             labelLayoutOrder: true,
             labelBarcodeHeightMm: true,
             labelFontSize: true,
+            labelTextStyles: true,
+            labelMarginTopMm: true, labelMarginRightMm: true, labelMarginBottomMm: true, labelMarginLeftMm: true,
           },
         },
       },
@@ -385,7 +393,8 @@ export const POST = async (request: Request) => {
     });
   }
 
-  const pdf = await buildPriceTagsPdf({
+  let pdf: Buffer;
+  try { pdf = await buildPriceTagsPdf({
     labels,
     template,
     locale: toIntlLocale(locale),
@@ -419,8 +428,14 @@ export const POST = async (request: Request) => {
       parsed.data.display?.barcodeHeightMm ?? savedPrintProfile?.labelBarcodeHeightMm ?? undefined,
     labelFontSize:
       parsed.data.display?.labelFontSize ?? savedPrintProfile?.labelFontSize ?? undefined,
+    labelTextStyles: parsed.data.display?.labelTextStyles ?? savedPrintProfile?.labelTextStyles,
+    labelMargins: parsed.data.display?.labelMargins ?? (savedPrintProfile ? { top: savedPrintProfile.labelMarginTopMm, right: savedPrintProfile.labelMarginRightMm, bottom: savedPrintProfile.labelMarginBottomMm, left: savedPrintProfile.labelMarginLeftMm } : undefined),
   });
-  const response = new Response(pdf, {
+  } catch (error) {
+    if (error instanceof AppError) return new Response(tErrors(error.message), { status: 400 });
+    throw error;
+  }
+  const response = new Response(new Uint8Array(pdf), {
     headers: {
       "Content-Type": "application/pdf",
       "Content-Disposition": "inline; filename=price-tags.pdf",

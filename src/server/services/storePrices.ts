@@ -14,7 +14,9 @@ export const upsertStorePrice = async (input: {
   storeId: string;
   productId: string;
   variantId?: string | null;
-  priceKgs: number;
+  priceKgs?: number;
+  retailPriceKgs?: number | null;
+  wholesalePriceKgs?: number | null;
   actorId: string;
   organizationId: string;
   requestId: string;
@@ -54,29 +56,19 @@ export const upsertStorePrice = async (input: {
       },
     });
 
-    const price = await tx.storePrice.upsert({
-      where: {
-        organizationId_storeId_productId_variantKey: {
-          organizationId: input.organizationId,
-          storeId: input.storeId,
-          productId: input.productId,
-          variantKey,
-        },
-      },
-      update: {
-        priceKgs: input.priceKgs,
-        updatedById: input.actorId,
-      },
-      create: {
-        organizationId: input.organizationId,
-        storeId: input.storeId,
-        productId: input.productId,
-        variantId: input.variantId ?? undefined,
-        variantKey,
-        priceKgs: input.priceKgs,
-        updatedById: input.actorId,
-      },
+    const key = { organizationId: input.organizationId, storeId: input.storeId, productId: input.productId, variantKey };
+    const extraBefore = await tx.storePriceTypes.findUnique({ where: { organizationId_storeId_productId_variantKey: key } });
+    const standard = input.priceKgs === undefined ? before : await tx.storePrice.upsert({
+      where: { organizationId_storeId_productId_variantKey: key },
+      create: { ...key, variantId: input.variantId, priceKgs: input.priceKgs, updatedById: input.actorId },
+      update: { priceKgs: input.priceKgs, updatedById: input.actorId },
     });
+    const extras = input.retailPriceKgs === undefined && input.wholesalePriceKgs === undefined ? extraBefore : await tx.storePriceTypes.upsert({
+      where: { organizationId_storeId_productId_variantKey: key },
+      create: { ...key, variantId: input.variantId, retailPriceKgs: input.retailPriceKgs, wholesalePriceKgs: input.wholesalePriceKgs, updatedById: input.actorId },
+      update: { retailPriceKgs: input.retailPriceKgs, wholesalePriceKgs: input.wholesalePriceKgs, updatedById: input.actorId },
+    });
+    const price = { ...standard, ...key, id: standard?.id ?? extras?.id ?? product.id, priceKgs: standard?.priceKgs ?? null, retailPriceKgs: extras?.retailPriceKgs ?? null, wholesalePriceKgs: extras?.wholesalePriceKgs ?? null };
 
     await writeAuditLog(tx, {
       organizationId: input.organizationId,
@@ -84,7 +76,7 @@ export const upsertStorePrice = async (input: {
       action: "STORE_PRICE_UPDATE",
       entity: "StorePrice",
       entityId: price.id,
-      before: before ? toJson(before) : null,
+      before: toJson({ standard: before, extras: extraBefore }),
       after: toJson(price),
       requestId: input.requestId,
     });
@@ -160,7 +152,7 @@ export const bulkUpdateStorePrices = async (input: {
     for (const product of products) {
       const existing = priceMap.get(product.id);
       const basePrice = product.basePriceKgs ? Number(product.basePriceKgs) : 0;
-      const current = existing ? Number(existing.priceKgs) : basePrice;
+      const current = existing?.priceKgs != null ? Number(existing.priceKgs) : basePrice;
       let next = current;
       if (input.mode === "set") {
         next = input.value;
@@ -175,7 +167,7 @@ export const bulkUpdateStorePrices = async (input: {
       if (next < 0) {
         next = 0;
       }
-      if (existing && Number(existing.priceKgs) === next) {
+      if (existing?.priceKgs != null && Number(existing.priceKgs) === next) {
         continue;
       }
 

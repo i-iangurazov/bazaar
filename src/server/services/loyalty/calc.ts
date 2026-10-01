@@ -1,3 +1,4 @@
+import { AppError } from "@/server/services/errors";
 import { Prisma } from "@prisma/client";
 
 /**
@@ -59,8 +60,9 @@ export function calculateLoyalty(input: {
   requestedPoints?: number;
 }): LoyaltyCalcResult {
   const { rules } = input;
+  if (!Number.isFinite(rules.pointValueKgs) || rules.pointValueKgs < 0.01 || new Prisma.Decimal(rules.pointValueKgs).decimalPlaces() > 2) throw new AppError("loyaltyInvalidPointValue", "BAD_REQUEST", 400);
   const lines: LoyaltyLineResult[] = input.lines.map((line) => {
-    const qty = new Prisma.Decimal(Math.max(0, Math.trunc(line.qty)));
+    const qty = new Prisma.Decimal(Math.max(0, line.qty));
     const base = decimal(line.baseUnitPriceKgs).mul(qty).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
     const promo = decimal(line.promoDiscountKgs).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
     const memberCandidate = percentOf(base, rules.memberDiscountPercent).toDecimalPlaces(
@@ -68,10 +70,10 @@ export function calculateLoyalty(input: {
       Prisma.Decimal.ROUND_HALF_UP,
     );
     // Default keeps the larger of the member vs promo discount; never the sum.
-    const effectiveDiscount =
+    const effectiveDiscount = Prisma.Decimal.min(base,
       line.participates && !rules.combinePromoDiscount
         ? Prisma.Decimal.max(promo, memberCandidate)
-        : promo.plus(line.participates ? memberCandidate : 0);
+        : promo.plus(line.participates ? memberCandidate : 0));
     const memberDiscount = line.participates
       ? Prisma.Decimal.max(0, effectiveDiscount.minus(promo))
       : new Prisma.Decimal(0);

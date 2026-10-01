@@ -7,6 +7,16 @@ import { PrismaClient } from "@prisma/client";
 
 // Review each additive migration before adding it to the production rollout.
 export const approvedProductionMigrations = {
+  "20260930120000_loyalty_foundation": "86bafee280af9b8e9095167ea17889220b163d1965056c02bd5f309c820cc7cc",
+  "20260930160000_loyalty_customer_identity": "11e064c167ecbf7baf30d048c5d0df6124a7382c737e3167b7c5ecbf1b98dde3",
+  "20260930180000_loyalty_account_reserved": "e9ed032d071778a4244484f5a52400da715f6d4f48ea18992b1f29d8fde026b0",
+  "20261001190000_loyalty_redemption_consent": "eea02050602114e3b8ff1528b1498d2950dd3807ff489395767a1be296f00e20",
+  "20261001200000_store_price_types_pos_transfer": "17735c800747364b911fcc8fb81c1b41e00e0b16b3d9ecbde74e4ca8da5b199c",
+  "20261001210000_label_text_styles": "39b99d43272903667242de8b90bcf3695f88f74153045edf53e7c94a964f20de",
+  "20261001220000_inherited_standard_price": "5aa9a9adacc83ac9168fd27fe75308251b24e49f642f222216a5db3792eaf43c",
+  "20261001230000_separate_store_price_types": "72bb82141e90e4a601334447cf48de2a5a4f893005b7bc3a10c46630f8f63692",
+  "20261001240000_store_price_types_delete_compatibility": "095bc227da3f71444cfbeb162e02efff184b17c87ddaa15dbb033d48914e2ce1",
+  "20261002000000_legacy_pos_price_provenance": "391fb9f84e6092338b428f2dcea1bc64de23c2eea82ef63d0b5bc9e6643272da",
   "20260928041000_catalog_source_legacy_guard": "96b4db19be5f981693930c6127245ca90294f7f62c7dfca6124d576949c64b9a",
   "20260928040000_catalog_sources": "0dff005db2dae6bfe5c8be76a651b320272a16b071fbb0e8ace2129865d4df6a",
   "20260928010000_directional_assortments": "9167211cb9a8db9284f868a4ee00413fe05cbc1995e2ae3274394fffbac47ae4",

@@ -85,7 +85,8 @@ describeDb("loyalty in the online catalogue order", () => {
     const stored = await prisma.customerOrder.findUniqueOrThrow({ where: { id: order.id } });
     expect(stored.saleChannel).toBe("ONLINE");
     expect(Number(stored.totalKgs)).toBe(475);
-    expect(Number(stored.discountKgs)).toBe(525);
+    expect(Number(stored.discountKgs)).toBe(0);
+    expect(Number(stored.subtotalKgs)).toBe(475);
     const account = await prisma.loyaltyAccount.findUniqueOrThrow({ where: { id: f.account.id } });
     expect(account.reservedPoints).toBe(475);
     expect(await prisma.$transaction((tx) => availablePoints(tx, f.account.id))).toBe(525);

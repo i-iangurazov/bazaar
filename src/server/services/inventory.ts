@@ -1179,6 +1179,7 @@ export type TransferStockLineInput = {
 };
 
 export type TransferStockInput = {
+  respectNegativeStockPolicy?: boolean;
   fromStoreId: string;
   toStoreId: string;
   lines?: TransferStockLineInput[];
@@ -1250,6 +1251,7 @@ export const transferStock = async (input: TransferStockInput) => {
       {
         key: input.idempotencyKey,
         route: "inventory.transfer",
+        ...(input.respectNegativeStockPolicy ? { request: toJson({ fromStoreId: input.fromStoreId, toStoreId: input.toStoreId, lines: normalizedInputLines }) } : {}),
         userId: input.actorId,
       },
       async () => {
@@ -1372,7 +1374,7 @@ export const transferStock = async (input: TransferStockInput) => {
             note: input.note ?? undefined,
             actorId: input.actorId,
             organizationId: input.organizationId,
-            allowNegativeStock: true,
+            allowNegativeStock: input.respectNegativeStockPolicy ? undefined : true,
           });
 
           const inMovement = await applyStockMovement(tx, {

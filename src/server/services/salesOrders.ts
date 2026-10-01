@@ -1,3 +1,4 @@
+import { releaseLoyaltyForOrder } from "@/server/services/loyalty/apply";
 import { assertSaleAssortment, lockAssortmentForSale } from "./assortmentPolicy";
 import { assertBaamReviewedVersion } from "@/server/services/baamExecutionContext";
 import {
@@ -1130,6 +1131,8 @@ export const addCustomerOrderLine = async (input: {
     }
 
     assertEditable(order.status);
+    if (await tx.salePayment.findFirst({ where: { customerOrderId: order.id } })) throw new AppError("loyaltyReceiptFinancialEdit", "CONFLICT", 409);
+    await releaseLoyaltyForOrder(tx, { customerOrderId: order.id });
 
     const resolved = await resolveUnitPrice({
       tx,
@@ -1234,11 +1237,15 @@ export const updateCustomerOrderLine = async (input: {
 
     assertEditable(line.customerOrder.status);
 
+    if (await tx.salePayment.findFirst({ where: { customerOrderId: line.customerOrderId } })) throw new AppError("loyaltyReceiptFinancialEdit", "CONFLICT", 409);
+    await releaseLoyaltyForOrder(tx, { customerOrderId: line.customerOrderId });
+    const restoredLine = await tx.customerOrderLine.findUniqueOrThrow({ where: { id: line.id } });
+
     const nextLine = await tx.customerOrderLine.update({
       where: { id: line.id },
       data: {
         qty: input.qty,
-        lineTotalKgs: Number(line.unitPriceKgs) * input.qty,
+        lineTotalKgs: roundMoney(Number(restoredLine.unitPriceKgs) * input.qty),
         lineCostTotalKgs:
           line.unitCostKgs === null ? null : roundMoney(Number(line.unitCostKgs) * input.qty),
       },
@@ -1296,6 +1303,9 @@ export const removeCustomerOrderLine = async (input: {
     }
 
     assertEditable(line.customerOrder.status);
+
+    if (await tx.salePayment.findFirst({ where: { customerOrderId: line.customerOrderId } })) throw new AppError("loyaltyReceiptFinancialEdit", "CONFLICT", 409);
+    await releaseLoyaltyForOrder(tx, { customerOrderId: line.customerOrderId });
 
     await tx.customerOrderLine.delete({ where: { id: line.id } });
     await syncAlreadyDeductedOrderStock(tx, line.customerOrder, input.actorId);
@@ -1364,6 +1374,7 @@ const updateOrderStatus = async (input: {
     });
 
     if (input.to === CustomerOrderStatus.CANCELED) {
+      await releaseLoyaltyForOrder(tx, { customerOrderId: order.id });
       await restoreCustomerOrderStockOnCancel(tx, {
         order: {
           id: order.id,

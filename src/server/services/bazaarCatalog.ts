@@ -464,7 +464,7 @@ export const listBazaarCatalogProducts = async (input: {
   ]);
 
   const storePriceByProductId = new Map(
-    storePrices.map((storePrice) => [storePrice.productId, Number(storePrice.priceKgs)]),
+    storePrices.filter((storePrice) => storePrice.priceKgs != null).map((storePrice) => [storePrice.productId, Number(storePrice.priceKgs)]),
   );
   const onHandByProductId = new Map<string, number>();
   for (const snapshot of snapshots) {

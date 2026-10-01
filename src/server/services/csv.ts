@@ -1,10 +1,11 @@
-const spreadsheetFormulaPattern = /^[=+\-@]/;
+const spreadsheetFormulaPattern = /^[\s\u0000-\u001f]*[=+\-@]/;
 const csvDelimiter = ";";
 
 export const sanitizeSpreadsheetValue = (value: unknown) => {
   if (value === null || value === undefined) {
     return "";
   }
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
   const str = String(value);
   if (!str) {
     return str;

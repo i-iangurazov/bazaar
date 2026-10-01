@@ -26,44 +26,41 @@ export const ensureAccount = async (
     update: {},
   });
 
-/**
- * Expired reservations stop counting immediately: they are swept (and the counter
- * released) before any availability read or reservation.
- */
+/** Lock accounts before reservations everywhere to serialize balance transitions. */
+export const lockLoyaltyAccount = async (tx: LoyaltyTx, accountId: string) => {
+  await tx.$queryRaw`SELECT id FROM "LoyaltyAccount" WHERE id = ${accountId} FOR UPDATE`;
+};
+
 const sweepExpired = async (tx: LoyaltyTx, accountId: string, now: Date) => {
-  const expired = await tx.loyaltyReservation.findMany({
-    where: { accountId, status: "ACTIVE", expiresAt: { lte: now } },
-    select: { id: true, points: true },
-  });
-  if (!expired.length) return;
-  const releasedPoints = expired.reduce((sum, row) => sum + row.points, 0);
-  await tx.loyaltyReservation.updateMany({
-    where: { id: { in: expired.map((row) => row.id) }, status: "ACTIVE" },
-    data: { status: "EXPIRED" },
-  });
-  await tx.loyaltyAccount.updateMany({
-    where: { id: accountId, reservedPoints: { gte: releasedPoints } },
-    data: { reservedPoints: { decrement: releasedPoints } },
+  await lockLoyaltyAccount(tx, accountId);
+  const changed = await tx.$queryRaw<Array<{ points: number }>>`
+    UPDATE "LoyaltyReservation" SET status = 'EXPIRED', "releasedAt" = ${now}
+    WHERE "accountId" = ${accountId} AND status = 'ACTIVE' AND "expiresAt" <= ${now}
+    RETURNING points
+  `;
+  const released = changed.reduce((sum, row) => sum + row.points, 0);
+  if (released) await tx.loyaltyAccount.update({
+    where: { id: accountId }, data: { reservedPoints: { decrement: released } },
   });
 };
 
 export const activeReservedPoints = async (tx: LoyaltyTx, accountId: string) => {
-  const account = await tx.loyaltyAccount.findUnique({
-    where: { id: accountId },
-    select: { reservedPoints: true },
+  const result = await tx.loyaltyReservation.aggregate({
+    where: { accountId, status: "ACTIVE", expiresAt: { gt: new Date() } },
+    _sum: { points: true },
   });
-  return account?.reservedPoints ?? 0;
+  return result._sum.points ?? 0;
 };
 
-/** Available = balance minus live reservations, never below zero. */
+/** Reads never mutate reservations, including public card requests outside a transaction. */
 export const availablePoints = async (tx: LoyaltyTx, accountId: string, now = new Date()) => {
-  await sweepExpired(tx, accountId, now);
-  const account = await tx.loyaltyAccount.findUnique({
-    where: { id: accountId },
-    select: { balancePoints: true, reservedPoints: true },
-  });
-  if (!account) return 0;
-  return Math.max(0, account.balancePoints - account.reservedPoints);
+  const [row] = await tx.$queryRaw<Array<{ available: number }>>`
+    SELECT GREATEST(0, a."balancePoints" - COALESCE((
+      SELECT SUM(r.points) FROM "LoyaltyReservation" r
+      WHERE r."accountId" = a.id AND r.status = 'ACTIVE' AND r."expiresAt" > ${now}
+    ), 0))::int AS available FROM "LoyaltyAccount" a WHERE a.id = ${accountId}
+  `;
+  return row?.available ?? 0;
 };
 
 /**
@@ -93,6 +90,7 @@ export const applyEntry = async (
     allowNegative?: boolean;
   },
 ) => {
+  await lockLoyaltyAccount(tx, input.accountId);
   const existing = await tx.loyaltyLedgerEntry.findUnique({ where: { eventKey: input.eventKey } });
   if (existing) return { entry: existing, replayed: true };
 
@@ -113,8 +111,9 @@ export const applyEntry = async (
     balanceAfter = updated.balancePoints;
   } else {
     const needed = -input.points;
+    const reserved = await activeReservedPoints(tx, input.accountId);
     const updated = await tx.loyaltyAccount.updateMany({
-      where: { id: input.accountId, balancePoints: { gte: needed } },
+      where: { id: input.accountId, balancePoints: { gte: needed + reserved } },
       data: { balancePoints: { decrement: needed } },
     });
     if (updated.count === 0) throw new AppError("loyaltyInsufficientPoints", "CONFLICT", 409);
@@ -162,8 +161,13 @@ export const reservePoints = async (
   },
 ) => {
   if (input.points <= 0) return null;
+  await lockLoyaltyAccount(tx, input.accountId);
   const existing = await tx.loyaltyReservation.findUnique({ where: { eventKey: input.eventKey } });
-  if (existing) return existing;
+  if (existing) {
+    if (existing.accountId !== input.accountId || existing.points !== input.points || existing.status !== "ACTIVE")
+      throw new AppError("loyaltyReservationExpired", "CONFLICT", 409);
+    return existing;
+  }
   const now = input.now ?? new Date();
   await sweepExpired(tx, input.accountId, now);
   // Atomic conditional guard: two parallel checkouts cannot reserve the same points,
@@ -196,6 +200,9 @@ export const confirmReservation = async (
   input: { reservationId: string; eventKey: string; reason?: string | null; now?: Date },
 ) => {
   const now = input.now ?? new Date();
+  const identity = await tx.loyaltyReservation.findUnique({ where: { id: input.reservationId } });
+  if (!identity) throw new AppError("loyaltyReservationExpired", "CONFLICT", 409);
+  await lockLoyaltyAccount(tx, identity.accountId);
   // Claim the reservation under a row lock so a duplicate confirmation cannot
   // convert it twice.
   const locked = await tx.$queryRaw<Array<{ id: string }>>`
@@ -237,15 +244,17 @@ export const releaseReservation = async (
   input: { reservationId: string; reason?: string | null; now?: Date },
 ) => {
   const now = input.now ?? new Date();
-  const reservation = await tx.loyaltyReservation.findUnique({ where: { id: input.reservationId } });
-  if (!reservation || reservation.status !== "ACTIVE") return { released: false };
-  await tx.loyaltyReservation.update({
-    where: { id: reservation.id },
+  const identity = await tx.loyaltyReservation.findUnique({ where: { id: input.reservationId } });
+  if (!identity) return { released: false };
+  await lockLoyaltyAccount(tx, identity.accountId);
+  const changed = await tx.loyaltyReservation.updateMany({
+    where: { id: input.reservationId, status: "ACTIVE" },
     data: { status: "RELEASED", releasedAt: now },
   });
-  await tx.loyaltyAccount.updateMany({
-    where: { id: reservation.accountId, reservedPoints: { gte: reservation.points } },
-    data: { reservedPoints: { decrement: reservation.points } },
+  if (!changed.count) return { released: false };
+  await tx.loyaltyAccount.update({
+    where: { id: identity.accountId },
+    data: { reservedPoints: { decrement: identity.points } },
   });
   return { released: true };
 };
@@ -254,44 +263,27 @@ export const releaseReservationsForOrder = async (
   tx: LoyaltyTx,
   input: { organizationId: string; customerOrderId: string; now?: Date },
 ) => {
-  const now = input.now ?? new Date();
   const rows = await tx.loyaltyReservation.findMany({
-    where: {
-      organizationId: input.organizationId,
-      customerOrderId: input.customerOrderId,
-      status: "ACTIVE",
-    },
-    select: { id: true, accountId: true, points: true },
+    where: { organizationId: input.organizationId, customerOrderId: input.customerOrderId, status: "ACTIVE" },
+    select: { id: true }, orderBy: [{ accountId: "asc" }, { id: "asc" }],
   });
-  if (!rows.length) return 0;
-  const result = await tx.loyaltyReservation.updateMany({
-    where: { id: { in: rows.map((row) => row.id) }, status: "ACTIVE" },
-    data: { status: "RELEASED", releasedAt: now },
-  });
+  let count = 0;
   for (const row of rows) {
-    await tx.loyaltyAccount.updateMany({
-      where: { id: row.accountId, reservedPoints: { gte: row.points } },
-      data: { reservedPoints: { decrement: row.points } },
-    });
+    if ((await releaseReservation(tx, { reservationId: row.id, now: input.now })).released) count++;
   }
-  return result.count;
+  return count;
 };
 
 export const expireReservations = async (tx: LoyaltyTx, now = new Date()) => {
-  const expired = await tx.loyaltyReservation.findMany({
+  const accounts = await tx.loyaltyReservation.findMany({
     where: { status: "ACTIVE", expiresAt: { lte: now } },
-    select: { id: true, accountId: true, points: true },
+    select: { accountId: true }, distinct: ["accountId"], orderBy: { accountId: "asc" },
   });
-  if (!expired.length) return { count: 0 };
-  const result = await tx.loyaltyReservation.updateMany({
-    where: { id: { in: expired.map((row) => row.id) }, status: "ACTIVE" },
-    data: { status: "EXPIRED" },
-  });
-  for (const row of expired) {
-    await tx.loyaltyAccount.updateMany({
-      where: { id: row.accountId, reservedPoints: { gte: row.points } },
-      data: { reservedPoints: { decrement: row.points } },
-    });
+  let count = 0;
+  for (const { accountId } of accounts) {
+    await lockLoyaltyAccount(tx, accountId);
+    count += await tx.loyaltyReservation.count({ where: { accountId, status: "ACTIVE", expiresAt: { lte: now } } });
+    await sweepExpired(tx, accountId, now);
   }
-  return { count: result.count };
+  return { count };
 };

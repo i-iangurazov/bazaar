@@ -8,6 +8,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 import Image from "next/image";
 
+import { OrderPayment } from "@/components/pos/order-payment";
 import { FormGrid } from "@/components/form-layout";
 import {
   AddIcon,
@@ -216,6 +217,8 @@ const SalesOrderDetailPage = () => {
     await Promise.all([
       utils.salesOrders.list.invalidate(),
       utils.salesOrders.getById.invalidate({ customerOrderId }),
+      utils.salesOrders.paymentInfo.invalidate({ customerOrderId }),
+      utils.loyalty.orderSummary.invalidate({ customerOrderId }),
     ]);
   };
 
@@ -769,6 +772,7 @@ const SalesOrderDetailPage = () => {
             </CardContent>
           </Card>
 
+          <OrderPayment customerOrderId={order.id} onPaid={() => { void loyaltyQuery.refetch(); }} />
           {loyaltyQuery.data ? (
             <Card>
               <CardHeader>
@@ -787,8 +791,8 @@ const SalesOrderDetailPage = () => {
                     <p className="text-sm font-medium tabular-nums">{loyaltyQuery.data.pointsSpent}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">{tLoyalty("loyaltyEarned")}</p>
-                    <p className="text-sm font-medium tabular-nums">{loyaltyQuery.data.pointsEarned}</p>
+                    <p className="text-xs text-muted-foreground">{tLoyalty(loyaltyQuery.data.hasEarned ? "loyaltyEarned" : "willEarn")}</p>
+                    <p className="text-sm font-medium tabular-nums">{loyaltyQuery.data.hasEarned ? loyaltyQuery.data.pointsEarned : loyaltyQuery.data.plannedPoints}</p>
                   </div>
                 </FormGrid>
                 {loyaltyQuery.data.entries.length ? (

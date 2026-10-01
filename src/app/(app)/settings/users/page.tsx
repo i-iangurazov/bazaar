@@ -87,6 +87,7 @@ const UsersPage = () => {
   const { confirm, confirmDialog } = useConfirmDialog();
   const trpcUtils = trpc.useUtils();
   const isForbidden = status === "authenticated" && !isAdmin;
+  const transferPermission = trpc.users.setTransferPermission.useMutation({ onSuccess: () => { void usersQuery.refetch(); } });
   const usersQuery = trpc.users.list.useQuery(undefined, { enabled: isAdmin });
   const storesQuery = trpc.stores.list.useQuery(undefined, { enabled: isAdmin });
   const inlineEditingEnabled = isInlineEditingEnabled();
@@ -545,6 +546,9 @@ const UsersPage = () => {
                                       <EditIcon className="h-4 w-4" aria-hidden />
                                       {t("edit")}
                                     </span>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem disabled={transferPermission.isLoading} onSelect={() => transferPermission.mutate({userId:user.id,enabled:!user.canTransferStock})}>
+                                    {t(user.canTransferStock ? "disableTransfer" : "enableTransfer")}
                                   </DropdownMenuItem>
                                   <DropdownMenuItem onSelect={() => setResetUser(user)}>
                                     <span className="flex items-center gap-2">

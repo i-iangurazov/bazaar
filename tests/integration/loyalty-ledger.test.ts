@@ -180,7 +180,8 @@ describeDb("loyalty ledger", () => {
     await expect(
       prisma.$transaction((tx) => availablePoints(tx, account.id)),
     ).resolves.toBe(20); // only the live reservation counts
-    // The availability read already swept it, so a later cleanup is idempotent.
+    // Availability is read-only; cleanup transitions once.
+    expect((await prisma.$transaction((tx) => expireReservations(tx))).count).toBe(1);
     expect((await prisma.$transaction((tx) => expireReservations(tx))).count).toBe(0);
   });
 

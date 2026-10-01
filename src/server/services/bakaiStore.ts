@@ -1068,7 +1068,7 @@ type BakaiSelectedApiProduct = {
     category: string | null;
     description: string | null;
     basePriceKgs: Prisma.Decimal | null;
-    storePrices?: Array<{ priceKgs: Prisma.Decimal }>;
+    storePrices?: Array<{ priceKgs: Prisma.Decimal | null }>;
     photoUrl: string | null;
     supplier: { name: string } | null;
     images: Array<{ url: string; position: number }>;

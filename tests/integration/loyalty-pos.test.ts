@@ -3,6 +3,8 @@ import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
 import { applyEntry, ensureAccount } from "@/server/services/loyalty/ledger";
+import { requestJoinOtp, verifyJoinOtp } from "@/server/services/loyalty/memberAuth";
+import { approveLoyaltyConsent } from "@/server/services/loyalty/consent";
 import { upsertLoyaltyProgram } from "@/server/services/loyalty/program";
 import { createTestCaller } from "../helpers/context";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
@@ -69,6 +71,15 @@ describeDb("loyalty at the register", () => {
   const draft = (caller: ReturnType<typeof createTestCaller>, registerId: string, productId: string) =>
     caller.pos.sales.createDraft({ registerId, lines: [{ productId, qty: 1 }] });
 
+  const consentFor = async (f: Awaited<ReturnType<typeof fixture>>, saleId: string, points: number) => {
+    const link = await prisma.loyaltyProgramStore.findFirstOrThrow({ where: { programId: f.program.id } });
+    const otp = await requestJoinOtp({ programStoreId: link.id, email: f.member.email! });
+    const session = await verifyJoinOtp({ programStoreId: link.id, email: f.member.email!, code: otp.code! });
+    const request = await f.caller.loyalty.posRequestConsent({ saleId, memberId: f.member.id, points });
+    expect(await approveLoyaltyConsent(session.token, request.id)).toBe(true);
+    return request.id;
+  };
+
   it("gives a 5% member discount, charges 950 and earns 47", async () => {
     const f = await fixture(0);
     const sale = await draft(f.caller, f.register.id, f.product.id);
@@ -97,6 +108,7 @@ describeDb("loyalty at the register", () => {
       saleId: sale.id,
       memberId: f.member.id,
       points: 475,
+      consentId: await consentFor(f, sale.id, 475),
     });
     expect(applied).toMatchObject({ totalKgs: 475, pointsSpent: 475, earnPoints: 23 });
 
@@ -130,7 +142,7 @@ describeDb("loyalty at the register", () => {
   it("refunds the paid money and restores points on a full return, exactly once", async () => {
     const f = await fixture(1000);
     const sale = await draft(f.caller, f.register.id, f.product.id);
-    await f.caller.loyalty.posApply({ saleId: sale.id, memberId: f.member.id, points: 475 });
+    await f.caller.loyalty.posApply({ saleId: sale.id, memberId: f.member.id, points: 475, consentId: await consentFor(f, sale.id, 475) });
     await f.caller.pos.sales.complete({
       saleId: sale.id,
       idempotencyKey: "loyalty-return-sale",
@@ -163,7 +175,7 @@ describeDb("loyalty at the register", () => {
   it("restores the cart and frees the reservation when the bonus is removed", async () => {
     const f = await fixture(1000);
     const sale = await draft(f.caller, f.register.id, f.product.id);
-    await f.caller.loyalty.posApply({ saleId: sale.id, memberId: f.member.id, points: 475 });
+    await f.caller.loyalty.posApply({ saleId: sale.id, memberId: f.member.id, points: 475, consentId: await consentFor(f, sale.id, 475) });
     expect(await prisma.loyaltyAccount.findUniqueOrThrow({ where: { id: f.account.id } })).toMatchObject({
       balancePoints: 1000,
       reservedPoints: 475,
@@ -177,23 +189,31 @@ describeDb("loyalty at the register", () => {
     expect(Number((await prisma.customerOrder.findUniqueOrThrow({ where: { id: sale.id } })).totalKgs)).toBe(1000);
   });
 
-  it("refuses to complete with a stale bonus after the cart changed", async () => {
+  it("releases the bonus and charges the restored price after an explicit cart edit", async () => {
     const f = await fixture(1000);
     const sale = await draft(f.caller, f.register.id, f.product.id);
     const line = await prisma.customerOrderLine.findFirstOrThrow({ where: { customerOrderId: sale.id } });
-    await f.caller.loyalty.posApply({ saleId: sale.id, memberId: f.member.id, points: 475 });
+    await f.caller.loyalty.posApply({ saleId: sale.id, memberId: f.member.id, points: 475, consentId: await consentFor(f, sale.id, 475) });
     // Add a second unit after the bonus was priced.
     await f.caller.pos.sales.updateLine({ lineId: line.id, qty: 2 });
     const currentTotal = Number(
       (await prisma.customerOrder.findUniqueOrThrow({ where: { id: sale.id } })).totalKgs,
     );
-    await expect(
-      f.caller.pos.sales.complete({
-        saleId: sale.id,
-        idempotencyKey: "loyalty-stale-cart",
-        payments: [{ method: "CASH", amountKgs: currentTotal }],
-      }),
-    ).rejects.toMatchObject({ message: "loyaltyCartChanged" });
+    expect(currentTotal).toBe(2000);
+    expect((await prisma.loyaltyAccount.findUniqueOrThrow({ where: { id: f.account.id } })).reservedPoints).toBe(0);
+    await f.caller.pos.sales.complete({ saleId: sale.id, idempotencyKey: "loyalty-stale-cart", payments: [{ method: "CASH", amountKgs: currentTotal }] });
+    expect((await prisma.loyaltyAccount.findUniqueOrThrow({ where: { id: f.account.id } })).balancePoints).toBe(1000);
+    expect(await prisma.loyaltyLedgerEntry.count({ where: { customerOrderId: sale.id } })).toBe(0);
+  });
+
+  it("rejects spending without shopper approval and refuses a tampered snapshot", async () => {
+    const f = await fixture(1000);
+    const sale = await draft(f.caller, f.register.id, f.product.id);
+    await expect(f.caller.loyalty.posApply({ saleId: sale.id, memberId: f.member.id, points: 475 })).rejects.toMatchObject({ message: "loyaltyConsentRequired" });
+    await f.caller.loyalty.posApply({ saleId: sale.id, memberId: f.member.id, points: 475, consentId: await consentFor(f, sale.id, 475) });
+    await prisma.customerOrderLine.updateMany({ where: { customerOrderId: sale.id }, data: { qty: 2 } });
+    await expect(f.caller.pos.sales.complete({ saleId: sale.id, idempotencyKey: "tampered-cart", payments: [{ method: "CASH", amountKgs: 475 }] })).rejects.toMatchObject({ message: "loyaltyCartChanged" });
+    expect((await prisma.loyaltyAccount.findUniqueOrThrow({ where: { id: f.account.id } })).balancePoints).toBe(1000);
   });
 
   it("leaves an ordinary sale untouched when the programme is disabled", async () => {

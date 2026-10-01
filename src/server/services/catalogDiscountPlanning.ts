@@ -15,7 +15,7 @@ export type CatalogDiscountPlanningStorePrice = {
   productId: string;
   variantId: string | null;
   variantKey: string;
-  priceKgs: Prisma.Decimal;
+  priceKgs: Prisma.Decimal | null;
 };
 
 export type CatalogDiscountPriceSource =
@@ -116,7 +116,7 @@ export const planCatalogDiscountTargets = ({
   }) => {
     const variantKey = variantKeyFrom(variantId);
     const exactPrice = priceByTarget.get(`${product.id}:${variantKey}`);
-    if (exactPrice) {
+    if (exactPrice?.priceKgs != null) {
       targets.push({
         productId: product.id,
         variantId,

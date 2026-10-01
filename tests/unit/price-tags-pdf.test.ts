@@ -1,6 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import PDFDocument from "pdfkit";
 
 import { ROLL_PRICE_TAG_TEMPLATE } from "@/lib/priceTags";
+import { resolveLabelTextStyles } from "@/lib/labelTextStyles";
 import { mmToPoints } from "@/server/services/priceTagsLayout";
 import {
   buildPriceTagsPdf,
@@ -20,6 +22,66 @@ const readMediaBox = (pdf: Buffer) => {
 };
 
 describe("price tags pdf", () => {
+  it.each(["name", "barcode", "barcodeText", "price"] as const)("applies the independent gap after %s in physical millimetres", async (field) => {
+    const drawText = vi.spyOn(PDFDocument.prototype, "text");
+    const drawImage = vi.spyOn(PDFDocument.prototype, "image");
+    try {
+      const next = { name: null, barcode: "0001234567895", barcodeText: "100", price: "SKU: SAMPLE" }[field];
+      const positions: number[] = [];
+      for (const gap of [0, 2]) {
+        drawText.mockClear(); drawImage.mockClear();
+        const styles = resolveLabelTextStyles(null, 8);
+        styles.spacing[field] = gap;
+        await buildPriceTagsPdf({
+          labels: [{ name: "Название", sku: "SAMPLE", barcode: "0001234567895", price: 100 }],
+          template: ROLL_PRICE_TAG_TEMPLATE, locale: "ru", storeName: null,
+          noPriceLabel: "Без цены", noBarcodeLabel: "", skuLabel: "SKU",
+          rollCalibration: { widthMm: 58, heightMm: 60, gapMm: 3.5, xOffsetMm: 0, yOffsetMm: 0 },
+          labelTextStyles: styles,
+        });
+        positions.push(Number(next ? drawText.mock.calls.find(call => call[0] === next)?.[2] : drawImage.mock.calls[0]?.[2]));
+      }
+      expect(positions[1]! - positions[0]!).toBeCloseTo(mmToPoints(2), 5);
+    } finally { drawText.mockRestore(); drawImage.mockRestore(); }
+  });
+
+  it.each([0, 1000, 12345.67])("keeps %s and its independently sized currency on one baseline", async (price) => {
+    const text = vi.spyOn(PDFDocument.prototype, "text");
+    try {
+      const styles = resolveLabelTextStyles(null, 8);
+      styles.price.fontSize = 18;
+      styles.currency.fontSize = 7;
+      await buildPriceTagsPdf({
+        labels: [{ name: "Товар", sku: "", barcode: "", price }],
+        template: ROLL_PRICE_TAG_TEMPLATE, locale: "ru", storeName: null,
+        noPriceLabel: "Без цены", noBarcodeLabel: "", skuLabel: "SKU",
+        showSku: false, showStoreName: false, labelTextStyles: styles,
+      });
+      const amount = text.mock.calls.find((call) => call[0] === new Intl.NumberFormat("ru", { maximumFractionDigits: 2 }).format(price));
+      const currency = text.mock.calls.find((call) => call[0] === "KGS");
+      expect(amount).toBeDefined();
+      expect(currency).toBeDefined();
+      expect(currency![2]).toBe(amount![2]);
+      expect(Number(currency![1])).toBeGreaterThan(Number(amount![1]));
+      expect(amount![3]).toMatchObject({ baseline: "alphabetic", lineBreak: false });
+      expect(currency![3]).toMatchObject({ baseline: "alphabetic", lineBreak: false });
+    } finally { text.mockRestore(); }
+  });
+
+  it("rejects a monetary row that cannot fit instead of wrapping its currency", async () => {
+    const styles = resolveLabelTextStyles(null, 8);
+    styles.price.fontSize = 48;
+    styles.price.overflow = "wrap";
+    styles.currency.overflow = "wrap";
+    await expect(buildPriceTagsPdf({
+      labels: [{ name: "", sku: "", barcode: "", price: 123456789 }],
+      template: ROLL_PRICE_TAG_TEMPLATE, locale: "ru", storeName: null,
+      noPriceLabel: "Без цены", noBarcodeLabel: "", skuLabel: "SKU",
+      rollCalibration: { widthMm: 40, heightMm: 30, gapMm: 3.5, xOffsetMm: 0, yOffsetMm: 0 },
+      labelTextStyles: styles,
+    })).rejects.toMatchObject({ message: "labelLayoutOverflow" });
+  });
+
   it("formats label prices with non-KGS store currency", () => {
     const formatted = formatPriceTagCurrency(895, "en-US", "USD", "89.5");
 

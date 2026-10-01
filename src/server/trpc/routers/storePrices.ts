@@ -117,7 +117,9 @@ export const storePricesRouter = router({
         storeId: z.string(),
         productId: z.string(),
         variantId: z.string().optional().nullable(),
-        priceKgs: z.number().min(0),
+        priceKgs: z.number().min(0).optional(),
+        retailPriceKgs: z.number().min(0).nullable().optional(),
+        wholesalePriceKgs: z.number().min(0).nullable().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -129,6 +131,8 @@ export const storePricesRouter = router({
           productId: input.productId,
           variantId: input.variantId ?? undefined,
           priceKgs: input.priceKgs,
+          retailPriceKgs: input.retailPriceKgs,
+          wholesalePriceKgs: input.wholesalePriceKgs,
           actorId: ctx.user.id,
           organizationId: ctx.user.organizationId,
           requestId: ctx.requestId,

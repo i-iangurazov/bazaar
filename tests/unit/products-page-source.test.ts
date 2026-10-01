@@ -61,7 +61,8 @@ describe("index page source layout", () => {
 
     expect(schemaSource).toContain("productExportColumnKeyEnum");
     expect(schemaSource).toContain("columns:");
-    expect(pageSource).toContain("columns: selectedExportColumns.length");
+    expect(pageSource).toMatch(/columns: selected(?:Export)?Columns/);
+    expect(pageSource).toContain("/api/products/export");
     expect(pageSource).not.toContain("const indexes = productExportColumnKeys");
     expect(serviceSource).toContain("selectedColumns.map((column) => column.header)");
     expect(serviceSource).toContain("selectedColumns.map((column) => column.key)");

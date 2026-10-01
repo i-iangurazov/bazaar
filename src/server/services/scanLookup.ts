@@ -5,6 +5,7 @@ import { decimalToNumber, sanitizeListImageUrl } from "@/server/services/product
 export type ScanLookupMatch = "barcode" | "sku" | "name";
 
 export type ScanLookupItem = {
+  variantCount?: number;
   id: string;
   sku: string;
   name: string;
@@ -37,6 +38,7 @@ type ScanLookupClient = {
 };
 
 const scanProductSelect = {
+  _count: { select: { variants: { where: { isActive: true } } } },
   id: true,
   sku: true,
   name: true,
@@ -79,6 +81,7 @@ export const lookupScanProducts = async (
   const visibleStoreIds = options?.storeIds ? new Set(options.storeIds) : null;
   const productWhere = options?.productWhere ?? {};
   const toItem = (item: {
+    _count?: { variants: number };
     id: string;
     sku: string;
     name: string;
@@ -93,6 +96,7 @@ export const lookupScanProducts = async (
     primaryBarcode?: string | null;
     matchType: ScanLookupMatch;
   }): ScanLookupItem => ({
+    variantCount: item._count?.variants ?? 0,
     id: item.id,
     sku: item.sku,
     name: item.name,

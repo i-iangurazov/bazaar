@@ -1,3 +1,4 @@
+import { labelTextStylesSchema } from "@/lib/labelTextStyles";
 import { z } from "zod";
 import {
   catalogSettingsSchema,
@@ -473,6 +474,7 @@ export const storesRouter = router({
         labelShowStoreName: z.boolean().default(false),
         labelBarcodeHeightMm: z.number().min(6).max(40).default(12),
         labelFontSize: z.number().min(6).max(14).default(8),
+        labelTextStyles: labelTextStylesSchema.optional(),
         labelRollGapMm: z
           .number()
           .min(PRICE_TAG_ROLL_LIMITS.gapMm.min)
@@ -561,6 +563,7 @@ export const storesRouter = router({
           labelShowStoreName: input.labelShowStoreName,
           labelBarcodeHeightMm: input.labelBarcodeHeightMm,
           labelFontSize: input.labelFontSize,
+          labelTextStyles: input.labelTextStyles,
           labelRollGapMm: input.labelRollGapMm,
           labelRollXOffsetMm: input.labelRollXOffsetMm,
           labelRollYOffsetMm: input.labelRollYOffsetMm,

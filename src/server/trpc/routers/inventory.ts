@@ -748,7 +748,7 @@ export const inventoryRouter = router({
             variant,
             primaryBarcode: resultProduct.barcodes[0]?.value ?? null,
             unitCostKgs: cost ? Number(cost.avgCostKgs) : null,
-            priceKgs: price
+            priceKgs: price?.priceKgs != null
               ? Number(price.priceKgs)
               : resultProduct.basePriceKgs
                 ? Number(resultProduct.basePriceKgs)

@@ -86,7 +86,7 @@ type BazaarApiStorePriceRow = {
   productId: string;
   variantId: string | null;
   variantKey: string;
-  priceKgs: Prisma.Decimal;
+  priceKgs: Prisma.Decimal | null;
   discountType: "PERCENTAGE" | null;
   discountPercentage: Prisma.Decimal | null;
   discountStartsAt: Date | null;

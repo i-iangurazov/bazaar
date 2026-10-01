@@ -4,6 +4,7 @@ const maxListImageUrlLength = 2_048;
 const maxDetailImageUrlLength = 8_192;
 
 type ProductPreviewRecord = {
+  _count?: { variants: number };
   id: string;
   sku: string;
   name: string;
@@ -18,6 +19,7 @@ type ProductPreviewRecord = {
 };
 
 type ProductListRecord = {
+  _count?: { variants: number };
   id: string;
   sku: string;
   name: string;
@@ -126,6 +128,7 @@ export const serializeProductPreview = (
     }, 0) ?? null;
 
   return {
+    variantCount: product._count?.variants ?? 0,
     id: product.id,
     sku: product.sku,
     name: product.name,
@@ -171,6 +174,7 @@ export const serializeProductListItem = ({
 
   return {
     ...product,
+    variantCount: product._count?.variants ?? 0,
     images: product.images.flatMap((image) => {
       const sanitized = sanitizeListImageUrl(image.url);
       return sanitized ? [{ ...image, url: sanitized }] : [];

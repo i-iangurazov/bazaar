@@ -1,5 +1,6 @@
 "use client";
 
+import { CustomerLoyaltyHistory } from "@/components/pos/customer-loyalty-history";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CustomerSource } from "@prisma/client";
 import { useLocale, useTranslations } from "next-intl";
@@ -851,6 +852,7 @@ const CustomerDatabasePage = () => {
               customerId: customerDetail.customer.id, channel: "all", view: "products",
               dateFrom: addBusinessDays(businessDateKey(new Date()), -29), dateTo: businessDateKey(new Date()),
             })}>{purchaseText("openReport")}</Link></Button>
+            <CustomerLoyaltyHistory customerId={customerDetail.customer.id} />
             <section className="space-y-3">
               <h3 className="text-sm font-semibold text-foreground">{t("detail.contactInfo")}</h3>
               <div className="grid gap-2 text-sm">

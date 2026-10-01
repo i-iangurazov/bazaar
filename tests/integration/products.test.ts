@@ -454,7 +454,7 @@ describeDb("products", () => {
       4,
     );
     expect(
-      noPhotoProduct.storePrices.find((row) => row.storeId === store.id)?.priceKgs.toNumber(),
+      noPhotoProduct.storePrices.find((row) => row.storeId === store.id)?.priceKgs?.toNumber(),
     ).toBe(1234);
     expect(noPhotoProduct.storeProducts.find((row) => row.storeId === store.id)?.isActive).toBe(
       true,
@@ -689,7 +689,7 @@ describeDb("products", () => {
     expect(
       duplicate.storePrices
         .find((price) => price.storeId === secondStore.id && price.variantId === copiedLarge.id)
-        ?.priceKgs.toNumber(),
+        ?.priceKgs?.toNumber(),
     ).toBe(175);
     await expect(
       prisma.stockMovement.count({
@@ -1691,6 +1691,8 @@ describeDb("products", () => {
       "Цена закупки",
       "Себестоимость",
       "Минимальный остаток",
+      "Остаток",
+      "Магазин / сумма остатков",
       "Фото / ссылки на изображения",
       "Варианты",
       "Штрихкоды",

@@ -1,3 +1,4 @@
+import { getLoyaltyHistory } from "./history";
 import { createHash, randomBytes, randomInt } from "node:crypto";
 import { appendFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
@@ -259,7 +260,7 @@ export type LoyaltyCardView = {
   rulesText: string | null;
   balancePoints: number;
   availablePoints: number;
-  history: Array<{ id: string; type: string; points: number; balanceAfter: number; createdAt: string }>;
+  history: Array<{ id: string; type: string; points: number; balanceAfter: number | null; reference: string | null; createdAt: string }>;
 };
 
 export const getCardView = async (rawSessionToken: string): Promise<LoyaltyCardView> => {
@@ -271,12 +272,7 @@ export const getCardView = async (rawSessionToken: string): Promise<LoyaltyCardV
       orderBy: { createdAt: "asc" },
       select: { storeId: true },
     }),
-    prisma.loyaltyLedgerEntry.findMany({
-      where: { accountId: context.account.id },
-      orderBy: { createdAt: "desc" },
-      take: 50,
-      select: { id: true, type: true, points: true, balanceAfter: true, createdAt: true },
-    }),
+    getLoyaltyHistory(context.member.organizationId, context.account.id),
     availablePoints(prisma, context.account.id),
   ]);
   const storeRow = store
@@ -303,7 +299,8 @@ export const getCardView = async (rawSessionToken: string): Promise<LoyaltyCardV
       type: entry.type,
       points: entry.points,
       balanceAfter: entry.balanceAfter,
-      createdAt: entry.createdAt.toISOString(),
+      createdAt: entry.createdAt,
+      reference: entry.reference,
     })),
   };
 };
