@@ -4,9 +4,9 @@ import { getHelpGuideById, helpCategories, helpGuideId, helpGuides } from "@/con
 import { searchHelpGuides } from "@/content/help/search";
 
 describe("Bazaar Guide catalog and search", () => {
-  it("ships a focused first release with complete multilingual short guides", () => {
-    expect(helpGuides).toHaveLength(20);
-    expect(helpCategories).toHaveLength(8);
+  it("ships complete multilingual short guides", () => {
+    expect(helpGuides).toHaveLength(24);
+    expect(helpCategories).toHaveLength(9);
     for (const guide of helpGuides) {
       expect(guide.steps.length).toBeGreaterThanOrEqual(3);
       expect(guide.steps.length).toBeLessThanOrEqual(7);
@@ -36,6 +36,10 @@ describe("Bazaar Guide catalog and search", () => {
     ["пробить чек", "pos/make-sale"],
     ["how is business doing", "reports/analytics-basics"],
     ["сменаны аяктоо", "pos/close-shift"],
+    ["UDS", "loyalty/get-started"],
+    ["списать баллы", "loyalty/pos-points"],
+    ["получить карту", "loyalty/customer-card"],
+    ["refund points", "loyalty/orders-and-returns"],
   ])("maps everyday wording %s to %s", (query, expected) => {
     const locale =
       /[a-z]/i.test(query) && !/[а-я]/i.test(query)

@@ -10,6 +10,7 @@ export type HelpCategorySlug =
   | "products"
   | "inventory"
   | "orders"
+  | "loyalty"
   | "reports"
   | "integrations"
   | "settings";

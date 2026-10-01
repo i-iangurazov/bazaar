@@ -30,10 +30,10 @@ export type HelpHomeData = {
 export const buildHelpHomeData = (locale: HelpLocale): HelpHomeData => ({
   quickSearches:
     locale === "kg"
-      ? ["сменаны жабуу", "товар кошуу", "кириштөө"]
+      ? ["сменаны жабуу", "товар кошуу", "кириштөө", "бонустар"]
       : locale === "en"
-        ? ["close a shift", "add a product", "receive stock"]
-        : ["закрыть смену", "добавить товар", "оприходование"],
+        ? ["close a shift", "add a product", "receive stock", "loyalty"]
+        : ["закрыть смену", "добавить товар", "оприходование", "бонусы"],
   guides: helpGuides.map((guide) => {
     const category = getHelpCategory(guide.category);
     return {

@@ -1,4 +1,5 @@
 import { helpText as t } from "./ui";
+import { loyaltyGuides } from "./loyalty";
 import type {
   HelpAnnotation,
   HelpCategory,
@@ -89,6 +90,16 @@ const integrationScreen = (label: LocalizedText, x = 26, y = 28) =>
 
 export const helpCategories: HelpCategory[] = [
   {
+    slug: "loyalty",
+    title: t("Бонусная программа", "Бонус программасы", "Loyalty program"),
+    description: t(
+      "Запуск, карта покупателя, баллы и возвраты.",
+      "Баштоо, кардар картасы, упайлар жана кайтаруулар.",
+      "Setup, customer cards, points, and returns.",
+    ),
+    icon: "loyalty",
+  },
+  {
     slug: "getting-started",
     title: t("Начало работы", "Ишти баштоо", "Getting started"),
     description: t(
@@ -171,6 +182,7 @@ export const helpCategories: HelpCategory[] = [
 ];
 
 export const helpGuides: HelpGuide[] = [
+  ...loyaltyGuides,
   guide({
     slug: "add-product",
     category: "products",
@@ -1786,6 +1798,16 @@ export const helpGuides: HelpGuide[] = [
 
 export const helpTasks: HelpTask[] = [
   {
+    title: t("Запустить бонусы", "Бонустарды баштоо", "Launch loyalty"),
+    description: t(
+      "От настройки до первой покупки",
+      "Жөндөөдөн биринчи сатып алууга чейин",
+      "From setup to the first purchase",
+    ),
+    guideId: "loyalty/get-started",
+    icon: "loyalty",
+  },
+  {
     title: t("Продать товар", "Товар сатуу", "Sell a product"),
     description: t("Оформить чек на кассе", "Кассада чек чыгаруу", "Complete a POS sale"),
     guideId: "pos/make-sale",
@@ -1939,6 +1961,7 @@ export const helpRoleTracks: HelpRoleTrack[] = [
       "reports/analytics-basics",
       "reports/export-reports",
       "settings/add-employee",
+      "loyalty/get-started",
       "integrations/connect-marketplace",
       "getting-started/choose-store",
     ],
@@ -1955,6 +1978,8 @@ export const helpRoleTracks: HelpRoleTrack[] = [
       "products/add-product",
       "products/import-products",
       "inventory/receiving",
+      "loyalty/customer-card",
+      "loyalty/orders-and-returns",
       "inventory/transfer",
       "inventory/write-off",
       "inventory/inventory-count",
@@ -1973,6 +1998,7 @@ export const helpRoleTracks: HelpRoleTrack[] = [
       "pos/open-shift",
       "pos/make-sale",
       "pos/apply-discount",
+      "loyalty/pos-points",
       "pos/split-payment",
       "pos/hold-receipt",
       "pos/resume-receipt",

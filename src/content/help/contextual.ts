@@ -1,4 +1,5 @@
 export const contextualHelpRoutes = [
+  { match: /^\/settings\/loyalty(?:\/|$)/, guideId: "loyalty/get-started" },
   { match: /^\/products(?:\/|$)/, guideId: "products/add-product" },
   { match: /^\/settings\/import(?:\/|$)/, guideId: "products/import-products" },
   { match: /^\/inventory\/receiving(?:\/|$)/, guideId: "inventory/receiving" },
@@ -34,6 +35,31 @@ import type { LocalizedText } from "./types";
 type ContextualHelpSummary = { title: LocalizedText; steps: LocalizedText[] };
 
 const contextualHelpSummaries: Record<string, ContextualHelpSummary> = {
+  "loyalty/get-started": {
+    title: t("Бонусная программа", "Бонус программасы", "Loyalty program"),
+    steps: [
+      t(
+        "Включите программу и выберите магазины",
+        "Программаны күйгүзүп, дүкөндөрдү тандаңыз",
+        "Enable the program and select stores",
+      ),
+      t(
+        "Настройте скидку, начисление и списание",
+        "Арзандатууну, топтоону жана колдонууну жөндөңүз",
+        "Set the discount, earning rate, and redemption",
+      ),
+      t(
+        "Сохраните и разместите QR регистрации",
+        "Сактап, катталуу QR кодун жайгаштырыңыз",
+        "Save and share the registration QR",
+      ),
+      t(
+        "Обучите кассиров и проверьте первую покупку",
+        "Кассирлерди үйрөтүп, биринчи сатып алууну текшериңиз",
+        "Train cashiers and check the first purchase",
+      ),
+    ],
+  },
   "products/add-product": {
     title: t("Товары", "Товарлар", "Products"),
     steps: [

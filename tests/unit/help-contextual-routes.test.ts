@@ -12,6 +12,7 @@ describe("contextual Bazaar Guide links", () => {
     ["/pos/sell", "pos/make-sale"],
     ["/pos/shifts", "pos/close-shift"],
     ["/settings/users", "settings/add-employee"],
+    ["/settings/loyalty", "loyalty/get-started"],
     ["/stores", "getting-started/choose-store"],
     ["/reports/analytics", "reports/analytics-basics"],
     ["/operations/integrations/m-market", "integrations/connect-marketplace"],
