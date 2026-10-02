@@ -225,6 +225,7 @@ const createImageOptimizer = (input: { maxImageBytes: number; logger?: ImagePrep
             quality: 1,
           }),
         );
+        if (candidates[0]?.size <= maxImageBytes) return candidates[0];
         pushCandidate(
           await encodeCanvasToFile({
             canvas,
@@ -234,6 +235,7 @@ const createImageOptimizer = (input: { maxImageBytes: number; logger?: ImagePrep
             quality: 1,
           }),
         );
+        if (candidates[1]?.size <= maxImageBytes) return candidates[1];
         if (normalizedType !== "image/png") {
           pushCandidate(
             await encodeCanvasToFile({

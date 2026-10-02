@@ -409,6 +409,10 @@ describeDb("products", () => {
       },
     });
 
+    await prisma.storePriceTypes.create({
+      data: { organizationId: org.id, storeId: store.id, productId: source.id,
+        retailPriceKgs: 1400, wholesalePriceKgs: 1100 },
+    });
     const withoutPhotos = await caller.products.duplicate({
       idempotencyKey: "duplicate-without-photos",
       productId: source.id,
@@ -440,6 +444,11 @@ describeDb("products", () => {
     });
 
     expect(noPhotoProduct.sku).not.toBe(source.sku);
+    const copiedPriceTypes = await prisma.storePriceTypes.findFirstOrThrow({
+      where: { productId: noPhotoProduct.id, storeId: store.id, variantKey: "BASE" },
+    });
+    expect(copiedPriceTypes.retailPriceKgs?.toNumber()).toBe(1400);
+    expect(copiedPriceTypes.wholesalePriceKgs?.toNumber()).toBe(1100);
     expect(noPhotoProduct.name).toBe(source.name);
     expect(noPhotoProduct.unit).toBe("pcs");
     expect(noPhotoProduct.baseUnitId).toBe(pcsUnit.id);

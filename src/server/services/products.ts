@@ -1747,6 +1747,19 @@ const resolveIncomingProductImages = async (input: {
   images?: CreateProductInput["images"];
 }) => {
   const cache = new Map<string, ResolveProductImageUrlResult>();
+  if (input.productId) {
+    const existing = await prisma.product.findFirst({
+      where: { id: input.productId, organizationId: input.organizationId },
+      select: { photoUrl: true, images: { select: { url: true } } },
+    });
+    for (const value of [existing?.photoUrl, ...(existing?.images.map((image) => image.url) ?? [])]) {
+      const url = normalizeProductImageUrl(value);
+      // Already saved remote photos must not be downloaded again on every edit.
+      if (url && !url.startsWith("data:")) {
+        cache.set(url, { url, managed: isManagedProductImageUrl(url) });
+      }
+    }
+  }
   const normalizedImages = normalizeImages(input.images);
   const resolvedImages: NormalizedImage[] = [];
 
@@ -2541,6 +2554,52 @@ export const updateProduct = async (input: UpdateProductInput) => {
   });
 };
 
+// Shared assortment managers may maintain photos without editing source prices or details.
+export const updateProductImages = async (input: {
+  organizationId: string;
+  actorId: string;
+  requestId: string;
+  productId: string;
+  images: NonNullable<CreateProductInput["images"]>;
+  variants?: Array<{ id?: string; imageId?: string | null; imageUrl?: string | null }>;
+}) => {
+  const media = await resolveIncomingProductImages(input);
+  return prisma.$transaction(async (tx) => {
+    await assertBaamReviewedVersion(tx, "Product", input.productId);
+    const before = await tx.product.findFirst({
+      where: { id: input.productId, organizationId: input.organizationId, isDeleted: false },
+      include: { images: true, variants: { where: { isActive: true } } },
+    });
+    if (!before) throw new AppError("productNotFound", "NOT_FOUND", 404);
+    const images = withStableProductImageIds(media.images, {
+      preserveIds: new Set(before.images.map((image) => image.id)),
+    });
+    const references = buildProductImageReferenceMap(images);
+    const variants = input.variants ?? before.variants;
+    if (variants.some((variant) => !before.variants.some((row) => row.id === variant.id))) {
+      throw new AppError("variantNotFound", "NOT_FOUND", 404);
+    }
+    await syncProductImages(tx, input.organizationId, input.productId, images);
+    for (const variant of variants) {
+      await tx.productVariant.update({
+        where: { id: variant.id! },
+        data: { imageId: resolveVariantImageId(variant, references) },
+      });
+    }
+    const product = await tx.product.update({
+      where: { id: input.productId },
+      data: { photoUrl: images[0]?.url ?? null },
+    });
+    await writeAuditLog(tx, {
+      organizationId: input.organizationId, actorId: input.actorId, requestId: input.requestId,
+      action: "PRODUCT_UPDATE", entity: "Product", entityId: product.id,
+      before: toJson({ photoUrl: before.photoUrl, images: before.images }),
+      after: toJson({ photoUrl: product.photoUrl, images }),
+    });
+    return product;
+  });
+};
+
 export const duplicateProduct = async (input: {
   idempotencyKey?: string;
   organizationId: string;
@@ -2807,6 +2866,32 @@ export const duplicateProduct = async (input: {
         }),
         skipDuplicates: true,
       });
+    }
+
+    if (copyPrice) {
+      const priceTypes = await tx.storePriceTypes.findMany({
+        where: {
+          organizationId: input.organizationId,
+          productId: source.id,
+          storeId: { in: [...assignedStoreIds] },
+        },
+      });
+      const copiedPriceTypes = priceTypes.filter(
+        (price) => price.variantKey === "BASE" || copiedVariantIdBySourceId.has(price.variantKey),
+      );
+      if (copiedPriceTypes.length) {
+        await tx.storePriceTypes.createMany({
+          data: copiedPriceTypes.map((price) => {
+            const variantId = copiedVariantIdBySourceId.get(price.variantKey) ?? null;
+            return {
+              organizationId: input.organizationId, storeId: price.storeId,
+              productId: duplicate.id, variantId, variantKey: variantId ?? "BASE",
+              retailPriceKgs: price.retailPriceKgs, wholesalePriceKgs: price.wholesalePriceKgs,
+              updatedById: input.actorId,
+            };
+          }),
+        });
+      }
     }
 
     const copiedReorderPolicies = copyMinimumStock

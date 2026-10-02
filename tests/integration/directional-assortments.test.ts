@@ -260,6 +260,38 @@ suite("directional assortment policy", () => {
       data: { organizationId: f.org.id, userId: f.managerUser.id, storeId: f.b.id },
     });
     const manager = createTestCaller({ ...f.managerUser, organizationId: f.org.id });
+    const oldImage = await prisma.productImage.create({
+      data: { organizationId: f.org.id, productId: f.a1.id, url: "https://photos.example.com/old.webp" },
+    });
+    const variant = await prisma.productVariant.create({
+      data: { productId: f.a1.id, name: "Original variant", attributes: {} },
+    });
+    const imageFetch = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("No redownload"));
+    try {
+      await manager.products.update({
+        productId: f.a1.id, imagesOnly: true,
+        sku: f.a1.sku, name: "Ignored media-save name", baseUnitId: f.baseUnit.id,
+        images: [
+          { url: `/uploads/product-images/${f.org.id}/shared-photo.webp` },
+          { id: oldImage.id, url: oldImage.url },
+        ],
+        variants: [{ id: variant.id, name: "Ignored variant edit", imageId: oldImage.id }],
+      });
+      expect(imageFetch).not.toHaveBeenCalled();
+    } finally {
+      imageFetch.mockRestore();
+    }
+    const photographedVariant = await prisma.productVariant.findUniqueOrThrow({ where: { id: variant.id } });
+    expect(photographedVariant.name).toBe("Original variant");
+    expect(photographedVariant.imageId).toBe(oldImage.id);
+    const photographed = await prisma.product.findUniqueOrThrow({ where: { id: f.a1.id } });
+    expect(photographed.name).toBe(f.a1.name);
+    expect(photographed.photoUrl).toContain("shared-photo.webp");
+    await expect(manager.products.update({
+      productId: f.c1.id, imagesOnly: true,
+      sku: f.c1.sku, name: f.c1.name, baseUnitId: f.baseUnit.id,
+      images: [{ url: `/uploads/product-images/${f.org.id}/forbidden-photo.webp` }],
+    })).rejects.toThrow("productAccessDenied");
     await expect(
       manager.products.inlineUpdate({ productId: f.a1.id, patch: { name: "Not mine" } }),
     ).rejects.toThrow("productAccessDenied");
@@ -272,9 +304,12 @@ suite("directional assortment policy", () => {
     });
     expect(bulk.generatedCount).toBe(1);
     expect(await prisma.productBarcode.count({ where: { productId: f.a1.id } })).toBe(0);
-    await expect(
-      manager.products.duplicate({ productId: f.a1.id, idempotencyKey: "ambiguous-copy" }),
-    ).rejects.toThrow("storeRequired");
+    const quickCopy = await manager.products.duplicate({
+      productId: f.a1.id, idempotencyKey: "quick-local-copy",
+    });
+    expect(await f.visible(f.b.id)).toContain(quickCopy.productId);
+    expect(await f.visible(f.a.id)).not.toContain(quickCopy.productId);
+    expect(await f.visible(f.c.id)).not.toContain(quickCopy.productId);
     const copy = await manager.products.duplicate({
       productId: f.a1.id,
       storeId: f.b.id,

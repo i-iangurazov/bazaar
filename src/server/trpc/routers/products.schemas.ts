@@ -205,6 +205,7 @@ export const createProductInputSchema = z.object({
 });
 
 export const updateProductInputSchema = z.object({
+  imagesOnly: z.boolean().optional(),
   productId: z.string(),
   storeId: z.string().optional(),
   sku: z.string().min(2),

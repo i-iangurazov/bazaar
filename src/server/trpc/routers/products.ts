@@ -82,6 +82,7 @@ import {
 } from "@/server/services/productDescriptionGenerationJobs";
 import { isProductDescriptionGenerationConfigured } from "@/server/services/productDescriptions";
 import { isAiDescriptionGenerationEnabled } from "@/lib/featureFlags";
+import { updateProductImages } from "@/server/services/products";
 
 const assertProductAccess = async (
   ...args: Parameters<typeof assertUserCanAccessProducts>
@@ -274,6 +275,21 @@ export const productsRouter = router({
   update: managerProcedure
     .input(updateProductInputSchema)
     .mutation(async ({ ctx, input }) => {
+      if (input.imagesOnly) {
+        await assertSingleProductAccess(ctx.prisma, ctx.user, input.productId);
+        try {
+          return await updateProductImages({
+            organizationId: ctx.user.organizationId,
+            actorId: ctx.user.id,
+            requestId: ctx.requestId,
+            productId: input.productId,
+            images: input.images ?? [],
+            variants: input.variants,
+          });
+        } catch (error) {
+          throw toTRPCError(error);
+        }
+      }
       await assertSingleProductAccess(ctx.prisma, ctx.user, input.productId, { writable: true });
       if (input.storeId) {
         await assertProductStoreAccess(ctx.prisma, ctx.user, input.storeId);
@@ -307,11 +323,29 @@ export const productsRouter = router({
       if (input.storeId) {
         await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
       }
+      let storeId = input.storeId;
+      if (!storeId) {
+        const accessibleStoreIds = userHasAllStoreAccess(ctx.user)
+          ? null
+          : await resolveAccessibleStoreIds(ctx.prisma, ctx.user);
+        const assignment = await ctx.prisma.storeProduct.findFirst({
+          where: {
+            organizationId: ctx.user.organizationId,
+            productId: input.productId,
+            isActive: true,
+            ...(accessibleStoreIds === null ? {} : { storeId: { in: accessibleStoreIds } }),
+            store: { directedAssortment: true },
+          },
+          orderBy: [{ isDirect: "desc" }, { isHistorical: "desc" }, { storeId: "asc" }],
+          select: { storeId: true },
+        });
+        storeId = assignment?.storeId;
+      }
       return duplicateProductMutation({
         organizationId: ctx.user.organizationId,
         actorId: ctx.user.id,
         requestId: ctx.requestId,
-        input,
+        input: { ...input, storeId },
       });
     }),
 

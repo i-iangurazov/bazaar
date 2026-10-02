@@ -18,6 +18,7 @@ import { z } from "zod";
 import { useFieldArray, useForm, useWatch, type FieldErrors } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Cropper, { type Area } from "react-easy-crop";
+import { isProductImageOnlyChange } from "@/lib/productImageChanges";
 
 import { ProductSearchResultItem } from "@/components/product-search-result-item";
 import { ProductEditorCard, ProductEditorFieldGrid } from "@/components/product-editor-layout";
@@ -98,6 +99,7 @@ const showProductPacksSection = isProductPacksEnabled();
 const aiDescriptionGenerationDisabled = !isAiDescriptionGenerationEnabled();
 
 export type ProductFormValues = {
+  imagesOnly?: boolean;
   sku: string;
   name: string;
   isBundle?: boolean;
@@ -947,6 +949,7 @@ export const ProductForm = ({
     },
   });
   const formIsDirty = form.formState.isDirty;
+  const formDirtyFields = form.formState.dirtyFields;
   const savedRevisionRef = useRef(savedRevision);
 
   useEffect(() => {
@@ -3329,6 +3332,7 @@ export const ProductForm = ({
       : normalizeProductBarcodes(values.barcodes ?? []);
 
     onSubmit({
+      imagesOnly: Boolean(productId) && isProductImageOnlyChange(formDirtyFields),
       sku: values.sku.trim(),
       name: values.name.trim(),
       isBundle: Boolean(values.isBundle),
