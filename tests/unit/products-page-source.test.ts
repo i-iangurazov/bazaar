@@ -235,15 +235,20 @@ describe("index page source layout", () => {
     expect(listQuickAction).toBeGreaterThan(-1);
     expect(listSelectiveAction).toBeGreaterThan(listQuickAction);
     expect(listSource.slice(listQuickAction, listSelectiveAction)).toContain(
-      "quickDuplicate.duplicateProduct(product.id)",
+      "quickDuplicate.duplicateProduct(product.id, storeId)",
     );
+    expect(listSource.slice(listQuickAction, listSelectiveAction)).toContain("if (!storeId)");
+    expect(listSource.slice(listQuickAction, listSelectiveAction)).toContain("setDuplicateTarget");
     expect(listSource.slice(listSelectiveAction, listSelectiveAction + 400)).toContain(
       "setDuplicateTarget",
     );
     expect(detailQuickAction).toBeGreaterThan(-1);
     expect(detailSelectiveAction).toBeGreaterThan(detailQuickAction);
     expect(detailSource).toContain(
-      "actionAfterMenuCloseRef.current = () => quickDuplicate.duplicateProduct(productId)",
+      "quickDuplicate.duplicateProduct(productId, storeId)",
+    );
+    expect(detailSource).toContain(
+      "const storeId = returnStoreId || selectedSettingsStore?.storeId;",
     );
     expect(detailSource).toContain(
       "actionAfterMenuCloseRef.current = () => setDuplicateDialogOpen(true)",
