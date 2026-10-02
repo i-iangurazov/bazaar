@@ -156,7 +156,7 @@ const convertBrowserReadableImageToJpeg = async (file: File) => {
   }
 };
 
-const createImageOptimizer = (input: { maxImageBytes: number; logger?: ImagePrepLogger }) => {
+const createImageOptimizer = (input: { maxImageBytes: number; logger?: ImagePrepLogger; fast?: boolean }) => {
   const { logger, maxImageBytes } = input;
 
   return async (file: File) => {
@@ -190,6 +190,29 @@ const createImageOptimizer = (input: { maxImageBytes: number; logger?: ImagePrep
           height,
         });
         return null;
+      }
+
+      if (input.fast) {
+        const scale = Math.min(1, 2048 / Math.max(width, height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(width * scale));
+        canvas.height = Math.max(1, Math.round(height * scale));
+        const context = canvas.getContext("2d");
+        if (context) {
+          context.drawImage(image, 0, 0, canvas.width, canvas.height);
+          const type = normalizedType === "image/png"
+            ? "image/webp"
+            : normalizedType as "image/jpeg" | "image/webp";
+          const compact = await encodeCanvasToFile({
+            canvas,
+            type,
+            quality: 0.9,
+            fileName: replaceFileExtension(file.name, type === "image/jpeg" ? "jpg" : "webp"),
+            lastModified: file.lastModified || Date.now(),
+          });
+          if (compact && compact.size <= maxImageBytes && compact.size < file.size) return compact;
+          if (file.size <= maxImageBytes) return file;
+        }
       }
 
       const optimizeFromDimensions = async (
@@ -501,6 +524,12 @@ const createHeicConverter = (logger?: ImagePrepLogger) => {
     }
   };
 };
+
+export const optimizeProductPhotoForUpload = (input: {
+  file: File;
+  maxImageBytes: number;
+  logger?: ImagePrepLogger;
+}) => createImageOptimizer({ ...input, fast: true })(input.file);
 
 export const prepareManagedProductImageForUpload = async (input: {
   file: File;

@@ -19,6 +19,7 @@ import { useFieldArray, useForm, useWatch, type FieldErrors } from "react-hook-f
 import { zodResolver } from "@hookform/resolvers/zod";
 import Cropper, { type Area } from "react-easy-crop";
 import { isProductImageOnlyChange } from "@/lib/productImageChanges";
+import { optimizeProductPhotoForUpload } from "@/lib/productImageClientUpload";
 
 import { ProductSearchResultItem } from "@/components/product-search-result-item";
 import { ProductEditorCard, ProductEditorFieldGrid } from "@/components/product-editor-layout";
@@ -1362,6 +1363,7 @@ export const ProductForm = ({
   const [imageUrlDraft, setImageUrlDraft] = useState("");
   const [pendingImageUploads, setPendingImageUploads] = useState<PendingImageUpload[]>([]);
   const pendingImageUploadsRef = useRef<PendingImageUpload[]>([]);
+  const directImageUploadUnavailableRef = useRef(false);
   const [isImageEditorOpen, setIsImageEditorOpen] = useState(false);
   const [imageEditorIndex, setImageEditorIndex] = useState<number | null>(null);
   const [imageEditorSourceUrl, setImageEditorSourceUrl] = useState<string | null>(null);
@@ -1669,205 +1671,8 @@ export const ProductForm = ({
     });
   };
 
-  const optimizeImageToLimit = async (file: File, targetMaxBytes = maxImageBytes) => {
-    const normalizedType = normalizeImageMimeType(file.type);
-    if (!["image/jpeg", "image/png", "image/webp"].includes(normalizedType)) {
-      logImagePrepDebug("optimize-unsupported-type", {
-        fileName: file.name,
-        size: file.size,
-        type: file.type,
-        normalizedType,
-      });
-      return null;
-    }
-
-    const objectUrl = URL.createObjectURL(file);
-    try {
-      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-        const nextImage = new Image();
-        nextImage.onload = () => resolve(nextImage);
-        nextImage.onerror = () => reject(new Error("imageCompressionFailed"));
-        nextImage.src = objectUrl;
-      });
-
-      const width = image.naturalWidth || image.width;
-      const height = image.naturalHeight || image.height;
-      if (!width || !height) {
-        logImagePrepDebug("optimize-invalid-dimensions", {
-          fileName: file.name,
-          size: file.size,
-          width,
-          height,
-        });
-        return null;
-      }
-
-      const optimizeFromDimensions = async (
-        targetWidth: number,
-        targetHeight: number,
-        allowAggressiveQuality = false,
-      ) => {
-        const canvas = document.createElement("canvas");
-        const safeWidth = Math.max(1, Math.round(targetWidth));
-        const safeHeight = Math.max(1, Math.round(targetHeight));
-        canvas.width = safeWidth;
-        canvas.height = safeHeight;
-
-        const context = canvas.getContext("2d");
-        if (!context) {
-          return null;
-        }
-        context.drawImage(image, 0, 0, safeWidth, safeHeight);
-
-        const candidates: File[] = [];
-        const pushCandidate = (candidate: File | null) => {
-          if (!candidate) {
-            return;
-          }
-          candidates.push(candidate);
-        };
-
-        // First pass: preserve visual quality as much as possible.
-        pushCandidate(
-          await encodeCanvasToFile({
-            canvas,
-            fileName: file.name,
-            lastModified: file.lastModified || Date.now(),
-            type: normalizedType as "image/jpeg" | "image/png" | "image/webp",
-            quality: 1,
-          }),
-        );
-        pushCandidate(
-          await encodeCanvasToFile({
-            canvas,
-            fileName: file.name,
-            lastModified: file.lastModified || Date.now(),
-            type: "image/webp",
-            quality: 1,
-          }),
-        );
-        if (normalizedType !== "image/png") {
-          pushCandidate(
-            await encodeCanvasToFile({
-              canvas,
-              fileName: file.name,
-              lastModified: file.lastModified || Date.now(),
-              type: "image/jpeg",
-              quality: 1,
-            }),
-          );
-        }
-
-        if (!candidates.length) {
-          logImagePrepDebug("optimize-no-candidates", {
-            fileName: file.name,
-            targetWidth: safeWidth,
-            targetHeight: safeHeight,
-          });
-          return null;
-        }
-
-        let best = candidates.reduce((smallest, candidate) =>
-          candidate.size < smallest.size ? candidate : smallest,
-        );
-        if (best.size <= targetMaxBytes) {
-          return best;
-        }
-
-        // Second pass: quality optimization before lowering dimensions further.
-        const fallbackType: "image/jpeg" | "image/webp" =
-          normalizedType === "image/png" ? "image/webp" : "image/jpeg";
-        const qualitySteps = allowAggressiveQuality
-          ? ([0.98, 0.95, 0.92, 0.9, 0.88, 0.85, 0.82, 0.78, 0.74, 0.7, 0.66, 0.62, 0.58] as const)
-          : ([0.98, 0.95, 0.92, 0.9, 0.88, 0.85, 0.82] as const);
-        for (const quality of qualitySteps) {
-          const optimized = await encodeCanvasToFile({
-            canvas,
-            fileName: file.name,
-            lastModified: file.lastModified || Date.now(),
-            type: fallbackType,
-            quality,
-          });
-          if (!optimized) {
-            continue;
-          }
-          if (optimized.size < best.size) {
-            best = optimized;
-          }
-          if (optimized.size <= targetMaxBytes) {
-            return optimized;
-          }
-        }
-
-        return best;
-      };
-
-      const maxCanvasPixels = 28_000_000;
-      const maxCanvasSide = 8192;
-      const areaScale =
-        width * height > maxCanvasPixels ? Math.sqrt(maxCanvasPixels / (width * height)) : 1;
-      const sideScale =
-        Math.max(width, height) > maxCanvasSide ? maxCanvasSide / Math.max(width, height) : 1;
-      const safeBaseScale = Math.min(1, areaScale, sideScale);
-      let targetWidth = Math.max(1, Math.round(width * safeBaseScale));
-      let targetHeight = Math.max(1, Math.round(height * safeBaseScale));
-
-      let best = await optimizeFromDimensions(targetWidth, targetHeight, false);
-      if (best?.size && best.size <= targetMaxBytes) {
-        return best;
-      }
-
-      // Keep compressing/downscaling until target is met or hard minimum is reached.
-      const minDimension = 320;
-      const maxResizePasses = 8;
-      for (let pass = 0; pass < maxResizePasses; pass += 1) {
-        const referenceSize = best?.size ?? file.size;
-        if (referenceSize <= targetMaxBytes) {
-          return best;
-        }
-        if (targetWidth <= minDimension && targetHeight <= minDimension) {
-          break;
-        }
-
-        const predictedScale = Math.sqrt(targetMaxBytes / Math.max(referenceSize, 1));
-        const stepScale = Math.min(0.9, Math.max(0.55, predictedScale * 0.98));
-        const nextTargetWidth = Math.max(minDimension, Math.round(targetWidth * stepScale));
-        const nextTargetHeight = Math.max(minDimension, Math.round(targetHeight * stepScale));
-
-        if (nextTargetWidth === targetWidth && nextTargetHeight === targetHeight) {
-          break;
-        }
-
-        targetWidth = nextTargetWidth;
-        targetHeight = nextTargetHeight;
-        const resized = await optimizeFromDimensions(targetWidth, targetHeight, true);
-        if (!resized) {
-          continue;
-        }
-        if (!best || resized.size < best.size) {
-          best = resized;
-        }
-        if (resized.size <= targetMaxBytes) {
-          return resized;
-        }
-      }
-
-      return best;
-    } catch (error) {
-      logImagePrepDebug(
-        "optimize-failed",
-        {
-          fileName: file.name,
-          size: file.size,
-          type: file.type,
-        },
-        error,
-      );
-      return null;
-    } finally {
-      URL.revokeObjectURL(objectUrl);
-    }
-  };
+  const optimizeImageToLimit = (file: File, targetMaxBytes = maxImageBytes) =>
+    optimizeProductPhotoForUpload({ file, maxImageBytes: targetMaxBytes, logger: logImagePrepDebug });
 
   const convertBrowserReadableImageToJpeg = async (file: File) => {
     const objectUrl = URL.createObjectURL(file);
@@ -2253,6 +2058,7 @@ export const ProductForm = ({
     file: File,
     onProgress?: (progress: number | null) => void,
   ) => {
+    if (directImageUploadUnavailableRef.current) return { attempted: false, url: null };
     let targetResponse: Response;
     try {
       targetResponse = await fetchProductImageDirectUploadTarget({
@@ -2260,6 +2066,7 @@ export const ProductForm = ({
         productId,
       });
     } catch (error) {
+      directImageUploadUnavailableRef.current = true;
       logImagePrepDebug(
         "direct-upload-target-error",
         {
@@ -2312,6 +2119,7 @@ export const ProductForm = ({
     }
 
     if (targetBody?.message === "directUploadUnavailable") {
+      directImageUploadUnavailableRef.current = true;
       logImagePrepDebug("direct-upload-unavailable", {
         fileName: file.name,
         fileSize: file.size,
@@ -2358,30 +2166,21 @@ export const ProductForm = ({
         },
         error,
       );
-      if (error instanceof ProductImageUploadTimeoutError) {
-        toast({ variant: "error", description: t("imageUploadTimedOut") });
-        return { attempted: true, url: null };
-      }
+      directImageUploadUnavailableRef.current = true;
       onProgress?.(null);
       return { attempted: false, url: null };
     }
 
     if (!uploadResponse.ok) {
+      directImageUploadUnavailableRef.current = true;
       logImagePrepDebug("direct-upload-put-failed", {
         status: uploadResponse.status,
         fileName: file.name,
         fileSize: file.size,
         fileType: file.type,
       });
-      if (
-        uploadResponse.status >= 500 ||
-        uploadResponse.status === 408 ||
-        uploadResponse.status === 429
-      ) {
-        onProgress?.(null);
-        return { attempted: false, url: null };
-      }
-      return { attempted: true, url: null };
+      onProgress?.(null);
+      return { attempted: false, url: null };
     }
 
     return { attempted: true, url: target.url.trim() || null };
@@ -2819,7 +2618,7 @@ export const ProductForm = ({
 
   const processPendingImageUpload = async (upload: PendingImageUpload) => {
     updatePendingImageUpload(upload.id, {
-      status: upload.file.size > maxImageBytes ? "optimizing" : "validating",
+      status: upload.file.size > 512 * 1024 ? "optimizing" : "validating",
       progress: null,
       error: null,
       uploadedUrl: undefined,
@@ -2827,10 +2626,11 @@ export const ProductForm = ({
 
     const prepared = await prepareProductImageFileForUpload({
       file: upload.file,
-      maxImageBytes,
+      maxImageBytes: Math.min(maxImageBytes, maxProxyUploadBytes),
       maxInputImageBytes,
+      optimizeAboveBytes: 512 * 1024,
       convertHeicToJpeg,
-      optimizeImageToLimit,
+      optimizeImageToLimit: (file) => optimizeImageToLimit(file, Math.min(maxImageBytes, maxProxyUploadBytes)),
     });
     if (!prepared.ok) {
       logImagePrepDebug("prepare-failed", {
@@ -2891,6 +2691,26 @@ export const ProductForm = ({
       const results: Array<{ url: string; uploadId: string } | null> = new Array(
         uploads.length,
       ).fill(null);
+      const completed = new Array<boolean>(uploads.length).fill(false);
+      let publishedCursor = 0;
+      let variantImageAssigned = false;
+      const publishCompletedImages = () => {
+        const ready: Array<{ url: string; uploadId: string }> = [];
+        while (publishedCursor < uploads.length && completed[publishedCursor]) {
+          const result = results[publishedCursor++];
+          if (result) ready.push(result);
+        }
+        if (!ready.length) return;
+        handleAppendImageEntries(ready.map((result) => ({ url: result.url })));
+        if (!variantImageAssigned) {
+          assignUploadedImageToVariantTarget(variantImageUploadTarget, ready[0].url);
+          variantImageAssigned = true;
+        }
+        window.setTimeout(
+          () => clearUploadedPendingImageUploads(ready.map((result) => result.uploadId)),
+          1600,
+        );
+      };
       let cursor = 0;
       const workers = Array.from(
         { length: Math.min(maxImageUploadConcurrency, uploads.length) },
@@ -2903,6 +2723,8 @@ export const ProductForm = ({
             }
 
             results[nextIndex] = await processPendingImageUpload(uploads[nextIndex]);
+            completed[nextIndex] = true;
+            publishCompletedImages();
           }
         },
       );
@@ -2913,14 +2735,6 @@ export const ProductForm = ({
       );
       const failedCount = uploads.length - uploadedImages.length;
 
-      if (uploadedImages.length) {
-        handleAppendImageEntries(uploadedImages.map((result) => ({ url: result.url })));
-        assignUploadedImageToVariantTarget(variantImageUploadTarget, uploadedImages[0].url);
-        window.setTimeout(
-          () => clearUploadedPendingImageUploads(uploadedImages.map((result) => result.uploadId)),
-          1600,
-        );
-      }
       if (failedCount > 0) {
         toast({ variant: "error", description: t("imageSomeFailed") });
       }

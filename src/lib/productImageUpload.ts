@@ -193,8 +193,9 @@ export type ProductImageDirectUploadTarget = {
 export const fetchProductImageDirectUploadTarget = async ({
   file,
   productId,
-  timeoutMs = resolveProductImageUploadTimeoutMs(
-    process.env.NEXT_PUBLIC_PRODUCT_IMAGE_UPLOAD_TIMEOUT_MS,
+  timeoutMs = Math.min(
+    10_000,
+    resolveProductImageUploadTimeoutMs(process.env.NEXT_PUBLIC_PRODUCT_IMAGE_UPLOAD_TIMEOUT_MS),
   ),
   fetchImpl = fetch,
 }: {
@@ -252,6 +253,7 @@ type PrepareProductImageFileInput = {
   maxInputImageBytes: number;
   convertHeicToJpeg: (file: File) => Promise<File | null>;
   optimizeImageToLimit: (file: File) => Promise<File | null>;
+  optimizeAboveBytes?: number;
 };
 
 export type PrepareProductImageFileError =
@@ -312,11 +314,14 @@ export const prepareProductImageFileForUpload = async (
     });
   }
 
-  if (file.size <= maxImageBytes) {
+  if (file.size <= Math.min(maxImageBytes, input.optimizeAboveBytes ?? maxImageBytes)) {
     return { ok: true, file };
   }
 
-  const optimized = await input.optimizeImageToLimit(file);
+  const optimized = await input.optimizeImageToLimit(file).catch(() => null);
+  if (file.size <= maxImageBytes && (!optimized || optimized.size >= file.size)) {
+    return { ok: true, file };
+  }
   if (!optimized) {
     return {
       ok: false,
