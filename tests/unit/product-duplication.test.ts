@@ -6,6 +6,12 @@ import {
 } from "@/lib/productDuplication";
 
 describe("quick product duplication", () => {
+  it("keeps the selected store in the duplicate mutation input", () => {
+    expect(buildQuickProductDuplicateInput({
+      productId: "product-1", storeId: "store-2", idempotencyKey: "duplicate-in-store-2",
+    })).toMatchObject({ productId: "product-1", storeId: "store-2" });
+  });
+
   it("copies normal catalog configuration without fabricating physical inventory", () => {
     const input = buildQuickProductDuplicateInput({
       productId: "product-1",

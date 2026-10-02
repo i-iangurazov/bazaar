@@ -985,7 +985,14 @@ const ProductDetailPage = () => {
           </DropdownMenuItem>
           <DropdownMenuItem
             onSelect={() => {
-              actionAfterMenuCloseRef.current = () => quickDuplicate.duplicateProduct(productId);
+              actionAfterMenuCloseRef.current = () => {
+                const storeId = returnStoreId || selectedSettingsStore?.storeId;
+                if (!storeId) {
+                  setDuplicateDialogOpen(true);
+                  return;
+                }
+                quickDuplicate.duplicateProduct(productId, storeId);
+              };
             }}
             disabled={quickDuplicate.isLoading}
           >

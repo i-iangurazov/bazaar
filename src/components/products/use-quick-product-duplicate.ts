@@ -15,11 +15,11 @@ export const useQuickProductDuplicate = () => {
   const router = useRouter();
   const trpcUtils = trpc.useUtils();
   const { toast } = useToast();
-  const operationRef = useRef<{ productId: string; idempotencyKey: string } | null>(null);
+  const operationRef = useRef<{ productId: string; storeId?: string; idempotencyKey: string } | null>(null);
   const requestInFlightRef = useRef(false);
 
   const mutation = trpc.products.duplicate.useMutation({
-    onSuccess: (result) => {
+    onSuccess: (result, input) => {
       requestInFlightRef.current = false;
       operationRef.current = null;
       void Promise.all([
@@ -33,7 +33,9 @@ export const useQuickProductDuplicate = () => {
         description:
           result.omittedBarcodesCount > 0 ? t("duplicateSuccessNoBarcodes") : t("duplicateSuccess"),
       });
-      router.push(`/products/${result.productId}`);
+      router.push(
+        `/products/${result.productId}${input.storeId ? `?storeId=${encodeURIComponent(input.storeId)}` : ""}`,
+      );
     },
     onError: (error) => {
       requestInFlightRef.current = false;
@@ -42,16 +44,18 @@ export const useQuickProductDuplicate = () => {
   });
 
   const duplicateProduct = useCallback(
-    (productId: string) => {
+    (productId: string, storeId?: string) => {
       if (!productId || requestInFlightRef.current) {
         return;
       }
       requestInFlightRef.current = true;
       const current = operationRef.current;
       const idempotencyKey =
-        current?.productId === productId ? current.idempotencyKey : crypto.randomUUID();
-      operationRef.current = { productId, idempotencyKey };
-      mutation.mutate(buildQuickProductDuplicateInput({ productId, idempotencyKey }));
+        current?.productId === productId && current.storeId === storeId
+          ? current.idempotencyKey
+          : crypto.randomUUID();
+      operationRef.current = { productId, storeId, idempotencyKey };
+      mutation.mutate(buildQuickProductDuplicateInput({ productId, storeId, idempotencyKey }));
     },
     [mutation],
   );

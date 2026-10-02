@@ -68,6 +68,10 @@ export const ProductDuplicateDialog = ({
   const { toast } = useToast();
   const trpcUtils = trpc.useUtils();
   const [name, setName] = useState("");
+  const [targetStoreId, setTargetStoreId] = useState("");
+  const storesQuery = trpc.stores.list.useQuery(undefined, { enabled: open && !storeId });
+  const effectiveStoreId = storeId || targetStoreId ||
+    (storesQuery.data?.length === 1 ? storesQuery.data[0]?.id : undefined);
   const [status, setStatus] = useState<"ACTIVE" | "ARCHIVED">("ACTIVE");
   const [options, setOptions] = useState<DuplicateOptions>(defaultOptions);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
@@ -78,6 +82,7 @@ export const ProductDuplicateDialog = ({
       return;
     }
     setName(productName);
+    setTargetStoreId("");
     setStatus("ACTIVE");
     setOptions(defaultOptions);
     setPendingNavigation(null);
@@ -99,7 +104,7 @@ export const ProductDuplicateDialog = ({
   }, [open, pendingNavigation, router]);
 
   const duplicateMutation = trpc.products.duplicate.useMutation({
-    onSuccess: async (result) => {
+    onSuccess: async (result, input) => {
       duplicateOperationRef.current = null;
       await Promise.all([
         trpcUtils.products.suggestSku.invalidate(),
@@ -113,7 +118,9 @@ export const ProductDuplicateDialog = ({
           result.omittedBarcodesCount > 0 ? t("duplicateSuccessNoBarcodes") : t("duplicateSuccess"),
       });
       setPendingNavigation(
-        result.status === "ARCHIVED" ? "/products" : `/products/${result.productId}`,
+        result.status === "ARCHIVED"
+          ? "/products"
+          : `/products/${result.productId}${input.storeId ? `?storeId=${encodeURIComponent(input.storeId)}` : ""}`,
       );
       onOpenChange(false);
     },
@@ -173,12 +180,12 @@ export const ProductDuplicateDialog = ({
         className="space-y-5"
         onSubmit={(event) => {
           event.preventDefault();
-          if (!productId || name.trim().length < 2 || duplicateMutation.isLoading) {
+          if (!productId || !effectiveStoreId || name.trim().length < 2 || duplicateMutation.isLoading) {
             return;
           }
           const payload = {
             productId,
-            storeId: storeId || undefined,
+            storeId: effectiveStoreId,
             name: name.trim(),
             status,
             ...options,
@@ -216,6 +223,23 @@ export const ProductDuplicateDialog = ({
           </div>
         </div>
 
+        {!storeId ? (
+          <div className="space-y-2">
+            <Label htmlFor="duplicate-product-store">{tCommon("store")}</Label>
+            <Select value={effectiveStoreId ?? ""} onValueChange={setTargetStoreId}>
+              <SelectTrigger id="duplicate-product-store" disabled={storesQuery.isLoading || duplicateMutation.isLoading}>
+                <SelectValue placeholder={t("storeRequired")} />
+              </SelectTrigger>
+              <SelectContent>
+                {(storesQuery.data ?? []).map((store) => (
+                  <SelectItem key={store.id} value={store.id}>{store.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {storesQuery.error ? <p role="alert" className="text-sm text-danger">{translateError(tErrors, storesQuery.error)}</p> : null}
+          </div>
+        ) : null}
+
         <fieldset className="space-y-1">
           <legend className="mb-2 text-sm font-semibold text-foreground">
             {t("duplicateOptionsTitle")}
@@ -251,7 +275,7 @@ export const ProductDuplicateDialog = ({
           >
             {tCommon("cancel")}
           </Button>
-          <Button type="submit" disabled={name.trim().length < 2 || duplicateMutation.isLoading}>
+          <Button type="submit" disabled={!effectiveStoreId || name.trim().length < 2 || duplicateMutation.isLoading}>
             {duplicateMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
             {t("duplicateCreateAction")}
           </Button>

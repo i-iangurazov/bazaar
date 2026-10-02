@@ -14,6 +14,7 @@ export const QUICK_PRODUCT_DUPLICATION_PRESET = {
 export const buildQuickProductDuplicateInput = (input: {
   idempotencyKey: string;
   productId: string;
+  storeId?: string;
 }) => ({
   ...input,
   ...QUICK_PRODUCT_DUPLICATION_PRESET,

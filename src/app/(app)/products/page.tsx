@@ -2334,7 +2334,13 @@ const ProductsPage = () => {
               label: t("duplicate"),
               icon: CopyIcon,
               disabled: quickDuplicate.isLoading,
-              onSelect: () => quickDuplicate.duplicateProduct(product.id),
+              onSelect: () => {
+                if (!storeId) {
+                  setDuplicateTarget({ id: product.id, name: product.name });
+                  return;
+                }
+                quickDuplicate.duplicateProduct(product.id, storeId);
+              },
             },
             {
               key: "selective-duplicate",
@@ -2372,6 +2378,7 @@ const ProductsPage = () => {
       persistProductsReturnState,
       quickDuplicate,
       restoreMutation,
+      storeId,
       t,
       tCommon,
       toast,
