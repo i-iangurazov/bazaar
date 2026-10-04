@@ -265,9 +265,11 @@ export const printHtmlViaQzTray = async ({
 export const printPdfBlobViaQzTray = async ({
   printerName,
   blob,
+  usePdfPageSize = false,
 }: {
   printerName: string;
   blob: Blob;
+  usePdfPageSize?: boolean;
 }) => {
   const targetPrinter = printerName.trim();
   if (!targetPrinter) {
@@ -282,9 +284,36 @@ export const printPdfBlobViaQzTray = async ({
     };
     reader.readAsDataURL(blob);
   });
+  const mediaBox = usePdfPageSize
+    ? atob(content).match(/\/MediaBox\s*\[\s*0\s+0\s+([\d.]+)\s+([\d.]+)\s*\]/)
+    : null;
+  if (usePdfPageSize && (!mediaBox || !(Number(mediaBox[1]) > 0) || !(Number(mediaBox[2]) > 0))) {
+    throw new Error("pdfPageSizeInvalid");
+  }
+  const paperSize = mediaBox
+    ? {
+      width: Number(mediaBox[1]) * 25.4 / 72,
+      height: Number(mediaBox[2]) * 25.4 / 72,
+    }
+    : null;
   const qz = await connectQzTray();
-  const config = qz.configs.create(targetPrinter);
-  await qz.print(config, [{ type: "pixel", format: "pdf", flavor: "base64", data: content }]);
+  const config = paperSize
+    ? qz.configs.create(targetPrinter, {
+        units: "mm",
+        size: { ...paperSize, custom: true },
+        margins: 0,
+        scaleContent: false,
+      })
+    : qz.configs.create(targetPrinter);
+  await qz.print(config, [
+    {
+      type: "pixel",
+      format: "pdf",
+      flavor: "base64",
+      data: content,
+      ...(paperSize ? { options: { pageWidth: paperSize.width, pageHeight: paperSize.height } } : {}),
+    },
+  ]);
   return { trustStatus };
 };
 
@@ -313,7 +342,8 @@ export const qzService = {
   getConnectionStatus: isQzTrayConnected,
   listPrinters: listQzPrinters,
   findPrinter: findQzPrinter,
-  printReceipt: printPdfBlobViaQzTray,
+  printReceipt: (input: { printerName: string; blob: Blob }) =>
+    printPdfBlobViaQzTray({ ...input, usePdfPageSize: true }),
   printBarcode: printPdfBlobViaQzTray,
   getTrustStatus: getQzTrustStatus,
   mapQzError: qzTrayErrorMessageKey,

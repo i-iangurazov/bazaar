@@ -195,27 +195,36 @@ const estimateReceiptHeight = (input: {
   labels: PosReceiptPdfLabels;
   settings: ReceiptTemplateSettings;
   doc: InstanceType<typeof PDFDocument>;
-  marginY: number;
+  marginTop: number;
+  marginBottom: number;
   contentWidth: number;
 }) => {
-  const { doc, contentWidth, marginY } = input;
+  const { doc, contentWidth, marginTop, marginBottom } = input;
   const settings = input.settings;
   const showSubtotal =
     settings.receiptShowSubtotal &&
     !amountsEqual(input.job.totals.subtotalKgs, input.job.totals.totalKgs);
+  const showDiscount =
+    settings.receiptShowDiscount &&
+    !amountsEqual(input.job.totals.subtotalKgs, input.job.totals.totalKgs);
+  const paymentsTotal = input.job.totals.payments.reduce(
+    (sum, payment) => sum + payment.amountKgs,
+    0,
+  );
+  const change = Math.max(0, paymentsTotal - input.job.totals.totalKgs);
   const metaLines = buildReceiptMetaLines({
     job: input.job,
     labels: input.labels,
     settings,
   });
-  let y = marginY;
+  let y = marginTop;
 
   const measureMetaLine = (text: string, fontSize: number, gap = 2) => {
     doc.fontSize(fontSize);
     y += doc.heightOfString(text, { width: contentWidth }) + gap;
   };
 
-  y += 14;
+  y += settings.receiptFontSize + 5;
 
   if (settings.receiptShowStoreName) {
     measureMetaLine(metaLines.businessName, settings.receiptFontSize + 0.4);
@@ -252,7 +261,12 @@ const estimateReceiptHeight = (input: {
   if (showSubtotal) {
     y += 12;
   }
-  y += 13;
+  if (showDiscount) {
+    y += 12;
+  }
+  if (settings.receiptShowTotal) {
+    y += 13;
+  }
 
   if (settings.receiptShowPaymentMethod && input.job.totals.payments.length) {
     y += 2;
@@ -260,10 +274,17 @@ const estimateReceiptHeight = (input: {
     y += 11;
     y += input.job.totals.payments.length * 11;
   }
+  if (settings.receiptShowChange && change > 0.009) {
+    y += 12;
+  }
 
   y += 6;
+  if (settings.receiptFooterText) {
+    doc.fontSize(settings.receiptFontSize - 0.7);
+    y += doc.heightOfString(settings.receiptFooterText, { width: contentWidth }) + 2;
+  }
 
-  return y + marginY + mmToPoints(RECEIPT_HEIGHT_BUFFER_MM);
+  return y + marginBottom + mmToPoints(RECEIPT_HEIGHT_BUFFER_MM);
 };
 
 export const buildPosReceiptPdf = async (input: {
@@ -277,7 +298,6 @@ export const buildPosReceiptPdf = async (input: {
   const marginRight = mmToPoints(settings.receiptMarginRightMm);
   const marginTop = mmToPoints(settings.receiptMarginTopMm);
   const marginBottom = mmToPoints(settings.receiptMarginBottomMm);
-  const marginY = marginTop;
   const baseFont = settings.receiptFontSize;
   const fontPath = join(process.cwd(), "assets", "fonts", "NotoSans-Regular.ttf");
   const fallbackPath = join(process.cwd(), "assets", "fonts", "ArialUnicode.ttf");
@@ -326,7 +346,8 @@ export const buildPosReceiptPdf = async (input: {
       labels: input.labels,
       settings,
       doc: measureDoc,
-      marginY,
+      marginTop,
+      marginBottom,
       contentWidth,
     }),
     mmToPoints(resolveMinimumReceiptHeightMm(settings)),

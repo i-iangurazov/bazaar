@@ -3762,6 +3762,7 @@ const PosSellPage = () => {
         const result = await printPdfBlobViaQzTray({
           blob,
           printerName: binding.receiptPrinterName,
+          usePdfPageSize: true,
         });
         return result.trustStatus === "trusted" ? ("qz" as const) : ("qz_untrusted" as const);
       }

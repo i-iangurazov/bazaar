@@ -77,6 +77,65 @@ const baseJob: Omit<ReceiptPrintJob, "variant" | "fiscal"> = {
 };
 
 describe("pos receipt pdf", () => {
+  const job: ReceiptPrintJob = {
+    ...baseJob,
+    variant: "PRECHECK",
+    fiscal: {
+      modeStatus: "NOT_SENT",
+      providerReceiptId: null,
+      fiscalNumber: null,
+      kkmFactoryNumber: null,
+      kkmRegistrationNumber: null,
+      upfdOrFiscalMemory: null,
+      qrPayload: null,
+      fiscalizedAt: null,
+      lastError: null,
+    },
+  };
+
+  const pageCount = (pdf: Buffer) =>
+    (pdf.toString("latin1").match(/\/Type\s*\/Page\b/g) ?? []).length;
+
+  const pageHeight = (pdf: Buffer) => {
+    const match = pdf.toString("latin1").match(/\/MediaBox\s*\[0 0 [\d.]+ ([\d.]+)\]/);
+    expect(match).not.toBeNull();
+    return Number(match![1]);
+  };
+
+  it("keeps discounted receipts, change and a multiline footer on one continuous page", async () => {
+    const pdf = await buildPosReceiptPdf({
+      job: {
+        ...job,
+        totals: {
+          subtotalKgs: 25,
+          totalKgs: 20,
+          payments: [{ method: "CASH", methodLabel: "Наличные", amountKgs: 50 }],
+        },
+      },
+      labels,
+      settings: {
+        receiptMarginTopMm: 0,
+        receiptMarginBottomMm: 10,
+        receiptFooterText: "Спасибо за покупку!\nДо новых встреч!\nПроверьте сдачу.",
+      },
+    });
+
+    expect(pageCount(pdf)).toBe(1);
+  });
+
+  it("includes the configured bottom margin in the paper length", async () => {
+    const build = (receiptMarginBottomMm: number) => buildPosReceiptPdf({
+      job: { ...job, items: Array.from({ length: 5 }, () => job.items[0]) },
+      labels,
+      settings: { receiptMarginTopMm: 0, receiptMarginBottomMm },
+    });
+    const [smallMargin, largeMargin] = await Promise.all([build(2), build(12)]);
+
+    expect(pageCount(smallMargin)).toBe(1);
+    expect(pageCount(largeMargin)).toBe(1);
+    expect(pageHeight(largeMargin) - pageHeight(smallMargin)).toBeCloseTo(10 * 72 / 25.4, 3);
+  });
+
   it("formats receipt totals with the selected store currency", () => {
     const formatted = __formatReceiptCurrencyForTests(895, {
       ...baseJob,
