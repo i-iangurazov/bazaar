@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   registers: vi.fn(),
   cashiers: vi.fn(),
   exportProducts: vi.fn(),
+  fillCosts: vi.fn(),
   download: vi.fn(),
 }));
 vi.mock("next-auth/react", () => ({ useSession: mocks.session }));
@@ -64,6 +65,14 @@ vi.mock("@/lib/trpc", () => ({
     useUtils: () => ({ client: { reports: { salesExport: { query: mocks.exportProducts } } } }),
     stores: { list: { useQuery: mocks.stores } },
     reports: {
+      fillMissingSalesCosts: {
+        useMutation: () => ({
+          mutate: mocks.fillCosts,
+          reset: vi.fn(),
+          isLoading: false,
+          error: null,
+        }),
+      },
       sales: { useQuery: mocks.overview },
       filterOptions: { useQuery: mocks.options },
       customerOptions: { useQuery: mocks.customers },
@@ -160,6 +169,21 @@ describe("all-filtered report export behavior", () => {
     setUrl(buildAnalyticsReportHref(input));
     mocks.overview.mockReturnValue(queryResult(report([product(0)], 26)));
   };
+
+  it("confirms the use of current costs before correcting the selected historical report scope", async () => {
+    loaded();
+    mocks.overview.mockReturnValue(
+      queryResult({ ...report(), totals: { ...totals, unknownCostLines: 1 } }),
+    );
+    render(<AnalyticsPage />);
+    fireEvent.click(screen.getByRole("button", { name: "reporting.fillMissingCosts" }));
+    expect(mocks.fillCosts).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog").textContent).toContain("reporting.fillMissingCostsNote");
+    fireEvent.click(screen.getByRole("button", { name: "reporting.fillMissingCostsConfirm" }));
+    expect(mocks.fillCosts).toHaveBeenCalledWith(
+      expect.objectContaining({ ...input, channel: "pos" }),
+    );
+  });
 
   it("requests all current filters without pagination and downloads off-page rows", async () => {
     loaded();
