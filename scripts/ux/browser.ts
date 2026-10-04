@@ -121,7 +121,9 @@ try {
   const tablePage = await admin.newPage();
   await verifyProductTable(tablePage, base, f.storeId, `${directory}/product-table`);
   await tablePage.close();
-  record("Product card has one contour; table scroll, row menus and pagination work at four widths");
+  record(
+    "Product card has one contour; table scroll, row menus and pagination work at four widths",
+  );
   for (const path of ["/stores", "/suppliers"]) {
     const formPage = await admin.newPage();
     let releaseSession!: () => void;
@@ -462,6 +464,39 @@ try {
     true,
   );
   await dashboard.goto(`${base}/pos/sell?registerId=${register.id}`);
+  const customerSelector = dashboard
+    .getByRole("button", { name: "Розничный покупатель", exact: true })
+    .first();
+  await until(() => customerSelector.isEnabled(), "POS customer selector is not ready");
+  await customerSelector.click();
+  const customerSearch = dashboard.getByPlaceholder("Поиск клиента по имени или телефону");
+  await customerSearch.waitFor();
+  const customerDropdown = customerSearch.locator('xpath=ancestor::*[@role="dialog"][1]');
+  await until(async () => {
+    const trigger = await customerSelector.boundingBox();
+    const dropdown = await customerDropdown.boundingBox();
+    return Boolean(
+      trigger &&
+      dropdown &&
+      Math.abs(trigger.width - dropdown.width) < 2 &&
+      Math.abs(trigger.x - dropdown.x) < 2,
+    );
+  }, "POS customer dropdown does not match the selector width");
+  await customerSearch.click();
+  assert.ok(await customerSearch.isVisible(), "Clicking inside closed the customer dropdown");
+  await dashboard.keyboard.press("Escape");
+  await customerSearch.waitFor({ state: "hidden" });
+  await until(
+    () => customerSelector.evaluate((element) => element === document.activeElement),
+    "Escape did not restore focus to the customer selector",
+  );
+  await customerSelector.click();
+  await customerSearch.waitFor();
+  await dashboard
+    .getByRole("combobox", { name: "Поиск по названию, SKU или штрихкоду", exact: true })
+    .click();
+  await customerSearch.waitFor({ state: "hidden" });
+  record("POS customer dropdown matches its selector and closes on outside click and Escape");
   await dashboard
     .getByRole("combobox", { name: "Поиск по названию, SKU или штрихкоду", exact: true })
     .fill(productName);

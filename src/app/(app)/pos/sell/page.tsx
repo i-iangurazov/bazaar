@@ -56,7 +56,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Modal, ModalFooter } from "@/components/ui/modal";
-import { PopoverSurface } from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -5205,24 +5205,25 @@ const PosSellPage = () => {
                   ? tCommon("notAvailable")
                   : t("entry.shiftClosed")}
             </Badge> : null}
-            <div className="relative flex min-w-0 flex-1 items-center gap-1">
-              <Button
-                type="button"
-                variant="ghost"
-                className="h-10 min-w-0 flex-1 justify-between gap-2 px-2 text-sm font-medium"
-                onClick={() => setCustomerSelectorOpen((current) => !current)}
-                disabled={!hasOpenShift || !activeStoreId}
-                aria-expanded={customerSelectorOpen}
-              >
-                <span className="truncate">
-                  {currentCustomer
-                    ? currentCustomerDetails
-                      ? `${currentCustomerLabel} · ${currentCustomerDetails}`
-                      : currentCustomerLabel
-                    : t("sell.retailCustomer")}
-                </span>
-                <ChevronDownIcon className="h-3.5 w-3.5 shrink-0" aria-hidden />
-              </Button>
+            <Popover open={customerSelectorOpen} onOpenChange={setCustomerSelectorOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-10 min-w-0 flex-1 justify-between gap-2 px-2 text-sm font-medium"
+                  disabled={!hasOpenShift || !activeStoreId}
+                  aria-expanded={customerSelectorOpen}
+                >
+                  <span className="truncate">
+                    {currentCustomer
+                      ? currentCustomerDetails
+                        ? `${currentCustomerLabel} · ${currentCustomerDetails}`
+                        : currentCustomerLabel
+                      : t("sell.retailCustomer")}
+                  </span>
+                  <ChevronDownIcon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                </Button>
+              </PopoverTrigger>
               {currentCustomer ? (
                 <Button
                   type="button"
@@ -5260,7 +5261,11 @@ const PosSellPage = () => {
                 </Button>
               ) : null}
               {customerSelectorOpen ? (
-                <PopoverSurface className="absolute inset-x-0 top-full z-50 mt-2 max-h-[70vh] w-full overflow-y-auto p-0">
+                <PopoverContent
+                  align="start"
+                  sideOffset={8}
+                  className="max-h-[70vh] w-[var(--radix-popover-trigger-width)] overflow-y-auto p-0"
+                >
                   <div className="space-y-3 p-3">
                     <div className="flex gap-2">
                       <Input
@@ -5361,9 +5366,9 @@ const PosSellPage = () => {
                       ))}
                     </div>
                   ) : null}
-                </PopoverSurface>
+                </PopoverContent>
               ) : null}
-            </div>
+            </Popover>
           </div>
         </div>
       </header>
