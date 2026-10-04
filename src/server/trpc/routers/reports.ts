@@ -7,6 +7,7 @@ import {
   reportCustomerAccessWhere,
 } from "@/server/services/reporting/access";
 import { getSalesReport, reportViews } from "@/server/services/reporting/sales";
+import { fillMissingSalesCosts } from "@/server/services/reporting/fillMissingSalesCosts";
 import { getOnlineSalesReport } from "@/server/services/reporting/onlineSales";
 import { getLoyaltyActivity } from "@/server/services/reporting/onlineSales";
 import { getOperationsReport, operationViews } from "@/server/services/reporting/operations";
@@ -126,6 +127,13 @@ const resolveReportStoreScope = async (
 };
 
 export const reportsRouter = router({
+  fillMissingSalesCosts: reportsProcedure.input(salesReportSchema).mutation(async ({ ctx, input }) => {
+    try {
+      return await fillMissingSalesCosts(ctx.user, input, ctx.requestId);
+    } catch (error) {
+      throw toTRPCError(error);
+    }
+  }),
   filterOptions: reportsProcedure
     .input(z.object({ storeId: z.string().min(1).optional() }).strict())
     .query(async ({ ctx, input }) => {

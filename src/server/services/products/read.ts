@@ -419,17 +419,14 @@ export const buildProductSqlBase = ({
     conditions.push(Prisma.sql`p."basePriceKgs" IS NULL`);
   }
 
-  // Cost is organization-wide per variant in the current model; there is no store cost column
-  // and no marker for an intentional zero. A missing row and zero both mean unfilled.
+  // Filter the same BASE cost shown in the product table. An unfilled variant
+  // must not make a product with a populated average cost appear here.
+  // There is no marker for an intentional zero in ProductCost.
   if (input?.readiness === "missingCost") {
-    conditions.push(Prisma.sql`(
-      (NOT EXISTS (SELECT 1 FROM "ProductVariant" v WHERE v."productId" = p.id AND v."isActive" = true)
-       AND NOT EXISTS (SELECT 1 FROM "ProductCost" c WHERE c."productId" = p.id AND c."organizationId" = ${organizationId} AND c."variantKey" = 'BASE' AND c."avgCostKgs" > 0))
-      OR EXISTS (SELECT 1 FROM "ProductVariant" v WHERE v."productId" = p.id AND v."isActive" = true
-        AND NOT EXISTS (SELECT 1 FROM "ProductCost" c WHERE c."productId" = p.id AND c."organizationId" = ${organizationId} AND c."variantId" = v.id AND c."avgCostKgs" > 0))
-      OR (EXISTS (SELECT 1 FROM "InventorySnapshot" stock WHERE stock."productId" = p.id AND stock."variantKey" = 'BASE'
-         ${input.storeId ? Prisma.sql`AND stock."storeId" = ${input.storeId}` : accessibleStoreIds ? Prisma.sql`AND stock."storeId" IN (${Prisma.join(accessibleStoreIds.length ? accessibleStoreIds : ["__none__"])})` : Prisma.empty})
-        AND NOT EXISTS (SELECT 1 FROM "ProductCost" c WHERE c."productId" = p.id AND c."organizationId" = ${organizationId} AND c."variantKey" = 'BASE' AND c."avgCostKgs" > 0))
+    conditions.push(Prisma.sql`NOT EXISTS (
+      SELECT 1 FROM "ProductCost" c
+      WHERE c."productId" = p.id AND c."organizationId" = ${organizationId}
+        AND c."variantKey" = 'BASE' AND c."avgCostKgs" > 0
     )`);
   }
 

@@ -3,10 +3,102 @@ import { prisma } from "@/server/db/prisma";
 import { getSalesReport, reportViews } from "@/server/services/reporting/sales";
 import { resetDatabase, shouldRunDbTests } from "../helpers/db";
 import { seedReportingFixture } from "../helpers/reportingFixture";
+import { fillMissingSalesCosts } from "@/server/services/reporting/fillMissingSalesCosts";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
 describeDb("canonical business reporting", () => {
   beforeEach(resetDatabase);
+  it("explicitly fills only missing costs in the authorized report scope and preserves snapshots", async () => {
+    const f = await seedReportingFixture(prisma);
+    const actor = { id: f.adminUser.id, organizationId: f.org.id };
+    const input = { dateFrom: f.input.dateFrom, dateTo: f.input.dateTo };
+    await expect(
+      fillMissingSalesCosts(
+        { id: f.cashierUser.id, organizationId: f.org.id },
+        input,
+        "cost-fill-cashier",
+      ),
+    ).rejects.toMatchObject({ message: "forbidden" });
+    expect(
+      await fillMissingSalesCosts(
+        actor,
+        { ...input, storeId: f.store.id },
+        "cost-fill-other-store",
+      ),
+    ).toEqual({ updatedLines: 0 });
+    await expect(
+      fillMissingSalesCosts(actor, { ...input, storeId: f.foreignStore.id }, "cost-fill-forbidden"),
+    ).rejects.toMatchObject({ message: "storeAccessDenied" });
+    expect(
+      await fillMissingSalesCosts(actor, { ...input, productId: f.tea.id }, "cost-fill-known"),
+    ).toEqual({ updatedLines: 0 });
+    expect(await fillMissingSalesCosts(actor, input, "cost-fill-selected-period")).toEqual({
+      updatedLines: 1,
+    });
+    const report = await getSalesReport(prisma, f.input, { now: f.now });
+    expect(report.totals).toMatchObject({
+      unknownCostLines: 0,
+      zeroCostLines: 1,
+      costKgs: 121,
+      grossProfitKgs: 419,
+      coveragePercent: 100,
+    });
+    const audit = await prisma.auditLog.findFirstOrThrow({
+      where: { organizationId: f.org.id, action: "SALES_MISSING_COST_FILLED" },
+    });
+    expect(audit.after).toMatchObject({ source: "current_product_cost", count: 1 });
+    await prisma.productCost.updateMany({
+      where: { organizationId: f.org.id },
+      data: { avgCostKgs: 9999 },
+    });
+    expect(await fillMissingSalesCosts(actor, input, "cost-fill-repeat")).toEqual({
+      updatedLines: 0,
+    });
+    expect((await getSalesReport(prisma, f.input, { now: f.now })).totals).toEqual(report.totals);
+  });
+  it("uses the exact variant cost and leaves conflicting historical costs for manual review", async () => {
+    const f = await seedReportingFixture(prisma);
+    const actor = { id: f.adminUser.id, organizationId: f.org.id };
+    const input = { dateFrom: f.input.dateFrom, dateTo: f.input.dateTo };
+    const variant = await prisma.productVariant.create({
+      data: { productId: f.unknown.id, name: "Variant with its own cost", attributes: {} },
+    });
+    const line = await prisma.customerOrderLine.findFirstOrThrow({
+      where: { customerOrderId: f.uncostedSale.id },
+    });
+    await prisma.customerOrderLine.update({
+      where: { id: line.id },
+      data: { variantId: variant.id, variantKey: variant.id },
+    });
+    expect(await fillMissingSalesCosts(actor, input, "cost-fill-no-base-fallback")).toEqual({
+      updatedLines: 0,
+    });
+    await prisma.productCost.create({
+      data: {
+        organizationId: f.org.id,
+        productId: f.unknown.id,
+        variantId: variant.id,
+        variantKey: variant.id,
+        avgCostKgs: 15,
+      },
+    });
+    expect(await fillMissingSalesCosts(actor, input, "cost-fill-variant")).toEqual({
+      updatedLines: 1,
+    });
+    const filled = await prisma.customerOrderLine.findUniqueOrThrow({ where: { id: line.id } });
+    expect(Number(filled.unitCostKgs)).toBe(15);
+    expect(Number(filled.lineCostTotalKgs)).toBe(15);
+    await prisma.customerOrderLine.update({
+      where: { id: line.id },
+      data: { unitCostKgs: 11, lineCostTotalKgs: 10 },
+    });
+    expect(await fillMissingSalesCosts(actor, input, "cost-fill-conflict")).toEqual({
+      updatedLines: 0,
+    });
+    const preserved = await prisma.customerOrderLine.findUniqueOrThrow({ where: { id: line.id } });
+    expect(Number(preserved.unitCostKgs)).toBe(11);
+    expect(Number(preserved.lineCostTotalKgs)).toBe(10);
+  });
   it("reconciles discounted documents, return dates and historical costs without multiplying split payments", async () => {
     const f = await seedReportingFixture(prisma);
     const report = await getSalesReport(prisma, f.input, { now: f.now });

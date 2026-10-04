@@ -5121,6 +5121,45 @@ const PosSellPage = () => {
     </Modal>
   );
 
+  const DesktopRegisterContext = () => (
+    <footer className="flex min-h-12 flex-wrap items-center gap-x-3 gap-y-1 border-t border-border bg-card px-4 py-2 text-xs text-muted-foreground">
+      <div className="flex min-w-0 max-w-full items-center gap-1">
+        <span className="shrink-0">{t("entry.register")}:</span>
+        <Select value={registerId} onValueChange={handleRegisterChange}>
+          <SelectTrigger
+            aria-label={t("entry.changeRegister")}
+            title={selectedRegisterLabel}
+            className="h-8 min-w-0 max-w-[280px] border-0 bg-transparent px-1 text-left text-xs font-semibold shadow-none focus:ring-0"
+          >
+            <SelectValue placeholder={selectedRegisterLabel} />
+          </SelectTrigger>
+          <SelectContent>
+            {(registersQuery.data ?? []).map((item) => (
+              <SelectItem key={item.id} value={item.id}>
+                {item.store.name} · {item.name} ({item.code})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <p className="min-w-0 flex-1 basis-48">
+        {currentCashierLabel}
+        {shiftOpenedContextLabel ? ` · ${shiftOpenedContextLabel}` : ""}
+      </p>
+      <Button
+        type="button"
+        variant="ghost"
+        className="ml-auto h-8 shrink-0 gap-1.5 px-2 text-xs"
+        onClick={() => setReceiptJournalOpen(true)}
+        disabled={!journalStoreId}
+        data-testid="pos-receipt-journal-open"
+      >
+        <SalesOrdersIcon className="h-4 w-4" aria-hidden />
+        {t("sell.receiptJournal")}
+      </Button>
+    </footer>
+  );
+
   const DesktopPosSaleView = () => (
     <div className="min-h-screen bg-muted/40 text-foreground">
       <header className="sticky top-0 z-30 flex min-h-16 flex-col border-b border-border bg-background shadow-sm lg:h-16 lg:flex-row">
@@ -5166,27 +5205,11 @@ const PosSellPage = () => {
                   ? tCommon("notAvailable")
                   : t("entry.shiftClosed")}
             </Badge> : null}
-            <Select value={registerId} onValueChange={handleRegisterChange}>
-              <SelectTrigger
-                aria-label={t("entry.changeRegister")}
-                title={selectedRegisterLabel}
-                className="h-8 min-w-0 flex-1 border-0 bg-transparent px-0 text-left text-sm font-semibold shadow-none focus:ring-0"
-              >
-                <SelectValue placeholder={selectedRegisterLabel} />
-              </SelectTrigger>
-              <SelectContent>
-                {(registersQuery.data ?? []).map((item) => (
-                  <SelectItem key={item.id} value={item.id}>
-                    {item.store.name} · {item.name} ({item.code})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <div className="relative flex min-w-0 max-w-[44%] items-center gap-1">
+            <div className="relative flex min-w-0 flex-1 items-center gap-1">
               <Button
                 type="button"
                 variant="ghost"
-                className="h-8 min-w-0 justify-start gap-1 px-2 text-xs font-medium"
+                className="h-10 min-w-0 flex-1 justify-between gap-2 px-2 text-sm font-medium"
                 onClick={() => setCustomerSelectorOpen((current) => !current)}
                 disabled={!hasOpenShift || !activeStoreId}
                 aria-expanded={customerSelectorOpen}
@@ -5341,20 +5364,6 @@ const PosSellPage = () => {
                 </PopoverSurface>
               ) : null}
             </div>
-            <Button
-              type="button"
-              variant="secondary"
-              size="icon"
-              className="h-8 w-8 shrink-0"
-              aria-label={t("sell.receiptJournal")}
-              title={t("sell.receiptJournal")}
-              onClick={() => setReceiptJournalOpen(true)}
-              disabled={!journalStoreId}
-              data-testid="pos-receipt-journal-open"
-            >
-              <SalesOrdersIcon className="h-3.5 w-3.5" aria-hidden />
-            </Button>
-            <ContextualHelpButton className="h-8 w-8 shrink-0" />
           </div>
         </div>
       </header>
@@ -5378,7 +5387,8 @@ const PosSellPage = () => {
       ) : !hasOpenShift ? (
         <section className="grid min-h-[calc(100vh-4rem)] place-items-center p-4">
           <section className="bazaar-admin-surface w-full max-w-xl p-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            {DesktopRegisterContext()}
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="text-lg font-semibold text-foreground">{t("entry.shiftClosed")}</p>
                 <p className="mt-1 text-sm text-muted-foreground">{t("sell.openShiftFirst")}</p>
@@ -5504,14 +5514,7 @@ const PosSellPage = () => {
               {renderCatalogPagination()}
             </div>
 
-            <footer className="grid min-h-12 grid-cols-[1fr_auto_1fr] items-center border-t border-border bg-card px-4 py-2 text-sm text-muted-foreground">
-              <span aria-hidden />
-              <div className="max-w-full truncate text-center">
-                {t("entry.register")}: {selectedRegisterLabel} · {currentCashierLabel}
-                {shiftOpenedContextLabel ? ` · ${shiftOpenedContextLabel}` : ""}
-              </div>
-              <span className="h-3 w-3 justify-self-end rounded-md bg-success" aria-hidden />
-            </footer>
+            {DesktopRegisterContext()}
           </section>
 
           <aside

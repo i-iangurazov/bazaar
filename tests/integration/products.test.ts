@@ -33,6 +33,40 @@ describeDb("products", () => {
     vi.unstubAllGlobals();
   });
 
+  it("filters missing average costs consistently in the table, selection and export", async () => {
+    const { org, store, adminUser, baseUnit, product } = await seedBase();
+    const caller = createTestCaller({ ...adminUser, organizationId: org.id });
+    await prisma.productCost.create({
+      data: { organizationId: org.id, productId: product.id, avgCostKgs: 15 },
+    });
+    // The former predicate returned this populated product for any empty variant.
+    await prisma.productVariant.create({
+      data: { productId: product.id, name: "Unfilled variant", attributes: {} },
+    });
+    const missing = await caller.products.create({
+      idempotencyKey: "missing-cost-filter-missing",
+      name: "No average cost", sku: "COST-MISSING", baseUnitId: baseUnit.id,
+      storeId: store.id,
+    });
+    const zero = await caller.products.create({
+      idempotencyKey: "missing-cost-filter-zero",
+      name: "Zero average cost", sku: "COST-ZERO", baseUnitId: baseUnit.id,
+      storeId: store.id, avgCostKgs: 0,
+    });
+    const input = { storeId: store.id, readiness: "missingCost" as const };
+    const expected = [missing.id, zero.id].sort();
+    const list = await caller.products.list(input);
+    expect(list.items.map((row) => row.id).sort()).toEqual(expected);
+    expect(list.total).toBe(2);
+    expect(list.items.every((row) => !row.avgCostKgs)).toBe(true);
+    expect((await caller.products.bootstrap(input)).list.items.map((row) => row.id).sort()).toEqual(expected);
+    expect((await caller.products.listIds(input)).sort()).toEqual(expected);
+    const { exportProductTableBatch } = await import("@/server/services/products/read");
+    const exported = await exportProductTableBatch({ prisma, organizationId: org.id,
+      user: { ...adminUser, organizationId: org.id }, storeId: store.id, input });
+    expect(exported.rows.map((row) => row.sku).sort()).toEqual(["COST-MISSING", "COST-ZERO"]);
+  });
+
   it("auto-generates unique SKU when create input omits it", async () => {
     const { org, adminUser, baseUnit } = await seedBase();
 

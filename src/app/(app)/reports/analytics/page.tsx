@@ -11,6 +11,7 @@ import { QueryErrorState } from "@/components/query-error-state";
 import { Button } from "@/components/ui/button";
 import { SelectItem } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { Modal, ModalFooter } from "@/components/ui/modal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
@@ -57,6 +58,15 @@ function AnalyticsReportContent() {
   );
   const [preview, setPreview] = useState<string | null>(null);
   const [showExtraFilters, setShowExtraFilters] = useState(false);
+  const [fillCostsOpen, setFillCostsOpen] = useState(false);
+  const [filledCosts, setFilledCosts] = useState<{ fingerprint: string; count: number } | null>(null);
+  const fillCostsMutation = trpc.reports.fillMissingSalesCosts.useMutation({
+    onSuccess: async (result) => {
+      setFilledCosts({ fingerprint: scope.fingerprint, count: result.updatedLines });
+      setFillCostsOpen(false);
+      await utils.reports.invalidate();
+    },
+  });
   const input = {
     dateFrom: state.dateFrom,
     dateTo: state.dateTo,
@@ -104,6 +114,19 @@ function AnalyticsReportContent() {
   const data = enabled && !query.error && (!query.isPreviousData || resolvedScope.current === dataScope)
     ? query.data : undefined;
   const detailLoading = Boolean(data && query.isPreviousData);
+  const detailSectionRef = useRef<HTMLElement>(null);
+  const reviewCostRequested = useRef(false);
+  const reviewCost = () => {
+    reviewCostRequested.current = true;
+    update({ view: "costGaps", sort: "name" });
+    detailSectionRef.current?.scrollIntoView({ block: "start" });
+  };
+  useEffect(() => {
+    if (!reviewCostRequested.current || data?.view !== "costGaps" || detailLoading) return;
+    reviewCostRequested.current = false;
+    detailSectionRef.current?.scrollIntoView({ block: "start" });
+    detailSectionRef.current?.focus({ preventScroll: true });
+  }, [data, detailLoading]);
   const money = (value: number | null | undefined) =>
     value === null || value === undefined
       ? "—"
@@ -311,6 +334,20 @@ function AnalyticsReportContent() {
           </Button>
         ))}
       </nav>
+      <Modal open={fillCostsOpen} onOpenChange={(open) => {
+        if (!fillCostsMutation.isLoading) setFillCostsOpen(open);
+      }} title={t("fillMissingCosts")}>
+        <p className="text-sm">{t("fillMissingCostsNote")}</p>
+        {fillCostsMutation.error ? <p role="alert" className="mt-3 text-sm text-danger">
+          {reportError(errors, fillCostsMutation.error)}
+        </p> : null}
+        <ModalFooter>
+          <Button variant="ghost" disabled={fillCostsMutation.isLoading} onClick={() => setFillCostsOpen(false)}>{common("cancel")}</Button>
+          <Button disabled={!enabled || fillCostsMutation.isLoading} onClick={() => fillCostsMutation.mutate(input)}>
+            {fillCostsMutation.isLoading ? common("loading") : t("fillMissingCostsConfirm")}
+          </Button>
+        </ModalFooter>
+      </Modal>
       {state.report === "online" ? (
         <OnlineSalesReport scope={scope} />
       ) : (
@@ -498,7 +535,7 @@ function AnalyticsReportContent() {
                 data.period.comparisonAvailable === false ? undefined : money(data.previous.costKgs)
               }
               onClick={() =>
-                update({ view: totals.unknownCostLines ? "costGaps" : "products", sort: "cost" })
+                totals.unknownCostLines ? reviewCost() : update({ view: "products", sort: "cost" })
               }
             />
             <ReportMetric
@@ -556,11 +593,22 @@ function AnalyticsReportContent() {
                   })}
                 </p>
               </div>
-              <Button variant="outline" onClick={() => update({ view: "costGaps" })}>
-                {t("reviewCost")}
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" onClick={reviewCost}>{t("reviewCost")}</Button>
+                {totals.unknownCostLines > 0 ? (
+                  <Button variant="secondary" onClick={() => {
+                    fillCostsMutation.reset();
+                    setFillCostsOpen(true);
+                  }}>{t("fillMissingCosts")}</Button>
+                ) : null}
+              </div>
             </div>
           )}
+          {filledCosts?.fingerprint === scope.fingerprint ? (
+            <p role="status" className="text-sm text-muted-foreground">
+              {t("filledMissingCosts", { count: filledCosts.count })}
+            </p>
+          ) : null}
           <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)]">
             <section className="min-w-0 rounded-xl border border-border bg-card p-4 sm:p-5">
               <div className="flex items-start justify-between gap-3">
@@ -627,7 +675,7 @@ function AnalyticsReportContent() {
               </Button>
             </section>
           </div>
-          <section className="min-w-0 overflow-hidden rounded-xl border border-border bg-card" aria-busy={detailLoading}>
+          <section ref={detailSectionRef} tabIndex={-1} aria-label={t("detail")} className="min-w-0 scroll-mt-20 overflow-hidden rounded-xl border border-border bg-card" aria-busy={detailLoading}>
             <div className="space-y-4 border-b border-border p-4 sm:p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -754,7 +802,7 @@ function AnalyticsReportContent() {
                             {data.view === "products"
                               ? row.sku
                               : ["documents", "costGaps"].includes(data.view)
-                                ? `${row.eventAt ? formatDateTime(new Date(row.eventAt), locale) : row.date} · ${row.storeName ?? ""} · ${t(row.kind === "return" ? "returnDocument" : "saleDocument")} · ${customerText("completed")} · ${channelText(row.saleChannel ?? "UNKNOWN")}`
+                                ? `${data.view === "costGaps" ? `${row.sku ?? ""} · ${row.documentNumber ?? ""} · ` : ""}${row.eventAt ? formatDateTime(new Date(row.eventAt), locale) : row.date} · ${row.storeName ?? ""} · ${t(row.kind === "return" ? "returnDocument" : "saleDocument")} · ${customerText("completed")} · ${channelText(row.saleChannel ?? "UNKNOWN")}`
                                 : ""}
                           </span>
                         </div>

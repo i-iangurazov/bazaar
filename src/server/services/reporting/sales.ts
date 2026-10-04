@@ -381,7 +381,7 @@ const groupNames = {
   customers: Prisma.sql`CASE WHEN "customerKey" = '__anonymous__' THEN '__anonymous__' ELSE "customerName" END`,
   days: Prisma.sql`date`,
   documents: Prisma.sql`"documentNumber"`,
-  costGaps: Prisma.sql`"productName"`,
+  costGaps: Prisma.sql`"productName" || CASE WHEN "variantName" IS NULL THEN '' ELSE ' · ' || "variantName" END`,
 };
 
 export async function getSalesReport(
