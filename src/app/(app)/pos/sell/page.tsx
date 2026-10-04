@@ -5260,7 +5260,7 @@ const PosSellPage = () => {
                 </Button>
               ) : null}
               {customerSelectorOpen ? (
-                <PopoverSurface className="absolute left-0 top-full z-50 mt-2 max-h-[70vh] w-[min(22rem,calc(100vw-2rem))] overflow-y-auto p-0 sm:left-auto sm:right-0">
+                <PopoverSurface className="absolute inset-x-0 top-full z-50 mt-2 max-h-[70vh] w-full overflow-y-auto p-0">
                   <div className="space-y-3 p-3">
                     <div className="flex gap-2">
                       <Input
