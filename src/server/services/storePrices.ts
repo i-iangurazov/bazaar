@@ -1,4 +1,10 @@
 import { OperationRequestPrincipalType, type Prisma } from "@prisma/client";
+import {
+  saveProductPriceTypes,
+  syncExistingRetailPrice,
+} from "@/server/services/productPriceTypes";
+import { resolveProductFormRetailPrice } from "@/server/services/productFormPricing";
+import { resolveStoreSellingPrice } from "@/server/services/storeSellingPrice";
 
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
@@ -56,19 +62,65 @@ export const upsertStorePrice = async (input: {
       },
     });
 
-    const key = { organizationId: input.organizationId, storeId: input.storeId, productId: input.productId, variantKey };
-    const extraBefore = await tx.storePriceTypes.findUnique({ where: { organizationId_storeId_productId_variantKey: key } });
-    const standard = input.priceKgs === undefined ? before : await tx.storePrice.upsert({
+    const key = {
+      organizationId: input.organizationId,
+      storeId: input.storeId,
+      productId: input.productId,
+      variantKey,
+    };
+    const extraBefore = await tx.storePriceTypes.findUnique({
       where: { organizationId_storeId_productId_variantKey: key },
-      create: { ...key, variantId: input.variantId, priceKgs: input.priceKgs, updatedById: input.actorId },
-      update: { priceKgs: input.priceKgs, updatedById: input.actorId },
     });
-    const extras = input.retailPriceKgs === undefined && input.wholesalePriceKgs === undefined ? extraBefore : await tx.storePriceTypes.upsert({
+    if (input.priceKgs !== undefined) {
+      await tx.storePrice.upsert({
+        where: { organizationId_storeId_productId_variantKey: key },
+        create: {
+          ...key,
+          variantId: input.variantId,
+          priceKgs: input.priceKgs,
+          updatedById: input.actorId,
+        },
+        update: { priceKgs: input.priceKgs, updatedById: input.actorId },
+      });
+      await syncExistingRetailPrice(tx, {
+        ...key,
+        priceKgs: input.priceKgs,
+        actorId: input.actorId,
+      });
+    }
+    if (input.retailPriceKgs !== undefined || input.wholesalePriceKgs !== undefined) {
+      const retailPriceKgs = input.variantId
+        ? input.retailPriceKgs
+        : await resolveProductFormRetailPrice(tx, {
+            ...input,
+            storePriceKgs: input.priceKgs,
+          });
+      await saveProductPriceTypes(tx, {
+        ...input,
+        prices: [
+          {
+            variantId: input.variantId ?? undefined,
+            retailPriceKgs,
+            wholesalePriceKgs: input.wholesalePriceKgs,
+          },
+        ],
+        audit: false,
+      });
+    }
+    const standard = await tx.storePrice.findUnique({
       where: { organizationId_storeId_productId_variantKey: key },
-      create: { ...key, variantId: input.variantId, retailPriceKgs: input.retailPriceKgs, wholesalePriceKgs: input.wholesalePriceKgs, updatedById: input.actorId },
-      update: { retailPriceKgs: input.retailPriceKgs, wholesalePriceKgs: input.wholesalePriceKgs, updatedById: input.actorId },
     });
-    const price = { ...standard, ...key, id: standard?.id ?? extras?.id ?? product.id, priceKgs: standard?.priceKgs ?? null, retailPriceKgs: extras?.retailPriceKgs ?? null, wholesalePriceKgs: extras?.wholesalePriceKgs ?? null };
+    const extras = await tx.storePriceTypes.findUnique({
+      where: { organizationId_storeId_productId_variantKey: key },
+    });
+    const price = {
+      ...standard,
+      ...key,
+      id: standard?.id ?? extras?.id ?? product.id,
+      priceKgs: standard?.priceKgs ?? null,
+      retailPriceKgs: extras?.retailPriceKgs ?? null,
+      wholesalePriceKgs: extras?.wholesalePriceKgs ?? null,
+    };
 
     await writeAuditLog(tx, {
       organizationId: input.organizationId,
@@ -147,12 +199,34 @@ export const bulkUpdateStorePrices = async (input: {
     });
 
     const priceMap = new Map(existingPrices.map((price) => [price.productId, price]));
+    const organization = await tx.organization.findUniqueOrThrow({
+      where: { id: input.organizationId },
+      select: { retailWholesaleEnabled: true },
+    });
+    const extras = organization.retailWholesaleEnabled
+      ? await tx.storePriceTypes.findMany({
+          where: {
+            organizationId: input.organizationId,
+            storeId: input.storeId,
+            productId: { in: products.map((product) => product.id) },
+            variantKey: "BASE",
+          },
+        })
+      : [];
+    const extrasByProduct = new Map(extras.map((row) => [row.productId, row]));
     let updated = 0;
 
     for (const product of products) {
       const existing = priceMap.get(product.id);
       const basePrice = product.basePriceKgs ? Number(product.basePriceKgs) : 0;
-      const current = existing?.priceKgs != null ? Number(existing.priceKgs) : basePrice;
+      const extra = extrasByProduct.get(product.id);
+      const current = resolveStoreSellingPrice({
+        enabled: organization.retailWholesaleEnabled,
+        mode: "RETAIL",
+        standard: existing?.priceKgs != null ? Number(existing.priceKgs) : basePrice,
+        retail: extra?.retailPriceKgs == null ? null : Number(extra.retailPriceKgs),
+        wholesale: extra?.wholesalePriceKgs == null ? null : Number(extra.wholesalePriceKgs),
+      }).price;
       let next = current;
       if (input.mode === "set") {
         next = input.value;
@@ -200,6 +274,14 @@ export const bulkUpdateStorePrices = async (input: {
         actorId: input.actorId,
       });
 
+      await syncExistingRetailPrice(tx, {
+        organizationId: input.organizationId,
+        storeId: input.storeId,
+        productId: product.id,
+        variantKey: "BASE",
+        priceKgs: next,
+        actorId: input.actorId,
+      });
       updated += 1;
     }
 

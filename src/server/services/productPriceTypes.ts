@@ -19,6 +19,7 @@ export async function saveProductPriceTypes(
     storeId?: string | null;
     productId: string;
     prices: Array<ProductPriceTypeValues & { variantId?: string }>;
+    audit?: boolean;
   },
 ) {
   const prices = input.prices.filter(
@@ -77,6 +78,19 @@ export async function saveProductPriceTypes(
       productId: input.productId,
       variantKey,
     };
+    // Lock/write the ordinary price before its retail alias in every writer.
+    if (price.retailPriceKgs != null) {
+      await tx.storePrice.upsert({
+        where: { organizationId_storeId_productId_variantKey: key },
+        create: {
+          ...key,
+          variantId: price.variantId,
+          priceKgs: price.retailPriceKgs,
+          updatedById: input.actorId,
+        },
+        update: { priceKgs: price.retailPriceKgs, updatedById: input.actorId },
+      });
+    }
     const after = await tx.storePriceTypes.upsert({
       where: { organizationId_storeId_productId_variantKey: key },
       create: {
@@ -92,6 +106,7 @@ export async function saveProductPriceTypes(
         updatedById: input.actorId,
       },
     });
+    if (input.audit === false) continue;
     await writeAuditLog(tx, {
       organizationId: input.organizationId,
       actorId: input.actorId,
@@ -103,4 +118,29 @@ export async function saveProductPriceTypes(
       after: toJson(after),
     });
   }
+}
+
+/** Ordinary-price edits keep an existing retail alias current, even while the
+ * feature is disabled. They never create extra prices or change wholesale. */
+export async function syncExistingRetailPrice(
+  tx: Prisma.TransactionClient,
+  input: {
+    organizationId: string;
+    storeId: string;
+    productId: string;
+    variantKey: string;
+    priceKgs: number;
+    actorId: string;
+  },
+) {
+  await tx.storePriceTypes.updateMany({
+    where: {
+      organizationId: input.organizationId,
+      storeId: input.storeId,
+      productId: input.productId,
+      variantKey: input.variantKey,
+      retailPriceKgs: { not: null },
+    },
+    data: { retailPriceKgs: input.priceKgs, updatedById: input.actorId },
+  });
 }

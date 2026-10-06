@@ -50,6 +50,7 @@ export const createProductMutation = async ({
 }: ProductMutationContext & { input: CreateProductInput }) => {
   try {
     return await createProduct({
+      requireRetailPrice: true,
       idempotencyKey: input.idempotencyKey,
       organizationId: ctx.organizationId,
       actorId: ctx.actorId,
@@ -88,6 +89,7 @@ export const updateProductMutation = async ({
 }: ProductMutationContext & { input: UpdateProductInput }) => {
   try {
     return await updateProduct({
+      requireRetailPrice: true,
       productId: input.productId,
       organizationId: ctx.organizationId,
       actorId: ctx.actorId,

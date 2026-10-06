@@ -17,6 +17,7 @@ import {
 } from "@/server/services/productImageStudio";
 import { uploadProductImageBuffer } from "@/server/services/productImageStorage";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
+import { createTestCaller } from "../helpers/context";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
 
@@ -56,6 +57,78 @@ describeDb("product image studio integration", () => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
+  });
+
+  it("lets a receiving-store manager save a shared card image without granting source-store access", async () => {
+    const f = await seedBase({ plan: "ENTERPRISE" });
+    const source = await prisma.store.create({
+      data: { organizationId: f.org.id, name: "Source", code: "SOURCE" },
+    });
+    await prisma.storeProduct.updateMany({
+      where: { productId: f.product.id },
+      data: { isDirect: false, isHistorical: false },
+    });
+    await prisma.storeProduct.create({
+      data: {
+        organizationId: f.org.id,
+        productId: f.product.id,
+        storeId: source.id,
+        isDirect: true,
+      },
+    });
+    const admin = createTestCaller({ ...f.adminUser, organizationId: f.org.id });
+    const change = {
+      action: "SHARE" as const,
+      sourceStoreId: source.id,
+      targetStoreIds: [f.store.id],
+      scope: "SELECTED" as const,
+      productIds: [f.product.id],
+      includeFuture: false,
+      mutual: false,
+    };
+    const preview = await admin.stores.previewAssortmentShare(change);
+    await admin.stores.applyAssortmentShare({
+      change,
+      previewToken: preview.previewToken,
+      idempotencyKey: "shared-studio-grant",
+    });
+    const job = await prisma.productImageStudioJob.create({
+      data: {
+        organizationId: f.org.id,
+        productId: f.product.id,
+        createdById: f.adminUser.id,
+        status: ProductImageStudioJobStatus.SUCCEEDED,
+        sourceImageUrl: "/uploads/products/source.webp",
+        sourceImageMimeType: "image/webp",
+        outputImageUrl: "/uploads/products/shared-generated.webp",
+        backgroundMode: ProductImageStudioBackground.WHITE,
+        provider: "test",
+      },
+    });
+    const manager = createTestCaller({ ...f.managerUser, organizationId: f.org.id });
+    await manager.productImageStudio.saveToProduct({
+      jobId: job.id,
+      productId: f.product.id,
+      setAsPrimary: true,
+    });
+    expect((await prisma.product.findUniqueOrThrow({ where: { id: f.product.id } })).photoUrl).toBe(
+      job.outputImageUrl,
+    );
+    expect(
+      await prisma.userStoreAccess.count({
+        where: { userId: f.managerUser.id, storeId: source.id },
+      }),
+    ).toBe(0);
+    await expect(
+      manager.products.pricing({ productId: f.product.id, storeId: source.id }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await prisma.storeProduct.updateMany({
+      where: { productId: f.product.id, storeId: f.store.id },
+      data: { isActive: false },
+    });
+    await expect(
+      manager.productImageStudio.saveToProduct({ jobId: job.id, productId: f.product.id }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
   it("creates, processes, and saves a generated image to product media", async () => {

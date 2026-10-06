@@ -110,7 +110,7 @@ export const workflowEnums: Record<string, [string, string, string]> = {
   Другое: ["Другое", "Other reason", "Башка себеп"],
   CASH: ["Наличные", "Cash", "Накталай"],
   CARD: ["Карта", "Card", "Карта"],
-  TRANSFER: ["Перевод", "Transfer", "Которуу"],
+  TRANSFER: ["Безналичные", "Cashless", "Накталай эмес"],
   OTHER: ["Другой способ", "Other", "Башка"],
   without_photo: ["Без фотографии", "Without photo", "Сүрөтсүз"],
   attached_photo: ["Прикреплённая фотография", "Attached photo", "Тиркелген сүрөт"],

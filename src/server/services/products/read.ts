@@ -350,6 +350,36 @@ const readProductsByImageSort = async ({
   return { total, products };
 };
 
+// Match the price used by the product list and POS, including legacy rows
+// whose retail value predates synchronization with the ordinary store price.
+const buildStoreSellingPriceSql = (
+  organizationId: string,
+  storeId: string,
+  mode: "RETAIL" | "WHOLESALE" = "RETAIL",
+  pricingTime?: Date,
+) => {
+  const typedPrice = mode === "WHOLESALE"
+    ? Prisma.sql`COALESCE(extra."wholesalePriceKgs", extra."retailPriceKgs", price."priceKgs", p."basePriceKgs")`
+    : Prisma.sql`COALESCE(extra."retailPriceKgs", extra."wholesalePriceKgs", price."priceKgs", p."basePriceKgs")`;
+  const amount = Prisma.sql`CASE WHEN organization."retailWholesaleEnabled"
+    THEN ${typedPrice} ELSE COALESCE(price."priceKgs", p."basePriceKgs") END`;
+  const effective = pricingTime ? Prisma.sql`CASE
+    WHEN price."discountType" = 'PERCENTAGE'
+      AND price."discountPercentage" > 0 AND price."discountPercentage" < 100
+      AND (price."discountStartsAt" IS NULL OR price."discountStartsAt" <= ${pricingTime})
+      AND (price."discountEndsAt" IS NULL OR ${pricingTime} < price."discountEndsAt")
+    THEN ROUND((${amount}) * (100 - price."discountPercentage") / 100, 2)
+    ELSE ${amount} END` : amount;
+  return Prisma.sql`(
+    SELECT ${effective} FROM "Organization" organization
+    LEFT JOIN "StorePrice" price ON price."organizationId" = organization.id
+      AND price."storeId" = ${storeId} AND price."productId" = p.id AND price."variantKey" = 'BASE'
+    LEFT JOIN "StorePriceTypes" extra ON extra."organizationId" = organization.id
+      AND extra."storeId" = ${storeId} AND extra."productId" = p.id AND extra."variantKey" = 'BASE'
+    WHERE organization.id = ${organizationId}
+  )`;
+};
+
 export const buildProductSqlBase = ({
   organizationId,
   input,
@@ -416,7 +446,9 @@ export const buildProductSqlBase = ({
       )
     `);
   } else if (input?.readiness === "missingPrice") {
-    conditions.push(Prisma.sql`p."basePriceKgs" IS NULL`);
+    conditions.push(input?.storeId
+      ? Prisma.sql`${buildStoreSellingPriceSql(organizationId, input.storeId)} IS NULL`
+      : Prisma.sql`p."basePriceKgs" IS NULL`);
   }
 
   // Filter the same BASE cost shown in the product table. An unfilled variant
@@ -543,24 +575,7 @@ const buildProductSqlSortExpression = ({
       )`;
     case "salePrice":
       return input?.storeId
-        ? Prisma.sql`COALESCE((
-            SELECT CASE
-              WHEN price."discountType" = 'PERCENTAGE'
-                AND price."discountPercentage" IS NOT NULL
-                AND price."discountPercentage" > 0
-                AND price."discountPercentage" < 100
-                AND (price."discountStartsAt" IS NULL OR price."discountStartsAt" <= ${pricingTime})
-                AND (price."discountEndsAt" IS NULL OR ${pricingTime} < price."discountEndsAt")
-              THEN ROUND(price."priceKgs" * (100 - price."discountPercentage") / 100, 2)
-              ELSE price."priceKgs"
-            END
-            FROM "StorePrice" price
-            WHERE price."organizationId" = ${organizationId}
-              AND price."storeId" = ${input.storeId}
-              AND price."productId" = p.id
-              AND price."variantKey" = 'BASE'
-            LIMIT 1
-          ), p."basePriceKgs")`
+        ? buildStoreSellingPriceSql(organizationId, input.storeId, input.priceMode ?? "RETAIL", pricingTime)
         : Prisma.sql`p."basePriceKgs"`;
     case "avgCost":
       return Prisma.sql`(
@@ -1051,6 +1066,18 @@ export const searchQuickProducts = async ({
   const priceOverrideMap = new Map(
     priceOverrides.filter((price) => price.priceKgs != null).map((price) => [price.productId, Number(price.priceKgs)]),
   );
+  const organization = storeId ? await prisma.organization.findUnique({
+    where: { id: organizationId }, select: { retailWholesaleEnabled: true },
+  }) : null;
+  if (organization?.retailWholesaleEnabled && storeId && orderedProducts.length) {
+    const extras = await prisma.storePriceTypes.findMany({
+      where: { organizationId, storeId, productId: { in: orderedProducts.map(product => product.id) }, variantKey: "BASE" },
+    });
+    for (const extra of extras) {
+      const price = extra.retailPriceKgs ?? extra.wholesalePriceKgs;
+      if (price != null) priceOverrideMap.set(extra.productId, Number(price));
+    }
+  }
 
   return orderedProducts.map((product) => ({
     ...serializeProductPreview(filterProductInventorySnapshots(product, visibleStoreIds), {
@@ -1118,6 +1145,7 @@ export const listProducts = async ({
     input?.readiness === "missingImage" ||
     input?.readiness === "missingBarcode" ||
     input?.readiness === "missingCost" ||
+    input?.readiness === "missingPrice" ||
     input?.readiness === "negativeStock" ||
     input?.readiness === "outOfStock" ||
     input?.readiness === "lowStock";
@@ -1135,7 +1163,7 @@ export const listProducts = async ({
   const advancedSqlPaginated = !paginatedOrderBy && !imageSortDbPaginated;
   const visibleSnapshotStoreIds = input?.storeId ? [input.storeId] : accessibleStoreIds;
   const pricingTime = new Date();
-  const priceTypesEnabled = Boolean(input?.priceMode && input.storeId && (await prisma.organization.findUnique({where:{id:organizationId},select:{retailWholesaleEnabled:true}}))?.retailWholesaleEnabled);
+  const priceTypesEnabled = Boolean(input?.storeId && (await prisma.organization.findUnique({where:{id:organizationId},select:{retailWholesaleEnabled:true}}))?.retailWholesaleEnabled);
 
   const baseReadStartedAt = Date.now();
   const [total, products] = advancedSqlPaginated
@@ -1651,7 +1679,7 @@ export const getProductPricing = async ({
     throw new TRPCError({ code: "NOT_FOUND", message: "productNotFound" });
   }
 
-  const [storePrice, cost] = await Promise.all([
+  const [storePrice, cost, organization, extra] = await Promise.all([
     storeId
       ? prisma.storePrice.findUnique({
           where: {
@@ -1675,13 +1703,23 @@ export const getProductPricing = async ({
       },
       select: { avgCostKgs: true },
     }),
+    storeId ? prisma.organization.findUnique({
+      where: { id: organizationId }, select: { retailWholesaleEnabled: true },
+    }) : Promise.resolve(null),
+    storeId ? prisma.storePriceTypes.findUnique({
+      where: { organizationId_storeId_productId_variantKey: { organizationId, storeId, productId, variantKey: "BASE" } },
+    }) : Promise.resolve(null),
   ]);
-
+  const selected = resolveStoreSellingPrice({
+    enabled: Boolean(organization?.retailWholesaleEnabled), mode: "RETAIL",
+    standard: storePrice?.priceKgs ?? product.basePriceKgs,
+    retail: extra?.retailPriceKgs, wholesale: extra?.wholesalePriceKgs,
+  });
   return serializeProductPricing({
     basePriceKgs: product.basePriceKgs,
-    effectivePriceKgs: storePrice?.priceKgs ?? product.basePriceKgs,
+    effectivePriceKgs: selected.price,
     avgCostKgs: cost?.avgCostKgs ?? null,
-    priceOverridden: Boolean(storePrice),
+    priceOverridden: Boolean(storePrice) || selected.source !== "STANDARD",
   });
 };
 
@@ -1868,7 +1906,11 @@ export const getProductStorePricing = async ({
     avgCostKgs: decimalToNumber(cost?.avgCostKgs),
     stores: stores.map((store) => {
       const override = overrideByStore.get(store.id);
-      const effective = override ?? basePrice;
+      const extras = extraByKey.get(`${store.id}:BASE`);
+      const effective = resolveStoreSellingPrice({
+        enabled: organization.retailWholesaleEnabled, mode: "RETAIL", standard: override ?? basePrice,
+        retail: decimalToNumber(extras?.retailPriceKgs), wholesale: decimalToNumber(extras?.wholesalePriceKgs),
+      }).price;
       return {
         storeId: store.id,
         storeName: store.name,
@@ -1889,6 +1931,11 @@ export const getProductStorePricing = async ({
         minStock: minStockByStore.get(store.id) ?? 0,
         variants: variants.map((variant) => {
           const variantOverride = variantOverrideByStoreAndVariant.get(`${store.id}:${variant.id}`);
+          const variantExtras = extraByKey.get(`${store.id}:${variant.id}`);
+          const variantPrice = resolveStoreSellingPrice({
+            enabled: organization.retailWholesaleEnabled, mode: "RETAIL", standard: variantOverride ?? effective,
+            retail: decimalToNumber(variantExtras?.retailPriceKgs), wholesale: decimalToNumber(variantExtras?.wholesalePriceKgs),
+          }).price;
           return {
             variantId: variant.id,
             retailPriceKgs: decimalToNumber(extraByKey.get(`${store.id}:${variant.id}`)?.retailPriceKgs),
@@ -1896,7 +1943,7 @@ export const getProductStorePricing = async ({
             variantName: variant.name,
             variantSku: variant.sku,
             attributes: variant.attributes,
-            effectivePriceKgs: variantOverride ?? effective,
+            effectivePriceKgs: variantPrice,
             overridePriceKgs: variantOverride ?? null,
             priceOverridden: variantOverride !== undefined,
             onHand: variantOnHandByStore.get(`${store.id}:${variant.id}`) ?? 0,

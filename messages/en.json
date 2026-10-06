@@ -2957,7 +2957,7 @@
     "payments": {
       "cash": "Cash",
       "card": "Card",
-      "transfer": "Transfer",
+      "transfer": "Cashless",
       "other": "Other"
     },
     "kkm": {
@@ -3675,9 +3675,11 @@
   },
   "products": {
     "retailPrice": "Retail price",
+    "retailPriceRequired": "Enter a retail price.",
+    "retailPricePlaceholder": "Enter a price",
     "wholesalePrice": "Wholesale price",
     "additionalPricesHint": "Empty means unset. 0 is a zero price.",
-    "priceModesHint": "Choose Retail or Wholesale at checkout. If that price is empty, the other price is used; if both are empty, the regular sale price applies. 0 is a zero price.",
+    "priceModesHint": "Retail is the regular selling price. If wholesale is not set, retail is used.",
     "saveAdditionalPrices": "Save additional prices",
     "exportFiltered": "Export filtered ({count})",
     "exportSelected": "Export selected ({count})",
@@ -4173,6 +4175,7 @@
     "setStorePrice": "Set store price",
     "savePrice": "Save price",
     "storePricingTitle": "Store pricing",
+    "storePriceModesHint": "Retail and wholesale prices are set separately for each store.",
     "storePricingHint": "Store pricing hint",
     "storePriceReadOnly": "Store price read only",
     "duplicate": "Duplicate",
@@ -4784,7 +4787,7 @@
       "amountKgs": "Amount, KGS",
       "CASH": "Cash",
       "CARD": "Card",
-      "TRANSFER": "Transfer",
+      "TRANSFER": "Cashless",
       "OTHER": "Other",
       "confirm": "Confirm receipt",
       "retry": "Retry confirmation"
@@ -4799,7 +4802,7 @@
       "method": "Refund method",
       "CASH": "Cash",
       "CARD": "Card",
-      "TRANSFER": "Transfer",
+      "TRANSFER": "Cashless",
       "OTHER": "Other",
       "cancel": "Cancel",
       "confirm": "Confirm refund",
@@ -5111,6 +5114,7 @@
     }
   },
   "errors": {
+    "retailPriceRequired": "Enter a retail price.",
     "loyaltyDisabled": "The loyalty programme is disabled",
     "loyaltyStoreNotParticipating": "This store does not take part in the programme",
     "loyaltyOtpRateLimited": "Too many code requests. Try again later.",
@@ -7635,11 +7639,11 @@
       "WRITE_OFF": "Write-off",
       "CASH": "Cash",
       "CARD": "Card",
-      "TRANSFER": "Transfer",
+      "TRANSFER": "Cashless",
       "OTHER": "Other payment",
       "CASH_REFUND": "Refund · cash",
       "CARD_REFUND": "Refund · card",
-      "TRANSFER_REFUND": "Refund · transfer",
+      "TRANSFER_REFUND": "Refund · cashless",
       "OTHER_REFUND": "Refund · other",
       "PAY_IN": "Cash deposit",
       "PAY_OUT": "Cash withdrawal",

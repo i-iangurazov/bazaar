@@ -3,6 +3,8 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { chromium, type BrowserContext, type Page, type Locator } from "playwright";
 import { verifyProductTable } from "./product-table-check";
+import { verifyProductEditor } from "./product-editor-check";
+import { verifyPosPaymentChoices } from "./pos-payment-check";
 const base = process.env.UX_HTTPS === "1" ? "https://localhost:3122" : "http://localhost:3122";
 const f = JSON.parse(await readFile("artifacts/ux/fixture.json", "utf8"));
 const directory = "artifacts/ux/flows";
@@ -507,6 +509,7 @@ try {
   const complete = dashboard.getByRole("button", { name: "Завершить продажу", exact: true });
   await complete.waitFor();
   await until(() => complete.isEnabled(), "Checkout is not ready");
+  await verifyPosPaymentChoices(dashboard);
   assert.equal(await dashboard.locator("[data-baam-launcher], [data-baam-drawer]").count(), 0);
   await dashboard.screenshot({ path: `${directory}/pos-checkout.png` });
   await complete.click();
@@ -520,7 +523,7 @@ try {
     .first()
     .waitFor();
   record(
-    "POS browser sale completes through the existing payment/stock process in the isolated store",
+    "POS offers cash/cashless only and completes a cashless sale through the normal stock ledger",
   );
   for (const [role, context] of [
     ["admin", admin],
@@ -648,6 +651,10 @@ try {
   record(
     "Customer, purchase and sales order search updates server results immediately and survives reload",
   );
+  const editorPage = await admin.newPage();
+  await verifyProductEditor(editorPage, base, f, (name, input, mutation) => api(admin, name, input, mutation), `${directory}/product-editor`);
+  await editorPage.close();
+  record("Product create/edit sections match; retail validation, feature toggles and full mobile names work");
   assert.deepEqual(errors, []);
 } catch (error) {
   failure = error instanceof Error ? error.stack : String(error);

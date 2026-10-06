@@ -44,7 +44,7 @@ export function StoreExtraPrices(props: {
       toast({ variant: "success", description: t("priceSaved") });
     },
   });
-  const valid = [retail, wholesale].every(
+  const valid = (Boolean(props.variantId) || retail.trim() !== "") && [retail, wholesale].every(
     (v) => v.trim() === "" || (Number.isFinite(Number(v)) && Number(v) >= 0),
   );
   return (
@@ -56,6 +56,8 @@ export function StoreExtraPrices(props: {
             type="number"
             min="0"
             step="0.01"
+            aria-required={!props.variantId}
+            placeholder={t("retailPricePlaceholder")}
             value={retail}
             onChange={(e) => setRetail(e.target.value)}
           />

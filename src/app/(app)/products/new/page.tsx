@@ -466,6 +466,7 @@ const NewProductPage = () => {
               currencyCode={selectedStore.currencyCode ?? null}
               currencyRateKgsPerUnit={selectedCurrencyRate}
               retailWholesaleEnabled={selectedStore.organization.retailWholesaleEnabled}
+              shopifyEditorLayout
               quickCreateMode
               canEditInitialStock={canEditInitialStock}
               enableSku={enableSku}

@@ -6,9 +6,32 @@ import {
   createDefaultPosPaymentDraft,
   reconcilePosPaymentDraftsForSaleTotal,
   removePosPaymentDraftRow,
+  posCheckoutPaymentMethod,
 } from "@/lib/posPaymentDrafts";
 
 describe("POS payment draft autofill", () => {
+  it("preserves a cashless choice or split made while the first draft is being created", () => {
+    const cashless = { method: PosPaymentMethod.TRANSFER, amount: "", providerRef: "bank-ref" };
+    const input = {
+      saleId: "new-sale",
+      totalKgs: 100,
+      previousAutoFill: { saleId: null, totalKgs: null },
+    };
+    expect(
+      reconcilePosPaymentDraftsForSaleTotal({ ...input, currentPayments: [cashless] }).payments,
+    ).toEqual([{ ...cashless, amount: "100" }]);
+    const split = [{ ...cashless, amount: "60" }, createDefaultPosPaymentDraft("40")];
+    expect(
+      reconcilePosPaymentDraftsForSaleTotal({ ...input, currentPayments: split }).payments,
+    ).toEqual(split);
+    expect(
+      reconcilePosPaymentDraftsForSaleTotal({
+        ...input,
+        currentPayments: [cashless],
+        previousAutoFill: { saleId: "old-sale", totalKgs: 100 },
+      }).payments,
+    ).toEqual([createDefaultPosPaymentDraft("100")]);
+  });
   it("initializes a new sale as a cash payment for the current total", () => {
     const result = reconcilePosPaymentDraftsForSaleTotal({
       currentPayments: [],
@@ -128,8 +151,18 @@ describe("POS payment draft autofill", () => {
       }),
     ).toEqual([
       { method: PosPaymentMethod.CASH, amount: "10000", providerRef: "" },
-      { method: PosPaymentMethod.CARD, amount: "", providerRef: "" },
+      { method: PosPaymentMethod.TRANSFER, amount: "", providerRef: "" },
     ]);
+  });
+
+  it("groups legacy non-cash methods for display while retaining original payment records", () => {
+    const existing = { method: PosPaymentMethod.CARD, amount: "100", providerRef: "card-ref" };
+    expect(posCheckoutPaymentMethod(existing.method)).toBe(PosPaymentMethod.TRANSFER);
+    expect(posCheckoutPaymentMethod(PosPaymentMethod.OTHER)).toBe(PosPaymentMethod.TRANSFER);
+    expect(posCheckoutPaymentMethod(PosPaymentMethod.CASH)).toBe(PosPaymentMethod.CASH);
+    const split = addPosPaymentDraftRow({ currentPayments: [existing], displayTotalAmount: "100" });
+    expect(split[0]).toEqual(existing);
+    expect(split[1]?.method).toBe(PosPaymentMethod.CASH);
   });
 
   it("keeps a single remaining payment synced to the current total after removing a split row", () => {

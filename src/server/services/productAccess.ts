@@ -15,6 +15,7 @@ export async function assertActorCanWriteProducts(
   organizationId: string,
   actorId: string,
   productIds: string[],
+  options?: { allowShared?: boolean },
 ) {
   const actor = await client.user.findFirst({
     where: { id: actorId, organizationId, isActive: true },
@@ -23,6 +24,7 @@ export async function assertActorCanWriteProducts(
     throw new AppError("forbidden", "FORBIDDEN", 403);
   await assertUserCanAccessProducts(client, { ...actor, organizationId }, productIds, {
     writable: true,
+    allowShared: options?.allowShared,
   });
 }
 
@@ -30,7 +32,7 @@ export const assertUserCanAccessProducts = async (
   client: ProductAccessClient,
   user: StoreAccessUser,
   productIds: string[],
-  options?: { includeArchived?: boolean; writable?: boolean },
+  options?: { includeArchived?: boolean; writable?: boolean; allowShared?: boolean },
 ) => {
   const uniqueProductIds = Array.from(new Set(productIds.map((id) => id.trim()).filter(Boolean)));
   if (!uniqueProductIds.length) {
@@ -47,7 +49,9 @@ export const assertUserCanAccessProducts = async (
       ...(options?.includeArchived ? {} : { isDeleted: false }),
       ...(accessibleStoreIds === null
         ? {}
-        : options?.writable
+        // Card edits may use received assortment grants. Ownership operations
+        // retain the direct/historical assignment requirement.
+        : options?.writable && !options.allowShared
           ? {
               storeProducts: {
                 some: {
@@ -70,5 +74,5 @@ export const assertUserCanAccessProduct = (
   client: ProductAccessClient,
   user: StoreAccessUser,
   productId: string,
-  options?: { includeArchived?: boolean; writable?: boolean },
+  options?: { includeArchived?: boolean; writable?: boolean; allowShared?: boolean },
 ) => assertUserCanAccessProducts(client, user, [productId], options);

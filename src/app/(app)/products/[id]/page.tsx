@@ -557,7 +557,7 @@ const ProductDetailPage = () => {
     const selectedVariantPriceById = new Map(
       (selectedSettingsStore?.variants ?? []).map((variant) => [
         variant.variantId,
-        variant.effectivePriceKgs ?? undefined,
+        variant.overridePriceKgs ?? undefined,
       ]),
     );
     return {
@@ -572,7 +572,7 @@ const ProductDetailPage = () => {
           : [],
       baseUnitId: productQuery.data.baseUnitId,
       basePriceKgs: productQuery.data.basePriceKgs ?? undefined,
-      storePriceKgs: selectedSettingsStore?.effectivePriceKgs ?? undefined,
+      storePriceKgs: selectedSettingsStore?.overridePriceKgs ?? productQuery.data.basePriceKgs ?? undefined,
       retailPriceKgs: selectedSettingsStore?.retailPriceKgs ?? null,
       wholesalePriceKgs: selectedSettingsStore?.wholesalePriceKgs ?? null,
       purchasePriceKgs: productQuery.data.purchasePriceKgs ?? undefined,
@@ -623,7 +623,7 @@ const ProductDetailPage = () => {
   }, [
     productQuery.data,
     selectedSettingsStore?.minStock,
-    selectedSettingsStore?.effectivePriceKgs,
+    selectedSettingsStore?.overridePriceKgs,
     selectedSettingsStore?.retailPriceKgs,
     selectedSettingsStore?.wholesalePriceKgs,
     selectedSettingsStore?.variants,
@@ -1260,7 +1260,7 @@ const ProductDetailPage = () => {
             <Card className="product-editor-card-form rounded-lg border-border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.08)]">
               <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <CardTitle>{t("storePricingTitle")}</CardTitle>
-                <p className="text-xs text-muted-foreground">{t("storePricingHint")}</p>
+                <p className="text-xs text-muted-foreground">{t(selectedSettingsStore?.retailWholesaleEnabled ? "storePriceModesHint" : "storePricingHint")}</p>
               </CardHeader>
               <CardContent>
                 {storePricingQuery.isLoading ? (
@@ -1298,7 +1298,7 @@ const ProductDetailPage = () => {
                           </div>
                           {canManageStorePrices || canManageInventory ? (
                             <div className="flex w-full flex-col gap-2 sm:w-auto">
-                              {canManageStorePrices ? (
+                              {canManageStorePrices && !storeRow.retailWholesaleEnabled ? (
                                 <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
                                   <Input
                                     type="number"
@@ -1347,7 +1347,7 @@ const ProductDetailPage = () => {
                             </div>
                           )}
                         </div>
-                        {canManageStorePrices && storeRow.retailWholesaleEnabled && storeRow.storeId !== selectedSettingsStore?.storeId ? <StoreExtraPrices storeId={storeRow.storeId} productId={productId} currencyCode={storeRow.currencyCode} currencyRateKgsPerUnit={Number(storeRow.currencyRateKgsPerUnit)} retail={storeRow.retailPriceKgs} wholesale={storeRow.wholesalePriceKgs} onSaved={() => { void storePricingQuery.refetch(); }} /> : null}
+                        {canManageStorePrices && storeRow.retailWholesaleEnabled && storeRow.storeId !== selectedSettingsStore?.storeId ? <StoreExtraPrices storeId={storeRow.storeId} productId={productId} currencyCode={storeRow.currencyCode} currencyRateKgsPerUnit={Number(storeRow.currencyRateKgsPerUnit)} retail={storeRow.retailPriceKgs ?? storeRow.overridePriceKgs ?? productQuery.data?.basePriceKgs ?? null} wholesale={storeRow.wholesalePriceKgs} onSaved={() => { void storePricingQuery.refetch(); }} /> : null}
                         {storeRow.variants.length ? (
                           <div className="mt-3 border-t border-border/70 pt-3">
                             <p className="mb-2 text-xs font-medium text-muted-foreground">
@@ -1364,9 +1364,9 @@ const ProductDetailPage = () => {
                                     <p className="truncate text-xs font-medium text-foreground">
                                       {resolveVariantLabel(variant)}
                                     </p>
-                                    {canManageStorePrices && storeRow.retailWholesaleEnabled && storeRow.storeId !== selectedSettingsStore?.storeId ? <StoreExtraPrices storeId={storeRow.storeId} productId={productId} variantId={variant.variantId} currencyCode={storeRow.currencyCode} currencyRateKgsPerUnit={Number(storeRow.currencyRateKgsPerUnit)} retail={variant.retailPriceKgs} wholesale={variant.wholesalePriceKgs} onSaved={() => { void storePricingQuery.refetch(); }} /> : null}
+                                    {canManageStorePrices && storeRow.retailWholesaleEnabled && storeRow.storeId !== selectedSettingsStore?.storeId ? <StoreExtraPrices storeId={storeRow.storeId} productId={productId} variantId={variant.variantId} currencyCode={storeRow.currencyCode} currencyRateKgsPerUnit={Number(storeRow.currencyRateKgsPerUnit)} retail={variant.retailPriceKgs ?? variant.overridePriceKgs} wholesale={variant.wholesalePriceKgs} onSaved={() => { void storePricingQuery.refetch(); }} /> : null}
                                     <div className="mt-2 grid gap-2">
-                                      {canManageStorePrices ? (
+                                      {canManageStorePrices && !storeRow.retailWholesaleEnabled ? (
                                         <div className="flex items-center gap-2">
                                           <Input
                                             type="number"

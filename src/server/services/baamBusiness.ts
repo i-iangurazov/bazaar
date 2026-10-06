@@ -77,7 +77,7 @@ const paymentLabel = (locale: string, method: PosPaymentMethod) => {
   const names = {
     CASH: ["Наличные", "Cash", "Накталай"],
     CARD: ["Карта", "Card", "Карта"],
-    TRANSFER: ["Перевод", "Transfer", "Которуу"],
+    TRANSFER: ["Безналичные", "Cashless", "Накталай эмес"],
     OTHER: ["Другой способ", "Other method", "Башка ыкма"],
   };
   const [ru, en, kg] = names[method];

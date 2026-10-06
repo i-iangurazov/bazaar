@@ -1,4 +1,5 @@
-import { saveProductPriceTypes, type ProductPriceTypeValues } from "@/server/services/productPriceTypes";
+import { saveProductPriceTypes, syncExistingRetailPrice, type ProductPriceTypeValues } from "@/server/services/productPriceTypes";
+import { resolveProductFormRetailPrice } from "@/server/services/productFormPricing";
 import { randomUUID } from "node:crypto";
 import {
   OperationRequestPrincipalType,
@@ -53,6 +54,7 @@ import {
 } from "@/server/services/products/importMatching";
 
 export type CreateProductInput = ProductPriceTypeValues & {
+  requireRetailPrice?: boolean;
   idempotencyKey?: string;
   organizationId: string;
   actorId: string;
@@ -963,6 +965,10 @@ const upsertStoreVariantPrices = async (
         updatedById: input.actorId,
       },
     });
+    await syncExistingRetailPrice(tx, {
+      organizationId: input.organizationId, storeId: input.storeId,
+      productId: input.productId, variantKey: variant.id, priceKgs, actorId: input.actorId,
+    });
   }
 };
 
@@ -1825,6 +1831,12 @@ export const createProduct = async (input: CreateProductInput) => {
           organizationId: input.organizationId,
           storeId: input.storeId,
         });
+        const retailPriceKgs = input.requireRetailPrice
+          ? await resolveProductFormRetailPrice(tx, {
+              ...input,
+              storeId: input.storeId ?? (assignmentStores.length === 1 ? assignmentStores[0]?.id : undefined),
+            })
+          : input.retailPriceKgs;
         await ensureSupplier(tx, input.organizationId, input.supplierId);
         const baseUnit = await ensureUnit(tx, input.organizationId, input.baseUnitId);
         const attributeDefinitions = await loadAttributeDefinitions(tx, input.organizationId);
@@ -1966,7 +1978,7 @@ export const createProduct = async (input: CreateProductInput) => {
           organizationId: input.organizationId, actorId: input.actorId, requestId: input.requestId,
           storeId: input.storeId ?? (assignmentStores.length === 1 ? assignmentStores[0]?.id : undefined), productId: product.id,
           prices: [
-            { retailPriceKgs: input.retailPriceKgs, wholesalePriceKgs: input.wholesalePriceKgs },
+            { retailPriceKgs, wholesalePriceKgs: input.wholesalePriceKgs },
             ...createdVariants.map((variant, index) => ({
               variantId: variant.id,
               retailPriceKgs: input.variants?.[index]?.retailPriceKgs,
@@ -2221,6 +2233,7 @@ export const assignExistingProductsToStore = async (input: AssignExistingProduct
 };
 
 export type UpdateProductInput = ProductPriceTypeValues & {
+  requireRetailPrice?: boolean;
   productId: string;
   organizationId: string;
   actorId: string;
@@ -2281,6 +2294,10 @@ export const updateProduct = async (input: UpdateProductInput) => {
     if (!before || before.organizationId !== input.organizationId) {
       throw new AppError("productNotFound", "NOT_FOUND", 404);
     }
+
+    const retailPriceKgs = input.requireRetailPrice
+      ? await resolveProductFormRetailPrice(tx, input)
+      : input.retailPriceKgs;
 
     const selectedStore = input.storeId
       ? await tx.store.findFirst({
@@ -2350,7 +2367,7 @@ export const updateProduct = async (input: UpdateProductInput) => {
         categories: normalizedCategories,
         unit: baseUnit.code,
         baseUnitId: baseUnit.id,
-        basePriceKgs: input.basePriceKgs ?? null,
+        basePriceKgs: input.basePriceKgs,
         description: input.description ?? null,
         photoUrl:
           resolvedMedia.photoUrl ?? (normalizedImages?.length ? normalizedImages[0].url : null),
@@ -2389,7 +2406,7 @@ export const updateProduct = async (input: UpdateProductInput) => {
     }
 
     const additionalPrices: Array<ProductPriceTypeValues & { variantId?: string }> = [
-      { retailPriceKgs: input.retailPriceKgs, wholesalePriceKgs: input.wholesalePriceKgs },
+      { retailPriceKgs, wholesalePriceKgs: input.wholesalePriceKgs },
     ];
     if (input.variants) {
       const incomingIds = new Set(
@@ -4131,6 +4148,10 @@ export const importProductsTx = async (
         priceKgs,
         updatedById: input.actorId,
       },
+    });
+    await syncExistingRetailPrice(tx, {
+      organizationId: input.organizationId, storeId: input.storeId,
+      productId, variantKey: "BASE", priceKgs, actorId: input.actorId,
     });
   };
 

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { prisma } from "@/server/db/prisma";
+import { bulkUpdateStorePrices, upsertStorePrice } from "@/server/services/storePrices";
 import { createTestCaller } from "../helpers/context";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 
@@ -18,6 +19,189 @@ describeDb("product form retail and wholesale prices", () => {
     const caller = createTestCaller({ ...f.adminUser, organizationId: f.org.id });
     return { ...f, caller };
   };
+
+  it("requires retail only in the enabled editor, accepts zero and rolls back invalid saves", async () => {
+    const f = await fixture();
+    const create = {
+      idempotencyKey: "required-retail-create",
+      storeId: f.store.id,
+      name: "Required retail",
+      baseUnitId: f.baseUnit.id,
+    };
+    await expect(f.caller.products.create(create)).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "retailPriceRequired",
+    });
+    await expect(
+      f.caller.products.create({ ...create, retailPriceKgs: null }),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "retailPriceRequired",
+    });
+    expect(await prisma.product.count({ where: { name: create.name } })).toBe(0);
+    const product = await f.caller.products.create({ ...create, retailPriceKgs: 0 });
+    expect(
+      (await f.caller.products.storePricing({ productId: product.id })).stores[0],
+    ).toMatchObject({ retailPriceKgs: 0, effectivePriceKgs: 0 });
+    await expect(
+      f.caller.products.update({
+        productId: product.id,
+        storeId: f.store.id,
+        sku: product.sku,
+        name: "Must not persist",
+        baseUnitId: f.baseUnit.id,
+        retailPriceKgs: null,
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST", message: "retailPriceRequired" });
+    expect((await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).name).toBe(
+      create.name,
+    );
+    // Photo-only and inline writers do not impose the full editor's requirement.
+    await f.caller.products.update({
+      imagesOnly: true,
+      productId: f.product.id,
+      storeId: f.store.id,
+      sku: f.product.sku,
+      name: f.product.name,
+      baseUnitId: f.baseUnit.id,
+      images: [{ url: "/uploads/products/editor-photo.webp", position: 0 }],
+    });
+    await f.caller.products.inlineUpdate({
+      productId: f.product.id,
+      patch: { name: "Inline rename" },
+    });
+    await prisma.organization.update({
+      where: { id: f.org.id },
+      data: { retailWholesaleEnabled: false },
+    });
+    const ordinary = await f.caller.products.create({
+      ...create,
+      idempotencyKey: "disabled-no-price",
+      name: "Optional ordinary",
+    });
+    expect(ordinary.basePriceKgs).toBeNull();
+  });
+
+  it("hydrates legacy prices, preserves hidden base values and keeps prices current across toggles", async () => {
+    const f = await fixture();
+    const product = await f.caller.products.create({
+      idempotencyKey: "legacy-retail-price",
+      storeId: f.store.id,
+      name: "Legacy price",
+      baseUnitId: f.baseUnit.id,
+      basePriceKgs: 75,
+    });
+    expect(
+      (await f.caller.products.storePricing({ productId: product.id })).stores[0],
+    ).toMatchObject({ retailPriceKgs: 75, effectivePriceKgs: 75 });
+    const edit = {
+      productId: product.id,
+      storeId: f.store.id,
+      sku: product.sku,
+      name: product.name,
+      baseUnitId: f.baseUnit.id,
+    };
+    await f.caller.products.update({ ...edit, retailPriceKgs: 120, wholesalePriceKgs: 90 });
+    expect(
+      (
+        await prisma.product.findUniqueOrThrow({ where: { id: product.id } })
+      ).basePriceKgs?.toNumber(),
+    ).toBe(75);
+    expect(
+      (
+        await prisma.storePrice.findFirstOrThrow({ where: { productId: product.id } })
+      ).priceKgs?.toNumber(),
+    ).toBe(120);
+    // The ordinary field in an older client must update the retail alias too.
+    await f.caller.products.update({ ...edit, storePriceKgs: 130 });
+    expect(
+      (await f.caller.products.storePricing({ productId: product.id })).stores[0],
+    ).toMatchObject({ retailPriceKgs: 130, wholesalePriceKgs: 90 });
+    await prisma.organization.update({
+      where: { id: f.org.id },
+      data: { retailWholesaleEnabled: false },
+    });
+    await f.caller.products.update({ ...edit, storePriceKgs: 150 });
+    await prisma.organization.update({
+      where: { id: f.org.id },
+      data: { retailWholesaleEnabled: true },
+    });
+    expect(
+      (await f.caller.products.storePricing({ productId: product.id })).stores[0],
+    ).toMatchObject({ retailPriceKgs: 150, wholesalePriceKgs: 90, effectivePriceKgs: 150 });
+    await upsertStorePrice({
+      organizationId: f.org.id,
+      actorId: f.adminUser.id,
+      requestId: "retail-direct-sync",
+      storeId: f.store.id,
+      productId: product.id,
+      priceKgs: 160,
+    });
+    await bulkUpdateStorePrices({
+      organizationId: f.org.id,
+      actorId: f.adminUser.id,
+      requestId: "retail-bulk-sync",
+      storeId: f.store.id,
+      mode: "increaseAbs",
+      value: 10,
+      filter: { search: product.name },
+    });
+    expect(
+      (await f.caller.products.storePricing({ productId: product.id })).stores[0],
+    ).toMatchObject({ retailPriceKgs: 170, wholesalePriceKgs: 90, effectivePriceKgs: 170 });
+  });
+
+  it("uses legacy retail values consistently in lists, price sorting and missing-price filters", async () => {
+    const f = await fixture();
+    const product = await f.caller.products.create({
+      idempotencyKey: "retail-list-price",
+      storeId: f.store.id,
+      name: "Retail list item",
+      baseUnitId: f.baseUnit.id,
+      retailPriceKgs: 125,
+    });
+    // Simulate a row saved before the retail/ordinary aliases were synchronized.
+    await prisma.storePrice.updateMany({
+      where: { productId: product.id },
+      data: { priceKgs: 10, discountType: "PERCENTAGE", discountPercentage: 20 },
+    });
+    const list = await f.caller.products.list({
+      storeId: f.store.id,
+      sortKey: "salePrice",
+      sortDirection: "desc",
+    });
+    expect(list.items.find((row) => row.id === product.id)?.effectivePriceKgs).toBe(100);
+    expect(
+      (await f.caller.products.storePricing({ productId: product.id })).stores[0].effectivePriceKgs,
+    ).toBe(125);
+    const missing = await f.caller.products.list({
+      storeId: f.store.id,
+      readiness: "missingPrice",
+    });
+    expect(missing.items.map((row) => row.id)).toContain(f.product.id);
+    expect(missing.items.map((row) => row.id)).not.toContain(product.id);
+    const missingIds = await f.caller.products.listIds({
+      storeId: f.store.id,
+      readiness: "missingPrice",
+    });
+    expect(missingIds).not.toContain(product.id);
+    await upsertStorePrice({
+      organizationId: f.org.id,
+      actorId: f.adminUser.id,
+      requestId: "retail-discount-preserve",
+      storeId: f.store.id,
+      productId: product.id,
+      retailPriceKgs: 200,
+    });
+    const ordinary = await prisma.storePrice.findFirstOrThrow({ where: { productId: product.id } });
+    expect(ordinary.discountPercentage?.toNumber()).toBe(20);
+    expect(ordinary.priceKgs?.toNumber()).toBe(200);
+    expect(
+      (await f.caller.products.list({ storeId: f.store.id })).items.find(
+        (row) => row.id === product.id,
+      )?.effectivePriceKgs,
+    ).toBe(160);
+  });
 
   it("creates and edits product and variant prices through the form API and applies them in POS", async () => {
     const f = await fixture();
@@ -80,17 +264,17 @@ describeDb("product form retail and wholesale prices", () => {
       name: product.name,
       baseUnitId: f.baseUnit.id,
       basePriceKgs: 100,
-      retailPriceKgs: null,
+      retailPriceKgs: 125,
       wholesalePriceKgs: 95,
       variants: [
         { id: small.id, name: small.name!, retailPriceKgs: null, wholesalePriceKgs: 40 },
         { id: large.id, name: large.name!, retailPriceKgs: 90, wholesalePriceKgs: 0 },
       ],
     });
-    await checkTotal("RETAIL", 225);
+    await checkTotal("RETAIL", 255);
     await checkTotal("WHOLESALE", 135);
     const reloaded = await f.caller.products.storePricing({ productId: product.id });
-    expect(reloaded.stores[0]).toMatchObject({ retailPriceKgs: null, wholesalePriceKgs: 95 });
+    expect(reloaded.stores[0]).toMatchObject({ retailPriceKgs: 125, wholesalePriceKgs: 95 });
     expect(reloaded.stores[0].variants.find((row) => row.variantId === large.id)).toMatchObject({
       retailPriceKgs: 90,
       wholesalePriceKgs: 0,

@@ -1158,7 +1158,9 @@ export const saveGeneratedImageToProduct = async (input: {
   const setAsPrimary = Boolean(input.setAsPrimary);
 
   const result = await prisma.$transaction(async (tx) => {
-    await assertActorCanWriteProducts(tx, input.organizationId, input.actorId, [product.id]);
+    await assertActorCanWriteProducts(tx, input.organizationId, input.actorId, [product.id], {
+      allowShared: true,
+    });
     const savedProductImageId = await attachGeneratedImageToProduct({
       tx,
       organizationId: input.organizationId,

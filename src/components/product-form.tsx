@@ -107,7 +107,7 @@ export type ProductFormValues = {
   category?: string;
   categories?: string[];
   baseUnitId: string;
-  basePriceKgs?: number;
+  basePriceKgs?: number | null;
   storePriceKgs?: number;
   retailPriceKgs?: number | null;
   wholesalePriceKgs?: number | null;
@@ -826,6 +826,13 @@ export const ProductForm = ({
           .optional(),
       })
       .superRefine((values, context) => {
+        if (retailWholesaleEnabled && categoryStoreId && values.retailPriceKgs === undefined) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: t("retailPriceRequired"),
+            path: ["retailPriceKgs"],
+          });
+        }
         const normalizedSku = values.sku.trim();
         if (enableSku) {
           if (productId) {
@@ -868,7 +875,7 @@ export const ProductForm = ({
           });
         }
       });
-  }, [enableBarcode, enableSku, productId, t, tErrors]);
+  }, [categoryStoreId, enableBarcode, enableSku, productId, retailWholesaleEnabled, t, tErrors]);
   type VariantFormRow = z.infer<typeof schema>["variants"][number];
 
   const toAttributeEntries = (attributes: Record<string, unknown>) => {
@@ -900,7 +907,9 @@ export const ProductForm = ({
       baseUnitId: initialValues.baseUnitId,
       basePriceKgs: displayMoneyFromKgs(initialValues.basePriceKgs),
       storePriceKgs: displayMoneyFromKgs(initialValues.storePriceKgs),
-      retailPriceKgs: displayMoneyFromKgs(initialValues.retailPriceKgs),
+      retailPriceKgs: displayMoneyFromKgs(
+        initialValues.retailPriceKgs ?? initialValues.storePriceKgs ?? initialValues.basePriceKgs,
+      ),
       wholesalePriceKgs: displayMoneyFromKgs(initialValues.wholesalePriceKgs),
       purchasePriceKgs: displayMoneyFromKgs(initialValues.purchasePriceKgs),
       avgCostKgs: displayMoneyFromKgs(initialValues.avgCostKgs),
@@ -921,7 +930,7 @@ export const ProductForm = ({
               sku: variant.sku ?? "",
               initialOnHand: variant.initialOnHand,
               storePriceKgs: displayMoneyFromKgs(variant.storePriceKgs),
-              retailPriceKgs: displayMoneyFromKgs(variant.retailPriceKgs),
+              retailPriceKgs: displayMoneyFromKgs(variant.retailPriceKgs ?? variant.storePriceKgs),
               wholesalePriceKgs: displayMoneyFromKgs(variant.wholesalePriceKgs),
               attributes: toAttributeEntries(variant.attributes ?? {}),
               canDelete: variant.canDelete ?? true,
@@ -1279,7 +1288,9 @@ export const ProductForm = ({
             name={variantIndex === undefined ? name : `variants.${variantIndex}.${name}`}
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{t(name === "retailPriceKgs" ? "retailPrice" : "wholesalePrice")} · {moneyCurrencyCode}</FormLabel>
+                <FormLabel required={variantIndex === undefined && name === "retailPriceKgs"}>
+                  {t(name === "retailPriceKgs" ? "retailPrice" : "wholesalePrice")} · {moneyCurrencyCode}
+                </FormLabel>
                 <FormControl>
                   <Input
                     {...field}
@@ -1288,7 +1299,8 @@ export const ProductForm = ({
                     inputMode="decimal"
                     min={0}
                     step="0.01"
-                    placeholder={t("pricePlaceholder")}
+                    aria-required={variantIndex === undefined && name === "retailPriceKgs"}
+                    placeholder={t("retailPricePlaceholder")}
                     disabled={readOnly || isSubmitting}
                   />
                 </FormControl>
@@ -3100,7 +3112,7 @@ export const ProductForm = ({
         name: variant.name?.trim() || undefined,
         sku: enableSku ? variant.sku?.trim() || undefined : undefined,
         initialOnHand: variant.initialOnHand,
-        storePriceKgs: submitMoneyToKgs(variant.storePriceKgs),
+        ...(!retailWholesaleEnabled ? { storePriceKgs: submitMoneyToKgs(variant.storePriceKgs) } : {}),
         ...(retailWholesaleEnabled ? {
           retailPriceKgs: submitMoneyToKgs(variant.retailPriceKgs) ?? null,
           wholesalePriceKgs: submitMoneyToKgs(variant.wholesalePriceKgs) ?? null,
@@ -3153,8 +3165,10 @@ export const ProductForm = ({
       category: categoryValues[0],
       categories: categoryValues,
       baseUnitId: values.baseUnitId,
-      basePriceKgs: submitMoneyToKgs(values.basePriceKgs),
-      storePriceKgs: submitMoneyToKgs(values.storePriceKgs),
+      ...(!retailWholesaleEnabled ? {
+        basePriceKgs: showBasePriceField ? submitMoneyToKgs(values.basePriceKgs) ?? null : undefined,
+        storePriceKgs: submitMoneyToKgs(values.storePriceKgs),
+      } : {}),
       ...(retailWholesaleEnabled ? {
         retailPriceKgs: submitMoneyToKgs(values.retailPriceKgs) ?? null,
         wholesalePriceKgs: submitMoneyToKgs(values.wholesalePriceKgs) ?? null,
@@ -4874,7 +4888,7 @@ export const ProductForm = ({
 
             <ProductEditorCard title={t("pricingTitle")} className={editorFormCardClassName}>
               <ProductEditorFieldGrid>
-                {priceStoreName ? (
+                {priceStoreName && !retailWholesaleEnabled ? (
                   <FormField
                     control={form.control}
                     name="storePriceKgs"
@@ -4899,7 +4913,7 @@ export const ProductForm = ({
                     )}
                   />
                 ) : null}
-                {showBasePriceField ? (
+                {showBasePriceField && !retailWholesaleEnabled ? (
                   <FormField
                     control={form.control}
                     name="basePriceKgs"
@@ -5017,7 +5031,10 @@ export const ProductForm = ({
                   />
                 ) : null}
               </ProductEditorFieldGrid>
-              {shopifyEditor && enableBarcode ? (
+            </ProductEditorCard>
+
+            {enableBarcode ? (
+              <ProductEditorCard title={t("barcodes")} className={editorFormCardClassName}>
                 <FormField
                   control={form.control}
                   name="barcodes"
@@ -5098,8 +5115,8 @@ export const ProductForm = ({
                     </FormItem>
                   )}
                 />
-              ) : null}
-            </ProductEditorCard>
+              </ProductEditorCard>
+            ) : null}
 
             {isBundle ? (
               <ProductEditorCard
@@ -5599,7 +5616,8 @@ export const ProductForm = ({
                             ) : null}
                             {canEditVariantPrice ? (
                               <div className="space-y-3">
-                                <FormField
+                                {!retailWholesaleEnabled ? (
+                                  <FormField
                                   control={form.control}
                                   name={`variants.${variant.index}.storePriceKgs`}
                                   render={({ field }) => (
@@ -5621,7 +5639,8 @@ export const ProductForm = ({
                                       <FormMessage />
                                     </FormItem>
                                   )}
-                                />
+                                  />
+                                ) : null}
                                 {renderAdditionalPriceFields(variant.index)}
                               </div>
                             ) : null}
@@ -6247,7 +6266,7 @@ export const ProductForm = ({
                         )}
                       />
                     ) : null}
-                    {showBasePriceField ? (
+                    {showBasePriceField && !retailWholesaleEnabled ? (
                       <FormField
                         control={form.control}
                         name="basePriceKgs"

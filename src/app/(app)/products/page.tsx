@@ -4177,7 +4177,23 @@ const ProductsPage = () => {
                 if (renderPhotoFirstMobileCard) {
                   return (
                     <div className="rounded-xl border border-border/80 bg-card/95 p-3 shadow-sm">
-                      <div className="flex items-start gap-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p
+                            data-product-name
+                            className="whitespace-normal break-words text-base font-semibold leading-snug text-foreground [overflow-wrap:anywhere]"
+                          >
+                            {product.name}
+                          </p>
+                        </div>
+                        <RowActions
+                          actions={mobileActions}
+                          maxInline={1}
+                          moreLabel={tCommon("tooltips.moreActions")}
+                          className="shrink-0"
+                        />
+                      </div>
+                      <div className="mt-3 flex items-start gap-3">
                         <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-lg border border-border/70 bg-muted/45">
                           {previewImageUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
@@ -4204,24 +4220,11 @@ const ProductsPage = () => {
                           ) : null}
                         </div>
                         <div className="min-w-0 flex-1 space-y-2">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <p className="line-clamp-2 text-base font-semibold leading-tight text-foreground">
-                                {product.name}
-                              </p>
-                              {enableSku ? (
-                                <p className="truncate text-xs text-muted-foreground">
-                                  {product.sku}
-                                </p>
-                              ) : null}
-                            </div>
-                            <RowActions
-                              actions={mobileActions}
-                              maxInline={1}
-                              moreLabel={tCommon("tooltips.moreActions")}
-                              className="shrink-0"
-                            />
-                          </div>
+                          {enableSku ? (
+                            <p className="truncate text-xs text-muted-foreground">
+                              {product.sku}
+                            </p>
+                          ) : null}
                           <div className="flex flex-wrap items-center gap-2">
                             <Badge variant="muted">
                               {product.isBundle ? t("typeBundle") : t("typeProduct")}

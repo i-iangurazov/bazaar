@@ -80,9 +80,12 @@ stores have no legacy catalog ID and a database guard prevents legacy rejoining.
 
 Different product IDs are retained. A historical collision between a product barcode
 and a pack barcode returns both candidates to the existing scanner chooser.
-Receiving access alone cannot authorize global product edits, bulk barcode changes,
-description jobs or saving generated images. Existing local store-price permissions
-remain in force. Assistant product mutations use the same protected router/services.
+Administrators and managers can edit a received product card through an active
+assignment in an accessible store. Name, description, images, categories, barcodes
+and variants belong to the shared identity and change for every receiving store.
+Prices and inventory remain store-specific; receiving a card does not grant access
+to the source store or its documents. Archive and bulk ownership operations retain
+their ownership checks. Assistant mutations use the same router/services.
 
 ### POS
 

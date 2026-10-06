@@ -290,7 +290,9 @@ export const productsRouter = router({
           throw toTRPCError(error);
         }
       }
-      await assertSingleProductAccess(ctx.prisma, ctx.user, input.productId, { writable: true });
+      await assertSingleProductAccess(ctx.prisma, ctx.user, input.productId, {
+        writable: true, allowShared: true,
+      });
       if (input.storeId) {
         await assertProductStoreAccess(ctx.prisma, ctx.user, input.storeId);
       }
@@ -305,7 +307,9 @@ export const productsRouter = router({
   inlineUpdate: managerProcedure
     .input(inlineUpdateProductInputSchema)
     .mutation(async ({ ctx, input }) => {
-      await assertSingleProductAccess(ctx.prisma, ctx.user, input.productId, { writable: true });
+      await assertSingleProductAccess(ctx.prisma, ctx.user, input.productId, {
+        writable: true, allowShared: true,
+      });
       return inlineUpdateProductMutation({
         prisma: ctx.prisma,
         organizationId: ctx.user.organizationId,
@@ -365,7 +369,9 @@ export const productsRouter = router({
   generateBarcode: managerProcedure
     .input(generateProductBarcodeInputSchema)
     .mutation(async ({ ctx, input }) => {
-      await assertSingleProductAccess(ctx.prisma, ctx.user, input.productId, { writable: true });
+      await assertSingleProductAccess(ctx.prisma, ctx.user, input.productId, {
+        writable: true, allowShared: true,
+      });
       return generateProductBarcodeMutation({
         organizationId: ctx.user.organizationId,
         actorId: ctx.user.id,

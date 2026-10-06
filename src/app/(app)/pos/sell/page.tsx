@@ -100,6 +100,8 @@ import { getQzTrayBinding, printPdfBlobViaQzTray, qzTrayErrorMessageKey } from "
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
 import {
   addPosPaymentDraftRow,
+  POS_CHECKOUT_PAYMENT_METHODS,
+  posCheckoutPaymentMethod,
   createDefaultPosPaymentDraft,
   removePosPaymentDraftRow,
   type PosPaymentAutoFillState,
@@ -6060,10 +6062,10 @@ const PosSellPage = () => {
                             {payments.map((payment, index) => (
                               <div
                                 key={`${index}-${payment.method}`}
-                                className="grid grid-cols-[116px_1fr_32px] gap-1.5"
+                                className="grid grid-cols-[152px_minmax(0,1fr)_32px] gap-1.5"
                               >
                                 <Select
-                                  value={payment.method}
+                                  value={posCheckoutPaymentMethod(payment.method)}
                                   onValueChange={(value) =>
                                     setPayments((current) =>
                                       current.map((item, itemIndex) =>
@@ -6084,14 +6086,8 @@ const PosSellPage = () => {
                                     <SelectItem value={PosPaymentMethod.CASH}>
                                       {t("payments.cash")}
                                     </SelectItem>
-                                    <SelectItem value={PosPaymentMethod.CARD}>
-                                      {t("payments.card")}
-                                    </SelectItem>
                                     <SelectItem value={PosPaymentMethod.TRANSFER}>
                                       {t("payments.transfer")}
-                                    </SelectItem>
-                                    <SelectItem value={PosPaymentMethod.OTHER}>
-                                      {t("payments.other")}
                                     </SelectItem>
                                   </SelectContent>
                                 </Select>
@@ -6379,12 +6375,7 @@ const PosSellPage = () => {
         : sale?.status && sale.status !== CustomerOrderStatus.DRAFT
           ? saleStatusLabel(sale.status)
           : t("sell.mobile.newStatus");
-      const paymentMethods = [
-        PosPaymentMethod.CASH,
-        PosPaymentMethod.CARD,
-        PosPaymentMethod.TRANSFER,
-        PosPaymentMethod.OTHER,
-      ];
+      const paymentMethods = POS_CHECKOUT_PAYMENT_METHODS;
 
       const handleMobileDone = () => {
         if (mobileScreen !== "sale") {
@@ -7194,7 +7185,7 @@ const PosSellPage = () => {
                           type="button"
                           className={cn(
                             "min-h-11 rounded-[10px] border border-border bg-card px-3 text-left text-[14px] font-semibold text-foreground",
-                            payments[0]?.method === method && "border-primary text-primary",
+                            payments[0] && posCheckoutPaymentMethod(payments[0].method) === method && "border-primary text-primary",
                           )}
                           onClick={() =>
                             setPayments((current) => {
@@ -7214,10 +7205,10 @@ const PosSellPage = () => {
                       {payments.map((payment, index) => (
                         <div
                           key={`${index}-${payment.method}`}
-                          className="grid grid-cols-[1fr_1fr_44px] gap-2"
+                          className="grid grid-cols-[152px_minmax(0,1fr)_44px] gap-2"
                         >
                           <Select
-                            value={payment.method}
+                            value={posCheckoutPaymentMethod(payment.method)}
                             onValueChange={(value) =>
                               setPayments((current) =>
                                 current.map((item, itemIndex) =>
@@ -7228,21 +7219,15 @@ const PosSellPage = () => {
                               )
                             }
                           >
-                            <SelectTrigger className="h-11 border-border bg-card text-foreground">
+                            <SelectTrigger aria-label={t("sell.paymentMethod")} className="h-11 border-border bg-card text-foreground">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value={PosPaymentMethod.CASH}>
                                 {t("payments.cash")}
                               </SelectItem>
-                              <SelectItem value={PosPaymentMethod.CARD}>
-                                {t("payments.card")}
-                              </SelectItem>
                               <SelectItem value={PosPaymentMethod.TRANSFER}>
                                 {t("payments.transfer")}
-                              </SelectItem>
-                              <SelectItem value={PosPaymentMethod.OTHER}>
-                                {t("payments.other")}
                               </SelectItem>
                             </SelectContent>
                           </Select>
@@ -8683,10 +8668,10 @@ const PosSellPage = () => {
                               {payments.map((payment, index) => (
                                 <div
                                   key={`${index}-${payment.method}`}
-                                  className="grid grid-cols-[1fr_1fr_44px] gap-2"
+                                  className="grid grid-cols-[152px_minmax(0,1fr)_44px] gap-2"
                                 >
                                   <Select
-                                    value={payment.method}
+                                    value={posCheckoutPaymentMethod(payment.method)}
                                     onValueChange={(value) =>
                                       setPayments((current) =>
                                         current.map((item, itemIndex) =>
@@ -8707,14 +8692,8 @@ const PosSellPage = () => {
                                       <SelectItem value={PosPaymentMethod.CASH}>
                                         {t("payments.cash")}
                                       </SelectItem>
-                                      <SelectItem value={PosPaymentMethod.CARD}>
-                                        {t("payments.card")}
-                                      </SelectItem>
                                       <SelectItem value={PosPaymentMethod.TRANSFER}>
                                         {t("payments.transfer")}
-                                      </SelectItem>
-                                      <SelectItem value={PosPaymentMethod.OTHER}>
-                                        {t("payments.other")}
                                       </SelectItem>
                                     </SelectContent>
                                   </Select>

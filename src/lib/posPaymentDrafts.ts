@@ -18,16 +18,19 @@ export const createDefaultPosPaymentDraft = (amount = ""): PosPaymentDraft => ({
   providerRef: "",
 });
 
-const PAYMENT_METHOD_ORDER = [
+export const POS_CHECKOUT_PAYMENT_METHODS = [
   PosPaymentMethod.CASH,
-  PosPaymentMethod.CARD,
   PosPaymentMethod.TRANSFER,
-  PosPaymentMethod.OTHER,
 ] as const;
 
+// Display old non-cash methods as one choice without rewriting stored payments.
+export const posCheckoutPaymentMethod = (method: PosPaymentMethod) =>
+  method === PosPaymentMethod.CASH ? PosPaymentMethod.CASH : PosPaymentMethod.TRANSFER;
+
 const nextPaymentMethod = (payments: PosPaymentDraft[]) =>
-  PAYMENT_METHOD_ORDER.find((method) => payments.every((payment) => payment.method !== method)) ??
-  PosPaymentMethod.CARD;
+  POS_CHECKOUT_PAYMENT_METHODS.find((method) =>
+    payments.every((payment) => posCheckoutPaymentMethod(payment.method) !== method),
+  ) ?? PosPaymentMethod.TRANSFER;
 
 export const addPosPaymentDraftRow = (input: {
   currentPayments: PosPaymentDraft[];
@@ -85,8 +88,16 @@ export const reconcilePosPaymentDraftsForSaleTotal = (input: {
   const nextAmount = String(nextDisplayTotal);
 
   if (input.previousAutoFill.saleId !== input.saleId) {
+    // A cashier may choose a method or split before the draft creation finishes.
+    // Only switching away from an already initialized sale resets its payments.
+    const pendingPayments = input.previousAutoFill.saleId === null ? input.currentPayments : [];
     return {
-      payments: [createDefaultPosPaymentDraft(nextAmount)],
+      payments:
+        pendingPayments.length === 1
+          ? [{ ...pendingPayments[0]!, amount: nextAmount }]
+          : pendingPayments.length
+            ? pendingPayments
+            : [createDefaultPosPaymentDraft(nextAmount)],
       autoFill: nextAutoFill,
     };
   }

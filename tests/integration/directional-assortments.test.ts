@@ -252,7 +252,7 @@ suite("directional assortment policy", () => {
     await expect(manager.stores.previewAssortmentShare(change)).rejects.toThrow();
   });
 
-  it("does not turn shared access into permission to edit global product fields", async () => {
+  it("allows shared card edits while keeping unrelated products and ownership operations protected", async () => {
     const f = await fixture();
     await f.apply(f.share(f.a.id, [f.b.id]));
     await prisma.userStoreAccess.deleteMany({ where: { userId: f.managerUser.id } });
@@ -292,9 +292,19 @@ suite("directional assortment policy", () => {
       sku: f.c1.sku, name: f.c1.name, baseUnitId: f.baseUnit.id,
       images: [{ url: `/uploads/product-images/${f.org.id}/forbidden-photo.webp` }],
     })).rejects.toThrow("productAccessDenied");
-    await expect(
-      manager.products.inlineUpdate({ productId: f.a1.id, patch: { name: "Not mine" } }),
-    ).rejects.toThrow("productAccessDenied");
+    await manager.products.inlineUpdate({ productId: f.a1.id, patch: { name: "Shared edit" } });
+    expect((await prisma.product.findUniqueOrThrow({ where: { id: f.a1.id } })).name).toBe("Shared edit");
+    await manager.products.update({
+      productId: f.a1.id, storeId: f.b.id, sku: f.a1.sku,
+      name: "Shared complete edit", baseUnitId: f.baseUnit.id,
+      description: "Visible in both stores", barcodes: ["SHARED-EDIT-123"],
+      variants: [{ id: variant.id, name: "Edited variant", attributes: {} }],
+    });
+    expect((await f.caller.products.getById({ productId: f.a1.id }))?.name).toBe("Shared complete edit");
+    expect((await manager.products.getById({ productId: f.a1.id }))?.name).toBe("Shared complete edit");
+    expect(await prisma.productVariant.findUniqueOrThrow({ where: { id: variant.id } })).toMatchObject({ name: "Edited variant" });
+    await expect(manager.products.inlineUpdate({ productId: f.c1.id, patch: { name: "Forbidden" } })).rejects.toThrow("productAccessDenied");
+    await expect(manager.products.archive({ productId: f.a1.id })).rejects.toThrow("productAccessDenied");
     await expect(
       manager.products.bulkGenerateBarcodes({ mode: "CODE128", filter: { productIds: [f.a1.id] } }),
     ).rejects.toThrow("productAccessDenied");
@@ -303,7 +313,7 @@ suite("directional assortment policy", () => {
       filter: { storeId: f.b.id },
     });
     expect(bulk.generatedCount).toBe(1);
-    expect(await prisma.productBarcode.count({ where: { productId: f.a1.id } })).toBe(0);
+    expect(await prisma.productBarcode.count({ where: { productId: f.a1.id, value: "SHARED-EDIT-123" } })).toBe(1);
     const quickCopy = await manager.products.duplicate({
       productId: f.a1.id, idempotencyKey: "quick-local-copy",
     });
