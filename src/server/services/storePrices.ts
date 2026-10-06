@@ -3,7 +3,6 @@ import {
   saveProductPriceTypes,
   syncExistingRetailPrice,
 } from "@/server/services/productPriceTypes";
-import { resolveProductFormRetailPrice } from "@/server/services/productFormPricing";
 import { resolveStoreSellingPrice } from "@/server/services/storeSellingPrice";
 
 import { prisma } from "@/server/db/prisma";
@@ -89,22 +88,19 @@ export const upsertStorePrice = async (input: {
       });
     }
     if (input.retailPriceKgs !== undefined || input.wholesalePriceKgs !== undefined) {
-      const retailPriceKgs = input.variantId
-        ? input.retailPriceKgs
-        : await resolveProductFormRetailPrice(tx, {
-            ...input,
-            storePriceKgs: input.priceKgs,
-          });
       await saveProductPriceTypes(tx, {
         ...input,
         prices: [
           {
             variantId: input.variantId ?? undefined,
-            retailPriceKgs,
+            retailPriceKgs: input.retailPriceKgs,
             wholesalePriceKgs: input.wholesalePriceKgs,
           },
         ],
         audit: false,
+        // Older settings clients may prepare or clear overrides before enabling
+        // the feature. The full product editor has its own retail requirement.
+        allowDisabled: true,
       });
     }
     const standard = await tx.storePrice.findUnique({

@@ -107,7 +107,9 @@ describeDb("feature acceptance across money, prices, stock and exports", () => {
     await f.cashier.pos.sales.cancelDraft({ saleId: sale.id });
     await prisma.organization.update({ where: { id: f.org.id }, data: { retailWholesaleEnabled: false } });
     const disabled = await f.cashier.pos.sales.createDraft({ registerId: f.register.id, priceMode: "WHOLESALE", lines: [{ productId: f.product.id, variantId: variant.id, qty: 1 }] });
-    expect(Number((await prisma.customerOrder.findUniqueOrThrow({ where: { id: disabled.id } })).totalKgs)).toBe(1000);
+    // Retail is now the ordinary selling price, so disabling the feature must
+    // preserve the variant's last selling price rather than resurrect the base.
+    expect(Number((await prisma.customerOrder.findUniqueOrThrow({ where: { id: disabled.id } })).totalKgs)).toBe(1200);
     await expect(f.cashier.posTools.changePriceMode({ saleId: disabled.id, mode: "RETAIL" })).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
   it("requires transfer permission, preserves the sale, and posts only one OUT/IN pair on replay", async () => {

@@ -20,6 +20,7 @@ export async function saveProductPriceTypes(
     productId: string;
     prices: Array<ProductPriceTypeValues & { variantId?: string }>;
     audit?: boolean;
+    allowDisabled?: boolean;
   },
 ) {
   const prices = input.prices.filter(
@@ -32,7 +33,7 @@ export async function saveProductPriceTypes(
     where: { id: input.organizationId },
     select: { retailWholesaleEnabled: true },
   });
-  if (!organization.retailWholesaleEnabled) {
+  if (!organization.retailWholesaleEnabled && !input.allowDisabled) {
     throw new AppError("retailWholesaleDisabled", "CONFLICT", 409);
   }
   const assignment = await tx.storeProduct.findFirst({
@@ -79,7 +80,7 @@ export async function saveProductPriceTypes(
       variantKey,
     };
     // Lock/write the ordinary price before its retail alias in every writer.
-    if (price.retailPriceKgs != null) {
+    if (organization.retailWholesaleEnabled && price.retailPriceKgs != null) {
       await tx.storePrice.upsert({
         where: { organizationId_storeId_productId_variantKey: key },
         create: {
