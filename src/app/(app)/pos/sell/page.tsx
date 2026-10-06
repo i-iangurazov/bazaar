@@ -42,7 +42,6 @@ import {
   SearchIcon,
   SalesOrdersIcon,
   StoresIcon,
-  StatusWarningIcon,
   TagIcon,
   TransferIcon,
   ViewIcon,
@@ -364,14 +363,11 @@ const buildOptimisticLine = (product: PosCartProduct): PosCartLine => {
 type ProductStockMeta = {
   label: string;
   className: string;
-  showWarningIcon: boolean;
 };
 
 type PosProductButtonProps = {
   product: PosCatalogProduct;
   variant: "desktop" | "mobile";
-  enableSku: boolean;
-  enableBarcode: boolean;
   disabled: boolean;
   cartQty: number;
   addProductLabel: string;
@@ -387,8 +383,6 @@ type PosProductButtonProps = {
 const PosProductButton = memo(function PosProductButton({
   product,
   variant,
-  enableSku,
-  enableBarcode,
   disabled,
   cartQty,
   addProductLabel,
@@ -402,10 +396,6 @@ const PosProductButton = memo(function PosProductButton({
 }: PosProductButtonProps) {
   const priceKgs = product.effectivePriceKgs ?? product.basePriceKgs ?? null;
   const stockQty = product.onHandQty ?? null;
-  const barcode = product.barcodes?.[0]?.value ?? null;
-  const productIdentity = [enableSku ? product.sku : "", enableBarcode && barcode ? barcode : ""]
-    .filter(Boolean)
-    .join(" · ");
   const primaryImage = product.images?.[0]?.url ?? product.photoUrl;
   const stock = stockMeta(stockQty);
   const priceMissing = priceKgs === null;
@@ -434,11 +424,13 @@ const PosProductButton = memo(function PosProductButton({
           activateProduct();
         }
       }}
-      className={`group grid w-full cursor-pointer grid-cols-[64px_minmax(0,1fr)] items-center gap-3 rounded-md border border-border bg-card text-left shadow-sm transition hover:border-primary/50 hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-disabled:cursor-not-allowed aria-disabled:opacity-60 dark:hover:bg-accent/40 sm:grid-cols-[64px_minmax(0,1fr)_auto] ${
-        variant === "mobile" ? "min-h-20 p-2" : "min-h-[92px] p-3"
+      className={`group grid w-full cursor-pointer items-center gap-3 bg-card text-left transition hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring aria-disabled:cursor-not-allowed aria-disabled:opacity-60 dark:hover:bg-accent/40 ${
+        variant === "mobile"
+          ? "min-h-16 grid-cols-[40px_minmax(0,1fr)_auto] rounded-md border border-border p-2"
+          : "min-h-16 grid-cols-[44px_minmax(0,1fr)_96px] px-3 py-2"
       }`}
     >
-      <span className="grid h-16 w-16 place-items-center overflow-hidden rounded-md border border-border bg-muted/30">
+      <span className="grid aspect-square w-full place-items-center overflow-hidden rounded-md border border-border bg-muted/30">
         {primaryImage ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -453,85 +445,83 @@ const PosProductButton = memo(function PosProductButton({
         )}
       </span>
 
-      <div className="min-w-0 self-stretch">
-        <div className="grid min-h-full gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-          <div className="min-w-0">
-            <p className="line-clamp-3 break-words text-sm font-semibold leading-5 text-foreground">
-              {product.name}
-            </p>
-            {productIdentity ? (
-              <p className="mt-0.5 line-clamp-2 break-all text-[11px] leading-4 text-muted-foreground sm:text-xs">
-                {productIdentity}
-              </p>
-            ) : null}
-            <div className="mt-2 flex min-w-0 flex-wrap items-center gap-2">
-              <span
-                className={`inline-flex max-w-full items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-semibold ${stock.className}`}
-              >
-                {stock.showWarningIcon ? (
-                  <StatusWarningIcon className="h-3 w-3 shrink-0" aria-hidden />
-                ) : null}
-                <span className="truncate">{stock.label}</span>
-              </span>
-              <span
-                className={
-                  priceMissing
-                    ? "text-xs font-medium text-muted-foreground"
-                    : "text-sm font-bold text-foreground"
-                }
-              >
-                {priceMissing ? priceMissingLabel : formatSaleMoney(priceKgs)}
-              </span>
-            </div>
-          </div>
-
-          <div
-            className="flex shrink-0 items-center justify-end"
-            onClick={(event) => event.stopPropagation()}
+      <div
+        className={
+          variant === "desktop"
+            ? "grid min-w-0 grid-cols-[minmax(0,1fr)_64px_136px] items-center gap-3"
+            : "min-w-0"
+        }
+      >
+        <p
+          data-pos-product-name
+          className="break-words text-sm font-medium leading-5 text-foreground [overflow-wrap:anywhere]"
+        >
+          {product.name}
+        </p>
+        <div
+          className={
+            variant === "desktop" ? "contents" : "mt-1 flex flex-wrap items-center gap-x-3 gap-y-1"
+          }
+        >
+          <span
+            data-pos-product-stock
+            className={`whitespace-nowrap text-right text-xs tabular-nums ${stock.className}`}
           >
-            {cartQty > 0 ? (
-              <div className="inline-flex h-10 items-center overflow-hidden rounded-md border border-border bg-background">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-10 w-10 rounded-md text-base"
-                  onClick={() => onProductDecrement(product)}
-                  disabled={disabled || cartQty <= 0}
-                  aria-label={decreaseQtyLabel}
-                >
-                  -
-                </Button>
-                <span className="min-w-9 px-2 text-center text-sm font-semibold tabular-nums text-foreground">
-                  {cartQty}
-                </span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-10 w-10 rounded-md text-base"
-                  onClick={() => onProductClick(product)}
-                  disabled={disabled}
-                  aria-label={increaseQtyLabel}
-                >
-                  +
-                </Button>
-              </div>
-            ) : (
-              <Button
-                type="button"
-                variant="secondary"
-                className="h-10 min-w-10 shrink-0 px-3"
-                onClick={() => onProductClick(product)}
-                disabled={disabled}
-                aria-label={addProductLabel}
-              >
-                <AddIcon className="h-4 w-4" aria-hidden />
-                <span className="hidden xl:inline">{addProductLabel}</span>
-              </Button>
-            )}
-          </div>
+            {stock.label}
+          </span>
+          <span
+            data-pos-product-price
+            className={`text-right text-sm tabular-nums ${priceMissing ? "font-medium text-muted-foreground" : "whitespace-nowrap font-semibold text-foreground"}`}
+          >
+            {priceMissing ? priceMissingLabel : formatSaleMoney(priceKgs)}
+          </span>
         </div>
+      </div>
+
+      <div
+        className="flex shrink-0 items-center justify-end"
+        onClick={(event) => event.stopPropagation()}
+      >
+        {cartQty > 0 ? (
+          <div className="inline-flex h-9 items-center overflow-hidden rounded-md border border-border bg-background">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-9 w-8 rounded-md text-base"
+              onClick={() => onProductDecrement(product)}
+              disabled={disabled || cartQty <= 0}
+              aria-label={decreaseQtyLabel}
+            >
+              -
+            </Button>
+            <span className="min-w-7 px-1 text-center text-sm font-semibold tabular-nums text-foreground">
+              {cartQty}
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-9 w-8 rounded-md text-base"
+              onClick={() => onProductClick(product)}
+              disabled={disabled}
+              aria-label={increaseQtyLabel}
+            >
+              +
+            </Button>
+          </div>
+        ) : (
+          <Button
+            type="button"
+            variant="secondary"
+            className="h-10 w-10 shrink-0 px-0"
+            onClick={() => onProductClick(product)}
+            disabled={disabled}
+            aria-label={addProductLabel}
+          >
+            <AddIcon className="h-4 w-4" aria-hidden />
+          </Button>
+        )}
       </div>
     </div>
   );
@@ -722,7 +712,6 @@ const PosSellPage = () => {
   });
   const selectedRegister = (registersQuery.data ?? []).find((item) => item.id === registerId);
   const enableSku = selectedRegister?.store.enableSku ?? true;
-  const enableBarcode = selectedRegister?.store.enableBarcode ?? true;
 
   useEffect(() => {
     if (!registerSelectionIssue) {
@@ -1547,6 +1536,9 @@ const PosSellPage = () => {
   }, [mobilePendingLineInputMode, mobilePendingProductId, optimisticSaleLines, sale?.lines]);
 
   useEffect(() => {
+    if (completedSaleEditIdRef.current) {
+      return;
+    }
     if (!activeDraft?.id || saleId || lastCompletedSale || completeMutation.isLoading) {
       return;
     }
@@ -1706,7 +1698,7 @@ const PosSellPage = () => {
   }, [clearCartRuntimeSyncState, registerId, setOptimisticSaleLines, setPayments]);
 
   useEffect(() => {
-    if (!saleId) {
+    if (!saleId || completedSaleEditIdRef.current) {
       return;
     }
     if (!saleQuery.isFetched || saleQuery.isLoading || saleQuery.isFetching) {
@@ -1736,6 +1728,11 @@ const PosSellPage = () => {
   ]);
 
   useEffect(() => {
+    // The edit query shares the receipt cache with saleQuery. A completed
+    // receipt loaded for correction must remain in the editable cart.
+    if (completedSaleEditIdRef.current) {
+      return;
+    }
     if (!sale?.id || sale.status === CustomerOrderStatus.DRAFT) {
       return;
     }
@@ -3996,42 +3993,14 @@ const PosSellPage = () => {
     (category) => !isDemoCategory(category),
   );
   const stockMeta = useCallback(
-    (stockQty: number | null): ProductStockMeta => {
-      if (stockQty === null) {
-        return {
-          label: tCommon("notAvailable"),
-          className: "border-foreground bg-foreground text-background",
-          showWarningIcon: false,
-        };
-      }
-      if (stockQty < 0) {
-        const absoluteQty = formatNumber(Math.abs(stockQty), locale);
-        return {
-          label: `−${absoluteQty} ${t("sell.stockUnitShort")}`,
-          className: "border-danger bg-danger text-danger-foreground",
-          showWarningIcon: true,
-        };
-      }
-      if (stockQty === 0) {
-        return {
-          label: t("sell.outOfStock"),
-          className: "border-danger bg-danger text-danger-foreground",
-          showWarningIcon: false,
-        };
-      }
-      if (stockQty <= 5) {
-        return {
-          label: `${formatNumber(stockQty, locale)} ${t("sell.stockUnitShort")}`,
-          className: "border-warning bg-warning text-warning-foreground",
-          showWarningIcon: false,
-        };
-      }
-      return {
-        label: `${formatNumber(stockQty, locale)} ${t("sell.stockUnitShort")}`,
-        className: "border-success bg-success text-success-foreground",
-        showWarningIcon: false,
-      };
-    },
+    (stockQty: number | null): ProductStockMeta => ({
+      label: stockQty === null
+        ? tCommon("notAvailable")
+        : `${formatNumber(stockQty, locale)} ${t("sell.stockUnitShort")}`,
+      className: stockQty !== null && stockQty <= 0
+        ? "text-danger"
+        : "text-muted-foreground",
+    }),
     [locale, t, tCommon],
   );
   const handleProductClick = useCallback(
@@ -5496,14 +5465,12 @@ const PosSellPage = () => {
               ) : null}
 
               {visibleProducts.length ? (
-                <div className="space-y-2">
+                <div className="divide-y divide-border overflow-hidden rounded-md border border-border bg-card">
                   {visibleProducts.map((product) => (
                     <PosProductButton
                       key={product.id}
                       product={product}
                       variant="desktop"
-                      enableSku={enableSku}
-                      enableBarcode={enableBarcode}
                       disabled={cancelDraftMutation.isLoading || completeMutation.isLoading}
                       cartQty={cartQtyByProductId.get(product.id) ?? 0}
                       addProductLabel={t("sell.addProduct")}
@@ -7447,12 +7414,7 @@ const PosSellPage = () => {
                 {visibleProducts.map((product) => {
                   const priceKgs = product.effectivePriceKgs ?? product.basePriceKgs ?? null;
                   const primaryImage = product.images?.[0]?.url ?? product.photoUrl;
-                  const productIdentifier = [
-                    enableSku ? product.sku?.trim() : null,
-                    enableBarcode ? product.barcodes?.[0]?.value?.trim() : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ");
+                  const stock = stockMeta(product.onHandQty ?? null);
                   const isPendingProduct = mobilePendingProductId === product.id;
                   return (
                     <button
@@ -7460,7 +7422,7 @@ const PosSellPage = () => {
                       type="button"
                       data-testid="pos-product-button"
                       data-product-id={product.id}
-                      className="grid min-h-[64px] w-full grid-cols-[48px_minmax(0,1fr)_34px] items-center gap-2.5 px-3 py-2 text-left"
+                      className="grid min-h-[64px] w-full grid-cols-[40px_minmax(0,1fr)_112px] items-center gap-2.5 px-3 py-2 text-left"
                       onClick={() => handleMobileProductSelect(product)}
                       disabled={
                         !hasOpenShift ||
@@ -7481,25 +7443,18 @@ const PosSellPage = () => {
                           <EmptyIcon className="h-5 w-5" aria-hidden />
                         )}
                       </span>
-                      <span className="min-w-0">
-                        <span className="line-clamp-2 text-[14px] font-semibold leading-tight text-foreground">
-                          {product.name}
+                      <span data-pos-product-name className="min-w-0 break-words text-[14px] font-medium leading-5 text-foreground [overflow-wrap:anywhere]">
+                        {product.name}
+                      </span>
+                      <span className="flex min-w-0 flex-col items-end gap-1 text-right tabular-nums">
+                        <span data-pos-product-stock className={`text-xs ${stock.className}`}>
+                          {stock.label}
                         </span>
-                        {productIdentifier ? (
-                          <span className="mt-0.5 block truncate text-[11px] leading-tight text-muted-foreground">
-                            {productIdentifier}
-                          </span>
-                        ) : null}
-                        <span className="mt-0.5 block text-[12px] font-semibold leading-none text-secondary-foreground">
+                        <span data-pos-product-price className="text-[12px] font-semibold text-foreground">
                           {priceKgs === null
-                            ? t("sell.mobile.freePriceProduct")
+                            ? t("sell.priceMissing")
                             : formatSaleMoney(priceKgs)}
                         </span>
-                      </span>
-                      <span className="text-right text-[13px] font-semibold text-secondary-foreground">
-                        {product.onHandQty === null || product.onHandQty === undefined
-                          ? "0"
-                          : formatNumber(product.onHandQty, locale)}
                       </span>
                     </button>
                   );
@@ -8093,8 +8048,6 @@ const PosSellPage = () => {
                     key={product.id}
                     product={product}
                     variant="mobile"
-                    enableSku={enableSku}
-                    enableBarcode={enableBarcode}
                     disabled={
                       !hasOpenShift || cancelDraftMutation.isLoading || completeMutation.isLoading
                     }

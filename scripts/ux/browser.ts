@@ -5,6 +5,7 @@ import { chromium, type BrowserContext, type Page, type Locator } from "playwrig
 import { verifyProductTable } from "./product-table-check";
 import { verifyProductEditor } from "./product-editor-check";
 import { verifyPosPaymentChoices } from "./pos-payment-check";
+import { verifyPosReceiptEditing } from "./pos-receipt-edit-check";
 const base = process.env.UX_HTTPS === "1" ? "https://localhost:3122" : "http://localhost:3122";
 const f = JSON.parse(await readFile("artifacts/ux/fixture.json", "utf8"));
 const directory = "artifacts/ux/flows";
@@ -525,6 +526,13 @@ try {
   record(
     "POS offers cash/cashless only and completes a cashless sale through the normal stock ledger",
   );
+  const completedReceipts = await api(admin, "pos.sales.list", {
+    registerId: register.id, statuses: ["COMPLETED"], page: 1, pageSize: 1,
+  });
+  const completedReceiptId = completedReceipts.items[0].id;
+  await verifyPosReceiptEditing(dashboard, base, register.id,
+    () => api(admin, "pos.sales.get", { saleId: completedReceiptId }));
+  record("History and journal open the same receipt correction; reload, saved prices/payments and mobile entry work");
   for (const [role, context] of [
     ["admin", admin],
     ["manager", manager],

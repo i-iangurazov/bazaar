@@ -457,9 +457,10 @@ describe("pos entry navigation", () => {
     );
 
     expect(mobileCatalogBlock).toContain("{product.name}");
-    expect(mobileCatalogBlock).toContain("product.sku?.trim()");
-    expect(mobileCatalogBlock).toContain("product.barcodes?.[0]?.value?.trim()");
-    expect(mobileCatalogBlock).toContain('t("sell.mobile.freePriceProduct")');
+    expect(mobileCatalogBlock).toContain("data-pos-product-name");
+    expect(mobileCatalogBlock).toContain("data-pos-product-stock");
+    expect(mobileCatalogBlock).toContain("data-pos-product-price");
+    expect(mobileCatalogBlock).toContain('t("sell.priceMissing")');
     expect(mobileCatalogBlock).not.toContain(
       'const productName = priceKgs === null ? t("sell.mobile.freePriceProduct") : product.name;',
     );
@@ -476,11 +477,11 @@ describe("pos entry navigation", () => {
   it("renders cashier products as readable rows with in-cart quantity controls", async () => {
     const pageSource = await readSource("src/app/(app)/pos/sell/page.tsx");
 
-    expect(pageSource).toContain("line-clamp-3 break-words");
+    expect(pageSource).toContain("data-pos-product-name");
     expect(pageSource).toContain("cartQtyByProductId");
     expect(pageSource).toContain("onProductDecrement");
     expect(pageSource).toContain('addProductLabel={t("sell.addProduct")}');
-    expect(pageSource).toContain('<div className="space-y-2">');
+    expect(pageSource).toContain("divide-y divide-border overflow-hidden rounded-md border");
     expect(pageSource).not.toContain(
       "grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 xl:grid-cols-4 2xl:grid-cols-5",
     );
