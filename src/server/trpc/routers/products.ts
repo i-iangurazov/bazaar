@@ -535,7 +535,10 @@ export const productsRouter = router({
   archive: managerProcedure
     .input(archiveProductInputSchema)
     .mutation(async ({ ctx, input }) => {
-      await assertSingleProductAccess(ctx.prisma, ctx.user, input.productId, { writable: true });
+      await assertSingleProductAccess(ctx.prisma, ctx.user, input.productId, {
+        writable: true,
+        allowShared: true,
+      });
       return archiveProductMutation({
         organizationId: ctx.user.organizationId,
         actorId: ctx.user.id,
@@ -550,6 +553,7 @@ export const productsRouter = router({
       await assertSingleProductAccess(ctx.prisma, ctx.user, input.productId, {
         includeArchived: true,
         writable: true,
+        allowShared: true,
       });
       return restoreProductMutation({
         organizationId: ctx.user.organizationId,

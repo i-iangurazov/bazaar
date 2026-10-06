@@ -49,7 +49,7 @@ export const assertUserCanAccessProducts = async (
       ...(options?.includeArchived ? {} : { isDeleted: false }),
       ...(accessibleStoreIds === null
         ? {}
-        // Card edits may use received assortment grants. Ownership operations
+        // Shared card mutations may use received assortment grants. Ownership operations
         // retain the direct/historical assignment requirement.
         : options?.writable && !options.allowShared
           ? {

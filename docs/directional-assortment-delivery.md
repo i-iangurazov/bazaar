@@ -84,8 +84,11 @@ Administrators and managers can edit a received product card through an active
 assignment in an accessible store. Name, description, images, categories, barcodes
 and variants belong to the shared identity and change for every receiving store.
 Prices and inventory remain store-specific; receiving a card does not grant access
-to the source store or its documents. Archive and bulk ownership operations retain
-their ownership checks. Assistant mutations use the same router/services.
+to the source store or its documents. Archive and restore use the same active
+assignment permission as card edits, including bulk archive/restore. They change
+the shared identity's archive state in every store and retain stock, prices and
+history. Bulk ownership operations retain their ownership checks. Assistant
+mutations use the same router/services.
 
 ### POS
 

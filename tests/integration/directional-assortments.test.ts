@@ -6,6 +6,7 @@ import { createProduct, importProducts } from "@/server/services/products";
 import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 import { createTestCaller } from "../helpers/context";
 import type { AssortmentChange } from "@/server/services/storeAssortments";
+import { updateSelectedProductArchiveState } from "@/lib/productBulkActions";
 
 const suite = shouldRunDbTests ? describe : describe.skip;
 suite("directional assortment policy", () => {
@@ -304,7 +305,7 @@ suite("directional assortment policy", () => {
     expect((await manager.products.getById({ productId: f.a1.id }))?.name).toBe("Shared complete edit");
     expect(await prisma.productVariant.findUniqueOrThrow({ where: { id: variant.id } })).toMatchObject({ name: "Edited variant" });
     await expect(manager.products.inlineUpdate({ productId: f.c1.id, patch: { name: "Forbidden" } })).rejects.toThrow("productAccessDenied");
-    await expect(manager.products.archive({ productId: f.a1.id })).rejects.toThrow("productAccessDenied");
+    await expect(manager.products.archive({ productId: f.c1.id })).rejects.toThrow("productAccessDenied");
     await expect(
       manager.products.bulkGenerateBarcodes({ mode: "CODE128", filter: { productIds: [f.a1.id] } }),
     ).rejects.toThrow("productAccessDenied");
@@ -329,6 +330,78 @@ suite("directional assortment policy", () => {
     expect(await f.visible(f.b.id)).toContain(copy.productId);
     expect(await f.visible(f.a.id)).not.toContain(copy.productId);
     expect(await f.visible(f.c.id)).not.toContain(copy.productId);
+  });
+
+  it("archives and restores shared cards individually and in bulk without changing stock or prices", async () => {
+    const f = await fixture();
+    await f.apply(f.share(f.a.id, [f.b.id]));
+    await prisma.userStoreAccess.updateMany({
+      where: { userId: f.managerUser.id }, data: { storeId: f.b.id },
+    });
+    const manager = createTestCaller({ ...f.managerUser, organizationId: f.org.id });
+    const snapshot = async () => ({
+      assignments: await prisma.storeProduct.findMany({ orderBy: { id: "asc" } }),
+      inventory: await prisma.inventorySnapshot.findMany({ orderBy: { id: "asc" } }),
+      prices: await prisma.storePrice.findMany({ orderBy: { id: "asc" } }),
+      movements: await prisma.stockMovement.findMany({ orderBy: { id: "asc" } }),
+    });
+    const before = await snapshot();
+    await manager.products.archive({ productId: f.a1.id });
+    for (const storeId of [f.a.id, f.b.id]) {
+      expect((await f.caller.products.list({ storeId })).items.map(p => p.id)).not.toContain(f.a1.id);
+      expect((await f.caller.products.list({ storeId, includeArchived: true })).items)
+        .toEqual(expect.arrayContaining([expect.objectContaining({ id: f.a1.id, isDeleted: true })]));
+    }
+    await manager.products.restore({ productId: f.a1.id });
+    const bulk = async (archived: boolean) => updateSelectedProductArchiveState({
+      selectedIds: [f.a1.id, f.a2.id, f.b1.id], archived,
+      loadProducts: ids => manager.products.byIds({ ids }),
+      updateProduct: productId => archived
+        ? manager.products.archive({ productId })
+        : manager.products.restore({ productId }),
+    });
+    for (const archived of [true, false]) {
+      const result = await bulk(archived);
+      expect(result.failedIds).toEqual([]);
+      expect(result.succeededIds.sort()).toEqual([f.a1.id, f.a2.id, f.b1.id].sort());
+      expect(await prisma.product.count({
+        where: { id: { in: result.succeededIds }, isDeleted: archived },
+      })).toBe(3);
+    }
+    expect(await snapshot()).toEqual(before);
+    expect(await prisma.auditLog.count({
+      where: { actorId: f.managerUser.id, action: { in: ["PRODUCT_ARCHIVE", "PRODUCT_RESTORE"] } },
+    })).toBe(8);
+    expect(await prisma.userStoreAccess.count({
+      where: { userId: f.managerUser.id, storeId: f.a.id },
+    })).toBe(0);
+  });
+
+  it("denies archive and restore after a received assignment or store access is revoked", async () => {
+    const f = await fixture();
+    await f.apply(f.share(f.a.id, [f.b.id]));
+    await prisma.userStoreAccess.updateMany({
+      where: { userId: f.managerUser.id }, data: { storeId: f.b.id },
+    });
+    const manager = createTestCaller({ ...f.managerUser, organizationId: f.org.id });
+    const cashier = createTestCaller({ ...f.cashierUser, organizationId: f.org.id });
+    await expect(cashier.products.archive({ productId: f.a1.id })).rejects.toThrow();
+    await manager.products.archive({ productId: f.a1.id });
+    await expect(cashier.products.restore({ productId: f.a1.id })).rejects.toThrow();
+    await prisma.storeProduct.update({
+      where: { storeId_productId: { storeId: f.b.id, productId: f.a1.id } },
+      data: { isActive: false },
+    });
+    await expect(manager.products.restore({ productId: f.a1.id })).rejects.toThrow("productAccessDenied");
+    await prisma.storeProduct.update({
+      where: { storeId_productId: { storeId: f.b.id, productId: f.a1.id } },
+      data: { isActive: true },
+    });
+    await manager.products.restore({ productId: f.a1.id });
+    await prisma.userStoreAccess.deleteMany({ where: { userId: f.managerUser.id } });
+    await expect(manager.products.archive({ productId: f.a1.id })).rejects.toThrow("productAccessDenied");
+    await f.caller.products.archive({ productId: f.a1.id });
+    await expect(manager.products.restore({ productId: f.a1.id })).rejects.toThrow("productAccessDenied");
   });
 
   it("previews barcode collisions without merging identities and makes reverse sharing explicit", async () => {
