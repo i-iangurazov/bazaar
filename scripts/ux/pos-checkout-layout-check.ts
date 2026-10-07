@@ -8,6 +8,8 @@ export async function verifyPosCheckoutLayout(page: Page, directory: string) {
     name: "Поиск по названию, SKU или штрихкоду",
     exact: true,
   });
+  // Selecting a search suggestion clears the query after adding its product.
+  await search.fill("Проверка очистки поиска");
   await search.click();
   assert.ok(
     await search.evaluate(

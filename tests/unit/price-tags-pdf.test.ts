@@ -22,6 +22,28 @@ const readMediaBox = (pdf: Buffer) => {
 };
 
 describe("price tags pdf", () => {
+  it("reserves the actual Cyrillic font line height before drawing the barcode", async () => {
+    const positions: Array<{ y: number; height: number }> = [];
+    const originalText = PDFDocument.prototype.text;
+    const text = vi.spyOn(PDFDocument.prototype, "text").mockImplementation(function (this: PDFKit.PDFDocument, ...args: Parameters<typeof originalText>) {
+      positions.push({ y: Number(args[2]), height: this.currentLineHeight(false) });
+      return originalText.apply(this, args);
+    });
+    const image = vi.spyOn(PDFDocument.prototype, "image");
+    try {
+      const styles = resolveLabelTextStyles(null, 8);
+      styles.name.overflow = "wrap";
+      await buildPriceTagsPdf({
+        labels: [{ name: "Шпатель зубчатый 250 мм для профессиональной укладки плитки", sku: "", barcode: "5901234123457", price: null }],
+        template: ROLL_PRICE_TAG_TEMPLATE, locale: "ru", storeName: null,
+        noPriceLabel: "", noBarcodeLabel: "", skuLabel: "SKU", labelTextStyles: styles,
+        showBarcodeText: false,
+      });
+      expect(positions).toHaveLength(2);
+      expect(Number(image.mock.calls[0]![2])).toBeGreaterThanOrEqual(positions[1]!.y + positions[1]!.height);
+    } finally { text.mockRestore(); image.mockRestore(); }
+  });
+
   it.each(["name", "barcode", "barcodeText", "price"] as const)("applies the independent gap after %s in physical millimetres", async (field) => {
     const drawText = vi.spyOn(PDFDocument.prototype, "text");
     const drawImage = vi.spyOn(PDFDocument.prototype, "image");
@@ -68,9 +90,10 @@ describe("price tags pdf", () => {
     } finally { text.mockRestore(); }
   });
 
-  it("rejects a monetary row that cannot fit instead of wrapping its currency", async () => {
+  it("rejects a monetary row when its configured minimum size cannot fit", async () => {
     const styles = resolveLabelTextStyles(null, 8);
     styles.price.fontSize = 48;
+    styles.price.minFontSize = 48;
     styles.price.overflow = "wrap";
     styles.currency.overflow = "wrap";
     await expect(buildPriceTagsPdf({
@@ -80,6 +103,49 @@ describe("price tags pdf", () => {
       rollCalibration: { widthMm: 40, heightMm: 30, gapMm: 3.5, xOffsetMm: 0, yOffsetMm: 0 },
       labelTextStyles: styles,
     })).rejects.toMatchObject({ message: "labelLayoutOverflow" });
+  });
+
+  it("fits a complete large monetary value without wrapping or truncating its currency", async () => {
+    const styles = resolveLabelTextStyles(null, 8);
+    styles.price.fontSize = 48;
+    const warnings: string[] = [];
+    const text = vi.spyOn(PDFDocument.prototype, "text");
+    try {
+      const pdf = await buildPriceTagsPdf({
+        labels: [{ name: "", sku: "", barcode: "", price: 123456789 }],
+        template: ROLL_PRICE_TAG_TEMPLATE, locale: "ru", storeName: null,
+        noPriceLabel: "Без цены", noBarcodeLabel: "", skuLabel: "SKU",
+        rollCalibration: { widthMm: 40, heightMm: 30, gapMm: 3.5, xOffsetMm: 0, yOffsetMm: 0 },
+        labelTextStyles: styles, layoutWarnings: warnings,
+      });
+      expect(warnings).toEqual([]);
+      const amount = text.mock.calls.slice().reverse().find(call => call[0] === "123 456 789");
+      const currency = text.mock.calls.slice().reverse().find(call => call[0] === "KGS");
+      expect(amount).toBeDefined();
+      expect(currency![2]).toBe(amount![2]);
+      expect(readMediaBox(pdf).height).toBeCloseTo(mmToPoints(30), 1);
+    } finally { text.mockRestore(); }
+  });
+
+  it("automatically fits a dense saved profile on a 58x30 label without changing settings", async () => {
+    const styles = resolveLabelTextStyles(null, 14);
+    styles.name.overflow = "wrap";
+    styles.spacing.name = 2;
+    styles.spacing.barcode = 2;
+    styles.spacing.price = 2;
+    const original = structuredClone(styles);
+    const warnings: string[] = [];
+    const pdf = await buildPriceTagsPdf({
+      labels: [{ name: "Шпатель зубчатый 250 мм для профессиональной укладки плитки", sku: "SKU-007772", barcode: "5901234123457", price: 400 }],
+      template: ROLL_PRICE_TAG_TEMPLATE, locale: "ru", storeName: "Курулуш Гранд",
+      noPriceLabel: "Без цены", noBarcodeLabel: "Нет штрихкода", skuLabel: "SKU",
+      rollCalibration: { widthMm: 58, heightMm: 30, gapMm: 3.5, xOffsetMm: 0, yOffsetMm: 0 },
+      barcodeHeightMm: 12, labelTextStyles: styles, layoutWarnings: warnings,
+    });
+    expect(warnings).toEqual([]);
+    expect(styles).toEqual(original);
+    expect(readMediaBox(pdf).height).toBeCloseTo(mmToPoints(30), 1);
+    expect(pdf.length).toBeGreaterThan(500);
   });
 
   it("formats label prices with non-KGS store currency", () => {

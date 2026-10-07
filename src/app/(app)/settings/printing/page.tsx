@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { PrinterPrintMode } from "@prisma/client";
 import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
 
-import { LabelTextEditor, LabelPdfPreview } from "@/components/products/label-text-editor";
+import { LabelAutoFitButton, LabelTextEditor, LabelPdfPreview } from "@/components/products/label-text-editor";
 import { resolveLabelTextStyles, type LabelTextStyles } from "@/lib/labelTextStyles";
 import { fetchLabelPreview, type LabelPreviewInput } from "@/lib/labelPreview";
 import { PageHeader } from "@/components/page-header";
@@ -1127,15 +1127,18 @@ const PrintingSettingsPage = () => {
                   ["labelBarcodeHeightMm", "barcodeHeight"],
                   ["labelDefaultCopies", "labelDefaultCopies"],
                 ] as const).map(([key, label]) => (
-                  <div key={key} className="space-y-1.5">
+                  <Fragment key={key}><div className="space-y-1.5">
                     <label className="text-xs font-medium text-foreground">{t(label)}</label>
                     <Input
                       type="number"
+                      aria-label={t(label)}
                       value={values[key]}
                       onChange={(event) => updateValue(key, Number(event.target.value))}
                       disabled={!canEdit}
                     />
-                  </div>
+                  </div>{key === "labelHeightMm" ? <div className="col-span-2">
+                    <LabelAutoFitButton input={labelPreviewInput} disabled={!canEdit || settingsQuery.isFetching} onFit={(fitted) => setValues(current => ({ ...current, labelTextStyles: fitted.labelTextStyles, labelBarcodeHeightMm: fitted.barcodeHeightMm }))} />
+                  </div> : null}</Fragment>
                 ))}
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -1895,16 +1898,19 @@ const PrintingSettingsPage = () => {
                     ["labelRollYOffsetMm", "labelRollYOffsetMm", PRICE_TAG_ROLL_LIMITS.offsetMm.step],
                     ["labelDefaultCopies", "labelDefaultCopies", 1],
                   ] as const).map(([key, label, step]) => (
-                    <div key={key} className="space-y-2">
+                    <Fragment key={key}><div className="space-y-2">
                       <label className="text-sm font-medium text-foreground">{t(label)}</label>
                       <Input
                         type="number"
                         step={step}
+                        aria-label={t(label)}
                         value={values[key]}
                         onChange={(event) => updateValue(key, Number(event.target.value))}
                         disabled={!canEdit}
                       />
-                    </div>
+                    </div>{key === "labelHeightMm" ? <div className="flex items-end md:col-span-2">
+                      <LabelAutoFitButton input={labelPreviewInput} disabled={!canEdit || settingsQuery.isFetching} onFit={(fitted) => setValues(current => ({ ...current, labelTextStyles: fitted.labelTextStyles, labelBarcodeHeightMm: fitted.barcodeHeightMm }))} />
+                    </div> : null}</Fragment>
                   ))}
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">

@@ -20,7 +20,7 @@ import {
   mmToPoints,
 } from "@/server/services/priceTagsLayout";
 
-import { resolveLabelTextStyles, type LabelMargins, type LabelTextField } from "@/lib/labelTextStyles";
+import { LABEL_TEXT_FIELDS, resolveLabelTextStyles, type LabelMargins, type LabelTextField } from "@/lib/labelTextStyles";
 import { AppError } from "@/server/services/errors";
 
 const PRINT_BLACK = "#000000";
@@ -122,7 +122,7 @@ const resolveBarcodeSpec = (value: string, barcodeType: "auto" | "ean13" | "code
   return resolveBarcodeRenderSpec(text);
 };
 
-export const buildPriceTagsPdf = async (input: PriceTagsPdfInput) => {
+const renderPriceTagsPdf = async (input: PriceTagsPdfInput, cache: Map<string, Buffer>) => {
   const { labels, template, locale, currencyCode, currencyRateKgsPerUnit, storeName,
     noPriceLabel, noBarcodeLabel, skuLabel, barcodeType = "auto" } = input;
   const isRoll = template === ROLL_PRICE_TAG_TEMPLATE;
@@ -131,7 +131,7 @@ export const buildPriceTagsPdf = async (input: PriceTagsPdfInput) => {
     width: calibration.widthMm ?? 58, height: calibration.heightMm ?? 40,
   } : undefined });
   const styles = resolveLabelTextStyles(input.labelTextStyles, input.labelFontSize);
-  const warnings = input.layoutWarnings ?? [];
+  const warnings: string[] = [];
   const doc = new PDFDocument({ size: [layout.pageWidth, layout.pageHeight], margin: 0 });
   const fontPath = join(process.cwd(), "assets", "fonts", "NotoSans-Regular.ttf");
   const fallbackPath = join(process.cwd(), "assets", "fonts", "ArialUnicode.ttf");
@@ -139,7 +139,6 @@ export const buildPriceTagsPdf = async (input: PriceTagsPdfInput) => {
   const chunks: Buffer[] = [];
   doc.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
   const ended = new Promise<void>((resolve, reject) => { doc.on("end", resolve); doc.on("error", reject); });
-  const cache = new Map<string, Buffer>();
   const margins = { top: input.labelMargins?.top ?? 0, right: input.labelMargins?.right ?? 0, bottom: input.labelMargins?.bottom ?? 0, left: input.labelMargins?.left ?? 0 };
   const order: Array<"name" | "price" | "barcode"> = input.labelLayoutOrder === "PRICE_NAME_BARCODE"
     ? ["price", "name", "barcode"] : input.labelLayoutOrder === "BARCODE_ONLY" ? ["barcode"]
@@ -161,7 +160,7 @@ export const buildPriceTagsPdf = async (input: PriceTagsPdfInput) => {
     let cursor = y + layout.padding + mmToPoints(margins.top);
     const warn = (field: string) => warnings.push(`${index + 1}:${field}`);
     if (width <= 0 || cursor >= bottom || x < 0 || y < 0 || x + layout.labelWidth > layout.pageWidth + 0.1 || y + layout.labelHeight > layout.pageHeight + 0.1) warn("margins");
-    // Clip only the diagnostic preview. Printing is rejected below if a block overflows.
+    // Never draw outside the physical label, including diagnostic previews.
     doc.save().rect(Math.max(0, x), Math.max(0, y), layout.labelWidth, layout.labelHeight).clip();
     const text = (field: LabelTextField, value: string) => {
       if (!visibility[field] || !value) return;
@@ -198,7 +197,7 @@ export const buildPriceTagsPdf = async (input: PriceTagsPdfInput) => {
         }
         lines = [line];
       } else if (lines.length > style.maxLines || lines.some((line) => doc.widthOfString(line) > blockWidth + 0.1)) warn(field);
-      const lineHeight = size * 1.2;
+      const lineHeight = doc.fontSize(size).currentLineHeight(false);
       const height = Math.min(lines.length, style.maxLines) * lineHeight + 2 * padding;
       if (cursor + height > bottom + 0.1) warn(field);
       doc.fontSize(size).fillColor(PRINT_BLACK).strokeColor(PRINT_BLACK).lineWidth(size / 55);
@@ -292,6 +291,44 @@ export const buildPriceTagsPdf = async (input: PriceTagsPdfInput) => {
     doc.restore();
   }
   doc.end(); await ended;
-  if (warnings.length && !input.allowOverflowPreview) throw new AppError("labelLayoutOverflow", "BAD_REQUEST", 400);
-  return Buffer.concat(chunks);
+  return { pdf: Buffer.concat(chunks), warnings };
 };
+
+/** Fit an overflowing saved profile at print time without changing store settings. */
+export const fitPriceTagsPdf = async (input: PriceTagsPdfInput) => {
+  const cache = new Map<string, Buffer>();
+  let result = await renderPriceTagsPdf(input, cache);
+  const styles = resolveLabelTextStyles(input.labelTextStyles, input.labelFontSize);
+  let labelTextStyles = styles;
+  let barcodeHeightMm = input.barcodeHeightMm ?? 12;
+  // Bounded retries share barcode images. Fonts respect each field's readable
+  // minimum; barcode rendering still enforces its minimum module width.
+  for (const ratio of [0.85, 0.7, 0.55, 0.45, 0]) {
+    if (!result.warnings.length || result.warnings.some((warning) => warning.endsWith(":margins"))) break;
+    const fitted = structuredClone(styles);
+    for (const field of LABEL_TEXT_FIELDS) {
+      const style = fitted[field];
+      style.fontSize = Math.max(style.minFontSize, Math.round(style.fontSize * ratio * 4) / 4);
+      // Monetary values stay complete and on one line even with legacy wrap settings.
+      if (field === "price" || field === "currency") style.overflow = "shrink";
+    }
+    for (const field of Object.keys(fitted.spacing) as Array<keyof typeof fitted.spacing>) {
+      fitted.spacing[field] = Math.round(Math.min(fitted.spacing[field], 0.2) * ratio * 1000) / 1000;
+    }
+    labelTextStyles = fitted;
+    barcodeHeightMm = Math.max(6, Math.round((input.barcodeHeightMm ?? 12) * ratio * 10) / 10);
+    result = await renderPriceTagsPdf({
+      ...input,
+      labelTextStyles: fitted,
+      barcodeHeightMm,
+    }, cache);
+  }
+  input.layoutWarnings?.push(...result.warnings);
+  if (result.warnings.length && !input.allowOverflowPreview) {
+    throw new AppError("labelLayoutOverflow", "BAD_REQUEST", 400);
+  }
+  return { pdf: result.pdf, labelTextStyles, barcodeHeightMm };
+};
+
+export const buildPriceTagsPdf = async (input: PriceTagsPdfInput) =>
+  (await fitPriceTagsPdf(input)).pdf;

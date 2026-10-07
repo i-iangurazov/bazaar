@@ -762,6 +762,9 @@
     "baam": "BAAM"
   },
   "printingSettings": {
+    "autoFit": "Fit to label size",
+    "autoFitting": "Fitting…",
+    "autoFitSuccess": "Layout fitted. Save your settings.",
     "title": "Print settings",
     "subtitle": "Receipts, labels, local print agent, and POS auto-print for each store.",
     "wizardTitle": "Printing wizard",
