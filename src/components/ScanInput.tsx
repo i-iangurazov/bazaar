@@ -670,13 +670,13 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
           </span>
         ) : null}
 
-        <div className="absolute right-1 top-1/2 flex -translate-y-1/2 items-center">
+        <div className="absolute inset-y-1 right-1 flex items-center">
           {showClearButton ? (
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="h-11 w-11"
+              className="aspect-square h-full w-auto rounded-sm focus-visible:ring-inset focus-visible:ring-offset-0"
               aria-label={tCommon("clearSearch")}
               disabled={Boolean(disabled || submitting || !currentValue)}
               onMouseDown={(event) => event.preventDefault()}
@@ -691,7 +691,7 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
           ) : null}
           <CameraScanButton
             iconOnly
-            className={showClearButton ? "h-11 w-11" : "h-8 w-8"}
+            className="aspect-square h-full w-auto rounded-sm focus-visible:ring-inset focus-visible:ring-offset-0"
             disabled={Boolean(disabled || submitting)}
             onScan={async (scannedValue) => {
               updateValue(scannedValue);

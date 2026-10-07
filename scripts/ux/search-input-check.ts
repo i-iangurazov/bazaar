@@ -89,6 +89,15 @@ export async function verifySearchInputs(
   await page.goto(`${base}/products?storeId=${fixture.storeId}`);
   const header = page.locator("input[data-tour=scan-input]").filter({ visible: true });
   await header.fill(productName);
+  const actionButtons = header.locator("..").locator("button");
+  for (const button of await actionButtons.all()) {
+    await button.hover();
+    const field = await header.boundingBox(), action = await button.boundingBox();
+    assert(field && action && action.x >= field.x && action.y >= field.y &&
+      action.x + action.width <= field.x + field.width &&
+      action.y + action.height <= field.y + field.height,
+    "Scanner and clear hover areas must stay inside the search field");
+  }
   const list = page.getByRole("listbox").filter({ hasText: productName });
   await expect(list).toBeVisible();
   const triggerBox = await header.boundingBox(),
