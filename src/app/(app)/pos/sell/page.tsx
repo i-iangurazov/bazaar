@@ -488,7 +488,7 @@ const PosProductButton = memo(function PosProductButton({
               type="button"
               variant="ghost"
               size="icon"
-              className="h-11 w-11 rounded-md text-lg font-bold leading-none text-foreground"
+              className="h-11 w-11 rounded-md text-base font-semibold leading-none text-foreground"
               onClick={() => onProductDecrement(product)}
               disabled={disabled || cartQty <= 0}
               aria-label={decreaseQtyLabel}
@@ -502,7 +502,7 @@ const PosProductButton = memo(function PosProductButton({
               type="button"
               variant="ghost"
               size="icon"
-              className="h-11 w-11 rounded-md text-lg font-bold leading-none text-foreground"
+              className="h-11 w-11 rounded-md text-base font-semibold leading-none text-foreground"
               onClick={() => onProductClick(product)}
               disabled={disabled}
               aria-label={increaseQtyLabel}
@@ -5874,7 +5874,7 @@ const PosSellPage = () => {
                                         type="button"
                                         variant="ghost"
                                         size="icon"
-                                        className="h-6 w-7 rounded-md text-lg font-bold leading-none text-foreground"
+                                        className="h-6 w-7 rounded-md text-base font-semibold leading-none text-foreground"
                                         onClick={() =>
                                           handleUpdateQty(
                                             line.id,
@@ -5910,7 +5910,7 @@ const PosSellPage = () => {
                                         type="button"
                                         variant="ghost"
                                         size="icon"
-                                        className="h-6 w-7 rounded-md text-lg font-bold leading-none text-foreground"
+                                        className="h-6 w-7 rounded-md text-base font-semibold leading-none text-foreground"
                                         onClick={() =>
                                           handleUpdateQty(line.id, String(line.qty + 1))
                                         }
