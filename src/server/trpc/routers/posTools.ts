@@ -23,7 +23,7 @@ export const posToolsRouter = router({
     try { await assertFeatureEnabled({organizationId: ctx.user.organizationId, feature: "pos"}); return await changePosPriceMode({...input,user:ctx.user,requestId:ctx.requestId}); }
     catch(error) { throw toTRPCError(error); }
   }),
-  transfer: cashierProcedure.input(z.object({registerId: z.string(), toStoreId: z.string(), idempotencyKey: z.string().min(8), lines: z.array(z.object({productId:z.string(),variantId:z.string().nullable().optional(),qty:z.number().int().positive()})).min(1).max(100)}).strict()).mutation(async ({ctx,input}) => {
+  transfer: cashierProcedure.input(z.object({registerId: z.string(), toStoreId: z.string(), idempotencyKey: z.string().min(8), lines: z.array(z.object({productId:z.string(),variantId:z.string().nullable().optional(),qty:z.number().multipleOf(0.001).positive()})).min(1).max(100)}).strict()).mutation(async ({ctx,input}) => {
     try {
       await assertFeatureEnabled({organizationId: ctx.user.organizationId, feature: "pos"});
       const actor = await ctx.prisma.user.findFirst({where: {id:ctx.user.id,organizationId:ctx.user.organizationId,isActive:true},select:{canTransferStock:true}});

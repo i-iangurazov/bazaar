@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 
 import { AppError } from "@/server/services/errors";
+import { roundQuantity } from "@/lib/quantity";
 
 const resolveVariantKey = (variantId?: string | null) => variantId ?? "BASE";
 
@@ -45,7 +46,7 @@ export const applyStockLotAdjustment = async (
   if (input.stockLotId && !existing) throw new AppError("lotNotFound", "NOT_FOUND", 404);
 
   const allowNegativeStock = store.allowNegativeStock || input.allowNegativeStock === true;
-  const nextQty = (existing?.onHandQty ?? 0) + input.qtyDelta;
+  const nextQty = roundQuantity((existing?.onHandQty ?? 0) + input.qtyDelta);
   if (!allowNegativeStock && input.qtyDelta < 0 && nextQty < 0) {
     throw new AppError("insufficientStock", "CONFLICT", 409);
   }

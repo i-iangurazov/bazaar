@@ -136,8 +136,8 @@ export const stockCountsRouter = router({
         storeId: z.string(),
         barcodeOrQuery: z.string().min(1),
         mode: z.enum(["increment", "set"]).optional().default("increment"),
-        countedQty: z.number().int().optional(),
-        countedDelta: z.number().int().optional(),
+        countedQty: z.number().multipleOf(0.001).optional(),
+        countedDelta: z.number().multipleOf(0.001).optional(),
         idempotencyKey: z.string().min(8),
       }),
     )
@@ -162,7 +162,7 @@ export const stockCountsRouter = router({
     }),
 
   setLineCountedQty: stockCountsProtectedProcedure
-    .input(z.object({ lineId: z.string(), countedQty: z.number().int().min(0) }))
+    .input(z.object({ lineId: z.string(), countedQty: z.number().multipleOf(0.001).min(0) }))
     .mutation(async ({ ctx, input }) => {
       try {
         const line = await ctx.prisma.stockCountLine.findFirst({

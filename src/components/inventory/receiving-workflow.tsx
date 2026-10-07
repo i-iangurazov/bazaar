@@ -1,5 +1,7 @@
 "use client";
 
+import { isValidQuantity } from "@/lib/quantity";
+
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -467,7 +469,7 @@ export const InventoryReceivingPage = ({
             }
             const currentQty = parseDecimalInput(line.quantityInput);
             const nextQty =
-              mode === "scan" && Number.isInteger(currentQty) && currentQty > 0
+              mode === "scan" && isValidQuantity(currentQty) && currentQty > 0
                 ? currentQty + 1
                 : currentQty;
             return {
@@ -705,7 +707,7 @@ export const InventoryReceivingPage = ({
       lines.map((line) => {
         const quantity = parseDecimalInput(line.quantityInput);
         const unitCost = parseDecimalInput(line.unitCostInput);
-        const quantityValid = Number.isInteger(quantity) && quantity > 0;
+        const quantityValid = isValidQuantity(quantity) && quantity > 0;
         const unitCostValid = Number.isFinite(unitCost) && unitCost >= 0;
         return {
           key: line.key,
@@ -1260,9 +1262,9 @@ export const InventoryReceivingPage = ({
                             handleReceivingInputKeyDown(event, line.key, "quantity", "desktop")
                           }
                           type="number"
-                          inputMode="numeric"
+                          inputMode="decimal"
                           min={1}
-                          step={1}
+                          step={0.001}
                           data-receiving-input="quantity"
                           className={cn("h-8 px-2", !metric?.quantityValid && "border-danger/60")}
                         />

@@ -97,7 +97,8 @@ export async function verifySearchInputs(
     triggerBox && listBox && Math.abs(triggerBox.width - listBox.width) < 2,
     "Dropdown must match the search field width",
   );
-  await page.locator("main h1").first().click();
+  // The dropdown can cover the page title; click an actual point outside its bounds.
+  await page.mouse.click(8, page.viewportSize()!.height - 8);
   await expect(list).toBeHidden();
   await header.click();
   await expect(list).toBeVisible();

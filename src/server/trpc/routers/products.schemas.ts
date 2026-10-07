@@ -80,7 +80,7 @@ export const productImageInputSchema = z.object({
 export const productBundleComponentInputSchema = z.object({
   componentProductId: z.string().min(1),
   componentVariantId: z.string().optional().nullable(),
-  qty: z.number().int().positive(),
+  qty: z.number().multipleOf(0.001).positive(),
 });
 
 export const productPackInputSchema = z.object({
@@ -99,7 +99,7 @@ export const productVariantInputSchema = z.object({
   name: z.string().optional(),
   sku: z.string().optional(),
   attributes: z.record(z.unknown()).optional(),
-  initialOnHand: z.number().int().min(0).optional(),
+  initialOnHand: z.number().multipleOf(0.001).min(0).optional(),
   storePriceKgs: z.number().min(0).optional(),
   retailPriceKgs: z.number().min(0).nullable().optional(),
   wholesalePriceKgs: z.number().min(0).nullable().optional(),
@@ -191,8 +191,8 @@ export const createProductInputSchema = z.object({
   wholesalePriceKgs: z.number().min(0).nullable().optional(),
   purchasePriceKgs: z.number().min(0).optional(),
   avgCostKgs: z.number().min(0).optional(),
-  initialOnHand: z.number().int().min(0).optional(),
-  minStock: z.number().int().min(0).optional(),
+  initialOnHand: z.number().multipleOf(0.001).min(0).optional(),
+  minStock: z.number().multipleOf(0.001).min(0).optional(),
   description: z.string().optional(),
   photoUrl: z.string().min(1).optional(),
   images: z.array(productImageInputSchema).optional(),
@@ -219,7 +219,7 @@ export const updateProductInputSchema = z.object({
   wholesalePriceKgs: z.number().min(0).nullable().optional(),
   purchasePriceKgs: z.number().min(0).optional(),
   avgCostKgs: z.number().min(0).optional(),
-  minStock: z.number().int().min(0).optional(),
+  minStock: z.number().multipleOf(0.001).min(0).optional(),
   description: z.string().optional(),
   photoUrl: z.string().min(1).optional(),
   images: z.array(productImageInputSchema).optional(),
@@ -354,8 +354,8 @@ export const importCsvRowSchema = z.object({
   basePriceKgs: z.number().min(0).optional(),
   purchasePriceKgs: z.number().min(0).optional(),
   avgCostKgs: z.number().min(0).optional(),
-  minStock: z.number().int().min(0).optional(),
-  stockQty: z.number().int().min(0).optional(),
+  minStock: z.number().multipleOf(0.001).min(0).optional(),
+  stockQty: z.number().multipleOf(0.001).min(0).optional(),
   sourceRowNumber: z.number().int().positive().optional(),
 });
 

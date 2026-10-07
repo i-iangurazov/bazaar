@@ -1,3 +1,5 @@
+import { assertProductQuantity } from "./productQuantity";
+import { isValidQuantity, roundQuantity } from "@/lib/quantity";
 import { getLoyaltyOrderSummary } from "./loyalty/orderSummary";
 import { resolveStoreSellingPrice, type StorePriceMode } from "@/server/services/storeSellingPrice";
 import { assertSaleAssortment, lockAssortmentForSale } from "./assortmentPolicy";
@@ -278,7 +280,7 @@ const addLineAggregateQty = (
   const key = lineAggregateKey(input.productId, input.variantKey);
   const existing = map.get(key);
   if (existing) {
-    existing.qty += input.qty;
+    existing.qty = roundQuantity(existing.qty + input.qty);
     return;
   }
   map.set(key, {
@@ -2329,6 +2331,7 @@ export const createPosSaleDraft = async (input: {
 
       if (input.lines?.length) {
         for (const lineInput of input.lines) {
+          await assertProductQuantity(tx, input.organizationId, lineInput.productId, lineInput.qty);
           const resolved = await resolveUnitPrice({
             tx,
             organizationId: input.organizationId,
@@ -3554,7 +3557,7 @@ export const getPosSale = async (input: {
                   markingType: true,
                 },
               },
-              baseUnit: { select: { code: true, labelRu: true, labelKg: true } },
+              baseUnit: { select: { code: true, labelRu: true, labelKg: true, quantityPrecision: true } },
             },
           },
           variant: {
@@ -3772,9 +3775,10 @@ export const editCompletedPosSale = async (input: {
             }
             requestedLineIds.add(lineId);
           }
-          if (!Number.isInteger(line.qty) || line.qty <= 0) {
+          if (!isValidQuantity(line.qty) || line.qty <= 0) {
             throw new AppError("invalidSalesQuantity", "BAD_REQUEST", 400);
           }
+          await assertProductQuantity(tx, input.organizationId, line.productId, line.qty);
           const unitPriceKgs = roundMoney(line.unitPriceKgs);
           if (!Number.isFinite(unitPriceKgs) || unitPriceKgs < 0) {
             throw new AppError("unitPriceInvalid", "BAD_REQUEST", 400);
@@ -3913,7 +3917,7 @@ export const editCompletedPosSale = async (input: {
           const desiredLine = desiredAggregates.get(key);
           const oldQty = oldLine?.qty ?? 0;
           const desiredQty = desiredLine?.qty ?? 0;
-          const stockDelta = oldQty - desiredQty;
+          const stockDelta = roundQuantity(oldQty - desiredQty);
           if (stockDelta === 0) {
             continue;
           }
@@ -4222,6 +4226,7 @@ export const addPosSaleLine = async (input: {
     });
 
     await releaseLoyaltyForOrder(tx, { customerOrderId: sale.id });
+    await assertProductQuantity(tx, input.organizationId, input.productId, input.qty);
     const resolved = await resolveUnitPrice({
       priceMode: sale.priceMode as StorePriceMode,
       tx,
@@ -4243,7 +4248,7 @@ export const addPosSaleLine = async (input: {
 
     if (existing) {
       if (!existing.unitPriceKgs.eq(resolved.unitPrice)) throw new AppError("posPriceConflict", "CONFLICT", 409);
-      const nextQty = existing.qty + input.qty;
+      const nextQty = roundQuantity(existing.qty + input.qty);
       const updated = await tx.customerOrderLine.update({
         where: { id: existing.id },
         data: {
@@ -4359,9 +4364,10 @@ export const updatePosSaleLine = async (input: {
     if (input.qty === undefined && input.unitPriceKgs === undefined) {
       throw new AppError("invalidInput", "BAD_REQUEST", 400);
     }
-    if (input.qty !== undefined && (!Number.isInteger(input.qty) || input.qty <= 0)) {
+    if (input.qty !== undefined && (!isValidQuantity(input.qty) || input.qty <= 0)) {
       throw new AppError("invalidQuantity", "BAD_REQUEST", 400);
     }
+    if (input.qty !== undefined) await assertProductQuantity(tx, input.organizationId, line.productId, input.qty);
     if (
       input.unitPriceKgs !== undefined &&
       (!Number.isFinite(input.unitPriceKgs) || input.unitPriceKgs < 0)
@@ -5457,7 +5463,7 @@ const allocatedReturnAmount = async (tx: Prisma.TransactionClient, line: { id: s
     where: { customerOrderLineId: line.id, saleReturn: { status: "COMPLETED" }, ...(excludeReturnLineId ? { id: { not: excludeReturnLineId } } : {}) },
     _sum: { qty: true, lineTotalKgs: true },
   });
-  const cumulative = Math.min(line.qty, (previous._sum.qty ?? 0) + qty);
+  const cumulative = Math.min(line.qty, roundQuantity((previous._sum.qty ?? 0) + qty));
   const refundable = cap ?? (await refundLineCaps(tx, line.customerOrderId)).get(line.id) ?? new Prisma.Decimal(0);
   return refundable.mul(cumulative).div(line.qty).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP).minus(previous._sum.lineTotalKgs ?? 0);
 };
@@ -5500,7 +5506,10 @@ const assertReturnLineAvailable = async (
   });
 
   const usedQty = alreadyReturned._sum.qty ?? 0;
-  const availableQty = orderLine.qty - usedQty;
+  const availableQty = roundQuantity(orderLine.qty - usedQty);
+
+  const source = await tx.customerOrder.findUniqueOrThrow({ where: { id: orderLine.customerOrderId }, select: { organizationId: true } });
+  await assertProductQuantity(tx, source.organizationId, orderLine.productId, input.requestedQty);
 
   if (availableQty <= 0) {
     throw new AppError("posReturnQtyExceeded", "CONFLICT", 409);
@@ -6054,7 +6063,7 @@ export const editCompletedSaleReturn = async (input: {
             }
             requestedLineIds.add(lineId);
           }
-          if (!Number.isInteger(line.qty) || line.qty <= 0) {
+          if (!isValidQuantity(line.qty) || line.qty <= 0) {
             throw new AppError("invalidReturnQuantity", "BAD_REQUEST", 400);
           }
           const unitPriceKgs = roundMoney(line.unitPriceKgs);

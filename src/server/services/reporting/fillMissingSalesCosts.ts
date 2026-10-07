@@ -40,7 +40,7 @@ export async function fillMissingSalesCosts(
       )
       UPDATE "CustomerOrderLine" line
       SET "unitCostKgs" = eligible."avgCostKgs",
-          "lineCostTotalKgs" = ROUND(eligible."avgCostKgs" * line.qty, 2)
+          "lineCostTotalKgs" = ROUND(eligible."avgCostKgs" * line.qty::numeric, 2)
       FROM eligible
       WHERE line.id = eligible.id AND line.qty > 0
         AND line."unitCostKgs" IS NULL AND line."lineCostTotalKgs" IS NULL

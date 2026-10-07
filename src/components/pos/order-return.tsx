@@ -1,4 +1,5 @@
 "use client";
+import { parseQuantity, roundQuantity } from "@/lib/quantity";
 import { useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { trpc } from "@/lib/trpc";
@@ -63,7 +64,7 @@ export function OrderReturn({ customerOrderId, lines, shifts, onReturned }: { cu
       <div className="space-y-3">
         {!shifts.length ? <p>{t("openShiftRequired")}</p> : null}
         <label className="block text-sm">{t("register")}<select className="mt-1 h-10 w-full rounded-md border bg-background px-2" value={selectedShift} disabled={busy || Boolean(attempt.current)} onChange={event => setShiftId(event.target.value)}>{shifts.map(shift => <option key={shift.id} value={shift.id}>{shift.name}</option>)}</select></label>
-        {available.map(line => <label key={line.id} className="flex items-center justify-between gap-3 text-sm"><span>{line.name} ({t("available", { qty: line.qty - line.returnedQty })})</span><Input className="w-24" type="number" min={0} max={line.qty - line.returnedQty} step={1} disabled={busy || Boolean(attempt.current)} value={quantities[line.id] ?? 0} onChange={event => setQuantities(current => ({ ...current, [line.id]: Math.min(line.qty - line.returnedQty, Math.max(0, Math.floor(Number(event.target.value) || 0))) }))} /></label>)}
+        {available.map(line => <label key={line.id} className="flex items-center justify-between gap-3 text-sm"><span>{line.name} ({t("available", { qty: roundQuantity(line.qty - line.returnedQty) })})</span><Input className="w-24" type="number" min={0} max={roundQuantity(line.qty - line.returnedQty)} step={0.001} disabled={busy || Boolean(attempt.current)} value={quantities[line.id] ?? 0} onChange={event => setQuantities(current => ({ ...current, [line.id]: Math.min(roundQuantity(line.qty - line.returnedQty), Math.max(0, parseQuantity(event.target.value) ?? 0)) }))} /></label>)}
         {draft ? <><p className="font-semibold">{t("actualRefund", { amount: draft.totalKgs })}</p><p className="text-sm">{t("moneyHint")}</p><label className="block text-sm">{t("method")}<select className="mt-1 h-10 w-full rounded-md border bg-background px-2" disabled={busy || Boolean(payload.current)} value={method} onChange={event => setMethod(event.target.value as Method)}>{(["CASH", "CARD", "TRANSFER", "OTHER"] as const).map(value => <option key={value} value={value}>{t(value)}</option>)}</select></label></> : null}
         {error ? <p role="alert" className="text-danger">{error}</p> : null}
         <ModalFooter><Button variant="ghost" disabled={busy} onClick={() => void close()}>{t("cancel")}</Button>{draft ? <Button disabled={busy} onClick={async () => {

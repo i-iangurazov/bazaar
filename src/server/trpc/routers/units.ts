@@ -15,6 +15,7 @@ export const unitsRouter = router({
         code: z.string().min(1),
         labelRu: z.string().min(1),
         labelKg: z.string().min(1),
+        quantityPrecision: z.union([z.literal(0), z.literal(3)]).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -26,6 +27,7 @@ export const unitsRouter = router({
           code: input.code.trim(),
           labelRu: input.labelRu.trim(),
           labelKg: input.labelKg.trim(),
+          quantityPrecision: input.quantityPrecision,
         });
       } catch (error) {
         throw toTRPCError(error);
@@ -38,6 +40,7 @@ export const unitsRouter = router({
         unitId: z.string(),
         labelRu: z.string().min(1),
         labelKg: z.string().min(1),
+        quantityPrecision: z.union([z.literal(0), z.literal(3)]).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -49,6 +52,7 @@ export const unitsRouter = router({
           requestId: ctx.requestId,
           labelRu: input.labelRu.trim(),
           labelKg: input.labelKg.trim(),
+          quantityPrecision: input.quantityPrecision,
         });
       } catch (error) {
         throw toTRPCError(error);

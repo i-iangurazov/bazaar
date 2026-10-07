@@ -115,7 +115,7 @@ const PurchaseOrderDetailPage = () => {
     return z.object({
       productId: z.string().min(1, t("productRequired")),
       variantId: z.string().optional().nullable(),
-      qtyOrdered: z.coerce.number().int().positive(t("qtyPositive")),
+      qtyOrdered: z.coerce.number().multipleOf(0.001).positive(t("qtyPositive")),
       unitSelection: z.string().min(1, t("unitRequired")),
       unitCost: optionalCost,
     });

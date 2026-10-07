@@ -63,7 +63,7 @@ export const bundlesRouter = router({
         bundleProductId: z.string(),
         componentProductId: z.string(),
         componentVariantId: z.string().optional().nullable(),
-        qty: z.number().int().positive(),
+        qty: z.number().multipleOf(0.001).positive(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -103,7 +103,7 @@ export const bundlesRouter = router({
       z.object({
         storeId: z.string(),
         bundleProductId: z.string(),
-        qty: z.number().int().positive(),
+        qty: z.number().multipleOf(0.001).positive(),
         idempotencyKey: z.string().min(8),
       }),
     )

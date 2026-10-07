@@ -9,6 +9,7 @@ export type ScanProductType = "product" | "bundle";
 export type ScanLookupItem = {
   id: string;
   name: string;
+  baseUnit?: { code: string; labelRu: string; labelKg: string; quantityPrecision: number };
   sku: string;
   matchType: ScanMatchType;
   type: ScanProductType;

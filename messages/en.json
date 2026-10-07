@@ -4345,7 +4345,8 @@
     "attributeNumberInvalid": "Invalid attribute number.",
     "printAction": "Print action",
     "variantPriceStoreRequired": "Select a product store to edit variant prices. Prices are saved separately for each store.",
-    "salePriceStoreHint": "Selling price in {store}."
+    "salePriceStoreHint": "Selling price in {store}.",
+    "unitLabel": "Unit of measure"
   },
   "storeGroups": {
     "title": "Store assortments",
@@ -5334,6 +5335,7 @@
     "packNotFound": "Pack not found",
     "packMismatch": "Pack mismatch",
     "packNotAllowed": "Pack not allowed",
+    "wholeQuantityRequired": "Enter a whole quantity for items sold by piece.",
     "invalidQuantity": "Invalid quantity.",
     "attributeInUse": "Attribute in use",
     "attributeNotFound": "Attribute not found",
@@ -5771,6 +5773,7 @@
     "noBarcode": "No barcode"
   },
   "units": {
+    "fractionalQuantity": "Fractional quantity",
     "title": "Units",
     "subtitle": "Units overview",
     "create": "Units create",

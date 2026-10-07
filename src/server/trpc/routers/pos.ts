@@ -87,7 +87,7 @@ const posCheckoutClientStateSchema = z
   .object({
     visibleCartLineCount: z.number().int().min(0).max(1_000).optional(),
     visibleCartTotalKgs: z.number().min(0).max(10_000_000).optional(),
-    reviewedLines: z.array(z.object({ productId: z.string().min(1), variantId: z.string().nullable().optional(), qty: z.number().int().positive(), unitPriceKgs: z.number().min(0) }).strict()).max(1000).optional(),
+    reviewedLines: z.array(z.object({ productId: z.string().min(1), variantId: z.string().nullable().optional(), qty: z.number().multipleOf(0.001).positive(), unitPriceKgs: z.number().min(0) }).strict()).max(1000).optional(),
   })
   .optional();
 
@@ -95,7 +95,7 @@ const posReceiptEditLineSchema = z.object({
   lineId: z.string().min(1).optional().nullable(),
   productId: z.string().min(1),
   variantId: z.string().optional().nullable(),
-  qty: z.number().int().positive(),
+  qty: z.number().multipleOf(0.001).positive(),
   unitPriceKgs: z.number().min(0),
 });
 
@@ -660,7 +660,7 @@ export const posRouter = router({
               z.object({
                 productId: z.string().min(1),
                 variantId: z.string().optional().nullable(),
-                qty: z.number().int().positive(),
+                qty: z.number().multipleOf(0.001).positive(),
               }),
             )
             .optional(),
@@ -740,7 +740,7 @@ export const posRouter = router({
           saleId: z.string().min(1),
           productId: z.string().min(1),
           variantId: z.string().optional().nullable(),
-          qty: z.number().int().positive(),
+          qty: z.number().multipleOf(0.001).positive(),
         }),
       )
       .mutation(async ({ ctx, input }) => {
@@ -765,7 +765,7 @@ export const posRouter = router({
         z
           .object({
             lineId: z.string().min(1),
-            qty: z.number().int().positive().optional(),
+            qty: z.number().multipleOf(0.001).positive().optional(),
             unitPriceKgs: z.number().min(0).optional(),
           })
           .refine((input) => input.qty !== undefined || input.unitPriceKgs !== undefined, {
@@ -1093,7 +1093,7 @@ export const posRouter = router({
         z.object({
           saleReturnId: z.string().min(1),
           customerOrderLineId: z.string().min(1),
-          qty: z.number().int().positive(),
+          qty: z.number().multipleOf(0.001).positive(),
         }),
       )
       .mutation(async ({ ctx, input }) => {
@@ -1116,7 +1116,7 @@ export const posRouter = router({
       .input(
         z.object({
           returnLineId: z.string().min(1),
-          qty: z.number().int().positive(),
+          qty: z.number().multipleOf(0.001).positive(),
         }),
       )
       .mutation(async ({ ctx, input }) => {

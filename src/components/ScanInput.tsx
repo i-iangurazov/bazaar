@@ -169,6 +169,7 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
       ? (liveProductSearchQuery.data ?? []).map((product) => ({
           id: product.id,
           name: product.name,
+          baseUnit: product.baseUnit,
           sku: product.sku,
           type: product.type,
           matchType: "name",

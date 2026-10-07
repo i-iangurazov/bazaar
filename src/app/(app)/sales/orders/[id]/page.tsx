@@ -1,4 +1,5 @@
 "use client";
+import { parseQuantity } from "@/lib/quantity";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CustomerOrderEmailType, CustomerOrderStatus } from "@prisma/client";
@@ -514,12 +515,12 @@ const SalesOrderDetailPage = () => {
     if (!order) {
       return;
     }
-    const normalizedQty = Number(lineQtyInput);
-    if (!lineQtyInput.trim() || !Number.isFinite(normalizedQty) || normalizedQty <= 0) {
+    const normalizedQty = parseQuantity(lineQtyInput);
+    if (!lineQtyInput.trim() || normalizedQty === null || normalizedQty <= 0) {
       toast({ variant: "error", description: t("qtyPositive") });
       return;
     }
-    const qty = Math.trunc(normalizedQty);
+    const qty = normalizedQty;
 
     if (lineDialogMode === "edit" && editingLineId) {
       await updateLineMutation.mutateAsync({
@@ -1327,8 +1328,8 @@ const SalesOrderDetailPage = () => {
             <Input
               ref={lineQtyInputRef}
               type="number"
-              min={1}
-              step={1}
+              min={0.001}
+              step={0.001}
               value={lineQtyInput}
               onChange={(event) => setLineQtyInput(event.target.value)}
             />

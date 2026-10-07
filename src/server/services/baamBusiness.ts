@@ -51,7 +51,7 @@ export type BusinessAction = {
 export const baamActions: Record<string, BusinessAction> = {};
 const id = z.string().min(1).max(100);
 const text = z.string().trim().min(1).max(1000);
-const qty = z.number().int().positive().max(2147483647);
+const qty = z.number().multipleOf(0.001).positive().max(2147483647);
 const money = z.number().min(0).max(100000000);
 const productRef = z.object({ productId: id, variantId: id.nullable().optional() }).strict();
 const quantityLine = productRef.extend({ qty });
@@ -542,7 +542,7 @@ defineAction({
     storeId: id,
     qtyDelta: z
       .number()
-      .int()
+      .multipleOf(0.001)
       .refine((n) => n !== 0),
     reason: z.string().min(3).max(500),
   }),
@@ -578,7 +578,7 @@ defineAction({
     "Set a NEW ABSOLUTE stock quantity with a reason. Server snapshots current quantity and version; any intervening sale/adjustment causes a conflict, never a silent overwrite.",
   schema: productRef.extend({
     storeId: id,
-    targetOnHand: z.number().int().min(-2147483648).max(2147483647),
+    targetOnHand: z.number().multipleOf(0.001).min(-2147483648).max(2147483647),
     reason: z.string().min(3).max(500),
   }),
   async prepare(c, input) {
@@ -1097,7 +1097,7 @@ defineAction({
   name: "count_set_quantity",
   description:
     "Set the counted physical quantity for one exact product/variant in a draft inventory count. Zero allowed; inspect/search actual product first. Does not apply the discrepancy to stock yet.",
-  schema: productRef.extend({ stockCountId: id, countedQty: z.number().int().min(0) }),
+  schema: productRef.extend({ stockCountId: id, countedQty: z.number().multipleOf(0.001).min(0) }),
   async prepare(c, input) {
     const count = await businessCaller(c.ctx).counts.get({ stockCountId: input.stockCountId });
     if (!count) throw new AppError("stockCountNotFound", "NOT_FOUND", 404);

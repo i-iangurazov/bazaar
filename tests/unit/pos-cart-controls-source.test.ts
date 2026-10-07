@@ -31,9 +31,9 @@ describe("POS cart quantity and price control order", () => {
       lineEditor.indexOf('data-pos-control="price"'),
     );
     expect(lineEditor).toContain(
-      "handleUpdateQty(activeLine.id, String(Math.max(1, activeLine.qty - 1)))",
+      "handleUpdateQty(activeLine.id, String(roundQuantity(Math.max(minimumCartQuantity(activeLine), activeLine.qty - cartQuantityStep(activeLine)))))",
     );
-    expect(lineEditor).toContain("handleUpdateQty(activeLine.id, String(activeLine.qty + 1))");
+    expect(lineEditor).toContain("handleUpdateQty(activeLine.id, String(roundQuantity(activeLine.qty + cartQuantityStep(activeLine))))");
     expect(lineEditor).toContain('data-testid="pos-line-qty"');
     expect(lineEditor).toContain('data-testid="pos-line-price"');
   });

@@ -1,3 +1,4 @@
+import { roundQuantity } from "@/lib/quantity";
 import { assertBaamReviewedVersion } from "@/server/services/baamExecutionContext";
 import { randomUUID } from "node:crypto";
 import type { InventorySnapshot } from "@prisma/client";
@@ -107,7 +108,7 @@ const adjustOnOrder = async (
     variantKey,
     allowNegativeStock,
   );
-  const nextOnOrder = snapshot.onOrder + delta;
+  const nextOnOrder = roundQuantity(snapshot.onOrder + delta);
   if (nextOnOrder < 0) {
     throw new AppError("onOrderNegative", "CONFLICT", 409);
   }
@@ -809,7 +810,7 @@ export const receivePurchaseOrder = async (input: {
           : po.lines
               .map((line) => ({
                 lineId: line.id,
-                qtyReceived: Math.max(0, line.qtyOrdered - line.qtyReceived),
+                qtyReceived: Math.max(0, roundQuantity(line.qtyOrdered - line.qtyReceived)),
                 unitId: undefined,
                 packId: undefined,
               }))
@@ -850,7 +851,7 @@ export const receivePurchaseOrder = async (input: {
             continue;
           }
 
-          const remaining = line.qtyOrdered - line.qtyReceived;
+          const remaining = roundQuantity(line.qtyOrdered - line.qtyReceived);
           if (!input.allowOverReceive && receiveQty > remaining) {
             throw new AppError("poOverReceiveNotAllowed", "CONFLICT", 409);
           }
@@ -895,7 +896,7 @@ export const receivePurchaseOrder = async (input: {
             });
           }
 
-          const nextReceived = line.qtyReceived + receiveQty;
+          const nextReceived = roundQuantity(line.qtyReceived + receiveQty);
           updatedLineTotals.set(line.id, nextReceived);
 
           await tx.purchaseOrderLine.update({

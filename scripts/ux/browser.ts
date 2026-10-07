@@ -7,6 +7,7 @@ import { verifyProductEditor } from "./product-editor-check";
 import { verifyPosPaymentChoices } from "./pos-payment-check";
 import { verifyPosCheckoutLayout } from "./pos-checkout-layout-check";
 import { verifyPosReceiptEditing } from "./pos-receipt-edit-check";
+import { verifyFractionalQuantities } from "./fractional-quantity-check";
 import { verifySearchInputs } from "./search-input-check";
 const base = process.env.UX_HTTPS === "1" ? "https://localhost:3122" : "http://localhost:3122";
 const f = JSON.parse(await readFile("artifacts/ux/fixture.json", "utf8"));
@@ -665,6 +666,7 @@ try {
   for (const check of await verifySearchInputs(dashboard, base, f, `${directory}/search`)) record(check);
   const editorPage = await admin.newPage();
   await verifyProductEditor(editorPage, base, f, (name, input, mutation) => api(admin, name, input, mutation), `${directory}/product-editor`);
+  for (const check of await verifyFractionalQuantities(editorPage, base, f, (name, input, mutation) => api(admin, name, input, mutation), `${directory}/fractional`)) record(check);
   await editorPage.close();
   record("Product create/edit sections match; retail validation, feature toggles and full mobile names work");
   assert.deepEqual(errors, []);

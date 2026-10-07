@@ -1,3 +1,5 @@
+import { assertProductQuantity } from "./productQuantity";
+import { roundQuantity } from "@/lib/quantity";
 import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { OperationRequestPrincipalType, StockCountStatus, StockMovementType } from "@prisma/client";
@@ -199,8 +201,9 @@ export const addOrUpdateLineByScan = async (input: {
       const baseCounted = existing?.countedQty ?? 0;
       const incrementBy = input.countedDelta ?? 1;
       const nextCounted =
-        input.mode === "set" ? (input.countedQty ?? 0) : baseCounted + incrementBy;
-      const deltaQty = nextCounted - expectedOnHand;
+        input.mode === "set" ? (input.countedQty ?? 0) : roundQuantity(baseCounted + incrementBy);
+      await assertProductQuantity(tx, input.organizationId, match.productId, nextCounted, true);
+      const deltaQty = roundQuantity(nextCounted - expectedOnHand);
 
       const now = new Date();
       const line = await tx.stockCountLine.upsert({
@@ -282,11 +285,12 @@ export const setLineCountedQty = async (input: {
     }
 
     await assertBaamReviewedVersion(tx, "StockCount", line.stockCountId);
+    await assertProductQuantity(tx, input.organizationId, line.productId, input.countedQty, true);
     const updated = await tx.stockCountLine.update({
       where: { id: input.lineId },
       data: {
         countedQty: input.countedQty,
-        deltaQty: input.countedQty - line.expectedOnHand,
+        deltaQty: roundQuantity(input.countedQty - line.expectedOnHand),
       },
     });
     await tx.stockCount.update({ where: { id: line.stockCountId }, data: { updatedAt: new Date() } });
@@ -368,7 +372,7 @@ export const applyStockCount = async (input: {
           });
           // Apply the discrepancy observed when this line was counted. Later sales
           // and receipts must survive; never reset the current stock to an old count.
-          const deltaQty = line.countedQty - line.expectedOnHand;
+          const deltaQty = roundQuantity(line.countedQty - line.expectedOnHand);
 
           if (deltaQty === 0) {
             continue;

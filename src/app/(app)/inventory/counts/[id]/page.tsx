@@ -191,7 +191,7 @@ const StockCountDetailPage = () => {
   const editSchema = useMemo(
     () =>
       z.object({
-        countedQty: z.coerce.number().int().min(0, t("countedNonNegative")),
+        countedQty: z.coerce.number().multipleOf(0.001).min(0, t("countedNonNegative")),
       }),
     [t],
   );
@@ -732,7 +732,7 @@ const StockCountDetailPage = () => {
                 <FormItem>
                   <FormLabel>{t("counted")}</FormLabel>
                   <FormControl>
-                    <Input {...field} type="number" inputMode="numeric" />
+                    <Input {...field} type="number" inputMode="decimal" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

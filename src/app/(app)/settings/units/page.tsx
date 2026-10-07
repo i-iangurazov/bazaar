@@ -11,6 +11,8 @@ import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
+import { defaultUnitPrecision } from "@/lib/quantity";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
@@ -71,6 +73,7 @@ const UnitsPage = () => {
         code: z.string().min(1, t("codeRequired")),
         labelRu: z.string().min(1, t("labelRequired")),
         labelKg: z.string().min(1, t("labelRequired")),
+        quantityPrecision: z.union([z.literal(0), z.literal(3)]),
       }),
     [t],
   );
@@ -81,6 +84,7 @@ const UnitsPage = () => {
       code: "",
       labelRu: "",
       labelKg: "",
+      quantityPrecision: 0,
     },
   });
 
@@ -156,13 +160,13 @@ const UnitsPage = () => {
 
   const openCreate = () => {
     setEditing(null);
-    form.reset({ code: "", labelRu: "", labelKg: "" });
+    form.reset({ code: "", labelRu: "", labelKg: "", quantityPrecision: 0 });
     setDialogOpen(true);
   };
 
   const openEdit = (unit: UnitRow) => {
     setEditing(unit);
-    form.reset({ code: unit.code, labelRu: unit.labelRu, labelKg: unit.labelKg });
+    form.reset({ code: unit.code, labelRu: unit.labelRu, labelKg: unit.labelKg, quantityPrecision: unit.quantityPrecision === 3 ? 3 : 0 });
     setDialogOpen(true);
   };
 
@@ -172,6 +176,7 @@ const UnitsPage = () => {
         unitId: editing.id,
         labelRu: values.labelRu.trim(),
         labelKg: values.labelKg.trim(),
+        quantityPrecision: values.quantityPrecision,
       });
       return;
     }
@@ -179,6 +184,7 @@ const UnitsPage = () => {
       code: values.code.trim(),
       labelRu: values.labelRu.trim(),
       labelKg: values.labelKg.trim(),
+      quantityPrecision: values.quantityPrecision,
     });
   };
 
@@ -382,7 +388,12 @@ const UnitsPage = () => {
                   <FormItem>
                     <FormLabel>{t("code")}</FormLabel>
                     <FormControl>
-                      <Input {...field} disabled={Boolean(editing)} />
+                      <Input {...field} disabled={Boolean(editing)} onChange={event => {
+                        field.onChange(event);
+                        if (!form.getFieldState("quantityPrecision").isDirty) {
+                          form.setValue("quantityPrecision", defaultUnitPrecision(event.target.value));
+                        }
+                      }} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -414,6 +425,13 @@ const UnitsPage = () => {
                   </FormItem>
                 )}
               />
+              <FormField control={form.control} name="quantityPrecision" render={({ field }) => (
+                <FormItem className="flex items-center justify-between gap-3">
+                  <FormLabel>{t("fractionalQuantity")}</FormLabel>
+                  <FormControl><Switch checked={field.value === 3} onCheckedChange={checked => field.onChange(checked ? 3 : 0)} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
             </FormGrid>
             <FormActions>
               <Button

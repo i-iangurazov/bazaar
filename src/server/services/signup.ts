@@ -178,6 +178,12 @@ export const registerBusinessFromToken = async (input: {
         },
       });
       organizationId = createdOrg.id;
+      await tx.unit.createMany({ data: [
+        { code: "шт", labelRu: "шт", labelKg: "даана", quantityPrecision: 0 },
+        { code: "кг", labelRu: "кг", labelKg: "кг", quantityPrecision: 3 },
+        { code: "л", labelRu: "л", labelKg: "л", quantityPrecision: 3 },
+        { code: "м", labelRu: "м", labelKg: "м", quantityPrecision: 3 },
+      ].map(unit => ({ ...unit, organizationId: createdOrg.id })) });
       await tx.user.update({
         where: { id: user.id },
         data: { organizationId, isOrgOwner: true },

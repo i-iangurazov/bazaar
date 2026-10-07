@@ -459,9 +459,9 @@ const buildSoldProductsActivity = (input: SoldProductsFilters, range: SalesAnaly
         AND r."completedAt" < ${range.toUtcExclusive}
     ), grouped AS (
       SELECT "productId", "variantKey", MAX("variantId") AS "variantId",
-             SUM("quantitySold")::int AS "quantitySold",
+             SUM("quantitySold")::double precision AS "quantitySold",
              SUM("grossRevenueKgs") AS "grossRevenueKgs",
-             SUM("quantityReturned")::int AS "quantityReturned",
+             SUM("quantityReturned")::double precision AS "quantityReturned",
              SUM("returnedRevenueKgs") AS "returnedRevenueKgs",
              COUNT(DISTINCT "orderId")::int AS "receiptCount"
       FROM activity

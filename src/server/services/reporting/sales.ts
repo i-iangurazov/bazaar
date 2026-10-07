@@ -85,8 +85,8 @@ export function historicalCostSql(alias: string) {
   return Prisma.sql`CASE
     WHEN ${a}.qty <= 0 OR ${a}."unitCostKgs" < 0 OR ${a}."lineCostTotalKgs" < 0 THEN NULL
     WHEN ${a}."lineCostTotalKgs" IS NOT NULL AND ${a}."unitCostKgs" IS NOT NULL
-      AND ${a}."lineCostTotalKgs" <> ROUND(${a}."unitCostKgs" * ${a}.qty, 2) THEN NULL
-    ELSE COALESCE(${a}."lineCostTotalKgs", ROUND(${a}."unitCostKgs" * ${a}.qty, 2)) END`;
+      AND ${a}."lineCostTotalKgs" <> ROUND(${a}."unitCostKgs" * ${a}.qty::numeric, 2) THEN NULL
+    ELSE COALESCE(${a}."lineCostTotalKgs", ROUND(${a}."unitCostKgs" * ${a}.qty::numeric, 2)) END`;
 }
 
 const inStores = (field: Prisma.Sql, ids: string[]) =>
@@ -183,8 +183,8 @@ export function salesEventsSql(
       SELECT DISTINCT l."customerOrderLineId" AS id
       FROM "SaleReturnLine" l JOIN return_docs d ON d.id = l."saleReturnId"
     ), return_history AS MATERIALIZED (
-      SELECT l.*, ol.qty AS "originalQty", ${historicalCostSql("ol")} AS "originalCost",
-        SUM(l.qty) OVER (PARTITION BY l."customerOrderLineId"
+      SELECT l.*, ol.qty::numeric AS "originalQty", ${historicalCostSql("ol")} AS "originalCost",
+        SUM(l.qty::numeric) OVER (PARTITION BY l."customerOrderLineId"
           ORDER BY r."completedAt", r.id, l.id ROWS UNBOUNDED PRECEDING) AS "returnedThrough"
       FROM original_return_lines selected
       JOIN "SaleReturnLine" l ON l."customerOrderLineId" = selected.id
@@ -196,7 +196,7 @@ export function salesEventsSql(
     ), lines AS MATERIALIZED (
       SELECT l.id, d.id AS "documentId", 'sale'::text AS kind, l."productId", l."variantId", l."variantKey",
         l.qty::numeric AS qty, l."lineTotalKgs" AS "rawRevenue", ${historicalCostSql("l")} AS cost,
-        GREATEST(COALESCE(l."baseUnitPriceKgs", l."unitPriceKgs") - l."unitPriceKgs", 0) * l.qty AS "catalogDiscount",
+        GREATEST(COALESCE(l."baseUnitPriceKgs", l."unitPriceKgs") - l."unitPriceKgs", 0) * l.qty::numeric AS "catalogDiscount",
         (${historicalCostSql("l")} IS NULL AND (l."unitCostKgs" IS NOT NULL OR l."lineCostTotalKgs" IS NOT NULL)) AS "costConflict",
         false AS "derivedReturnCost"
       FROM sale_docs d JOIN "CustomerOrderLine" l ON l."customerOrderId" = d.id
@@ -204,13 +204,13 @@ export function salesEventsSql(
       SELECT l.id, d.id, 'return', l."productId", l."variantId", l."variantKey", l.qty::numeric, l."lineTotalKgs",
         CASE WHEN l."originalQty" > 0 AND l."returnedThrough" <= l."originalQty" AND l.qty > 0
           THEN ROUND(l."originalCost" * l."returnedThrough" / l."originalQty", 2)
-            - ROUND(l."originalCost" * (l."returnedThrough" - l.qty) / l."originalQty", 2)
+            - ROUND(l."originalCost" * (l."returnedThrough" - l.qty::numeric) / l."originalQty", 2)
           ELSE NULL END,
         0::numeric,
         (l."returnedThrough" > l."originalQty" OR (l."originalCost" IS NULL AND l."lineCostTotalKgs" IS NOT NULL)),
         (l."originalCost" IS NOT NULL AND (l."lineCostTotalKgs" IS NULL OR
           l."lineCostTotalKgs" <> ROUND(l."originalCost" * l."returnedThrough" / NULLIF(l."originalQty", 0), 2)
-            - ROUND(l."originalCost" * (l."returnedThrough" - l.qty) / NULLIF(l."originalQty", 0), 2)))
+            - ROUND(l."originalCost" * (l."returnedThrough" - l.qty::numeric) / NULLIF(l."originalQty", 0), 2)))
       FROM return_docs d JOIN return_history l ON l."saleReturnId" = d.id
     ), decorated AS MATERIALIZED (
       SELECT l.*, p.name AS "productName", COALESCE(v.sku, p.sku) AS sku, v.name AS "variantName", p.unit,

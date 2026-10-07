@@ -1,4 +1,5 @@
 "use client";
+import { parseQuantity } from "@/lib/quantity";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -116,12 +117,12 @@ const NewSalesOrderPage = () => {
     }
 
     const rawQty = pendingQty.trim();
-    const qty = Number(rawQty);
-    if (!rawQty || !Number.isFinite(qty) || qty <= 0) {
+    const qty = parseQuantity(rawQty);
+    if (!rawQty || qty === null || qty <= 0) {
       toast({ variant: "error", description: t("qtyPositive") });
       return false;
     }
-    const normalizedQty = Math.trunc(qty);
+    const normalizedQty = qty;
 
     let unitPriceKgs: number | null = null;
     try {
@@ -199,13 +200,13 @@ const NewSalesOrderPage = () => {
           ? {
               ...line,
               qty:
-                rawValue.trim().length > 0 && Number.isFinite(Number(rawValue))
-                  ? Math.trunc(Number(rawValue))
+                rawValue.trim().length > 0 && parseQuantity(rawValue) !== null
+                  ? parseQuantity(rawValue) ?? 0
                   : 0,
               qtyInput: rawValue,
               lineTotalKgs:
-                rawValue.trim().length > 0 && Number.isFinite(Number(rawValue))
-                  ? toLineTotal(Math.trunc(Number(rawValue)), line.unitPriceKgs)
+                rawValue.trim().length > 0 && parseQuantity(rawValue) !== null
+                  ? toLineTotal(parseQuantity(rawValue) ?? 0, line.unitPriceKgs)
                   : null,
             }
           : line,
@@ -251,7 +252,7 @@ const NewSalesOrderPage = () => {
       lines: draftLines.map((line) => ({
         productId: line.productId,
         variantId: null,
-        qty: Math.trunc(line.qty),
+        qty: line.qty,
       })),
     };
     const serializedPayload = JSON.stringify(payload);
@@ -424,7 +425,7 @@ const NewSalesOrderPage = () => {
 
               <Input
                 type="number"
-                min={1}
+                min={0.001}
                 value={pendingQty}
                 onChange={(event) => setPendingQty(event.target.value)}
                 className="sm:max-w-[120px]"
@@ -465,7 +466,7 @@ const NewSalesOrderPage = () => {
                     <div className="flex w-full items-center gap-2 sm:w-auto">
                       <Input
                         type="number"
-                        min={1}
+                        min={0.001}
                         value={line.qtyInput}
                         onChange={(event) => updateDraftLineQty(line.productId, event.target.value)}
                         className="h-9 w-full sm:w-20"

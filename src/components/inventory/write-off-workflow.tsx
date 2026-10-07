@@ -1,5 +1,7 @@
 "use client";
 
+import { isValidQuantity } from "@/lib/quantity";
+
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -447,7 +449,7 @@ export const InventoryWriteOffsPage = ({
     () =>
       lines.map((line) => {
         const quantity = parseDecimalInput(line.quantityInput);
-        const quantityValid = Number.isInteger(quantity) && quantity > 0;
+        const quantityValid = isValidQuantity(quantity) && quantity > 0;
         const lineTotal =
           quantityValid && typeof line.unitCostKgs === "number"
             ? quantity * line.unitCostKgs
@@ -898,9 +900,9 @@ export const InventoryWriteOffsPage = ({
                           }
                           onKeyDown={(event) => handleQuantityKeyDown(event, line.key, "desktop")}
                           type="number"
-                          inputMode="numeric"
+                          inputMode="decimal"
                           min={1}
-                          step={1}
+                          step={0.001}
                           data-write-off-input="quantity"
                           className={cn("h-8 px-2", !metric?.quantityValid && "border-danger/60")}
                         />

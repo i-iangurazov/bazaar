@@ -5,6 +5,7 @@ const maxDetailImageUrlLength = 8_192;
 
 type ProductPreviewRecord = {
   _count?: { variants: number };
+  baseUnit?: { code: string; labelRu: string; labelKg: string; quantityPrecision: number };
   id: string;
   sku: string;
   name: string;
@@ -19,6 +20,7 @@ type ProductPreviewRecord = {
 };
 
 type ProductListRecord = {
+  baseUnit?: { code: string; labelRu: string; labelKg: string; quantityPrecision: number };
   _count?: { variants: number };
   id: string;
   sku: string;
@@ -132,6 +134,7 @@ export const serializeProductPreview = (
     id: product.id,
     sku: product.sku,
     name: product.name,
+    baseUnit: product.baseUnit,
     type: product.isBundle ? ("bundle" as const) : ("product" as const),
     isBundle: product.isBundle,
     category: product.categories?.[0] ?? product.category ?? null,

@@ -220,7 +220,7 @@ export const salesOrdersRouter = router({
             z.object({
               productId: z.string().min(1),
               variantId: z.string().optional().nullable(),
-              qty: z.number().int().positive(),
+              qty: z.number().multipleOf(0.001).positive(),
             }),
           )
           .optional(),
@@ -333,7 +333,7 @@ export const salesOrdersRouter = router({
         customerOrderId: z.string(),
         productId: z.string(),
         variantId: z.string().optional().nullable(),
-        qty: z.number().int().positive(),
+        qty: z.number().multipleOf(0.001).positive(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -357,7 +357,7 @@ export const salesOrdersRouter = router({
     .input(
       z.object({
         lineId: z.string(),
-        qty: z.number().int().positive(),
+        qty: z.number().multipleOf(0.001).positive(),
       }),
     )
     .mutation(async ({ ctx, input }) => {

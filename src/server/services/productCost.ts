@@ -1,3 +1,4 @@
+import { isValidQuantity, roundQuantity } from "@/lib/quantity";
 import { Prisma } from "@prisma/client";
 
 import { AppError } from "@/server/services/errors";
@@ -125,7 +126,7 @@ const readValuedReceiptStream = async (
       unvaluedMovementCount += 1;
       continue;
     }
-    quantity += movement.qtyDelta;
+    quantity = roundQuantity(quantity + movement.qtyDelta);
     totalValueKgs = totalValueKgs.plus(movementValue);
     valuedMovementCount += 1;
     lastReceiptAt = movement.createdAt;
@@ -250,7 +251,7 @@ export const updateProductCost = async (
     },
   });
   const previousQuantity = existing?.costBasisQty ?? 0;
-  const nextQuantity = previousQuantity + input.qtyReceived;
+  const nextQuantity = roundQuantity(previousQuantity + input.qtyReceived);
   const previousTotal = existing
     ? existing.avgCostKgs.mul(previousQuantity)
     : new Prisma.Decimal(0);
@@ -292,9 +293,9 @@ export const replaceProductCostContribution = async (
   },
 ) => {
   if (
-    !Number.isInteger(input.previousQuantity) ||
+    !isValidQuantity(input.previousQuantity) ||
     input.previousQuantity < 0 ||
-    !Number.isInteger(input.nextQuantity) ||
+    !isValidQuantity(input.nextQuantity) ||
     input.nextQuantity < 0
   ) {
     throw new AppError("invalidDocumentQuantity", "BAD_REQUEST", 400);
@@ -348,8 +349,8 @@ export const replaceProductCostContribution = async (
     });
   }
 
-  const quantityDelta = input.nextQuantity - input.previousQuantity;
-  const previousStreamQuantity = stream.quantity - quantityDelta;
+  const quantityDelta = roundQuantity(input.nextQuantity - input.previousQuantity);
+  const previousStreamQuantity = roundQuantity(stream.quantity - quantityDelta);
   const fullyValuedBeforeEdit =
     stream.unvaluedMovementCount === 0 &&
     existing.costBasisQty === previousStreamQuantity;
@@ -363,7 +364,7 @@ export const replaceProductCostContribution = async (
     nextQuantity = stream.quantity;
     nextTotal = stream.totalValueKgs;
   } else {
-    nextQuantity = existing.costBasisQty - input.previousQuantity + input.nextQuantity;
+    nextQuantity = roundQuantity(existing.costBasisQty - input.previousQuantity + input.nextQuantity);
     nextTotal = existing.avgCostKgs
       .mul(existing.costBasisQty)
       .minus(previousLineTotalKgs)

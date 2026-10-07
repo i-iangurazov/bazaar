@@ -1,3 +1,4 @@
+import { defaultUnitPrecision } from "@/lib/quantity";
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
 import { writeAuditLog } from "@/server/services/audit";
@@ -16,6 +17,7 @@ export const createUnit = async (input: {
   code: string;
   labelRu: string;
   labelKg: string;
+  quantityPrecision?: 0 | 3;
 }) =>
   prisma.$transaction(async (tx) => {
     const existing = await tx.unit.findUnique({
@@ -31,6 +33,7 @@ export const createUnit = async (input: {
         code: input.code,
         labelRu: input.labelRu,
         labelKg: input.labelKg,
+        quantityPrecision: input.quantityPrecision ?? defaultUnitPrecision(input.code, input.labelRu),
       },
     });
 
@@ -55,6 +58,7 @@ export const updateUnit = async (input: {
   requestId: string;
   labelRu: string;
   labelKg: string;
+  quantityPrecision?: 0 | 3;
 }) =>
   prisma.$transaction(async (tx) => {
     const before = await tx.unit.findUnique({ where: { id: input.unitId } });
@@ -62,9 +66,12 @@ export const updateUnit = async (input: {
       throw new AppError("unitNotFound", "NOT_FOUND", 404);
     }
 
+    if (input.quantityPrecision === 0 && before.quantityPrecision > 0 && await tx.product.count({ where: { baseUnitId: before.id } })) {
+      throw new AppError("unitInUse", "CONFLICT", 409);
+    }
     const unit = await tx.unit.update({
       where: { id: input.unitId },
-      data: { labelRu: input.labelRu, labelKg: input.labelKg },
+      data: { labelRu: input.labelRu, labelKg: input.labelKg, quantityPrecision: input.quantityPrecision },
     });
 
     await writeAuditLog(tx, {

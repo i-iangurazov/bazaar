@@ -1,3 +1,5 @@
+import { assertProductQuantity } from "./productQuantity";
+import { roundQuantity } from "@/lib/quantity";
 import { releaseLoyaltyForOrder } from "@/server/services/loyalty/apply";
 import { assertSaleAssortment, lockAssortmentForSale } from "./assortmentPolicy";
 import { assertBaamReviewedVersion } from "@/server/services/baamExecutionContext";
@@ -150,7 +152,7 @@ const syncAlreadyDeductedOrderStock = async (
   for (const line of lines) {
     const key = `${line.productId}:${line.variantId ?? "BASE"}`;
     const delta = deltas.get(key) ?? { productId: line.productId, variantId: line.variantId, qtyDelta: 0 };
-    delta.qtyDelta -= line.qty;
+    delta.qtyDelta = roundQuantity(delta.qtyDelta - line.qty);
     deltas.set(key, delta);
   }
   for (const delta of [...deltas.values()].sort((a,b) => a.productId.localeCompare(b.productId))) {
@@ -647,7 +649,7 @@ export const getSalesOrderMetrics = async (input: {
         costKgs: 0,
         profitKgs: 0,
       };
-      top.qty += line.qty;
+      top.qty = roundQuantity(top.qty + line.qty);
       top.revenueKgs += revenue;
       top.costKgs += cost;
       top.profitKgs += profit;
@@ -784,6 +786,7 @@ const createCustomerOrderDraftTx = async (
     const existingKeys = new Set<string>();
 
     for (const lineInput of input.lines) {
+      await assertProductQuantity(tx, input.organizationId, lineInput.productId, lineInput.qty);
       const resolved = await resolveUnitPrice({
         tx,
         organizationId: input.organizationId,
@@ -1134,6 +1137,7 @@ export const addCustomerOrderLine = async (input: {
     if (await tx.salePayment.findFirst({ where: { customerOrderId: order.id } })) throw new AppError("loyaltyReceiptFinancialEdit", "CONFLICT", 409);
     await releaseLoyaltyForOrder(tx, { customerOrderId: order.id });
 
+    await assertProductQuantity(tx, input.organizationId, input.productId, input.qty);
     const resolved = await resolveUnitPrice({
       tx,
       organizationId: input.organizationId,
@@ -1236,6 +1240,7 @@ export const updateCustomerOrderLine = async (input: {
     }
 
     assertEditable(line.customerOrder.status);
+    await assertProductQuantity(tx, input.organizationId, line.productId, input.qty);
 
     if (await tx.salePayment.findFirst({ where: { customerOrderId: line.customerOrderId } })) throw new AppError("loyaltyReceiptFinancialEdit", "CONFLICT", 409);
     await releaseLoyaltyForOrder(tx, { customerOrderId: line.customerOrderId });

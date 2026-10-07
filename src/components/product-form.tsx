@@ -159,6 +159,7 @@ export type ProductFormValues = {
 };
 
 type UnitOption = {
+  quantityPrecision?: number;
   id: string;
   code: string;
   labelRu: string;
@@ -574,8 +575,8 @@ const normalizeSkuToken = (value?: string | null) =>
     .replace(/[^A-Z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 
-const preventInvalidIntegerInput = (event: KeyboardEvent<HTMLInputElement>) => {
-  if (["-", "+", "e", "E", ".", ","].includes(event.key)) {
+const preventInvalidQuantityInput = (event: KeyboardEvent<HTMLInputElement>) => {
+  if (["-", "+", "e", "E"].includes(event.key)) {
     event.preventDefault();
   }
 };
@@ -746,7 +747,7 @@ export const ProductForm = ({
     );
     const optionalStockQty = z.preprocess(
       (value) => (value === "" || value === null || value === undefined ? undefined : value),
-      z.coerce.number().int(t("stockNonNegative")).min(0, t("stockNonNegative")).optional(),
+      z.coerce.number().multipleOf(0.001, t("stockNonNegative")).min(0, t("stockNonNegative")).optional(),
     );
 
     return z
@@ -818,7 +819,7 @@ export const ProductForm = ({
             z.object({
               componentProductId: z.string().min(1, t("bundleSelectComponent")),
               componentVariantId: z.string().optional().nullable(),
-              qty: z.coerce.number().int().positive(t("bundleQtyPositive")),
+              qty: z.coerce.number().multipleOf(0.001).positive(t("bundleQtyPositive")),
               componentName: z.string().optional(),
               componentSku: z.string().optional(),
             }),
@@ -4682,7 +4683,7 @@ export const ProductForm = ({
                           {...itemField}
                           value={itemField.value ?? ""}
                           type="number"
-                          inputMode="numeric"
+                          inputMode="decimal"
                           min={1}
                           disabled={readOnly}
                         />
@@ -4853,13 +4854,13 @@ export const ProductForm = ({
 
             <ProductEditorCard title={t("category")} className={editorFormCardClassName}>
               {shopifyCategoryPicker}
-              {!unitOptions.length ? (
+              {(
                 <FormField
                   control={form.control}
                   name="baseUnitId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel required>{t("unit")}</FormLabel>
+                      <FormLabel required>{t("unitLabel")}</FormLabel>
                       <Select
                         value={field.value}
                         onValueChange={field.onChange}
@@ -4878,12 +4879,12 @@ export const ProductForm = ({
                           ))}
                         </SelectContent>
                       </Select>
-                      <FormDescription>{t("unitMissingHint")}</FormDescription>
+                      {!unitOptions.length ? <FormDescription>{t("unitMissingHint")}</FormDescription> : null}
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-              ) : null}
+              )}
             </ProductEditorCard>
 
             <ProductEditorCard title={t("pricingTitle")} className={editorFormCardClassName}>
@@ -4979,11 +4980,11 @@ export const ProductForm = ({
                             {...field}
                             value={field.value ?? ""}
                             type="number"
-                            inputMode="numeric"
+                            inputMode="decimal"
                             min={0}
-                            step={1}
+                            step={0.001}
                             placeholder={t("initialOnHandPlaceholder")}
-                            onKeyDown={preventInvalidIntegerInput}
+                            onKeyDown={preventInvalidQuantityInput}
                             disabled={readOnly}
                           />
                         </FormControl>
@@ -5003,11 +5004,11 @@ export const ProductForm = ({
                           {...field}
                           value={field.value ?? ""}
                           type="number"
-                          inputMode="numeric"
+                          inputMode="decimal"
                           min={0}
-                          step={1}
+                          step={0.001}
                           placeholder={t("minStockPlaceholder")}
-                          onKeyDown={preventInvalidIntegerInput}
+                          onKeyDown={preventInvalidQuantityInput}
                           disabled={readOnly}
                         />
                       </FormControl>
@@ -5192,9 +5193,9 @@ export const ProductForm = ({
                                   {...field}
                                   value={field.value ?? ""}
                                   type="number"
-                                  min={1}
-                                  step={1}
-                                  inputMode="numeric"
+                                  min={0.001}
+                                  step={0.001}
+                                  inputMode="decimal"
                                   disabled={readOnly}
                                 />
                               </FormControl>
@@ -5658,12 +5659,12 @@ export const ProductForm = ({
                                         {...field}
                                         value={field.value ?? ""}
                                         type="number"
-                                        inputMode="numeric"
+                                        inputMode="decimal"
                                         min={0}
-                                        step={1}
+                                        step={0.001}
                                         className="h-9"
                                         placeholder={t("initialOnHandPlaceholder")}
-                                        onKeyDown={preventInvalidIntegerInput}
+                                        onKeyDown={preventInvalidQuantityInput}
                                         disabled={readOnly}
                                       />
                                     </FormControl>
@@ -6233,13 +6234,13 @@ export const ProductForm = ({
                         </FormItem>
                       )}
                     />
-                    {!compactCreate || !unitOptions.length ? (
+                    {(
                       <FormField
                         control={form.control}
                         name="baseUnitId"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel required>{t("unit")}</FormLabel>
+                            <FormLabel required>{t("unitLabel")}</FormLabel>
                             <Select
                               value={field.value}
                               onValueChange={field.onChange}
@@ -6265,7 +6266,7 @@ export const ProductForm = ({
                           </FormItem>
                         )}
                       />
-                    ) : null}
+                    )}
                     {showBasePriceField && !retailWholesaleEnabled ? (
                       <FormField
                         control={form.control}
@@ -6304,11 +6305,11 @@ export const ProductForm = ({
                                     {...field}
                                     value={field.value ?? ""}
                                     type="number"
-                                    inputMode="numeric"
+                                    inputMode="decimal"
                                     min={0}
-                                    step={1}
+                                    step={0.001}
                                     placeholder={t("initialOnHandPlaceholder")}
-                                    onKeyDown={preventInvalidIntegerInput}
+                                    onKeyDown={preventInvalidQuantityInput}
                                     disabled={readOnly}
                                   />
                                 </FormControl>
@@ -6329,11 +6330,11 @@ export const ProductForm = ({
                                   {...field}
                                   value={field.value ?? ""}
                                   type="number"
-                                  inputMode="numeric"
+                                  inputMode="decimal"
                                   min={0}
-                                  step={1}
+                                  step={0.001}
                                   placeholder={t("minStockPlaceholder")}
-                                  onKeyDown={preventInvalidIntegerInput}
+                                  onKeyDown={preventInvalidQuantityInput}
                                   disabled={readOnly}
                                 />
                               </FormControl>
@@ -6718,9 +6719,9 @@ export const ProductForm = ({
                                     <Input
                                       {...field}
                                       type="number"
-                                      min={1}
-                                      step={1}
-                                      inputMode="numeric"
+                                      min={0.001}
+                                      step={0.001}
+                                      inputMode="decimal"
                                       disabled={readOnly}
                                     />
                                   </FormControl>
@@ -6881,7 +6882,7 @@ export const ProductForm = ({
                                             {...itemField}
                                             value={itemField.value ?? ""}
                                             type="number"
-                                            inputMode="numeric"
+                                            inputMode="decimal"
                                             min={1}
                                             disabled={readOnly}
                                           />
@@ -7117,11 +7118,11 @@ export const ProductForm = ({
                                           {...itemField}
                                           value={itemField.value ?? ""}
                                           type="number"
-                                          inputMode="numeric"
+                                          inputMode="decimal"
                                           min={0}
-                                          step={1}
+                                          step={0.001}
                                           placeholder={t("initialOnHandPlaceholder")}
-                                          onKeyDown={preventInvalidIntegerInput}
+                                          onKeyDown={preventInvalidQuantityInput}
                                           disabled={readOnly}
                                         />
                                       </FormControl>

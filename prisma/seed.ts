@@ -1,3 +1,4 @@
+import { defaultUnitPrecision } from "../src/lib/quantity";
 import {
   Prisma,
   PrismaClient,
@@ -177,12 +178,14 @@ const ensureUnits = async (orgId: string) => {
         update: {
           labelRu: unit.labelRu,
           labelKg: unit.labelKg,
+          quantityPrecision: defaultUnitPrecision(unit.code),
         },
         create: {
           organizationId: orgId,
           code: unit.code,
           labelRu: unit.labelRu,
           labelKg: unit.labelKg,
+          quantityPrecision: defaultUnitPrecision(unit.code),
         },
       }),
     ),

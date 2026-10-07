@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 
 import { AppError } from "@/server/services/errors";
+import { isValidQuantity } from "@/lib/quantity";
 
 export type QuantityMode = "purchasing" | "receiving" | "inventory";
 
@@ -36,10 +37,10 @@ export const resolveBaseQuantity = async (
     if (!Number.isFinite(input.qty)) {
       throw new AppError("invalidQuantity", "BAD_REQUEST", 400);
     }
-    // Decimal pack inputs such as 0.29 * 100 must produce 29 base units,
-    // without accepting genuinely fractional base quantities by rounding.
     const baseQty = new Prisma.Decimal(input.qty).mul(pack.multiplierToBase);
-    if (!baseQty.isFinite() || !baseQty.isInteger() || !Number.isSafeInteger(baseQty.toNumber())) {
+    const unit = await tx.unit.findUnique({ where: { id: input.baseUnitId } });
+    if (!unit || unit.organizationId !== input.organizationId ||
+        !baseQty.isFinite() || !isValidQuantity(baseQty.toNumber(), unit.quantityPrecision)) {
       throw new AppError("invalidQuantity", "BAD_REQUEST", 400);
     }
     return baseQty.toNumber();
@@ -49,7 +50,8 @@ export const resolveBaseQuantity = async (
     throw new AppError("unitMismatch", "BAD_REQUEST", 400);
   }
 
-  if (!Number.isFinite(input.qty) || !Number.isInteger(input.qty)) {
+  const unit = await tx.unit.findUnique({ where: { id: input.baseUnitId } });
+  if (!unit || unit.organizationId !== input.organizationId || !isValidQuantity(input.qty, unit.quantityPrecision)) {
     throw new AppError("invalidQuantity", "BAD_REQUEST", 400);
   }
 

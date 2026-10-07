@@ -360,7 +360,7 @@ describe("pos entry navigation", () => {
     expect(routerSource).toContain("discountKgs: z.number().min(0).optional()");
     expect(routerSource).toContain("payments: z.array(paymentSchema).max(4).optional()");
     expect(serviceSource).toContain("requestedDiscountKgs");
-    expect(serviceSource).toContain("const stockDelta = oldQty - desiredQty;");
+    expect(serviceSource).toContain("const stockDelta = roundQuantity(oldQty - desiredQty);");
     expect(serviceSource).toContain('route: "pos.sales.editCompleted"');
     expect(serviceSource).toContain("cashDeltaKgs");
   });

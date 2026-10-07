@@ -243,7 +243,7 @@ export const purchaseOrdersRouter = router({
             z.object({
               productId: z.string(),
               variantId: z.string().optional(),
-              qtyOrdered: z.number().int().positive(),
+              qtyOrdered: z.number().multipleOf(0.001).positive(),
               unitCost: z.number().optional(),
               unitId: z.string().optional().nullable(),
               packId: z.string().optional().nullable(),
@@ -283,7 +283,7 @@ export const purchaseOrdersRouter = router({
             z.object({
               productId: z.string(),
               variantId: z.string().optional().nullable(),
-              qtyOrdered: z.number().int().positive(),
+              qtyOrdered: z.number().multipleOf(0.001).positive(),
               supplierId: z.string().optional().nullable(),
             }),
           )
@@ -349,7 +349,7 @@ export const purchaseOrdersRouter = router({
           .array(
             z.object({
               lineId: z.string(),
-              qtyReceived: z.number().int().positive(),
+              qtyReceived: z.number().multipleOf(0.001).positive(),
               unitId: z.string().optional().nullable(),
               packId: z.string().optional().nullable(),
             }),
@@ -418,7 +418,7 @@ export const purchaseOrdersRouter = router({
         purchaseOrderId: z.string(),
         productId: z.string(),
         variantId: z.string().optional().nullable(),
-        qtyOrdered: z.number().int().positive(),
+        qtyOrdered: z.number().multipleOf(0.001).positive(),
         unitCost: z.number().min(0).optional().nullable(),
         unitId: z.string().optional().nullable(),
         packId: z.string().optional().nullable(),
@@ -448,7 +448,7 @@ export const purchaseOrdersRouter = router({
     .input(
       z.object({
         lineId: z.string(),
-        qtyOrdered: z.number().int().positive(),
+        qtyOrdered: z.number().multipleOf(0.001).positive(),
         unitCost: z.number().min(0).optional().nullable(),
         unitId: z.string().optional().nullable(),
         packId: z.string().optional().nullable(),

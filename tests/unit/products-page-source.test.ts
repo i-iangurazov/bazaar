@@ -216,7 +216,7 @@ describe("index page source layout", () => {
     expect(productServiceSource).toContain("source.reorderPolicies.filter");
     expect(productReadSource).toContain("prisma.reorderPolicy.findMany");
     expect(productReadSource).toContain("minStock: minStockByStore.get(store.id) ?? 0");
-    expect(productSchemasSource).toContain("minStock: z.number().int().min(0).optional()");
+    expect(productSchemasSource).toContain("minStock: z.number().multipleOf(0.001).min(0).optional()");
     expect(productMutationsSource).toContain("minStock: input.minStock");
   });
 

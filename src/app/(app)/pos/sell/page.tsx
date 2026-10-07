@@ -1,4 +1,5 @@
 "use client";
+import { parseQuantity, isValidQuantity, roundQuantity } from "@/lib/quantity";
 import { PosTransferDialog } from "@/components/pos/transfer-dialog";
 
 import { posShiftCloseHref } from "@/lib/posShiftClose";
@@ -249,7 +250,12 @@ const CustomerCreatePanel = ({
   </div>
 );
 
+type PosQuantityUnit = { code: string; labelRu: string; labelKg: string; quantityPrecision: number };
+const cartQuantityStep = (line: PosCartLine) => line.product.baseUnit?.quantityPrecision === 3 ? 0.1 : 1;
+const minimumCartQuantity = (line: PosCartLine) => line.product.baseUnit?.quantityPrecision === 3 ? 0.001 : 1;
+
 type PosCartProduct = {
+  baseUnit?: PosQuantityUnit;
   variantCount?: number;
   variantId?: string | null;
   variantName?: string | null;
@@ -288,6 +294,7 @@ type PosCartLine = {
   lineCostTotalKgs?: number | null;
   markingCodes: string[];
   product: {
+    baseUnit?: PosQuantityUnit;
     id: string;
     sku?: string | null;
     name: string;
@@ -344,6 +351,7 @@ const buildOptimisticLine = (product: PosCartProduct): PosCartLine => {
       id: product.id,
       sku: product.sku ?? "",
       name: product.name,
+      baseUnit: product.baseUnit,
       primaryImage,
       isBundle: Boolean(product.isBundle),
       complianceFlags: product.complianceFlags ?? null,
@@ -366,7 +374,7 @@ type PosProductButtonProps = {
   increaseQtyLabel: string;
   priceMissingLabel: string;
   formatSaleMoney: (amountKgs: number) => string;
-  stockMeta: (stockQty: number | null) => ProductStockMeta;
+  stockMeta: (stockQty: number | null, unit?: PosQuantityUnit | null) => ProductStockMeta;
   onProductClick: (product: PosCatalogProduct) => void;
   onProductDecrement: (product: PosCatalogProduct) => void;
 };
@@ -388,7 +396,7 @@ const PosProductButton = memo(function PosProductButton({
   const priceKgs = product.effectivePriceKgs ?? product.basePriceKgs ?? null;
   const stockQty = product.onHandQty ?? null;
   const primaryImage = product.images?.[0]?.url ?? product.photoUrl;
-  const stock = stockMeta(stockQty);
+  const stock = stockMeta(stockQty, product.baseUnit);
   const priceMissing = priceKgs === null;
 
   const activateProduct = () => {
@@ -1910,7 +1918,7 @@ const PosSellPage = () => {
             return baseLines;
           }
           return baseLines.map((line, index) =>
-            index === existingIndex ? recalculateCartLine(line, { qty: line.qty + 1 }) : line,
+            index === existingIndex ? recalculateCartLine(line, { qty: roundQuantity(line.qty + 1) }) : line,
           );
         }
 
@@ -2145,7 +2153,7 @@ const PosSellPage = () => {
           return true;
         }
         const localLineId = existingLineBeforeAdd?.id ?? optimisticLineId;
-        const nextQty = (existingLineBeforeAdd?.qty ?? 0) + 1;
+        const nextQty = roundQuantity((existingLineBeforeAdd?.qty ?? 0) + 1);
         if (nextQty > 0) {
           scheduleLineSync(localLineId, { qty: nextQty });
         }
@@ -2426,11 +2434,13 @@ const PosSellPage = () => {
       [lineId]: { ...current[lineId], qty: raw },
     }));
 
-    const qty = Math.trunc(Number(raw));
-    if (!Number.isFinite(qty) || qty <= 0) {
+    const qty = parseQuantity(raw);
+    if (qty === null || qty <= 0) {
       return;
     }
 
+    const line = getCurrentCartLines().find(item => item.id === lineId);
+    if (line?.product.baseUnit && !isValidQuantity(qty, line.product.baseUnit.quantityPrecision)) return;
     patchOptimisticLine(lineId, { qty });
     scheduleLineSync(lineId, { qty });
   };
@@ -2438,8 +2448,8 @@ const PosSellPage = () => {
   const handleQtyBlur = (line: PosCartLine) => {
     if (cartPriceSyncRef.current) return;
     const raw = lineInputDrafts[line.id]?.qty ?? String(line.qty);
-    const qty = Math.trunc(Number(raw));
-    if (!Number.isFinite(qty) || qty <= 0) {
+    const qty = parseQuantity(raw);
+    if (qty === null || qty <= 0 || !isValidQuantity(qty, line.product.baseUnit?.quantityPrecision ?? 0)) {
       setLineInputDrafts((current) => ({
         ...current,
         [line.id]: { ...current[line.id], qty: String(line.qty) },
@@ -3375,7 +3385,7 @@ const PosSellPage = () => {
   const journalReturnLineStates =
     journalSelectedSale?.lines.map((line) => {
       const availableQty = journalReturnAvailableQtyByLine[line.id] ?? 0;
-      const qty = Math.trunc(Number(journalReturnQtyByLine[line.id] ?? 0));
+      const qty = parseQuantity(journalReturnQtyByLine[line.id] ?? "0") ?? 0;
       const selectedQty =
         Number.isFinite(qty) && qty > 0 && availableQty > 0 ? Math.min(qty, availableQty) : 0;
       return { line, availableQty, selectedQty };
@@ -3407,7 +3417,7 @@ const PosSellPage = () => {
       Object.fromEntries(
         journalSelectedSale.lines.map((line) => {
           const availableQty = journalReturnAvailableQtyByLine[line.id] ?? 0;
-          const qty = Math.trunc(Number(current[line.id] ?? 0));
+          const qty = parseQuantity(current[line.id] ?? "0") ?? 0;
           const normalizedQty = Number.isFinite(qty) ? Math.max(0, Math.min(qty, availableQty)) : 0;
           return [line.id, String(normalizedQty)];
         }),
@@ -4002,10 +4012,10 @@ const PosSellPage = () => {
     (category) => !isDemoCategory(category),
   );
   const stockMeta = useCallback(
-    (stockQty: number | null): ProductStockMeta => ({
+    (stockQty: number | null, unit?: PosQuantityUnit | null): ProductStockMeta => ({
       label: stockQty === null
         ? tCommon("notAvailable")
-        : `${formatNumber(stockQty, locale)} ${t("sell.stockUnitShort")}`,
+        : `${formatNumber(stockQty, locale)} ${unit ? (locale === "kg" ? unit.labelKg : unit.labelRu) || unit.code : t("sell.stockUnitShort")}`,
       className: stockQty !== null && stockQty <= 0
         ? "text-danger"
         : "text-muted-foreground",
@@ -4034,7 +4044,7 @@ const PosSellPage = () => {
       focusLineSearchInput();
       return;
     }
-    handleUpdateQty(line.id, String(line.qty - 1));
+    handleUpdateQty(line.id, String(roundQuantity(line.qty - cartQuantityStep(line))));
     focusLineSearchInput();
   };
 
@@ -4899,13 +4909,13 @@ const PosSellPage = () => {
                     aria-label={`${line.product.name}: ${t("history.availableQty")} ${availableQty}`}
                     onChange={(event) => {
                       const raw = event.target.value.replace(/[^\d]/g, "");
-                      const parsed = raw ? Math.trunc(Number(raw)) : 0;
+                      const parsed = raw ? parseQuantity(raw) ?? 0 : 0;
                       setJournalReturnQtyByLine((current) => ({
                         ...current,
                         [line.id]: String(Math.min(parsed, availableQty)),
                       }));
                     }}
-                    inputMode="numeric"
+                    inputMode="decimal"
                     className="mt-2"
                     disabled={availableQty <= 0 || isJournalReturnBusy}
                   />
@@ -5077,7 +5087,7 @@ const PosSellPage = () => {
           if (decrement) {
             const line = findCartLineForProduct(getCurrentCartLines(), product.id, variant.id ?? "BASE");
             if (line && line.qty <= 1) await trackCartSyncPromise(handleRemoveLine(line.id));
-            else if (line) handleUpdateQty(line.id, String(line.qty - 1));
+            else if (line) handleUpdateQty(line.id, String(roundQuantity(line.qty - cartQuantityStep(line))));
             focusLineSearchInput(); return;
           }
           await handleAddLine(product.id, product, { variantId: variant.id, variantName: variant.name, refocusSearch: true });
@@ -5870,11 +5880,11 @@ const PosSellPage = () => {
                                         onClick={() =>
                                           handleUpdateQty(
                                             line.id,
-                                            String(Math.max(1, line.qty - 1)),
+                                            String(roundQuantity(Math.max(minimumCartQuantity(line), line.qty - cartQuantityStep(line)))),
                                           )
                                         }
                                         disabled={
-                                          line.qty <= 1 ||
+                                          line.qty <= minimumCartQuantity(line) ||
                                           cancelDraftMutation.isLoading ||
                                           completeMutation.isLoading
                                         }
@@ -5890,8 +5900,8 @@ const PosSellPage = () => {
                                         }
                                         onFocus={(event) => event.currentTarget.select()}
                                         onBlur={() => handleQtyBlur(line)}
-                                        className="h-6 w-8 rounded-md border-y-0 px-1 py-0 text-center text-xs shadow-none focus-visible:ring-0"
-                                        inputMode="numeric"
+                                        className="h-6 w-12 rounded-md border-y-0 px-1 py-0 text-center text-xs shadow-none focus-visible:ring-0"
+                                        inputMode="decimal"
                                         aria-label={t("sell.cartQty")}
                                         disabled={
                                           cancelDraftMutation.isLoading ||
@@ -5904,7 +5914,7 @@ const PosSellPage = () => {
                                         size="icon"
                                         className="h-6 w-7 rounded-md text-base font-semibold leading-none text-foreground"
                                         onClick={() =>
-                                          handleUpdateQty(line.id, String(line.qty + 1))
+                                          handleUpdateQty(line.id, String(roundQuantity(line.qty + cartQuantityStep(line))))
                                         }
                                         disabled={
                                           cancelDraftMutation.isLoading ||
@@ -6467,7 +6477,8 @@ const PosSellPage = () => {
         if (mobileLineInputMode === "price") {
           handleUpdateLinePrice(activeLine.id, nextValue);
         } else {
-          handleUpdateQty(activeLine.id, nextValue.replace(/[^\d]/g, ""));
+          if (!/^\d*(?:[.,]\d{0,3})?$/.test(nextValue)) return;
+          handleUpdateQty(activeLine.id, nextValue);
         }
       };
 
@@ -6487,11 +6498,11 @@ const PosSellPage = () => {
             const next = Math.max(0, roundMoney(current + (key === "+" ? 1 : -1)));
             updateActiveLineInput(String(next));
           } else {
-            const current = Math.trunc(Number(activeLineInputValue() || activeLine.qty));
-            const next = Math.max(
-              1,
-              (Number.isFinite(current) ? current : 1) + (key === "+" ? 1 : -1),
-            );
+            const current = parseQuantity(activeLineInputValue() || String(activeLine.qty)) ?? 0;
+            const next = roundQuantity(Math.max(
+              minimumCartQuantity(activeLine),
+              current + (key === "+" ? 1 : -1) * cartQuantityStep(activeLine),
+            ));
             updateActiveLineInput(String(next));
           }
           setMobileKeypadReplaceNext(true);
@@ -6504,7 +6515,7 @@ const PosSellPage = () => {
           return;
         }
 
-        if (key === "," && mobileLineInputMode !== "price") {
+        if (key === "," && mobileLineInputMode !== "price" && activeLine.product.baseUnit?.quantityPrecision !== 3) {
           return;
         }
 
@@ -6907,7 +6918,7 @@ const PosSellPage = () => {
                         {line.product.name}{line.variant?.name ? ` · ${line.variant.name}` : ""}{line.manualPrice ? <span className="ml-1 text-xs text-muted-foreground" title={t("tools.manualPrice")} aria-label={t("tools.manualPrice")}>*</span> : null}
                       </span>
                       <span className="mt-0.5 block text-[12px] text-muted-foreground">
-                        {line.qty} x {formatSaleMoney(line.unitPriceKgs)}
+                        {formatNumber(line.qty, locale)} {line.product.baseUnit ? (locale === "kg" ? line.product.baseUnit.labelKg : line.product.baseUnit.labelRu) : ""} × {formatSaleMoney(line.unitPriceKgs)}
                       </span>
                     </span>
                     <span className="shrink-0 text-right text-[14px] font-semibold text-foreground">
@@ -7267,7 +7278,7 @@ const PosSellPage = () => {
                 {visibleProducts.map((product) => {
                   const priceKgs = product.effectivePriceKgs ?? product.basePriceKgs ?? null;
                   const primaryImage = product.images?.[0]?.url ?? product.photoUrl;
-                  const stock = stockMeta(product.onHandQty ?? null);
+                  const stock = stockMeta(product.onHandQty ?? null, product.baseUnit);
                   const isPendingProduct = mobilePendingProductId === product.id;
                   return (
                     <button
@@ -7540,10 +7551,10 @@ const PosSellPage = () => {
                     type="button"
                     className="grid min-h-[50px] w-11 shrink-0 place-items-center text-lg font-semibold disabled:opacity-40"
                     onClick={() =>
-                      handleUpdateQty(activeLine.id, String(Math.max(1, activeLine.qty - 1)))
+                      handleUpdateQty(activeLine.id, String(roundQuantity(Math.max(minimumCartQuantity(activeLine), activeLine.qty - cartQuantityStep(activeLine)))))
                     }
                     disabled={
-                      activeLine.qty <= 1 ||
+                      activeLine.qty <= minimumCartQuantity(activeLine) ||
                       cancelDraftMutation.isLoading ||
                       completeMutation.isLoading
                     }
@@ -7567,7 +7578,7 @@ const PosSellPage = () => {
                   <button
                     type="button"
                     className="grid min-h-[50px] w-11 shrink-0 place-items-center text-lg font-semibold disabled:opacity-40"
-                    onClick={() => handleUpdateQty(activeLine.id, String(activeLine.qty + 1))}
+                    onClick={() => handleUpdateQty(activeLine.id, String(roundQuantity(activeLine.qty + cartQuantityStep(activeLine))))}
                     disabled={cancelDraftMutation.isLoading || completeMutation.isLoading}
                     aria-label={t("sell.increaseQty")}
                   >
@@ -8274,11 +8285,11 @@ const PosSellPage = () => {
                                         onClick={() =>
                                           handleUpdateQty(
                                             line.id,
-                                            String(Math.max(1, line.qty - 1)),
+                                            String(roundQuantity(Math.max(minimumCartQuantity(line), line.qty - cartQuantityStep(line)))),
                                           )
                                         }
                                         disabled={
-                                          line.qty <= 1 ||
+                                          line.qty <= minimumCartQuantity(line) ||
                                           cancelDraftMutation.isLoading ||
                                           completeMutation.isLoading
                                         }
@@ -8295,7 +8306,7 @@ const PosSellPage = () => {
                                         onFocus={(event) => event.currentTarget.select()}
                                         onBlur={() => handleQtyBlur(line)}
                                         className="h-11 w-11 rounded-md border-y-0 px-1 text-center shadow-none focus-visible:ring-0"
-                                        inputMode="numeric"
+                                        inputMode="decimal"
                                         disabled={
                                           cancelDraftMutation.isLoading ||
                                           completeMutation.isLoading
@@ -8307,7 +8318,7 @@ const PosSellPage = () => {
                                         size="icon"
                                         className="h-11 w-11 rounded-md text-base"
                                         onClick={() =>
-                                          handleUpdateQty(line.id, String(line.qty + 1))
+                                          handleUpdateQty(line.id, String(roundQuantity(line.qty + cartQuantityStep(line))))
                                         }
                                         disabled={
                                           cancelDraftMutation.isLoading ||

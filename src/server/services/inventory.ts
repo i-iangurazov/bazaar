@@ -1,3 +1,4 @@
+import { isValidQuantity, roundQuantity } from "@/lib/quantity";
 import { inventoryProductAccessWhere } from "./storeAccess";
 import { randomUUID } from "node:crypto";
 import type { InventorySnapshot, Prisma } from "@prisma/client";
@@ -101,7 +102,7 @@ export const applyStockMovement = async (
   tx: Prisma.TransactionClient,
   input: ApplyStockMovementInput,
 ): Promise<{ snapshot: InventorySnapshot; movementId: string }> => {
-  if (!Number.isSafeInteger(input.qtyDelta)) {
+  if (!isValidQuantity(input.qtyDelta)) {
     throw new AppError("invalidQuantity", "BAD_REQUEST", 400);
   }
   const store = await tx.store.findUnique({ where: { id: input.storeId } });
@@ -112,7 +113,7 @@ export const applyStockMovement = async (
     throw new AppError("storeOrgMismatch", "FORBIDDEN", 403);
   }
 
-  const product = await tx.product.findUnique({ where: { id: input.productId } });
+  const product = await tx.product.findUnique({ where: { id: input.productId }, include: { baseUnit: true } });
   if (!product || product.isDeleted) {
     throw new AppError("productNotFound", "NOT_FOUND", 404);
   }
@@ -120,6 +121,8 @@ export const applyStockMovement = async (
       (input.organizationId && product.organizationId !== input.organizationId)) {
     throw new AppError("productOrgMismatch", "FORBIDDEN", 403);
   }
+  if (!isValidQuantity(input.qtyDelta, product.baseUnit.quantityPrecision))
+    throw new AppError("wholeQuantityRequired", "BAD_REQUEST", 400);
   await assignProductToStore(tx, {
     organizationId: input.organizationId ?? store.organizationId,
     storeId: input.storeId,
@@ -159,7 +162,7 @@ export const applyStockMovement = async (
     throw new AppError("snapshotMissing", "NOT_FOUND", 404);
   }
 
-  const nextOnHand = snapshot.onHand + input.qtyDelta;
+  const nextOnHand = roundQuantity(snapshot.onHand + input.qtyDelta);
   if (!effectiveAllowNegativeStock && input.qtyDelta < 0 && nextOnHand < 0) {
     throw new AppError("insufficientStock", "CONFLICT", 409);
   }
@@ -328,7 +331,7 @@ export const setStockOnHand = async (input: {
       if (before.version !== input.expectedVersion || before.onHand !== input.expectedOnHand) {
         throw new AppError("inventoryStockConflict", "CONFLICT", 409);
       }
-      const qtyDelta = input.targetOnHand - before.onHand;
+      const qtyDelta = roundQuantity(input.targetOnHand - before.onHand);
       if (!qtyDelta) return before;
       const { snapshot } = await applyStockMovement(tx, {
         ...input, qtyDelta, type: StockMovementType.ADJUSTMENT,
@@ -413,7 +416,7 @@ export const bulkSetOnHand = async (input: BulkSetOnHandInput): Promise<BulkSetO
         const snapshot = await lockStockSnapshot(tx, {
           ...input, productId: selected.productId, variantId: selected.variantId,
         });
-        const qtyDelta = input.targetOnHand - snapshot.onHand;
+        const qtyDelta = roundQuantity(input.targetOnHand - snapshot.onHand);
         if (qtyDelta === 0) {
           continue;
         }
@@ -768,7 +771,7 @@ export const postStockReceiving = async (
             throw new AppError("duplicateLineItem", "BAD_REQUEST", 400);
           }
           lineKeys.add(key);
-          if (!Number.isInteger(line.quantity) || line.quantity <= 0) {
+          if (!isValidQuantity(line.quantity) || line.quantity <= 0) {
             throw new AppError("invalidReceivingQuantity", "BAD_REQUEST", 400);
           }
           if (!Number.isFinite(line.unitCost) || line.unitCost < 0) {
@@ -885,7 +888,7 @@ export const postStockReceiving = async (
           receivingId,
           storeId: input.storeId,
           lineCount: lineResults.length,
-          totalQuantity: lineResults.reduce((sum, line) => sum + line.quantity, 0),
+          totalQuantity: lineResults.reduce((sum, line) => roundQuantity(sum + line.quantity), 0),
           totalCostKgs: lineResults.reduce((sum, line) => sum + line.quantity * line.unitCost, 0),
           lines: lineResults,
         };
@@ -980,7 +983,7 @@ export const postStockWriteOff = async (
             throw new AppError("duplicateLineItem", "BAD_REQUEST", 400);
           }
           lineKeys.add(key);
-          if (!Number.isInteger(line.qty) || line.qty <= 0) {
+          if (!isValidQuantity(line.qty) || line.qty <= 0) {
             throw new AppError("invalidWriteOffQty", "BAD_REQUEST", 400);
           }
         }
@@ -1051,7 +1054,7 @@ export const postStockWriteOff = async (
             packId: line.packId,
             mode: "inventory",
           });
-          if (!Number.isInteger(qty) || qty <= 0) {
+          if (!isValidQuantity(qty) || qty <= 0) {
             throw new AppError("invalidWriteOffQty", "BAD_REQUEST", 400);
           }
 
@@ -1126,7 +1129,7 @@ export const postStockWriteOff = async (
           reason: input.reason,
           comment,
           lineCount: lineResults.length,
-          totalQuantity: lineResults.reduce((sum, line) => sum + line.quantity, 0),
+          totalQuantity: lineResults.reduce((sum, line) => roundQuantity(sum + line.quantity), 0),
           totalCostKgs,
           lines: lineResults,
         };
@@ -1234,7 +1237,7 @@ export const transferStock = async (input: TransferStockInput) => {
       throw new AppError("duplicateLineItem", "BAD_REQUEST", 400);
     }
     lineKeys.add(key);
-    if (!Number.isInteger(line.qty) || line.qty <= 0) {
+    if (!isValidQuantity(line.qty) || line.qty <= 0) {
       throw new AppError("invalidTransferQty", "BAD_REQUEST", 400);
     }
   }
@@ -1333,7 +1336,7 @@ export const transferStock = async (input: TransferStockInput) => {
             packId: line.packId,
             mode: "inventory",
           });
-          if (!Number.isInteger(qty) || qty <= 0) {
+          if (!isValidQuantity(qty) || qty <= 0) {
             throw new AppError("invalidTransferQty", "BAD_REQUEST", 400);
           }
           const unitCost = costMap.get(`${line.productId}:${line.variantKey}`) ?? null;
@@ -1446,7 +1449,7 @@ export const transferStock = async (input: TransferStockInput) => {
           fromStoreId: input.fromStoreId,
           toStoreId: input.toStoreId,
           lineCount: lineResults.length,
-          totalQuantity: lineResults.reduce((sum, line) => sum + line.quantity, 0),
+          totalQuantity: lineResults.reduce((sum, line) => roundQuantity(sum + line.quantity), 0),
           lines: lineResults,
           outSnapshot: lineResults[0]?.outSnapshotId ?? null,
           inSnapshot: lineResults[0]?.inSnapshotId ?? null,
@@ -1578,7 +1581,7 @@ const aggregateStockDocumentLines = (
     const unitCostKgs = movement.unitCostKgs === null ? null : Number(movement.unitCostKgs);
     const lineTotalKgs = movement.lineTotalKgs === null ? null : Number(movement.lineTotalKgs);
     if (existing) {
-      existing.qtyDelta += Number(movement.qtyDelta);
+      existing.qtyDelta = roundQuantity(existing.qtyDelta + Number(movement.qtyDelta));
       if (lineTotalKgs !== null) {
         existing.lineTotalKgs += lineTotalKgs;
         existing.hasLineTotal = true;
@@ -1636,7 +1639,7 @@ const getNetStockMovementStoreIds = (
     }
     const existing = totals.get(movement.storeId);
     if (existing) {
-      existing.quantity += movement.qtyDelta;
+      existing.quantity = roundQuantity(existing.quantity + movement.qtyDelta);
       return;
     }
     totals.set(movement.storeId, { quantity: movement.qtyDelta, firstIndex: index });
@@ -1663,7 +1666,7 @@ const normalizeStockDocumentEditLines = (
     if (normalized.has(key)) {
       throw new AppError("duplicateLineItem", "BAD_REQUEST", 400);
     }
-    if (!Number.isInteger(line.quantity) || line.quantity <= 0) {
+    if (!isValidQuantity(line.quantity) || line.quantity <= 0) {
       throw new AppError("invalidDocumentQuantity", "BAD_REQUEST", 400);
     }
     const unitCostKgs =
@@ -1972,12 +1975,12 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
                   onHand: applied.snapshot.onHand,
                 });
               }
-            } else if (newQuantity - oldQuantity !== 0 || lineTotalDelta !== 0) {
+            } else if (roundQuantity(newQuantity - oldQuantity) !== 0 || lineTotalDelta !== 0) {
               const movement = await applyStockMovement(tx, {
                 storeId: sourceStoreId,
                 productId: movementLine.productId,
                 variantId: movementLine.variantId,
-                qtyDelta: newQuantity - oldQuantity,
+                qtyDelta: roundQuantity(newQuantity - oldQuantity),
                 type: StockMovementType.RECEIVE,
                 referenceType: input.referenceType,
                 referenceId: input.referenceId,
@@ -2064,12 +2067,12 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
                   onHand: applied.snapshot.onHand,
                 });
               }
-            } else if (oldQuantity - newQuantity !== 0 || lineTotalDelta !== 0) {
+            } else if (roundQuantity(oldQuantity - newQuantity) !== 0 || lineTotalDelta !== 0) {
               const movement = await applyStockMovement(tx, {
                 storeId: sourceStoreId,
                 productId: movementLine.productId,
                 variantId: movementLine.variantId,
-                qtyDelta: oldQuantity - newQuantity,
+                qtyDelta: roundQuantity(oldQuantity - newQuantity),
                 type: StockMovementType.WRITE_OFF,
                 referenceType: input.referenceType,
                 referenceId: input.referenceId,
@@ -2188,7 +2191,7 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
             }
             continue;
           }
-          const outQtyDelta = oldQuantity - newQuantity;
+          const outQtyDelta = roundQuantity(oldQuantity - newQuantity);
           if (outQtyDelta !== 0 || lineTotalDelta !== 0) {
             const outMovement = await applyStockMovement(tx, {
               storeId: sourceStoreId,
@@ -2215,7 +2218,7 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
             });
           }
           if (destinationStoreId === oldDestinationStoreId) {
-            const inQtyDelta = newQuantity - oldQuantity;
+            const inQtyDelta = roundQuantity(newQuantity - oldQuantity);
             if (inQtyDelta !== 0) {
               const inMovement = await applyStockMovement(tx, {
                 storeId: destinationStoreId,
@@ -2319,7 +2322,7 @@ export const editStockMovementDocument = async (input: EditStockMovementDocument
           referenceId: input.referenceId,
           lineCount: desiredLines.size,
           totalQuantity: Array.from(desiredLines.values()).reduce(
-            (sum, line) => sum + line.quantity,
+            (sum, line) => roundQuantity(sum + line.quantity),
             0,
           ),
           totalAmountKgs: roundStockMoney(
@@ -2506,7 +2509,7 @@ export const archiveStockMovementDocument = async (input: ArchiveStockMovementDo
           archived: true,
           reason,
           lineCount: lines.length,
-          totalQuantity: lines.reduce((sum, line) => sum + line.quantity, 0),
+          totalQuantity: lines.reduce((sum, line) => roundQuantity(sum + line.quantity), 0),
         };
       },
     );
@@ -2586,7 +2589,7 @@ export const recomputeInventorySnapshots = async (input: RecomputeInventoryInput
     const onHandMap = new Map<string, number>();
     for (const row of movementAggregates) {
       const variantKey = resolveVariantKey(row.variantId);
-      onHandMap.set(`${row.productId}:${variantKey}`, row._sum?.qtyDelta ?? 0);
+      onHandMap.set(`${row.productId}:${variantKey}`, roundQuantity(row._sum?.qtyDelta ?? 0));
     }
 
     const openLines = await tx.purchaseOrderLine.findMany({
@@ -2607,7 +2610,7 @@ export const recomputeInventorySnapshots = async (input: RecomputeInventoryInput
       }
       const variantKey = resolveVariantKey(line.variantId);
       const mapKey = `${line.productId}:${variantKey}`;
-      onOrderMap.set(mapKey, (onOrderMap.get(mapKey) ?? 0) + remaining);
+      onOrderMap.set(mapKey, roundQuantity((onOrderMap.get(mapKey) ?? 0) + remaining));
     }
 
     const existingSnapshots = await tx.inventorySnapshot.findMany({

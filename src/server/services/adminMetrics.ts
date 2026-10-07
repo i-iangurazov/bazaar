@@ -335,7 +335,7 @@ const orderSql = (input: NormalizedAdminMetricsInput) => {
 };
 
 const summaryProjectionSql = Prisma.sql`
-  COALESCE(SUM(stock_qty), 0)::integer AS total_stock_qty,
+  COALESCE(SUM(stock_qty), 0)::double precision AS total_stock_qty,
   COUNT(DISTINCT product_id)::integer AS product_count,
   COUNT(*)::integer AS snapshot_count,
   COALESCE(SUM(CASE WHEN cost_price_kgs IS NOT NULL THEN stock_qty * cost_price_kgs ELSE 0 END), 0)::numeric AS cost_value_kgs,

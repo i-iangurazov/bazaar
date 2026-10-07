@@ -121,16 +121,16 @@ export const getStockoutsReport = async (
         m."variantId",
         m."qtyDelta",
         m."createdAt",
-        COALESCE(snapshot."onHand", 0)::int AS "currentOnHand",
-        (COALESCE(snapshot."onHand", 0) - COALESCE(later.delta, 0))::int AS "periodEndOnHand",
+        COALESCE(snapshot."onHand", 0)::double precision AS "currentOnHand",
+        (COALESCE(snapshot."onHand", 0) - COALESCE(later.delta, 0))::double precision AS "periodEndOnHand",
         SUM(m."qtyDelta") OVER (
           PARTITION BY m."storeId", m."productId", m."variantId"
-        )::int AS "rangeDelta",
+        )::double precision AS "rangeDelta",
         SUM(m."qtyDelta") OVER (
           PARTITION BY m."storeId", m."productId", m."variantId"
           ORDER BY m."createdAt" ASC, m.id ASC
           ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-        )::int AS "cumulativeDelta"
+        )::double precision AS "cumulativeDelta"
       FROM "StockMovement" m
       INNER JOIN "Store" s ON s.id = m."storeId"
       LEFT JOIN later_movements later
@@ -157,7 +157,7 @@ export const getStockoutsReport = async (
         "variantId",
         COUNT(*)::int AS count,
         MAX("createdAt") AS "lastAt",
-        MAX("currentOnHand")::int AS "onHand"
+        MAX("currentOnHand")::double precision AS "onHand"
       FROM crossings
       WHERE "beforeOnHand" > 0 AND "afterOnHand" <= 0
       GROUP BY "storeId", "productId", "variantId"
@@ -227,7 +227,7 @@ export const getSlowMoversReport = async (
         snapshot."storeId",
         snapshot."productId",
         snapshot."variantId",
-        snapshot."onHand"::int AS "onHand",
+        snapshot."onHand"::double precision AS "onHand",
         last_movements."lastMovementAt"
       FROM "InventorySnapshot" snapshot
       INNER JOIN "Store" s ON s.id = snapshot."storeId"
@@ -296,7 +296,7 @@ export const getShrinkageReport = async (
         m."productId",
         m."variantId",
         m."createdById" AS "userId",
-        (-SUM(m."qtyDelta"))::int AS "totalQty",
+        (-SUM(m."qtyDelta"))::double precision AS "totalQty",
         COUNT(*)::int AS "movementCount"
       FROM "StockMovement" m
       INNER JOIN "Store" s ON s.id = m."storeId"

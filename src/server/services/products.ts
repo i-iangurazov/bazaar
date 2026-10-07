@@ -1,3 +1,4 @@
+import { defaultUnitPrecision, isValidQuantity, roundQuantity } from "@/lib/quantity";
 import { saveProductPriceTypes, syncExistingRetailPrice, type ProductPriceTypeValues } from "@/server/services/productPriceTypes";
 import { resolveProductFormRetailPrice } from "@/server/services/productFormPricing";
 import { randomUUID } from "node:crypto";
@@ -1070,7 +1071,7 @@ const ensureUnitByCode = async (
   tx.unit.upsert({
     where: { organizationId_code: { organizationId, code } },
     update: { labelRu: code, labelKg: code },
-    create: { organizationId, code, labelRu: code, labelKg: code },
+    create: { organizationId, code, labelRu: code, labelKg: code, quantityPrecision: defaultUnitPrecision(code) },
   });
 
 const normalizeImportPhotoUrl = normalizeProductImageUrl;
@@ -1140,7 +1141,7 @@ const normalizeBundleComponents = (components?: CreateProductInput["bundleCompon
     .map((component) => ({
       componentProductId: component.componentProductId.trim(),
       componentVariantId: component.componentVariantId?.trim() || null,
-      qty: Math.trunc(component.qty),
+      qty: component.qty,
     }))
     .filter((component) => component.componentProductId.length > 0);
 
@@ -1184,12 +1185,16 @@ const syncBundleComponents = async (
       organizationId: input.organizationId,
       isDeleted: false,
     },
-    select: { id: true },
+    select: { id: true, baseUnit: { select: { quantityPrecision: true } } },
   });
   const validIds = new Set(products.map((product) => product.id));
+  const precisionByProduct = new Map(products.map(product => [product.id, product.baseUnit.quantityPrecision]));
   for (const component of normalized) {
     if (!validIds.has(component.componentProductId)) {
       throw new AppError("productNotFound", "NOT_FOUND", 404);
+    }
+    if (!isValidQuantity(component.qty, precisionByProduct.get(component.componentProductId) ?? 0)) {
+      throw new AppError("invalidQuantity", "BAD_REQUEST", 400);
     }
     if (component.componentProductId === input.productId) {
       throw new AppError("bundleComponentInvalid", "BAD_REQUEST", 400);
@@ -1568,7 +1573,7 @@ const applyInitialVariantInventory = async (
         initialOnHand:
           variant.initialOnHand === undefined || variant.initialOnHand === null
             ? null
-            : Math.trunc(variant.initialOnHand),
+            : variant.initialOnHand,
       }))
       .filter((variant) => variant.initialOnHand !== null) ?? [];
 
@@ -1630,8 +1635,8 @@ const applyInitialInventorySettings = async (
     throw new AppError("storeRequired", "BAD_REQUEST", 400);
   }
 
-  const initialOnHand = hasInitialOnHand ? Math.trunc(input.initialOnHand ?? 0) : undefined;
-  const minStock = hasMinStock ? Math.trunc(input.minStock ?? 0) : undefined;
+  const initialOnHand = hasInitialOnHand ? input.initialOnHand ?? 0 : undefined;
+  const minStock = hasMinStock ? input.minStock ?? 0 : undefined;
   if (
     (initialOnHand !== undefined && initialOnHand < 0) ||
     (minStock !== undefined && minStock < 0)
@@ -4082,7 +4087,7 @@ export const importProductsTx = async (
     if (value === undefined || value === null) {
       return undefined;
     }
-    if (!Number.isFinite(value) || value < 0 || !Number.isInteger(value)) {
+    if (!Number.isFinite(value) || value < 0 || !isValidQuantity(value)) {
       throw new AppError("invalidInput", "BAD_REQUEST", 400);
     }
     return value;
@@ -4193,7 +4198,7 @@ export const importProductsTx = async (
     if (!input.storeId) {
       throw new AppError("storeRequired", "BAD_REQUEST", 400);
     }
-    if (!Number.isFinite(stockQty) || stockQty < 0 || !Number.isInteger(stockQty)) {
+    if (!Number.isFinite(stockQty) || stockQty < 0 || !isValidQuantity(stockQty)) {
       throw new AppError("invalidInput", "BAD_REQUEST", 400);
     }
 
@@ -4201,7 +4206,7 @@ export const importProductsTx = async (
       storeId: input.storeId, productId, organizationId: input.organizationId,
     });
     const currentOnHand = currentSnapshot?.onHand ?? 0;
-    const qtyDelta = stockBehavior === "set" ? stockQty - currentOnHand : stockQty;
+    const qtyDelta = stockBehavior === "set" ? roundQuantity(stockQty - currentOnHand) : stockQty;
     if (qtyDelta === 0) {
       return;
     }

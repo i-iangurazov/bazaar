@@ -1,3 +1,4 @@
+import { parseQuantity } from "@/lib/quantity";
 import {
   convertFromKgs,
   convertToKgs,
@@ -270,13 +271,13 @@ const parseNonNegativeMoney = (raw: string): InlineParseResult<number> => {
   return { ok: true, value: parsed };
 };
 
-const parseNonNegativeInt = (raw: string): InlineParseResult<number> => {
+const parseNonNegativeQuantity = (raw: string): InlineParseResult<number> => {
   const normalized = raw.replace(/\s+/g, "");
   if (!normalized.length) {
     return { ok: false, errorKey: "validationError" };
   }
-  const parsed = Number(normalized);
-  if (!Number.isFinite(parsed) || parsed < 0 || !Number.isInteger(parsed)) {
+  const parsed = parseQuantity(normalized);
+  if (parsed === null || parsed < 0) {
     return { ok: false, errorKey: "validationError" };
   }
   return { ok: true, value: parsed };
@@ -284,8 +285,8 @@ const parseNonNegativeInt = (raw: string): InlineParseResult<number> => {
 
 const parseStockQuantity = (raw: string): InlineParseResult<number> => {
   const normalized = raw.trim().replace(",", ".");
-  const value = Number(normalized);
-  if (!/^-?\d+(?:\.0+)?$/.test(normalized) || !Number.isSafeInteger(value) ||
+  const value = parseQuantity(normalized);
+  if (value === null ||
       value < -2147483648 || value > 2147483647) {
     return { ok: false, errorKey: "invalidQuantity" };
   }
@@ -404,7 +405,7 @@ const moneyEquals = (left: number | null | undefined, right: number | null | und
   return Math.abs(left - right) < 0.01;
 };
 
-const formatInt = (value: number | null | undefined, locale: string, notAvailableLabel: string) =>
+const formatQuantity = (value: number | null | undefined, locale: string, notAvailableLabel: string) =>
   value === null || value === undefined ? notAvailableLabel : formatNumber(value, locale);
 
 const createInlineIdempotencyKey = () =>
@@ -536,7 +537,7 @@ export const inlineEditRegistry: InlineEditRegistry = {
       columnKey: "onHand",
       inputType: "number",
       formatter: (value, _row, _context, display) =>
-        formatInt(value, display.locale, display.notAvailableLabel),
+        formatQuantity(value, display.locale, display.notAvailableLabel),
       parser: (raw, _row, context) => {
         if (!context.storeId) {
           return { ok: false, errorKey: "storeRequired" };
@@ -568,7 +569,7 @@ export const inlineEditRegistry: InlineEditRegistry = {
   inventory: {
     onHand: {
       tableKey: "inventory", columnKey: "onHand", inputType: "number",
-      formatter: (value, _row, _context, display) => formatInt(value, display.locale, display.notAvailableLabel),
+      formatter: (value, _row, _context, display) => formatQuantity(value, display.locale, display.notAvailableLabel),
       parser: parseStockQuantity,
       mutation: (row, value, context) => ({ route: "inventory.setOnHand", input: {
         storeId: row.snapshot.storeId, productId: row.snapshot.productId,
@@ -583,8 +584,8 @@ export const inlineEditRegistry: InlineEditRegistry = {
       columnKey: "minStock",
       inputType: "number",
       formatter: (value, _row, _context, display) =>
-        formatInt(value, display.locale, display.notAvailableLabel),
-      parser: (raw) => parseNonNegativeInt(raw),
+        formatQuantity(value, display.locale, display.notAvailableLabel),
+      parser: (raw) => parseNonNegativeQuantity(raw),
       mutation: (row, value) => ({
         route: "inventory.setMinStock",
         input: {

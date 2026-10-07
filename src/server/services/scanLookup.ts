@@ -11,6 +11,7 @@ export type ScanLookupItem = {
   id: string;
   sku: string;
   name: string;
+  baseUnit?: { code: string; labelRu: string; labelKg: string; quantityPrecision: number };
   matchType: ScanLookupMatch;
   type: "product" | "bundle";
   primaryImage: string | null;
@@ -39,6 +40,7 @@ const scanProductSelect = {
   id: true,
   sku: true,
   name: true,
+  baseUnit: { select: { code: true, labelRu: true, labelKg: true, quantityPrecision: true } },
   isBundle: true,
   photoUrl: true,
   category: true,

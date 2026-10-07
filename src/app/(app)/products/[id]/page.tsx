@@ -650,7 +650,7 @@ const ProductDetailPage = () => {
   const componentSchema = useMemo(
     () =>
       z.object({
-        qty: z.coerce.number().int().positive(t("bundleQtyPositive")),
+        qty: z.coerce.number().multipleOf(0.001).positive(t("bundleQtyPositive")),
         variantId: z.string().optional().nullable(),
       }),
     [t],
@@ -664,7 +664,7 @@ const ProductDetailPage = () => {
   const assembleSchema = useMemo(
     () =>
       z.object({
-        qty: z.coerce.number().int().positive(t("bundleQtyPositive")),
+        qty: z.coerce.number().multipleOf(0.001).positive(t("bundleQtyPositive")),
       }),
     [t],
   );

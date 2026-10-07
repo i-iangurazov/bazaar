@@ -105,7 +105,7 @@ const productMovementEditLineSchema = z.object({
   customerOrderLineId: z.string().min(1).optional().nullable(),
   productId: z.string().min(1),
   variantId: z.string().optional().nullable(),
-  quantity: z.number().int().positive(),
+  quantity: z.number().multipleOf(0.001).positive(),
   unitPriceKgs: z.number().min(0).optional().nullable(),
   unitCostKgs: z.number().min(0).optional().nullable(),
 });
@@ -1197,7 +1197,7 @@ export const inventoryRouter = router({
     .input(z.object({
       storeId: z.string().min(1), productId: z.string().min(1),
       variantId: z.string().nullable().optional(),
-      targetOnHand: z.number().int().min(-2147483648).max(2147483647),
+      targetOnHand: z.number().multipleOf(0.001).min(-2147483648).max(2147483647),
       expectedOnHand: z.number().int(), expectedVersion: z.number().int().nonnegative(),
       reason: z.string().min(3), idempotencyKey: z.string().min(8),
     }))
@@ -1255,7 +1255,7 @@ export const inventoryRouter = router({
       z.object({
         storeId: z.string(),
         snapshotIds: z.array(z.string()).min(1).max(5_000, "inventoryBulkSelectionLimit"),
-        targetOnHand: z.number().int(),
+        targetOnHand: z.number().multipleOf(0.001),
         reason: z.string().min(3),
         idempotencyKey: z.string().min(8),
       }),
@@ -1285,7 +1285,7 @@ export const inventoryRouter = router({
         storeId: z.string(),
         productId: z.string(),
         variantId: z.string().optional(),
-        qtyReceived: z.number().int().positive(),
+        qtyReceived: z.number().multipleOf(0.001).positive(),
         unitId: z.string().optional(),
         packId: z.string().optional(),
         unitCost: z.number().min(0).optional().nullable(),
@@ -1331,7 +1331,7 @@ export const inventoryRouter = router({
             z.object({
               productId: z.string().min(1),
               variantId: z.string().optional().nullable(),
-              quantity: z.number().int().positive("invalidReceivingQuantity"),
+              quantity: z.number().multipleOf(0.001).positive("invalidReceivingQuantity"),
               unitCost: z.number().min(0, "unitCostInvalid"),
             }),
           )
@@ -1373,7 +1373,7 @@ export const inventoryRouter = router({
             z.object({
               productId: z.string().min(1),
               variantId: z.string().optional().nullable(),
-              qty: z.number().int().positive("invalidWriteOffQty"),
+              qty: z.number().multipleOf(0.001).positive("invalidWriteOffQty"),
               unitId: z.string().optional().nullable(),
               packId: z.string().optional().nullable(),
             }),
@@ -1419,7 +1419,7 @@ export const inventoryRouter = router({
             z.object({
               productId: z.string().min(1),
               variantId: z.string().optional().nullable(),
-              qty: z.number().int().positive(),
+              qty: z.number().multipleOf(0.001).positive(),
               unitId: z.string().optional().nullable(),
               packId: z.string().optional().nullable(),
               expiryDate: z.string().optional().nullable(),
@@ -1430,7 +1430,7 @@ export const inventoryRouter = router({
           .optional(),
         productId: z.string().optional(),
         variantId: z.string().optional().nullable(),
-        qty: z.number().int().positive().optional(),
+        qty: z.number().multipleOf(0.001).positive().optional(),
         unitId: z.string().optional(),
         packId: z.string().optional(),
         note: z.string().optional(),
@@ -1493,7 +1493,7 @@ export const inventoryRouter = router({
       z.object({
         storeId: z.string(),
         productId: z.string(),
-        minStock: z.number().int().min(0),
+        minStock: z.number().multipleOf(0.001).min(0),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -1516,7 +1516,7 @@ export const inventoryRouter = router({
     .input(
       z.object({
         storeId: z.string(),
-        minStock: z.number().int().min(0),
+        minStock: z.number().multipleOf(0.001).min(0),
       }),
     )
     .mutation(async ({ ctx, input }) => {

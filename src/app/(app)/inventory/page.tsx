@@ -643,7 +643,7 @@ const InventoryPage = () => {
         variantId: z.string().optional().nullable(),
         qtyDelta: z.coerce
           .number()
-          .int()
+          .multipleOf(0.001)
           .refine((value) => value !== 0, t("qtyNonZero")),
         unitSelection: z.string().min(1, t("unitRequired")),
         reason: z.string().trim().min(3, t("reasonRequired")),
@@ -655,7 +655,7 @@ const InventoryPage = () => {
   const bulkOnHandSchema = useMemo(
     () =>
       z.object({
-        targetOnHand: z.coerce.number().int(),
+        targetOnHand: z.coerce.number().multipleOf(0.001),
         reason: z.string().trim().min(3, t("reasonRequired")),
       }),
     [t],
@@ -669,7 +669,7 @@ const InventoryPage = () => {
           toStoreId: z.string().min(1, t("storeRequired")),
           productId: z.string().min(1, t("productRequired")),
           variantId: z.string().optional().nullable(),
-          qty: z.coerce.number().int().positive(t("qtyPositive")),
+          qty: z.coerce.number().multipleOf(0.001).positive(t("qtyPositive")),
           unitSelection: z.string().min(1, t("unitRequired")),
           note: z.string().optional(),
           expiryDate: z.string().optional(),
@@ -686,7 +686,7 @@ const InventoryPage = () => {
       z
         .object({
           productId: z.string().optional(),
-          minStock: z.coerce.number().int().min(0, t("minStockNonNegative")),
+          minStock: z.coerce.number().multipleOf(0.001).min(0, t("minStockNonNegative")),
           applyToAll: z.boolean().default(false),
         })
         .superRefine((values, context) => {
@@ -709,7 +709,7 @@ const InventoryPage = () => {
       z.object({
         template: z.enum(PRICE_TAG_TEMPLATES),
         storeId: z.string().optional(),
-        quantity: z.coerce.number().int().min(1, t("printQtyMin")),
+        quantity: z.coerce.number().multipleOf(0.001).min(1, t("printQtyMin")),
         gapMm: z.coerce
           .number()
           .min(

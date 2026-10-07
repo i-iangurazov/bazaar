@@ -1,5 +1,6 @@
+import { assertProductQuantity } from "./productQuantity";
 import { randomUUID } from "node:crypto";
-import { StockMovementType } from "@prisma/client";
+import { Prisma, StockMovementType } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
@@ -78,6 +79,7 @@ export const addBundleComponent = async (input: {
       }
     }
 
+    await assertProductQuantity(tx, input.organizationId, input.componentProductId, input.qty);
     const componentLine = await tx.productBundleComponent.create({
       data: {
         organizationId: input.organizationId,
@@ -169,7 +171,7 @@ export const assembleBundle = async (input: {
         const assemblyId = randomUUID();
 
         for (const component of bundle.bundleComponents) {
-          const totalQty = component.qty * input.qty;
+          const totalQty = new Prisma.Decimal(component.qty).mul(input.qty).toNumber();
           if (totalQty <= 0) {
             continue;
           }
