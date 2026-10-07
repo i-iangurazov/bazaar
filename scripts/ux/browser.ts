@@ -366,6 +366,8 @@ try {
   );
   const nameInput = dashboard.getByRole("textbox", { name: /^Название/ }).first();
   await nameInput.fill(productName);
+  const unitSelector = dashboard.getByRole("combobox").filter({ hasText: /^шт\.?$/ });
+  await unitSelector.waitFor();
   await dashboard.getByLabel("Цена продажи", { exact: true }).first().fill("19");
   let createRequests = 0;
   await dashboard.route("**/api/trpc/products.create*", async (route) => {
@@ -380,6 +382,7 @@ try {
     "Product form did not recover after network error",
   );
   assert.equal(await nameInput.inputValue(), productName);
+  assert.match(await unitSelector.innerText(), /^шт\.?$/);
   await dashboard.screenshot({
     path: `${directory}/product-form-network-error.png`,
     fullPage: true,

@@ -94,6 +94,7 @@ describe("persisted authentication lifecycle and security", () => {
       (id) => !Object.values(fixture.tenants).some((t) => t.org.id === id),
     )) {
       await prisma.store.deleteMany({ where: { organizationId } });
+      await prisma.unit.deleteMany({ where: { organizationId } });
       await prisma.organization.delete({ where: { id: organizationId } });
     }
     await cleanupCommerceFixtures(prisma, fixture);

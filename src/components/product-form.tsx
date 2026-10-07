@@ -905,7 +905,7 @@ export const ProductForm = ({
       categories:
         initialValues.categories ??
         (initialValues.category?.trim() ? [initialValues.category.trim()] : []),
-      baseUnitId: initialValues.baseUnitId,
+      baseUnitId: initialValues.baseUnitId || resolveDefaultUnitId(unitOptions),
       basePriceKgs: displayMoneyFromKgs(initialValues.basePriceKgs),
       storePriceKgs: displayMoneyFromKgs(initialValues.storePriceKgs),
       retailPriceKgs: displayMoneyFromKgs(
@@ -4863,7 +4863,10 @@ export const ProductForm = ({
                       <FormLabel required>{t("unitLabel")}</FormLabel>
                       <Select
                         value={field.value}
-                        onValueChange={field.onChange}
+                        onValueChange={(value) => {
+                          // Radix's native form input can emit an empty value as async options mount.
+                          if (value) field.onChange(value);
+                        }}
                         disabled={readOnly || !unitOptions.length}
                       >
                         <FormControl>
@@ -6243,7 +6246,9 @@ export const ProductForm = ({
                             <FormLabel required>{t("unitLabel")}</FormLabel>
                             <Select
                               value={field.value}
-                              onValueChange={field.onChange}
+                              onValueChange={(value) => {
+                                if (value) field.onChange(value);
+                              }}
                               disabled={readOnly || !unitOptions.length}
                             >
                               <FormControl>

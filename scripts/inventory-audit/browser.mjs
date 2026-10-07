@@ -138,7 +138,7 @@ try {
   assert.equal((await stock(admin)).onHand, 0);
   await record("Slow response: Enter plus blur sends one request and saves zero");
   slow = false;
-  for (const invalid of ["", "1,5", "abc"]) {
+  for (const invalid of ["", "1,2345", "abc"]) {
     const previousWrites = writes;
     await edit(first, invalid);
     await editor(first).press("Enter");
@@ -155,7 +155,7 @@ try {
   await settled(first);
   assert.equal((await stock(admin)).onHand, -2);
   await record(
-    "Empty/invalid/fractional input rejected; unchanged value sends nothing; negative saved on blur",
+    "Empty/invalid/excess-precision input rejected; unchanged value sends nothing; negative saved on blur",
   );
 
   await edit(first, "8");
