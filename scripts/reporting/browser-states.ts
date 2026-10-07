@@ -132,7 +132,7 @@ try {
     await route.continue();
   };
   await page.route("**/api/trpc/**", reorder);
-  const search = page.getByRole("textbox", {
+  const search = page.getByRole("searchbox", {
     name: messages.analytics.filters.productSearch,
     exact: true,
   });

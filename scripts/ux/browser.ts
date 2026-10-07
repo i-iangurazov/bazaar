@@ -411,7 +411,7 @@ try {
   record("POS respects the requested store when its register list is empty");
   await dashboard.goto(`${base}/inventory/receiving?storeId=${f.otherStoreId}`);
   await dashboard.getByRole("combobox", { name: "Магазин", exact: true }).waitFor();
-  await dashboard.getByRole("textbox", { name: "Найти товар", exact: true }).fill(productName);
+  await dashboard.getByRole("searchbox", { name: "Найти товар", exact: true }).fill(productName);
   await dashboard
     .locator(".bazaar-doc-search-row button")
     .filter({ hasText: productName })
@@ -439,7 +439,7 @@ try {
   await dashboard.getByRole("combobox", { name: "Куда", exact: true }).click();
   await dashboard.getByRole("option", { name: "Новый магазин", exact: true }).click();
   await dashboard
-    .getByRole("textbox", { name: "Найти товар в источнике", exact: true })
+    .getByRole("searchbox", { name: "Найти товар в источнике", exact: true })
     .fill(productName);
   await dashboard
     .locator(".bazaar-doc-search-row button")

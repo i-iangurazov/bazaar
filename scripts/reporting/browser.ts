@@ -167,7 +167,7 @@ try {
     .getByRole("button", { name: messages.ru.customerPurchases.select, exact: true })
     .click();
   await page
-    .getByRole("textbox", { name: messages.ru.customerPurchases.search, exact: true })
+    .getByRole("searchbox", { name: messages.ru.customerPurchases.search, exact: true })
     .fill("Покупатель для отчёта");
   await page.getByRole("button", { name: /Покупатель для отчёта.*report@example/ }).click();
   await ready(page);

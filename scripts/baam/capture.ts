@@ -32,6 +32,7 @@ try {
     const session = await (await context.request.get(base + "/api/auth/session")).json();
     assert.equal(session.user?.role, role.toUpperCase(), "Isolated test login must succeed");
     const page = await context.newPage();
+    page.setDefaultNavigationTimeout(60_000);
     const errors: string[] = [];
     page.on("pageerror", (e) => errors.push(e.message));
     for (const path of ["/pos", "/inventory", "/products", "/baam", "/pos/sell"]) {
