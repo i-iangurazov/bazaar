@@ -2644,7 +2644,7 @@ export const duplicateProduct = async (input: {
   storeId?: string | null;
 }) => {
   const executeDuplicate = async (tx: Prisma.TransactionClient) => {
-    await assertWithinLimits({ organizationId: input.organizationId, kind: "products" });
+    await assertWithinLimits({ organizationId: input.organizationId, kind: "products", db: tx });
 
     const source = await tx.product.findUnique({
       where: { id: input.productId },

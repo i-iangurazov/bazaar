@@ -1,5 +1,5 @@
 import { PrismaClient, type Prisma } from "@prisma/client";
-import { withDefaultConnectionParams } from "./connection";
+import { resolveRuntimeDatabaseUrl, withDefaultConnectionParams } from "./connection";
 
 import {
   isPrismaQueryProfilingEnabled,
@@ -7,7 +7,7 @@ import {
 } from "@/server/profiling/perf";
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
-const localDatabaseUrl = process.env.DATABASE_URL;
+const localDatabaseUrl = resolveRuntimeDatabaseUrl(process.env);
 
 const datasourceUrl = localDatabaseUrl
   ? withDefaultConnectionParams(localDatabaseUrl, process.env.VERCEL_ENV === "production")

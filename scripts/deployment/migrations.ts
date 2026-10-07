@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { PrismaClient } from "@prisma/client";
+import { resolveRuntimeDatabaseUrl } from "../../src/server/db/connection";
 
 // Review each additive migration before adding it to the production rollout.
 export const approvedProductionMigrations = {
@@ -110,7 +111,7 @@ async function main() {
     name,
     checksum: createHash("sha256").update(await readFile(resolve(migrationsPath, name, "migration.sql"))).digest("hex"),
   })));
-  const database = new PrismaClient();
+  const database = new PrismaClient({ datasourceUrl: resolveRuntimeDatabaseUrl(process.env) });
   let pending: string[];
   try {
     const history = await database.$queryRaw<MigrationRecord[]>`

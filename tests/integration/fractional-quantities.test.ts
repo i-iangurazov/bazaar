@@ -57,6 +57,48 @@ dbDescribe("fractional quantities across stock and checkout", () => {
       });
     return { ...f, caller, context, stock };
   }
+  it("duplicates fractional base and variant stock, costs and minimums exactly once", async () => {
+    const f = await fixture();
+    const variant = await prisma.productVariant.create({
+      data: { productId: f.product.id, name: "Small", attributes: {} },
+    });
+    await postStockReceiving({
+      ...f.context,
+      storeId: f.store.id,
+      lines: [
+        { productId: f.product.id, quantity: 3.5, unitCost: 100 },
+        { productId: f.product.id, variantId: variant.id, quantity: 1.5, unitCost: 90 },
+      ],
+      idempotencyKey: "fraction-duplicate-stock",
+    });
+    await prisma.reorderPolicy.create({
+      data: { storeId: f.store.id, productId: f.product.id, minStock: 0.5, minOrderQty: 0.3, leadTimeDays: 1, reviewPeriodDays: 1, safetyStockDays: 0 },
+    });
+    const input = {
+      productId: f.product.id, storeId: f.store.id, name: "Weighted copy",
+      copyInventory: true, copyCost: true, copyPrice: true, copyVariants: true,
+      copyImages: false, copySku: false, idempotencyKey: "fraction-duplicate-product",
+    };
+    const copy = await f.caller.products.duplicate(input);
+    expect((await f.caller.products.duplicate(input)).productId).toBe(copy.productId);
+    const saved = await prisma.product.findUniqueOrThrow({
+      where: { id: copy.productId },
+      include: { inventorySnapshots: true, variants: true, productCosts: true, reorderPolicies: true, barcodes: true },
+    });
+    expect(saved.baseUnitId).toBe(f.baseUnit.id);
+    expect(saved.sku).not.toBe(f.product.sku);
+    expect(Number(saved.basePriceKgs)).toBe(400);
+    expect(saved.barcodes).toHaveLength(0);
+    expect(saved.variants).toHaveLength(1);
+    expect(saved.inventorySnapshots.find(row => row.variantKey === "BASE")?.onHand).toBe(3.5);
+    expect(saved.inventorySnapshots.find(row => row.variantId === saved.variants[0].id)?.onHand).toBe(1.5);
+    expect(saved.productCosts.find(row => row.variantKey === "BASE")?.costBasisQty).toBe(3.5);
+    expect(Number(saved.productCosts.find(row => row.variantKey === "BASE")?.avgCostKgs)).toBe(100);
+    expect(saved.productCosts.find(row => row.variantId === saved.variants[0].id)?.costBasisQty).toBe(1.5);
+    expect(saved.reorderPolicies[0]).toMatchObject({ minStock: 0.5, minOrderQty: 0.3 });
+    expect((await f.stock()).onHand).toBe(3.5);
+    expect(await prisma.product.count({ where: { name: input.name } })).toBe(1);
+  });
   it("receives, sells 1.5 kg and returns 0.3 + 1.2 kg once with matching cash, cost and stock", async () => {
     const f = await fixture();
     await postStockReceiving({

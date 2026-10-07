@@ -1,4 +1,4 @@
-import type { OrganizationPlan } from "@prisma/client";
+import type { OrganizationPlan, Prisma } from "@prisma/client";
 
 import { prisma } from "@/server/db/prisma";
 import {
@@ -88,8 +88,8 @@ export const hasPlanFeature = (plan: OrganizationPlan, feature: PlanFeature) =>
 
 export const getPlanMonthlyPrice = (plan: OrganizationPlan) => getPlanMonthlyPriceKgs(plan);
 
-export const getOrganizationPlan = async (organizationId: string) => {
-  const org = await prisma.organization.findUnique({
+export const getOrganizationPlan = async (organizationId: string, db: Prisma.TransactionClient = prisma) => {
+  const org = await db.organization.findUnique({
     where: { id: organizationId },
     select: {
       id: true,
@@ -105,8 +105,8 @@ export const getOrganizationPlan = async (organizationId: string) => {
   return org;
 };
 
-export const assertTrialActive = async (organizationId: string) => {
-  const org = await getOrganizationPlan(organizationId);
+export const assertTrialActive = async (organizationId: string, db: Prisma.TransactionClient = prisma) => {
+  const org = await getOrganizationPlan(organizationId, db);
   const accessState = resolveOrganizationAccessState(org);
   if (accessState.hasAccess) {
     return org;
@@ -124,8 +124,10 @@ export const assertCapacity = async (input: {
   organizationId: string;
   kind: "stores" | "users" | "products";
   add: number;
+  db?: Prisma.TransactionClient;
 }) => {
-  const org = await assertTrialActive(input.organizationId);
+  const db = input.db ?? prisma;
+  const org = await assertTrialActive(input.organizationId, db);
   const limits = getLimitsForPlan(org.plan);
   const limit =
     input.kind === "stores"
@@ -136,13 +138,13 @@ export const assertCapacity = async (input: {
 
   let count = 0;
   if (input.kind === "stores") {
-    count = await prisma.store.count({ where: { organizationId: input.organizationId } });
+    count = await db.store.count({ where: { organizationId: input.organizationId } });
   } else if (input.kind === "users") {
-    count = await prisma.user.count({
+    count = await db.user.count({
       where: { organizationId: input.organizationId, isActive: true },
     });
   } else {
-    count = await prisma.product.count({ where: { organizationId: input.organizationId } });
+    count = await db.product.count({ where: { organizationId: input.organizationId } });
   }
 
   if (count + input.add > limit) {
@@ -161,7 +163,8 @@ export const assertCapacity = async (input: {
 export const assertWithinLimits = async (input: {
   organizationId: string;
   kind: "stores" | "users" | "products";
-}) => assertCapacity({ organizationId: input.organizationId, kind: input.kind, add: 1 });
+  db?: Prisma.TransactionClient;
+}) => assertCapacity({ ...input, add: 1 });
 
 export const assertFeatureEnabled = async (input: {
   organizationId: string;
