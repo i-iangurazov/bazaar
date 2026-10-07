@@ -47,6 +47,8 @@ import {
   ViewIcon,
   BarcodeIcon,
 } from "@/components/icons";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
+import { SearchInput } from "@/components/search-input";
 import { ScanInput } from "@/components/ScanInput";
 import { PosPaymentMethodControl } from "@/components/pos/payment-method-control";
 import { LoyaltyDialog } from "@/components/pos/loyalty-dialog";
@@ -151,17 +153,6 @@ const createIdempotencyKey = () => {
     return crypto.randomUUID();
   }
   return `pos-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-};
-
-const useDebouncedValue = (value: string, delayMs: number) => {
-  const [debounced, setDebounced] = useState(value);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => setDebounced(value), delayMs);
-    return () => window.clearTimeout(timer);
-  }, [delayMs, value]);
-
-  return debounced;
 };
 
 const hasTouchKeyboard = () => {
@@ -1827,14 +1818,15 @@ const PosSellPage = () => {
     hasCartLines && payments.length === 1
       ? cartTotalKgs
       : roundMoney(displayMoneyToKgs(totalPayment, currencySource));
-  const productResults: PosCatalogProduct[] = activeStoreId
+  const catalogSearchPending = lineSearch.trim() !== searchTerm || catalogProductsQuery.isPreviousData;
+  const productResults: PosCatalogProduct[] = activeStoreId && !catalogSearchPending
     ? (catalogProductsQuery.data?.items ?? [])
     : [];
   const visibleProducts = productResults;
   const catalogTotal = catalogProductsQuery.data?.total ?? 0;
   const catalogTotalPages = Math.max(1, Math.ceil(catalogTotal / catalogPageSize));
   const productGridLoading = Boolean(
-    activeStoreId && catalogProductsQuery.isLoading && !catalogProductsQuery.data,
+    activeStoreId && (catalogSearchPending || (catalogProductsQuery.isLoading && !catalogProductsQuery.data)),
   );
   const productCategories = productCategoriesQuery.data ?? [];
 
@@ -4327,9 +4319,9 @@ const PosSellPage = () => {
       >
         <div className="flex min-h-full flex-col gap-4">
           <div className="bazaar-admin-toolbar grid gap-2 md:grid-cols-4">
-            <Input
+            <SearchInput
               value={journalSearch}
-              onChange={(event) => setJournalSearch(event.target.value)}
+              onValueChange={setJournalSearch}
               placeholder={t("sell.receiptSearchPlaceholder")}
               data-testid="pos-receipt-journal-search"
             />
@@ -5340,9 +5332,9 @@ const PosSellPage = () => {
                 >
                   <div className="space-y-3 p-3">
                     <div className="flex gap-2">
-                      <Input
+                      <SearchInput
                         value={customerSearch}
-                        onChange={(event) => setCustomerSearch(event.target.value)}
+                        onValueChange={setCustomerSearch}
                         placeholder={t("sell.customerSearchPlaceholder")}
                         autoFocus
                       />
@@ -6202,9 +6194,9 @@ const PosSellPage = () => {
 
           <div className="mt-4 space-y-3">
             <div className="flex gap-2">
-              <Input
+              <SearchInput
                 value={customerSearch}
-                onChange={(event) => setCustomerSearch(event.target.value)}
+                onValueChange={setCustomerSearch}
                 placeholder={t("sell.customerSearchPlaceholder")}
                 autoFocus
                 className="h-12"

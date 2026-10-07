@@ -37,6 +37,22 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 describe("durable, organization-scoped list navigation", () => {
+  it("stays unready until the authenticated storage scope is available", () => {
+    const { result, rerender } = renderHook(
+      ({ storageKey }: { storageKey: string | null }) =>
+        useScopedListState({
+          pathname: "/products",
+          storageKey,
+          defaultValue: defaults,
+          fields,
+          parse,
+        }),
+      { initialProps: { storageKey: null } as { storageKey: string | null } },
+    );
+    expect(result.current.isReady).toBe(false);
+    rerender({ storageKey: "org-a:user" });
+    expect(result.current.isReady).toBe(true);
+  });
   it("waits for a client navigation to commit instead of adopting the previous page as its owner", () => {
     navigate("/dashboard?storeId=a");
     const { result } = renderHook(() =>

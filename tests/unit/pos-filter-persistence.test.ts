@@ -14,7 +14,9 @@ describe("POS filter persistence", () => {
     const source = readFileSync(sourcePath, "utf8");
     expect(source).toContain("useSearchParams");
     expect(source).toContain("buildPosFilterHref");
-    expect(source).toMatch(/router\.replace\(href, \{ scroll: false \}\)/);
+    expect(source).toMatch(
+      /router\.replace\(href, \{ scroll: false \}\)|window\.history\.replaceState\(null, "", href\)/,
+    );
   });
 
   it("persists both receipt routes through their shared registry", () => {

@@ -45,6 +45,8 @@ import {
   inventoryProductAccessWhere,
   resolveAccessibleStoreIds,
 } from "@/server/services/storeAccess";
+import { findRankedProductIds } from "@/server/services/products/searchSql";
+import { normalizeProductSearchText } from "@/server/services/products/searchRelevance";
 import { WRITE_OFF_REASONS } from "@/lib/inventory/writeOff";
 
 const inventoryStockFilterSchema = z.enum(["all", "lowStock", "outOfStock", "negativeStock", "notInAssortment"]);
@@ -111,8 +113,7 @@ const productMovementEditLineSchema = z.object({
 const normalizeInventorySearchTokens = (search?: string | null) =>
   Array.from(
     new Set(
-      (search ?? "")
-        .trim()
+      normalizeProductSearchText(search)
         .split(/\s+/)
         .map((token) => token.trim())
         .filter(Boolean),
@@ -656,7 +657,11 @@ export const inventoryRouter = router({
   searchProducts: protectedProcedure
     .input(inventoryProductSearchInputSchema)
     .query(async ({ ctx, input }) => {
-      await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+      try {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+      } catch (error) {
+        throw toTRPCError(error);
+      }
 
       const searchTokens = normalizeInventorySearchTokens(input.search);
       const limit = input.limit ?? 25;
@@ -669,8 +674,16 @@ export const inventoryRouter = router({
           : buildInventoryProductSearchWhere(searchTokens, input.searchFields)),
       };
 
+      const rankedIds = input.search?.trim() && !input.productId
+        ? await findRankedProductIds({
+            prisma: ctx.prisma, organizationId: ctx.user.organizationId,
+            query: input.search, limit, fields: input.searchFields,
+            storeIds: [input.storeId], inventoryStoreId: input.storeId,
+            matchTokensAcrossFields: true,
+          })
+        : null;
       const products = await ctx.prisma.product.findMany({
-        where,
+        where: rankedIds ? { ...where, id: { in: rankedIds } } : where,
         select: {
           ...inventoryProductSelect(input.storeId, ctx.user.organizationId),
           inventorySnapshots: {
@@ -698,6 +711,8 @@ export const inventoryRouter = router({
         take: limit,
       });
 
+      const positions = new Map(rankedIds?.map((id, index) => [id, index]));
+      if (rankedIds) products.sort((a, b) => (positions.get(a.id) ?? 0) - (positions.get(b.id) ?? 0));
       return products.flatMap((product) => {
         const snapshots = product.inventorySnapshots.length
           ? product.inventorySnapshots

@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  useDeferredValue,
   useEffect,
   useMemo,
   useCallback,
@@ -15,6 +14,7 @@ import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
 
 import { Modal } from "@/components/ui/modal";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { ScanInput } from "@/components/ScanInput";
 import {
   ProductSearchResultItem,
@@ -152,7 +152,7 @@ export const CommandPalette = ({
     }
   }, [isOpen]);
 
-  const deferredQuery = useDeferredValue(query);
+  const deferredQuery = useDebouncedValue(query);
   const normalizedQuery = normalizeQuery(query);
   const normalizedSearchQuery = normalizeQuery(deferredQuery);
   const recentSearchesStorageKey = useMemo(
@@ -368,7 +368,7 @@ export const CommandPalette = ({
   }, [access, actions, normalizedQuery]);
 
   const results = useMemo<PaletteItem[]>(() => {
-    const items = searchQuery.data?.results ?? [];
+    const items = normalizedQuery === normalizedSearchQuery ? (searchQuery.data?.results ?? []) : [];
     return items
       .filter((item) => canNavigateCommand(access, searchResultDestination(item)))
       .map((item) => {
@@ -416,7 +416,7 @@ export const CommandPalette = ({
             };
         }
       });
-  }, [access, searchQuery.data]);
+  }, [access, searchQuery.data, normalizedQuery, normalizedSearchQuery]);
 
   const resultGroups = useMemo(
     () =>
@@ -528,6 +528,7 @@ export const CommandPalette = ({
   }): Promise<boolean> => {
     const selectedIndex = hoveredIndex ?? activeIndex;
     const shouldSelectActiveItem =
+      normalizedQuery === normalizedSearchQuery &&
       allItems.length > 0 &&
       (hoveredIndex !== null || keyboardNavigation || normalizedQuery.length >= 2);
     if (shouldSelectActiveItem) {

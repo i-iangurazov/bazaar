@@ -2289,6 +2289,7 @@ const InventoryPage = () => {
           placeholder={t("searchPlaceholder")}
           value={search}
           onChange={setSearch}
+          disabled={!inventoryTableStateReady}
         />
         <FilterField id="inventory-store" label={tCommon("store")}>
           <Select value={storeId} onValueChange={setStoreId}>

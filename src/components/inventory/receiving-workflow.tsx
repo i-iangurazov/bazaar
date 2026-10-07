@@ -11,6 +11,8 @@ import { PageLoading } from "@/components/page-loading";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/search-input";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -30,7 +32,6 @@ import {
   EditIcon,
   EmptyIcon,
   ReceiveIcon,
-  SearchIcon,
   StatusDangerIcon,
   StatusSuccessIcon,
 } from "@/components/icons";
@@ -179,16 +180,18 @@ export const InventoryReceivingPage = ({
     [locale, selectedStore],
   );
 
+  const debouncedSearch = useDebouncedValue(search.trim());
+  const searchPending = debouncedSearch !== search.trim();
   const searchQuery = trpc.inventory.searchProducts.useQuery(
     {
       storeId,
-      search: search.trim() || undefined,
+      search: debouncedSearch || undefined,
       searchFields: receivingProductSearchFields,
       limit: 100,
     },
     {
       enabled: Boolean(storeId && canManageStock),
-      keepPreviousData: true,
+      keepPreviousData: false,
     },
   );
   type SearchResult = NonNullable<typeof searchQuery.data>[number];
@@ -1047,14 +1050,10 @@ export const InventoryReceivingPage = ({
               </Button>
             </div>
             <div className="relative">
-              <SearchIcon
-                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-                aria-hidden
-              />
-              <Input
+              <SearchInput
                 ref={searchInputRef}
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
+                onValueChange={setSearch}
                 onFocus={() => {
                   lastFocusedElementRef.current = { target: "search" };
                 }}
@@ -1062,12 +1061,10 @@ export const InventoryReceivingPage = ({
                 placeholder={t("receivingSearchPlaceholderShort")}
                 aria-label={t("receivingSearchPlaceholderShort")}
                 disabled={!storeId}
-                className="pl-9"
-                autoComplete="off"
               />
             </div>
             <div ref={searchResultsRef} className="bazaar-doc-search-list">
-              {searchQuery.isFetching ? (
+              {searchPending || searchQuery.isFetching ? (
                 <div className="flex items-center gap-2 px-3 py-3 text-sm text-muted-foreground">
                   <Spinner className="h-4 w-4" />
                   {tCommon("loading")}

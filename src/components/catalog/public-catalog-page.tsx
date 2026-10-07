@@ -12,6 +12,7 @@ import { PhoneNumberInput } from "@/components/phone-number-input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { SearchInput } from "@/components/search-input";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import {
@@ -1003,9 +1004,9 @@ export const PublicCatalogPage = ({ slug }: { slug: string }) => {
                 : "grid-cols-1",
             )}
           >
-            <Input
+            <SearchInput
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onValueChange={setSearch}
               placeholder={t("searchPlaceholder")}
               aria-label={t("searchAria")}
               className={isCompactHeader ? "h-9" : "h-10"}

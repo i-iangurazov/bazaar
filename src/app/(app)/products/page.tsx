@@ -3557,6 +3557,7 @@ const ProductsPage = () => {
           placeholder={productSearchPlaceholder}
           value={search}
           onChange={setSearch}
+          disabled={!productsTableStateReady}
         />
         <FilterField id="products-store" label={tCommon("store")}>
           <Select value={storeId || "all"} onValueChange={setStoreId}>

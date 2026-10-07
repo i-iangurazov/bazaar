@@ -1,9 +1,9 @@
 "use client";
 import { type ReactNode, useId, useState } from "react";
 import { useTranslations } from "next-intl";
-import { SearchIcon, CloseIcon, AdjustIcon, ChevronDownIcon } from "@/components/icons";
+import { CloseIcon, AdjustIcon, ChevronDownIcon } from "@/components/icons";
 import { Button } from "./ui/button";
-import { Input } from "./ui/input";
+import { SearchInput } from "@/components/search-input";
 import { cn } from "@/lib/utils";
 
 export type ActiveListFilter = { key: string; label: string; onRemove: () => void };
@@ -178,6 +178,7 @@ export function FilterField({
 export function ListSearch({
   value,
   onChange,
+  disabled,
   label,
   placeholder,
   className,
@@ -186,6 +187,7 @@ export function ListSearch({
 }: {
   value: string;
   onChange: (value: string) => void;
+  disabled?: boolean;
   label: string;
   placeholder?: string;
   className?: string;
@@ -194,34 +196,16 @@ export function ListSearch({
 }) {
   const generated = useId();
   const id = providedId ?? generated;
-  const t = useTranslations("workspace");
   return (
     <FilterField id={id} label={label} className={cn("basis-64", className)}>
-      <div className="relative">
-        <SearchIcon
-          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-          aria-hidden
-        />
-        <Input
-          id={id}
-          data-tour={dataTour}
-          type="search"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          className="pl-9 pr-9 [&::-webkit-search-cancel-button]:appearance-none"
-        />
-        {value ? (
-          <button
-            type="button"
-            aria-label={t("clearSearch")}
-            onClick={() => onChange("")}
-            className="absolute right-0 top-0 flex h-10 w-9 items-center justify-center rounded-r-md text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
-          >
-            <CloseIcon className="h-4 w-4" aria-hidden />
-          </button>
-        ) : null}
-      </div>
+      <SearchInput
+        id={id}
+        data-tour={dataTour}
+        value={value}
+        disabled={disabled}
+        onValueChange={onChange}
+        placeholder={placeholder}
+      />
     </FilterField>
   );
 }

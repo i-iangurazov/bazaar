@@ -10,7 +10,7 @@ import { ArchiveIcon, HideIcon, RestoreIcon, ViewIcon } from "@/components/icons
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/search-input";
 import {
   Select,
   SelectContent,
@@ -146,9 +146,9 @@ const CategorySettingsPage = () => {
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">{t("search")}</label>
-              <Input
+              <SearchInput
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
+                onValueChange={setSearch}
                 placeholder={t("searchPlaceholder")}
               />
             </div>

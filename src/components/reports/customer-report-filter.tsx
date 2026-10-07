@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/search-input";
 import { Spinner } from "@/components/ui/spinner";
 import { ReportPagination } from "@/components/reports/report-controls";
 import { trpc } from "@/lib/trpc";
@@ -51,11 +51,11 @@ export function CustomerReportFilter(props: {
       </div>
       {open ? (
         <div className="space-y-3">
-          <Input
+          <SearchInput
             aria-label={t("search")}
             placeholder={t("search")}
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onValueChange={setSearch}
           />
           {query.isLoading ? <Spinner /> : null}
           {query.error ? <p role="alert">{translateError(errors, query.error)}</p> : null}

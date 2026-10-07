@@ -3,7 +3,6 @@
 import React, {
   useCallback,
   forwardRef,
-  useDeferredValue,
   useEffect,
   useId,
   useImperativeHandle,
@@ -24,6 +23,7 @@ import { CameraScanButton } from "@/components/camera-scan-button";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { normalizeScanValue } from "@/lib/scanning/normalize";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 import {
   resolveScanResult,
   shouldSubmitFromKey,
@@ -110,7 +110,7 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
       enableProductSearch = false,
       productSearchMinLength = 2,
       dataTour,
-      showClearButton = false,
+      showClearButton = true,
       selectOnInteraction = false,
     },
     forwardedRef,
@@ -118,6 +118,13 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
     const utils = trpc.useUtils();
     const tCommon = useTranslations("common");
     const innerRef = useRef<HTMLInputElement | null>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+    const focusedRef = useRef(false);
+    const composingRef = useRef(false);
+    const inFlightRef = useRef(false);
+    const inputVersionRef = useRef(0);
+    const dismissedRef = useRef(false);
     const listboxId = useId();
     const feedbackTimerRef = useRef<number | null>(null);
     const hideTimerRef = useRef<number | null>(null);
@@ -137,18 +144,26 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
     } | null>(null);
 
     const currentValue = controlled ? (value ?? "") : internalValue;
-    const deferredValue = useDeferredValue(currentValue);
-    const liveSearchQuery = deferredValue.trim();
+    const observedValueRef = useRef(currentValue);
+    useEffect(() => {
+      if (currentValue !== observedValueRef.current) {
+        inputVersionRef.current += 1;
+        observedValueRef.current = currentValue;
+      }
+    }, [currentValue]);
+    const currentSearchQuery = currentValue.trim();
+    const liveSearchQuery = useDebouncedValue(currentSearchQuery);
     const effectiveTabSubmitMinLength =
       tabSubmitMinLength ?? defaultTabSubmitMinLengthByContext[context];
     const liveProductSearchEnabled =
       showDropdown &&
       enableProductSearch &&
       !disabled &&
+      liveSearchQuery === currentSearchQuery &&
       liveSearchQuery.length >= productSearchMinLength;
     const liveProductSearchQuery = trpc.products.searchQuick.useQuery(
       { q: liveSearchQuery },
-      { enabled: liveProductSearchEnabled, keepPreviousData: true },
+      { enabled: liveProductSearchEnabled, keepPreviousData: false },
     );
     const liveProductItems: ScanLookupItem[] = liveProductSearchEnabled
       ? (liveProductSearchQuery.data ?? []).map((product) => ({
@@ -168,9 +183,15 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
       : [];
     const dropdownItems = multipleItems.length > 0 ? multipleItems : liveProductItems;
     const showLiveLoading =
-      liveProductSearchEnabled && liveProductSearchQuery.isFetching && dropdownItems.length === 0;
+      showDropdown &&
+      enableProductSearch &&
+      !disabled &&
+      currentSearchQuery.length >= productSearchMinLength &&
+      dropdownItems.length === 0 &&
+      (liveSearchQuery !== currentSearchQuery || liveProductSearchQuery.isFetching);
     const showLiveEmpty =
       liveProductSearchEnabled &&
+      !liveProductSearchQuery.isError &&
       !liveProductSearchQuery.isFetching &&
       multipleItems.length === 0 &&
       liveProductItems.length === 0;
@@ -215,6 +236,7 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
         if (hideTimerRef.current) {
           window.clearTimeout(hideTimerRef.current);
         }
+        inputVersionRef.current += 1;
       },
       [],
     );
@@ -235,7 +257,31 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
       };
     }, [portalDropdown, shouldRenderDropdown, updatePortalRect]);
 
+    useEffect(() => {
+      if (!shouldRenderDropdown) return;
+      const dismiss = (event: PointerEvent) => {
+        const target = event.target as Node;
+        if (!containerRef.current?.contains(target) && !dropdownRef.current?.contains(target)) {
+          dismissedRef.current = true;
+          setDropdownOpen(false);
+          setShowEmptyResult(false);
+        }
+      };
+      document.addEventListener("pointerdown", dismiss, true);
+      return () => document.removeEventListener("pointerdown", dismiss, true);
+    }, [shouldRenderDropdown]);
+
+    useEffect(() => {
+      if (shouldRenderDropdown && dropdownItems[activeIndex]) {
+        document
+          .getElementById(`${listboxId}-${dropdownItems[activeIndex].id}`)
+          ?.scrollIntoView?.({ block: "nearest" });
+      }
+    }, [activeIndex, listboxId, shouldRenderDropdown, dropdownItems]);
+
     const updateValue = (nextValue: string) => {
+      inputVersionRef.current += 1;
+      observedValueRef.current = nextValue;
       if (!controlled) {
         setInternalValue(nextValue);
       }
@@ -268,8 +314,12 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
       innerRef.current?.select();
     };
 
-    const handleResolved = async (resolved: ScanResolvedResult) => {
+    const handleResolved = async (
+      resolved: ScanResolvedResult,
+      inputVersion = inputVersionRef.current,
+    ) => {
       const handled = (await onResolved?.(resolved)) !== false;
+      if (inputVersion !== inputVersionRef.current) return;
 
       if (resolved.kind === "exact") {
         if (handled) {
@@ -303,16 +353,19 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
     const handleSubmit = async (trigger: ScanSubmitTrigger, rawOverride?: string) => {
       const rawValue = rawOverride ?? currentValue;
       const normalizedValue = normalizeScanValue(rawValue);
-      if (!normalizedValue || submitting) {
+      if (!normalizedValue || inFlightRef.current || disabled) {
         return;
       }
 
+      inFlightRef.current = true;
+      const inputVersion = inputVersionRef.current;
       setLastTrigger(trigger);
       setSubmitting(true);
 
       try {
         if (onSubmitValue) {
           const handled = (await onSubmitValue({ rawValue, normalizedValue, trigger })) !== false;
+          if (inputVersion !== inputVersionRef.current) return;
           if (handled) {
             setFeedback("success");
             resetFeedbackLater();
@@ -325,25 +378,37 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
           return;
         }
 
-        const lookup = await utils.products.lookupScan.fetch({ q: normalizedValue });
+        const lookup = await utils.products.lookupScan.fetch({
+          q: normalizeScanValue(rawValue, { removeSpaces: false }),
+        });
+        if (inputVersion !== inputVersionRef.current) return;
         const resolved = resolveScanResult({
           context,
           trigger,
           query: normalizedValue,
-          lookup,
+          lookup:
+            context === "pos" && !showDropdown && lookup.items.length === 1
+              ? { ...lookup, exactMatch: true }
+              : lookup,
         });
-        await handleResolved(resolved);
+        await handleResolved(resolved, inputVersion);
       } catch {
+        if (inputVersion !== inputVersionRef.current) return;
         setFeedback("error");
         void nativeHaptics.error();
         resetFeedbackLater();
         focusAndSelect();
       } finally {
+        inFlightRef.current = false;
         setSubmitting(false);
       }
     };
 
     const handleItemSelect = async (item: ScanLookupItem) => {
+      if (inFlightRef.current || disabled) return;
+      inFlightRef.current = true;
+      setSubmitting(true);
+      const inputVersion = inputVersionRef.current;
       const resolved: ScanResolvedResult = {
         kind: "exact",
         context,
@@ -351,9 +416,20 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
         input: normalizeScanValue(currentValue),
         item,
       };
-      await handleResolved(resolved);
-      if (hasTouchKeyboard()) {
-        innerRef.current?.blur();
+      try {
+        await handleResolved(resolved, inputVersion);
+        if (hasTouchKeyboard() && inputVersionRef.current === inputVersion + 1) {
+          innerRef.current?.blur();
+        }
+      } catch {
+        if (inputVersion === inputVersionRef.current) {
+          setFeedback("error");
+          resetFeedbackLater();
+          focusAndSelect();
+        }
+      } finally {
+        inFlightRef.current = false;
+        setSubmitting(false);
       }
     };
 
@@ -362,7 +438,11 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
         return;
       }
       setActiveIndex(0);
-      if (liveSearchQuery.length >= productSearchMinLength) {
+      if (
+        focusedRef.current &&
+        !dismissedRef.current &&
+        currentSearchQuery.length >= productSearchMinLength
+      ) {
         setDropdownOpen(true);
         setShowEmptyResult(false);
       } else if (multipleItems.length === 0) {
@@ -371,18 +451,20 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
     }, [
       enableProductSearch,
       liveSearchQuery,
+      currentSearchQuery,
       multipleItems.length,
       productSearchMinLength,
       showDropdown,
     ]);
 
     const handleKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+      if (composingRef.current || event.nativeEvent.isComposing || event.keyCode === 229) return;
       onKeyDown?.(event);
       if (event.defaultPrevented) {
         return;
       }
 
-      if (dropdownOpen && dropdownItems.length > 0) {
+      if (shouldRenderDropdown && dropdownItems.length > 0) {
         if (event.key === "ArrowDown") {
           event.preventDefault();
           setActiveIndex((current) => (current + 1) % dropdownItems.length);
@@ -405,6 +487,8 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
 
       if (dropdownOpen && event.key === "Escape") {
         event.preventDefault();
+        event.stopPropagation();
+        dismissedRef.current = true;
         setDropdownOpen(false);
         setShowEmptyResult(false);
         return;
@@ -430,6 +514,7 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
 
     const dropdown = shouldRenderDropdown ? (
       <div
+        ref={dropdownRef}
         id={listboxId}
         role="listbox"
         className={cn(
@@ -485,20 +570,21 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
     ) : null;
 
     return (
-      <div className={cn("relative", className)}>
+      <div ref={containerRef} className={cn("relative", className)}>
         <Input
           ref={innerRef}
           role="combobox"
-          aria-expanded={showDropdown && dropdownOpen}
-          aria-controls={showDropdown && dropdownOpen ? listboxId : undefined}
+          aria-expanded={shouldRenderDropdown}
+          aria-controls={shouldRenderDropdown ? listboxId : undefined}
           aria-activedescendant={
-            showDropdown && dropdownOpen && dropdownItems.length > 0
+            shouldRenderDropdown && dropdownItems.length > 0
               ? `${listboxId}-${dropdownItems[activeIndex]?.id}`
               : undefined
           }
           data-tour={dataTour}
           value={currentValue}
           onChange={(event) => {
+            dismissedRef.current = false;
             updateValue(event.target.value);
             if (multipleItems.length > 0) {
               setMultipleItems([]);
@@ -512,10 +598,21 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
             setActiveIndex(0);
           }}
           onKeyDown={handleKeyDown}
+          onCompositionStart={() => {
+            composingRef.current = true;
+          }}
+          onCompositionEnd={() => {
+            composingRef.current = false;
+          }}
           onClick={(event) => {
+            dismissedRef.current = false;
             if (selectOnInteraction) event.currentTarget.select();
+            if (dropdownItems.length || showLiveLoading || showLiveEmpty) setDropdownOpen(true);
           }}
           onFocus={(event) => {
+            focusedRef.current = true;
+            dismissedRef.current = false;
+            if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
             if (selectOnInteraction) event.currentTarget.select();
             if (
               multipleItems.length > 0 ||
@@ -528,6 +625,7 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
             onFocus?.();
           }}
           onBlur={() => {
+            focusedRef.current = false;
             if (hideTimerRef.current) {
               window.clearTimeout(hideTimerRef.current);
             }

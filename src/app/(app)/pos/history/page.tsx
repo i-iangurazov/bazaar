@@ -12,6 +12,8 @@ import { CloseIcon, DownloadIcon, PrintIcon, ShareIcon, ViewIcon } from "@/compo
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SearchInput } from "@/components/search-input";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { Input } from "@/components/ui/input";
 import { Modal, ModalFooter } from "@/components/ui/modal";
 import {
@@ -66,6 +68,7 @@ const PosHistoryPage = () => {
   const { toast } = useToast();
 
   const [search, setSearch] = useState(searchParams.get("q") ?? "");
+  const debouncedSearch = useDebouncedValue(search.trim());
   const [dateFrom, setDateFrom] = useState(readPosDateParam(searchParams, "from", ""));
   const [dateTo, setDateTo] = useState(readPosDateParam(searchParams, "to", ""));
   const [statusFilter, setStatusFilter] = useState<CustomerOrderStatus | "ALL">(
@@ -142,7 +145,7 @@ const PosHistoryPage = () => {
       registerId: registerId || undefined,
       statuses: statusFilter === "ALL" ? undefined : [statusFilter],
       paymentMethod: paymentMethodFilter === "ALL" ? undefined : paymentMethodFilter,
-      search: search.trim() || undefined,
+      search: debouncedSearch || undefined,
       dateFrom: dateFrom ? businessDateOnlyToUtc(dateFrom) : undefined,
       dateTo: dateTo ? businessDateOnlyEndUtc(dateTo) : undefined,
       page: salesPage,
@@ -157,7 +160,7 @@ const PosHistoryPage = () => {
       statuses: [CustomerOrderStatus.DRAFT],
       heldState: "held",
       paymentMethod: paymentMethodFilter === "ALL" ? undefined : paymentMethodFilter,
-      search: search.trim() || undefined,
+      search: debouncedSearch || undefined,
       dateFrom: dateFrom ? businessDateOnlyToUtc(dateFrom) : undefined,
       dateTo: dateTo ? businessDateOnlyEndUtc(dateTo) : undefined,
       page: 1,
@@ -213,7 +216,7 @@ const PosHistoryPage = () => {
       returnsPage: returnsPage === 1 ? null : returnsPage,
     });
     const currentHref = searchParamsString ? `${pathname}?${searchParamsString}` : pathname;
-    if (href !== currentHref) router.replace(href, { scroll: false });
+    if (href !== currentHref) window.history.replaceState(null, "", href);
   }, [
     dateFrom,
     dateTo,
@@ -714,9 +717,9 @@ const PosHistoryPage = () => {
             </SelectContent>
           </Select>
 
-          <Input
+          <SearchInput
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onValueChange={setSearch}
             placeholder={t("history.search")}
             className="h-11"
           />
@@ -945,9 +948,9 @@ const PosHistoryPage = () => {
                 ))}
               </SelectContent>
             </Select>
-            <Input
+            <SearchInput
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onValueChange={setSearch}
               placeholder={t("history.search")}
             />
           </CardContent>

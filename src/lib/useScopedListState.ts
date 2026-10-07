@@ -154,7 +154,7 @@ export function useScopedListState<T>(options: {
   );
   return {
     ...stored,
-    isReady: isReady && ownsRoute,
+    isReady: Boolean(options.storageKey) && isReady && ownsRoute,
     value,
     setValue,
     hasStoredValue: stored.hasStoredValue || explicit,

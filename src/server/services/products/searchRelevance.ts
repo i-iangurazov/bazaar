@@ -23,6 +23,9 @@ const missScore: ProductSearchScore = {
 export const normalizeProductSearchText = (value: string | null | undefined) =>
   (value ?? "").normalize("NFKC").toLocaleLowerCase().replace(/\s+/g, " ").trim();
 
+/** Prisma's insensitive string filters use LIKE patterns, including equals. */
+export const escapeProductSearchPattern = (value: string) => value.replace(/[\\%_]/g, "\\$&");
+
 export const tokenizeProductSearchText = (value: string | null | undefined) =>
   normalizeProductSearchText(value).match(/[\p{L}\p{N}]+/gu) ?? [];
 

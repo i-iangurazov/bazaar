@@ -10,7 +10,7 @@ import { ReceiptPreviewModal } from "@/components/pos/receipt-preview-modal";
 import { QueryErrorState } from "@/components/query-error-state";
 import { Button } from "@/components/ui/button";
 import { SelectItem } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/search-input";
 import { Modal, ModalFooter } from "@/components/ui/modal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -382,11 +382,12 @@ function AnalyticsReportContent() {
       >
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <ReportField label={a("filters.productSearch")}>
-            <Input
+            <SearchInput
               aria-label={a("filters.productSearch")}
               placeholder={t("searchPlaceholder")}
               value={scope.search}
-              onChange={(event) => scope.setSearch(event.target.value)}
+              disabled={!enabled}
+              onValueChange={scope.setSearch}
               onBlur={() => {
                 if ((state.search ?? "") !== scope.search)
                   update({ search: scope.search || undefined });

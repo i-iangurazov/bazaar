@@ -1,4 +1,6 @@
 import type { Prisma } from "@prisma/client";
+import { escapeProductSearchPattern } from "@/server/services/products/searchRelevance";
+import { findRankedProductIds } from "@/server/services/products/searchSql";
 import { normalizeScanValue } from "@/lib/scanning/normalize";
 import { decimalToNumber, sanitizeListImageUrl } from "@/server/services/products/serializers";
 
@@ -25,13 +27,8 @@ export type ScanLookupResult = {
   items: ScanLookupItem[];
 };
 
-const scanMatchRank: Record<ScanLookupMatch, number> = {
-  barcode: 0,
-  sku: 1,
-  name: 2,
-};
-
 type ScanLookupClient = {
+  $queryRaw: Prisma.TransactionClient["$queryRaw"];
   productBarcode: Pick<Prisma.ProductBarcodeDelegate, "findFirst">;
   productPack: Pick<Prisma.ProductPackDelegate, "findFirst">;
   product: Pick<Prisma.ProductDelegate, "findFirst" | "findMany">;
@@ -173,7 +170,7 @@ export const lookupScanProducts = async (
       organizationId,
       isDeleted: false,
       ...productWhere,
-      sku: { equals: exactNeedle, mode: "insensitive" },
+      sku: { equals: escapeProductSearchPattern(exactNeedle), mode: "insensitive" },
     },
     select: scanProductSelect,
   });
@@ -194,30 +191,16 @@ export const lookupScanProducts = async (
   const barcodeNeedle = normalized || fuzzyNeedle;
   const fuzzyNeedleLower = fuzzyNeedle.toLowerCase();
 
+  const ids = await findRankedProductIds({
+    prisma: client,
+    organizationId,
+    query: fuzzyNeedle,
+    limit: 10,
+    storeIds: options?.storeIds,
+  });
+  if (!ids.length) return { exactMatch: false, items: [] };
   const products = await client.product.findMany({
-    where: {
-      organizationId,
-      isDeleted: false,
-      ...productWhere,
-      OR: [
-        { name: { contains: fuzzyNeedle, mode: "insensitive" } },
-        { sku: { contains: fuzzyNeedle, mode: "insensitive" } },
-        {
-          barcodes: {
-            some: {
-              value: { contains: barcodeNeedle, mode: "insensitive" },
-            },
-          },
-        },
-        {
-          packs: {
-            some: {
-              packBarcode: { contains: barcodeNeedle, mode: "insensitive" },
-            },
-          },
-        },
-      ],
-    },
+    where: { organizationId, isDeleted: false, ...productWhere, id: { in: ids } },
     select: {
       ...scanProductSelect,
       barcodes: {
@@ -241,21 +224,20 @@ export const lookupScanProducts = async (
     take: 10,
   });
 
+  const byId = new Map(products.map((product) => [product.id, product]));
   return {
     exactMatch: false,
-    items: products
-      .map((product) => {
-        const hasBarcodeMatch = product.barcodes.length > 0 || product.packs.length > 0;
-        const hasSkuMatch = product.sku.toLowerCase().includes(fuzzyNeedleLower);
-        return toItem({
+    items: ids.flatMap((id) => {
+      const product = byId.get(id);
+      if (!product) return [];
+      const hasBarcodeMatch = product.barcodes.length > 0 || product.packs.length > 0;
+      const hasSkuMatch = product.sku.toLowerCase().includes(fuzzyNeedleLower);
+      return [
+        toItem({
           ...product,
           matchType: hasBarcodeMatch ? "barcode" : hasSkuMatch ? "sku" : "name",
-        });
-      })
-      .sort(
-        (left, right) =>
-          scanMatchRank[left.matchType] - scanMatchRank[right.matchType] ||
-          left.name.localeCompare(right.name, "ru"),
-      ),
+        }),
+      ];
+    }),
   };
 };

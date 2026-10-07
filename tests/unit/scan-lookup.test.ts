@@ -5,6 +5,7 @@ import { lookupScanProducts } from "@/server/services/scanLookup";
 describe("lookupScanProducts", () => {
   it("prefers exact barcode matches", async () => {
     const client = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       productBarcode: {
         findFirst: vi.fn().mockResolvedValue({
           product: { id: "prod-1", sku: "SKU-1", name: "Milk" },
@@ -28,6 +29,7 @@ describe("lookupScanProducts", () => {
 
   it("falls back to exact SKU match", async () => {
     const client = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       productBarcode: { findFirst: vi.fn().mockResolvedValue(null) },
       productPack: { findFirst: vi.fn().mockResolvedValue(null) },
       product: {
@@ -49,6 +51,7 @@ describe("lookupScanProducts", () => {
 
   it("returns name matches when no exact match", async () => {
     const client = {
+      $queryRaw: vi.fn().mockResolvedValue([{ id: "prod-3" }]),
       productBarcode: { findFirst: vi.fn().mockResolvedValue(null) },
       productPack: { findFirst: vi.fn().mockResolvedValue(null) },
       product: {
@@ -74,8 +77,11 @@ describe("lookupScanProducts", () => {
     expect(client.product.findMany).toHaveBeenCalled();
   });
 
-  it("orders fuzzy results as barcode then sku then name", async () => {
+  it("preserves relevance order selected before the database limit", async () => {
     const client = {
+      $queryRaw: vi
+        .fn()
+        .mockResolvedValue([{ id: "prod-barcode" }, { id: "prod-sku" }, { id: "prod-name" }]),
       productBarcode: { findFirst: vi.fn().mockResolvedValue(null) },
       productPack: { findFirst: vi.fn().mockResolvedValue(null) },
       product: {

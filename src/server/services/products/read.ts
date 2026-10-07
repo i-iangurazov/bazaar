@@ -11,9 +11,10 @@ import { lookupScanProducts } from "@/server/services/scanLookup";
 import { suggestNextProductSku } from "@/server/services/products";
 import { getProductDuplicateDiagnostics } from "@/server/services/products/diagnostics";
 import {
-  compareProductSearchRelevance,
   tokenizeProductSearchText,
+  escapeProductSearchPattern,
 } from "@/server/services/products/searchRelevance";
+import { buildProductSearchScoreSql, findRankedProductIds } from "./searchSql";
 import {
   assertUserCanAccessStore,
   productStoreAssignmentInWhere,
@@ -617,74 +618,6 @@ const buildProductSqlSortExpression = ({
   return Prisma.sql`LOWER(p."name")`;
 };
 
-const buildProductSearchScoreSql = (searchQuery: string) => {
-  const needle = searchQuery.toLocaleLowerCase();
-  const barcodeNeedle = (normalizeScanValue(searchQuery) || searchQuery).toLocaleLowerCase();
-  const tokens = tokenizeProductSearchText(searchQuery);
-  const missingTokensSql = tokens.length
-    ? Prisma.join(
-        tokens.map(
-          (token) => Prisma.sql`CASE WHEN EXISTS (
-            SELECT 1
-            FROM UNNEST(REGEXP_SPLIT_TO_ARRAY(LOWER(p."name"), '[^[:alnum:]]+')) name_token
-            WHERE POSITION(${token} IN name_token) > 0
-          ) THEN 0 ELSE 1 END`,
-        ),
-        " + ",
-      )
-    : Prisma.sql`0`;
-  const allTokensMatchSql =
-    tokens.length > 1 ? Prisma.sql`(${missingTokensSql}) = 0` : Prisma.sql`false`;
-
-  const rankSql = Prisma.sql`CASE
-    WHEN LOWER(p."sku") = ${needle} OR EXISTS (
-      SELECT 1 FROM "ProductBarcode" barcode
-      WHERE barcode."productId" = p.id AND LOWER(barcode."value") = ${barcodeNeedle}
-    ) THEN 0
-    WHEN LOWER(p."name") = ${needle} THEN 1
-    WHEN LEFT(LOWER(p."name"), CHAR_LENGTH(${needle})) = ${needle} THEN 2
-    WHEN EXISTS (
-      SELECT 1
-      FROM UNNEST(REGEXP_SPLIT_TO_ARRAY(LOWER(p."name"), '[^[:alnum:]]+')) name_token
-      WHERE LEFT(name_token, CHAR_LENGTH(${needle})) = ${needle}
-    ) THEN 3
-    WHEN POSITION(${needle} IN LOWER(p."name")) > 0 THEN 4
-    WHEN ${allTokensMatchSql} THEN 5
-    WHEN LEFT(LOWER(p."sku"), CHAR_LENGTH(${needle})) = ${needle} OR EXISTS (
-      SELECT 1 FROM "ProductBarcode" barcode
-      WHERE barcode."productId" = p.id
-        AND LEFT(LOWER(barcode."value"), CHAR_LENGTH(${barcodeNeedle})) = ${barcodeNeedle}
-    ) THEN 6
-    WHEN POSITION(${needle} IN LOWER(p."sku")) > 0 OR EXISTS (
-      SELECT 1 FROM "ProductBarcode" barcode
-      WHERE barcode."productId" = p.id
-        AND POSITION(${barcodeNeedle} IN LOWER(barcode."value")) > 0
-    ) THEN 7
-    ELSE 99
-  END`;
-  const tokenPrefixIndexSql = Prisma.sql`COALESCE((
-    SELECT MIN(name_token.ordinality - 1)
-    FROM UNNEST(REGEXP_SPLIT_TO_ARRAY(LOWER(p."name"), '[^[:alnum:]]+'))
-      WITH ORDINALITY AS name_token(value, ordinality)
-    WHERE LEFT(name_token.value, CHAR_LENGTH(${needle})) = ${needle}
-  ), 9007199254740991)`;
-
-  return {
-    rankSql,
-    missingTokensSql: Prisma.sql`CASE WHEN (${rankSql}) = 99 THEN 9007199254740991 ELSE (${missingTokensSql}) END`,
-    indexSql: Prisma.sql`CASE
-      WHEN (${rankSql}) = 3 THEN ${tokenPrefixIndexSql}
-      WHEN (${rankSql}) = 4 THEN POSITION(${needle} IN LOWER(p."name")) - 1
-      WHEN (${rankSql}) = 99 THEN 9007199254740991
-      ELSE 0
-    END`,
-    nameLengthSql: Prisma.sql`CASE
-      WHEN (${rankSql}) = 99 THEN 9007199254740991
-      ELSE CHAR_LENGTH(LOWER(p."name"))
-    END`,
-  };
-};
-
 const readProductsByAdvancedSqlSort = async ({
   prisma,
   organizationId,
@@ -910,12 +843,10 @@ export const searchQuickProducts = async ({
   }
 
   const resultLimit = Math.min(Math.max(limit ?? 20, 1), 50);
-  const candidateLimit = Math.min(Math.max(resultLimit * 10, 100), 500);
   const fuzzyNeedle = trimmed || exactNeedle;
   const barcodeNeedle = normalized || fuzzyNeedle;
   const fuzzyNeedleLower = fuzzyNeedle.toLowerCase();
   const barcodeNeedleLower = barcodeNeedle.toLowerCase();
-  const fuzzyTokens = tokenizeProductSearchText(fuzzyNeedle);
   if (storeId && user) {
     try {
       await assertUserCanAccessStore(prisma, user, storeId);
@@ -949,51 +880,37 @@ export const searchQuickProducts = async ({
         organizationId,
         isDeleted: false,
         ...assignmentScope,
-        sku: { equals: exactNeedle, mode: "insensitive" },
+        sku: { equals: escapeProductSearchPattern(exactNeedle), mode: "insensitive" },
       },
       select: productPreviewSelect,
       take: resultLimit,
     }),
-    prisma.product.findMany({
-      where: {
+    (async () => {
+      const ids = await findRankedProductIds({
+        prisma,
         organizationId,
-        isDeleted: false,
-        ...assignmentScope,
-        OR: [
-          { name: { contains: fuzzyNeedle, mode: "insensitive" } },
-          ...(fuzzyTokens.length > 1
-            ? [
-                {
-                  AND: fuzzyTokens.map((token) => ({
-                    name: { contains: token, mode: "insensitive" as const },
-                  })),
-                },
-              ]
-            : []),
-          { sku: { contains: fuzzyNeedle, mode: "insensitive" } },
-          {
-            barcodes: {
-              some: { value: { contains: barcodeNeedle, mode: "insensitive" } },
-            },
+        query: fuzzyNeedle,
+        limit: resultLimit,
+        storeIds: visibleStoreIds,
+      });
+      if (!ids.length) return [];
+      const products = await prisma.product.findMany({
+        where: { organizationId, isDeleted: false, ...assignmentScope, id: { in: ids } },
+        select: {
+          ...productPreviewSelect,
+          barcodes: {
+            where: { value: { contains: barcodeNeedle, mode: "insensitive" } },
+            select: { value: true },
+            take: 1,
           },
-          {
-            packs: {
-              some: { packBarcode: { contains: barcodeNeedle, mode: "insensitive" } },
-            },
-          },
-        ],
-      },
-      select: {
-        ...productPreviewSelect,
-        barcodes: {
-          where: { value: { contains: barcodeNeedle, mode: "insensitive" } },
-          select: { value: true },
-          take: 1,
         },
-      },
-      orderBy: { name: "asc" },
-      take: candidateLimit,
-    }),
+      });
+      const byId = new Map(products.map((product) => [product.id, product]));
+      return ids.flatMap((id) => {
+        const product = byId.get(id);
+        return product ? [product] : [];
+      });
+    })(),
   ]);
 
   const items = new Map<
@@ -1023,20 +940,7 @@ export const searchQuickProducts = async ({
     items.set(product.id, { ...product, matchType: "sku" });
   });
 
-  const searchCollator = new Intl.Collator(undefined, {
-    numeric: true,
-    sensitivity: "base",
-  });
-  const rankedFuzzyMatches = fuzzyMatches.sort((left, right) =>
-    compareProductSearchRelevance({
-      query: fuzzyNeedle,
-      left,
-      right,
-      collator: searchCollator,
-    }),
-  );
-
-  rankedFuzzyMatches.forEach((product) => {
+  fuzzyMatches.forEach((product) => {
     if (items.has(product.id)) {
       return;
     }
@@ -1064,14 +968,24 @@ export const searchQuickProducts = async ({
         })
       : [];
   const priceOverrideMap = new Map(
-    priceOverrides.filter((price) => price.priceKgs != null).map((price) => [price.productId, Number(price.priceKgs)]),
+    priceOverrides
+      .filter((price) => price.priceKgs != null)
+      .map((price) => [price.productId, Number(price.priceKgs)]),
   );
-  const organization = storeId ? await prisma.organization.findUnique({
-    where: { id: organizationId }, select: { retailWholesaleEnabled: true },
-  }) : null;
+  const organization = storeId
+    ? await prisma.organization.findUnique({
+        where: { id: organizationId },
+        select: { retailWholesaleEnabled: true },
+      })
+    : null;
   if (organization?.retailWholesaleEnabled && storeId && orderedProducts.length) {
     const extras = await prisma.storePriceTypes.findMany({
-      where: { organizationId, storeId, productId: { in: orderedProducts.map(product => product.id) }, variantKey: "BASE" },
+      where: {
+        organizationId,
+        storeId,
+        productId: { in: orderedProducts.map((product) => product.id) },
+        variantKey: "BASE",
+      },
     });
     for (const extra of extras) {
       const price = extra.retailPriceKgs ?? extra.wholesalePriceKgs;

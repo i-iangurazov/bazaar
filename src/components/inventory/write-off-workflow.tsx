@@ -13,13 +13,14 @@ import {
   BackIcon,
   DeleteIcon,
   EmptyIcon,
-  SearchIcon,
   StatusDangerIcon,
   StatusSuccessIcon,
 } from "@/components/icons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/search-input";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -149,16 +150,18 @@ export const InventoryWriteOffsPage = ({
     [locale, selectedStore],
   );
 
+  const debouncedSearch = useDebouncedValue(search.trim());
+  const searchPending = debouncedSearch !== search.trim();
   const searchQuery = trpc.inventory.searchProducts.useQuery(
     {
       storeId,
-      search: search.trim() || undefined,
+      search: debouncedSearch || undefined,
       searchFields: writeOffProductSearchFields,
       limit: 100,
     },
     {
       enabled: canSearch,
-      keepPreviousData: true,
+      keepPreviousData: false,
     },
   );
   type SearchResult = NonNullable<typeof searchQuery.data>[number];
@@ -742,22 +745,19 @@ export const InventoryWriteOffsPage = ({
               {selectedStore ? <Badge variant="muted">{selectedStore.name}</Badge> : null}
             </div>
             <div className="relative">
-              <SearchIcon
-                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-                aria-hidden
-              />
-              <Input
+              <SearchInput
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
+                onValueChange={setSearch}
                 onKeyDown={handleSearchKeyDown}
                 placeholder={t("writeOffSearchPlaceholderShort")}
+                aria-label={t("writeOffSearchPlaceholderShort")}
                 disabled={!canSearch}
-                className="pl-9"
-                autoComplete="off"
+
+
               />
             </div>
             <div className="bazaar-doc-search-list">
-              {searchQuery.isFetching ? (
+              {searchPending || searchQuery.isFetching ? (
                 <div className="flex items-center gap-2 px-3 py-3 text-sm text-muted-foreground">
                   <Spinner className="h-4 w-4" />
                   {tCommon("loading")}

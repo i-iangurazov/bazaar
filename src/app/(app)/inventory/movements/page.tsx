@@ -4,7 +4,7 @@ import { canPrintMovementDocument } from "@/lib/movementPrint";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { CustomerOrderStatus } from "@prisma/client";
 import type { ColumnDef, OnChangeFn, SortingState } from "@tanstack/react-table";
@@ -23,6 +23,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { SearchInput } from "@/components/search-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Modal, ModalFooter } from "@/components/ui/modal";
@@ -47,7 +48,6 @@ import {
   EmptyIcon,
   PrintIcon,
   ReceiveIcon,
-  SearchIcon,
   SortIcon,
   TransferIcon,
   ViewIcon,
@@ -130,7 +130,6 @@ const ProductMovementsPage = () => {
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const locale = useLocale();
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const trpcUtils = trpc.useUtils();
@@ -181,7 +180,7 @@ const ProductMovementsPage = () => {
 
   const updateJournalParams = useCallback(
     (updates: Record<string, string | number | null | undefined>) => {
-      const params = new URLSearchParams(currentQueryString);
+      const params = new URLSearchParams(window.location.search);
       Object.entries(updates).forEach(([key, value]) => {
         if (value === null || value === undefined || value === "") {
           params.delete(key);
@@ -190,9 +189,9 @@ const ProductMovementsPage = () => {
         params.set(key, String(value));
       });
       const nextQuery = params.toString();
-      router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+      window.history.replaceState(null, "", nextQuery ? `${pathname}?${nextQuery}` : pathname);
     },
-    [currentQueryString, pathname, router],
+    [pathname],
   );
 
   const setPage = (value: number) => updateJournalParams({ page: value > 1 ? value : null });
@@ -714,14 +713,12 @@ const ProductMovementsPage = () => {
         <div className="space-y-1">
           <Label htmlFor="movement-search">{tCommon("search")}</Label>
           <div className="relative">
-            <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
+            <SearchInput
               id="movement-search"
               value={search}
-              onChange={(event) =>
-                setFilterParam("search", normalizeOptionalParam(event.target.value))
+              onValueChange={(value) =>
+                setFilterParam("search", normalizeOptionalParam(value))
               }
-              className="pl-9"
               placeholder={t("searchPlaceholder")}
             />
           </div>
