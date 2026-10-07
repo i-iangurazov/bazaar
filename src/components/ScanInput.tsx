@@ -572,14 +572,14 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
         ) : null}
 
         <div className="absolute right-1 top-1/2 flex -translate-y-1/2 items-center">
-          {showClearButton && currentValue ? (
+          {showClearButton ? (
             <Button
               type="button"
               variant="ghost"
               size="icon"
               className="h-11 w-11"
               aria-label={tCommon("clearSearch")}
-              disabled={Boolean(disabled || submitting)}
+              disabled={Boolean(disabled || submitting || !currentValue)}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => {
                 clearInput();

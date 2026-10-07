@@ -488,12 +488,12 @@ const PosProductButton = memo(function PosProductButton({
               type="button"
               variant="ghost"
               size="icon"
-              className="h-11 w-11 rounded-md text-base"
+              className="h-11 w-11 rounded-md text-lg font-bold leading-none text-foreground"
               onClick={() => onProductDecrement(product)}
               disabled={disabled || cartQty <= 0}
               aria-label={decreaseQtyLabel}
             >
-              -
+              −
             </Button>
             <span className="min-w-7 px-1 text-center text-sm font-semibold tabular-nums text-foreground">
               {cartQty}
@@ -502,7 +502,7 @@ const PosProductButton = memo(function PosProductButton({
               type="button"
               variant="ghost"
               size="icon"
-              className="h-11 w-11 rounded-md text-base"
+              className="h-11 w-11 rounded-md text-lg font-bold leading-none text-foreground"
               onClick={() => onProductClick(product)}
               disabled={disabled}
               aria-label={increaseQtyLabel}
@@ -550,6 +550,8 @@ const PosSellPage = () => {
   ]);
   const [discountDraft, setDiscountDraft] = useState("");
   const [discountEditorOpen, setDiscountEditorOpen] = useState(false);
+  const [discountSaving, setDiscountSaving] = useState(false);
+  const discountSavingRef = useRef(false);
   const [sellInDebt, setSellInDebt] = useState(false);
   const [debtFullName, setDebtFullName] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<PosCustomerSelection | null>(null);
@@ -1639,6 +1641,9 @@ const PosSellPage = () => {
   }, [cartDisplayTotal, saleIdForPaymentInit, saleTotalForPaymentInit, sellInDebt, setPayments]);
 
   useEffect(() => {
+    if (completedSaleEditIdRef.current) {
+      return;
+    }
     if (!sale) {
       if (!hasLocalCartLines) {
         setDiscountDraft("");
@@ -1800,6 +1805,7 @@ const PosSellPage = () => {
   const retryEntry = () => registersQuery.isError ? registersQuery.refetch() : shiftQuery.refetch();
   const isLineBusy =
     Boolean(cartPriceSync) ||
+    discountSaving ||
     removeLineMutation.isLoading ||
     updateDiscountMutation.isLoading ||
     updateCustomerMutation.isLoading ||
@@ -2553,11 +2559,11 @@ const PosSellPage = () => {
     }
   };
 
-  const handleUpdateDiscount = async () => {
-    if (!saleId || cartPriceSyncRef.current) {
+  const handleUpdateDiscount = async (rawOverride?: string) => {
+    if (!saleId || cartPriceSyncRef.current || discountSavingRef.current) {
       return false;
     }
-    const raw = discountDraft.trim();
+    const raw = (rawOverride ?? discountDraft).trim();
     const amount = raw.length ? Number(raw.replace(/\s+/g, "").replace(",", ".")) : 0;
     if (!Number.isFinite(amount) || amount < 0) {
       toast({ variant: "error", description: t("sell.discountInvalid") });
@@ -2568,13 +2574,15 @@ const PosSellPage = () => {
       toast({ variant: "error", description: t("sell.discountTooLarge") });
       return false;
     }
-    if (Math.abs(discountKgs - (sale?.discountKgs ?? 0)) < 0.009) {
+    if (rawOverride === undefined && Math.abs(discountKgs - (sale?.discountKgs ?? 0)) < 0.009) {
       return true;
     }
     if (completedSaleEditIdRef.current) {
       setDiscountDraft(String(displayMoneyFromKgs(discountKgs, currencySource)));
       return true;
     }
+    discountSavingRef.current = true;
+    setDiscountSaving(true);
     try {
       const updatedDiscount = await updateDiscountMutation.mutateAsync({ saleId, discountKgs });
       trpcUtils.pos.sales.get.setData({ saleId }, (currentSale) =>
@@ -2593,6 +2601,15 @@ const PosSellPage = () => {
     } catch {
       // handled by mutation onError
       return false;
+    } finally {
+      discountSavingRef.current = false;
+      setDiscountSaving(false);
+    }
+  };
+
+  const handleRemoveSaleDiscount = async () => {
+    if (await handleUpdateDiscount("0")) {
+      setDiscountEditorOpen(false);
     }
   };
 
@@ -5055,7 +5072,7 @@ const PosSellPage = () => {
       {posToolsQuery.data.priceTypesEnabled ? <select aria-label={t("tools.priceType")} value={priceMode} onChange={event=>void changePriceMode(event.target.value as "RETAIL"|"WHOLESALE")} disabled={isLineBusy || completeMutation.isLoading || !hasOpenShift} className="h-11 w-[76px] rounded-md border border-border bg-background px-1 text-xs min-[360px]:w-[88px] sm:w-[96px] sm:text-sm">
         <option value="RETAIL">{t("tools.retail")}</option><option value="WHOLESALE">{t("tools.wholesale")}</option>
       </select> : null}
-      {posToolsQuery.data.canTransfer ? <Button variant="secondary" className="h-11 min-w-11 shrink-0 px-2" aria-label={t("tools.transferTitle")} title={t("tools.transferTitle")} disabled={!hasOpenShift || Boolean(cartPriceSync)} onClick={()=>setTransferOpen(true)}><TransferIcon className="h-5 w-5" aria-hidden /><span className="hidden xl:inline">{t("tools.transfer")}</span></Button> : null}
+      {posToolsQuery.data.canTransfer ? <Button variant="secondary" className="h-11 min-w-11 shrink-0 px-2" aria-label={t("tools.transferTitle")} title={t("tools.transferTitle")} disabled={!hasOpenShift || Boolean(cartPriceSync)} onClick={()=>setTransferOpen(true)}><TransferIcon className="h-5 w-5" aria-hidden /></Button> : null}
     </div>
   ) : null;
   const PosToolsDialogs = () => <>
@@ -5857,7 +5874,7 @@ const PosSellPage = () => {
                                         type="button"
                                         variant="ghost"
                                         size="icon"
-                                        className="h-6 w-7 rounded-md text-sm"
+                                        className="h-6 w-7 rounded-md text-lg font-bold leading-none text-foreground"
                                         onClick={() =>
                                           handleUpdateQty(
                                             line.id,
@@ -5871,7 +5888,7 @@ const PosSellPage = () => {
                                         }
                                         aria-label={t("sell.decreaseQty")}
                                       >
-                                        -
+                                        −
                                       </Button>
                                       <Input
                                         data-testid="pos-line-qty"
@@ -5893,7 +5910,7 @@ const PosSellPage = () => {
                                         type="button"
                                         variant="ghost"
                                         size="icon"
-                                        className="h-6 w-7 rounded-md text-sm"
+                                        className="h-6 w-7 rounded-md text-lg font-bold leading-none text-foreground"
                                         onClick={() =>
                                           handleUpdateQty(line.id, String(line.qty + 1))
                                         }
@@ -5988,6 +6005,20 @@ const PosSellPage = () => {
                               : `+ ${t("sell.addDiscount")}`}
                           </Button>
                           {cartDiscountKgs > 0 ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-danger hover:text-danger"
+                              aria-label={t("sell.removeDiscount")}
+                              disabled={isLineBusy || completeMutation.isLoading}
+                              onMouseDown={(event) => event.preventDefault()}
+                              onClick={() => void handleRemoveSaleDiscount()}
+                            >
+                              <CloseIcon className="h-3.5 w-3.5" aria-hidden />
+                            </Button>
+                          ) : null}
+                          {cartDiscountKgs > 0 ? (
                             <span className="text-[11px] text-muted-foreground">
                               {t("sell.subtotal")} {formatSaleMoney(cartSubtotalKgs)}
                             </span>
@@ -6036,6 +6067,7 @@ const PosSellPage = () => {
                               variant="secondary"
                               size="sm"
                               className="h-6 px-2.5 text-xs"
+                              onMouseDown={(event) => event.preventDefault()}
                               onClick={() => void handleUpdateDiscount()}
                               disabled={isLineBusy || completeMutation.isLoading}
                             >
@@ -6422,37 +6454,7 @@ const PosSellPage = () => {
         }
       };
 
-      const handleMobileRemoveDiscount = async () => {
-        if (!saleId) {
-          return;
-        }
-        if (completedSaleEditIdRef.current === saleId) {
-          setDiscountDraft("0");
-          setDiscountEditorOpen(false);
-          return;
-        }
-        try {
-          setDiscountDraft("0");
-          const updatedDiscount = await updateDiscountMutation.mutateAsync({
-            saleId,
-            discountKgs: 0,
-          });
-          trpcUtils.pos.sales.get.setData({ saleId }, (currentSale) =>
-            currentSale
-              ? {
-                  ...currentSale,
-                  subtotalKgs: updatedDiscount.subtotalKgs,
-                  discountKgs: updatedDiscount.discountKgs,
-                  totalKgs: updatedDiscount.totalKgs,
-                }
-              : currentSale,
-          );
-          await trpcUtils.pos.sales.get.invalidate({ saleId });
-          setDiscountEditorOpen(false);
-        } catch {
-          // handled by mutation onError
-        }
-      };
+      const handleMobileRemoveDiscount = handleRemoveSaleDiscount;
 
       const activeLineInputValue = () => {
         if (!activeLine) {
@@ -7478,7 +7480,7 @@ const PosSellPage = () => {
                       disabled={isLineBusy || completeMutation.isLoading}
                       data-testid="pos-mobile-discount-remove"
                     >
-                      {tCommon("delete")}
+                      {t("sell.removeDiscount")}
                     </button>
                   ) : (
                     <button

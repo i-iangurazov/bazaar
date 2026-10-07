@@ -2579,6 +2579,7 @@
       }
     },
     "sell": {
+      "removeDiscount": "Remove discount",
       "receiptNotOpened": "The requested receipt was not opened",
       "openingReceipt": "Opening the selected receipt…",
       "receiptAlreadyResolved": "This receipt is already completed or canceled. Return to the shift and check the current list.",

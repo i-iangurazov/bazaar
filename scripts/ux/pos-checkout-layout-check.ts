@@ -20,10 +20,29 @@ export async function verifyPosCheckoutLayout(page: Page, directory: string) {
   );
   await page.getByRole("button", { name: "Очистить поиск", exact: true }).click();
   await expect(search).toHaveValue("");
+  await expect(page.getByRole("button", { name: "Очистить поиск", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Очистить поиск", exact: true })).toBeDisabled();
   await expect(
     page.getByRole("button", { name: "Сканировать камерой", exact: true }),
   ).toBeVisible();
   await expect(page.getByTestId("pos-cart-line")).toHaveCount(1);
+
+  const paymentAmount = page.getByTestId("pos-payment-row").getByLabel("Сумма", { exact: true });
+  const originalAmount = await paymentAmount.inputValue();
+  const amount = Number(originalAmount);
+  if (amount > 0) {
+    const discount = Math.max(0.01, Math.round(amount * 10) / 100);
+    await page.getByRole("button", { name: "Добавить скидку", exact: false }).click();
+    const input = page.getByLabel("Скидка на чек", { exact: true });
+    await input.fill(String(discount));
+    await page.getByRole("button", { name: "Применить скидку", exact: true }).click();
+    await expect(paymentAmount).toHaveValue(String(Math.round((amount - discount) * 100) / 100));
+    // A focused unsaved value must not race the explicit remove action through onBlur.
+    await input.fill(String(amount));
+    await page.getByRole("button", { name: "Убрать скидку", exact: true }).click();
+    await expect(paymentAmount).toHaveValue(originalAmount);
+    await expect(input).toBeHidden();
+  }
 
   for (const size of [
     { width: 1024, height: 768 },
