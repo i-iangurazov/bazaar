@@ -5,6 +5,7 @@ import { chromium, type BrowserContext, type Page, type Locator } from "playwrig
 import { verifyProductTable } from "./product-table-check";
 import { verifyProductEditor } from "./product-editor-check";
 import { verifyPosPaymentChoices } from "./pos-payment-check";
+import { verifyPosCheckoutLayout } from "./pos-checkout-layout-check";
 import { verifyPosReceiptEditing } from "./pos-receipt-edit-check";
 const base = process.env.UX_HTTPS === "1" ? "https://localhost:3122" : "http://localhost:3122";
 const f = JSON.parse(await readFile("artifacts/ux/fixture.json", "utf8"));
@@ -510,6 +511,7 @@ try {
   const complete = dashboard.getByRole("button", { name: "Завершить продажу", exact: true });
   await complete.waitFor();
   await until(() => complete.isEnabled(), "Checkout is not ready");
+  await verifyPosCheckoutLayout(dashboard, directory);
   await verifyPosPaymentChoices(dashboard);
   assert.equal(await dashboard.locator("[data-baam-launcher], [data-baam-drawer]").count(), 0);
   await dashboard.screenshot({ path: `${directory}/pos-checkout.png` });

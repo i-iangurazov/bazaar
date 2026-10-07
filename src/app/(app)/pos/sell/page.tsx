@@ -48,6 +48,7 @@ import {
   BarcodeIcon,
 } from "@/components/icons";
 import { ScanInput } from "@/components/ScanInput";
+import { PosPaymentMethodControl } from "@/components/pos/payment-method-control";
 import { LoyaltyDialog } from "@/components/pos/loyalty-dialog";
 import { LoyaltyButton, CompletedLoyaltySummary } from "@/components/pos/loyalty-panel";
 import { ContextualHelpButton } from "@/components/help/ContextualHelpButton";
@@ -99,7 +100,6 @@ import { getQzTrayBinding, printPdfBlobViaQzTray, qzTrayErrorMessageKey } from "
 import { downloadPdfBlob, fetchPdfBlob, printPdfBlob } from "@/lib/pdfClient";
 import {
   addPosPaymentDraftRow,
-  POS_CHECKOUT_PAYMENT_METHODS,
   posCheckoutPaymentMethod,
   createDefaultPosPaymentDraft,
   removePosPaymentDraftRow,
@@ -427,7 +427,7 @@ const PosProductButton = memo(function PosProductButton({
       className={`group grid w-full cursor-pointer items-center gap-3 bg-card text-left transition hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring aria-disabled:cursor-not-allowed aria-disabled:opacity-60 dark:hover:bg-accent/40 ${
         variant === "mobile"
           ? "min-h-16 grid-cols-[40px_minmax(0,1fr)_auto] rounded-md border border-border p-2"
-          : "min-h-16 grid-cols-[44px_minmax(0,1fr)_96px] px-3 py-2"
+          : "min-h-16 grid-cols-[44px_minmax(0,1fr)_116px] px-3 py-2"
       }`}
     >
       <span className="grid aspect-square w-full place-items-center overflow-hidden rounded-md border border-border bg-muted/30">
@@ -448,7 +448,7 @@ const PosProductButton = memo(function PosProductButton({
       <div
         className={
           variant === "desktop"
-            ? "grid min-w-0 grid-cols-[minmax(0,1fr)_64px_136px] items-center gap-3"
+            ? "grid min-w-0 grid-cols-[minmax(0,1fr)_120px] items-center gap-2 xl:grid-cols-[minmax(0,1fr)_56px_128px] xl:gap-3"
             : "min-w-0"
         }
       >
@@ -460,7 +460,7 @@ const PosProductButton = memo(function PosProductButton({
         </p>
         <div
           className={
-            variant === "desktop" ? "contents" : "mt-1 flex flex-wrap items-center gap-x-3 gap-y-1"
+            variant === "desktop" ? "flex flex-col items-end gap-1 xl:contents" : "mt-1 flex flex-wrap items-center gap-x-3 gap-y-1"
           }
         >
           <span
@@ -483,12 +483,12 @@ const PosProductButton = memo(function PosProductButton({
         onClick={(event) => event.stopPropagation()}
       >
         {cartQty > 0 ? (
-          <div className="inline-flex h-9 items-center overflow-hidden rounded-md border border-border bg-background">
+          <div className="inline-flex h-11 items-center overflow-hidden rounded-md border border-border bg-background">
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="h-9 w-8 rounded-md text-base"
+              className="h-11 w-11 rounded-md text-base"
               onClick={() => onProductDecrement(product)}
               disabled={disabled || cartQty <= 0}
               aria-label={decreaseQtyLabel}
@@ -502,7 +502,7 @@ const PosProductButton = memo(function PosProductButton({
               type="button"
               variant="ghost"
               size="icon"
-              className="h-9 w-8 rounded-md text-base"
+              className="h-11 w-11 rounded-md text-base"
               onClick={() => onProductClick(product)}
               disabled={disabled}
               aria-label={increaseQtyLabel}
@@ -514,7 +514,7 @@ const PosProductButton = memo(function PosProductButton({
           <Button
             type="button"
             variant="secondary"
-            className="h-10 w-10 shrink-0 px-0"
+            className="h-11 w-11 shrink-0 px-0"
             onClick={() => onProductClick(product)}
             disabled={disabled}
             aria-label={addProductLabel}
@@ -4054,7 +4054,7 @@ const PosSellPage = () => {
   };
 
   const saleOptions = !isCompletedSaleEdit ? (
-    <div className="flex min-h-9 items-center justify-between gap-2" data-testid="pos-sale-options">
+    <div className="flex min-h-11 items-center justify-between gap-2" data-testid="pos-sale-options">
       {saleChannelControl}
       {loyaltyStatus.data?.enabled && hasCartLines ? <LoyaltyButton
         disabled={!saleId || isLineBusy || Boolean(cartPriceSync) || completeMutation.isLoading || saleQuery.isFetching}
@@ -5131,12 +5131,94 @@ const PosSellPage = () => {
     </footer>
   );
 
+  const renderPaymentRows = (mobile = false) => (
+    <div className="space-y-2">
+      {payments.map((payment, index) => (
+        <div
+          key={index}
+          data-testid="pos-payment-row"
+          className={cn(
+            "grid items-center gap-1.5",
+            mobile
+              ? "grid-cols-[minmax(0,1fr)_44px]"
+              : "grid-cols-[minmax(196px,1.15fr)_minmax(96px,1fr)_24px]",
+          )}
+        >
+          <div className={mobile ? "col-span-2" : undefined}>
+            <PosPaymentMethodControl
+              compact={!mobile}
+              value={payment.method}
+              onChange={(method) =>
+                setPayments((current) =>
+                  current.map((item, itemIndex) =>
+                    itemIndex === index ? { ...item, method } : item,
+                  ),
+                )
+              }
+              disabled={isLineBusy || completeMutation.isLoading}
+            />
+          </div>
+          <Input
+            ref={index === 0 ? firstPaymentAmountRef : undefined}
+            value={payments.length === 1 ? cartDisplayTotalDraft : payment.amount}
+            onChange={(event) => {
+              if (payments.length === 1) return;
+              const amount = event.target.value;
+              setPayments((current) =>
+                current.map((item, itemIndex) => (itemIndex === index ? { ...item, amount } : item)),
+              );
+            }}
+            aria-label={t("sell.paymentAmount")}
+            placeholder={t("sell.paymentAmount")}
+            inputMode="decimal"
+            readOnly={payments.length === 1}
+            disabled={isLineBusy || completeMutation.isLoading}
+            className={cn("px-2", mobile ? "h-11 text-sm" : "h-6 py-0 text-xs")}
+          />
+          <Button
+            type="button"
+            variant="secondary"
+            size="icon"
+            className={mobile ? "h-11 w-11" : "h-6 w-6"}
+            onClick={() => (payments.length === 1 ? addPaymentRow() : removePaymentRow(index))}
+            disabled={isLineBusy || completeMutation.isLoading}
+            aria-label={payments.length === 1 ? t("sell.addPayment") : tCommon("delete")}
+          >
+            {payments.length === 1 ? (
+              <AddIcon className="h-4 w-4" aria-hidden />
+            ) : (
+              <DeleteIcon className="h-4 w-4" aria-hidden />
+            )}
+          </Button>
+        </div>
+      ))}
+      {payments.length > 1 ? (
+        <div className="flex items-center justify-between gap-3">
+          <Button
+            variant="ghost"
+            className={cn("px-2 text-xs", mobile ? "h-11" : "h-6")}
+            onClick={addPaymentRow}
+            disabled={isLineBusy || completeMutation.isLoading}
+          >
+            <AddIcon className="h-4 w-4" aria-hidden />
+            {t("sell.addPayment")}
+          </Button>
+          {showPaymentTotalSummary ? (
+            <p className="text-xs text-muted-foreground">
+              {t("sell.paymentTotal")}: {paymentTotalLabel}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+
   const DesktopPosSaleView = () => (
     <div className="min-h-screen bg-muted/40 text-foreground">
-      <header className="sticky top-0 z-30 flex min-h-16 flex-col border-b border-border bg-background shadow-sm lg:h-16 lg:flex-row">
+      <header className="sticky top-0 z-30 flex min-h-16 flex-wrap border-b border-border bg-background shadow-sm lg:h-16 lg:flex-nowrap">
         <Button
           asChild
-          className="h-16 w-full rounded-md bg-primary px-5 text-base font-semibold text-primary-foreground hover:bg-primary/90 lg:w-auto"
+          className="h-16 shrink-0 rounded-md bg-primary px-5 text-base font-semibold text-primary-foreground hover:bg-primary/90"
         >
           <Link href={posReturnHref}>
             <BackIcon className="h-5 w-5 shrink-0" aria-hidden />
@@ -5144,11 +5226,13 @@ const PosSellPage = () => {
           </Link>
         </Button>
 
-        <div className="flex min-h-16 flex-1 items-center gap-3 bg-card px-4">
+        <div className="flex min-h-16 min-w-0 flex-1 items-center gap-3 bg-card px-4">
           <SearchIcon className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden />
           <ScanInput
             ref={lineSearchInputRef}
             context="pos"
+            showClearButton
+            selectOnInteraction
             value={lineSearch}
             onValueChange={setLineSearch}
             placeholder={t("sell.searchProduct")}
@@ -5164,7 +5248,7 @@ const PosSellPage = () => {
           {PosHeaderTools()}
         </div>
 
-        <div className="grid min-h-12 gap-0 border-t border-border bg-muted/30 lg:w-[520px] lg:border-l lg:border-t-0 2xl:w-[600px]">
+        <div className="grid min-h-12 w-full gap-0 border-t border-border bg-muted/30 lg:w-[480px] lg:border-l lg:border-t-0 2xl:w-[520px]">
           <div className="flex min-w-0 items-center gap-2 px-3 py-2">
             {!hasOpenShift ? <Badge
               variant="warning"
@@ -5378,7 +5462,7 @@ const PosSellPage = () => {
           </section>
         </section>
       ) : (
-        <section className="grid min-h-[calc(100vh-4rem)] pb-20 lg:h-[calc(100vh-4rem)] lg:grid-cols-[minmax(0,1fr)_520px] lg:pb-0 2xl:grid-cols-[minmax(0,1fr)_600px]">
+        <section className="grid min-h-[calc(100dvh-4rem)] pb-20 lg:h-[calc(100dvh-4rem)] lg:grid-cols-[minmax(0,1fr)_480px] lg:pb-0 2xl:grid-cols-[minmax(0,1fr)_520px]">
           <section className="flex min-h-0 flex-col bg-muted/40">
             <div className="min-h-14 overflow-x-auto border-b border-border/70 bg-card px-4 py-3 shadow-sm">
               <div className="flex w-max min-w-full items-center justify-center gap-2">
@@ -5614,28 +5698,21 @@ const PosSellPage = () => {
               </div>
             ) : (
               <>
-                <div className="flex min-h-12 items-center justify-between gap-3 border-b border-border px-3 py-2">
+                <div className="flex min-h-10 shrink-0 items-center justify-between gap-3 border-b border-border px-3 py-1">
                   <div className="min-w-0 flex-1">
                     <div className="flex min-w-0 items-baseline gap-2">
                       <p className="truncate text-sm font-semibold text-foreground">
                         {checkoutPanelTitle}
                       </p>
-                      {shiftOpenedLabel ? (
-                        <span className="hidden shrink-0 text-[11px] text-muted-foreground sm:inline">
-                          {shiftOpenedLabel}
-                        </span>
-                      ) : null}
+
                     </div>
-                    <p className="mt-0.5 truncate text-[11px] leading-4 text-muted-foreground">
-                      {selectedRegisterLabel}
-                    </p>
                   </div>
                   {saleId ? (
                     <Button
                       type="button"
                       variant="secondary"
                       size="sm"
-                      className="h-8 shrink-0 px-3 text-xs"
+                      className="h-7 shrink-0 px-3 text-xs"
                       onClick={handleDiscardSale}
                       disabled={isLineBusy || completeMutation.isLoading}
                     >
@@ -5688,11 +5765,11 @@ const PosSellPage = () => {
                         return (
                           <div
                             key={line.id}
-                            className="px-3 py-2"
+                            className="px-3 py-1"
                             data-testid="pos-cart-line"
                             data-product-id={getCartLineProductId(line)}
                           >
-                            <div className="flex gap-2.5">
+                            <div className="flex gap-2">
                               {line.product.primaryImage ? (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img
@@ -5700,41 +5777,34 @@ const PosSellPage = () => {
                                   alt={line.product.name}
                                   loading="lazy"
                                   decoding="async"
-                                  className="h-12 w-12 shrink-0 rounded-md border border-border object-cover"
+                                  className="h-8 w-8 shrink-0 rounded-md border border-border object-cover"
                                 />
                               ) : (
-                                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-md border border-dashed border-border bg-muted/40 text-muted-foreground">
+                                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-dashed border-border bg-muted/40 text-muted-foreground">
                                   <EmptyIcon className="h-4 w-4" aria-hidden />
                                 </span>
                               )}
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-start justify-between gap-2">
                                   <div className="min-w-0">
-                                    <p className="line-clamp-2 break-words text-sm font-medium leading-5 text-foreground">
+                                    <p className="break-words text-[13px] font-medium leading-4 text-foreground">
                                       {line.product.name}{line.variant?.name ? ` · ${line.variant.name}` : ""}{line.manualPrice ? <span className="ml-1 text-xs text-muted-foreground" title={t("tools.manualPrice")} aria-label={t("tools.manualPrice")}>*</span> : null}
                                       {line.product.isBundle ? ` · ${t("sell.bundle")}` : ""}
                                     </p>
-                                    {enableSku ? (
-                                      <p className="truncate text-[11px] leading-4 text-muted-foreground">
-                                        {line.product.sku}
-                                      </p>
-                                    ) : null}
+
                                   </div>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
-                                    onClick={() => handleRemoveLine(line.id)}
-                                    disabled={isLineBusy || completeMutation.isLoading}
-                                    aria-label={tCommon("delete")}
+
+                                  <p
+                                    className="shrink-0 whitespace-nowrap text-right text-[13px] font-semibold leading-4 text-foreground"
+                                    data-testid="pos-line-total"
                                   >
-                                    <DeleteIcon className="h-4 w-4" aria-hidden />
-                                  </Button>
+                                    {formatSaleMoney(lineNetTotalKgs)}
+                                  </p>
                                 </div>
-                                <div className="mt-1.5 grid grid-cols-[1fr_auto] items-center gap-2">
-                                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                                <div className="mt-0.5 grid grid-cols-[minmax(0,1fr)_24px] items-center gap-2">
+                                  <div className="flex min-w-0 items-center gap-2">
                                     <div
-                                      className="order-2 flex min-w-0 items-center gap-1.5"
+                                      className="order-2 flex min-w-0 flex-1 items-center gap-1.5"
                                       data-pos-control="price"
                                     >
                                       <Input
@@ -5746,7 +5816,7 @@ const PosSellPage = () => {
                                         aria-label={t("sell.unitPrice")}
                                         title={t("sell.unitPrice")}
                                         inputMode="decimal"
-                                        className="h-8 w-24 rounded-md px-2 text-[12px] font-medium text-foreground shadow-none focus-visible:ring-1"
+                                        className="h-6 w-20 rounded-md px-1.5 py-0 text-xs font-medium text-foreground shadow-none focus-visible:ring-1"
                                         onFocus={(event) => event.currentTarget.select()}
                                         onChange={(event) =>
                                           handleUpdateLinePrice(line.id, event.currentTarget.value)
@@ -5780,14 +5850,14 @@ const PosSellPage = () => {
                                       ) : null}
                                     </div>
                                     <div
-                                      className="order-1 inline-flex min-w-[108px] items-center overflow-hidden rounded-md border border-border bg-background"
+                                      className="order-1 inline-flex min-w-[88px] shrink-0 items-center overflow-hidden rounded-md border border-border bg-background"
                                       data-pos-control="quantity"
                                     >
                                       <Button
                                         type="button"
                                         variant="ghost"
                                         size="icon"
-                                        className="h-8 w-8 rounded-md text-sm"
+                                        className="h-6 w-7 rounded-md text-sm"
                                         onClick={() =>
                                           handleUpdateQty(
                                             line.id,
@@ -5811,8 +5881,9 @@ const PosSellPage = () => {
                                         }
                                         onFocus={(event) => event.currentTarget.select()}
                                         onBlur={() => handleQtyBlur(line)}
-                                        className="h-8 w-11 rounded-md border-y-0 px-1 text-center text-sm shadow-none focus-visible:ring-0"
+                                        className="h-6 w-8 rounded-md border-y-0 px-1 py-0 text-center text-xs shadow-none focus-visible:ring-0"
                                         inputMode="numeric"
+                                        aria-label={t("sell.cartQty")}
                                         disabled={
                                           cancelDraftMutation.isLoading ||
                                           completeMutation.isLoading
@@ -5822,7 +5893,7 @@ const PosSellPage = () => {
                                         type="button"
                                         variant="ghost"
                                         size="icon"
-                                        className="h-8 w-8 rounded-md text-sm"
+                                        className="h-6 w-7 rounded-md text-sm"
                                         onClick={() =>
                                           handleUpdateQty(line.id, String(line.qty + 1))
                                         }
@@ -5836,12 +5907,16 @@ const PosSellPage = () => {
                                       </Button>
                                     </div>
                                   </div>
-                                  <p
-                                    className="text-right text-sm font-semibold leading-none text-foreground"
-                                    data-testid="pos-line-total"
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
+                                    onClick={() => handleRemoveLine(line.id)}
+                                    disabled={isLineBusy || completeMutation.isLoading}
+                                    aria-label={tCommon("delete")}
                                   >
-                                    {formatSaleMoney(lineNetTotalKgs)}
-                                  </p>
+                                    <DeleteIcon className="h-4 w-4" aria-hidden />
+                                  </Button>
                                 </div>
                               </div>
                             </div>
@@ -5862,7 +5937,7 @@ const PosSellPage = () => {
                                     }))
                                   }
                                   placeholder={t("sell.markingPlaceholder")}
-                                  className="h-8 px-2 text-sm"
+                                  className="h-6 px-2 py-0 text-xs"
                                 />
                                 <div className="flex items-center justify-between gap-2">
                                   <p className="text-[11px] text-muted-foreground">
@@ -5874,7 +5949,7 @@ const PosSellPage = () => {
                                     type="button"
                                     size="sm"
                                     variant="secondary"
-                                    className="h-8 px-3 text-xs"
+                                    className="h-6 px-3 text-xs"
                                     onClick={() => handleSaveMarkingCodes(line.id)}
                                     disabled={isLineBusy || completeMutation.isLoading}
                                   >
@@ -5894,58 +5969,44 @@ const PosSellPage = () => {
                   <div
                     ref={paymentsSectionRef}
                     data-baam-obstacle="action"
-                    className="border-t border-border bg-card"
+                    data-testid="pos-checkout-footer"
+                    className="flex max-h-[min(55dvh,420px)] shrink-0 flex-col border-t border-border bg-card"
                   >
-                    <div className="space-y-2 px-4 py-2">
-                      {saleOptions}
-                      <div className="px-1">
-                        <div className="space-y-1 text-[11px] leading-4">
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="text-muted-foreground">{t("sell.subtotal")}</span>
-                            <span className="font-medium text-muted-foreground">
-                              {formatSaleMoney(cartSubtotalKgs)}
+                    <div className="min-h-0 space-y-2 overflow-y-auto px-3 py-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            className="h-6 shrink-0 px-2 text-xs"
+                            aria-expanded={discountEditorOpen}
+                            onClick={() => setDiscountEditorOpen((current) => !current)}
+                            disabled={isLineBusy || completeMutation.isLoading}
+                          >
+                            {cartDiscountKgs > 0
+                              ? `${t("sell.discount")} ${formatSaleMoney(cartDiscountKgs)}`
+                              : `+ ${t("sell.addDiscount")}`}
+                          </Button>
+                          {cartDiscountKgs > 0 ? (
+                            <span className="text-[11px] text-muted-foreground">
+                              {t("sell.subtotal")} {formatSaleMoney(cartSubtotalKgs)}
                             </span>
-                          </div>
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="text-muted-foreground">{t("sell.discount")}</span>
-                            <div className="flex items-center gap-2">
-                              {!showDiscountEditor ? (
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-6 px-1.5 text-[11px] text-muted-foreground"
-                                  onClick={() => setDiscountEditorOpen(true)}
-                                  disabled={isLineBusy || completeMutation.isLoading}
-                                >
-                                  + {t("sell.addDiscount")}
-                                </Button>
-                              ) : null}
-                              <span className="font-medium text-muted-foreground">
-                                {formatSaleMoney(cartDiscountKgs)}
-                              </span>
-                            </div>
-                          </div>
+                          ) : null}
                         </div>
-                        <div className="mt-1.5 flex items-end justify-between gap-3">
-                          <span className="text-sm font-semibold leading-none text-foreground">
-                            {t("sell.amountDue")}
-                          </span>
-                          <span
-                            className="text-xl font-bold leading-none text-foreground"
+                        <div className="shrink-0 text-right">
+                          <p className="text-[11px] text-muted-foreground">{t("sell.amountDue")}</p>
+                          <p
+                            className="whitespace-nowrap text-xl font-bold leading-6"
                             data-testid="pos-cart-total"
                           >
                             {formatSaleMoney(cartTotalKgs)}
-                          </span>
+                          </p>
                         </div>
                       </div>
-
-                      {showDiscountEditor ? (
+                      {discountEditorOpen ? (
                         <div className="rounded-md border border-border/60 bg-muted/5 p-2">
                           <div className="flex items-center justify-between gap-3">
-                            <p className="text-xs font-medium text-foreground">
-                              {t("sell.saleDiscount")}
-                            </p>
+                            <p className="text-xs font-medium text-foreground">{t("sell.saleDiscount")}</p>
                             <Badge variant="muted" className="h-6 shrink-0 px-2 text-[11px]">
                               {t("sell.discountAmountMode")}
                             </Badge>
@@ -5965,188 +6026,89 @@ const PosSellPage = () => {
                               placeholder={t("sell.discountPlaceholder")}
                               inputMode="decimal"
                               disabled={isLineBusy || completeMutation.isLoading}
-                              className="h-8 px-2 text-sm"
+                              className="h-6 px-2 py-0 text-xs"
                             />
-                            <div className="flex h-8 items-center justify-center rounded-md border border-input bg-muted/20 px-2 text-[11px] font-medium text-muted-foreground">
+                            <div className="flex h-6 items-center justify-center rounded-md border border-input bg-muted/20 px-2 text-[11px] font-medium text-muted-foreground">
                               {discountCurrencyCode}
                             </div>
                             <Button
                               type="button"
                               variant="secondary"
                               size="sm"
-                              className="h-8 px-2.5 text-xs"
+                              className="h-6 px-2.5 text-xs"
                               onClick={() => void handleUpdateDiscount()}
                               disabled={isLineBusy || completeMutation.isLoading}
                             >
-                              {updateDiscountMutation.isLoading ? (
-                                <Spinner className="h-3.5 w-3.5" />
-                              ) : null}
+                              {updateDiscountMutation.isLoading ? <Spinner className="h-3.5 w-3.5" /> : null}
                               {t("sell.applyDiscount")}
                             </Button>
                           </div>
                         </div>
                       ) : null}
-
-                      <div className="rounded-md border border-border/60 bg-muted/5 p-2">
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-medium leading-none text-foreground">
-                              {t("sell.paymentsTitle")}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2 rounded-md px-1">
-                            <span className="text-xs leading-none text-muted-foreground">
-                              {t("sell.sellInDebt")}
-                            </span>
-                            <Switch
-                              checked={sellInDebt}
-                              onCheckedChange={handleSellInDebtChange}
-                              disabled={isCompletedSaleEdit}
-                            />
-                          </div>
+                      <div className="flex flex-wrap items-center justify-between gap-x-3">
+                        <div className="[&_[data-testid=pos-sale-options]]:min-h-6 [&_label]:min-h-6 [&_label]:text-xs [&_button]:h-6">
+                          {saleOptions}
                         </div>
-
-                        {sellInDebt ? (
-                          <div className="mt-2 space-y-1.5 rounded-md border border-warning/25 bg-warning/10 p-2">
-                            <p className="text-xs leading-4 text-muted-foreground">
-                              {t("sell.sellInDebtHint")}
-                            </p>
-                            <label className="text-xs font-medium text-foreground">
-                              {t("sell.debtFullName")}
-                            </label>
+                        <label className="ml-auto flex min-h-6 items-center gap-2 text-xs text-muted-foreground">
+                          <span>{t("sell.sellInDebt")}</span>
+                          <Switch
+                            checked={sellInDebt}
+                            onCheckedChange={handleSellInDebtChange}
+                            disabled={isCompletedSaleEdit}
+                          />
+                        </label>
+                      </div>
+                      {sellInDebt ? (
+                        <div className="space-y-1.5 rounded-md border border-warning/25 bg-warning/10 p-2">
+                          <p className="text-xs text-muted-foreground">{t("sell.sellInDebtHint")}</p>
+                          <label className="block text-xs font-medium">
+                            {t("sell.debtFullName")}
                             <Input
                               value={debtFullName}
                               onChange={(event) => setDebtFullName(event.target.value)}
                               placeholder={t("sell.debtFullNamePlaceholder")}
                               disabled={isLineBusy || completeMutation.isLoading}
-                              className="h-8 px-2 text-sm"
+                              className="mt-1 h-6 px-2 py-0 text-xs"
                             />
-                          </div>
-                        ) : null}
-
-                        {!sellInDebt ? (
-                          <div className="mt-2 space-y-1.5">
-                            {payments.map((payment, index) => (
-                              <div
-                                key={`${index}-${payment.method}`}
-                                className="grid grid-cols-[152px_minmax(0,1fr)_32px] gap-1.5"
-                              >
-                                <Select
-                                  value={posCheckoutPaymentMethod(payment.method)}
-                                  onValueChange={(value) =>
-                                    setPayments((current) =>
-                                      current.map((item, itemIndex) =>
-                                        itemIndex === index
-                                          ? { ...item, method: value as PosPaymentMethod }
-                                          : item,
-                                      ),
-                                    )
-                                  }
-                                >
-                                  <SelectTrigger
-                                    aria-label={t("sell.paymentMethod")}
-                                    className="h-8 px-2 text-sm"
-                                  >
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value={PosPaymentMethod.CASH}>
-                                      {t("payments.cash")}
-                                    </SelectItem>
-                                    <SelectItem value={PosPaymentMethod.TRANSFER}>
-                                      {t("payments.transfer")}
-                                    </SelectItem>
-                                  </SelectContent>
-                                </Select>
-                                <Input
-                                  ref={index === 0 ? firstPaymentAmountRef : undefined}
-                                  value={
-                                    payments.length === 1 ? cartDisplayTotalDraft : payment.amount
-                                  }
-                                  onChange={(event) => {
-                                    if (payments.length === 1) {
-                                      return;
-                                    }
-                                    setPayments((current) =>
-                                      current.map((item, itemIndex) =>
-                                        itemIndex === index
-                                          ? { ...item, amount: event.target.value }
-                                          : item,
-                                      ),
-                                    );
-                                  }}
-                                  placeholder={t("sell.paymentAmount")}
-                                  inputMode="decimal"
-                                  readOnly={payments.length === 1}
-                                  className="h-8 px-2 text-sm"
-                                />
-                                <Button
-                                  type="button"
-                                  variant="secondary"
-                                  size="icon"
-                                  className="h-8 w-8"
-                                  onClick={() => removePaymentRow(index)}
-                                  disabled={
-                                    payments.length <= 1 || isLineBusy || completeMutation.isLoading
-                                  }
-                                  aria-label={tCommon("delete")}
-                                >
-                                  <DeleteIcon className="h-4 w-4" aria-hidden />
-                                </Button>
-                              </div>
-                            ))}
-                            <div className="flex items-center justify-between gap-3">
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                className="h-8 px-3 text-xs"
-                                onClick={addPaymentRow}
-                                disabled={isLineBusy || completeMutation.isLoading}
-                              >
-                                {t("sell.addPayment")}
-                              </Button>
-                              {showPaymentTotalSummary ? (
-                                <p className="text-xs text-muted-foreground">
-                                  {t("sell.paymentTotal")}: {paymentTotalLabel}
-                                </p>
-                              ) : null}
-                            </div>
-                          </div>
-                        ) : null}
-                      </div>
-
+                          </label>
+                        </div>
+                      ) : (
+                        renderPaymentRows()
+                      )}
+                    </div>
+                    <div
+                      className={cn(
+                        "grid shrink-0 gap-2 px-3 pb-3 pt-1",
+                        !isCompletedSaleEdit && "grid-cols-2",
+                      )}
+                    >
                       {!isCompletedSaleEdit ? (
                         <Button
                           type="button"
                           variant="secondary"
-                          className="h-9 w-full rounded-md px-4 text-sm font-semibold"
+                          className="h-7 min-w-0 rounded-md px-2 text-xs font-semibold"
                           data-baam-obstacle="action"
                           onClick={() => void handleHoldReceipt()}
-                          disabled={
-                            !saleId || !hasCartLines || isLineBusy || completeMutation.isLoading
-                          }
+                          disabled={!saleId || !hasCartLines || isLineBusy || completeMutation.isLoading}
                         >
                           {holdDraftMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
                           {t("sell.holdReceipt")}
                         </Button>
                       ) : null}
-
                       <Button
-                        className="h-9 w-full rounded-md bg-success px-4 text-sm font-semibold text-success-foreground hover:bg-success/90 disabled:bg-success/40 disabled:text-success-foreground/70"
+                        className="h-7 min-w-0 rounded-md bg-success px-2 text-xs font-semibold text-success-foreground hover:bg-success/90 disabled:bg-success/40 disabled:text-success-foreground/70"
                         data-baam-obstacle="action"
                         onClick={handleComplete}
                         disabled={completeDisabled}
                       >
-                        <span className="flex items-center justify-center gap-2">
-                          {completeMutation.isLoading || editCompletedSaleMutation.isLoading ? (
-                            <Spinner className="h-5 w-5" />
-                          ) : null}
-                          {isCompletedSaleEdit
-                            ? t("sell.saveReceiptCorrection")
-                            : sellInDebt
-                              ? t("sell.completeDebtSale")
-                              : t("sell.completeSale")}
-                        </span>
+                        {completeMutation.isLoading || editCompletedSaleMutation.isLoading ? (
+                          <Spinner className="h-4 w-4" />
+                        ) : null}
+                        {isCompletedSaleEdit
+                          ? t("sell.saveReceiptCorrection")
+                          : sellInDebt
+                            ? t("sell.completeDebtSale")
+                            : t("sell.completeSale")}
                       </Button>
                     </div>
                   </div>
@@ -6342,7 +6304,6 @@ const PosSellPage = () => {
         : sale?.status && sale.status !== CustomerOrderStatus.DRAFT
           ? saleStatusLabel(sale.status)
           : t("sell.mobile.newStatus");
-      const paymentMethods = POS_CHECKOUT_PAYMENT_METHODS;
 
       const handleMobileDone = () => {
         if (mobileScreen !== "sale") {
@@ -7019,7 +6980,7 @@ const PosSellPage = () => {
           className={cn(
             "min-h-[calc(100dvh-176px)]",
             hasCartLines
-              ? "pb-[calc(9.5rem_+_env(safe-area-inset-bottom))]"
+              ? "pb-[calc(5.5rem_+_env(safe-area-inset-bottom))]"
               : "pb-[calc(5.5rem_+_env(safe-area-inset-bottom))]",
           )}
         >
@@ -7145,120 +7106,16 @@ const PosSellPage = () => {
                   </div>
                 ) : (
                   <>
-                    <div className="mt-4 grid grid-cols-2 gap-2">
-                      {paymentMethods.map((method) => (
-                        <button
-                          key={method}
-                          type="button"
-                          className={cn(
-                            "min-h-11 rounded-[10px] border border-border bg-card px-3 text-left text-[14px] font-semibold text-foreground",
-                            payments[0] && posCheckoutPaymentMethod(payments[0].method) === method && "border-primary text-primary",
-                          )}
-                          onClick={() =>
-                            setPayments((current) => {
-                              const [firstPayment, ...rest] = current.length
-                                ? current
-                                : [createDefaultPosPaymentDraft()];
-                              return [{ ...firstPayment, method }, ...rest];
-                            })
-                          }
-                        >
-                          {paymentMethodLabel(method)}
-                        </button>
-                      ))}
-                    </div>
-
-                    <div className="mt-4 space-y-2">
-                      {payments.map((payment, index) => (
-                        <div
-                          key={`${index}-${payment.method}`}
-                          className="grid grid-cols-[152px_minmax(0,1fr)_44px] gap-2"
-                        >
-                          <Select
-                            value={posCheckoutPaymentMethod(payment.method)}
-                            onValueChange={(value) =>
-                              setPayments((current) =>
-                                current.map((item, itemIndex) =>
-                                  itemIndex === index
-                                    ? { ...item, method: value as PosPaymentMethod }
-                                    : item,
-                                ),
-                              )
-                            }
-                          >
-                            <SelectTrigger aria-label={t("sell.paymentMethod")} className="h-11 border-border bg-card text-foreground">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value={PosPaymentMethod.CASH}>
-                                {t("payments.cash")}
-                              </SelectItem>
-                              <SelectItem value={PosPaymentMethod.TRANSFER}>
-                                {t("payments.transfer")}
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <Input
-                            ref={index === 0 ? firstPaymentAmountRef : undefined}
-                            value={payments.length === 1 ? cartDisplayTotalDraft : payment.amount}
-                            onChange={(event) => {
-                              if (payments.length === 1) {
-                                return;
-                              }
-                              setPayments((current) =>
-                                current.map((item, itemIndex) =>
-                                  itemIndex === index
-                                    ? { ...item, amount: event.target.value }
-                                    : item,
-                                ),
-                              );
-                            }}
-                            placeholder={t("sell.paymentAmount")}
-                            inputMode="decimal"
-                            readOnly={payments.length === 1}
-                            className="h-11 border-border bg-card text-foreground"
-                          />
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            size="icon"
-                            className="h-11 w-11"
-                            onClick={() => removePaymentRow(index)}
-                            disabled={
-                              payments.length <= 1 || isLineBusy || completeMutation.isLoading
-                            }
-                            aria-label={tCommon("delete")}
-                          >
-                            <DeleteIcon className="h-4 w-4" aria-hidden />
-                          </Button>
-                        </div>
-                      ))}
-                      <div className="flex items-center justify-between gap-3">
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          className="h-11"
-                          onClick={addPaymentRow}
-                          disabled={isLineBusy || completeMutation.isLoading}
-                        >
-                          {t("sell.addPayment")}
-                        </Button>
-                        {showPaymentTotalSummary ? (
-                          <p className="text-sm text-muted-foreground">
-                            {t("sell.paymentTotal")}: {paymentTotalLabel}
-                          </p>
-                        ) : null}
-                      </div>
-                    </div>
+                    <div className="mt-3">{renderPaymentRows(true)}</div>
                   </>
                 )}
               </section>
 
-              <div className="fixed inset-x-0 bottom-0 z-30 space-y-2 border-t border-border bg-background px-4 pb-[calc(1.25rem_+_env(safe-area-inset-bottom))] pt-3 md:hidden">
+              <div className={cn("fixed inset-x-0 bottom-0 z-30 grid gap-2 border-t border-border bg-background px-4 pb-[calc(1.25rem_+_env(safe-area-inset-bottom))] pt-3 md:hidden", !isCompletedSaleEdit && "grid-cols-2")}>
                 {!isCompletedSaleEdit ? (
                   <button
                     type="button"
-                    className="min-h-11 w-full rounded-[11px] bg-secondary text-[14px] font-semibold text-secondary-foreground disabled:opacity-50"
+                    className="min-h-[50px] min-w-0 rounded-[11px] bg-secondary px-2 text-[13px] font-semibold text-secondary-foreground disabled:opacity-50"
                     data-baam-obstacle="action"
                     onClick={() => void handleHoldReceipt()}
                     disabled={!saleId || !hasCartLines || isLineBusy || completeMutation.isLoading}
@@ -7268,7 +7125,7 @@ const PosSellPage = () => {
                 ) : null}
                 <button
                   type="button"
-                  className="min-h-[50px] w-full rounded-[12px] bg-primary text-[15px] font-semibold text-primary-foreground disabled:opacity-50"
+                  className="min-h-[50px] min-w-0 rounded-[12px] bg-primary px-2 text-[13px] font-semibold text-primary-foreground disabled:opacity-50"
                   data-baam-obstacle="action"
                   onClick={handleComplete}
                   disabled={completeDisabled}
@@ -7326,6 +7183,8 @@ const PosSellPage = () => {
               <ScanInput
                 ref={lineSearchInputRef}
                 context="pos"
+                showClearButton
+                selectOnInteraction
                 value={lineSearch}
                 onValueChange={setLineSearch}
                 placeholder={t("sell.mobile.search")}
@@ -7500,6 +7359,8 @@ const PosSellPage = () => {
               <div className="mt-5 rounded-[12px] border border-border bg-card/95 px-3 py-2">
                 <ScanInput
                   context="pos"
+                  showClearButton
+                  selectOnInteraction
                   value={lineSearch}
                   onValueChange={setLineSearch}
                   placeholder={t("sell.mobile.hardwareScannerPlaceholder")}
@@ -7892,6 +7753,8 @@ const PosSellPage = () => {
             <ScanInput
               ref={lineSearchInputRef}
               context="pos"
+              showClearButton
+              selectOnInteraction
               value={lineSearch}
               onValueChange={setLineSearch}
               placeholder={t("sell.searchProduct")}

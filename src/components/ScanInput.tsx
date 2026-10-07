@@ -14,7 +14,8 @@ import React, {
 import { createPortal } from "react-dom";
 import { useTranslations } from "next-intl";
 
-import { CheckIcon, EmptyIcon } from "@/components/icons";
+import { CheckIcon, CloseIcon, EmptyIcon } from "@/components/icons";
+import { Button } from "@/components/ui/button";
 import { ProductSearchResultItem } from "@/components/product-search-result-item";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
@@ -60,6 +61,8 @@ type ScanInputProps = {
   enableProductSearch?: boolean;
   productSearchMinLength?: number;
   dataTour?: string;
+  showClearButton?: boolean;
+  selectOnInteraction?: boolean;
 };
 
 type FeedbackState = "idle" | "success" | "error";
@@ -107,6 +110,8 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
       enableProductSearch = false,
       productSearchMinLength = 2,
       dataTour,
+      showClearButton = false,
+      selectOnInteraction = false,
     },
     forwardedRef,
   ) => {
@@ -507,7 +512,11 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
             setActiveIndex(0);
           }}
           onKeyDown={handleKeyDown}
-          onFocus={() => {
+          onClick={(event) => {
+            if (selectOnInteraction) event.currentTarget.select();
+          }}
+          onFocus={(event) => {
+            if (selectOnInteraction) event.currentTarget.select();
             if (
               multipleItems.length > 0 ||
               liveProductItems.length > 0 ||
@@ -535,16 +544,18 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
           enterKeyHint="search"
           autoComplete="off"
           className={cn(
-            "pr-20",
+            !showClearButton ? "pr-20" : undefined,
             feedback === "error" ? "border-danger focus-visible:ring-danger/30" : undefined,
             inputClassName,
+            showClearButton ? "pr-24" : undefined,
+            showClearButton && (submitting || feedback === "success") ? "pr-32" : undefined,
           )}
         />
         {submitting ? (
           <span
             className={cn(
               "pointer-events-none absolute top-1/2 -translate-y-1/2 text-muted-foreground",
-              "right-12",
+              showClearButton ? "right-24" : "right-12",
             )}
           >
             <Spinner className="h-4 w-4" />
@@ -553,22 +564,42 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
           <span
             className={cn(
               "pointer-events-none absolute top-1/2 -translate-y-1/2 text-success",
-              "right-12",
+              showClearButton ? "right-24" : "right-12",
             )}
           >
             <CheckIcon className="h-4 w-4" aria-hidden />
           </span>
         ) : null}
 
-        <CameraScanButton
+        <div className="absolute right-1 top-1/2 flex -translate-y-1/2 items-center">
+          {showClearButton && currentValue ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-11 w-11"
+              aria-label={tCommon("clearSearch")}
+              disabled={Boolean(disabled || submitting)}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                clearInput();
+                setFeedback("idle");
+                innerRef.current?.focus({ preventScroll: true });
+              }}
+            >
+              <CloseIcon className="h-4 w-4" aria-hidden />
+            </Button>
+          ) : null}
+          <CameraScanButton
             iconOnly
-            className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2"
+            className={showClearButton ? "h-11 w-11" : "h-8 w-8"}
             disabled={Boolean(disabled || submitting)}
             onScan={async (scannedValue) => {
               updateValue(scannedValue);
               await handleSubmit("enter", scannedValue);
             }}
-        />
+          />
+        </div>
 
         {portalDropdown && dropdown && typeof document !== "undefined"
           ? createPortal(dropdown, document.body)
