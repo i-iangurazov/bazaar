@@ -9,6 +9,7 @@ import { verifyPosCheckoutLayout } from "./pos-checkout-layout-check";
 import { verifyPosReceiptEditing } from "./pos-receipt-edit-check";
 import { verifyFractionalQuantities } from "./fractional-quantity-check";
 import { verifySearchInputs } from "./search-input-check";
+import { verifyPosSearchSelection } from "./pos-search-selection-check";
 const base = process.env.UX_HTTPS === "1" ? "https://localhost:3122" : "http://localhost:3122";
 const f = JSON.parse(await readFile("artifacts/ux/fixture.json", "utf8"));
 const directory = "artifacts/ux/flows";
@@ -540,6 +541,17 @@ try {
   await verifyPosReceiptEditing(dashboard, base, register.id,
     () => api(admin, "pos.sales.get", { saleId: completedReceiptId }));
   record("History and journal open the same receipt correction; reload, saved prices/payments and mobile entry work");
+  const touchContext = await login("admin", true);
+  const touchPage = await touchContext.newPage();
+  for (const width of [1024, 390]) {
+    await touchPage.setViewportSize({ width, height: width === 390 ? 844 : 768 });
+    await touchPage.goto(`${base}/pos/sell?registerId=${register.id}`, { timeout: 60_000 });
+    if (width === 390) await touchPage.getByRole("button", { name: "Добавить товары", exact: true }).click();
+    await verifyPosSearchSelection(touchPage, true);
+    await touchPage.screenshot({ path: `${directory}/pos-search-touch-${width}.png` });
+    record(`POS ${width}px touch: first tap selects, second tap edits, re-entry and clear work`);
+  }
+  await touchContext.close();
   for (const [role, context] of [
     ["admin", admin],
     ["manager", manager],

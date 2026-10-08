@@ -61,6 +61,65 @@ describe("ScanInput", () => {
     searchQuickUseQueryMock.mockReturnValue({ data: [], isFetching: false });
   });
 
+  it("selects the query on first focus and lets later clicks edit part of it", async () => {
+    const user = userEvent.setup();
+    const change = vi.fn();
+    render(<ScanInput context="pos" placeholder="scan" ariaLabel="scan"
+      value="Смеситель GF-2106 Titan" onValueChange={change} selectOnInteraction />);
+    const input = screen.getByLabelText("scan") as HTMLInputElement;
+    await user.click(input);
+    expect([input.selectionStart, input.selectionEnd]).toEqual([0, input.value.length]);
+    await user.pointer({ target: input, keys: "[MouseLeft>]" });
+    input.setSelectionRange(10, 10);
+    await user.pointer({ target: input, keys: "[/MouseLeft]" });
+    expect([input.selectionStart, input.selectionEnd]).toEqual([10, 10]);
+    await user.keyboard("X");
+    expect(change).toHaveBeenLastCalledWith("Смеситель XGF-2106 Titan");
+  });
+
+  it("preserves a manually selected substring and selects all again after leaving the field", async () => {
+    const user = userEvent.setup();
+    render(<><ScanInput context="pos" placeholder="scan" ariaLabel="scan"
+      value="Milk chocolate" selectOnInteraction /><button>Outside</button></>);
+    const input = screen.getByLabelText("scan") as HTMLInputElement;
+    await user.click(input);
+    await user.pointer({ target: input, keys: "[MouseLeft>]" });
+    input.setSelectionRange(5, 14);
+    await user.pointer({ target: input, keys: "[/MouseLeft]" });
+    expect([input.selectionStart, input.selectionEnd]).toEqual([5, 14]);
+    await user.click(screen.getByText("Outside"));
+    await user.click(input);
+    expect([input.selectionStart, input.selectionEnd]).toEqual([0, 14]);
+  });
+
+  it("selects on keyboard focus without forcing later clicks to select all", async () => {
+    const user = userEvent.setup();
+    render(<ScanInput context="pos" placeholder="scan" ariaLabel="scan"
+      value="Milk chocolate" selectOnInteraction />);
+    const input = screen.getByLabelText("scan") as HTMLInputElement;
+    await user.tab();
+    expect(document.activeElement).toBe(input);
+    expect([input.selectionStart, input.selectionEnd]).toEqual([0, 14]);
+    input.setSelectionRange(5, 5);
+    fireEvent.click(input);
+    expect([input.selectionStart, input.selectionEnd]).toEqual([5, 5]);
+  });
+
+  it("releases the automatic full selection on a second touch while preserving partial selections", async () => {
+    const user = userEvent.setup();
+    render(<ScanInput context="pos" placeholder="scan" ariaLabel="scan"
+      value="Milk chocolate" selectOnInteraction />);
+    const input = screen.getByLabelText("scan") as HTMLInputElement;
+    await user.pointer({ target: input, keys: "[TouchA]" });
+    expect([input.selectionStart, input.selectionEnd]).toEqual([0, 14]);
+    await user.pointer({ target: input, keys: "[TouchA]" });
+    expect(input.selectionStart).toBe(input.selectionEnd);
+    input.setSelectionRange(5, 14);
+    await user.pointer({ target: input, keys: "[TouchA>]" });
+    expect([input.selectionStart, input.selectionEnd]).toEqual([5, 14]);
+    await user.pointer({ target: input, keys: "[/TouchA]" });
+  });
+
   it("submits on Enter", async () => {
     lookupFetchMock.mockResolvedValue({ exactMatch: true, items: [exactItem] });
     const onResolved = vi.fn().mockResolvedValue(true);

@@ -121,6 +121,7 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
     const containerRef = useRef<HTMLDivElement>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const focusedRef = useRef(false);
+    const selectOnPointerClickRef = useRef(false);
     const composingRef = useRef(false);
     const inFlightRef = useRef(false);
     const inputVersionRef = useRef(0);
@@ -605,9 +606,30 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
           onCompositionEnd={() => {
             composingRef.current = false;
           }}
+          onPointerDown={(event) => {
+            const input = event.currentTarget;
+            selectOnPointerClickRef.current = selectOnInteraction && event.button === 0 &&
+              input.ownerDocument.activeElement !== input;
+            // Touch browsers can retain an automatic full selection on the next tap.
+            // Collapse it before the native gesture positions the caret.
+            if (selectOnInteraction && event.pointerType === "touch" &&
+                input.ownerDocument.activeElement === input && input.value.length > 0 &&
+                input.selectionStart === 0 && input.selectionEnd === input.value.length) {
+              input.setSelectionRange(input.value.length, input.value.length);
+            }
+          }}
+          onPointerCancel={() => {
+            selectOnPointerClickRef.current = false;
+          }}
           onClick={(event) => {
             dismissedRef.current = false;
-            if (selectOnInteraction) event.currentTarget.select();
+            // Preserve the first focus selection after the browser places its caret.
+            // Further clicks and deliberate partial selections use native editing.
+            const input = event.currentTarget;
+            const hasPartialSelection = input.selectionStart !== input.selectionEnd &&
+              !(input.selectionStart === 0 && input.selectionEnd === input.value.length);
+            if (selectOnPointerClickRef.current && !hasPartialSelection) input.select();
+            selectOnPointerClickRef.current = false;
             if (dropdownItems.length || showLiveLoading || showLiveEmpty) setDropdownOpen(true);
           }}
           onFocus={(event) => {
@@ -627,6 +649,7 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
           }}
           onBlur={() => {
             focusedRef.current = false;
+            selectOnPointerClickRef.current = false;
             if (hideTimerRef.current) {
               window.clearTimeout(hideTimerRef.current);
             }

@@ -1,27 +1,11 @@
 import assert from "node:assert/strict";
 import type { Page } from "playwright";
 import { expect } from "playwright/test";
+import { verifyPosSearchSelection } from "./pos-search-selection-check";
 
 export async function verifyPosCheckoutLayout(page: Page, directory: string) {
   const originalViewport = page.viewportSize();
-  const search = page.getByRole("combobox", {
-    name: "Поиск по названию, SKU или штрихкоду",
-    exact: true,
-  });
-  // Selecting a search suggestion clears the query after adding its product.
-  await search.fill("Проверка очистки поиска");
-  await search.click();
-  assert.ok(
-    await search.evaluate(
-      (input: HTMLInputElement) =>
-        input.value.length > 0 &&
-        input.selectionStart === 0 &&
-        input.selectionEnd === input.value.length,
-    ),
-    "Clicking POS search did not select the whole query",
-  );
-  await page.getByRole("button", { name: "Очистить поиск", exact: true }).click();
-  await expect(search).toHaveValue("");
+  await verifyPosSearchSelection(page);
   await expect(page.getByRole("button", { name: "Очистить поиск", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Очистить поиск", exact: true })).toBeDisabled();
   await expect(
