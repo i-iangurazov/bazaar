@@ -48,6 +48,7 @@ import {
   runOperationRequest,
 } from "@/server/services/operationRequests";
 import { classifyDatabaseOperationFailure } from "@/server/services/databaseOperationFailure";
+import { applyArchivedBarcodeTransfers, type ProductBarcodeTransfer } from "./products/barcodeTransfers";
 import {
   productImportMatchIsBlocking,
   productImportMatchIsExisting,
@@ -80,6 +81,7 @@ export type CreateProductInput = ProductPriceTypeValues & {
   }[];
   supplierId?: string;
   barcodes?: string[];
+  barcodeTransfers?: ProductBarcodeTransfer[];
   packs?: {
     id?: string;
     packName: string;
@@ -1847,6 +1849,7 @@ export const createProduct = async (input: CreateProductInput) => {
         const attributeDefinitions = await loadAttributeDefinitions(tx, input.organizationId);
         ensureRequiredAttributes(input.variants, attributeDefinitions);
         const barcodes = normalizeBarcodes(input.barcodes);
+        await applyArchivedBarcodeTransfers(tx, { ...input, targetProductId: productId, barcodes, transfers: input.barcodeTransfers });
         await ensureBarcodesAvailable(tx, input.organizationId, barcodes);
         const normalizedPacks = normalizePacks(input.packs);
         const packBarcodes = normalizedPacks
@@ -2045,6 +2048,7 @@ export const createProduct = async (input: CreateProductInput) => {
             images: input.images ?? [],
             supplierId: input.supplierId ?? null,
             barcodes: input.barcodes ?? [],
+            ...(input.barcodeTransfers?.length ? { barcodeTransfers: input.barcodeTransfers } : {}),
             packs: input.packs ?? [],
             variants: input.variants ?? [],
             isBundle: input.isBundle ?? false,
@@ -2259,6 +2263,7 @@ export type UpdateProductInput = ProductPriceTypeValues & {
   images?: CreateProductInput["images"];
   supplierId?: string | null;
   barcodes?: string[];
+  barcodeTransfers?: ProductBarcodeTransfer[];
   packs?: CreateProductInput["packs"];
   variants?: {
     id?: string;
@@ -2316,6 +2321,7 @@ export const updateProduct = async (input: UpdateProductInput) => {
     const attributeDefinitions = await loadAttributeDefinitions(tx, input.organizationId);
     ensureRequiredAttributes(input.variants, attributeDefinitions);
     const barcodes = normalizeBarcodes(input.barcodes);
+    await applyArchivedBarcodeTransfers(tx, { ...input, targetProductId: input.productId, barcodes, transfers: input.barcodeTransfers });
     await ensureBarcodesAvailable(tx, input.organizationId, barcodes, input.productId);
     if (before.baseUnitId !== baseUnit.id) {
       const movementCount = await tx.stockMovement.count({

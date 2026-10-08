@@ -1,6 +1,7 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
 
 import { normalizeScanValue } from "@/lib/scanning/normalize";
+import { productStoreAssignmentInWhere, resolveAccessibleStoreIds, userHasAllStoreAccess, type StoreAccessUser } from "@/server/services/storeAccess";
 
 type PrismaDbClient = PrismaClient | Prisma.TransactionClient;
 
@@ -70,6 +71,7 @@ export const getProductDuplicateDiagnostics = async ({
   sku,
   name,
   barcodes,
+  user,
 }: {
   prisma: PrismaDbClient;
   organizationId: string;
@@ -77,6 +79,7 @@ export const getProductDuplicateDiagnostics = async ({
   sku?: string;
   name?: string;
   barcodes?: string[];
+  user?: StoreAccessUser;
 }) => {
   const trimmedSku = sku?.trim() ?? "";
   const normalizedName = normalizeProductNameForDiagnostics(name);
@@ -113,6 +116,7 @@ export const getProductDuplicateDiagnostics = async ({
                 sku: true,
                 name: true,
                 isDeleted: true,
+                storeProducts: { where: { isActive: true }, select: { store: { select: { id: true, name: true } } } },
               },
             },
           },
@@ -138,6 +142,16 @@ export const getProductDuplicateDiagnostics = async ({
     return match.normalizedName === normalizedName;
   });
 
+  const canManage = user && (user.role === "ADMIN" || user.role === "MANAGER");
+  const storeIds = canManage && !userHasAllStoreAccess(user)
+    ? await resolveAccessibleStoreIds(prisma, user) : null;
+  const matchingIds = barcodeMatches.map(m => m.product.id);
+  const accessibleIds = new Set(canManage && matchingIds.length
+    ? (await prisma.product.findMany({ where: {
+        organizationId, id: { in: matchingIds },
+        ...(storeIds === null ? {} : productStoreAssignmentInWhere(storeIds)),
+      }, select: { id: true } })).map(p => p.id)
+    : []);
   return {
     exactSkuMatch,
     exactBarcodeMatches: barcodeMatches.map((match) => ({
@@ -146,6 +160,9 @@ export const getProductDuplicateDiagnostics = async ({
       sku: match.product.sku,
       name: match.product.name,
       isDeleted: match.product.isDeleted,
+      canAccess: accessibleIds.has(match.product.id),
+      canTransfer: match.product.isDeleted && accessibleIds.has(match.product.id),
+      stores: match.product.storeProducts.map(a => a.store).filter(s => storeIds === null || storeIds.includes(s.id)),
     })),
     likelyNameMatches: filteredNameMatches.map(({ normalizedName: _normalizedName, ...match }) => match),
   };

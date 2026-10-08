@@ -71,6 +71,11 @@ export const importUpdateFieldEnum = z.enum([
   "stockQty",
 ]);
 
+export const productBarcodeTransferInputSchema = z.object({
+  sourceProductId: z.string().min(1),
+  barcode: z.string().min(4),
+});
+
 export const productImageInputSchema = z.object({
   id: z.string().optional(),
   url: z.string().min(1),
@@ -198,6 +203,7 @@ export const createProductInputSchema = z.object({
   images: z.array(productImageInputSchema).optional(),
   supplierId: z.string().optional(),
   barcodes: z.array(z.string()).optional(),
+  barcodeTransfers: z.array(productBarcodeTransferInputSchema).max(100).optional(),
   isBundle: z.boolean().optional(),
   bundleComponents: z.array(productBundleComponentInputSchema).optional(),
   packs: z.array(productPackInputSchema).optional(),
@@ -225,6 +231,7 @@ export const updateProductInputSchema = z.object({
   images: z.array(productImageInputSchema).optional(),
   supplierId: z.string().nullable().optional(),
   barcodes: z.array(z.string()).optional(),
+  barcodeTransfers: z.array(productBarcodeTransferInputSchema).max(100).optional(),
   isBundle: z.boolean().optional(),
   bundleComponents: z.array(productBundleComponentInputSchema).optional(),
   packs: z.array(productPackInputSchema).optional(),

@@ -1381,15 +1381,18 @@ export const getProductDuplicateDiagnosticsQuery = async ({
   prisma,
   organizationId,
   input,
+  user,
 }: {
   prisma: PrismaDbClient;
   organizationId: string;
   input: ProductDuplicateDiagnosticsInput;
+  user?: StoreAccessUser;
 }) => {
   try {
     return await getProductDuplicateDiagnostics({
       prisma,
       organizationId,
+      user,
       productId: input.productId,
       sku: input.sku,
       name: input.name,

@@ -15,7 +15,7 @@ export async function assertActorCanWriteProducts(
   organizationId: string,
   actorId: string,
   productIds: string[],
-  options?: { allowShared?: boolean },
+  options?: { allowShared?: boolean; includeArchived?: boolean },
 ) {
   const actor = await client.user.findFirst({
     where: { id: actorId, organizationId, isActive: true },
@@ -25,6 +25,7 @@ export async function assertActorCanWriteProducts(
   await assertUserCanAccessProducts(client, { ...actor, organizationId }, productIds, {
     writable: true,
     allowShared: options?.allowShared,
+    includeArchived: options?.includeArchived,
   });
 }
 

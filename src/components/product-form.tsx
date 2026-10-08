@@ -95,6 +95,7 @@ import {
 import { defaultLocale, normalizeLocale } from "@/lib/locales";
 import { normalizeScanValue } from "@/lib/scanning/normalize";
 import { isAiDescriptionGenerationEnabled, isProductPacksEnabled } from "@/lib/featureFlags";
+import { ProductBarcodeConflict } from "@/components/products/product-barcode-conflict";
 
 const showProductPacksSection = isProductPacksEnabled();
 const aiDescriptionGenerationDisabled = !isAiDescriptionGenerationEnabled();
@@ -123,6 +124,7 @@ export type ProductFormValues = {
     position?: number;
   }[];
   barcodes: string[];
+  barcodeTransfers?: { sourceProductId: string; barcode: string }[];
   packs: {
     id?: string;
     packName: string;
@@ -780,6 +782,7 @@ export const ProductForm = ({
           )
           .optional(),
         barcodes: z.array(z.string()).optional(),
+        barcodeTransfers: z.array(z.object({ sourceProductId: z.string(), barcode: z.string() })).optional(),
         packs: z
           .array(
             z.object({
@@ -920,6 +923,7 @@ export const ProductForm = ({
       photoUrl: initialValues.photoUrl ?? "",
       images: initialValues.images ?? [],
       barcodes: normalizeProductBarcodes(initialValues.barcodes),
+      barcodeTransfers: [],
       packs: initialValues.packs ?? [],
       variants:
         initialValues.variants.length > 0
@@ -973,7 +977,7 @@ export const ProductForm = ({
     }
 
     savedRevisionRef.current = savedRevision;
-    form.reset(form.getValues());
+    form.reset({ ...form.getValues(), barcodeTransfers: [] });
     onDirtyChange?.(false);
   }, [form, onDirtyChange, savedRevision]);
 
@@ -1419,7 +1423,7 @@ export const ProductForm = ({
   const deferredDuplicateDiagnosticsInput = useDeferredValue(duplicateDiagnosticsInput);
   const duplicateDiagnosticsEnabled =
     !readOnly &&
-    enableSimilarProductCheck &&
+    (enableSimilarProductCheck || deferredDuplicateDiagnosticsInput.barcodes.length > 0) &&
     (compactCreate
       ? deferredDuplicateDiagnosticsInput.barcodes.length > 0
       : Boolean(
@@ -1439,6 +1443,29 @@ export const ProductForm = ({
       keepPreviousData: true,
     },
   );
+  const barcodeTransfers = useWatch({ control: form.control, name: "barcodeTransfers" }) ?? [];
+  const renderBarcodeConflict = (match: NonNullable<typeof duplicateDiagnosticsQuery.data>["exactBarcodeMatches"][number]) => (
+    <ProductBarcodeConflict key={`${match.barcode}-${match.id}`} match={match}
+      showSku={enableSku} disabled={readOnly || isSubmitting || duplicateDiagnosticsQuery.isFetching}
+      selected={barcodeTransfers.some(t => t.sourceProductId === match.id && t.barcode === match.barcode)}
+      onToggle={() => {
+        const current = form.getValues("barcodeTransfers") ?? [];
+        const selected = current.some(t => t.sourceProductId === match.id && t.barcode === match.barcode);
+        form.setValue("barcodeTransfers", selected ? current.filter(t => t.barcode !== match.barcode)
+          : [...current.filter(t => t.barcode !== match.barcode), { sourceProductId: match.id, barcode: match.barcode }], { shouldDirty: true });
+      }} />
+  );
+  const barcodeConflictPanel = enableBarcode && duplicateDiagnosticsEnabled && duplicateDiagnosticsQuery.data?.exactBarcodeMatches.some(m => watchedBarcodes.includes(m.barcode)) ? (
+    <div className="space-y-2">
+      <p className="text-xs font-medium text-foreground">{t("duplicateExactBarcodesTitle")}</p>
+      {duplicateDiagnosticsQuery.data.exactBarcodeMatches.filter(m => watchedBarcodes.includes(m.barcode)).map(renderBarcodeConflict)}
+    </div>
+  ) : null;
+  useEffect(() => {
+    const current = form.getValues("barcodeTransfers") ?? [];
+    const remaining = current.filter(t => watchedBarcodes.includes(t.barcode));
+    if (remaining.length !== current.length) form.setValue("barcodeTransfers", remaining, { shouldDirty: true });
+  }, [form, watchedBarcodes]);
   const generateBarcodeMutation = trpc.products.generateBarcode.useMutation({
     onSuccess: (result) => {
       form.setValue("barcodes", result.barcodes ?? [result.value], {
@@ -3182,6 +3209,7 @@ export const ProductForm = ({
       photoUrl: resolvedPhotoUrl,
       images: resolvedImages,
       barcodes: submittedBarcodes,
+      barcodeTransfers: (values.barcodeTransfers ?? []).filter(t => submittedBarcodes.includes(t.barcode)),
       packs:
         values.packs?.map((pack) => ({
           id: pack.id,
@@ -4044,6 +4072,7 @@ export const ProductForm = ({
               )}
             </div>
             <FormDescription>{t("barcodeHint")}</FormDescription>
+            {barcodeConflictPanel}
             <FormMessage />
           </FormItem>
         )}
@@ -4181,7 +4210,8 @@ export const ProductForm = ({
     </FormSection>
   );
 
-  const duplicateDiagnosticsPanel = duplicateDiagnosticsEnabled ? (
+  const duplicateDiagnosticsPanel = duplicateDiagnosticsEnabled &&
+    (duplicateDiagnosticsQuery.isFetching || duplicateDiagnosticsQuery.data?.exactSkuMatch || duplicateDiagnosticsQuery.data?.likelyNameMatches.length) ? (
     <div className="rounded-lg border border-warning/30 bg-warning/10 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-semibold text-foreground">{t("duplicateDiagnosticsTitle")}</p>
@@ -4214,33 +4244,6 @@ export const ProductForm = ({
             </div>
           </div>
         ) : null}
-        {enableBarcode && duplicateDiagnosticsQuery.data?.exactBarcodeMatches.length
-          ? duplicateDiagnosticsQuery.data.exactBarcodeMatches.map((match) => (
-              <div
-                key={`${match.barcode}-${match.id}`}
-                className="rounded-md border border-danger/30 bg-background p-3"
-              >
-                <p className="text-xs font-semibold text-danger">
-                  {t("duplicateExactBarcodesTitle")}
-                </p>
-                <div className="mt-1 flex flex-wrap items-center gap-2">
-                  <Badge variant="muted">{match.barcode}</Badge>
-                  <span className="text-sm text-foreground">{match.name}</span>
-                  {enableSku ? (
-                    <span className="text-xs text-muted-foreground">{match.sku}</span>
-                  ) : null}
-                  {match.isDeleted ? <Badge variant="muted">{t("archived")}</Badge> : null}
-                </div>
-                <Link
-                  href={`/products/${match.id}`}
-                  target="_blank"
-                  className="mt-2 inline-flex text-xs text-primary underline-offset-4 hover:underline"
-                >
-                  {t("duplicateOpenProduct")}
-                </Link>
-              </div>
-            ))
-          : null}
         {duplicateDiagnosticsQuery.data?.likelyNameMatches.length ? (
           <div className="space-y-2">
             <p className="text-xs font-semibold text-foreground">
@@ -5119,6 +5122,7 @@ export const ProductForm = ({
                     </FormItem>
                   )}
                 />
+                {barcodeConflictPanel}
               </ProductEditorCard>
             ) : null}
 
@@ -6452,6 +6456,7 @@ export const ProductForm = ({
                               )}
                             </div>
                             <FormDescription>{t("barcodeHint")}</FormDescription>
+                            {barcodeConflictPanel}
                             <FormMessage />
                           </FormItem>
                         )}
@@ -6482,7 +6487,7 @@ export const ProductForm = ({
                       />
                     ) : null}
                   </FormGrid>
-                  {duplicateDiagnosticsEnabled ? (
+                  {duplicateDiagnosticsEnabled && (duplicateDiagnosticsQuery.isFetching || duplicateDiagnosticsQuery.data?.exactSkuMatch || duplicateDiagnosticsQuery.data?.likelyNameMatches.length) ? (
                     <div className="rounded-md border border-warning/40 bg-warning/10 p-3">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="text-sm font-medium text-foreground">
@@ -6518,38 +6523,6 @@ export const ProductForm = ({
                               {t("duplicateOpenProduct")}
                             </Link>
                           </div>
-                        </div>
-                      ) : null}
-                      {enableBarcode &&
-                      duplicateDiagnosticsQuery.data?.exactBarcodeMatches.length ? (
-                        <div className="mt-3 space-y-2">
-                          <p className="text-xs font-medium text-foreground">
-                            {t("duplicateExactBarcodesTitle")}
-                          </p>
-                          {duplicateDiagnosticsQuery.data.exactBarcodeMatches.map((match) => (
-                            <div
-                              key={`${match.barcode}-${match.id}`}
-                              className="rounded-md border border-danger/30 bg-background p-3"
-                            >
-                              <div className="flex flex-wrap items-center gap-2">
-                                <Badge variant="muted">{match.barcode}</Badge>
-                                <span className="text-sm text-foreground">{match.name}</span>
-                                {enableSku ? (
-                                  <span className="text-xs text-muted-foreground">{match.sku}</span>
-                                ) : null}
-                                {match.isDeleted ? (
-                                  <Badge variant="muted">{t("archived")}</Badge>
-                                ) : null}
-                              </div>
-                              <Link
-                                href={`/products/${match.id}`}
-                                target="_blank"
-                                className="mt-2 inline-flex text-xs text-primary underline-offset-4 hover:underline"
-                              >
-                                {t("duplicateOpenProduct")}
-                              </Link>
-                            </div>
-                          ))}
                         </div>
                       ) : null}
                       {duplicateDiagnosticsQuery.data?.likelyNameMatches.length ? (

@@ -203,6 +203,7 @@ export const productsRouter = router({
       return getProductDuplicateDiagnosticsQuery({
         prisma: ctx.prisma,
         organizationId: ctx.user.organizationId,
+        user: ctx.user,
         input,
       });
     }),
@@ -275,6 +276,9 @@ export const productsRouter = router({
   update: managerProcedure
     .input(updateProductInputSchema)
     .mutation(async ({ ctx, input }) => {
+      if (input.imagesOnly && input.barcodeTransfers?.length) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "invalidInput" });
+      }
       if (input.imagesOnly) {
         await assertSingleProductAccess(ctx.prisma, ctx.user, input.productId);
         try {
