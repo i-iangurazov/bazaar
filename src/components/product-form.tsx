@@ -1414,11 +1414,11 @@ export const ProductForm = ({
   const duplicateDiagnosticsInput = useMemo(
     () => ({
       productId,
-      sku: enableSku ? watchedSku?.trim() || undefined : undefined,
-      name: watchedName?.trim() || undefined,
+      sku: enableSimilarProductCheck && enableSku ? watchedSku?.trim() || undefined : undefined,
+      name: enableSimilarProductCheck ? watchedName?.trim() || undefined : undefined,
       barcodes: enableBarcode ? normalizeProductBarcodes(watchedBarcodes) : [],
     }),
-    [enableBarcode, enableSku, productId, watchedBarcodes, watchedName, watchedSku],
+    [enableBarcode, enableSku, enableSimilarProductCheck, productId, watchedBarcodes, watchedName, watchedSku],
   );
   const deferredDuplicateDiagnosticsInput = useDeferredValue(duplicateDiagnosticsInput);
   const duplicateDiagnosticsEnabled =
@@ -4210,7 +4210,7 @@ export const ProductForm = ({
     </FormSection>
   );
 
-  const duplicateDiagnosticsPanel = duplicateDiagnosticsEnabled &&
+  const duplicateDiagnosticsPanel = enableSimilarProductCheck && duplicateDiagnosticsEnabled &&
     (duplicateDiagnosticsQuery.isFetching || duplicateDiagnosticsQuery.data?.exactSkuMatch || duplicateDiagnosticsQuery.data?.likelyNameMatches.length) ? (
     <div className="rounded-lg border border-warning/30 bg-warning/10 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -6487,7 +6487,7 @@ export const ProductForm = ({
                       />
                     ) : null}
                   </FormGrid>
-                  {duplicateDiagnosticsEnabled && (duplicateDiagnosticsQuery.isFetching || duplicateDiagnosticsQuery.data?.exactSkuMatch || duplicateDiagnosticsQuery.data?.likelyNameMatches.length) ? (
+                  {enableSimilarProductCheck && duplicateDiagnosticsEnabled && (duplicateDiagnosticsQuery.isFetching || duplicateDiagnosticsQuery.data?.exactSkuMatch || duplicateDiagnosticsQuery.data?.likelyNameMatches.length) ? (
                     <div className="rounded-md border border-warning/40 bg-warning/10 p-3">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="text-sm font-medium text-foreground">

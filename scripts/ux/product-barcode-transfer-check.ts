@@ -32,80 +32,112 @@ export async function verifyProductBarcodeTransfer(
   const priceModes = profile.organization.retailWholesaleEnabled
     ? { retailPriceKgs: 400, wholesalePriceKgs: 400 }
     : {};
+  const stores = (await api("stores.list", undefined)) as Array<{
+    id: string;
+    enableSku: boolean;
+    enableBarcode: boolean;
+    enableSimilarProductCheck: boolean;
+  }>;
+  const store = stores.find((s) => s.id === fixture.storeId);
+  assert.ok(store, "Barcode fixture store must be accessible");
+  const originalSettings = {
+    storeId: store.id,
+    enableSku: store.enableSku,
+    enableBarcode: store.enableBarcode,
+    enableSimilarProductCheck: store.enableSimilarProductCheck,
+  };
   const checks: string[] = [];
-  for (const width of [1440, 390]) {
-    const barcode = `ARCHIVE-${randomUUID()}`;
-    const name = `Горелка новая ${width} QA ${randomUUID().slice(0, 8)}`;
-    const source = (await api(
-      "products.create",
-      {
-        idempotencyKey: randomUUID(),
-        storeId: fixture.storeId,
-        name: `Горелка архивная ${width} QA`,
-        baseUnitId: units[0].id,
-        basePriceKgs: 400,
-        ...priceModes,
+  try {
+    for (const width of [1440, 390]) {
+      await api(
+        "stores.updateProductSettings",
+        {
+          ...originalSettings,
+          enableBarcode: true,
+          enableSimilarProductCheck: width === 1440,
+        },
+        true,
+      );
+      const barcode = `ARCHIVE-${randomUUID()}`;
+      const name = `Горелка новая ${width} QA ${randomUUID().slice(0, 8)}`;
+      const source = (await api(
+        "products.create",
+        {
+          idempotencyKey: randomUUID(),
+          storeId: fixture.storeId,
+          name: `Горелка архивная ${width} QA`,
+          baseUnitId: units[0].id,
+          basePriceKgs: 400,
+          ...priceModes,
+          barcodes: [barcode],
+          initialOnHand: 1,
+        },
+        true,
+      )) as { id: string; name: string };
+      await api("products.archive", { productId: source.id }, true);
+      await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 });
+      await page.goto(
+        `${base}/products/new?storeId=${fixture.storeId}&barcode=${encodeURIComponent(barcode)}`,
+      );
+      await page
+        .getByRole("textbox", { name: /^Название/ })
+        .first()
+        .fill(name);
+      const price = profile.organization.retailWholesaleEnabled
+        ? page.getByLabel(/^Розничная цена/).first()
+        : page.getByLabel("Цена продажи", { exact: true }).first();
+      await price.fill("400");
+      const conflict = page
+        .locator(`[data-barcode-conflict="${barcode}"]`)
+        .filter({ visible: true });
+      await expect(conflict).toContainText(source.name);
+      await expect(conflict).toContainText("Архив");
+      if (width === 390) {
+        await expect(page.getByText("Проверка на похожие товары", { exact: true })).toHaveCount(0);
+      }
+      await conflict.scrollIntoViewIfNeeded();
+      const transfer = conflict.getByRole("button", { name: "Перенести штрихкод", exact: true });
+      await expect(transfer).toBeEnabled();
+      const popupPromise = page.waitForEvent("popup");
+      await conflict.getByRole("link", { name: "Показать в архиве", exact: true }).click();
+      const popup = await popupPromise;
+      await expect(popup.getByText(source.name, { exact: true }).first()).toBeVisible();
+      await popup.close();
+      await transfer.click();
+      const cancel = conflict.getByRole("button", { name: "Отменить перенос", exact: true });
+      await expect(cancel).toHaveAttribute("aria-pressed", "true");
+      await expect(conflict.getByRole("status")).toContainText("При сохранении");
+      const beforeSave = (await api("products.duplicateDiagnostics", {
         barcodes: [barcode],
-        initialOnHand: 1,
-      },
-      true,
-    )) as { id: string; name: string };
-    await api("products.archive", { productId: source.id }, true);
-    await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 });
-    await page.goto(
-      `${base}/products/new?storeId=${fixture.storeId}&barcode=${encodeURIComponent(barcode)}`,
-    );
-    await page
-      .getByRole("textbox", { name: /^Название/ })
-      .first()
-      .fill(name);
-    const price = profile.organization.retailWholesaleEnabled
-      ? page.getByLabel(/^Розничная цена/).first()
-      : page.getByLabel("Цена продажи", { exact: true }).first();
-    await price.fill("400");
-    const conflict = page.locator(`[data-barcode-conflict="${barcode}"]`).filter({ visible: true });
-    await expect(conflict).toContainText(source.name);
-    await expect(conflict).toContainText("Архив");
-    await conflict.scrollIntoViewIfNeeded();
-    const transfer = conflict.getByRole("button", { name: "Перенести штрихкод", exact: true });
-    await expect(transfer).toBeEnabled();
-    const popupPromise = page.waitForEvent("popup");
-    await conflict.getByRole("link", { name: "Показать в архиве", exact: true }).click();
-    const popup = await popupPromise;
-    await expect(popup.getByText(source.name, { exact: true }).first()).toBeVisible();
-    await popup.close();
-    await transfer.click();
-    const cancel = conflict.getByRole("button", { name: "Отменить перенос", exact: true });
-    await expect(cancel).toHaveAttribute("aria-pressed", "true");
-    await expect(conflict.getByRole("status")).toContainText("При сохранении");
-    const beforeSave = (await api("products.duplicateDiagnostics", {
-      barcodes: [barcode],
-    })) as BarcodeDiagnostics;
-    assert.equal(
-      beforeSave.exactBarcodeMatches[0].id,
-      source.id,
-      "Selecting a transfer must not change its owner before save",
-    );
-    await cancel.click();
-    await expect(transfer).toHaveAttribute("aria-pressed", "false");
-    await transfer.click();
-    await page.screenshot({ path: `${output}/barcode-transfer-${width}.png` });
-    const responsePromise = page.waitForResponse(
-      (r) => r.url().includes("/api/trpc/products.create") && r.request().method() === "POST",
-    );
-    await page.getByRole("button", { name: "Сохранить", exact: true }).click();
-    const response = await responsePromise;
-    assert.equal(response.status(), 200, await response.text());
-    await expect(page).toHaveURL(/\/products(?:\?|$)/);
-    const diagnostics = (await api("products.duplicateDiagnostics", {
-      barcodes: [barcode],
-    })) as BarcodeDiagnostics;
-    assert.equal(diagnostics.exactBarcodeMatches[0].name, name);
-    assert.equal(diagnostics.exactBarcodeMatches[0].isDeleted, false);
-    assert.equal(diagnostics.exactBarcodeMatches[0].canTransfer, false);
-    checks.push(
-      `Product editor ${width}px: archived barcode shown, archive link, consent/cancel and transactional save work`,
-    );
+      })) as BarcodeDiagnostics;
+      assert.equal(
+        beforeSave.exactBarcodeMatches[0].id,
+        source.id,
+        "Selecting a transfer must not change its owner before save",
+      );
+      await cancel.click();
+      await expect(transfer).toHaveAttribute("aria-pressed", "false");
+      await transfer.click();
+      await page.screenshot({ path: `${output}/barcode-transfer-${width}.png` });
+      const responsePromise = page.waitForResponse(
+        (r) => r.url().includes("/api/trpc/products.create") && r.request().method() === "POST",
+      );
+      await page.getByRole("button", { name: "Сохранить", exact: true }).click();
+      const response = await responsePromise;
+      assert.equal(response.status(), 200, await response.text());
+      await expect(page).toHaveURL(/\/products(?:\?|$)/);
+      const diagnostics = (await api("products.duplicateDiagnostics", {
+        barcodes: [barcode],
+      })) as BarcodeDiagnostics;
+      assert.equal(diagnostics.exactBarcodeMatches[0].name, name);
+      assert.equal(diagnostics.exactBarcodeMatches[0].isDeleted, false);
+      assert.equal(diagnostics.exactBarcodeMatches[0].canTransfer, false);
+      checks.push(
+        `Product editor ${width}px: archived barcode shown, archive link, consent/cancel and transactional save work (similar-product check ${width === 1440 ? "on" : "off"})`,
+      );
+    }
+  } finally {
+    await api("stores.updateProductSettings", originalSettings, true);
   }
   return checks;
 }
