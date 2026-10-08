@@ -84,6 +84,18 @@ describe("BAAM deterministic workflow boundary", () => {
       true,
     );
   });
+  it("requires barcode transfers to stay in the product editor rather than conversational actions", () => {
+    for (const [name, valid] of [
+      ["product_create", { name: "Coffee", baseUnitId: "unit" }],
+      ["product_update", { productId: "product", name: "Coffee" }],
+    ] as const) {
+      expect(baamActions[name].schema.safeParse(valid).success).toBe(true);
+      expect(baamActions[name].schema.safeParse({
+        ...valid, barcodeTransfers: [{ sourceProductId: "archived", barcode: "12345678" }],
+      }).success).toBe(false);
+      expect(workflowFields(name, "ru").some(field => field.key === "barcodeTransfers")).toBe(false);
+    }
+  });
   it("rejects prototype and overly deep form paths", () => {
     expect(() => workflowSet({}, "constructor.prototype.admin", true)).toThrow();
     expect(workflowValuesSchema.safeParse(JSON.parse('{"__proto__":{"admin":true}}')).success).toBe(

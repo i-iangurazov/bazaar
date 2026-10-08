@@ -190,6 +190,8 @@ export function resultId(value: unknown): string | undefined {
 const productCreate = createProductInputSchema
   .omit({
     idempotencyKey: true,
+    // Barcode transfers require choosing the archived source in the product editor.
+    barcodeTransfers: true,
     photoUrl: true,
     images: true,
     variants: true,
