@@ -681,12 +681,20 @@ try {
     "Customer, purchase and sales order search updates server results immediately and survives reload",
   );
   for (const check of await verifySearchInputs(dashboard, base, f, `${directory}/search`)) record(check);
-  const editorPage = await admin.newPage();
-  await verifyProductEditor(editorPage, base, f, (name, input, mutation) => api(admin, name, input, mutation), `${directory}/product-editor`);
-  for (const check of await verifyFractionalQuantities(editorPage, base, f, (name, input, mutation) => api(admin, name, input, mutation), `${directory}/fractional`)) record(check);
-  for (const check of await verifyProductBarcodeTransfer(editorPage, base, f, (name, input, mutation) => api(admin, name, input, mutation), `${directory}/barcode-transfer`)) record(check);
-  for (const check of await verifyProductUnitChange(editorPage, base, f, (name, input, mutation) => api(admin, name, input, mutation), `${directory}/unit-change`)) record(check);
-  await editorPage.close();
+  const withEditorPage = async <T>(verify: (page: Page) => Promise<T>) => {
+    // Each scenario owns its navigation. A previous POS route can still replace its URL.
+    const page = await admin.newPage();
+    page.on("pageerror", (error) => errors.push(error.message));
+    try {
+      return await verify(page);
+    } finally {
+      await page.close();
+    }
+  };
+  await withEditorPage((page) => verifyProductEditor(page, base, f, (name, input, mutation) => api(admin, name, input, mutation), `${directory}/product-editor`));
+  for (const check of await withEditorPage((page) => verifyFractionalQuantities(page, base, f, (name, input, mutation) => api(admin, name, input, mutation), `${directory}/fractional`))) record(check);
+  for (const check of await withEditorPage((page) => verifyProductBarcodeTransfer(page, base, f, (name, input, mutation) => api(admin, name, input, mutation), `${directory}/barcode-transfer`))) record(check);
+  for (const check of await withEditorPage((page) => verifyProductUnitChange(page, base, f, (name, input, mutation) => api(admin, name, input, mutation), `${directory}/unit-change`))) record(check);
   record("Product create/edit sections match; retail validation, feature toggles and full mobile names work");
   assert.deepEqual(errors, []);
 } catch (error) {
