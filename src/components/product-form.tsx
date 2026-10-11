@@ -27,6 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Input } from "@/components/ui/input";
+import { ProductNameInput } from "@/components/products/product-name-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -4797,11 +4798,12 @@ export const ProductForm = ({
                   <FormItem>
                     <FormLabel required>{t("name")}</FormLabel>
                     <FormControl>
-                      <Input
+                      <ProductNameInput
                         aria-required
                         {...field}
                         value={field.value ?? ""}
                         disabled={readOnly}
+                        onClear={() => field.onChange("")}
                       />
                     </FormControl>
                     <FormMessage />
@@ -6044,11 +6046,12 @@ export const ProductForm = ({
                         <FormItem>
                           <FormLabel required>{t("name")}</FormLabel>
                           <FormControl>
-                            <Input
+                            <ProductNameInput
                               aria-required
                               {...field}
                               value={field.value ?? ""}
                               disabled={readOnly}
+                              onClear={() => field.onChange("")}
                             />
                           </FormControl>
                           <FormMessage />

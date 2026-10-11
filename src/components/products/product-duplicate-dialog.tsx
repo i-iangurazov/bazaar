@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
+import { ProductNameInput } from "@/components/products/product-name-input";
 import { Label } from "@/components/ui/label";
 import { Modal, ModalFooter } from "@/components/ui/modal";
 import {
@@ -201,10 +201,11 @@ export const ProductDuplicateDialog = ({
         <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_180px]">
           <div className="space-y-2">
             <Label htmlFor="duplicate-product-name">{t("duplicateNameLabel")}</Label>
-            <Input
+            <ProductNameInput
               id="duplicate-product-name"
               value={name}
               onChange={(event) => setName(event.target.value)}
+              onClear={() => setName("")}
               maxLength={300}
               autoFocus
             />
