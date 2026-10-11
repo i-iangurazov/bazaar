@@ -49,6 +49,7 @@ import {
 } from "@/server/services/operationRequests";
 import { classifyDatabaseOperationFailure } from "@/server/services/databaseOperationFailure";
 import { applyArchivedBarcodeTransfers, type ProductBarcodeTransfer } from "./products/barcodeTransfers";
+import { assertProductUnitPrecision } from "./products/unitChange";
 import {
   productImportMatchIsBlocking,
   productImportMatchIsExisting,
@@ -2300,6 +2301,13 @@ export const updateProduct = async (input: UpdateProductInput) => {
 
   return prisma.$transaction(async (tx) => {
     await assertBaamReviewedVersion(tx, "Product", input.productId);
+    // Serialize a unit correction with inventory movements, then read the current unit.
+    await tx.$queryRaw`
+      SELECT "id" FROM "Product"
+      WHERE "id" = ${input.productId} AND "organizationId" = ${input.organizationId}
+        AND "baseUnitId" <> ${input.baseUnitId}
+      FOR UPDATE
+    `;
     const before = await tx.product.findUnique({ where: { id: input.productId } });
     if (!before || before.organizationId !== input.organizationId) {
       throw new AppError("productNotFound", "NOT_FOUND", 404);
@@ -2324,11 +2332,9 @@ export const updateProduct = async (input: UpdateProductInput) => {
     await applyArchivedBarcodeTransfers(tx, { ...input, targetProductId: input.productId, barcodes, transfers: input.barcodeTransfers });
     await ensureBarcodesAvailable(tx, input.organizationId, barcodes, input.productId);
     if (before.baseUnitId !== baseUnit.id) {
-      const movementCount = await tx.stockMovement.count({
-        where: { productId: input.productId },
-      });
-      if (movementCount > 0) {
-        throw new AppError("unitChangeNotAllowed", "CONFLICT", 409);
+      const previousUnit = await ensureUnit(tx, input.organizationId, before.baseUnitId);
+      if (baseUnit.quantityPrecision < previousUnit.quantityPrecision) {
+        await assertProductUnitPrecision(tx, input.productId, baseUnit.quantityPrecision);
       }
     }
 

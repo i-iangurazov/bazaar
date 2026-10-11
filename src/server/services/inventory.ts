@@ -113,6 +113,12 @@ export const applyStockMovement = async (
     throw new AppError("storeOrgMismatch", "FORBIDDEN", 403);
   }
 
+  // A unit correction cannot race a movement validated with the previous precision.
+  await tx.$queryRaw`
+    SELECT "id" FROM "Product"
+    WHERE "id" = ${input.productId} AND "organizationId" = ${store.organizationId}
+    FOR SHARE
+  `;
   const product = await tx.product.findUnique({ where: { id: input.productId }, include: { baseUnit: true } });
   if (!product || product.isDeleted) {
     throw new AppError("productNotFound", "NOT_FOUND", 404);

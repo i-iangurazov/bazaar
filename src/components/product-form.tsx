@@ -4886,6 +4886,9 @@ export const ProductForm = ({
                         </SelectContent>
                       </Select>
                       {!unitOptions.length ? <FormDescription>{t("unitMissingHint")}</FormDescription> : null}
+                      {productId && field.value !== initialValues.baseUnitId ? (
+                        <FormDescription>{t("unitChangeHint")}</FormDescription>
+                      ) : null}
                       <FormMessage />
                     </FormItem>
                   )}
@@ -6270,6 +6273,9 @@ export const ProductForm = ({
                             </Select>
                             {!unitOptions.length ? (
                               <FormDescription>{t("unitMissingHint")}</FormDescription>
+                            ) : null}
+                            {productId && field.value !== initialValues.baseUnitId ? (
+                              <FormDescription>{t("unitChangeHint")}</FormDescription>
                             ) : null}
                             <FormMessage />
                           </FormItem>

@@ -11,6 +11,7 @@ import { verifyFractionalQuantities } from "./fractional-quantity-check";
 import { verifySearchInputs } from "./search-input-check";
 import { verifyPosSearchSelection } from "./pos-search-selection-check";
 import { verifyProductBarcodeTransfer } from "./product-barcode-transfer-check";
+import { verifyProductUnitChange } from "./product-unit-change-check";
 const base = process.env.UX_HTTPS === "1" ? "https://localhost:3122" : "http://localhost:3122";
 const f = JSON.parse(await readFile("artifacts/ux/fixture.json", "utf8"));
 const directory = "artifacts/ux/flows";
@@ -684,6 +685,7 @@ try {
   await verifyProductEditor(editorPage, base, f, (name, input, mutation) => api(admin, name, input, mutation), `${directory}/product-editor`);
   for (const check of await verifyFractionalQuantities(editorPage, base, f, (name, input, mutation) => api(admin, name, input, mutation), `${directory}/fractional`)) record(check);
   for (const check of await verifyProductBarcodeTransfer(editorPage, base, f, (name, input, mutation) => api(admin, name, input, mutation), `${directory}/barcode-transfer`)) record(check);
+  for (const check of await verifyProductUnitChange(editorPage, base, f, (name, input, mutation) => api(admin, name, input, mutation), `${directory}/unit-change`)) record(check);
   await editorPage.close();
   record("Product create/edit sections match; retail validation, feature toggles and full mobile names work");
   assert.deepEqual(errors, []);
