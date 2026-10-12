@@ -150,6 +150,9 @@ describeDb("inline edit mutations", () => {
         name: "Bulk Min Product 2",
         unit: baseUnit.code,
         baseUnitId: baseUnit.id,
+        storeProducts: {
+          create: { organizationId: org.id, storeId: store.id, isActive: true },
+        },
       },
     });
 

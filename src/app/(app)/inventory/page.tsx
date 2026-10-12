@@ -4253,7 +4253,9 @@ const InventoryPage = () => {
                       <Input
                         {...field}
                         type="number"
-                        inputMode="numeric"
+                        inputMode="decimal"
+                        step="0.001"
+                        min="0"
                         placeholder={t("minStockPlaceholder")}
                       />
                     </FormControl>

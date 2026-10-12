@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/services/errors";
 import { writeAuditLog } from "@/server/services/audit";
@@ -75,23 +77,29 @@ export const setDefaultMinStock = async (input: SetDefaultMinStockInput) =>
       throw new AppError("storeNotFound", "NOT_FOUND", 404);
     }
 
-    const products = await tx.product.findMany({
-      where: { organizationId: input.organizationId, isDeleted: false },
-      select: { id: true },
-    });
-
-    for (const product of products) {
-      await tx.reorderPolicy.upsert({
-        where: { storeId_productId: { storeId: input.storeId, productId: product.id } },
-        update: { minStock: input.minStock },
-        create: {
-          storeId: input.storeId,
-          productId: product.id,
-          minStock: input.minStock,
-          ...defaultPolicy,
-        },
-      });
-    }
+    // One statement avoids a database round trip for every product. Only the
+    // selected store's active assortment participates; physical stock is untouched.
+    const count = await tx.$executeRaw`
+      INSERT INTO "ReorderPolicy" (
+        "id", "storeId", "productId", "minStock", "leadTimeDays", "reviewPeriodDays",
+        "safetyStockDays", "minOrderQty", "createdAt", "updatedAt"
+      )
+      SELECT ${randomUUID()} || ':' || sp."productId", ${input.storeId}, sp."productId", ${input.minStock},
+        ${defaultPolicy.leadTimeDays}, ${defaultPolicy.reviewPeriodDays},
+        ${defaultPolicy.safetyStockDays}, ${defaultPolicy.minOrderQty}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+      FROM "StoreProduct" sp
+      WHERE sp."organizationId" = ${input.organizationId}
+        AND sp."storeId" = ${input.storeId}
+        AND sp."isActive" = true
+        -- A primary-key lookup stays bounded when statistics lag behind a large import.
+        AND (
+          SELECT p."organizationId" = ${input.organizationId} AND NOT p."isDeleted"
+          FROM "Product" p WHERE p."id" = sp."productId"
+        )
+      ORDER BY sp."productId"
+      ON CONFLICT ("storeId", "productId") DO UPDATE
+        SET "minStock" = EXCLUDED."minStock", "updatedAt" = EXCLUDED."updatedAt"
+    `;
 
     await writeAuditLog(tx, {
       organizationId: input.organizationId,
@@ -100,9 +108,9 @@ export const setDefaultMinStock = async (input: SetDefaultMinStockInput) =>
       entity: "Store",
       entityId: store.id,
       before: null,
-      after: toJson({ storeId: store.id, minStock: input.minStock, count: products.length }),
+      after: toJson({ storeId: store.id, minStock: input.minStock, count }),
       requestId: input.requestId,
     });
 
-    return { count: products.length };
+    return { count };
   });
