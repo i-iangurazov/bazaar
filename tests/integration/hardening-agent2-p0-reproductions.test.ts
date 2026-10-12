@@ -489,10 +489,23 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
       initialOnHand: 3,
     };
 
-    const [firstCreate, secondCreate] = await Promise.all([
+    const createResults = await Promise.allSettled([
       caller.products.create(createInput),
       caller.products.create(createInput),
     ]);
+    const completedCreates = createResults.flatMap((result) =>
+      result.status === "fulfilled" ? [result.value] : [],
+    );
+    expect(completedCreates.length).toBeGreaterThan(0);
+    const firstCreate = completedCreates[0]!;
+    for (const result of createResults) {
+      if (result.status === "rejected") {
+        expect(result.reason).toMatchObject({ code: "CONFLICT", message: "requestInProgress" });
+      } else {
+        expect(result.value.id).toBe(firstCreate.id);
+      }
+    }
+    const secondCreate = await caller.products.create(createInput);
     const createdRows = await prisma.product.findMany({
       where: { organizationId: org.id, name: marker },
     });
@@ -628,10 +641,25 @@ describeDb("Agent 2 P0 runtime reproductions", () => {
         },
       ],
     };
-    const [firstImport, secondImport] = await Promise.all([
+    // A simultaneous request can observe a live lease before its handler takes the row lock.
+    // Wait for both requests before assertions or the next test's database reset.
+    const importResults = await Promise.allSettled([
       caller.products.importCsv(importInput),
       caller.products.importCsv(importInput),
     ]);
+    const completedImports = importResults.flatMap((result) =>
+      result.status === "fulfilled" ? [result.value] : [],
+    );
+    expect(completedImports.length).toBeGreaterThan(0);
+    const firstImport = completedImports[0]!;
+    for (const result of importResults) {
+      if (result.status === "rejected") {
+        expect(result.reason).toMatchObject({ code: "CONFLICT", message: "requestInProgress" });
+      } else {
+        expect(result.value.batchId).toBe(firstImport.batchId);
+      }
+    }
+    const secondImport = await caller.products.importCsv(importInput);
     await expect(
       caller.products.importCsv({
         ...importInput,
