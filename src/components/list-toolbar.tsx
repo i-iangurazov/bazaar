@@ -184,6 +184,7 @@ export function ListSearch({
   className,
   id: providedId,
   dataTour,
+  cameraScan,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -193,6 +194,7 @@ export function ListSearch({
   className?: string;
   id?: string;
   dataTour?: string;
+  cameraScan?: boolean;
 }) {
   const generated = useId();
   const id = providedId ?? generated;
@@ -205,6 +207,7 @@ export function ListSearch({
         disabled={disabled}
         onValueChange={onChange}
         placeholder={placeholder}
+        cameraScan={cameraScan}
       />
     </FilterField>
   );
