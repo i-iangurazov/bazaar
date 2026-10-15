@@ -1,12 +1,16 @@
 import { z } from "zod";
 
 import { requestJoinOtp } from "@/server/services/loyalty/memberAuth";
+import { loyaltyAuthErrorResponse } from "@/server/services/loyalty/authErrors";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const schema = z
-  .object({ programStoreId: z.string().trim().min(1).max(100), email: z.string().trim().email().max(254) })
+  .object({
+    programStoreId: z.string().trim().min(1).max(100),
+    email: z.string().trim().email().max(254),
+  })
   .strict();
 
 export const POST = async (request: Request) => {
@@ -15,7 +19,6 @@ export const POST = async (request: Request) => {
   try {
     return Response.json(await requestJoinOtp(parsed.data), { status: 200 });
   } catch (error) {
-    const status = (error as { status?: number }).status ?? 400;
-    return Response.json({ message: (error as Error).message || "genericMessage" }, { status });
+    return loyaltyAuthErrorResponse(error);
   }
 };

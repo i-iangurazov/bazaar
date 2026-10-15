@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 
 export function LoyaltyJoinForm({ programStoreId }: { programStoreId: string }) {
   const t = useTranslations("loyalty");
+  const tErrors = useTranslations("errors");
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -43,7 +44,11 @@ export function LoyaltyJoinForm({ programStoreId }: { programStoreId: string }) 
         router.push("/loyalty/card");
       }
     } catch (caught) {
-      setError(caught instanceof Error && t.has(caught.message) ? t(caught.message) : t("genericMessage"));
+      setError(
+        caught instanceof Error && tErrors.has(caught.message)
+          ? tErrors(caught.message)
+          : t("genericMessage"),
+      );
     } finally {
       setBusy(false);
     }

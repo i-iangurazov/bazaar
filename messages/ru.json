@@ -5134,6 +5134,8 @@
     "loyaltyDisabled": "Программа лояльности выключена",
     "loyaltyStoreNotParticipating": "Магазин не участвует в программе",
     "loyaltyOtpRateLimited": "Слишком много запросов кода. Попробуйте позже.",
+    "loyaltyAuthUnavailable": "Вход временно недоступен. Попробуйте немного позже.",
+    "emailDeliveryFailed": "Не удалось отправить письмо. Попробуйте немного позже.",
     "loyaltyOtpExpired": "Код истёк, запросите новый",
     "loyaltyOtpTooManyAttempts": "Слишком много попыток, запросите новый код",
     "loyaltyOtpInvalid": "Неверный код",

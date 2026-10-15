@@ -6,7 +6,9 @@ import { join } from "node:path";
 import { prisma } from "@/server/db/prisma";
 import { isProductionRuntime } from "@/server/config/runtime";
 import { AppError } from "@/server/services/errors";
-import { sendTransactionalEmail } from "@/server/services/email";
+import { EmailProviderError, sendTransactionalEmail } from "@/server/services/email";
+import { getLogger } from "@/server/logging";
+import { loyaltyDeliveryFailureReason } from "./authErrors";
 import { createRateLimiter } from "@/server/middleware/rateLimiter";
 import { availablePoints, ensureAccount } from "@/server/services/loyalty/ledger";
 
@@ -22,7 +24,11 @@ const hash = (value: string) => createHash("sha256").update(value).digest("hex")
 const randomToken = () => randomBytes(32).toString("hex");
 
 const otpLimiter = createRateLimiter({ windowMs: 60_000, max: 6, prefix: "loyalty-otp" });
-const verifyLimiter = createRateLimiter({ windowMs: 60_000, max: 20, prefix: "loyalty-otp-verify" });
+const verifyLimiter = createRateLimiter({
+  windowMs: 60_000,
+  max: 20,
+  prefix: "loyalty-otp-verify",
+});
 
 const isTestRuntime = () => process.env.NODE_ENV === "test";
 
@@ -36,7 +42,9 @@ export const isLocalOtpOutboxEnabled = () =>
   process.env.VERCEL !== "1";
 
 const writeLocalOutbox = async (email: string, code: string) => {
-  const path = process.env.LOYALTY_OTP_OUTBOX_PATH?.trim() || join(process.cwd(), "tmp", "loyalty-otp-outbox.log");
+  const path =
+    process.env.LOYALTY_OTP_OUTBOX_PATH?.trim() ||
+    join(process.cwd(), "tmp", "loyalty-otp-outbox.log");
   await mkdir(join(process.cwd(), "tmp"), { recursive: true }).catch(() => undefined);
   await appendFile(path, `${new Date().toISOString()}\t${email}\t${code}\n`, "utf8");
   return path;
@@ -44,8 +52,7 @@ const writeLocalOutbox = async (email: string, code: string) => {
 
 export const normalizeEmail = (value: string) => value.trim().toLowerCase();
 export const emailContactKey = (value: string) => `email:${normalizeEmail(value)}`;
-export const phoneContactKey = (value: string) =>
-  `phone:${value.replace(/[^0-9]/g, "")}`;
+export const phoneContactKey = (value: string) => `phone:${value.replace(/[^0-9]/g, "")}`;
 
 export type LoyaltyJoinTarget = {
   programStoreId: string;
@@ -57,7 +64,9 @@ export type LoyaltyJoinTarget = {
 };
 
 /** Public "get card" target for a store QR. Scanning never earns or spends points. */
-export const resolveJoinTarget = async (programStoreId: string): Promise<LoyaltyJoinTarget | null> => {
+export const resolveJoinTarget = async (
+  programStoreId: string,
+): Promise<LoyaltyJoinTarget | null> => {
   const link = await prisma.loyaltyProgramStore.findUnique({
     where: { id: programStoreId },
   });
@@ -88,17 +97,35 @@ export const requestJoinOtp = async (input: { programStoreId: string; email: str
   const target = await resolveJoinTarget(input.programStoreId);
   if (!target || !target.enabled) throw new AppError("loyaltyDisabled", "FORBIDDEN", 403);
   const email = normalizeEmail(input.email);
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new AppError("invalidInput", "BAD_REQUEST", 400);
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))
+    throw new AppError("invalidInput", "BAD_REQUEST", 400);
 
-  await otpLimiter.consume(`email:${email}`);
+  try {
+    await otpLimiter.consume(`email:${email}`);
+  } catch (error) {
+    if (error instanceof Error && error.message === "rateLimited") {
+      throw new AppError("loyaltyOtpRateLimited", "TOO_MANY_REQUESTS", 429, {
+        retryAfterSeconds: 60,
+      });
+    }
+    throw error;
+  }
   const recent = await prisma.loyaltyOtpChallenge.count({
-    where: { organizationId: target.organizationId, email, createdAt: { gte: new Date(Date.now() - OTP_WINDOW_MS) } },
+    where: {
+      organizationId: target.organizationId,
+      email,
+      createdAt: { gte: new Date(Date.now() - OTP_WINDOW_MS) },
+    },
   });
-  if (recent >= OTP_MAX_PER_WINDOW) throw new AppError("loyaltyOtpRateLimited", "TOO_MANY_REQUESTS", 429);
+  if (recent >= OTP_MAX_PER_WINDOW) {
+    throw new AppError("loyaltyOtpRateLimited", "TOO_MANY_REQUESTS", 429, {
+      retryAfterSeconds: 600,
+    });
+  }
 
   const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
   const contactKey = emailContactKey(email);
-  await prisma.loyaltyOtpChallenge.create({
+  const challenge = await prisma.loyaltyOtpChallenge.create({
     data: {
       organizationId: target.organizationId,
       programId: target.programId,
@@ -106,39 +133,89 @@ export const requestJoinOtp = async (input: { programStoreId: string; email: str
       email,
       purpose: "JOIN",
       codeHash: hash(code),
-      expiresAt: new Date(Date.now() + OTP_TTL_MINUTES * 60_000),
+      // A code cannot authenticate until its delivery has been accepted.
+      expiresAt: new Date(0),
     },
   });
 
-  if (!isTestRuntime() && isLocalOtpOutboxEnabled()) {
-    await writeLocalOutbox(email, code);
-  } else if (!isTestRuntime()) {
-    await sendTransactionalEmail({
-      to: email,
-      subject: "Код подтверждения BAZAAR",
-      text: `Ваш код подтверждения: ${code}\nКод действует ${OTP_TTL_MINUTES} минут.`,
-      html: `<p>Ваш код подтверждения: <b>${code}</b></p><p>Код действует ${OTP_TTL_MINUTES} минут.</p>`,
-      tags: [{ name: "kind", value: "loyalty_otp" }],
+  try {
+    if (!isTestRuntime() && isLocalOtpOutboxEnabled()) {
+      await writeLocalOutbox(email, code);
+    } else if (!isTestRuntime()) {
+      const delivery = await sendTransactionalEmail({
+        to: email,
+        subject: "Код подтверждения BAZAAR",
+        text: `Ваш код подтверждения: ${code}\nКод действует ${OTP_TTL_MINUTES} минут.`,
+        html: `<p>Ваш код подтверждения: <b>${code}</b></p><p>Код действует ${OTP_TTL_MINUTES} минут.</p>`,
+        tags: [{ name: "kind", value: "loyalty_otp" }],
+        idempotencyKey: `loyalty-otp-${challenge.id}`,
+      });
+      if (delivery.provider !== "resend" || !delivery.id)
+        throw new Error("emailDeliveryNotAccepted");
+    }
+    await prisma.loyaltyOtpChallenge.update({
+      where: { id: challenge.id },
+      data: { expiresAt: new Date(Date.now() + OTP_TTL_MINUTES * 60_000) },
     });
+  } catch (error) {
+    getLogger().error(
+      {
+        event: "loyalty_otp_delivery_failed",
+        reason: loyaltyDeliveryFailureReason(error),
+        providerStatus: error instanceof EmailProviderError ? error.status : null,
+      },
+      "Loyalty code delivery failed",
+    );
+    // Keep an earlier delivered code usable and release the undelivered request's quota.
+    await prisma.loyaltyOtpChallenge.deleteMany({ where: { id: challenge.id } }).catch(() => {
+      getLogger().error({ event: "loyalty_otp_cleanup_failed" }, "Loyalty code cleanup failed");
+    });
+    throw new AppError("emailDeliveryFailed", "INTERNAL_SERVER_ERROR", 503);
   }
   // The code is returned only to automated tests; production never exposes it.
-  return { delivered: true, expiresInMinutes: OTP_TTL_MINUTES, ...(isTestRuntime() ? { code } : {}) };
+  return {
+    delivered: true,
+    expiresInMinutes: OTP_TTL_MINUTES,
+    ...(isTestRuntime() ? { code } : {}),
+  };
 };
 
 /** Verifies an OTP, creates the member/account if new, and returns a session token. */
-export const verifyJoinOtp = async (input: { programStoreId: string; email: string; code: string }) => {
+export const verifyJoinOtp = async (input: {
+  programStoreId: string;
+  email: string;
+  code: string;
+}) => {
   const target = await resolveJoinTarget(input.programStoreId);
   if (!target || !target.enabled) throw new AppError("loyaltyDisabled", "FORBIDDEN", 403);
   const email = normalizeEmail(input.email);
-  await verifyLimiter.consume(`email:${email}`);
+  try {
+    await verifyLimiter.consume(`email:${email}`);
+  } catch (error) {
+    if (error instanceof Error && error.message === "rateLimited") {
+      throw new AppError("loyaltyOtpRateLimited", "TOO_MANY_REQUESTS", 429, {
+        retryAfterSeconds: 60,
+      });
+    }
+    throw error;
+  }
 
   const challenge = await prisma.loyaltyOtpChallenge.findFirst({
-    where: { organizationId: target.organizationId, email, purpose: "JOIN", consumedAt: null },
+    where: {
+      organizationId: target.organizationId,
+      programId: target.programId,
+      email,
+      purpose: "JOIN",
+      consumedAt: null,
+      expiresAt: { gt: new Date() },
+    },
     orderBy: { createdAt: "desc" },
   });
   const now = new Date();
-  if (!challenge || challenge.expiresAt <= now) throw new AppError("loyaltyOtpExpired", "BAD_REQUEST", 400);
-  if (challenge.attempts >= OTP_MAX_ATTEMPTS) throw new AppError("loyaltyOtpTooManyAttempts", "TOO_MANY_REQUESTS", 429);
+  if (!challenge || challenge.expiresAt <= now)
+    throw new AppError("loyaltyOtpExpired", "BAD_REQUEST", 400);
+  if (challenge.attempts >= OTP_MAX_ATTEMPTS)
+    throw new AppError("loyaltyOtpTooManyAttempts", "TOO_MANY_REQUESTS", 429);
   if (hash(input.code.trim()) !== challenge.codeHash) {
     await prisma.loyaltyOtpChallenge.update({
       where: { id: challenge.id },
@@ -260,7 +337,14 @@ export type LoyaltyCardView = {
   rulesText: string | null;
   balancePoints: number;
   availablePoints: number;
-  history: Array<{ id: string; type: string; points: number; balanceAfter: number | null; reference: string | null; createdAt: string }>;
+  history: Array<{
+    id: string;
+    type: string;
+    points: number;
+    balanceAfter: number | null;
+    reference: string | null;
+    createdAt: string;
+  }>;
 };
 
 export const getCardView = async (rawSessionToken: string): Promise<LoyaltyCardView> => {
@@ -276,7 +360,10 @@ export const getCardView = async (rawSessionToken: string): Promise<LoyaltyCardV
     availablePoints(prisma, context.account.id),
   ]);
   const storeRow = store
-    ? await prisma.store.findUnique({ where: { id: store.storeId }, select: { id: true, name: true } })
+    ? await prisma.store.findUnique({
+        where: { id: store.storeId },
+        select: { id: true, name: true },
+      })
     : null;
   return {
     member: {

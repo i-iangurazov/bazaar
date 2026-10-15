@@ -5133,6 +5133,8 @@
     "loyaltyDisabled": "Лоялдуулук программасы өчүк",
     "loyaltyStoreNotParticipating": "Дүкөн программага катышпайт",
     "loyaltyOtpRateLimited": "Код суроо өтө көп. Кийинчерээк аракет кылыңыз.",
+    "loyaltyAuthUnavailable": "Кирүү убактылуу жеткиликсиз. Бир аздан кийин кайра аракет кылыңыз.",
+    "emailDeliveryFailed": "Кат жөнөтүлгөн жок. Бир аздан кийин кайра аракет кылыңыз.",
     "loyaltyOtpExpired": "Коддун мөөнөтү бүттү, жаңысын сураңыз",
     "loyaltyOtpTooManyAttempts": "Аракет өтө көп, жаңы код сураңыз",
     "loyaltyOtpInvalid": "Код туура эмес",

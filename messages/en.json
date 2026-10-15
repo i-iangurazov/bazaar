@@ -5134,6 +5134,8 @@
     "loyaltyDisabled": "The loyalty programme is disabled",
     "loyaltyStoreNotParticipating": "This store does not take part in the programme",
     "loyaltyOtpRateLimited": "Too many code requests. Try again later.",
+    "loyaltyAuthUnavailable": "Sign-in is temporarily unavailable. Please try again shortly.",
+    "emailDeliveryFailed": "We couldn't send the email. Please try again shortly.",
     "loyaltyOtpExpired": "The code expired, request a new one",
     "loyaltyOtpTooManyAttempts": "Too many attempts, request a new code",
     "loyaltyOtpInvalid": "Invalid code",
