@@ -395,7 +395,7 @@ const PosProductButton = memo(function PosProductButton({
 }: PosProductButtonProps) {
   const priceKgs = product.effectivePriceKgs ?? product.basePriceKgs ?? null;
   const stockQty = product.onHandQty ?? null;
-  const primaryImage = product.primaryImage ?? product.images?.[0]?.url ?? product.photoUrl;
+  const primaryImage = product.images?.[0]?.url ?? product.photoUrl;
   const stock = stockMeta(stockQty, product.baseUnit);
   const priceMissing = priceKgs === null;
 
@@ -440,7 +440,7 @@ const PosProductButton = memo(function PosProductButton({
             alt={product.name}
             loading="lazy"
             decoding="async"
-            className="absolute inset-0 h-full w-full bg-white object-contain"
+            className="absolute inset-0 h-full w-full bg-card object-contain"
           />
         ) : (
           <EmptyIcon className="h-5 w-5 text-muted-foreground" aria-hidden />
@@ -7280,8 +7280,7 @@ const PosSellPage = () => {
               <div className="divide-y divide-border">
                 {visibleProducts.map((product) => {
                   const priceKgs = product.effectivePriceKgs ?? product.basePriceKgs ?? null;
-                  const primaryImage =
-                    product.primaryImage ?? product.images?.[0]?.url ?? product.photoUrl;
+                  const primaryImage = product.images?.[0]?.url ?? product.photoUrl;
                   const stock = stockMeta(product.onHandQty ?? null, product.baseUnit);
                   const isPendingProduct = mobilePendingProductId === product.id;
                   return (
@@ -7310,7 +7309,7 @@ const PosSellPage = () => {
                             alt={product.name}
                             loading="lazy"
                             decoding="async"
-                            className="absolute inset-0 h-full w-full bg-white object-contain"
+                            className="absolute inset-0 h-full w-full bg-card object-contain"
                           />
                         ) : (
                           <EmptyIcon className="h-5 w-5" aria-hidden />
