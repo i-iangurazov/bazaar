@@ -100,8 +100,34 @@ export async function verifyStockCountSearch(
   console.log("Stock count: receiving link clicked");
   await expect(page).toHaveURL(/\/inventory\/receiving/);
   await expect(menu).toBeHidden();
-  await expect(page.getByRole("heading", { name: "Оприходование", exact: true }).first()).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Оприходование", exact: true }).first(),
+  ).toBeVisible();
   console.log("Stock count: receiving page ready");
+  const stores = (await api("stores.list", undefined)) as { id: string; name: string }[];
+  const receivingStore = stores.find((store) => store.id === fixture.storeId);
+  assert(receivingStore);
+  await page.getByRole("combobox", { name: "Магазин", exact: true }).click();
+  await page.getByRole("option", { name: receivingStore.name, exact: true }).click();
+  await expect(page.locator(".bazaar-doc-search-row").first()).toBeVisible();
+  await page.locator(".bazaar-doc-search-list").evaluate((list) => {
+    const nav = document.querySelector("[data-native-bottom-nav]");
+    if (!nav) throw new Error("Mobile navigation is missing");
+    window.scrollBy({
+      top: list.getBoundingClientRect().top - nav.getBoundingClientRect().top + 24,
+      behavior: "instant",
+    });
+  });
+  await page.screenshot({ path: `${output}/receiving-mobile-navigation.png` });
+  assert(
+    await more.evaluate((button) => {
+      const rect = button.getBoundingClientRect();
+      return button.contains(
+        document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2),
+      );
+    }),
+    "Receiving product results cover mobile navigation",
+  );
   await more.click();
   await menu.getByRole("link", { name: "Инвентаризация", exact: true }).click();
   await expect(page).toHaveURL(/\/inventory\/counts/);

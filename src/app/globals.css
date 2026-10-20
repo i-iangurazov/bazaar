@@ -298,7 +298,7 @@ html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
   }
 
   .bazaar-doc-search-list {
-    @apply relative z-[90] mt-3 max-h-[25rem] overflow-y-auto rounded-xl border border-border bg-card shadow-lg;
+    @apply relative z-10 mt-3 max-h-[25rem] overflow-y-auto rounded-xl border border-border bg-card shadow-lg;
     scrollbar-width: thin;
     scrollbar-color: hsl(var(--border)) transparent;
   }
