@@ -395,7 +395,7 @@ const PosProductButton = memo(function PosProductButton({
 }: PosProductButtonProps) {
   const priceKgs = product.effectivePriceKgs ?? product.basePriceKgs ?? null;
   const stockQty = product.onHandQty ?? null;
-  const primaryImage = product.images?.[0]?.url ?? product.photoUrl;
+  const primaryImage = product.primaryImage ?? product.images?.[0]?.url ?? product.photoUrl;
   const stock = stockMeta(stockQty, product.baseUnit);
   const priceMissing = priceKgs === null;
 
@@ -425,11 +425,14 @@ const PosProductButton = memo(function PosProductButton({
       }}
       className={`group grid w-full cursor-pointer items-center gap-3 bg-card text-left transition hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring aria-disabled:cursor-not-allowed aria-disabled:opacity-60 dark:hover:bg-accent/40 ${
         variant === "mobile"
-          ? "min-h-16 grid-cols-[40px_minmax(0,1fr)_auto] rounded-md border border-border p-2"
-          : "min-h-16 grid-cols-[44px_minmax(0,1fr)_116px] px-3 py-2"
+          ? "min-h-[72px] grid-cols-[56px_minmax(0,1fr)_auto] rounded-md border border-border p-2"
+          : "min-h-[72px] grid-cols-[56px_minmax(0,1fr)_116px] px-3 py-2"
       }`}
     >
-      <span className="grid aspect-square w-full place-items-center overflow-hidden rounded-md border border-border bg-muted/30">
+      <span
+        data-pos-product-image
+        className="relative grid h-14 w-14 place-items-center overflow-hidden rounded-md border border-border bg-muted/30"
+      >
         {primaryImage ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -437,7 +440,7 @@ const PosProductButton = memo(function PosProductButton({
             alt={product.name}
             loading="lazy"
             decoding="async"
-            className="h-full w-full object-cover"
+            className="absolute inset-0 h-full w-full bg-white object-contain"
           />
         ) : (
           <EmptyIcon className="h-5 w-5 text-muted-foreground" aria-hidden />
@@ -7277,7 +7280,8 @@ const PosSellPage = () => {
               <div className="divide-y divide-border">
                 {visibleProducts.map((product) => {
                   const priceKgs = product.effectivePriceKgs ?? product.basePriceKgs ?? null;
-                  const primaryImage = product.images?.[0]?.url ?? product.photoUrl;
+                  const primaryImage =
+                    product.primaryImage ?? product.images?.[0]?.url ?? product.photoUrl;
                   const stock = stockMeta(product.onHandQty ?? null, product.baseUnit);
                   const isPendingProduct = mobilePendingProductId === product.id;
                   return (
@@ -7286,7 +7290,7 @@ const PosSellPage = () => {
                       type="button"
                       data-testid="pos-product-button"
                       data-product-id={product.id}
-                      className="grid min-h-[64px] w-full grid-cols-[40px_minmax(0,1fr)_112px] items-center gap-2.5 px-3 py-2 text-left"
+                      className="grid min-h-[72px] w-full grid-cols-[56px_minmax(0,1fr)_112px] items-center gap-2.5 px-3 py-2 text-left"
                       onClick={() => handleMobileProductSelect(product)}
                       disabled={
                         !hasOpenShift ||
@@ -7295,13 +7299,18 @@ const PosSellPage = () => {
                         completeMutation.isLoading
                       }
                     >
-                      <span className="grid h-10 w-10 place-items-center overflow-hidden rounded-[10px] bg-secondary text-secondary-foreground">
+                      <span
+                        data-pos-product-image
+                        className="relative grid h-14 w-14 place-items-center overflow-hidden rounded-[10px] bg-secondary text-secondary-foreground"
+                      >
                         {primaryImage ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
                             src={primaryImage}
                             alt={product.name}
-                            className="h-full w-full object-cover"
+                            loading="lazy"
+                            decoding="async"
+                            className="absolute inset-0 h-full w-full bg-white object-contain"
                           />
                         ) : (
                           <EmptyIcon className="h-5 w-5" aria-hidden />

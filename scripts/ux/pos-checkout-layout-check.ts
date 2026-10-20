@@ -3,6 +3,29 @@ import type { Page } from "playwright";
 import { expect } from "playwright/test";
 import { verifyPosSearchSelection } from "./pos-search-selection-check";
 
+export async function verifyPosCatalogImages(page: Page) {
+  const products = page.getByTestId("pos-product-button").filter({ visible: true });
+  await expect(products.first()).toBeVisible({ timeout: 60_000 });
+  for (const product of (await products.all()).slice(0, 8)) {
+    const image = await product.locator("[data-pos-product-image]").boundingBox();
+    const name = await product.locator("[data-pos-product-name]").boundingBox();
+    const row = await product.boundingBox();
+    assert.ok(image && name && row);
+    assert.ok(image.width >= 56 && image.height >= 56, "Product photos must be legible");
+    assert.ok(Math.abs(image.width - image.height) < 1, "Photo frames must stay square");
+    assert.ok(image.x + image.width <= name.x, "The photo overlaps the product name");
+    assert.ok(image.y >= row.y && image.y + image.height <= row.y + row.height + 1);
+    assert.ok(row.x + row.width <= page.viewportSize()!.width + 1, "Product row overflows");
+    const photo = product.locator("[data-pos-product-image] img");
+    if (await photo.count()) {
+      await expect(photo).toHaveCSS("object-fit", "contain");
+      const picture = await photo.boundingBox();
+      assert.ok(picture && picture.width <= image.width && picture.height <= image.height,
+        "The image must fit inside its frame without clipping");
+    }
+  }
+}
+
 export async function verifyPosCheckoutLayout(page: Page, directory: string) {
   const originalViewport = page.viewportSize();
   await verifyPosSearchSelection(page);
@@ -35,6 +58,7 @@ export async function verifyPosCheckoutLayout(page: Page, directory: string) {
     { width: 1280, height: 720 },
   ]) {
     await page.setViewportSize(size);
+    await verifyPosCatalogImages(page);
     const cart = page.getByTestId("pos-cart-line").first();
     await expect(cart).toBeVisible();
     const hold = await page

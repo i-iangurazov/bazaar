@@ -5,7 +5,7 @@ import { chromium, type BrowserContext, type Page, type Locator } from "playwrig
 import { verifyProductTable } from "./product-table-check";
 import { verifyProductEditor } from "./product-editor-check";
 import { verifyPosPaymentChoices } from "./pos-payment-check";
-import { verifyPosCheckoutLayout } from "./pos-checkout-layout-check";
+import { verifyPosCatalogImages, verifyPosCheckoutLayout } from "./pos-checkout-layout-check";
 import { verifyPosReceiptEditing } from "./pos-receipt-edit-check";
 import { verifyFractionalQuantities } from "./fractional-quantity-check";
 import { verifySearchInputs } from "./search-input-check";
@@ -552,6 +552,7 @@ try {
     await touchPage.goto(`${base}/pos/sell?registerId=${register.id}`, { timeout: 60_000 });
     if (width === 390) await touchPage.getByRole("button", { name: "Добавить товары", exact: true }).click();
     await verifyPosSearchSelection(touchPage, true);
+    await verifyPosCatalogImages(touchPage);
     await touchPage.screenshot({ path: `${directory}/pos-search-touch-${width}.png` });
     record(`POS ${width}px touch: first tap selects, second tap edits, re-entry and clear work`);
   }
