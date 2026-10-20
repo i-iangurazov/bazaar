@@ -141,6 +141,7 @@ export const productListIdsInputSchema = z
 
 export const lookupProductScanInputSchema = z.object({
   q: z.string(),
+  storeId: z.string().optional(),
 });
 
 export const findProductByBarcodeInputSchema = z.object({

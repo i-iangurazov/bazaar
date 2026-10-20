@@ -724,14 +724,17 @@ export const lookupProductScan = async ({
   organizationId,
   user,
   query,
+  storeId,
 }: {
   prisma: PrismaDbClient;
   organizationId: string;
   user?: StoreAccessUser;
   query: string;
+  storeId?: string;
 }) => {
   try {
-    const accessibleStoreIds = await resolveProductStoreScopeIds(prisma, user);
+    if (storeId && user) await assertUserCanAccessStore(prisma, user, storeId);
+    const accessibleStoreIds = storeId ? [storeId] : await resolveProductStoreScopeIds(prisma, user);
     const scope = {
       productWhere: productStoreAssignmentInWhere(accessibleStoreIds),
       storeIds: accessibleStoreIds,

@@ -2164,7 +2164,7 @@ const InventoryPage = () => {
         title={t("title")}
         subtitle={t("subtitle")}
         action={
-          <div className="hidden md:contents">
+          <div className="contents">
             {canManage || canManageStock ? (
               <>
                 {canManageStock ? (

@@ -35,6 +35,7 @@ type ProductSearchResultItemProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>
   selected?: boolean;
   rightSlot?: ReactNode;
   compact?: boolean;
+  wrapName?: boolean;
   currencySource?: CurrencySource;
 };
 
@@ -53,6 +54,7 @@ export const ProductSearchResultItem = ({
   selected,
   rightSlot,
   compact,
+  wrapName = false,
   currencySource,
   className,
   ...buttonProps
@@ -109,7 +111,14 @@ export const ProductSearchResultItem = ({
       )}
       <span className="min-w-0 flex-1">
         <span className="flex min-w-0 items-center gap-2">
-          <span className="truncate font-medium text-foreground">{product.name}</span>
+          <span
+            className={cn(
+              "min-w-0 font-medium text-foreground",
+              wrapName ? "break-words [overflow-wrap:anywhere]" : "truncate",
+            )}
+          >
+            {product.name}
+          </span>
           {isBundle ? (
             <Badge variant="muted" className="shrink-0">
               {t("bundleProductLabel")}

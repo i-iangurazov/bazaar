@@ -41,6 +41,7 @@ type ScanInputSubmitPayload = {
 
 type ScanInputProps = {
   context: ScanContext;
+  storeId?: string;
   placeholder: string;
   ariaLabel: string;
   value?: string;
@@ -90,6 +91,7 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
   (
     {
       context,
+      storeId,
       placeholder,
       ariaLabel,
       value,
@@ -163,7 +165,7 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
       liveSearchQuery === currentSearchQuery &&
       liveSearchQuery.length >= productSearchMinLength;
     const liveProductSearchQuery = trpc.products.searchQuick.useQuery(
-      { q: liveSearchQuery },
+      { q: liveSearchQuery, ...(storeId ? { storeId } : {}) },
       { enabled: liveProductSearchEnabled, keepPreviousData: false },
     );
     const liveProductItems: ScanLookupItem[] = liveProductSearchEnabled
@@ -382,6 +384,7 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
 
         const lookup = await utils.products.lookupScan.fetch({
           q: normalizeScanValue(rawValue, { removeSpaces: false }),
+          ...(storeId ? { storeId } : {}),
         });
         if (inputVersion !== inputVersionRef.current) return;
         const resolved = resolveScanResult({
@@ -541,6 +544,7 @@ export const ScanInput = forwardRef<HTMLInputElement, ScanInputProps>(
               id={`${listboxId}-${item.id}`}
               role="option"
               product={item}
+              wrapName={context === "stockCount"}
               active={index === activeIndex}
               compact
               aria-selected={index === activeIndex}

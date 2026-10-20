@@ -837,6 +837,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
 
   type MobileNavCandidate = MobileShellNavItem & {
     activePath?: string;
+    exact?: boolean;
     adminOnly?: boolean;
     managerOnly?: boolean;
     platformOwnerOnly?: boolean;
@@ -868,7 +869,9 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
       href: item.href,
       icon: item.icon,
       description: item.description,
-      active: normalizedPath === activePath || normalizedPath.startsWith(`${activePath}/`),
+      active:
+        normalizedPath === activePath ||
+        (!item.exact && normalizedPath.startsWith(`${activePath}/`)),
     };
   };
 
@@ -912,7 +915,22 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
       label: tNav("inventory"),
       href: appRoutes.inventory,
       activePath: "/inventory",
+      exact: true,
       icon: InventoryIcon,
+      requiredPermission: "viewInventory",
+    },
+    {
+      key: "mobile-stock-receiving",
+      label: tNav("stockReceiving"),
+      href: appRoutes.receiving,
+      icon: ReceiveIcon,
+      requiredPermission: "viewInventory",
+    },
+    {
+      key: "mobile-stock-counts",
+      label: tNav("stockCounts"),
+      href: appRoutes.counts,
+      icon: StockCountsIcon,
       requiredPermission: "viewInventory",
     },
     {

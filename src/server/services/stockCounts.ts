@@ -15,6 +15,7 @@ import { toJson } from "@/server/services/json";
 import { normalizeScanValue } from "@/lib/scanning/normalize";
 import { classifyDatabaseOperationFailure } from "@/server/services/databaseOperationFailure";
 import { runOperationRequest } from "@/server/services/operationRequests";
+import { productStoreAssignmentWhere } from "@/server/services/storeAccess";
 
 const resolveVariantKey = (variantId?: string | null) => variantId ?? "BASE";
 
@@ -125,6 +126,7 @@ export const addOrUpdateLineByScan = async (input: {
   stockCountId: string;
   storeId: string;
   barcodeOrQuery: string;
+  productId?: string;
   mode: "increment" | "set";
   countedQty?: number;
   countedDelta?: number;
@@ -149,6 +151,7 @@ export const addOrUpdateLineByScan = async (input: {
           stockCountId: input.stockCountId,
           storeId: input.storeId,
           barcodeOrQuery: normalizeScanValue(input.barcodeOrQuery),
+          ...(input.productId ? { productId: input.productId } : {}),
           mode: input.mode,
           countedQty: input.mode === "set" ? (input.countedQty ?? 0) : null,
           countedDelta: input.mode === "increment" ? (input.countedDelta ?? 1) : null,
@@ -174,7 +177,23 @@ export const addOrUpdateLineByScan = async (input: {
         throw new AppError("stockCountLocked", "CONFLICT", 409);
       }
 
-      const match = await resolveScanMatch(tx, input.organizationId, input.barcodeOrQuery);
+      const selectedProduct = input.productId
+        ? await tx.product.findFirst({
+            where: {
+              id: input.productId,
+              organizationId: input.organizationId,
+              isDeleted: false,
+              ...productStoreAssignmentWhere(input.storeId),
+            },
+            select: { id: true },
+          })
+        : null;
+      if (input.productId && !selectedProduct) {
+        throw new AppError("scanNotFound", "NOT_FOUND", 404);
+      }
+      const match = selectedProduct
+        ? { productId: selectedProduct.id, variantId: null, barcodeValue: null }
+        : await resolveScanMatch(tx, input.organizationId, input.barcodeOrQuery);
       const variantKey = resolveVariantKey(match.variantId);
 
       const existing = await tx.stockCountLine.findUnique({

@@ -142,6 +142,24 @@ describe("ScanInput", () => {
     });
   });
 
+  it("scopes both live name suggestions and scanner lookup to the count store", async () => {
+    lookupFetchMock.mockResolvedValue({ exactMatch: true, items: [exactItem] });
+    const onResolved = vi.fn().mockResolvedValue(true);
+    const user = userEvent.setup();
+    render(<ScanInput context="stockCount" storeId="count-store" enableProductSearch
+      placeholder="scan" ariaLabel="scan" onResolved={onResolved} />);
+    await user.type(screen.getByLabelText("scan"), "000123{Enter}");
+    await waitFor(() => expect(lookupFetchMock).toHaveBeenCalledWith({
+      q: "000123", storeId: "count-store",
+    }));
+    expect(searchQuickUseQueryMock).toHaveBeenCalledWith(
+      expect.objectContaining({ storeId: "count-store" }), expect.anything(),
+    );
+    await waitFor(() => expect(onResolved).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "exact", item: expect.objectContaining({ id: "prod-1" }) }),
+    ));
+  });
+
   it("submits on Tab when enabled for scanner-oriented contexts", async () => {
     lookupFetchMock.mockResolvedValue({ exactMatch: true, items: [exactItem] });
     const onResolved = vi.fn().mockResolvedValue(true);

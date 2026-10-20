@@ -133,13 +133,15 @@ const StockCountDetailPage = () => {
       return true;
     }
 
-    const barcodeOrQuery = result.item.matchType === "barcode" ? result.input : result.item.sku;
+    const isBarcode = result.item.matchType === "barcode" || result.item.primaryBarcode === result.input;
+    const barcodeOrQuery = isBarcode ? result.input : result.item.sku;
 
     try {
       await addLineMutation.mutateAsync({
         stockCountId: count.id,
         storeId: count.storeId,
         barcodeOrQuery,
+        ...(!isBarcode ? { productId: result.item.id } : {}),
         mode: "increment",
         idempotencyKey: crypto.randomUUID(),
       });
@@ -379,6 +381,9 @@ const StockCountDetailPage = () => {
               <ScanInput
                 ref={scanInputRef}
                 context="stockCount"
+                storeId={count?.storeId}
+                enableProductSearch
+                portalDropdown
                 placeholder={t("scanPlaceholder")}
                 ariaLabel={t("scanPlaceholder")}
                 onResolved={handleScanResolved}

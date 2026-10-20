@@ -130,6 +130,7 @@ export const productsRouter = router({
         organizationId: ctx.user.organizationId,
         user: ctx.user,
         query: input.q,
+        storeId: input.storeId,
       }),
     ),
 
