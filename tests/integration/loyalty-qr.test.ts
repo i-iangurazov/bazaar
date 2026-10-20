@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import sharp from "sharp";
-import { BinaryBitmap, HybridBinarizer, QRCodeReader, RGBLuminanceSource } from "@zxing/library";
+import { BinaryBitmap, DecodeHintType, HybridBinarizer, QRCodeReader, RGBLuminanceSource } from "@zxing/library";
 
 import { prisma } from "@/server/db/prisma";
 import { issueCardToken, requestJoinOtp, verifyCardToken, verifyJoinOtp } from "@/server/services/loyalty/memberAuth";
@@ -10,7 +10,7 @@ import { resetDatabase, seedBase, shouldRunDbTests } from "../helpers/db";
 
 const describeDb = shouldRunDbTests ? describe : describe.skip;
 
-/** Decodes a rendered QR PNG back to its text, exactly like a scanner would. */
+/** Decode the generated, unrotated PNG using ZXing's pure-image mode. */
 const decodeQr = async (png: Buffer) => {
   const sizes = [null, 400, 300, 600, 800];
   let lastError: unknown;
@@ -19,7 +19,8 @@ const decodeQr = async (png: Buffer) => {
       let pipeline = sharp(png).flatten({ background: "#ffffff" });
       if (size) pipeline = pipeline.resize(size, size, { kernel: "nearest" });
       const { data, info } = await pipeline.ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-      const luminances = new Int32Array(info.width * info.height);
+      // Int32Array would be interpreted as packed RGB instead of grayscale bytes.
+      const luminances = new Uint8ClampedArray(info.width * info.height);
       for (let index = 0; index < luminances.length; index += 1) {
         const r = data[index * 4] ?? 0;
         const g = data[index * 4 + 1] ?? 0;
@@ -29,7 +30,7 @@ const decodeQr = async (png: Buffer) => {
       const bitmap = new BinaryBitmap(
         new HybridBinarizer(new RGBLuminanceSource(luminances, info.width, info.height)),
       );
-      return new QRCodeReader().decode(bitmap).getText();
+      return new QRCodeReader().decode(bitmap, new Map([[DecodeHintType.PURE_BARCODE, true]])).getText();
     } catch (error) {
       lastError = error;
     }
@@ -43,6 +44,11 @@ describeDb("loyalty QR codes", () => {
   });
 
   it("renders a decodable store QR and accepts the decoded card QR in the register handler", async () => {
+    // These valid payloads can confuse the camera finder-pattern detector on a clean PNG.
+    for (const id of ["cmdfa0cfa073b89b61e6bec111", "cm861e45e62a1e23669c54e7ed", "cmc1afe39bc6ffcdf123527799"]) {
+      const url = `https://bazaar.kg/loyalty/join/${id}`;
+      expect(await decodeQr(await renderQrPng(url))).toBe(url);
+    }
     const base = await seedBase({ plan: "BUSINESS" });
     const program = await upsertLoyaltyProgram(prisma, base.org.id, {
       enabled: true,
