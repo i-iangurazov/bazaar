@@ -2,15 +2,17 @@
 
 ## План-каталог (SSoT)
 - Коды: `STARTER`, `BUSINESS`, `ENTERPRISE`
+- `src/server/billing/planCatalog.ts` задаёт цены, лимиты и включённые модули. Лендинг, структурированные предложения поисковым системам и кабинет используют этот каталог.
+- `src/lib/billing/plans.ts` задаёт общие идентификаторы, порядок планов и полный список модулей для сравнения.
 - Отображаемые названия (i18n):
-  - `plans.starter.name`: «Новичок»
-  - `plans.business.name`: «Бизнесмен»
-  - `plans.enterprise.name`: «Монополист»
+  - `billing.plans.starter.name`: «Новичок»
+  - `billing.plans.business.name`: «Бизнесмен»
+  - `billing.plans.enterprise.name`: «Монополист»
 
 ## Лимиты (жесткое серверное ограничение)
-- `STARTER`: до 1 магазина, до 100 товаров, до 5 активных пользователей
-- `BUSINESS`: до 3 магазинов, до 500 товаров, до 10 активных пользователей
-- `ENTERPRISE`: до 10 магазинов, до 1000 товаров, до 20 активных пользователей
+- `STARTER`: до 1 магазина, до 1000 товаров, до 5 активных пользователей
+- `BUSINESS`: до 5 магазинов, до 5000 товаров, до 10 активных пользователей
+- `ENTERPRISE`: до 15 магазинов, до 20000 товаров, до 20 активных пользователей
 
 ## Цены (KGS)
 - Фиксированные цены/мес:
@@ -21,12 +23,12 @@
   - `PLAN_PRICE_STARTER_KGS`
   - `PLAN_PRICE_BUSINESS_KGS`
   - `PLAN_PRICE_ENTERPRISE_KGS`
-  - при override берется точное значение (без пересчета в USD)
+  - при override берется точное значение (без пересчета в USD), одинаковое на лендинге и в кабинете; дробная часть сохраняется при отображении.
 
 ## Feature allowances
 - `STARTER`:
-  - включено: `priceTags`, `customerOrders`
-  - отключено: `imports`, `exports`, `analytics`, `compliance`, `supportToolkit`, `pos`, `stockCounts`, `storePrices`, `bundles`, `expiryLots`, `periodClose`, `kkm`
+  - включено: `pos`, `priceTags`, `customerOrders`
+  - отключено: `imports`, `exports`, `analytics`, `compliance`, `supportToolkit`, `stockCounts`, `storePrices`, `bundles`, `expiryLots`, `periodClose`, `kkm`
 - `BUSINESS`:
   - включено: `imports`, `exports`, `analytics`, `pos`, `stockCounts`, `priceTags`, `storePrices`, `bundles`, `expiryLots`, `customerOrders`, `periodClose`
   - отключено: `compliance`, `supportToolkit`, `kkm`
@@ -74,23 +76,23 @@
 ## Billing UX
 - `/billing` показывает:
   - текущий план (RU name)
-  - цену в KGS (primary) + USD label
+  - цену в KGS, включая поддерживаемый серверный override
   - usage meters (stores/users/products)
   - `LIMIT_EXCEEDED` banner
   - checklist модулей (check/lock)
-  - comparison table (3 плана)
-  - CTA: WhatsApp + request upgrade
+  - comparison table: все 3 плана и все 14 модулей
+  - CTA: WhatsApp + request upgrade; автоматическая оплата пока не подключена
 
 ## Тесты (минимум)
 - `plan-limits.test.ts`:
   - starter cannot create 2nd store
-  - starter cannot exceed 100 products
+  - starter cannot exceed 1000 products
   - starter cannot exceed 5 active users
 - `plan-features.test.ts`:
   - starter exports/analytics -> FORBIDDEN + proper key
   - business imports/exports/analytics -> allowed
 - `billing.test.ts`:
-  - rounded `priceKgs`
+  - точная цена `monthlyPriceKgs` без пересчета валют
   - limits/features returned correctly
 
 ## QA checklist
@@ -99,3 +101,9 @@
 - `pnpm i18n:check`
 - `CI=1 pnpm test:ci`
 - `pnpm build`
+
+## Изменение 21 октября 2026 года
+
+Касса открыта на STARTER в соответствии с публичным обещанием. Новый бизнес остаётся на STARTER и может провести продажу в активный trial. Цены, лимиты, дополнительные feature gates и правила уже одобренного доступа не менялись. SQL-миграция для этого изменения не требуется.
+
+Публичное сравнение показывает актуальные ограничения и включение каждого модуля. Список возможностей, порядок тарифов и названия RU/KG/EN согласованы с кабинетом.

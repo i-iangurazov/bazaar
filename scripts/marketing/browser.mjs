@@ -235,9 +235,13 @@ try {
         ["1750", "4375", "8750"],
       );
       const prices = await page.locator("#pricing article").allTextContents();
-      structured.offers.forEach((offer, i) =>
-        assert(prices[i].replace(/\s/g, "").includes(offer.price)),
-      );
+      const priceFormatter = new Intl.NumberFormat(locale === "kg" ? "ky-KG" : locale, {
+        maximumFractionDigits: 2,
+      });
+      structured.offers.forEach((offer, i) => {
+        const expected = priceFormatter.format(Number(offer.price));
+        assert(prices[i].includes(expected), `${label}: localized price ${expected}`);
+      });
       assert((await page.locator('a[href="/signup"]').count()) >= 5);
       for (const href of await page
         .locator('a[href^="#"]')

@@ -46,9 +46,8 @@ describe("Bazaar Retail OS marketing landing", () => {
     expect(landing).toContain("Все каналы продаж.");
     expect(landing).toContain("Видите не отчёты. Видите бизнес.");
     expect(landing).toContain("Bazaar всегда с вами");
-    expect(landing).toContain('price: "1750"');
-    expect(landing).toContain('price: "4375"');
-    expect(landing).toContain('price: "8750"');
+    expect(landing).toContain("getPlanCatalogEntries()");
+    expect(landing).toContain("price: String(plan.monthlyPriceKgs)");
     expect(landing).toContain("не публикует вымышленные отзывы или статистику");
   });
 

@@ -23,65 +23,14 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import { trpc } from "@/lib/trpc";
-import { formatDateTime } from "@/lib/i18nFormat";
+import { PLAN_CODES, PLAN_FEATURE_CODES, getPlanRank, type PlanCode } from "@/lib/billing/plans";
+import { formatDateTime, formatNumber as formatLocaleNumber } from "@/lib/i18nFormat";
 import { translateError } from "@/lib/translateError";
 
-type PlanTier = "STARTER" | "BUSINESS" | "ENTERPRISE";
-type PlanFeature =
-  | "imports"
-  | "exports"
-  | "analytics"
-  | "compliance"
-  | "supportToolkit"
-  | "pos"
-  | "stockCounts"
-  | "priceTags"
-  | "storePrices"
-  | "bundles"
-  | "expiryLots"
-  | "customerOrders"
-  | "periodClose"
-  | "kkm";
-
-const planRank: Record<PlanTier, number> = {
-  STARTER: 1,
-  BUSINESS: 2,
-  ENTERPRISE: 3,
-};
-
-const planOrder: PlanTier[] = ["STARTER", "BUSINESS", "ENTERPRISE"];
-
-const featureOrder: PlanFeature[] = [
-  "imports",
-  "exports",
-  "analytics",
-  "compliance",
-  "supportToolkit",
-  "pos",
-  "stockCounts",
-  "priceTags",
-  "storePrices",
-  "bundles",
-  "expiryLots",
-  "customerOrders",
-  "periodClose",
-  "kkm",
-];
-
-const comparisonFeatures: PlanFeature[] = [
-  "imports",
-  "exports",
-  "analytics",
-  "pos",
-  "stockCounts",
-  "storePrices",
-  "bundles",
-  "expiryLots",
-  "periodClose",
-  "compliance",
-  "supportToolkit",
-  "kkm",
-];
+type PlanTier = PlanCode;
+const planOrder = PLAN_CODES;
+const featureOrder = PLAN_FEATURE_CODES;
+const comparisonFeatures = PLAN_FEATURE_CODES;
 
 const BillingPage = () => {
   const t = useTranslations("billing");
@@ -130,7 +79,7 @@ const BillingPage = () => {
   }, [requestedPlan, t]);
 
   const formatNumber = (value: number) =>
-    new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(value);
+    formatLocaleNumber(value, locale, { maximumFractionDigits: 2 });
 
   if (isForbidden) {
     return (
@@ -268,7 +217,7 @@ const BillingPage = () => {
                 const tier = planItem.planTier as PlanTier;
                 const isCurrent = tier === currentPlan;
                 const canRequestUpgrade =
-                  Boolean(currentPlan) && planRank[tier] > planRank[currentPlan as PlanTier];
+                  Boolean(currentPlan) && getPlanRank(tier) > getPlanRank(currentPlan as PlanTier);
                 const hasPendingRequest = Boolean(pendingRequest);
                 const requestedThisPlan =
                   pendingRequest && pendingRequest.requestedPlan === planItem.plan;

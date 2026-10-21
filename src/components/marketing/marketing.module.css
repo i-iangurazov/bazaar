@@ -1159,6 +1159,13 @@
   color: #344158;
   font-size: 13px;
 }
+.planCapacity {
+  display: grid;
+  margin-top: 14px;
+  gap: 5px;
+  color: #344158;
+  font-size: 13px;
+}
 .planCard ul {
   display: grid;
   margin: 32px 0 34px;
@@ -1235,6 +1242,31 @@
 }
 .planComparison p b {
   color: var(--ink);
+}
+.planComparison > .planComparisonScroll {
+  display: block;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+.planComparison table {
+  width: 100%;
+  min-width: 660px;
+  border-collapse: collapse;
+  font-size: 13px;
+  text-align: left;
+}
+.planComparison th,
+.planComparison td {
+  border-top: 1px solid var(--line);
+  padding: 13px 14px;
+  vertical-align: top;
+}
+.planComparison th {
+  color: var(--ink);
+  font-weight: 600;
+}
+.planComparison td {
+  color: #69768b;
 }
 
 .finalCta {

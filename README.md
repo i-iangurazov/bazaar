@@ -113,9 +113,11 @@ The app enforces subscription rules server-side (not UI-only) and checks both li
 
 | Plan | Limits | Enabled feature modules |
 | --- | --- | --- |
-| `STARTER` | `1` store, `3` active users, `1000` products | Core inventory/catalog/PO flows only |
-| `BUSINESS` | `5` stores, `15` active users, `50000` products | `imports`, `exports`, `analytics`, `compliance` |
-| `ENTERPRISE` | `20` stores, `60` active users, `200000` products | `imports`, `exports`, `analytics`, `compliance`, `supportToolkit` |
+| `STARTER` | `1` store, `5` active users, `1000` products | Core inventory/catalog/PO flows, `pos`, `priceTags`, `customerOrders` |
+| `BUSINESS` | `5` stores, `10` active users, `5000` products | Starter plus `imports`, `exports`, `analytics`, `stockCounts`, `storePrices`, `bundles`, `expiryLots`, `periodClose` |
+| `ENTERPRISE` | `15` stores, `20` active users, `20000` products | Business plus `compliance`, `supportToolkit`, `kkm` |
+
+The server catalog in `src/server/billing/planCatalog.ts` supplies limits, grants and KGS prices to both the public pricing section (including structured offers) and authenticated billing. `src/lib/billing/plans.ts` supplies shared identifiers and comparison order. Prices default to 1,750 / 4,375 / 8,750 KGS per month and respect server-side `PLAN_PRICE_*_KGS` overrides on both surfaces. An active Starter trial can use POS. Existing manual/approved access rules are preserved; automatic payment collection is a separate phase. See [Subscriptions](docs/subscriptions-v2.md) and [Playground delivery record](docs/playground-progress.md).
 
 - Billing state model: `ACTIVE`, `PAST_DUE`, `CANCELED` with `trialEndsAt` and `currentPeriodEndsAt`.
 - Hard checks are applied on create/invite/import flows (stores, users, products) and on feature routers (exports, analytics, imports, compliance).

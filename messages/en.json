@@ -535,29 +535,29 @@
     "resetSuccess": "Password updated."
   },
   "billing": {
-    "title": "Billing",
-    "subtitle": "Billing overview",
+    "title": "Plans",
+    "subtitle": "Plans, limits and available modules.",
     "planTitle": "Plan",
     "plans": {
       "starter": {
-        "name": "Name",
-        "short": "Short"
+        "name": "Starter",
+        "short": "Start"
       },
       "business": {
-        "name": "Name",
-        "short": "Short"
+        "name": "Business",
+        "short": "Growth"
       },
       "enterprise": {
-        "name": "Name",
-        "short": "Short"
+        "name": "Enterprise",
+        "short": "Network"
       },
       "trial": "Trial",
       "pro": "Pro"
     },
     "trialEndsAt": "Trial ends at {date}",
     "currentPeriodEndsAt": "Current period ends at {date}",
-    "trialExpired": "Trial expired",
-    "trialActive": "Trial active",
+    "trialExpired": "Your trial has ended. Read-only access remains available.",
+    "trialActive": "Your trial is active.",
     "subscriptionActive": "Subscription active.",
     "subscriptionStatus": "Subscription status",
     "subscriptionStatuses": {
@@ -567,17 +567,17 @@
       "unknown": "Unknown"
     },
     "usageTitle": "Usage",
-    "usageStores": "Usage stores {count} {limit}",
-    "usageUsers": "Usage users {count} {limit}",
-    "usageProducts": "Usage products {count} {limit}",
+    "usageStores": "Stores: {count} of {limit}",
+    "usageUsers": "Active users: {count} of {limit}",
+    "usageProducts": "Products: {count} of {limit}",
     "capacityStores": "Store limit: {limit}",
     "capacityUsers": "User limit: {limit}",
     "capacityProducts": "Product limit: {limit}",
-    "planPricePrimary": "Plan price primary {amount}",
-    "planPriceSecondary": "Plan price secondary {usd}",
-    "planPriceRounding": "Plan price rounding {step} {rate}",
-    "featuresEnabled": "Features enabled {value}",
-    "featuresNone": "Features none",
+    "planPricePrimary": "{amount} KGS/month",
+    "planPriceSecondary": "{usd} USD/month",
+    "planPriceRounding": "Rounded to {step} KGS (rate: {rate})",
+    "featuresEnabled": "Included features: {value}",
+    "featuresNone": "No additional modules are included in this plan.",
     "features": {
       "imports": "Imports",
       "exports": "Exports",
@@ -594,49 +594,58 @@
       "periodClose": "Period close",
       "kkm": "KKM"
     },
-    "plansCatalogTitle": "Plans catalog",
+    "plansCatalogTitle": "Plans and features",
     "planDescriptions": {
-      "starter": "Starter",
-      "business": "Business",
-      "enterprise": "Enterprise"
+      "starter": "For one store with POS, products and customer orders.",
+      "business": "For growing businesses with analytics, imports and advanced modules.",
+      "enterprise": "For larger networks with compliance, support and fiscal integration."
     },
     "includesTitle": "Includes",
-    "currentPlanBadge": "Current plan badge",
-    "upgradeOnlyHigherPlans": "Upgrade only higher plans",
-    "requestUpgrade": "Request upgrade",
-    "requestPendingButton": "Request pending button",
-    "requestPendingOtherButton": "Request pending other button",
-    "pendingRequestTitle": "Pending request",
-    "pendingRequestDetails": "Pending request details {plan} {date}",
-    "requestModalTitle": "Request modal title {plan}",
-    "requestModalDescription": "Request modal description",
-    "requestMessageLabel": "Request message label",
-    "requestMessagePlaceholder": "Enter request message",
-    "requestSubmit": "Request submit",
-    "requestSentSuccess": "Request sent completed.",
-    "comparisonTitle": "Comparison",
+    "currentPlanBadge": "Current plan",
+    "upgradeOnlyHigherPlans": "Only higher plans are available",
+    "requestUpgrade": "Request an upgrade",
+    "requestPendingButton": "Request sent",
+    "requestPendingOtherButton": "Another request is pending",
+    "pendingRequestTitle": "Upgrade request sent",
+    "pendingRequestDetails": "Plan: {plan}. Sent: {date}.",
+    "requestModalTitle": "Request an upgrade to {plan}",
+    "requestModalDescription": "Describe why you need an upgrade. The platform owner will review your request.",
+    "requestMessageLabel": "Comment",
+    "requestMessagePlaceholder": "For example: we are opening another store and expanding the team.",
+    "requestSubmit": "Send request",
+    "requestSentSuccess": "Your plan change request has been sent.",
+    "comparisonTitle": "Compare plans",
     "comparison": {
-      "columnFeature": "Column feature",
+      "columnFeature": "Feature",
       "included": "Included",
-      "locked": "Locked",
+      "locked": "Not included",
       "rows": {
         "stores": "Stores",
         "products": "Products",
         "users": "Users"
       }
     },
-    "limitExceededTitle": "Limit exceeded",
-    "limitExceededDescription": "Limit exceeded description",
+    "limitExceededTitle": "Your usage exceeds this plan",
+    "limitExceededDescription": "Your existing data is preserved. Creating more records is limited until you upgrade or reduce usage.",
     "limitExceededItems": {
-      "stores": "Stores",
-      "products": "Products",
-      "users": "Users"
+      "stores": "Store limit exceeded",
+      "products": "Product limit exceeded",
+      "users": "Active user limit exceeded"
     },
-    "ctaTitle": "Cta",
-    "ctaHint": "Cta hint",
-    "ctaWhatsapp": "Cta whatsapp",
+    "ctaTitle": "Need higher limits?",
+    "ctaHint": "Contact us on WhatsApp or request an upgrade to a higher plan.",
+    "ctaWhatsapp": "Contact us on WhatsApp",
     "ctaWhatsappLink": "https://wa.me/996709911300",
-    "empty": "No billing."
+    "empty": "Plan information is unavailable.",
+    "publicPricing": {
+      "title": "Clear plans for your store",
+      "description": "Monthly prices in Kyrgyz som. Compare the features and choose the right size for your business.",
+      "recommended": "Recommended",
+      "monthlySuffix": "KGS / month",
+      "monthlyPrice": "Monthly price",
+      "includesPrevious": "Everything in {plan}",
+      "tryFree": "Try for free"
+    }
   },
   "platformOwner": {
     "title": "Platform",

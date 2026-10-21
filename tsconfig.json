@@ -40,6 +40,7 @@
     ".next/types/**/*.ts",
     "scripts/stabilization/**/*.ts",
     "scripts/qa/**/*.tsx",
+    "scripts/qa/playground-pricing-browser.ts",
     "vitest.stabilization*.ts"
   ],
   "exclude": [

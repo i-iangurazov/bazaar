@@ -19,6 +19,8 @@ export default defineConfig({
       "tests/stabilization/**",
       "scripts/deployment/*.test.mjs",
       "artifacts/**",
+      "tmp/**",
+      ".next/**",
     ],
     environment: "node",
     setupFiles: ["./tests/setup.ts"],
