@@ -29,6 +29,7 @@ type OrganizationAccessPlan = {
   subscriptionStatus: "ACTIVE" | "PAST_DUE" | "CANCELED" | string;
   trialEndsAt: Date | null;
   currentPeriodEndsAt: Date | null;
+  subscriptionBillingMode?: "MANUAL" | "SELF_SERVE";
 };
 
 export const hasActivePaidOrApprovedSubscription = (
@@ -37,6 +38,11 @@ export const hasActivePaidOrApprovedSubscription = (
 ) => {
   if (org.subscriptionStatus !== "ACTIVE") {
     return false;
+  }
+
+  if (org.subscriptionBillingMode === "SELF_SERVE") {
+    return Boolean(org.currentPeriodEndsAt && org.currentPeriodEndsAt >= now &&
+      (!org.trialEndsAt || org.currentPeriodEndsAt > org.trialEndsAt));
   }
 
   if (org.plan !== "STARTER") {
@@ -61,7 +67,8 @@ export const isTrialExpiredWithoutSubscription = (org: OrganizationAccessPlan, n
 
 export const resolveOrganizationAccessState = (org: OrganizationAccessPlan, now = new Date()) => {
   const subscriptionActive = hasActivePaidOrApprovedSubscription(org, now);
-  const trialActive = Boolean(org.trialEndsAt && org.trialEndsAt >= now);
+  const trialActive = Boolean(org.trialEndsAt && org.trialEndsAt >= now &&
+    (org.subscriptionBillingMode !== "SELF_SERVE" || org.subscriptionStatus === "ACTIVE"));
   const trialExpired = isTrialExpiredWithoutSubscription(org, now);
   return {
     subscriptionActive,
@@ -97,6 +104,7 @@ export const getOrganizationPlan = async (organizationId: string, db: Prisma.Tra
       trialEndsAt: true,
       subscriptionStatus: true,
       currentPeriodEndsAt: true,
+      subscriptionBillingMode: true,
     },
   });
   if (!org) {

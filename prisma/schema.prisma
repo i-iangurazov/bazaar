@@ -512,6 +512,8 @@ model Organization {
   subscriptionStatus  OrganizationSubscriptionStatus @default(ACTIVE)
   trialEndsAt         DateTime?
   currentPeriodEndsAt DateTime?
+  subscriptionBillingMode SubscriptionBillingMode @default(MANUAL)
+  billingAnchorDay Int?
   createdAt           DateTime                       @default(now())
   updatedAt           DateTime                       @updatedAt
 
@@ -604,6 +606,88 @@ model Organization {
   printerSettings             StorePrinterSettings[]
   bazaarCatalogHiddenProducts BazaarCatalogHiddenProduct[]
   mobileDevices               MobileDevice[]
+  subscriptionInvoices        SubscriptionInvoice[]
+  subscriptionPeriods         SubscriptionPeriod[]
+}
+
+enum SubscriptionBillingMode {
+  MANUAL
+  SELF_SERVE
+}
+
+enum SubscriptionInvoiceStatus {
+  CREATING
+  PENDING
+  PAID
+  FAILED
+  EXPIRED
+  REVIEW
+  RESOLVED
+}
+
+model SubscriptionInvoice {
+  id                String                     @id @default(cuid())
+  organizationId    String
+  createdById       String
+  idempotencyKey    String
+  pendingSlot       String?                    @unique
+  plan              OrganizationPlan
+  amountMinor       Int
+  currency          String                     @default("KGS")
+  status            SubscriptionInvoiceStatus  @default(CREATING)
+  merchantId        String
+  isTest            Boolean
+  providerPaymentId String?
+  checkoutUrl       String?
+  termsVersion      String
+  termsUrl          String
+  sellerName        String
+  termsAcceptedAt   DateTime                   @default(now())
+  expiresAt         DateTime
+  paidAt            DateTime?
+  nextCheckAt       DateTime                   @default(now())
+  processingToken   String?
+  processingUntil   DateTime?
+  lastIssue         String?
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+  organization      Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  events            SubscriptionPaymentEvent[]
+  period            SubscriptionPeriod?
+
+  @@unique([organizationId, idempotencyKey])
+  @@unique([id, organizationId])
+  @@unique([merchantId, isTest, providerPaymentId])
+  @@index([status, nextCheckAt])
+  @@index([organizationId, createdAt, id])
+}
+
+model SubscriptionPaymentEvent {
+  id               String              @id @default(cuid())
+  invoiceId        String
+  deduplicationKey String              @unique
+  source           String
+  state            String
+  payloadDigest    String
+  createdAt        DateTime            @default(now())
+  invoice          SubscriptionInvoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  @@index([invoiceId, createdAt])
+}
+
+model SubscriptionPeriod {
+  id             String              @id @default(cuid())
+  organizationId String
+  invoiceId      String              @unique
+  plan           OrganizationPlan
+  startsAt       DateTime
+  endsAt         DateTime
+  createdAt      DateTime            @default(now())
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  invoice        SubscriptionInvoice @relation(fields: [invoiceId, organizationId], references: [id, organizationId], onDelete: Restrict)
+
+  @@unique([invoiceId, organizationId])
+  @@index([organizationId, endsAt])
 }
 
 model User {

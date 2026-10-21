@@ -49,6 +49,7 @@ export const getBillingSummary = async (input: { organizationId: string }) => {
       subscriptionStatus: true,
       trialEndsAt: true,
       currentPeriodEndsAt: true,
+      subscriptionBillingMode: true,
       createdAt: true,
     },
   });
@@ -92,7 +93,8 @@ export const getBillingSummary = async (input: { organizationId: string }) => {
     organizationId: org.id,
     plan: org.plan,
     planTier: toPlanTier(org.plan),
-    subscriptionStatus: org.subscriptionStatus,
+    subscriptionStatus: org.subscriptionBillingMode === "SELF_SERVE" && org.subscriptionStatus === "ACTIVE" && !accessState.hasAccess ? "PAST_DUE" as const : org.subscriptionStatus,
+    subscriptionBillingMode: org.subscriptionBillingMode,
     trialEndsAt: org.trialEndsAt,
     currentPeriodEndsAt: org.currentPeriodEndsAt,
     trialExpired,

@@ -21,7 +21,7 @@
 ## Subscription direction
 
 - Prioritize payment methods usable by customers in Kyrgyzstan, with KGS and a confirmed merchant setup. International coverage is secondary.
-- The human confirmed on 2026-10-21 that an IP/OsOO and a bank account in Kyrgyzstan exist; acquiring is not connected yet. Do not assume an existing provider contract or collect provider secrets in chat.
+- The human confirmed on 2026-10-21 that the seller is an IP (individual entrepreneur) with a KICB account; acquiring is not connected yet. Do not assume an existing provider contract or collect provider secrets in chat.
 - Complete tariff consistency and the confirmed forecasting store-access defect before introducing payment collection.
 - Confirm the actual seller, merchant capabilities and the treatment of existing businesses before enabling payments. Preserve existing approved/free access while preparing payment integration.
 - Separate the merchant's subscription to Bazaar from customer purchases in merchant stores. Provider redirects are not proof of payment; verified server results and reconciliation determine payment state.

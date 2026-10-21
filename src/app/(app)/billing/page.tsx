@@ -26,6 +26,7 @@ import { trpc } from "@/lib/trpc";
 import { PLAN_CODES, PLAN_FEATURE_CODES, getPlanRank, type PlanCode } from "@/lib/billing/plans";
 import { formatDateTime, formatNumber as formatLocaleNumber } from "@/lib/i18nFormat";
 import { translateError } from "@/lib/translateError";
+import { SubscriptionPayments } from "@/components/billing/subscription-payments";
 
 type PlanTier = PlanCode;
 const planOrder = PLAN_CODES;
@@ -174,6 +175,8 @@ const BillingPage = () => {
               ) : null}
             </CardContent>
           </Card>
+
+          <SubscriptionPayments onUpdated={() => void billingQuery.refetch()} />
 
           <Card className="lg:col-span-2">
             <CardHeader>

@@ -645,6 +645,51 @@
       "monthlyPrice": "Monthly price",
       "includesPrevious": "Everything in {plan}",
       "tryFree": "Try for free"
+    },
+    "payments": {
+      "title": "Subscription payments",
+      "description": "Choose a plan and pay for one calendar month in KGS through Freedom Pay.",
+      "manualAccess": "Your organization has agreed access terms. Contact support to change these terms or enable online payments.",
+      "unavailable": "Online payments are currently unavailable. Contact support to renew.",
+      "accountPaused": "Your organization is suspended. Contact support to restore access.",
+      "sandbox": "Test mode: no real money will be charged.",
+      "pendingHint": "An invoice already exists. Continue payment or check its status. Delayed results are also checked automatically.",
+      "reviewHint": "Support needs to review this payment. You can create a new invoice after the review.",
+      "expiresAt": "The payment link is valid until {date}.",
+      "continue": "Continue payment",
+      "check": "Check payment",
+      "support": "Contact support",
+      "plan": "Plan",
+      "pay": "Pay {amount}",
+      "planChangeHint": "You can renew your current plan until the paid period ends. Contact support to change plans.",
+      "creationFailed": "The payment could not be created. Please try again.",
+      "confirmed": "Payment confirmed. Your subscription has been extended.",
+      "checked": "Payment checked. The invoice shows its current status.",
+      "history": "Payment history",
+      "invoice": "Invoice number",
+      "created": "Created",
+      "paid": "Paid",
+      "period": "Subscription period",
+      "seller": "Seller",
+      "termsVersion": "Terms version",
+      "empty": "No payments yet.",
+      "more": "Show more",
+      "confirmTitle": "Confirm payment",
+      "confirmDescription": "One month of the {plan} plan — {amount}.",
+      "renewalPolicy": "One payment with no automatic charges. The month is added to your current period, or starts after payment confirmation if your access has expired.",
+      "acceptTerms": "I accept the",
+      "termsLink": "payment and subscription terms",
+      "goToPayment": "Proceed to payment",
+      "statuses": {
+        "CREATING": "Awaiting response",
+        "PENDING": "Awaiting payment",
+        "PAID": "Paid",
+        "FAILED": "Unpaid",
+        "EXPIRED": "Expired",
+        "REVIEW": "Under review",
+        "RESOLVED": "Reviewed by support"
+      },
+      "checkDelayed": "The payment provider has not responded yet. The invoice status is preserved; the check will be retried."
     }
   },
   "platformOwner": {
@@ -704,7 +749,27 @@
       "activePlanMix": "Active plan mix",
       "pendingUpgradeRequests": "Pending upgrade requests",
       "activePlanCount": "{plan}: {count}"
-    }
+    },
+    "paymentReviews": {
+      "title": "Payments requiring review",
+      "description": "Up to 50 oldest cases. Verify the transaction in the provider dashboard and agree on a resolution with the customer.",
+      "refund": "The provider reported a refund or reversal.",
+      "planChanged": "The plan changed during payment.",
+      "accessChanged": "Access terms changed during payment.",
+      "recheck": "Check with provider",
+      "resolve": "Close case",
+      "empty": "No payments require review.",
+      "resolveTitle": "Complete payment review",
+      "resolveHint": "Closing a case does not refund money or change access. Process refunds in the provider dashboard and adjust access in organization settings. Carry out the agreed resolution first, then record it below.",
+      "note": "Resolution (10–500 characters)",
+      "confirm": "The resolution has been agreed with the customer and carried out; I am closing the case."
+    },
+    "billingMode": "Billing mode",
+    "billingModeManual": "Agreed access",
+    "billingModeSelfServe": "Self-service payments",
+    "billingModeHint": "Self-service access ends when the trial or paid period expires. Change this mode only after agreement with the organization.",
+    "applyBillingDates": "Set new access dates",
+    "applyBillingDatesHint": "Periods are counted from today. When unchecked, existing dates are preserved when changing the plan, status or billing mode."
   },
   "nav": {
     "platform": "Platform",
@@ -5511,7 +5576,16 @@
     "onlineReturnFinancialEdit": "A completed online return’s financial details cannot be changed. You can edit its note.",
     "loyaltyReceiptFinancialEdit": "Items and amounts on a loyalty receipt cannot be changed after completion. Create a return and a new sale.",
     "loyaltyInvalidPointValue": "Point value must be at least 0.01 KGS with no more than two decimal places. Check loyalty settings.",
-    "onlineReturnRequiresPayment": "The order must be fully paid before a return."
+    "onlineReturnRequiresPayment": "The order must be fully paid before a return.",
+    "billingPaymentsUnavailable": "Online payments are currently unavailable.",
+    "billingTermsChanged": "Payment terms have changed. Refresh the page and review them again.",
+    "billingPriceChanged": "The price has changed. Refresh the page and confirm the current amount.",
+    "billingManualAccessProtected": "Access terms are managed separately. Contact support.",
+    "billingPaymentNeedsReview": "Support must review the previous payment first.",
+    "billingPaymentPending": "An invoice is already pending. Refresh the page to continue payment.",
+    "billingPlanChangeAfterPeriod": "Change plans after the paid period ends or contact support.",
+    "billingPaymentMismatch": "Payment details do not match the invoice. Contact support.",
+    "billingReviewAlreadyResolved": "This case is already closed. Refresh the list."
   },
   "adminJobs": {
     "title": "Admin jobs",

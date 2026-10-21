@@ -205,6 +205,12 @@ const cleanupIdempotencyKeys = async (): Promise<JobResult> => {
 };
 
 const jobs: Record<string, JobDefinition> = {
+  "subscription-payment-reconcile": {
+    handler: async () => {
+      const { reconcileSubscriptionPayments } = await import("@/server/billing/subscriptionPayments");
+      return reconcileSubscriptionPayments();
+    },
+  },
   "cleanup-idempotency-keys": {
     handler: cleanupIdempotencyKeys,
     maxAttempts: 3,

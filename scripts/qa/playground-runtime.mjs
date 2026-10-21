@@ -30,7 +30,7 @@ nextEnv.loadEnvConfig(process.cwd(), false);
 const env = { ...process.env };
 for (const key of Object.keys(env)) {
   if (
-    /^(?:RESEND_|OPENAI_|DEEPSEEK_|BAAM_|R2_|STRIPE_|SMTP_|BAKAI_|M_MARKET_|MMARKET_|O_MARKET_|FCM_|APNS_|QZ_)/.test(
+    /^(?:FREEDOMPAY_|BILLING_|RESEND_|OPENAI_|DEEPSEEK_|BAAM_|R2_|STRIPE_|SMTP_|BAKAI_|M_MARKET_|MMARKET_|O_MARKET_|FCM_|APNS_|QZ_)/.test(
       key,
     )
   )
@@ -62,7 +62,7 @@ Object.assign(env, {
   ALLOW_TEST_DB_RESET: "0",
   SIGNUP_MODE: "open",
   SKIP_EMAIL_VERIFICATION: "0",
-  PLATFORM_OWNER_EMAILS: "",
+  PLATFORM_OWNER_EMAILS: "payments-owner@example.invalid",
   O_MARKET_MOCK_API: "1",
   MOBILE_PUSH_MODE: "disabled",
 });

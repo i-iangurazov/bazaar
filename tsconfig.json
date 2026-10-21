@@ -41,6 +41,7 @@
     "scripts/stabilization/**/*.ts",
     "scripts/qa/**/*.tsx",
     "scripts/qa/playground-pricing-browser.ts",
+    "scripts/qa/playground-payments-browser.ts",
     "vitest.stabilization*.ts"
   ],
   "exclude": [

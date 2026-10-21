@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 
+import { PaymentReviews } from "@/components/billing/payment-reviews";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
@@ -40,6 +42,7 @@ type BillingModalState = {
   subscriptionStatus: "ACTIVE" | "PAST_DUE" | "CANCELED";
   trialDays: number;
   currentPeriodDays: number;
+  subscriptionBillingMode: "MANUAL" | "SELF_SERVE";
 };
 
 const normalizePlanForEditor = (plan: string): BillingModalState["plan"] => {
@@ -85,6 +88,10 @@ const PlatformPage = () => {
   const isPlatformOwner = Boolean(session?.user?.isPlatformOwner);
   const isForbidden = status === "authenticated" && !isPlatformOwner;
   const [billingModal, setBillingModal] = useState<BillingModalState | null>(null);
+  const [applyBillingDates, setApplyBillingDates] = useState(false);
+  useEffect(() => {
+    setApplyBillingDates(false);
+  }, [billingModal?.organizationId]);
   const [billingNumberDraft, setBillingNumberDraft] = useState({
     trialDays: "",
     currentPeriodDays: "",
@@ -248,6 +255,8 @@ const PlatformPage = () => {
           </Card>
         </div>
       ) : null}
+
+      <PaymentReviews enabled={status === "authenticated" && isPlatformOwner} />
 
       <Card>
         <CardHeader>
@@ -439,6 +448,7 @@ const PlatformPage = () => {
                               organizationName: org.name || tCommon("notAvailable"),
                               plan: normalizePlanForEditor(org.plan),
                               subscriptionStatus: org.subscriptionStatus,
+                              subscriptionBillingMode: org.subscriptionBillingMode,
                               trialDays: 14,
                               currentPeriodDays: 30,
                             })
@@ -479,8 +489,8 @@ const PlatformPage = () => {
                 organizationId: billingModal.organizationId,
                 plan: billingModal.plan,
                 subscriptionStatus: billingModal.subscriptionStatus,
-                trialDays,
-                currentPeriodDays,
+                ...(applyBillingDates ? { trialDays, currentPeriodDays } : {}),
+                subscriptionBillingMode: billingModal.subscriptionBillingMode,
               });
             }}
           >
@@ -491,6 +501,49 @@ const PlatformPage = () => {
               <p className="font-medium text-foreground">{billingModal.organizationName}</p>
             </div>
 
+            <div className="space-y-2">
+              <p className="text-sm font-medium">{t("billingMode")}</p>
+              <Select
+                value={billingModal.subscriptionBillingMode}
+                onValueChange={(value) =>
+                  setBillingModal((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          subscriptionBillingMode:
+                            value as BillingModalState["subscriptionBillingMode"],
+                        }
+                      : prev,
+                  )
+                }
+              >
+                <SelectTrigger aria-label={t("billingMode")}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="MANUAL">{t("billingModeManual")}</SelectItem>
+                  <SelectItem value="SELF_SERVE" disabled={!summaryQuery.data?.paymentsAvailable}>
+                    {t("billingModeSelfServe")}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">{t("billingModeHint")}</p>
+            </div>
+
+            <div className="flex items-start gap-3">
+              <Checkbox
+                id="apply-billing-dates"
+                checked={applyBillingDates}
+                disabled={updateBillingMutation.isLoading}
+                onCheckedChange={(value) => setApplyBillingDates(value === true)}
+              />
+              <label htmlFor="apply-billing-dates" className="text-sm">
+                {t("applyBillingDates")}
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  {t("applyBillingDatesHint")}
+                </span>
+              </label>
+            </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <p className="text-sm font-medium text-foreground">{t("plan")}</p>
@@ -545,6 +598,7 @@ const PlatformPage = () => {
                   type="number"
                   min={0}
                   max={365}
+                  disabled={!applyBillingDates || updateBillingMutation.isLoading}
                   value={toNumberInputValue(billingNumberDraft.trialDays)}
                   onChange={(event) => {
                     const next = event.target.value;
@@ -564,6 +618,7 @@ const PlatformPage = () => {
                   type="number"
                   min={1}
                   max={365}
+                  disabled={!applyBillingDates || updateBillingMutation.isLoading}
                   value={toNumberInputValue(billingNumberDraft.currentPeriodDays)}
                   onChange={(event) => {
                     const next = event.target.value;

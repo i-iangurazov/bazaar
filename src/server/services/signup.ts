@@ -11,6 +11,7 @@ import { consumeAuthToken } from "@/server/services/authTokens";
 import { assertWithinLimits } from "@/server/services/planLimits";
 import { isEmailVerificationRequired } from "@/server/config/auth";
 import { defaultLocale, normalizeLocale } from "@/lib/locales";
+import { selfServeSignupEnabled } from "@/server/billing/paymentConfig";
 
 const DEFAULT_TRIAL_DAYS = Number(process.env.TRIAL_DAYS ?? "14");
 
@@ -175,6 +176,7 @@ export const registerBusinessFromToken = async (input: {
           subscriptionStatus: "ACTIVE",
           trialEndsAt,
           currentPeriodEndsAt: trialEndsAt,
+          subscriptionBillingMode: selfServeSignupEnabled() ? "SELF_SERVE" : "MANUAL",
         },
       });
       organizationId = createdOrg.id;

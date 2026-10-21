@@ -13,6 +13,7 @@ describe("scheduled job recovery", () => {
   it("keeps every durable recovery runner in a fresh-process schedule", () => {
     expect(scheduledJobGroups.recovery).toEqual(
       expect.arrayContaining([
+        "subscription-payment-reconcile",
         "export-job",
         "kkm-retry-receipts",
         "order-confirmation-email",
