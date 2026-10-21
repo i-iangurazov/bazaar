@@ -355,14 +355,13 @@ const IntegrationsPage = () => {
         <IntegrationTile
           title={t("productImageStudio.title")}
           description={t("productImageStudio.description")}
-          status={t("productImageStudio.soonBadge")}
-          statusVariant="muted"
+          status={imageStudioStatus}
+          statusVariant={productImageStudioOverviewQuery.data?.configured ? "success" : "muted"}
           detail={
             <span>
               {t("productImageStudio.currentStatus")}: {imageStudioStatus}
             </span>
           }
-          className="pointer-events-none opacity-40"
           actions={
             <>
               <ActionLink href="/operations/integrations/product-image-studio">

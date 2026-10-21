@@ -11,7 +11,7 @@ export function stockAuditEnvironment(
     if (value !== undefined) env[key] = value;
   }
   for (const key of Object.keys(env)) {
-    if (/^(?:RESEND_|OPENAI_|R2_|STRIPE_|SMTP_|BAKAI_|M_MARKET_|O_MARKET_)/.test(key)) {
+    if (/^(?:RESEND_|OPENAI_|DEEPSEEK_|AI_PROVIDER|BAAM_|R2_|STRIPE_|SMTP_|BAKAI_|M_MARKET_|O_MARKET_)/.test(key)) {
       env[key] = "";
     }
   }

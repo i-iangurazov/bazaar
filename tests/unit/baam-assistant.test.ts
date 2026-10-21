@@ -291,7 +291,7 @@ describe("BAAM question interpretation and authoritative answers", () => {
         .mockResolvedValueOnce(scope)
         .mockRejectedValueOnce(new Error(reason));
       await expect(askBaam(input)).rejects.toThrow(reason);
-      expect(mocks.access).toHaveBeenCalledWith(input.actorId, undefined);
+      expect(mocks.access).toHaveBeenCalledWith(input.actorId, undefined, true);
       expect(mocks.access.mock.invocationCallOrder[2]).toBeGreaterThan(
         mocks.fetch.mock.invocationCallOrder[0],
       );

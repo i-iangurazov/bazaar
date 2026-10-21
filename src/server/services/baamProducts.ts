@@ -98,7 +98,7 @@ export const executeBaamProductPlan = async (input: {
   const c = copy[input.locale];
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SET TRANSACTION READ ONLY`;
-    const access = await readBaamAccessScope(tx, input.actorId, input.storeId);
+    const access = await readBaamAccessScope(tx, input.actorId, input.storeId, dated);
     const selectedStores = access.availableStores.filter(store => access.storeIds.includes(store.id));
     const queriedAt = new Date().toISOString();
     const evidence: BaamProductEvidence = {
@@ -140,18 +140,18 @@ export const executeBaamProductPlan = async (input: {
       WHERE o."organizationId" = ${access.organizationId}
         AND ${access.storeIds.length ? Prisma.sql`o."storeId" IN (${Prisma.join(access.storeIds)})` : Prisma.sql`false`}
         AND o."isPosSale" = true AND o."isHeld" = false AND o.status::text = 'COMPLETED'
-        AND o."completedAt" >= ${range.fromUtc} AND o."completedAt" < ${range.toUtcExclusive}
+        AND o."completedAt" >= (${range.fromUtc}::timestamptz AT TIME ZONE 'UTC') AND o."completedAt" < (${range.toUtcExclusive}::timestamptz AT TIME ZONE 'UTC')
       UNION ALL
       SELECT rl."productId", 0::numeric, rl.qty::numeric, 0::numeric, rl."lineTotalKgs"
       FROM "SaleReturnLine" rl JOIN "SaleReturn" r ON r.id = rl."saleReturnId"
       WHERE r."organizationId" = ${access.organizationId}
         AND ${access.storeIds.length ? Prisma.sql`r."storeId" IN (${Prisma.join(access.storeIds)})` : Prisma.sql`false`}
         AND r.status::text = 'COMPLETED'
-        AND r."completedAt" >= ${range.fromUtc} AND r."completedAt" < ${range.toUtcExclusive}
+        AND r."completedAt" >= (${range.fromUtc}::timestamptz AT TIME ZONE 'UTC') AND r."completedAt" < (${range.toUtcExclusive}::timestamptz AT TIME ZONE 'UTC')
     ` : Prisma.sql`SELECT NULL::text AS "productId", 0::numeric AS sold, 0::numeric AS returned,
       0::numeric AS revenue, 0::numeric AS refunds WHERE false`;
     const order = plan.productAction === "ranking"
-      ? Prisma.sql`${plan.metric === "revenue" ? Prisma.sql`"netRevenueKgs"` : Prisma.sql`"netQuantity"`}
+      ? Prisma.sql`${plan.metric === "revenue" ? Prisma.sql`"netRevenueKgs"` : plan.metric === "return_units" ? Prisma.sql`"quantityReturned"` : Prisma.sql`"netQuantity"`}
           ${plan.direction === "bottom" ? Prisma.sql`ASC` : Prisma.sql`DESC`}, name ASC, id ASC`
       : query ? Prisma.sql`CASE WHEN lower(sku) = lower(${query}) OR lower(name) = lower(${query})
           OR EXISTS (SELECT 1 FROM "ProductBarcode" pb WHERE pb."productId" = filtered.id
@@ -197,7 +197,7 @@ export const executeBaamProductPlan = async (input: {
     const clarification = singleProduct && total > 1;
     evidence.details.push(`${c.matches}: ${total}; ${c.shown}: ${rows.length}${rows[0] ? `; ${c.count}: ${rows[0].population}` : ""}`);
     const heading = plan.productAction === "performance" ? c.performance : plan.productAction === "zero_sales" ? c.zero : dated ? c.ranking : c.catalog;
-    const ordering = plan.productAction === "ranking" ? ` ${plan.direction === "bottom" ? c.bottom : c.top}: ${plan.metric === "revenue" ? c.netRevenue : c.netUnits}.` : "";
+    const ordering = plan.productAction === "ranking" ? ` ${plan.direction === "bottom" ? c.bottom : c.top}: ${plan.metric === "revenue" ? c.netRevenue : plan.metric === "return_units" ? c.returned : c.netUnits}.` : "";
     return {
       status: clarification ? "clarification" : "answer",
       answer: `${heading}.${ordering} ${rows.length ? `${c.shown}: ${rows.length} / ${total}.` : c.noMatch}${clarification ? ` ${c.pick}` : ""}`,

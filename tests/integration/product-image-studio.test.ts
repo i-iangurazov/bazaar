@@ -212,8 +212,8 @@ describeDb("product image studio integration", () => {
       output_format: "jpeg",
       output_compression: 95,
       background: "opaque",
-      input_fidelity: "high",
     });
+    expect(fetchBody?.tools?.[0]).not.toHaveProperty("input_fidelity");
     expect(fetchBody?.tools?.[0]).not.toHaveProperty("format");
     expect(fetchBody?.tools?.[0]).not.toHaveProperty("compression");
 

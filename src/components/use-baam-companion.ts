@@ -1,6 +1,7 @@
 "use client";
 import { uploadBaamImage } from "@/lib/baam/mediaClient";
 import type { WorkflowCommand } from "@/lib/baam/workflows";
+import { flushBaamWorkflowForms } from "@/lib/baam/workflowFlush";
 import { useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -283,6 +284,7 @@ export function useBaamCompanion(identity: BaamIdentity) {
     setNotice(undefined);
     try {
       const id = retry?.conversationId ?? (await ensureConversation());
+      if (!retry) await flushBaamWorkflowForms(id);
       requestId = id;
       busyRef.current.set(id, requestToken);
       setSendingSlots((old) => ({ ...old, [id]: requestToken }));

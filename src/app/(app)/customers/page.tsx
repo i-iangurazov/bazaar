@@ -112,7 +112,8 @@ const CustomerDatabasePage = () => {
   );
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState<CustomerFormState>(emptyForm);
-  const [detailCustomerId, setDetailCustomerId] = useState<string | null>(null);
+  const [detailCustomerId, setDetailCustomerId] = useState<string | null>(searchParams.get("customerId"));
+  useEffect(() => { setDetailCustomerId(searchParams.get("customerId")); }, [searchParams]);
   const [exportOpen, setExportOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<DownloadFormat>("xlsx");
   const [selectedExportColumns, setSelectedExportColumns] = useState<CustomerExportColumnKey[]>([

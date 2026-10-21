@@ -36,6 +36,10 @@ export const baamSendSchema = z
 export type BaamSend = z.infer<typeof baamSendSchema>;
 export type BaamChoice = { label: string; value: string };
 export type BaamPart =
+  | { type: "metrics"; title: string; period: string; stores: string[]; cards: Array<{ label: string; value: string; comparison?: string }>; notes: string[] }
+  | { type: "analysisContext"; token: string; dateFrom: string; dateTo: string; storeId?: string }
+  | { type: "record"; id: string; title: string; href: string; sku: string | null; displayFields: Array<{ label: string; value: string }> }
+  | { type: "evidence"; details: string[] }
   | { type: "workflow"; workflowId: string }
   | { type: "commands"; commands: Array<{ label: string; action: string }> }
   | { type: "choices"; choices: BaamChoice[] }

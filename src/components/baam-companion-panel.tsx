@@ -165,6 +165,9 @@ export function BaamCompanionPanel({
           <span className="ml-1.5 hidden sm:inline">{c.t("new")}</span>
         </Button>
       </div>
+      <p className="border-b border-border/60 px-4 py-2 text-xs text-muted-foreground" role="status">
+        {c.t(c.capabilities.data?.configured ? "ready" : "localMode")}
+      </p>
       {c.showHistory ? (
         <History c={c} />
       ) : (

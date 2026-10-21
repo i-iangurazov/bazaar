@@ -704,8 +704,9 @@ defineAction({
 defineAction({
   name: "customer_create",
   description:
-    "Create a customer in a selected accessible store using existing contact matching rules.",
-  schema: contact.extend({ storeId: id, address: z.string().max(500).optional() }),
+    "Create a customer in a selected accessible store. A phone or email is required by existing contact matching rules.",
+  schema: contact.extend({ storeId: id, address: z.string().max(500).optional() })
+    .refine(data => Boolean(data.phone?.trim() || data.email?.trim()), { message: "customerContactRequired" }),
   async prepare(c, data) {
     const store = await baamStore(c, data.storeId);
     const summary = {

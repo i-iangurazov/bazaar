@@ -24,6 +24,7 @@ const rawEnvSchema = z
     EMAIL_FROM: z.string().optional(),
     RESEND_API_KEY: z.string().optional(),
     OPENAI_API_KEY: z.string().optional(),
+    DEEPSEEK_API_KEY: z.string().optional(),
     IMAGE_STORAGE_PROVIDER: z.string().optional(),
     EXPORT_STORAGE_PROVIDER: z.string().optional(),
     R2_ACCOUNT_ID: z.string().optional(),
@@ -99,6 +100,7 @@ export type RuntimeEnv = {
   emailFrom: string;
   resendApiKey: string;
   openAiApiKey: string;
+  deepseekApiKey: string;
   imageStorageProvider: string;
   exportStorageProvider: string;
   r2Configured: boolean;
@@ -141,6 +143,7 @@ const parseRuntimeEnv = (source: NodeJS.ProcessEnv): RuntimeEnv => {
     emailFrom: parsed.EMAIL_FROM?.trim() ?? "",
     resendApiKey: parsed.RESEND_API_KEY?.trim() ?? "",
     openAiApiKey: parsed.OPENAI_API_KEY?.trim() ?? "",
+    deepseekApiKey: parsed.DEEPSEEK_API_KEY?.trim() ?? "",
     imageStorageProvider: parsed.IMAGE_STORAGE_PROVIDER?.trim().toLowerCase() ?? "",
     exportStorageProvider: parsed.EXPORT_STORAGE_PROVIDER?.trim().toLowerCase() ?? "",
     r2Configured: Boolean(
@@ -232,7 +235,7 @@ const assertHardeningPreviewEnv = (env: RuntimeEnv) => {
   if (env.emailProvider !== "log" || !env.allowLogEmailInProduction) {
     throw new Error("Hardening Preview email must use the local log provider.");
   }
-  if (env.resendApiKey || env.openAiApiKey) {
+  if (env.resendApiKey || env.openAiApiKey || env.deepseekApiKey) {
     throw new Error("External provider credentials are forbidden in hardening Preview.");
   }
   if (env.imageStorageProvider && env.imageStorageProvider !== "local") {

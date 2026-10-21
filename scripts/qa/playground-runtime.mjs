@@ -30,7 +30,7 @@ nextEnv.loadEnvConfig(process.cwd(), false);
 const env = { ...process.env };
 for (const key of Object.keys(env)) {
   if (
-    /^(?:FREEDOMPAY_|BILLING_|RESEND_|OPENAI_|DEEPSEEK_|BAAM_|R2_|STRIPE_|SMTP_|BAKAI_|M_MARKET_|MMARKET_|O_MARKET_|FCM_|APNS_|QZ_)/.test(
+    /^(?:FREEDOMPAY_|BILLING_|RESEND_|OPENAI_|DEEPSEEK_|AI_PROVIDER|BAAM_|R2_|STRIPE_|SMTP_|BAKAI_|M_MARKET_|MMARKET_|O_MARKET_|FCM_|APNS_|QZ_)/.test(
       key,
     )
   )

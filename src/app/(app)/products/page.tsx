@@ -3343,9 +3343,9 @@ const ProductsPage = () => {
                         <SparklesIcon className="h-4 w-4" aria-hidden />
                       )}
                       {arrangeCategoriesRunning ? tCommon("loading") : t("aiArrangeCategories")}
-                      <Badge variant="muted" className="ml-auto">
+                      {aiFeaturesVisuallyDisabled ? <Badge variant="muted" className="ml-auto">
                         {t("aiUnavailableBadge")}
-                      </Badge>
+                      </Badge> : null}
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       disabled={

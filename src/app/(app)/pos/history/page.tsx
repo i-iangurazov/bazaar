@@ -90,7 +90,8 @@ const PosHistoryPage = () => {
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [isPhoneScreen, setIsPhoneScreen] = useState<boolean | null>(null);
   const [resumeConflictOpen, setResumeConflictOpen] = useState(false);
-  const [detailSaleId, setDetailSaleId] = useState<string | null>(null);
+  const [detailSaleId, setDetailSaleId] = useState<string | null>(searchParams.get("saleId"));
+  useEffect(() => { setDetailSaleId(searchParams.get("saleId")); }, [searchParams]);
   const [returnSaleId, setReturnSaleId] = useState<string | null>(null);
   const [returnQtyByLine, setReturnQtyByLine] = useState<Record<string, string>>({});
   const [refundMethod, setRefundMethod] = useState<PosPaymentMethod>(PosPaymentMethod.CASH);

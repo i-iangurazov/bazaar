@@ -144,7 +144,7 @@ const resolveOpenAiImageQuality = (value?: string | null): OpenAiImageQuality =>
 };
 
 const supportsOpenAiInputFidelity = (imageModel: string) =>
-  /^gpt-image-1(?:$|-mini$|\.5$)/i.test(imageModel.trim());
+  /^gpt-image-1(?:$|\.5$)/i.test(imageModel.trim());
 
 const resolveProviderConfig = () => {
   const apiKey = process.env.OPENAI_API_KEY?.trim() ?? "";
@@ -529,6 +529,8 @@ const callOpenAiImageEnhancement = async (input: {
 
   const requestBody = {
     model: config.model,
+    store: false,
+    safety_identifier: createHash("sha256").update(`bazaar-image-studio:${input.jobId}`).digest("hex"),
     input: [
       {
         role: "system",
@@ -565,6 +567,7 @@ const callOpenAiImageEnhancement = async (input: {
       assertExternalProviderCallAllowed("openai");
       response = await fetch(OPENAI_RESPONSES_URL, {
         method: "POST",
+        redirect: "error",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${config.apiKey}`,

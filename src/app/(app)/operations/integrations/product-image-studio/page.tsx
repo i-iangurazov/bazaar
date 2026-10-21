@@ -75,7 +75,6 @@ const studioMaxProxyImageBytes = Math.min(
 );
 const studioAcceptedFileTypes =
   "image/jpeg,image/png,image/webp,image/heic,image/heif,image/heic-sequence,image/heif-sequence,.jpg,.jpeg,.png,.webp,.heic,.heics,.heif,.heifs,.hif";
-const productImageStudioVisuallyDisabled = true;
 
 const isWorkingStudioJobStatus = (status?: ProductImageStudioJobStatus | null) =>
   status === ProductImageStudioJobStatus.QUEUED ||
@@ -533,16 +532,9 @@ const ProductImageStudioPage = () => {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        action={<Badge variant="muted">{t("soonBadge")}</Badge>}
       />
 
-      <div
-        className={
-          productImageStudioVisuallyDisabled
-            ? "pointer-events-none space-y-6 opacity-40"
-            : "space-y-6"
-        }
-      >
+      <div className="space-y-6">
         <Card className="bazaar-admin-surface">
           <CardHeader className="bazaar-admin-section-header space-y-3">
             <div className="flex flex-wrap items-start justify-between gap-3">

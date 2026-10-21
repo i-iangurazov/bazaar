@@ -1,0 +1,562 @@
+{
+  "date": "2026-10-22",
+  "branch": "codex/playground",
+  "baseCommit": "698c68df561164294e0dc8df90fd4f2eee911180",
+  "productionDeployed": false,
+  "mainMerged": false,
+  "credentialsCommitted": false,
+  "configuration": {
+    "textAndVision": "DeepSeek Flash",
+    "speechRecognition": "existing OpenAI executor",
+    "imageRetouch": "existing OpenAI image executor",
+    "readAloud": "browser speech synthesis",
+    "businessFacts": "authorized deterministic server readers"
+  },
+  "localChecks": {
+    "typecheck": "passed",
+    "lint": "passed",
+    "i18n": "passed",
+    "productionBuild": {
+      "status": "passed",
+      "command": "PLAYGROUND_DATABASE_URL=<dedicated local database> PLAYGROUND_REDIS_URL=<dedicated Redis DB 1> node scripts/qa/playground-runtime.mjs build",
+      "log": "tmp/ai-upgrade/build-last.log"
+    },
+    "fullRegression": {
+      "passed": 2463,
+      "files": 342,
+      "log": "tmp/ai-upgrade/full-tests-release.log",
+      "note": "Full suite before the final isolated boundary/flush/customer-validation additions; those additions were then checked by the following focused suites. CI checks the final commit."
+    },
+    "finalBaamRegression": {
+      "passed": 127,
+      "files": 8,
+      "log": "tmp/ai-upgrade/latest-regression.log"
+    },
+    "boundaryAndProviderRegression": {
+      "passed": 173,
+      "files": 4,
+      "log": "tmp/ai-upgrade/boundaries-final.log"
+    },
+    "additionalChangedUIAndContracts": {
+      "passed": 192,
+      "files": 7,
+      "log": "tmp/ai-upgrade/final-additional.log"
+    }
+  },
+  "liveChecks": {
+    "general_intents": {
+      "passed": 36,
+      "total": 36,
+      "evidence": [
+        {
+          "name": "intent-1",
+          "pass": true
+        },
+        {
+          "name": "intent-2",
+          "pass": true
+        },
+        {
+          "name": "intent-3",
+          "pass": true
+        },
+        {
+          "name": "intent-4",
+          "pass": true
+        },
+        {
+          "name": "intent-5",
+          "pass": true
+        },
+        {
+          "name": "intent-6",
+          "pass": true
+        },
+        {
+          "name": "intent-7",
+          "pass": true
+        },
+        {
+          "name": "intent-8",
+          "pass": true
+        },
+        {
+          "name": "intent-9",
+          "pass": true
+        },
+        {
+          "name": "intent-10",
+          "pass": true
+        },
+        {
+          "name": "intent-11",
+          "pass": true
+        },
+        {
+          "name": "intent-12",
+          "pass": true
+        },
+        {
+          "name": "intent-13",
+          "pass": true
+        },
+        {
+          "name": "intent-14",
+          "pass": true
+        },
+        {
+          "name": "intent-15",
+          "pass": true
+        },
+        {
+          "name": "intent-16",
+          "pass": true
+        },
+        {
+          "name": "intent-17",
+          "pass": true
+        },
+        {
+          "name": "intent-18",
+          "pass": true
+        },
+        {
+          "name": "intent-19",
+          "pass": true
+        },
+        {
+          "name": "intent-20",
+          "pass": true
+        },
+        {
+          "name": "intent-21",
+          "pass": true
+        },
+        {
+          "name": "intent-22",
+          "pass": true
+        },
+        {
+          "name": "intent-23",
+          "pass": true
+        },
+        {
+          "name": "intent-24",
+          "pass": true
+        },
+        {
+          "name": "intent-25",
+          "pass": true
+        },
+        {
+          "name": "intent-26",
+          "pass": true
+        },
+        {
+          "name": "intent-27",
+          "pass": true
+        },
+        {
+          "name": "intent-28",
+          "pass": true
+        },
+        {
+          "name": "intent-29",
+          "pass": true
+        },
+        {
+          "name": "intent-30",
+          "pass": true
+        },
+        {
+          "name": "intent-31",
+          "pass": true
+        },
+        {
+          "name": "intent-32",
+          "pass": true
+        },
+        {
+          "name": "intent-33",
+          "pass": true
+        },
+        {
+          "name": "intent-34",
+          "pass": true
+        },
+        {
+          "name": "intent-35",
+          "pass": true
+        },
+        {
+          "name": "intent-36",
+          "pass": true
+        }
+      ]
+    },
+    "all_write_actions": {
+      "passed": 49,
+      "total": 49,
+      "evidence": [
+        {
+          "name": "intent-1",
+          "pass": true
+        },
+        {
+          "name": "intent-2",
+          "pass": true
+        },
+        {
+          "name": "intent-3",
+          "pass": true
+        },
+        {
+          "name": "intent-4",
+          "pass": true
+        },
+        {
+          "name": "intent-5",
+          "pass": true
+        },
+        {
+          "name": "intent-6",
+          "pass": true
+        },
+        {
+          "name": "intent-7",
+          "pass": true
+        },
+        {
+          "name": "intent-8",
+          "pass": true
+        },
+        {
+          "name": "intent-9",
+          "pass": true
+        },
+        {
+          "name": "intent-10",
+          "pass": true
+        },
+        {
+          "name": "intent-11",
+          "pass": true
+        },
+        {
+          "name": "intent-12",
+          "pass": true
+        },
+        {
+          "name": "intent-13",
+          "pass": true
+        },
+        {
+          "name": "intent-14",
+          "pass": true
+        },
+        {
+          "name": "intent-15",
+          "pass": true
+        },
+        {
+          "name": "intent-16",
+          "pass": true
+        },
+        {
+          "name": "intent-17",
+          "pass": true
+        },
+        {
+          "name": "intent-18",
+          "pass": true
+        },
+        {
+          "name": "intent-19",
+          "pass": true
+        },
+        {
+          "name": "intent-20",
+          "pass": true
+        },
+        {
+          "name": "intent-21",
+          "pass": true
+        },
+        {
+          "name": "intent-22",
+          "pass": true
+        },
+        {
+          "name": "intent-23",
+          "pass": true
+        },
+        {
+          "name": "intent-24",
+          "pass": true
+        },
+        {
+          "name": "intent-25",
+          "pass": true
+        },
+        {
+          "name": "intent-26",
+          "pass": true
+        },
+        {
+          "name": "intent-27",
+          "pass": true
+        },
+        {
+          "name": "intent-28",
+          "pass": true
+        },
+        {
+          "name": "intent-29",
+          "pass": true
+        },
+        {
+          "name": "intent-30",
+          "pass": true
+        },
+        {
+          "name": "intent-31",
+          "pass": true
+        },
+        {
+          "name": "intent-32",
+          "pass": true
+        },
+        {
+          "name": "intent-33",
+          "pass": true
+        },
+        {
+          "name": "intent-34",
+          "pass": true
+        },
+        {
+          "name": "intent-35",
+          "pass": true
+        },
+        {
+          "name": "intent-36",
+          "pass": true
+        },
+        {
+          "name": "intent-37",
+          "pass": true
+        },
+        {
+          "name": "intent-38",
+          "pass": true
+        },
+        {
+          "name": "intent-39",
+          "pass": true
+        },
+        {
+          "name": "intent-40",
+          "pass": true
+        },
+        {
+          "name": "intent-41",
+          "pass": true
+        },
+        {
+          "name": "intent-42",
+          "pass": true
+        },
+        {
+          "name": "intent-43",
+          "pass": true
+        },
+        {
+          "name": "intent-44",
+          "pass": true
+        },
+        {
+          "name": "intent-45",
+          "pass": true
+        },
+        {
+          "name": "intent-46",
+          "pass": true
+        },
+        {
+          "name": "intent-47",
+          "pass": true
+        },
+        {
+          "name": "intent-48",
+          "pass": true
+        },
+        {
+          "name": "intent-49",
+          "pass": true
+        }
+      ]
+    },
+    "current_chat_flows": {
+      "passed": 12,
+      "total": 12,
+      "evidence": [
+        {
+          "name": "ranking-ru",
+          "pass": true
+        },
+        {
+          "name": "ranking-kg",
+          "pass": true
+        },
+        {
+          "name": "ranking-en",
+          "pass": true
+        },
+        {
+          "name": "comparison-and-follow-up",
+          "pass": true
+        },
+        {
+          "name": "product-search",
+          "pass": true
+        },
+        {
+          "name": "help-ru",
+          "pass": true
+        },
+        {
+          "name": "help-en",
+          "pass": true
+        },
+        {
+          "name": "help-kg",
+          "pass": true
+        },
+        {
+          "name": "negation-without-mutation",
+          "pass": true
+        },
+        {
+          "name": "supplier-action-idempotency",
+          "pass": true
+        },
+        {
+          "name": "supplier-search",
+          "pass": true
+        },
+        {
+          "name": "explicit-confirmation-receiving",
+          "pass": true
+        }
+      ]
+    },
+    "media": {
+      "passed": 9,
+      "total": 9,
+      "evidence": [
+        {
+          "name": "description-ru",
+          "pass": true
+        },
+        {
+          "name": "description-en",
+          "pass": true
+        },
+        {
+          "name": "description-kg",
+          "pass": true
+        },
+        {
+          "name": "vision-specifications",
+          "pass": true
+        },
+        {
+          "name": "baam-photo-understanding",
+          "pass": true
+        },
+        {
+          "name": "voice-ru",
+          "pass": true
+        },
+        {
+          "name": "voice-en",
+          "pass": true
+        },
+        {
+          "name": "voice-kg",
+          "pass": true
+        },
+        {
+          "name": "photo-studio-real-edit",
+          "pass": true
+        }
+      ]
+    },
+    "catalog": {
+      "passed": 1,
+      "total": 1,
+      "evidence": [
+        {
+          "name": "category-arrangement-vision",
+          "pass": true
+        }
+      ]
+    },
+    "spoken_command": {
+      "passed": 1,
+      "total": 1,
+      "evidence": [
+        {
+          "name": "spoken-business-command-to-report",
+          "pass": true
+        }
+      ]
+    }
+  },
+  "browser": {
+    "engine": "Chromium",
+    "build": "production",
+    "transport": "local HTTPS with Secure cookies",
+    "viewports": [
+      "1440x1000",
+      "390x844"
+    ],
+    "pageErrors": [],
+    "verified": [
+      "metric cards",
+      "ranking with exact product link",
+      "empty results",
+      "formatted instructions and links",
+      "explicit confirmation",
+      "quantity edit flushed before confirmation",
+      "loaded customer detail after link",
+      "loaded receipt detail after link",
+      "enabled image studio"
+    ],
+    "evidenceDirectory": "artifacts/baam-companion/ai-upgrade"
+  },
+  "acceptanceCorpus": "scripts/baam/acceptance-cases.ts",
+  "remainingLimits": [
+    "ADMIN/MANAGER and normal plan/store gates remain enforced",
+    "20 record results; up to 50 products per ranking",
+    "Ambiguous or unsupported periods/operations require clarification or the linked application flow",
+    "ASR and photo quality remain reviewable; browser voice availability depends on device",
+    "No claim of manually executing every adapter in every language, role and physical device",
+    "No live customer database or production provider deployment was modified"
+  ],
+  "infrastructure": {
+    "dedicatedDisposablePostgres": true,
+    "dedicatedRedis": true,
+    "ciParityDatabaseLocale": "en_US.UTF-8",
+    "ciParityDatabaseTimezone": "UTC",
+    "explicitAnalyticsBoundaryTests": [
+      "UTC",
+      "Asia/Bishkek"
+    ],
+    "automatedTestsUseLiveProviders": false
+  },
+  "liveCommand": "BAAM_LIVE_PROVIDER=1 node --import tsx scripts/baam/ai-live-check.ts [--intents [--actions] | --media | --catalog | --voice]",
+  "ci": {
+    "note": "The pushed commit is independently verified in GitHub Actions; final run links are reported in the delivery message."
+  }
+}

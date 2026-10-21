@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { assertExternalProviderCallAllowed } from "@/server/config/runtime";
 import { parseBuffer } from "music-metadata";
 import { z } from "zod";
 import { prisma } from "@/server/db/prisma";
@@ -174,8 +175,10 @@ export async function transcribeBaamAudio(
       .slice(0, 15);
     for (const keyword of ["Bazaar", "BAAM", ...keywords])
       form.append("keywords[]", keyword.slice(0, 100));
+    assertExternalProviderCallAllowed("openai");
     const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
       method: "POST",
+      redirect: "error",
       headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
       body: form,
       signal: AbortSignal.timeout(75_000),

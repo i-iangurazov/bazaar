@@ -5,7 +5,7 @@ const require = createRequire(import.meta.url);
 const nextEnv = createRequire(require.resolve("next/package.json"))("@next/env");
 nextEnv.loadEnvConfig(process.cwd(), true);
 for (const key of Object.keys(process.env)) {
-  if (/^(?:RESEND_|OPENAI_|R2_|STRIPE_|SMTP_|BAKAI_|M_MARKET_|O_MARKET_)/.test(key))
+  if (/^(?:RESEND_|OPENAI_|DEEPSEEK_|AI_PROVIDER|BAAM_|R2_|STRIPE_|SMTP_|BAKAI_|M_MARKET_|O_MARKET_)/.test(key))
     process.env[key] = "";
 }
 // Anonymous pages need no database fixtures. Never inherit a production connection.

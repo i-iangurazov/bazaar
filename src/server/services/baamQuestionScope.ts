@@ -245,6 +245,19 @@ export const resolveBaamQuestionScope = (input: {
     candidates.push({ range, reason });
     text = blank(text, match.index!, match[0].length);
   };
+  const dotted = [...text.matchAll(/(?<!\d)(\d{1,2})\.(\d{1,2})\.(\d{4})(?!\d)/gu)];
+  if (dotted.length > 2) return { status: "clarification", clarification: "date" };
+  if (dotted.length) {
+    if (dotted.length === 2 && !/^(?:\s|по|до|—|–|-)+$/u.test(text.slice(dotted[0].index! + dotted[0][0].length, dotted[1].index!))) return { status: "clarification", clarification: "date" };
+    const date = (hit: RegExpMatchArray) => `${hit[3]}-${hit[2].padStart(2, "0")}-${hit[1].padStart(2, "0")}`;
+    candidates.push({ range: { dateFrom: date(dotted[0]), dateTo: date(dotted.at(-1)!) }, reason: "explicit_dates" });
+    for (const hit of dotted) text = blank(text, hit.index!, hit[0].length);
+  }
+  for (const hit of [...text.matchAll(new RegExp(`(?<!\\d)(\\d{1,2})\\s*(?:по|—|–|-)\\s*(\\d{1,2})\\s+(${monthSource})\\s+(\\d{4})(?!\\d)`, "gu"))]) {
+    const month = monthPatterns.findIndex(pattern => terms(pattern, hit[3]).length) + 1;
+    const prefix = `${hit[4]}-${String(month).padStart(2, "0")}-`;
+    consume(hit, { dateFrom: prefix + hit[1].padStart(2, "0"), dateTo: prefix + hit[2].padStart(2, "0") }, "explicit_dates");
+  }
   const iso = [...text.matchAll(/(?<![\d])\d{4}-\d{2}-\d{2}(?![\d])/gu)];
   if (iso.length > 2) return { status: "clarification", clarification: "date" };
   if (iso.length) {
@@ -328,10 +341,20 @@ export const resolveBaamQuestionScope = (input: {
       );
   }
   for (const hit of terms(
-    "(?:this|current)\\s+month|(?:этот|текущий|этом)\\s+месяц\\p{L}*|(?:бул|ушул)\\s+ай\\p{L}*",
+    "(?:this|current)\\s+month|(?:этот|текущий|этом)\\s+месяц\\p{L}*|за\\s+месяц|(?:бул|ушул)\\s+ай\\p{L}*",
     text,
   ))
     consume(hit, { dateFrom: monthStart(today, 0), dateTo: today }, "month_to_date");
+  for (const hit of terms("(?:this|current)\\s+week|(?:эт[ау]|текущ[ау]ю)\\s+недел\\p{L}*|(?:бул|ушул)\\s+(?:апта|жума)\\p{L}*", text)) {
+    const weekday = new Date(`${today}T00:00:00Z`).getUTCDay() || 7;
+    consume(hit, { dateFrom: addBusinessDays(today, 1 - weekday), dateTo: today }, "calendar_week");
+  }
+  for (const hit of terms("за\\s+неделю", text)) consume(hit, { dateFrom: addBusinessDays(today, -6), dateTo: today }, "controls");
+  const withoutRankingCount = /top|bottom|lowest|worst|least|топ|продаваем|популяр|selling|чаще|меньше|хуже|без продаж|no sales|zero.sales|сатылбаган|эң көп|эң аз/iu.test(text)
+    ? text
+        .replace(/((?:\btop|\bfirst|\bbottom|топ|первые|биринчи)\s*[-–]?\s*)\d{1,4}(?!\d)/giu, "$1")
+        .replace(/(?<!\d)\d{1,4}(?!\d)(?=\s+(?:(?:самых|лучших|популярных|продаваемых|сатылган|сатылуучу|best|selling|top)\s+)*(?:товар|products?\b|items?\b))/giu, "")
+    : text;
   // Residual calendar/location cues cannot silently become control-scope facts.
   const suspicious = terms(
     "today|yesterday|tomorrow|tonight|days?|weeks?|months?|quarters?|years?|past|rolling|since|between|before|after|last|previous|сегодня\\p{L}*|вчера\\p{L}*|завтра\\p{L}*|позавчера\\p{L}*|недел\\p{L}*|месяц\\p{L}*|квартал\\p{L}*|год\\p{L}*|дней|дня|день|жыл\\p{L}*|ай(?:да|дагы|дын|га|дан)?|күн(?:дө|дөгү|дүн|гө|дөн)?|эртең\\p{L}*|monday|tuesday|wednesday|thursday|friday|saturday|sunday|понедельник\\p{L}*|вторник\\p{L}*|сред[ауыое]|четверг\\p{L}*|пятниц\\p{L}*|суббот\\p{L}*|воскресень\\p{L}*|дүйшөмбү\\p{L}*|шейшемби\\p{L}*|шаршемби\\p{L}*|бейшемби\\p{L}*|ишемби\\p{L}*|жекшемби\\p{L}*",
@@ -341,7 +364,7 @@ export const resolveBaamQuestionScope = (input: {
     suspicious.length ||
     /\b\d{1,4}[-/]\d{1,2}(?:[-/]\d{1,4})?\b/u.test(text) ||
     /\b\d{1,2}\.\d{1,2}\.\d{4}\b/u.test(text) ||
-    (candidates.length && /\b\d{1,4}\b/u.test(text))
+    (candidates.length && /\b\d{1,4}\b/u.test(withoutRankingCount))
   )
     return { status: "clarification", clarification: "date" };
   if (candidates.length > 1) return { status: "clarification", clarification: "date" };
