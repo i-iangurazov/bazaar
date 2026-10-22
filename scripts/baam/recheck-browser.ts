@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { chromium, type BrowserContext } from "playwright";
 import { readFile, writeFile, mkdir, copyFile } from "node:fs/promises";
 import sharp from "sharp";
+import { randomBytes } from "node:crypto";
 const base =
   process.env.BAAM_TEST_HTTPS === "1" ? "https://localhost:3121" : "http://localhost:3121";
 assert.equal(
@@ -46,9 +47,11 @@ async function api(
 assert.equal((await api("baam.companion")).organizationId, fixture.organizationId);
 const results: Array<Record<string, unknown>> = [],
   errors: string[] = [];
+const only = process.argv.find((arg) => arg.startsWith("--only="))?.slice(7);
 const page = await context.newPage();
 page.on("pageerror", (e) => errors.push(e.message));
 async function run(name: string, fn: () => Promise<unknown>) {
+  if (only && only !== name) return;
   const started = performance.now();
   try {
     results.push({
@@ -63,7 +66,10 @@ async function run(name: string, fn: () => Promise<unknown>) {
   }
   results.at(-1)!.ms = Math.round(performance.now() - started);
   console.log(JSON.stringify(results.at(-1)));
-  await writeFile(`${dir}/browser.json`, JSON.stringify({ results, errors }, null, 2));
+  await writeFile(
+    `${dir}/browser${only ? `-${only}` : ""}.json`,
+    JSON.stringify({ results, errors }, null, 2),
+  );
 }
 try {
   await page.goto(base + "/baam");
@@ -192,6 +198,13 @@ try {
       assert.equal(r.status(), 200, JSON.stringify(body));
       assert(body.url.startsWith(`/uploads/imported-products/${fixture.organizationId}/`));
       assert.match(body.mimeType, /^image\/(?:jpeg|png|webp)$/);
+      const served = await context.request.get(base + body.url);
+      assert.equal(
+        served.status(),
+        200,
+        "Newly uploaded images must be accessible before a server restart",
+      );
+      assert((await sharp(await served.body()).metadata()).width! > 0);
       return { type: body.mimeType, url: body.url };
     });
   }
@@ -220,6 +233,22 @@ try {
     assert.equal(response.status(), 401);
     await anonymous.close();
     return { status: 401 };
+  });
+  await run("runtime-new-upload-decodes-without-restart", async () => {
+    const buffer = await sharp(randomBytes(30 * 30 * 3), {
+      raw: { width: 30, height: 30, channels: 3 },
+    })
+      .png()
+      .toBuffer();
+    const uploaded = await context.request.post(`${base}/api/product-image-studio/upload`, {
+      multipart: { file: { name: "new-after-server-start.png", mimeType: "image/png", buffer } },
+    });
+    assert.equal(uploaded.status(), 200);
+    const { url } = await uploaded.json();
+    const served = await context.request.get(base + url);
+    assert.equal(served.status(), 200);
+    assert.equal((await sharp(await served.body()).metadata()).width, 30);
+    return { uniqueFileCreatedAfterBoot: true, immediatelyServedAndDecoded: true };
   });
   await run("studio-generate-preview-and-save", async () => {
     const before = await api("products.getById", { productId: fixture.productId });
@@ -251,6 +280,16 @@ try {
     await page
       .getByAltText("Сгенерированное каталожное изображение товара")
       .waitFor({ timeout: 15000 });
+    await page.waitForFunction(
+      () => {
+        const image = document.querySelector(
+          'img[alt="Сгенерированное каталожное изображение товара"]',
+        ) as HTMLImageElement | null;
+        return image?.complete && image.naturalWidth > 0;
+      },
+      undefined,
+      { timeout: 15000 },
+    );
     await page.screenshot({ path: `${dir}/studio-preview.png` });
     const save = () =>
       Promise.all([
@@ -306,6 +345,16 @@ try {
     await page
       .getByAltText("Сгенерированное каталожное изображение товара")
       .waitFor({ timeout: 30000 });
+    await page.waitForFunction(
+      () => {
+        const image = document.querySelector(
+          'img[alt="Сгенерированное каталожное изображение товара"]',
+        ) as HTMLImageElement | null;
+        return image?.complete && image.naturalWidth > 0;
+      },
+      undefined,
+      { timeout: 15000 },
+    );
     assert(
       injected && refreshed,
       "Stale details must refetch even when the list already shows completion",
@@ -315,6 +364,7 @@ try {
   });
   await page.screenshot({ path: `${dir}/desktop-studio.png` });
   assert.deepEqual(errors, []);
+  assert(results.length > 0, "The requested browser case must exist");
   if (results.some((r) => !r.pass)) process.exitCode = 1;
 } finally {
   await browser.close();

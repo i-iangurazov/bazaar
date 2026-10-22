@@ -258,6 +258,8 @@ describeDb("product image studio integration", () => {
 
   it("persists balanced/detail modes separately and sends the selected quality", async () => {
     vi.stubEnv("OPENAI_API_KEY", "sk-test");
+    vi.stubEnv("PRODUCT_IMAGE_STUDIO_IMAGE_MODEL", "");
+    vi.stubEnv("OPENAI_IMAGE_MODEL", "");
     vi.stubEnv("PRODUCT_IMAGE_STUDIO_IMAGE_QUALITY", "medium");
     const { org, adminUser } = await seedBase();
     const source = await uploadProductImageBuffer({
@@ -295,6 +297,9 @@ describeDb("product image studio integration", () => {
     expect(
       fetchMock.mock.calls.map((call) => JSON.parse(String(call[1].body)).tools[0].quality),
     ).toEqual(["medium", "high"]);
+    expect(
+      fetchMock.mock.calls.map((call) => JSON.parse(String(call[1].body)).tools[0].model),
+    ).toEqual(["gpt-image-2.5-sunburst", "gpt-image-2.5-sunburst"]);
   });
 
   it.each(["network-timeout", "empty-success"])(

@@ -16,6 +16,8 @@ yarn-error.log
 !.env.example
 retail-system.zip
 uploads/
+!src/app/uploads/
+!src/app/uploads/**
 .vercel
 *.jks
 *.keystore

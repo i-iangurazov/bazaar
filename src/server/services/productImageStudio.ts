@@ -27,7 +27,7 @@ export const PRODUCT_IMAGE_STUDIO_JOB_NAME = "product-image-studio-process";
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const DEFAULT_OPENAI_AI_MODEL = "gpt-5-nano";
-const DEFAULT_OPENAI_IMAGE_MODEL = "gpt-image-2.5-flare";
+const DEFAULT_OPENAI_IMAGE_MODEL = "gpt-image-2.5-sunburst";
 const DEFAULT_OPENAI_IMAGE_QUALITY = "medium";
 const PROVIDER_NAME = "openai";
 const MANAGED_UPLOAD_PREFIX = "/uploads/imported-products/";

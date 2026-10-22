@@ -8,15 +8,15 @@
   "providers": {
     "textAndVision": "deepseek-flash",
     "speechRecognition": "existing OpenAI ASR",
-    "imageEdit": "gpt-image-2.5-flare, medium by default; explicit high option",
+    "imageEdit": "gpt-image-2.5-sunburst, medium by default; explicit high option",
     "readAloud": "browser speech synthesis",
     "businessFigures": "authorized server services and PostgreSQL"
   },
   "automated": {
     "fullRegression": {
-      "passed": 2514,
-      "files": 347,
-      "log": "tmp/ai-upgrade/recheck-full-tests-final.log",
+      "passed": 2525,
+      "files": 348,
+      "log": "tmp/ai-upgrade/recheck-full-tests-images.log",
       "database": "bazaar_hardening_baam_tests; providers disabled"
     },
     "typecheck": "passed",
@@ -25,9 +25,15 @@
     "productionBuild": {
       "status": "passed",
       "command": "node --import tsx scripts/baam/build.ts",
-      "log": "tmp/ai-upgrade/recheck-production-build.log"
+      "log": "tmp/ai-upgrade/recheck-production-build-final.log"
     },
-    "formattingNote": "Unrelated original formatting restored only after canonical Prettier output equality; JSON values equality checked."
+    "formattingNote": "Unrelated original formatting restored only after canonical Prettier output equality; JSON values equality checked.",
+    "finalStudioContracts": {
+      "passed": 20,
+      "files": 2,
+      "log": "tmp/ai-upgrade/recheck-final-studio-contracts.log",
+      "note": "After final precise-edit model selection; includes model/quality/default assertions and runtime file-route safety."
+    }
   },
   "liveAcceptance": {
     "reads": {
@@ -139,7 +145,8 @@
     "media": {
       "passed": 9,
       "total": 9,
-      "evidence": "tmp/ai-upgrade/live-media-acceptance.json"
+      "evidence": "tmp/ai-upgrade/live-media-acceptance.json",
+      "note": "The image benchmark in this earlier 9-case run used Flare; final Sunburst is separately checked through the real provider and final production UI."
     },
     "clothingCategories": {
       "passed": 1,
@@ -147,11 +154,13 @@
       "evidence": "tmp/ai-upgrade/live-catalog-acceptance.json"
     },
     "browser": {
-      "passed": 16,
-      "total": 16,
+      "passed": 17,
+      "total": 17,
       "evidence": "artifacts/baam-companion/recheck/browser.json",
       "environment": "local production build; HTTPS; synthetic organization",
-      "previewRace": "Injected a stale PROCESSING details response while the list was already SUCCEEDED; details refetched and preview rendered."
+      "previewRace": "Injected a stale PROCESSING details response while the list was already SUCCEEDED; details refetched and preview rendered.",
+      "actualImageDecodeRequired": true,
+      "log": "tmp/ai-upgrade/recheck-browser-production-final.log"
     },
     "catalog": {
       "passed": 3,
@@ -170,15 +179,21 @@
       "deniedMicrophoneExplained": true,
       "readAloudUiApiOnly": true,
       "environment": "local production build; Chrome at mobile viewport; controlled synthetic audio stream"
+    },
+    "runtimeFreshUpload": {
+      "passed": 1,
+      "total": 1,
+      "evidence": "artifacts/baam-companion/recheck/browser-runtime-new-upload-decodes-without-restart.json",
+      "environment": "local production; randomized new PNG created after boot, served and decoded before restart"
     }
   },
   "studioTiming": {
-    "realMediaCallMs": 25424,
-    "productionUiThroughSaveMs": 28882,
-    "developmentUiThroughSaveMs": 35246,
-    "model": "gpt-image-2.5-flare",
+    "directPreciseEditProbeMs": 24748,
+    "productionUiThroughSaveMs": 36319,
+    "model": "gpt-image-2.5-sunburst",
     "quality": "medium",
-    "note": "Controlled synthetic images; not a latency guarantee for arbitrary photographs or provider load."
+    "brandingPreservedInBothReviewedSunburstResults": true,
+    "note": "Controlled synthetic images; not a guarantee of identity preservation or latency for arbitrary photographs. Explicit preview and save remain required."
   },
   "limitations": [
     "No physical user microphone or speakers were tested; Chrome MediaRecorder and real ASR were exercised with controlled synthetic speech.",
@@ -193,6 +208,20 @@
     "automatedDisposableDatabase": "bazaar_hardening_baam_tests",
     "localOnly": true,
     "originalLocaleBackup": "bazaar_hardening_baam_original_c and owned temporary pg_dump",
-    "syntheticWritesOnly": true
+    "syntheticWritesOnly": true,
+    "ownQaCartPreservedAndHeld": "S-000007, remains unpaid, no deletion; user can create a fresh cart"
+  },
+  "studioModelSelection": {
+    "selected": "gpt-image-2.5-sunburst",
+    "directProbeMs": 24748,
+    "brandingPreservedInControlledProbe": true,
+    "rejectedDefault": "gpt-image-2.5-flare",
+    "reason": "One visually reviewed Flare output removed source lettering; Sunburst is selected for precise product editing."
+  },
+  "runtimeImageRegression": {
+    "passed": 11,
+    "noTraversalOrExternalSymlink": true,
+    "unchangedPublicUrls": true,
+    "evidence": "tmp/ai-upgrade/recheck-runtime-images.log"
   }
 }
