@@ -4,6 +4,7 @@ import { resolveTextAiConfig } from "./aiProvider";
 import { readBaamImages } from "./baamVision";
 import { answerBaamAnalytics, latestBaamAnalysis } from "./baamAnalytics";
 import { answerBaamRecords } from "./baamRecordAnswers";
+import { answerBaamRead } from "./baamReadAgent";
 import { baamGuideContext } from "./baamGuideContext";
 import { parseLocalBaamProductPlan } from "./baamProductPlan";
 import { diagnosticBaamPlan } from "./baamLocalIntent";
@@ -118,6 +119,12 @@ export async function sendBaamMessage(ctx: Context, input: BaamSend) {
             ? "[The application displayed authorized business data; use the supplied analytical context for follow-ups.]"
             : m.text.slice(0, 1200),
       }));
+      const previousRead = history
+        .flatMap((m) =>
+          Array.isArray(m.parts) ? (m.parts as Array<{ type?: string; plan?: unknown }>) : [],
+        )
+        .filter((p) => p.type === "readContext")
+        .at(-1)?.plan;
       const images = await readBaamImages(ctx, conversation.id, input.attachmentIds);
       analyzedAttachment = images.length > 0;
       const recentWorkflows = await prisma.baamWorkflow.findMany({
@@ -147,7 +154,7 @@ export async function sendBaamMessage(ctx: Context, input: BaamSend) {
           .map((m) => m.text.slice(0, 800)),
         dialogue,
         active: current,
-        previousAnalysis: (await latestBaamAnalysis(ctx, conversation.id))?.plan,
+        previousAnalysis: previousRead ?? (await latestBaamAnalysis(ctx, conversation.id))?.plan,
         page: input.page?.path,
         recentRecords,
         images,
@@ -216,6 +223,30 @@ export async function sendBaamMessage(ctx: Context, input: BaamSend) {
           "Учурдагы карточканы текшериңиз: жетишпеген талааларды толтуруп, позицияларды тактаңыз. Аткарылган аракет кайра иштетилбейт.",
         );
     } else if (
+      ["analytics", "report", "records", "search", "choice"].includes(intent.kind) &&
+      resolveTextAiConfig()
+    ) {
+      const answer = await answerBaamRead(
+        ctx,
+        input,
+        turn.id,
+        conversation.storeId ?? undefined,
+        controller.signal,
+        () => {
+          modelCalls++;
+        },
+        {
+          kind: intent.kind,
+          query: intent.query,
+          dateFrom: intent.dateFrom,
+          dateTo: intent.dateTo,
+          period: intent.period,
+          recordKind: intent.recordKind,
+        },
+      );
+      text = answer.text;
+      parts = answer.parts;
+    } else if (
       intent.kind === "analytics" ||
       (intent.kind === "report" && (intent.period || (intent.dateFrom && intent.dateTo)))
     ) {
@@ -243,11 +274,16 @@ export async function sendBaamMessage(ctx: Context, input: BaamSend) {
       parts = answer.parts;
     } else if ((intent.kind === "answer" || intent.kind === "help") && intent.reply?.trim()) {
       text = intent.reply.trim();
-      parts = baamGuideContext(input.text, input.locale, input.page?.path)
+      parts = (
+        analyzedAttachment ? [] : baamGuideContext(input.text, input.locale, input.page?.path)
+      )
         .filter((guide) => guide.relevant)
         .slice(0, 2)
         .map((guide) => ({ type: "link", label: guide.title, href: guide.page }));
-    } else if (intent.confidence === "low" || intent.kind === "choice") {
+    } else if (
+      intent.kind === "choice" ||
+      (intent.confidence === "low" && !["action", "correction"].includes(intent.kind))
+    ) {
       text = intent.reply?.trim() || baamChoiceText(input.locale);
       parts = intent.reply?.trim()
         ? []

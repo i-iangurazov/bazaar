@@ -1,3 +1,4 @@
+import { mockBaamReads, readRequest } from "../helpers/baamReadProvider";
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { User } from "@prisma/client";
@@ -120,6 +121,42 @@ describe.skipIf(!shouldRunDbTests)(
         });
       return { ...f, ctx, api, products, conversation, send, saleId: draft.id, shift };
     }
+    it("combines bounded parallel read calls without permitting parallel writes", async () => {
+      const f = await fixture();
+      const reads = mockBaamReads([
+        readRequest({ dataset: "customers", mode: "latest" }),
+        readRequest({ dataset: "sales", mode: "latest" }),
+      ]);
+      vi.stubGlobal("fetch", async (url: unknown, init?: RequestInit) => {
+        const response = await reads(url, init);
+        const payload = JSON.parse(String(init?.body));
+        if (payload.tools[0].name === "understand_request") {
+          const body = await response.json();
+          return Response.json({ status: "completed", output: [body.output[0], body.output[0]] });
+        }
+        if (payload.tools[0].name !== "read_business") return response;
+        const body = await response.json();
+        const plan = JSON.parse(body.output[0].arguments);
+        return Response.json({
+          status: "completed",
+          output: plan.requests.map((request: unknown) => ({
+            type: "function_call",
+            name: "read_business",
+            arguments: JSON.stringify({ ...plan, requests: [request] }),
+          })),
+        });
+      });
+      const result = await f.send("Покажи последнего клиента и последнюю завершённую продажу");
+      const answer = result.data.messages.filter((m) => m.role === "assistant").at(-1)!;
+      const parts = answer.parts as Array<{ type: string; id?: string }>;
+      const context = parts.find((part) => part.type === "readContext");
+      expect(context).toMatchObject({
+        narration: "generated",
+        plan: { requests: [{ dataset: "customers" }, { dataset: "sales" }] },
+      });
+      expect(parts.some((part) => part.type === "record" && part.id === f.saleId)).toBe(true);
+      expect(await prisma.baamWorkflow.count()).toBe(0);
+    });
     it.each([
       ["Покажи топ-7 товаров за сегодня", "ru", 7],
       ["Бул айдагы эң көп сатылган 6 товарды көрсөт", "kg", 6],
@@ -127,7 +164,9 @@ describe.skipIf(!shouldRunDbTests)(
       "answers %s from the current chat and respects its requested count",
       async (text, locale, count) => {
         const f = await fixture();
-        const network = vi.fn();
+        const network = mockBaamReads([
+          readRequest({ dataset: "products", mode: "top", limit: count }),
+        ]);
         vi.stubGlobal("fetch", network);
         const result = await f.send(text, locale);
         expect(result.status).toBe("COMPLETED");
@@ -141,10 +180,28 @@ describe.skipIf(!shouldRunDbTests)(
         expect(cards, JSON.stringify(answer)).toHaveLength(count);
         expect(cards[0].title).toBe("Rank product 8");
         expect(JSON.stringify(cards[0].displayFields)).toContain("800");
-        expect(parts.some((p) => p.type === "analysisContext")).toBe(true);
-        expect(network).not.toHaveBeenCalled();
+        expect(parts.some((p) => p.type === "readContext")).toBe(true);
+        expect(
+          network.mock.calls.some(([, init]) => String(init?.body).includes("compose_answer")),
+        ).toBe(true);
       },
     );
+    it("tries the read-only planner before a generic menu when initial classification is uncertain", async () => {
+      const f = await fixture();
+      vi.stubGlobal(
+        "fetch",
+        mockBaamReads(
+          [readRequest({ dataset: "products", mode: "catalog_details", query: f.products[2].id })],
+          { kind: "choice", confidence: "low" },
+        ),
+      );
+      const result = await f.send("Расскажи об этом товаре");
+      const answer = result.data.messages.filter((m) => m.role === "assistant").at(-1)!;
+      expect(JSON.stringify(answer.parts)).toContain("Rank product 3");
+      expect(JSON.stringify(answer.parts)).toContain('"narration":"generated"');
+      expect(result.data.workflows).toHaveLength(0);
+      expect(await prisma.product.count()).toBe(9);
+    });
     it("answers a general how-to without changing business records", async () => {
       const f = await fixture();
       vi.stubGlobal(
@@ -164,9 +221,80 @@ describe.skipIf(!shouldRunDbTests)(
       expect(await prisma.product.count()).toBe(before);
       expect(result.data.workflows).toHaveLength(0);
     });
+    it("opens review for an identified action with incomplete parameters even when extraction confidence is low, without executing", async () => {
+      const f = await fixture();
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(
+          provider(
+            intent({
+              kind: "action",
+              action: "stock_receive",
+              confidence: "low",
+              fields: [{ path: "lines.0.productId", value: "RANK-3" }],
+            }),
+          ),
+        ),
+      );
+      const before = await prisma.stockMovement.count();
+      const result = await f.send("Оприходуй RANK-3");
+      expect(result.status).toBe("COMPLETED");
+      expect(result.data.workflows[0].kind).toBe("stock_receive");
+      expect(result.data.workflows[0].status).toBe("EDITING");
+      expect(await prisma.stockMovement.count()).toBe(before);
+      const confirmed = await f.send("Подтверждаю выполнение");
+      expect(confirmed.data.workflows[0].status).toBe("EDITING");
+      expect(await prisma.stockMovement.count()).toBe(before);
+    });
+    it("resolves a spoken SKU through the batch form path and retains it after a quantity correction", async () => {
+      const f = await fixture();
+      vi.stubGlobal(
+        "fetch",
+        vi
+          .fn()
+          .mockResolvedValueOnce(
+            provider(
+              intent({
+                kind: "action",
+                action: "stock_receive",
+                fields: [
+                  { path: "storeId", value: f.store.id },
+                  { path: "lines.0.productId", value: "ранк три" },
+                  { path: "lines.0.quantity", value: "2" },
+                  { path: "lines.0.unitCost", value: "0" },
+                ],
+              }),
+            ),
+          )
+          .mockResolvedValueOnce(
+            provider(
+              intent({
+                kind: "correction",
+                action: "stock_receive",
+                fields: [{ path: "lines.0.quantity", value: "3" }],
+              }),
+            ),
+          ),
+      );
+      const first = await f.send("Оприходуй две штуки ранк три с нулевой себестоимостью");
+      const current = (r: typeof first) =>
+        r.data.workflows.find((w) => w.id === r.data.conversation.activeWorkflowId)!;
+      expect(
+        (current(first).parameters as { lines: Array<{ productId: string }> }).lines[0].productId,
+      ).toBe(f.products[2].id);
+      const corrected = await f.send("Нет, количество три");
+      expect(
+        (current(corrected).parameters as { lines: Array<{ productId: string; quantity: number }> })
+          .lines[0],
+      ).toMatchObject({ productId: f.products[2].id, quantity: 3 });
+      expect(current(await f.send("Подтверждаю выполнение")).status).toBe("COMPLETED");
+    });
     it("keeps a simple sales summary fast and renders server-derived metric cards", async () => {
       const f = await fixture();
-      const network = vi.fn();
+      const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bishkek" }).format(
+        new Date(),
+      );
+      const network = mockBaamReads([readRequest({ dateFrom: today, dateTo: today })]);
       vi.stubGlobal("fetch", network);
       const result = await f.send("Продажи за сегодня");
       expect(result.status).toBe("COMPLETED");
@@ -177,20 +305,27 @@ describe.skipIf(!shouldRunDbTests)(
         }>
       ).find((item) => item.type === "metrics")!;
       expect(part.cards?.map((card) => card.value)).toContain("3 600 KGS");
-      expect(network).not.toHaveBeenCalled();
+      expect(network).toHaveBeenCalledTimes(3);
     });
     it("preserves basic catalog search without granting a locked analytics feature", async () => {
       const f = await fixture();
       await prisma.organization.update({ where: { id: f.org.id }, data: { plan: "STARTER" } });
-      vi.stubGlobal("fetch", vi.fn());
+      vi.stubGlobal(
+        "fetch",
+        mockBaamReads([readRequest({ dataset: "products", mode: "list", query: "RANK-3" })]),
+      );
       const found = await f.send("Найди товар RANK-3");
       expect(found.status).toBe("COMPLETED");
       expect(JSON.stringify(found.data.messages.at(-1)?.parts)).toContain(f.products[2].id);
+      vi.stubGlobal(
+        "fetch",
+        mockBaamReads([readRequest({ dataset: "products", mode: "top", limit: 7 })]),
+      );
       const ranking = await f.send("Покажи топ-7 товаров за сегодня");
       expect(ranking.status).toBe("FAILED");
       expect(ranking.data.messages.at(-1)?.text).toBe("featureLockedAnalytics");
     });
-    it("searches only customers visible to the manager and never sends their records to the provider", async () => {
+    it("sends only authorized customer facts to the narrator and omits unnecessary contact details", async () => {
       const f = await fixture();
       const hidden = await prisma.store.create({
         data: { organizationId: f.org.id, name: "Hidden", code: "HIDDEN" },
@@ -213,9 +348,10 @@ describe.skipIf(!shouldRunDbTests)(
       });
       const ctx = context(f.managerUser),
         c = await createBaamConversation(ctx, { locale: "en" });
-      const network = vi
-        .fn()
-        .mockResolvedValue(provider(intent({ kind: "records", recordKind: "customers" })));
+      const network = mockBaamReads([readRequest({ dataset: "customers", mode: "list" })], {
+        kind: "records",
+        recordKind: "customers",
+      });
       vi.stubGlobal("fetch", network);
       const result = await sendBaamMessage(ctx, {
         conversationId: c.id,
@@ -228,7 +364,43 @@ describe.skipIf(!shouldRunDbTests)(
       expect(result.status).toBe("COMPLETED");
       expect(JSON.stringify(result.data.messages)).toContain("Visible customer");
       expect(JSON.stringify(result.data.messages)).not.toContain("Hidden private customer");
-      expect(String(network.mock.calls[0][1].body)).not.toContain("+996555000001");
+      expect(JSON.stringify(network.mock.calls)).not.toContain("Hidden private customer");
+      expect(JSON.stringify(network.mock.calls)).not.toContain("+996555000001");
+      expect(JSON.stringify(network.mock.calls)).toContain("Visible customer");
+    });
+    it("does not publish model-read results when a store grant is revoked during narration", async () => {
+      const f = await fixture(),
+        manager = context(f.managerUser);
+      await prisma.customer.create({
+        data: { organizationId: f.org.id, storeId: f.store.id, name: "Scoped private client" },
+      });
+      const conversation = await createBaamConversation(manager, {
+        locale: "en",
+        storeId: f.store.id,
+      });
+      const providerRead = mockBaamReads([readRequest({ dataset: "customers", mode: "list" })]);
+      vi.stubGlobal("fetch", async (url: unknown, init?: RequestInit) => {
+        if (JSON.parse(String(init?.body)).tools[0].name === "review_answer")
+          await prisma.userStoreAccess.deleteMany({
+            where: { userId: f.managerUser.id, storeId: f.store.id },
+          });
+        return providerRead(url, init);
+      });
+      await expect(
+        sendBaamMessage(manager, {
+          conversationId: conversation.id,
+          revision: 0,
+          text: "Show customers",
+          locale: "en",
+          clientRequestId: randomUUID(),
+          attachmentIds: [],
+        }),
+      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+      expect(
+        await prisma.baamMessage.count({
+          where: { conversationId: conversation.id, role: "assistant" },
+        }),
+      ).toBe(0);
     });
     it("refuses unsupported parallel plans before any mutation", async () => {
       const f = await fixture();
@@ -289,7 +461,8 @@ describe.skipIf(!shouldRunDbTests)(
             limit: 1,
           },
         });
-        expect(product.cards[0].displayFields[0].value).toBe(`${expected ? "800" : "0"} KGS`);
+        if (expected) expect(product.cards[0].displayFields[0].value).toBe("800 KGS");
+        else expect(product.cards).toHaveLength(0);
       }
     });
     it("opens the exact authorized customer and order instead of an unrelated directory", async () => {
@@ -299,11 +472,11 @@ describe.skipIf(!shouldRunDbTests)(
       });
       vi.stubGlobal(
         "fetch",
-        vi
-          .fn()
-          .mockResolvedValue(
-            provider(intent({ kind: "records", recordKind: "customers", query: "Aibek" })),
-          ),
+        mockBaamReads([readRequest({ dataset: "customers", query: "Aibek", mode: "list" })], {
+          kind: "records",
+          recordKind: "customers",
+          query: "Aibek",
+        }),
       );
       const result = await f.send("Найди клиента Айбека");
       const record = (
@@ -329,6 +502,10 @@ describe.skipIf(!shouldRunDbTests)(
         idempotencyKey: randomUUID(),
         payments: [{ method: "CASH", amountKgs: 200 }],
       });
+      vi.stubGlobal(
+        "fetch",
+        mockBaamReads([readRequest({ dataset: "products", mode: "top", metric: "return_units" })]),
+      );
       const result = await f.send("Какие товары чаще всего возвращают за месяц?");
       expect(result.status).toBe("COMPLETED");
       const cards = (

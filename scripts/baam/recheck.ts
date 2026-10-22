@@ -155,7 +155,13 @@ const noWorkflow = (a: Answer) => assert.equal(a.result.data.workflows.length, 0
 const metrics = (a: Answer) => {
   noWorkflow(a);
   assert(
-    a.parts.some((p) => p.type === "salesMetrics" || p.type === "metrics"),
+    a.parts.some((p) => p.type === "salesMetrics" || p.type === "metrics") ||
+      (a.parts.some(
+        (p) =>
+          p.type === "readContext" &&
+          p.plan.requests.some((r: { dataset: string }) => r.dataset === "sales_metrics"),
+      ) &&
+        a.parts.some((p) => p.type === "evidence")),
     JSON.stringify(a.parts).slice(0, 400),
   );
 };
@@ -448,6 +454,17 @@ try {
       );
       return { updatedSameProduct: true, price: 175 };
     });
+    await run("created-product-read-follow-up", async () => {
+      assert(createdProductId && productConversation);
+      const read = await ask(
+        "Покажи артикул, единицу и текущую цену этого товара",
+        productConversation,
+      );
+      assert.equal(read.cards.length, 1, read.answer.text);
+      assert.equal(read.cards[0].id, createdProductId);
+      assert.match(JSON.stringify(read.cards), /175/);
+      return { sameCreatedProduct: true, price: 175 };
+    });
     await run("create-supplier", async () => {
       const a = await ask("Добавь поставщика Голосовой поставщик");
       let wf = active(a);
@@ -568,7 +585,10 @@ try {
       metrics(a);
       const b = await ask("А за вчера?", a.id);
       metrics(b);
-      const context = b.parts.find((p) => p.type === "analysisContext");
+      const context = b.parts
+        .find((p) => p.type === "readContext")
+        ?.plan.requests.find((r: { dataset: string }) => r.dataset === "sales_metrics");
+      assert.equal(context?.mode, "comparison");
       assert.equal(context?.dateFrom, "2026-10-21");
       assert.equal(context?.dateTo, "2026-10-21");
       return { comparisonRetained: true, dateFrom: context?.dateFrom, dateTo: context?.dateTo };
@@ -579,3 +599,7 @@ try {
 } finally {
   await prisma.$disconnect();
 }
+
+// Every acceptance report and domain transaction has been awaited; do not leave
+// optional Redis subscriptions keeping a completed QA process alive.
+process.exit(Number(process.exitCode ?? 0));

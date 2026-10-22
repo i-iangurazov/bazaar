@@ -45,3 +45,18 @@ it("reads the chosen language, stops and cleans up speech without auto-playing",
   unmount();
   expect(cancel.mock.calls.length).toBeGreaterThanOrEqual(3);
 });
+it("renders a narrow scrollable table with authorized links and literal escaped names", () => {
+  const { container } = render(
+    <BaamAnswerText
+      text={
+        "| Товар | Сумма |\n|---|---|\n| [Чай](/products/tea) | **300 KGS** |\n| \\[Имя\\] | 0 |"
+      }
+      links={["/products/tea"]}
+    />,
+  );
+  expect(screen.getByRole("table")).toBeTruthy();
+  expect(screen.getAllByRole("row")).toHaveLength(3);
+  expect(screen.getByRole("link").getAttribute("href")).toBe("/products/tea");
+  expect(container.textContent).toContain("[Имя]");
+  expect(container.querySelector("table")?.parentElement?.className).toContain("overflow-x-auto");
+});

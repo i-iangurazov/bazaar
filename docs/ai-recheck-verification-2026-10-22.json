@@ -1,166 +1,1992 @@
 {
   "date": "2026-10-22",
   "branch": "codex/playground",
-  "baseCommit": "45488f23cd1956271dc59f2bcc281a429fa60464",
+  "baseCommit": "392ca69f622d6446ce98ef15a5a58a2ce36aba0d",
   "mainMerged": false,
   "productionDeployed": false,
   "credentialsCommitted": false,
-  "providers": {
-    "textAndVision": "deepseek-flash",
-    "speechRecognition": "existing OpenAI ASR",
-    "imageEdit": "gpt-image-2.5-sunburst, medium by default; explicit high option",
-    "readAloud": "browser speech synthesis",
-    "businessFigures": "authorized server services and PostgreSQL"
+  "sourceHash": "05224a344d759f7454fcf33e0699fdfd4f2a147b532782118ab448852f42e13f",
+  "sourceFiles": [
+    "src/server/services/baamReadAgent.ts",
+    "src/server/services/baamReadTools.ts",
+    "src/server/services/baamWorkflowRecords.ts",
+    "src/server/services/baamReadFollowup.ts",
+    "src/server/services/baamQuestionScope.ts",
+    "src/server/services/baamSpokenSku.ts",
+    "src/server/services/baamReadData.ts",
+    "src/server/services/baamReadPlan.ts",
+    "src/server/services/baamCompanion.ts",
+    "src/server/services/baamWorkflowIntent.ts",
+    "src/server/services/baamProducts.ts",
+    "src/server/services/aiProvider.ts",
+    "src/components/use-baam-companion.ts",
+    "src/components/baam-message-list.tsx",
+    "src/components/baam-answer-text.tsx",
+    "src/lib/baam/companion.ts",
+    "src/lib/baam/recordStatus.ts",
+    "src/lib/baam/copy.ts"
+  ],
+  "implementation": {
+    "readOperations": 43,
+    "datasets": 12,
+    "boundedReadsPerTurn": 6,
+    "maximumRowsPerRead": 50,
+    "narration": "DeepSeek plans authorized reads, composes and fact-checks answers; server substitutes factual values and allowlisted links",
+    "voice": "automatic submit after ASR; optional one-click correction; mutations still need explicit confirmation",
+    "independentReadClassifications": "safe bounded parallel read classifications accepted; mixed/parallel writes rejected",
+    "domainDefinitions": "customer orders exclude POS receipts; supplier orders and stock receipts are separate domains"
   },
   "automated": {
-    "fullRegression": {
-      "passed": 2525,
-      "files": 348,
-      "log": "tmp/ai-upgrade/recheck-full-tests-images.log",
-      "database": "bazaar_hardening_baam_tests; providers disabled"
-    },
+    "tests": 2586,
+    "files": 352,
+    "status": "passed",
+    "log": "tmp/ai-upgrade/baam-current-frozen-suite.log",
     "typecheck": "passed",
     "lint": "passed without warnings",
     "translations": "passed RU/EN/KG",
-    "productionBuild": {
-      "status": "passed",
-      "command": "node --import tsx scripts/baam/build.ts",
-      "log": "tmp/ai-upgrade/recheck-production-build-final.log"
-    },
-    "formattingNote": "Unrelated original formatting restored only after canonical Prettier output equality; JSON values equality checked.",
-    "finalStudioContracts": {
-      "passed": 20,
-      "files": 2,
-      "log": "tmp/ai-upgrade/recheck-final-studio-contracts.log",
-      "note": "After final precise-edit model selection; includes model/quality/default assertions and runtime file-route safety."
-    }
+    "productionBuild": "passed",
+    "buildLog": "tmp/ai-upgrade/baam-release-proof-build.log"
   },
   "liveAcceptance": {
+    "expandedReads": {
+      "passed": 66,
+      "total": 66,
+      "timings": {
+        "medianMs": 7718,
+        "p95Ms": 14735,
+        "minMs": 5416,
+        "maxMs": 25683
+      },
+      "reports": [
+        "artifacts/baam-companion/read-quality/release-proof-0.json",
+        "artifacts/baam-companion/read-quality/release-proof-1.json",
+        "artifacts/baam-companion/read-quality/release-proof-2.json"
+      ],
+      "firstPass": {
+        "passed": 65,
+        "total": 66,
+        "transientFailures": [
+          {
+            "id": "latest-return",
+            "error": "AssertionError [ERR_ASSERTION]: baamProviderUnavailable\n+ actual - expected\n\n+ 'FAILED'\n- 'COMPLETED'\n",
+            "providerStatus": 502
+          }
+        ]
+      },
+      "rechecks": [
+        {
+          "id": "latest-return",
+          "passed": true,
+          "ms": 7720,
+          "evidence": "artifacts/baam-companion/read-quality/release-proof-retry-502.json"
+        }
+      ],
+      "checks": [
+        "completed turn",
+        "generated narration, no facts-only fallback",
+        "actual authorized dataset",
+        "operation/metric/count/date/store assertions",
+        "requested format",
+        "real rows and links"
+      ],
+      "cases": [
+        {
+          "id": "repro-top7",
+          "question": "Покажи топ-7 товаров за месяц",
+          "passed": true,
+          "ms": 10642,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "top",
+                "limit": 7,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": "revenue",
+                "dataset": "products",
+                "dateFrom": "2026-10-01",
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "repro-unsold",
+          "question": "Какие товары не продавались в этом периоде?",
+          "passed": true,
+          "ms": 8008,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "zero_sales",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": null,
+                "dataset": "products",
+                "dateFrom": "2026-10-01",
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "repro-top12",
+          "question": "Покажи топ-12 товаров за месяц",
+          "passed": true,
+          "ms": 7525,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "top",
+                "limit": 12,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": "revenue",
+                "dataset": "products",
+                "dateFrom": "2026-10-01",
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "repro-overview",
+          "question": "А что у нас вообще происходит в магазине, не подскажешь, пожалуйста?",
+          "passed": true,
+          "ms": 19388,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "summary",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": null,
+                "dataset": "sales_metrics",
+                "dateFrom": "2026-10-01",
+                "movementType": null,
+                "stockThreshold": null
+              },
+              {
+                "mode": "top",
+                "limit": 5,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": "revenue",
+                "dataset": "products",
+                "dateFrom": "2026-10-01",
+                "movementType": null,
+                "stockThreshold": null
+              },
+              {
+                "mode": "low_stock",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": null,
+                "metric": null,
+                "dataset": "inventory",
+                "dateFrom": null,
+                "movementType": null,
+                "stockThreshold": 5
+              },
+              {
+                "mode": "new",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": null,
+                "dataset": "customers",
+                "dateFrom": "2026-10-01",
+                "movementType": null,
+                "stockThreshold": null
+              },
+              {
+                "mode": "drafts",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": null,
+                "metric": null,
+                "dataset": "sales",
+                "dateFrom": null,
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "repro-latest-sale",
+          "question": "Привет, а не подскажешь ли ты мне последнюю продажу в нашей кассе?",
+          "passed": true,
+          "ms": 7332,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "latest",
+                "limit": 1,
+                "query": null,
+                "store": null,
+                "dateTo": null,
+                "metric": null,
+                "dataset": "sales",
+                "dateFrom": null,
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "repro-latest-receipt",
+          "question": "Так, а какое у нас было последнее оприходование?",
+          "passed": true,
+          "ms": 8128,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "latest",
+                "limit": 1,
+                "query": null,
+                "store": null,
+                "dateTo": null,
+                "metric": null,
+                "dataset": "stock_movements",
+                "dateFrom": null,
+                "movementType": "RECEIVE",
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "repro-new-customers",
+          "question": "А есть ли у нас какие-то новые клиенты, может быть?",
+          "passed": true,
+          "ms": 9119,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "new",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": null,
+                "dataset": "customers",
+                "dateFrom": "2026-10-01",
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "today",
+          "question": "Что у нас с выручкой сегодня?",
+          "passed": true,
+          "ms": 7927,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "summary",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": null,
+                "dataset": "sales_metrics",
+                "dateFrom": "2026-10-22",
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "daily",
+          "question": "Разложи чистую выручку и число чеков по дням за последние семь дней, в таблице",
+          "passed": true,
+          "ms": 7558,
+          "plan": {
+            "format": "table",
+            "requests": [
+              {
+                "mode": "daily",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": null,
+                "dataset": "sales_metrics",
+                "dateFrom": "2026-10-16",
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "discounts",
+          "question": "Какие суммы скидок и возвратов у нас за месяц?",
+          "passed": true,
+          "ms": 7362,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "summary",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": null,
+                "dataset": "sales_metrics",
+                "dateFrom": "2026-10-01",
+                "movementType": null,
+                "stockThreshold": null
+              },
+              {
+                "mode": "list",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": null,
+                "dataset": "returns",
+                "dateFrom": "2026-10-01",
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "bottom",
+          "question": "Что продаётся хуже всего в этом месяце? Покажи десять товаров",
+          "passed": true,
+          "ms": 9531,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "bottom",
+                "limit": 10,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": "revenue",
+                "dataset": "products",
+                "dateFrom": "2026-10-01",
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "stock-product",
+          "question": "Какой сейчас остаток у AI-QA-3, по каждому магазину отдельно?",
+          "passed": true,
+          "ms": 7533,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "list",
+                "limit": 20,
+                "query": "AI-QA-3",
+                "store": "*",
+                "dateTo": null,
+                "metric": null,
+                "dataset": "inventory",
+                "dateFrom": null,
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "threshold",
+          "question": "Каких товаров осталось не больше трёх штук? Покажи остатки",
+          "passed": true,
+          "ms": 14735,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "low_stock",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": null,
+                "metric": null,
+                "dataset": "inventory",
+                "dateFrom": null,
+                "movementType": null,
+                "stockThreshold": 3
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "transfers",
+          "question": "Какие перемещения между магазинами были за неделю?",
+          "passed": true,
+          "ms": 6597,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "list",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": null,
+                "dataset": "stock_movements",
+                "dateFrom": "2026-10-16",
+                "movementType": "TRANSFER_IN",
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "suppliers",
+          "question": "Какие у нас есть поставщики?",
+          "passed": true,
+          "ms": 9848,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "list",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": null,
+                "metric": null,
+                "dataset": "suppliers",
+                "dateFrom": null,
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "draft-sales",
+          "question": "Покажи неоплаченные отложенные чеки в кассе",
+          "passed": true,
+          "ms": 7946,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "drafts",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": null,
+                "metric": null,
+                "dataset": "sales",
+                "dateFrom": null,
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "mixed-request",
+          "question": "Кратко: выручка за сегодня, последний чек и есть ли минусовые остатки",
+          "passed": true,
+          "ms": 8581,
+          "plan": {
+            "format": "short",
+            "requests": [
+              {
+                "mode": "summary",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": null,
+                "dataset": "sales_metrics",
+                "dateFrom": "2026-10-22",
+                "movementType": null,
+                "stockThreshold": null
+              },
+              {
+                "mode": "latest",
+                "limit": 1,
+                "query": null,
+                "store": null,
+                "dateTo": null,
+                "metric": null,
+                "dataset": "sales",
+                "dateFrom": null,
+                "movementType": null,
+                "stockThreshold": null
+              },
+              {
+                "mode": "negative_stock",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": null,
+                "metric": null,
+                "dataset": "inventory",
+                "dateFrom": null,
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "kyrgyz-overview",
+          "question": "Ушул айда дүкөндө эмне болуп жатат? Сатуу жана калдыктар жөнүндө айтып бер",
+          "passed": true,
+          "ms": 25683,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "summary",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": "revenue",
+                "dataset": "sales_metrics",
+                "dateFrom": "2026-10-01",
+                "movementType": null,
+                "stockThreshold": null
+              },
+              {
+                "mode": "top",
+                "limit": 5,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": "revenue",
+                "dataset": "products",
+                "dateFrom": "2026-10-01",
+                "movementType": null,
+                "stockThreshold": null
+              },
+              {
+                "mode": "low_stock",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": null,
+                "metric": null,
+                "dataset": "inventory",
+                "dateFrom": null,
+                "movementType": null,
+                "stockThreshold": 5
+              },
+              {
+                "mode": "new",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": null,
+                "dataset": "customers",
+                "dateFrom": "2026-10-01",
+                "movementType": null,
+                "stockThreshold": null
+              },
+              {
+                "mode": "drafts",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": null,
+                "metric": null,
+                "dataset": "sales",
+                "dateFrom": null,
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "quoted-product",
+          "question": "Найди товар с артикулом AI-QA-3 и покажи ссылку",
+          "passed": true,
+          "ms": 5761,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "list",
+                "limit": 20,
+                "query": "AI-QA-3",
+                "store": null,
+                "dateTo": null,
+                "metric": null,
+                "dataset": "products",
+                "dateFrom": null,
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "store-switch",
+          "question": "Продажи за месяц в магазине Test Store",
+          "passed": true,
+          "ms": 7514,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "summary",
+                "limit": 20,
+                "query": null,
+                "store": "Test Store",
+                "dateTo": "2026-10-22",
+                "metric": null,
+                "dataset": "sales_metrics",
+                "dateFrom": "2026-10-01",
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "store-followup",
+          "question": "А в Оше за тот же период?",
+          "passed": true,
+          "ms": 7332,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "summary",
+                "limit": 20,
+                "query": null,
+                "store": "Ош",
+                "dateTo": "2026-10-22",
+                "metric": null,
+                "dataset": "sales_metrics",
+                "dateFrom": "2026-10-01",
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "store-reset",
+          "question": "Покажи новых клиентов по всем доступным магазинам за этот месяц",
+          "passed": true,
+          "ms": 7909,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "new",
+                "limit": 20,
+                "query": null,
+                "store": "*",
+                "dateTo": "2026-10-22",
+                "metric": null,
+                "dataset": "customers",
+                "dateFrom": "2026-10-01",
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "date-empty",
+          "question": "Какие продажи были за июль 2026 года?",
+          "passed": true,
+          "ms": 7166,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "summary",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-07-31",
+                "metric": null,
+                "dataset": "sales_metrics",
+                "dateFrom": "2026-07-01",
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "greeting-read",
+          "question": "Привет, дорогой, будь добр, расскажи пожалуйста сколько сегодня наторговали",
+          "passed": true,
+          "ms": 6832,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "summary",
+                "limit": 1,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": null,
+                "dataset": "sales_metrics",
+                "dateFrom": "2026-10-22",
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "stock-spoken-sku",
+          "question": "Сколько сейчас на остатке у товара тест один?",
+          "passed": true,
+          "ms": 7572,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "list",
+                "limit": 20,
+                "query": "тест один",
+                "store": null,
+                "dateTo": null,
+                "metric": null,
+                "dataset": "inventory",
+                "dateFrom": null,
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "customer-orders-drafts",
+          "question": "Покажи черновики клиентских заказов",
+          "passed": true,
+          "ms": 8261,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "drafts",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": null,
+                "metric": null,
+                "dataset": "orders",
+                "dateFrom": null,
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "table-start",
+          "question": "Дай пять самых продаваемых товаров текущего месяца",
+          "passed": true,
+          "ms": 6774,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "top",
+                "limit": 5,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": "revenue",
+                "dataset": "products",
+                "dateFrom": "2026-10-01",
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "table-followup",
+          "question": "Теперь покажи это таблицей со ссылками на товары",
+          "passed": true,
+          "ms": 7885,
+          "plan": {
+            "format": "table",
+            "requests": [
+              {
+                "mode": "top",
+                "limit": 5,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": "revenue",
+                "dataset": "products",
+                "dateFrom": "2026-10-01",
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "short-followup",
+          "question": "А теперь объясни этот результат коротко, двумя предложениями",
+          "passed": true,
+          "ms": 7035,
+          "plan": {
+            "format": "short",
+            "requests": [
+              {
+                "mode": "top",
+                "limit": 5,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": "revenue",
+                "dataset": "products",
+                "dateFrom": "2026-10-01",
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "yesterday",
+          "question": "Были ли вчера продажи и возвраты?",
+          "passed": true,
+          "ms": 6401,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "summary",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-21",
+                "metric": "revenue",
+                "dataset": "sales_metrics",
+                "dateFrom": "2026-10-21",
+                "movementType": null,
+                "stockThreshold": null
+              },
+              {
+                "mode": "list",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-21",
+                "metric": null,
+                "dataset": "returns",
+                "dateFrom": "2026-10-21",
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "compare",
+          "question": "Сравни продажи этой недели с предыдущим таким же периодом",
+          "passed": true,
+          "ms": 7267,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "comparison",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": "revenue",
+                "dataset": "sales_metrics",
+                "dateFrom": "2026-10-19",
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "top50",
+          "question": "Хочу топ-50 товаров по продажам за месяц",
+          "passed": true,
+          "ms": 5578,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "top",
+                "limit": 50,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": "revenue",
+                "dataset": "products",
+                "dateFrom": "2026-10-01",
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "zero-table",
+          "question": "Все товары без продаж в этом месяце, с артикулами, таблицей",
+          "passed": true,
+          "ms": 7540,
+          "plan": {
+            "format": "table",
+            "requests": [
+              {
+                "mode": "zero_sales",
+                "limit": 50,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": null,
+                "dataset": "products",
+                "dateFrom": "2026-10-01",
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "negative-stock",
+          "question": "Есть ли у нас товары с отрицательными остатками?",
+          "passed": true,
+          "ms": 11222,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "negative_stock",
+                "limit": 20,
+                "query": null,
+                "store": "*",
+                "dateTo": null,
+                "metric": null,
+                "dataset": "inventory",
+                "dateFrom": null,
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "stock-receipts",
+          "question": "Какие последние десять оприходований были у нас?",
+          "passed": true,
+          "ms": 9743,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "list",
+                "limit": 10,
+                "query": null,
+                "store": null,
+                "dateTo": null,
+                "metric": null,
+                "dataset": "stock_movements",
+                "dateFrom": null,
+                "movementType": "RECEIVE",
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "new-clients-week",
+          "question": "Кто из клиентов появился за последние семь дней?",
+          "passed": true,
+          "ms": 7827,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "new",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": null,
+                "dataset": "customers",
+                "dateFrom": "2026-10-16",
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "latest-purchase",
+          "question": "Последний заказ поставщику — какой у него статус?",
+          "passed": true,
+          "ms": 7407,
+          "plan": {
+            "format": "short",
+            "requests": [
+              {
+                "mode": "latest",
+                "limit": 1,
+                "query": null,
+                "store": null,
+                "dateTo": null,
+                "metric": null,
+                "dataset": "purchases",
+                "dateFrom": null,
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "latest-return",
+          "question": "Когда у нас был последний возврат? Если нет, так и скажи",
+          "passed": true,
+          "ms": 7720,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "latest",
+                "limit": 1,
+                "query": null,
+                "store": null,
+                "dateTo": null,
+                "metric": null,
+                "dataset": "returns",
+                "dateFrom": null,
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "english-overview",
+          "question": "What is going on in my business this month? What needs attention?",
+          "passed": true,
+          "ms": 18289,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "summary",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": null,
+                "dataset": "sales_metrics",
+                "dateFrom": "2026-10-01",
+                "movementType": null,
+                "stockThreshold": null
+              },
+              {
+                "mode": "top",
+                "limit": 5,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": "revenue",
+                "dataset": "products",
+                "dateFrom": "2026-10-01",
+                "movementType": null,
+                "stockThreshold": null
+              },
+              {
+                "mode": "low_stock",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": null,
+                "metric": null,
+                "dataset": "inventory",
+                "dateFrom": null,
+                "movementType": null,
+                "stockThreshold": 5
+              },
+              {
+                "mode": "new",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": null,
+                "dataset": "customers",
+                "dateFrom": "2026-10-01",
+                "movementType": null,
+                "stockThreshold": null
+              },
+              {
+                "mode": "drafts",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": null,
+                "metric": null,
+                "dataset": "sales",
+                "dateFrom": null,
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "kyrgyz-new",
+          "question": "Бул аптада кошулган жаңы кардарларды көрсөт",
+          "passed": true,
+          "ms": 10217,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "new",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": null,
+                "dataset": "customers",
+                "dateFrom": "2026-10-19",
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "unknown-product",
+          "question": "Есть ли в каталоге товар НЕСУЩЕСТВУЮЩИЙ-XX-999?",
+          "passed": true,
+          "ms": 5910,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "list",
+                "limit": 20,
+                "query": "НЕСУЩЕСТВУЮЩИЙ-XX-999",
+                "store": null,
+                "dateTo": null,
+                "metric": null,
+                "dataset": "products",
+                "dateFrom": null,
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "date-range",
+          "question": "Покажи продажи с 20 по 22 октября 2026 года",
+          "passed": true,
+          "ms": 7718,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "summary",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": null,
+                "dataset": "sales_metrics",
+                "dateFrom": "2026-10-20",
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "returns-products",
+          "question": "Какие товары чаще всего возвращали за месяц?",
+          "passed": true,
+          "ms": 5416,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "top",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": "return_units",
+                "dataset": "products",
+                "dateFrom": "2026-10-01",
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "comparison-context-start",
+          "question": "Покажи продажи за эту неделю",
+          "passed": true,
+          "ms": 7324,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "summary",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": null,
+                "dataset": "sales_metrics",
+                "dateFrom": "2026-10-19",
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "comparison-context-next",
+          "question": "А что изменилось относительно предыдущего периода?",
+          "passed": true,
+          "ms": 8740,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "comparison",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": null,
+                "dataset": "sales_metrics",
+                "dateFrom": "2026-10-19",
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "context-topic-reset",
+          "question": "Теперь другая тема: покажи последний приход товара",
+          "passed": true,
+          "ms": 7317,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "latest",
+                "limit": 1,
+                "query": null,
+                "store": null,
+                "dateTo": null,
+                "metric": null,
+                "dataset": "stock_movements",
+                "dateFrom": null,
+                "movementType": "RECEIVE",
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "customer-orders-list",
+          "question": "Какие клиентские заказы у нас есть, кроме кассовых чеков?",
+          "passed": true,
+          "ms": 6954,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "list",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": null,
+                "metric": null,
+                "dataset": "orders",
+                "dateFrom": null,
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "customer-email-details",
+          "question": "Покажи электронную почту клиента Айбек Голосовой",
+          "passed": true,
+          "ms": 8096,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "details",
+                "limit": 5,
+                "query": "Айбек Голосовой",
+                "store": null,
+                "dateTo": null,
+                "metric": null,
+                "dataset": "customers",
+                "dateFrom": null,
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "list-explicit",
+          "question": "Списком покажи три последние завершённые продажи, если их меньше — покажи сколько есть",
+          "passed": true,
+          "ms": 8656,
+          "plan": {
+            "format": "list",
+            "requests": [
+              {
+                "mode": "list",
+                "limit": 3,
+                "query": null,
+                "store": null,
+                "dateTo": null,
+                "metric": null,
+                "dataset": "sales",
+                "dateFrom": null,
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "payments",
+          "question": "Сколько получили наличными и сколько по карте за этот месяц?",
+          "passed": true,
+          "ms": 7845,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "summary",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": null,
+                "dataset": "sales_metrics",
+                "dateFrom": "2026-10-01",
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "diagnose",
+          "question": "Почему у нас изменились продажи, что мне стоит проверить первым делом?",
+          "passed": true,
+          "ms": 13110,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "summary",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": null,
+                "dataset": "sales_metrics",
+                "dateFrom": "2026-10-01",
+                "movementType": null,
+                "stockThreshold": null
+              },
+              {
+                "mode": "comparison",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": null,
+                "dataset": "sales_metrics",
+                "dateFrom": "2026-09-01",
+                "movementType": null,
+                "stockThreshold": null
+              },
+              {
+                "mode": "top",
+                "limit": 5,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": "revenue",
+                "dataset": "products",
+                "dateFrom": "2026-10-01",
+                "movementType": null,
+                "stockThreshold": null
+              },
+              {
+                "mode": "bottom",
+                "limit": 5,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": "revenue",
+                "dataset": "products",
+                "dateFrom": "2026-10-01",
+                "movementType": null,
+                "stockThreshold": null
+              },
+              {
+                "mode": "low_stock",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": null,
+                "metric": null,
+                "dataset": "inventory",
+                "dateFrom": null,
+                "movementType": null,
+                "stockThreshold": 5
+              },
+              {
+                "mode": "drafts",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": null,
+                "metric": null,
+                "dataset": "sales",
+                "dateFrom": null,
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "units-top6",
+          "question": "Шесть товаров, которые купили больше всего по количеству, за этот месяц",
+          "passed": true,
+          "ms": 7373,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "top",
+                "limit": 6,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": "units",
+                "dataset": "products",
+                "dateFrom": "2026-10-01",
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "product-performance",
+          "question": "Сколько штук AI-QA-3 продали за октябрь 2026 и на какую сумму?",
+          "passed": true,
+          "ms": 7926,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "details",
+                "limit": 20,
+                "query": "AI-QA-3",
+                "store": null,
+                "dateTo": "2026-10-31",
+                "metric": "units",
+                "dataset": "products",
+                "dateFrom": "2026-10-01",
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "empty-stock",
+          "question": "Покажи товары, которых сейчас ровно ноль на руках",
+          "passed": true,
+          "ms": 8134,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "empty_stock",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": null,
+                "metric": null,
+                "dataset": "inventory",
+                "dateFrom": null,
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "writeoffs",
+          "question": "Были ли списания в этом месяце?",
+          "passed": true,
+          "ms": 6635,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "list",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": null,
+                "dataset": "stock_movements",
+                "dateFrom": "2026-10-01",
+                "movementType": "WRITE_OFF",
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "latest-customer",
+          "question": "Покажи самого последнего добавленного клиента и дату регистрации",
+          "passed": true,
+          "ms": 6055,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "latest",
+                "limit": 1,
+                "query": null,
+                "store": null,
+                "dateTo": null,
+                "metric": null,
+                "dataset": "customers",
+                "dateFrom": null,
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "counts",
+          "question": "Какая последняя инвентаризация и применена ли она?",
+          "passed": true,
+          "ms": 6919,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "latest",
+                "limit": 1,
+                "query": null,
+                "store": null,
+                "dateTo": null,
+                "metric": null,
+                "dataset": "stock_counts",
+                "dateFrom": null,
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "stores",
+          "question": "Какие магазины мне доступны?",
+          "passed": true,
+          "ms": 7235,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "list",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": null,
+                "metric": null,
+                "dataset": "stores",
+                "dateFrom": null,
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "english-receipt",
+          "question": "Show my most recent completed checkout receipt and its amount",
+          "passed": true,
+          "ms": 7605,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "latest",
+                "limit": 1,
+                "query": null,
+                "store": null,
+                "dateTo": null,
+                "metric": null,
+                "dataset": "sales",
+                "dateFrom": null,
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "kyrgyz-receipt",
+          "question": "Товарларды акыркы жолу качан кабыл алдык?",
+          "passed": true,
+          "ms": 12642,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "latest",
+                "limit": 1,
+                "query": null,
+                "store": null,
+                "dateTo": null,
+                "metric": null,
+                "dataset": "stock_movements",
+                "dateFrom": null,
+                "movementType": "RECEIVE",
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "known-sale",
+          "question": "Найди чек S 000001",
+          "passed": true,
+          "ms": 6724,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "list",
+                "limit": 20,
+                "query": "S 000001",
+                "store": null,
+                "dateTo": null,
+                "metric": null,
+                "dataset": "sales",
+                "dateFrom": null,
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "date-english",
+          "question": "Show sales from October 20th to October 22nd, 2026",
+          "passed": true,
+          "ms": 8139,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "summary",
+                "limit": 20,
+                "query": null,
+                "store": null,
+                "dateTo": "2026-10-22",
+                "metric": null,
+                "dataset": "sales_metrics",
+                "dateFrom": "2026-10-20",
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "customer-and-sale",
+          "question": "Покажи последнего добавленного клиента и последнюю завершённую продажу",
+          "passed": true,
+          "ms": 12858,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "latest",
+                "limit": 1,
+                "query": null,
+                "store": null,
+                "dateTo": null,
+                "metric": null,
+                "dataset": "customers",
+                "dateFrom": null,
+                "movementType": null,
+                "stockThreshold": null
+              },
+              {
+                "mode": "latest",
+                "limit": 1,
+                "query": null,
+                "store": null,
+                "dateTo": null,
+                "metric": null,
+                "dataset": "sales",
+                "dateFrom": null,
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "inventory-table",
+          "question": "Таблица с текущими остатками AI-QA-1 и названиями магазинов",
+          "passed": true,
+          "ms": 9335,
+          "plan": {
+            "format": "table",
+            "requests": [
+              {
+                "mode": "list",
+                "limit": 20,
+                "query": "AI-QA-1",
+                "store": "*",
+                "dateTo": null,
+                "metric": null,
+                "dataset": "inventory",
+                "dateFrom": null,
+                "movementType": null,
+                "stockThreshold": null
+              },
+              {
+                "mode": "list",
+                "limit": 20,
+                "query": null,
+                "store": "*",
+                "dateTo": null,
+                "metric": null,
+                "dataset": "stores",
+                "dateFrom": null,
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "customer-order-latest",
+          "question": "Покажи последний заказ клиента и его статус",
+          "passed": true,
+          "ms": 6715,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "latest",
+                "limit": 1,
+                "query": null,
+                "store": null,
+                "dateTo": null,
+                "metric": null,
+                "dataset": "orders",
+                "dateFrom": null,
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        },
+        {
+          "id": "current-product-details",
+          "question": "Расскажи об этом товаре: артикул, цена, единица",
+          "passed": true,
+          "ms": 6944,
+          "plan": {
+            "format": "auto",
+            "requests": [
+              {
+                "mode": "catalog_details",
+                "limit": 1,
+                "query": "cmviff5qs0008qvcqu3sbropz",
+                "store": null,
+                "dateTo": null,
+                "metric": null,
+                "dataset": "products",
+                "dateFrom": null,
+                "movementType": null,
+                "stockThreshold": null
+              }
+            ],
+            "clarification": null
+          }
+        }
+      ]
+    },
     "reads": {
       "passed": 25,
       "total": 25,
-      "evidence": "artifacts/baam-companion/recheck/reads.json",
-      "cases": [
-        "explicit-spoken-day",
-        "top-seven-spoken",
-        "top-three-current-year",
-        "product-performance-sku-day-confusion",
-        "zero-sales",
-        "no-returns",
-        "comparison",
-        "ordinal-range",
-        "diagnostics-without-causes",
-        "product-search",
-        "receipt-search",
-        "supplier-search",
-        "stores",
-        "empty-search",
-        "variants-how-to",
-        "negated-write",
-        "page-context",
-        "capabilities",
-        "invalid-spoken-date",
-        "missing-fields",
-        "multiple-unrelated-writes",
-        "other-organization",
-        "unsupported-profit-tax",
-        "english-ranking",
-        "mixed-ranking"
-      ]
+      "at": "2026-10-22T11:46:34.979Z",
+      "evidence": "artifacts/baam-companion/recheck/reads.json"
     },
     "voice": {
       "passed": 25,
       "total": 25,
-      "evidence": "artifacts/baam-companion/recheck/voice.json",
-      "cases": [
-        "explicit-spoken-day",
-        "top-seven-spoken",
-        "top-three-current-year",
-        "product-performance-sku-day-confusion",
-        "zero-sales",
-        "no-returns",
-        "comparison",
-        "ordinal-range",
-        "diagnostics-without-causes",
-        "product-search",
-        "receipt-search",
-        "supplier-search",
-        "stores",
-        "empty-search",
-        "variants-how-to",
-        "negated-write",
-        "page-context",
-        "capabilities",
-        "invalid-spoken-date",
-        "missing-fields",
-        "multiple-unrelated-writes",
-        "other-organization",
-        "unsupported-profit-tax",
-        "english-ranking",
-        "mixed-ranking"
-      ]
+      "at": "2026-10-22T11:58:10.674Z",
+      "evidence": "artifacts/baam-companion/recheck/voice.json"
     },
     "actions": {
-      "passed": 9,
-      "total": 9,
-      "evidence": "artifacts/baam-companion/recheck/actions.json",
-      "cases": [
-        "create-product-with-spoken-unit",
-        "follow-up-price-without-repeating-product",
-        "create-supplier",
-        "missing-customer-contact-and-follow-up",
-        "receive-correct-confirm-and-no-duplicate",
-        "stock-count-create",
-        "unpaid-receipt-with-register-resolution",
-        "cancel-pending-operation",
-        "comparison-follow-up-context"
-      ]
+      "passed": 10,
+      "total": 10,
+      "at": "2026-10-22T11:42:38.852Z",
+      "evidence": "artifacts/baam-companion/recheck/actions.json"
     },
     "voice-actions": {
-      "passed": 9,
-      "total": 9,
-      "evidence": "artifacts/baam-companion/recheck/voice-actions.json",
-      "cases": [
-        "create-product-with-spoken-unit",
-        "follow-up-price-without-repeating-product",
-        "create-supplier",
-        "missing-customer-contact-and-follow-up",
-        "receive-correct-confirm-and-no-duplicate",
-        "stock-count-create",
-        "unpaid-receipt-with-register-resolution",
-        "cancel-pending-operation",
-        "comparison-follow-up-context"
-      ]
+      "passed": 10,
+      "total": 10,
+      "at": "2026-10-22T11:57:57.066Z",
+      "evidence": "artifacts/baam-companion/recheck/voice-actions.json"
     },
-    "all49ActionIntents": {
+    "writeInterpretation": {
       "passed": 49,
       "total": 49,
-      "evidence": "tmp/ai-upgrade/live-actions-acceptance.json"
+      "executionClaim": false,
+      "log": "tmp/ai-upgrade/baam-current-frozen-intents.log"
     },
-    "broadMultilingualIntents": {
-      "passed": 36,
-      "total": 36,
-      "evidence": "tmp/ai-upgrade/live-intents-acceptance.json"
-    },
-    "media": {
-      "passed": 9,
-      "total": 9,
-      "evidence": "tmp/ai-upgrade/live-media-acceptance.json",
-      "note": "The image benchmark in this earlier 9-case run used Flare; final Sunburst is separately checked through the real provider and final production UI."
-    },
-    "clothingCategories": {
-      "passed": 1,
-      "total": 1,
-      "evidence": "tmp/ai-upgrade/live-catalog-acceptance.json"
-    },
-    "browser": {
-      "passed": 17,
-      "total": 17,
-      "evidence": "artifacts/baam-companion/recheck/browser.json",
-      "environment": "local production build; HTTPS; synthetic organization",
-      "previewRace": "Injected a stale PROCESSING details response while the list was already SUCCEEDED; details refetched and preview rendered.",
-      "actualImageDecodeRequired": true,
-      "log": "tmp/ai-upgrade/recheck-browser-production-final.log"
+    "productionBrowser": {
+      "passed": 19,
+      "total": 19,
+      "pageErrors": 0,
+      "evidence": "artifacts/baam-companion/recheck/browser.json"
     },
     "catalog": {
       "passed": 3,
@@ -172,36 +1998,32 @@
       "rawMediaRecorderUpload": true,
       "providerStatus": 200,
       "recognized": "Покажи топ 7 товаров по количеству за октябрь.",
+      "automaticSubmission": true,
+      "sendClicksBeforeFirstAnswer": 0,
+      "automaticResultCards": 7,
       "editable": true,
       "editedQueryExecuted": true,
       "resultCards": 5,
       "recordingCancelDidNotUpload": true,
       "deniedMicrophoneExplained": true,
       "readAloudUiApiOnly": true,
-      "environment": "local production build; Chrome at mobile viewport; controlled synthetic audio stream"
-    },
-    "runtimeFreshUpload": {
-      "passed": 1,
-      "total": 1,
-      "evidence": "artifacts/baam-companion/recheck/browser-runtime-new-upload-decodes-without-restart.json",
-      "environment": "local production; randomized new PNG created after boot, served and decoded before restart"
+      "evidence": "artifacts/baam-companion/recheck/voice-browser/voice.json"
     }
   },
-  "studioTiming": {
-    "directPreciseEditProbeMs": 24748,
-    "productionUiThroughSaveMs": 36319,
-    "model": "gpt-image-2.5-sunburst",
-    "quality": "medium",
-    "brandingPreservedInBothReviewedSunburstResults": true,
-    "note": "Controlled synthetic images; not a guarantee of identity preservation or latency for arbitrary photographs. Explicit preview and save remain required."
+  "providers": {
+    "textAndVision": "deepseek-flash",
+    "speechRecognition": "existing OpenAI ASR",
+    "imageEdit": "gpt-image-2.5-sunburst, medium by default; explicit high option",
+    "readAloud": "browser speech synthesis",
+    "businessFigures": "authorized server services and PostgreSQL"
   },
   "limitations": [
-    "No physical user microphone or speakers were tested; Chrome MediaRecorder and real ASR were exercised with controlled synthetic speech.",
-    "49-operation corpus verifies interpretation; full end-to-end manual execution covered 9 chains in each input mode. Business services have independent regression coverage.",
-    "DeepSeek currently accepts text/images and returns text; ASR and image editing still require their separate OpenAI executors.",
-    "Image support means nine tested common raster formats under configured size limits, not RAW/SVG/all codecs or unlimited sizes.",
-    "Vercel waitUntil is covered by the host-lifetime contract test and production bundle; no production deployment was authorized or performed.",
-    "Provider errors, unclear requests, missing required fields and unavailable permissions still require a clear error or clarification; no unlimited success guarantee."
+    "A finite acceptance corpus is not a guarantee for every possible natural-language request; provider and ASR failures remain possible.",
+    "No physical user microphone/speakers or all-device mobile acceptance; controlled synthetic speech used real browser recording and real ASR.",
+    "DeepSeek executes text/vision/planning/review. ASR and image generation/editing retain OpenAI; read-aloud uses the browser.",
+    "ADMIN/MANAGER permissions, store grants, entitlements and explicit mutation confirmation remain enforced.",
+    "Historical stock/profit/taxes and unsupported operations are not fabricated. Bounded/truncated reads disclose scope.",
+    "49 classifier cases are not 49 manually executed workflows; ten full chains in each input mode verify database effects separately."
   ],
   "dataSafety": {
     "liveDatabase": "bazaar_hardening_baam; never reset",
@@ -211,17 +2033,231 @@
     "syntheticWritesOnly": true,
     "ownQaCartPreservedAndHeld": "S-000007, remains unpaid, no deletion; user can create a fresh cart"
   },
-  "studioModelSelection": {
-    "selected": "gpt-image-2.5-sunburst",
-    "directProbeMs": 24748,
-    "brandingPreservedInControlledProbe": true,
-    "rejectedDefault": "gpt-image-2.5-flare",
-    "reason": "One visually reviewed Flare output removed source lettering; Sunburst is selected for precise product editing."
-  },
-  "runtimeImageRegression": {
-    "passed": 11,
-    "noTraversalOrExternalSymlink": true,
-    "unchangedPublicUrls": true,
-    "evidence": "tmp/ai-upgrade/recheck-runtime-images.log"
+  "previousDelivery": {
+    "date": "2026-10-22",
+    "branch": "codex/playground",
+    "baseCommit": "45488f23cd1956271dc59f2bcc281a429fa60464",
+    "mainMerged": false,
+    "productionDeployed": false,
+    "credentialsCommitted": false,
+    "providers": {
+      "textAndVision": "deepseek-flash",
+      "speechRecognition": "existing OpenAI ASR",
+      "imageEdit": "gpt-image-2.5-sunburst, medium by default; explicit high option",
+      "readAloud": "browser speech synthesis",
+      "businessFigures": "authorized server services and PostgreSQL"
+    },
+    "automated": {
+      "fullRegression": {
+        "passed": 2525,
+        "files": 348,
+        "log": "tmp/ai-upgrade/recheck-full-tests-images.log",
+        "database": "bazaar_hardening_baam_tests; providers disabled"
+      },
+      "typecheck": "passed",
+      "lint": "passed without warnings",
+      "translations": "passed RU/EN/KG",
+      "productionBuild": {
+        "status": "passed",
+        "command": "node --import tsx scripts/baam/build.ts",
+        "log": "tmp/ai-upgrade/recheck-production-build-final.log"
+      },
+      "formattingNote": "Unrelated original formatting restored only after canonical Prettier output equality; JSON values equality checked.",
+      "finalStudioContracts": {
+        "passed": 20,
+        "files": 2,
+        "log": "tmp/ai-upgrade/recheck-final-studio-contracts.log",
+        "note": "After final precise-edit model selection; includes model/quality/default assertions and runtime file-route safety."
+      }
+    },
+    "liveAcceptance": {
+      "reads": {
+        "passed": 25,
+        "total": 25,
+        "evidence": "artifacts/baam-companion/recheck/reads.json",
+        "cases": [
+          "explicit-spoken-day",
+          "top-seven-spoken",
+          "top-three-current-year",
+          "product-performance-sku-day-confusion",
+          "zero-sales",
+          "no-returns",
+          "comparison",
+          "ordinal-range",
+          "diagnostics-without-causes",
+          "product-search",
+          "receipt-search",
+          "supplier-search",
+          "stores",
+          "empty-search",
+          "variants-how-to",
+          "negated-write",
+          "page-context",
+          "capabilities",
+          "invalid-spoken-date",
+          "missing-fields",
+          "multiple-unrelated-writes",
+          "other-organization",
+          "unsupported-profit-tax",
+          "english-ranking",
+          "mixed-ranking"
+        ]
+      },
+      "voice": {
+        "passed": 25,
+        "total": 25,
+        "evidence": "artifacts/baam-companion/recheck/voice.json",
+        "cases": [
+          "explicit-spoken-day",
+          "top-seven-spoken",
+          "top-three-current-year",
+          "product-performance-sku-day-confusion",
+          "zero-sales",
+          "no-returns",
+          "comparison",
+          "ordinal-range",
+          "diagnostics-without-causes",
+          "product-search",
+          "receipt-search",
+          "supplier-search",
+          "stores",
+          "empty-search",
+          "variants-how-to",
+          "negated-write",
+          "page-context",
+          "capabilities",
+          "invalid-spoken-date",
+          "missing-fields",
+          "multiple-unrelated-writes",
+          "other-organization",
+          "unsupported-profit-tax",
+          "english-ranking",
+          "mixed-ranking"
+        ]
+      },
+      "actions": {
+        "passed": 9,
+        "total": 9,
+        "evidence": "artifacts/baam-companion/recheck/actions.json",
+        "cases": [
+          "create-product-with-spoken-unit",
+          "follow-up-price-without-repeating-product",
+          "create-supplier",
+          "missing-customer-contact-and-follow-up",
+          "receive-correct-confirm-and-no-duplicate",
+          "stock-count-create",
+          "unpaid-receipt-with-register-resolution",
+          "cancel-pending-operation",
+          "comparison-follow-up-context"
+        ]
+      },
+      "voice-actions": {
+        "passed": 9,
+        "total": 9,
+        "evidence": "artifacts/baam-companion/recheck/voice-actions.json",
+        "cases": [
+          "create-product-with-spoken-unit",
+          "follow-up-price-without-repeating-product",
+          "create-supplier",
+          "missing-customer-contact-and-follow-up",
+          "receive-correct-confirm-and-no-duplicate",
+          "stock-count-create",
+          "unpaid-receipt-with-register-resolution",
+          "cancel-pending-operation",
+          "comparison-follow-up-context"
+        ]
+      },
+      "all49ActionIntents": {
+        "passed": 49,
+        "total": 49,
+        "evidence": "tmp/ai-upgrade/live-actions-acceptance.json"
+      },
+      "broadMultilingualIntents": {
+        "passed": 36,
+        "total": 36,
+        "evidence": "tmp/ai-upgrade/live-intents-acceptance.json"
+      },
+      "media": {
+        "passed": 9,
+        "total": 9,
+        "evidence": "tmp/ai-upgrade/live-media-acceptance.json",
+        "note": "The image benchmark in this earlier 9-case run used Flare; final Sunburst is separately checked through the real provider and final production UI."
+      },
+      "clothingCategories": {
+        "passed": 1,
+        "total": 1,
+        "evidence": "tmp/ai-upgrade/live-catalog-acceptance.json"
+      },
+      "browser": {
+        "passed": 17,
+        "total": 17,
+        "evidence": "artifacts/baam-companion/recheck/browser.json",
+        "environment": "local production build; HTTPS; synthetic organization",
+        "previewRace": "Injected a stale PROCESSING details response while the list was already SUCCEEDED; details refetched and preview rendered.",
+        "actualImageDecodeRequired": true,
+        "log": "tmp/ai-upgrade/recheck-browser-production-final.log"
+      },
+      "catalog": {
+        "passed": 3,
+        "total": 3,
+        "evidence": "artifacts/baam-companion/recheck/catalog.json"
+      },
+      "voiceBrowser": {
+        "source": "synthetic business speech via WebCodecs audio track; actual Chrome MediaRecorder; desktop browser at mobile viewport; no physical microphone claim",
+        "rawMediaRecorderUpload": true,
+        "providerStatus": 200,
+        "recognized": "Покажи топ 7 товаров по количеству за октябрь.",
+        "editable": true,
+        "editedQueryExecuted": true,
+        "resultCards": 5,
+        "recordingCancelDidNotUpload": true,
+        "deniedMicrophoneExplained": true,
+        "readAloudUiApiOnly": true,
+        "environment": "local production build; Chrome at mobile viewport; controlled synthetic audio stream"
+      },
+      "runtimeFreshUpload": {
+        "passed": 1,
+        "total": 1,
+        "evidence": "artifacts/baam-companion/recheck/browser-runtime-new-upload-decodes-without-restart.json",
+        "environment": "local production; randomized new PNG created after boot, served and decoded before restart"
+      }
+    },
+    "studioTiming": {
+      "directPreciseEditProbeMs": 24748,
+      "productionUiThroughSaveMs": 36319,
+      "model": "gpt-image-2.5-sunburst",
+      "quality": "medium",
+      "brandingPreservedInBothReviewedSunburstResults": true,
+      "note": "Controlled synthetic images; not a guarantee of identity preservation or latency for arbitrary photographs. Explicit preview and save remain required."
+    },
+    "limitations": [
+      "No physical user microphone or speakers were tested; Chrome MediaRecorder and real ASR were exercised with controlled synthetic speech.",
+      "49-operation corpus verifies interpretation; full end-to-end manual execution covered 9 chains in each input mode. Business services have independent regression coverage.",
+      "DeepSeek currently accepts text/images and returns text; ASR and image editing still require their separate OpenAI executors.",
+      "Image support means nine tested common raster formats under configured size limits, not RAW/SVG/all codecs or unlimited sizes.",
+      "Vercel waitUntil is covered by the host-lifetime contract test and production bundle; no production deployment was authorized or performed.",
+      "Provider errors, unclear requests, missing required fields and unavailable permissions still require a clear error or clarification; no unlimited success guarantee."
+    ],
+    "dataSafety": {
+      "liveDatabase": "bazaar_hardening_baam; never reset",
+      "automatedDisposableDatabase": "bazaar_hardening_baam_tests",
+      "localOnly": true,
+      "originalLocaleBackup": "bazaar_hardening_baam_original_c and owned temporary pg_dump",
+      "syntheticWritesOnly": true,
+      "ownQaCartPreservedAndHeld": "S-000007, remains unpaid, no deletion; user can create a fresh cart"
+    },
+    "studioModelSelection": {
+      "selected": "gpt-image-2.5-sunburst",
+      "directProbeMs": 24748,
+      "brandingPreservedInControlledProbe": true,
+      "rejectedDefault": "gpt-image-2.5-flare",
+      "reason": "One visually reviewed Flare output removed source lettering; Sunburst is selected for precise product editing."
+    },
+    "runtimeImageRegression": {
+      "passed": 11,
+      "noTraversalOrExternalSymlink": true,
+      "unchangedPublicUrls": true,
+      "evidence": "tmp/ai-upgrade/recheck-runtime-images.log"
+    }
   }
 }

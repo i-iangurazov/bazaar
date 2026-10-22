@@ -329,25 +329,28 @@ export async function resolveWorkflowValues(
         const key = `${s.field.lookup}:${value ?? ""}`;
         let pending = searchCache.get(key);
         if (!pending && s.field.lookup === "products") {
-          pending = Promise.resolve(
-            products
-              .filter(
-                (p) =>
-                  p.id === value ||
-                  p.barcodes.some((b) => b.value === value) ||
-                  [p.name, p.sku].some((x) =>
-                    x.toLocaleLowerCase().includes(String(value).toLocaleLowerCase()),
-                  ),
-              )
-              .slice(0, 21)
-              .map((p) => recordOption(p, input.locale)),
-          );
-          searchCache.set(key, pending);
+          const matches = products
+            .filter(
+              (p) =>
+                p.id === value ||
+                p.barcodes.some((b) => b.value === value) ||
+                [p.name, p.sku].some((x) =>
+                  x.toLocaleLowerCase().includes(String(value).toLocaleLowerCase()),
+                ),
+            )
+            .slice(0, 21)
+            .map((p) => recordOption(p, input.locale));
+          // A batch miss is not a missing product. Use the shared scoped resolver
+          // for spoken aliases and exact references outside the batch window.
+          if (matches.length) {
+            pending = Promise.resolve(matches);
+            searchCache.set(key, pending);
+          }
         }
         if (!pending) {
           pending = baamSearch(ctx, {
             kind: s.field.lookup as Parameters<typeof baamSearch>[1]["kind"],
-            query: typeof value === "string" && !/^c[a-z0-9]{20,}$/.test(value) ? value : undefined,
+            query: typeof value === "string" ? value : undefined,
             storeId: s.field.lookup === "units" ? undefined : storeId,
             offset: 0,
           }).then((r) =>

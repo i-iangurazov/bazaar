@@ -51,7 +51,7 @@ const only = process.argv.find((arg) => arg.startsWith("--only="))?.slice(7);
 const page = await context.newPage();
 page.on("pageerror", (e) => errors.push(e.message));
 async function run(name: string, fn: () => Promise<unknown>) {
-  if (only && only !== name) return;
+  if (only && !only.split(",").includes(name)) return;
   const started = performance.now();
   try {
     results.push({
@@ -125,6 +125,54 @@ try {
     await page.locator('input[name="name"]').waitFor({ timeout: 60000 });
     assert.equal(await page.locator('input[name="name"]').inputValue(), "AI QA Tea 8");
     return { records: 7, href, mobileOverflow: false };
+  });
+  await run("baam-followup-table-short-and-scope", async () => {
+    await page.goto(base + "/baam");
+    await page.getByRole("button", { name: "Новый диалог", exact: true }).click();
+    await ask("Покажи топ-7 товаров за этот месяц");
+    const tableAnswer = await ask("Теперь покажи это таблицей со ссылками на товары");
+    const table = tableAnswer.getByRole("table");
+    await table.waitFor({ timeout: 90000 });
+    assert.equal(await table.getByRole("row").count(), 8);
+    assert.equal(await table.locator('a[href^="/products/"]').count(), 7);
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await table.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `${dir}/desktop-conversation-table.png` });
+    await page.setViewportSize({ width: 390, height: 844 });
+    assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+    await page.screenshot({ path: `${dir}/mobile-conversation-table.png` });
+    const short = await ask("Объясни этот результат коротко, двумя предложениями");
+    assert((await short.innerText()).split(/\s+/).length < 180);
+    const overview = await ask("А что вообще происходит в магазине, на что обратить внимание?");
+    assert.match(await overview.innerText(), /продаж|выруч/i);
+    const sale = await ask("А теперь покажи последнюю завершённую продажу в кассе");
+    assert.equal(await sale.locator("[data-baam-record]").count(), 1);
+    assert.match(await sale.innerText(), /S-000001/);
+    assert.doesNotMatch(await sale.innerText(), /S-000007/);
+    return {
+      tableRows: 7,
+      clickableProducts: 7,
+      mobileOverflow: false,
+      topicSwitch: true,
+      latestCompletedSale: true,
+    };
+  });
+  await run("baam-receiving-document-link", async () => {
+    await page.goto(base + "/baam");
+    const answer = await ask(
+      "Покажи последнее оприходование, со всеми позициями и ссылкой на документ",
+    );
+    const link = answer.locator('a[href^="/inventory/movements/"]').first();
+    await link.waitFor({ timeout: 90000 });
+    const href = await link.getAttribute("href");
+    assert(href?.includes("%3A"));
+    await link.click();
+    await page.waitForURL(`${base}${href}`);
+    const product = page.getByRole("link", { name: "Test Product", exact: true }).first();
+    await product.waitFor({ timeout: 60000 });
+    await product.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `${dir}/mobile-baam-receiving-document.png` });
+    return { href, openedActualDocument: true };
   });
   await run("baam-heic-photo-to-real-vision", async () => {
     await page.goto(base + "/baam");

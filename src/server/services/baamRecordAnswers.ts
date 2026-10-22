@@ -1,5 +1,6 @@
+import { baamRecordStatus } from "@/lib/baam/recordStatus";
 import type { Context } from "@/server/trpc/trpc";
-import { baamText, type BaamLocale, type BaamPart } from "@/lib/baam/companion";
+import { baamText, baamUriComponent, type BaamLocale, type BaamPart } from "@/lib/baam/companion";
 import { baamSearch, baamSearchSchema } from "./baamReadTools";
 
 export async function answerBaamRecords(
@@ -32,21 +33,6 @@ export async function answerBaamRecords(
     returns: "/pos/history",
     stores: "/stores",
   };
-  const statusCopy: Record<string, [string, string, string]> = {
-    DRAFT: ["Черновик", "Draft", "Долбоор"],
-    COMPLETED: ["Завершён", "Completed", "Аяктады"],
-    CANCELLED: ["Отменён", "Cancelled", "Жокко чыгарылды"],
-    SUBMITTED: ["Отправлен", "Submitted", "Жөнөтүлдү"],
-    APPROVED: ["Подтверждён", "Approved", "Бекитилди"],
-    RECEIVED: ["Получен", "Received", "Кабыл алынды"],
-    PARTIALLY_RECEIVED: ["Частично получен", "Partially received", "Жарым-жартылай кабыл алынды"],
-    CONFIRMED: ["Подтверждён", "Confirmed", "Ырасталды"],
-    FULFILLED: ["Выдан", "Fulfilled", "Берилди"],
-    READY: ["Готов к выдаче", "Ready", "Берүүгө даяр"],
-    NEW: ["Новый", "New", "Жаңы"],
-    IN_PROGRESS: ["В работе", "In progress", "Аткарылууда"],
-    APPLIED: ["Применена", "Applied", "Колдонулду"],
-  };
   const href = (item: Record<string, unknown>) => {
     const id = encodeURIComponent(String(item.id));
     if (["orders", "purchases", "stock_counts"].includes(value.kind))
@@ -57,7 +43,7 @@ export async function answerBaamRecords(
     if (value.kind === "returns")
       return `/pos/history?saleId=${encodeURIComponent(String(item.originalSaleId))}`;
     if (value.kind === "suppliers")
-      return `/suppliers?q=${encodeURIComponent(String(item.name ?? ""))}`;
+      return `/suppliers?q=${baamUriComponent(String(item.name ?? ""))}`;
     return roots[value.kind];
   };
   const parts: BaamPart[] = found.items.map((item, index) => {
@@ -71,9 +57,7 @@ export async function answerBaamRecords(
     if (item.status)
       displayFields.push({
         label: baamText(input.locale, "Статус", "Status", "Абал"),
-        value: statusCopy[String(item.status)]
-          ? baamText(input.locale, ...statusCopy[String(item.status)])
-          : String(item.status),
+        value: baamRecordStatus(String(item.status), input.locale),
       });
     if (item.totalKgs != null)
       displayFields.push({

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { BaamReadPlan } from "@/server/services/baamReadPlan";
 
 export const baamLocaleSchema = z.enum(["ru", "en", "kg"]);
 export type BaamLocale = z.infer<typeof baamLocaleSchema>;
@@ -36,9 +37,26 @@ export const baamSendSchema = z
 export type BaamSend = z.infer<typeof baamSendSchema>;
 export type BaamChoice = { label: string; value: string };
 export type BaamPart =
-  | { type: "metrics"; title: string; period: string; stores: string[]; cards: Array<{ label: string; value: string; comparison?: string }>; notes: string[] }
+  | {
+      type: "metrics";
+      title: string;
+      period: string;
+      stores: string[];
+      cards: Array<{ label: string; value: string; comparison?: string }>;
+      notes: string[];
+    }
   | { type: "analysisContext"; token: string; dateFrom: string; dateTo: string; storeId?: string }
-  | { type: "record"; id: string; title: string; href: string; sku: string | null; displayFields: Array<{ label: string; value: string }> }
+  | {
+      type: "record";
+      id: string;
+      title: string;
+      href: string;
+      sku: string | null;
+      compact?: boolean;
+      hidden?: boolean;
+      displayFields: Array<{ label: string; value: string }>;
+    }
+  | { type: "readContext"; plan: BaamReadPlan; narration?: "generated" | "facts_only" }
   | { type: "evidence"; details: string[] }
   | { type: "workflow"; workflowId: string }
   | { type: "commands"; commands: Array<{ label: string; action: string }> }
@@ -58,7 +76,15 @@ export type BaamActionResult = {
 export const baamText = (locale: string, ru: string, en: string, kg: string) =>
   locale === "en" ? en : locale === "kg" ? kg : ru;
 
+// RFC 3986 also escapes parentheses/apostrophes left intact by encodeURIComponent;
+// supplier names must remain valid in allowlisted URLs and Markdown links.
+export const baamUriComponent = (value: string) =>
+  encodeURIComponent(value).replace(
+    /[!'()*]/g,
+    (char) => "%" + char.charCodeAt(0).toString(16).toUpperCase(),
+  );
+
 // Only application links are rendered. Provider content can never create a URL.
 export const isBaamLink = (value: string) =>
-  /^\/(?:[a-z][a-z0-9-]*\/?)+(?:[a-zA-Z0-9_-]+)?(?:\?[a-zA-Z0-9_%=&.-]*)?$/.test(value) &&
+  /^\/(?:[a-z][a-z0-9-]*\/?)+(?:[a-zA-Z0-9_-]|%3[aA])*(?:\?[a-zA-Z0-9_%=&.-]*)?$/.test(value) &&
   !value.startsWith("/api/");

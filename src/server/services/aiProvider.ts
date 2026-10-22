@@ -37,12 +37,18 @@ export function resolveTextAiConfig(
     : null;
 }
 
-export function aiResponseBody(config: TextAiConfig, body: Record<string, unknown>) {
+export function aiResponseBody(
+  config: TextAiConfig,
+  body: Record<string, unknown>,
+  options?: { reasoningEffort?: "none" | "low" },
+) {
   return {
     ...body,
     model: config.model,
     store: false,
-    ...(config.provider === "deepseek" ? { reasoning: { effort: "none" } } : {}),
+    ...(config.provider === "deepseek"
+      ? { reasoning: { effort: options?.reasoningEffort ?? "none" } }
+      : {}),
   };
 }
 
@@ -50,13 +56,14 @@ export function fetchAiResponse(
   config: TextAiConfig,
   body: Record<string, unknown>,
   signal: AbortSignal,
+  options?: { reasoningEffort?: "none" | "low" },
 ) {
   assertExternalProviderCallAllowed(config.provider);
   return fetch(config.url, {
     method: "POST",
     redirect: "error",
     headers: { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify(aiResponseBody(config, body)),
+    body: JSON.stringify(aiResponseBody(config, body, options)),
     signal,
   });
 }

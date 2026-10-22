@@ -156,19 +156,34 @@ try {
     ),
   );
   assert.equal(response.status(), 200, JSON.stringify(result));
-  await chat.getByText(/Проверьте названия, количества и суммы/).waitFor();
-  const input = chat.locator("[data-baam-input]");
-  const recognized = await input.inputValue();
+  await chat.getByText(/Распознаю речь/).waitFor({ state: "hidden", timeout: 5000 });
+  const recognized = String(result.text ?? "");
   assert.match(recognized, /семь|7/i);
+  // No send click: finishing the recording must submit and answer by itself.
+  await page.waitForFunction(
+    () => document.querySelectorAll("[data-baam-record]").length === 7,
+    undefined,
+    { timeout: 90000 },
+  );
+  assert.equal(
+    await chat.locator("[data-baam-entry]").count(),
+    2,
+    "One voice turn, no duplicate submit",
+  );
+  await page.screenshot({ path: `${directory}/mobile-auto-answer.png` });
+  await chat.getByRole("button", { name: "Исправить запрос", exact: true }).click();
+  const input = chat.locator("[data-baam-input]");
+  assert.equal(await input.inputValue(), recognized);
   await input.fill(recognized.replace(/семь|7/i, "5"));
   await page.screenshot({ path: `${directory}/mobile-transcription.png` });
   await chat.getByRole("button", { name: "Отправить сообщение", exact: true }).click();
   await page.waitForFunction(
-    () => document.querySelectorAll("[data-baam-record]").length === 5,
+    () =>
+      [...document.querySelectorAll("[data-baam-entry]")]
+        .at(-1)
+        ?.querySelectorAll("[data-baam-record]").length === 5,
     undefined,
-    {
-      timeout: 90000,
-    },
+    { timeout: 90000 },
   );
   await page.screenshot({ path: `${directory}/mobile-answer.png` });
   // Check the playback controls' browser API contract without claiming that a
@@ -224,6 +239,9 @@ try {
         rawMediaRecorderUpload: true,
         providerStatus: response.status(),
         recognized,
+        automaticSubmission: true,
+        sendClicksBeforeFirstAnswer: 0,
+        automaticResultCards: 7,
         editable: true,
         editedQueryExecuted: true,
         resultCards: 5,
@@ -235,7 +253,9 @@ try {
       2,
     ),
   );
-  console.log("Actual MediaRecorder recording, upload, ASR and editable transcription passed");
+  console.log(
+    "Actual MediaRecorder recording, automatic submission, answer and optional correction passed",
+  );
 } catch (error) {
   await page.screenshot({ path: `${directory}/voice-failure.png` });
   await writeFile(`${directory}/voice-failure.txt`, await page.locator("body").innerText());

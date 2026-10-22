@@ -20,6 +20,8 @@ export type BaamProductResult = {
   cards: BaamProductCard[];
   evidence: BaamProductEvidence;
   contextProductId?: string;
+  total?: number;
+  population?: number;
 };
 
 const copy = {
@@ -102,7 +104,7 @@ export const executeBaamProductPlan = async (input: {
     const selectedStores = access.availableStores.filter(store => access.storeIds.includes(store.id));
     const queriedAt = new Date().toISOString();
     const evidence: BaamProductEvidence = {
-      summary: plan.productAction === "performance" ? c.performance : dated ? c.ranking : c.catalog,
+      summary: plan.productAction === "performance" ? c.performance : plan.productAction === "zero_sales" ? c.zero : dated ? c.ranking : c.catalog,
       appliedPeriod: dated,
       details: [
         `${c.scope}: ${selectedStores.map(store => store.name).join(", ") || c.noStores}`,
@@ -173,6 +175,7 @@ export const executeBaamProductPlan = async (input: {
         WHERE true ${search}
           ${plan.productAction === "zero_sales" ? Prisma.sql`AND COALESCE(g.sold, 0) = 0` : Prisma.empty}
           ${plan.productAction === "ranking" && plan.metric === "return_units" ? Prisma.sql`AND COALESCE(g.returned, 0) > 0` : Prisma.empty}
+          ${plan.productAction === "ranking" && plan.direction === "top" && plan.metric !== "return_units" ? Prisma.sql`AND COALESCE(g.sold, 0) > 0` : Prisma.empty}
       )
       SELECT *, COUNT(*) OVER()::int AS total, (SELECT COUNT(*)::int FROM population) AS population
       FROM filtered ORDER BY ${order} LIMIT ${plan.limit}
@@ -201,11 +204,13 @@ export const executeBaamProductPlan = async (input: {
     const ordering = plan.productAction === "ranking" ? ` ${plan.direction === "bottom" ? c.bottom : c.top}: ${plan.metric === "revenue" ? c.netRevenue : plan.metric === "return_units" ? c.returned : c.netUnits}.` : "";
     const noMatch = plan.productAction === "ranking" && plan.metric === "return_units"
       ? { ru: "За выбранный период завершённых возвратов этих товаров нет.", en: "No completed returns for these products in the selected period.", kg: "Тандалган мезгилде бул товарлардын аяктаган кайтаруулары жок." }[input.locale]
-      : c.noMatch;
+      : plan.productAction === "ranking"
+        ? { ru: "В выбранном периоде нет завершённых продаж этих товаров.", en: "No completed sales for these products in the selected period.", kg: "Тандалган мезгилде бул товарлардын аяктаган сатуулары жок." }[input.locale]
+        : c.noMatch;
     return {
       status: clarification ? "clarification" : "answer",
       answer: `${heading}.${ordering} ${rows.length ? `${c.shown}: ${rows.length} / ${total}.` : noMatch}${clarification ? ` ${c.pick}` : ""}`,
-      cards, evidence,
+      cards, evidence, total, population: rows[0]?.population,
       ...((!dated || plan.productAction === "performance") && total === 1 ? { contextProductId: rows[0].id } : {}),
     };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, timeout: 15_000 });

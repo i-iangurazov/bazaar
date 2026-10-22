@@ -194,8 +194,28 @@ export function BaamMessageList({ c }: { c: BaamController }) {
           {c.messages.map((message) => (
             <li key={message.id} data-baam-entry className="min-w-0">
               {message.role === "user" ? (
-                <div className="ml-auto max-w-[90%] whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-secondary px-4 py-3 text-sm leading-6">
-                  {message.text}
+                <div>
+                  <div className="ml-auto max-w-[90%] whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-secondary px-4 py-3 text-sm leading-6">
+                    {message.text}
+                  </div>
+                  {Array.isArray(message.parts) &&
+                  (message.parts as unknown as BaamPart[]).some(
+                    (p) => p.type === "transcription",
+                  ) ? (
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        disabled={c.busy || c.mediaPending}
+                        className="min-h-9 px-2 text-xs text-muted-foreground underline hover:text-primary disabled:opacity-50"
+                        onClick={() => {
+                          c.setQuestion(message.text);
+                          c.inputRef.current?.focus();
+                        }}
+                      >
+                        {c.t("editVoice")}
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -207,16 +227,15 @@ export function BaamMessageList({ c }: { c: BaamController }) {
                     <p role="alert" className="break-words text-sm leading-6 text-destructive">
                       {c.readableError(message.text)}
                     </p>
-                  ) : Array.isArray(message.parts) &&
-                    (message.parts as unknown as BaamPart[]).some(
-                      (part) => part.type === "metrics",
-                    ) ? null : (
+                  ) : (
                     <BaamAnswerText
                       text={message.text}
                       links={(Array.isArray(message.parts)
                         ? (message.parts as unknown as BaamPart[])
                         : []
-                      ).flatMap((part) => (part.type === "link" ? [part.href] : []))}
+                      ).flatMap((part) =>
+                        part.type === "link" || part.type === "record" ? [part.href] : [],
+                      )}
                     />
                   )}
                 </div>
@@ -325,12 +344,55 @@ export function BaamMessageList({ c }: { c: BaamController }) {
                       lastActionMessage.get(part.actionId) === message.id
                     )
                       return <ActionCard key={part.actionId} actionId={part.actionId} c={c} />;
-                    if (part.type === "record" && isBaamLink(part.href))
+                    if (
+                      part.type === "record" &&
+                      !part.hidden &&
+                      part.compact &&
+                      part.displayFields.length <= 2 &&
+                      isBaamLink(part.href)
+                    )
                       return (
                         <article
                           key={`${part.id}-${index}`}
                           data-baam-record
-                          className="min-w-0 space-y-2 rounded-xl border border-border bg-card p-4"
+                          className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-border px-3 py-2"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <Link
+                              href={part.href}
+                              prefetch={false}
+                              className="inline-flex min-h-8 items-center gap-1 text-sm font-semibold text-primary hover:underline"
+                            >
+                              {part.title}
+                              <ArrowUpRight size={13} className="shrink-0" />
+                            </Link>
+                            {part.sku ? (
+                              <p className="break-all text-[11px] text-muted-foreground">
+                                {part.sku}
+                              </p>
+                            ) : null}
+                          </div>
+                          <dl className="flex shrink-0 gap-3 text-right">
+                            {part.displayFields.map((f, n) => (
+                              <div key={n}>
+                                <dt className="max-w-28 text-[10px] leading-4 text-muted-foreground">
+                                  {f.label}
+                                </dt>
+                                <dd className="text-sm font-semibold tabular-nums">{f.value}</dd>
+                              </div>
+                            ))}
+                          </dl>
+                        </article>
+                      );
+                    if (part.type === "record" && !part.hidden && isBaamLink(part.href))
+                      return (
+                        <article
+                          key={`${part.id}-${index}`}
+                          data-baam-record
+                          className={cn(
+                            "min-w-0 space-y-2 rounded-xl border border-border bg-card",
+                            part.compact ? "px-3 py-2" : "p-4",
+                          )}
                         >
                           <Link
                             href={part.href}
@@ -343,7 +405,12 @@ export function BaamMessageList({ c }: { c: BaamController }) {
                           {part.sku ? (
                             <p className="break-all text-xs text-muted-foreground">{part.sku}</p>
                           ) : null}
-                          <dl className="grid gap-2 text-sm sm:grid-cols-2">
+                          <dl
+                            className={cn(
+                              "grid gap-2 text-sm",
+                              part.compact ? "grid-cols-2 sm:grid-cols-3" : "sm:grid-cols-2",
+                            )}
+                          >
                             {part.displayFields.map((field, n) => (
                               <div key={n} className="min-w-0">
                                 <dt className="text-xs text-muted-foreground">{field.label}</dt>

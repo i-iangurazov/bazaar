@@ -101,10 +101,16 @@ const copy = {
     "Check names, quantities and amounts. Edit the text before sending.",
     "Аттарды, сандарды жана суммаларды текшериңиз. Жөнөтүүдөн мурун текстти оңдосоңуз болот.",
   ],
+  editVoice: ["Исправить запрос", "Edit request", "Суроону оңдоо"],
+  voiceScopeChanged: [
+    "Магазин изменился во время распознавания. Проверьте запрос и отправьте его в выбранный магазин.",
+    "The store changed during transcription. Review the request before sending it to the selected store.",
+    "Үн таанылып жатканда дүкөн өзгөрдү. Тандалган дүкөнгө жөнөтүүдөн мурун суроону текшериңиз.",
+  ],
   voiceSupport: [
-    "Голос: русский, English, кыргызча · до 90 секунд",
-    "Voice: русский, English, кыргызча · up to 90 seconds",
-    "Үн: русский, English, кыргызча · 90 секундга чейин",
+    "Голос: русский, English, кыргызча · после записи запрос отправится автоматически",
+    "Voice: русский, English, кыргызча · sent automatically after recording",
+    "Үн: русский, English, кыргызча · жаздыргандан кийин автоматтык жөнөтүлөт",
   ],
   micDenied: [
     "Доступ к микрофону закрыт. Разрешите его в настройках браузера или напишите сообщение.",

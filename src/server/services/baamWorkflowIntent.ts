@@ -1,6 +1,7 @@
 import { resolveTextAiConfig, fetchAiResponse } from "./aiProvider";
 import { baamGuideContext } from "./baamGuideContext";
 import { z } from "zod";
+import { baamReadOperations } from "./baamReadPlan";
 import { baamText } from "@/lib/baam/companion";
 import {
   workflowActions,
@@ -349,6 +350,17 @@ export async function understandBaamIntent(input: {
         role: "developer",
         content: JSON.stringify({
           locale: input.locale,
+          readCapabilities: Object.keys(baamReadOperations),
+          readRoutingRule:
+            "Questions about actual catalog products, prices, SKUs, units, stock, stock receipts/оприходования, movements, transfers, write-offs, customers, suppliers, sales, orders or counts MUST use analytics or records/search, never a general answer. 'Tell me about this product' on its record page asks to READ its actual fields; it is not a how-to. The unified reader can combine datasets and choose latest/new/current filters. Only questions about HOW to operate the interface use answer/help. For a previous business answer, explain/reformat/shorten/table/list follow-ups also MUST use analytics so facts are read again.",
+          currentPageRecord: /^\/products\/([A-Za-z0-9_-]+)$/.test(input.page ?? "")
+            ? {
+                entity: "product",
+                id: input.page!.split("/")[2],
+                instruction:
+                  "Use a read intent to describe this record's actual fields. Never invent them from guides. HOW-TO questions still use answer.",
+              }
+            : null,
           businessDate: new Intl.DateTimeFormat("en-CA", {
             timeZone: "Asia/Bishkek",
             year: "numeric",
@@ -357,6 +369,8 @@ export async function understandBaamIntent(input: {
           }).format(new Date()),
           active: input.active,
           previousAnalysis: input.previousAnalysis,
+          followUpRule:
+            "If previousAnalysis exists, a request to explain those figures, shorten/reformat that answer, show it as a table/list, or add links is analytics, never answer/help. Its facts must be re-read before answering. A new topic uses its own dataset and does not repeat the previous ranking.",
           page: input.page,
           recentRecords: input.recentRecords,
           guides: baamGuideContext(input.text, input.locale, input.page),
@@ -397,14 +411,48 @@ export async function understandBaamIntent(input: {
     if (!body || (body.status && body.status !== "completed") || !Array.isArray(body.output))
       throw new AppError("baamProviderInvalidResponse", "BAD_REQUEST", 400);
     const calls = body.output.filter((o: { type?: string }) => o?.type === "function_call");
-    // DeepSeek ignores parallel_tool_calls=false; enforce one accepted plan here.
+    // DeepSeek can ignore parallel_tool_calls=false. Multiple strictly read-only
+    // classifications may route the ORIGINAL full question to the unified reader.
+    // Multiple or mixed write plans remain rejected before preparing any action.
     if (
-      calls.length !== 1 ||
-      calls[0].name !== "understand_request" ||
-      typeof calls[0].arguments !== "string" ||
-      calls[0].arguments.length > 32000
+      !calls.length ||
+      calls.length > 6 ||
+      calls.some(
+        (call: { name?: string; arguments?: unknown }) =>
+          call.name !== "understand_request" ||
+          typeof call.arguments !== "string" ||
+          call.arguments.length > 32000,
+      )
     )
       throw new AppError("baamProviderInvalidResponse", "BAD_REQUEST", 400);
+    if (calls.length > 1) {
+      const plans = calls.map((call: { arguments: string }) =>
+        intentSchema.safeParse(JSON.parse(call.arguments)),
+      );
+      if (
+        !plans.every(
+          (plan: ReturnType<typeof intentSchema.safeParse>) =>
+            plan.success &&
+            ["analytics", "report", "records", "search"].includes(plan.data.kind) &&
+            plan.data.action === null &&
+            plan.data.fields.length === 0,
+        )
+      )
+        throw new AppError("baamProviderInvalidResponse", "BAD_REQUEST", 400);
+      result = intentSchema.parse({
+        kind: "analytics",
+        action: null,
+        confidence: "high",
+        fields: [],
+        query: null,
+        recordKind: null,
+        dateFrom: null,
+        dateTo: null,
+        period: null,
+        reply: null,
+      });
+      break;
+    }
     try {
       result = intentSchema.parse(JSON.parse(calls[0].arguments));
       const action = result.kind === "correction" ? input.active?.kind : result.action;
@@ -426,6 +474,12 @@ export async function understandBaamIntent(input: {
     }
   }
   if (!result) throw new AppError("baamProviderInvalidResponse", "BAD_REQUEST", 400);
+  console.info("baam.intent.resolved", {
+    kind: result.kind,
+    action: result.action,
+    confidence: result.confidence,
+    fieldPaths: result.fields.map((field) => field.path),
+  });
   let parameters: WorkflowValues = {};
   const action = result.kind === "correction" ? input.active?.kind : (result.action ?? undefined);
   if (result.kind === "action" || result.kind === "correction") {

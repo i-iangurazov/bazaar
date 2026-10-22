@@ -56,6 +56,8 @@ export function useBaamCompanion(identity: BaamIdentity) {
   const draftKey = `baam-draft:${identity.organizationId}:${identity.userId}:${identity.activeId ?? "new"}`;
   const [draftReady, setDraftReady] = useState("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const questionRef = useRef(question);
+  questionRef.current = question;
   const scrollRef = useRef<HTMLDivElement>(null);
   const nearBottom = useRef(true);
   const busyRef = useRef(new Map<string, string>());
@@ -82,11 +84,13 @@ export function useBaamCompanion(identity: BaamIdentity) {
       retry: false,
       refetchOnWindowFocus: true,
       refetchInterval: (data) =>
-        data?.activeTurn ||
-        data?.actions.some((a) => a.status === "RUNNING") ||
-        data?.workflows.some((w) => w.status === "RUNNING")
-          ? 5000
-          : 30000,
+        sendingSlots[slot] && !data?.activeTurn
+          ? 1000
+          : data?.activeTurn ||
+              data?.actions.some((a) => a.status === "RUNNING") ||
+              data?.workflows.some((w) => w.status === "RUNNING")
+            ? 5000
+            : 30000,
     },
   );
   const allowed =
@@ -273,7 +277,13 @@ export function useBaamCompanion(identity: BaamIdentity) {
       utils.baam.conversations.invalidate(),
     ]);
   };
-  const ask = async (text = question, retry?: BaamSend, command?: WorkflowCommand) => {
+  const ask = async (
+    text = question,
+    retry?: BaamSend,
+    command?: WorkflowCommand,
+    voice?: { id: string; conversationId: string },
+  ) => {
+    if (voice && identityRef.current !== voice.conversationId) return;
     if ((!text.trim() && !retry) || busyRef.current.has(slot) || busy || !available) return;
     const requestSlot = slotRef.current;
     const requestToken = crypto.randomUUID();
@@ -304,7 +314,7 @@ export function useBaamCompanion(identity: BaamIdentity) {
             : {}),
         },
         attachmentIds: attachments.map((a) => a.id),
-        ...(voiceId ? { transcriptionId: voiceId } : {}),
+        ...(voice?.id || voiceId ? { transcriptionId: voice?.id ?? voiceId } : {}),
       };
       if (identityRef.current === id) {
         setPendingRequest(request);
@@ -361,6 +371,10 @@ export function useBaamCompanion(identity: BaamIdentity) {
       );
     }
   };
+  // The transcription resolves after React has rendered a new conversation or
+  // scope. Always submit through the current controller, never a stale closure.
+  const askRef = useRef(ask);
+  askRef.current = ask;
   const upload = async (file: Blob, kind: "audio" | "image", name: string) => {
     if (mediaPending) return;
     const originalSlot = slotRef.current;
@@ -370,6 +384,10 @@ export function useBaamCompanion(identity: BaamIdentity) {
     setError(undefined);
     try {
       const id = await ensureConversation();
+      const originalRevision =
+        kind === "audio"
+          ? (await utils.baam.conversation.fetch({ id })).conversation.revision
+          : undefined;
       uploadId = id;
       if (identityRef.current === id) setUploadSlot(id);
       if (kind === "image") {
@@ -405,10 +423,20 @@ export function useBaamCompanion(identity: BaamIdentity) {
       if (!response.ok) throw new Error(result.message ?? "network");
       if (identityRef.current !== id) return;
       if (kind === "audio") {
-        setQuestion((previous) => `${previous}${previous ? "\n" : ""}${result.text ?? ""}`);
+        const text = [questionRef.current.trim(), result.text?.trim()].filter(Boolean).join("\n");
+        setQuestion(text);
         setVoiceId(result.id);
         setVoiceBlob(undefined);
-        inputRef.current?.focus();
+        const current = await utils.baam.conversation.fetch({ id });
+        if (identityRef.current !== id) return;
+        setUploadSlot((old) => (old === id || old === originalSlot ? undefined : old));
+        if (current.conversation.revision === originalRevision && text.trim()) {
+          await askRef.current(text, undefined, undefined, { id: result.id, conversationId: id });
+        } else {
+          setVoiceId(undefined);
+          setNotice(t("voiceScopeChanged"));
+          inputRef.current?.focus();
+        }
       } else if (result.url)
         setAttachments((previous) => [
           ...previous,

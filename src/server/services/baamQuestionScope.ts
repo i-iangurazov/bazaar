@@ -259,7 +259,7 @@ export const resolveBaamQuestionScope = (input: {
   if (ids.length > 1) return { status: "clarification", clarification: "store" };
   for (const hit of fullHits) text = blank(text, hit.start, hit.length);
   const allStores = terms(
-    "(?:all|every)\\s+(?:stores|shops)|вс[еех]+\\s+магазин\\p{L}*|(?:бардык|баардык)\\s+дүкөн\\p{L}*",
+    "(?:all|every)\\s+(?:accessible\\s+)?(?:stores|shops)|вс[еехм]+(?:\\s+доступн\\p{L}*)?\\s+магазин\\p{L}*|(?:бардык|баардык)\\s+(?:жеткиликтүү\\s+)?дүкөн\\p{L}*",
     text,
   );
   if (allStores.length && ids.length) return { status: "clarification", clarification: "store" };
