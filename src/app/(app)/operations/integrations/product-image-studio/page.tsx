@@ -50,6 +50,8 @@ import {
   putProductImageDirectUpload,
   resolveProductImageProxyUploadMaxBytes,
   type ProductImageDirectUploadTarget,
+  productPhotoAccept,
+  supportedProductImageUploadMimeTypes,
 } from "@/lib/productImageUpload";
 import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
@@ -73,8 +75,7 @@ const studioMaxProxyImageBytes = Math.min(
   studioMaxImageBytes,
   resolveProductImageProxyUploadMaxBytes(process.env.NEXT_PUBLIC_PRODUCT_IMAGE_PROXY_MAX_BYTES),
 );
-const studioAcceptedFileTypes =
-  "image/jpeg,image/png,image/webp,image/heic,image/heif,image/heic-sequence,image/heif-sequence,.jpg,.jpeg,.png,.webp,.heic,.heics,.heif,.heifs,.hif";
+const studioAcceptedFileTypes = productPhotoAccept;
 
 const isWorkingStudioJobStatus = (status?: ProductImageStudioJobStatus | null) =>
   status === ProductImageStudioJobStatus.QUEUED ||
@@ -158,6 +159,7 @@ const ProductImageStudioPage = () => {
 
   const [sourceImage, setSourceImage] = useState<UploadedSource | null>(null);
   const [uploadingSource, setUploadingSource] = useState(false);
+  const [uploadPhase, setUploadPhase] = useState<"preparing" | "uploading">("preparing");
   const [productSearch, setProductSearch] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<{
     id: string;
@@ -171,6 +173,8 @@ const ProductImageStudioPage = () => {
   const [softShadow, setSoftShadow] = useState(false);
   const [tighterCrop, setTighterCrop] = useState(false);
   const [brighterPresentation, setBrighterPresentation] = useState(false);
+  const [highQuality, setHighQuality] = useState(false);
+  const [clockNow, setClockNow] = useState(Date.now());
   const [saveAsPrimary, setSaveAsPrimary] = useState(false);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
 
@@ -198,7 +202,9 @@ const ProductImageStudioPage = () => {
     { jobId: selectedJobId ?? "" },
     {
       enabled: canView && Boolean(selectedJobId),
-      refetchInterval: isWorkingStudioJobStatus(selectedJobFromList?.status) ? 1_500 : false,
+      // The list can observe completion before this query does. Only this
+      // query's own terminal response may stop its polling.
+      refetchInterval: (job) => (!job || isWorkingStudioJobStatus(job.status) ? 1_500 : false),
     },
   );
   const productSearchQuery = trpc.products.searchQuick.useQuery(
@@ -442,17 +448,24 @@ const ProductImageStudioPage = () => {
     }
 
     setUploadingSource(true);
+    setUploadPhase("preparing");
     try {
       const prepared = await prepareManagedProductImageForUpload({
         file,
         maxImageBytes: studioMaxImageBytes,
         maxInputImageBytes: studioMaxInputImageBytes,
+        serverConversionMaxBytes: studioMaxProxyImageBytes,
       });
       if (!prepared.ok) {
         throw new Error(resolveSourceUploadErrorMessage(prepared.code));
       }
 
-      const directUpload = await uploadSourceImageDirectly(prepared.file);
+      // HEIC/HEIF and other source formats must be decoded before they can
+      // reach the retoucher. Direct PUT intentionally accepts web formats only.
+      setUploadPhase("uploading");
+      const directUpload = supportedProductImageUploadMimeTypes.has(prepared.file.type)
+        ? await uploadSourceImageDirectly(prepared.file)
+        : { attempted: false, source: null };
       const uploadedSource =
         directUpload.source ?? (await uploadSourceImageViaProxy(prepared.file));
 
@@ -484,6 +497,7 @@ const ProductImageStudioPage = () => {
       softShadow,
       tighterCrop,
       brighterPresentation,
+      highQuality,
     });
   };
 
@@ -514,6 +528,24 @@ const ProductImageStudioPage = () => {
   const isBusy =
     createJobMutation.isLoading || retryJobMutation.isLoading || saveToProductMutation.isLoading;
   const previewIsWorking = jobMutationInFlight || isWorkingStudioJobStatus(selectedJob?.status);
+  useEffect(() => {
+    if (!previewIsWorking) return;
+    setClockNow(Date.now());
+    const interval = setInterval(() => setClockNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [previewIsWorking, selectedJob?.id]);
+  const elapsedSeconds = Math.max(
+    0,
+    Math.floor(
+      (clockNow -
+        new Date(
+          isWorkingStudioJobStatus(selectedJob?.status)
+            ? (selectedJob?.createdAt ?? clockNow)
+            : clockNow,
+        ).getTime()) /
+        1000,
+    ),
+  );
   const sourcePreviewUrl = selectedJob?.sourceImageUrl ?? sourceImage?.url ?? null;
   const generatedPreviewUrl = selectedJob?.outputImageUrl
     ? appendImageCacheBuster(
@@ -529,10 +561,7 @@ const ProductImageStudioPage = () => {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title={t("title")}
-        subtitle={t("subtitle")}
-      />
+      <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
       <div className="space-y-6">
         <Card className="bazaar-admin-surface">
@@ -585,9 +614,7 @@ const ProductImageStudioPage = () => {
               </div>
             </div>
             {providerMissing ? (
-              <p className="bazaar-admin-notice mt-4 text-sm">
-                {t("overview.providerMissing")}
-              </p>
+              <p className="bazaar-admin-notice mt-4 text-sm">{t("overview.providerMissing")}</p>
             ) : null}
           </CardContent>
         </Card>
@@ -608,7 +635,10 @@ const ProductImageStudioPage = () => {
                   disabled={!canEdit || uploadingSource}
                 >
                   {uploadingSource ? (
-                    <Spinner className="h-5 w-5" />
+                    <span className="flex items-center gap-2" role="status">
+                      <Spinner className="h-5 w-5" />
+                      {t(`input.${uploadPhase}`)}
+                    </span>
                   ) : (
                     <>
                       <span className="text-sm font-medium">{t("input.uploadCta")}</span>
@@ -711,9 +741,7 @@ const ProductImageStudioPage = () => {
                 ) : null}
               </div>
 
-              <p className="bazaar-admin-notice text-sm">
-                {t("input.reviewNote")}
-              </p>
+              <p className="bazaar-admin-notice text-sm">{t("input.reviewNote")}</p>
             </CardContent>
           </Card>
 
@@ -763,6 +791,18 @@ const ProductImageStudioPage = () => {
               <div className="space-y-4">
                 <div className="flex items-center justify-between gap-4">
                   <div>
+                    <p className="text-sm font-medium">{t("presets.highQuality")}</p>
+                    <p className="text-xs text-muted-foreground">{t("presets.highQualityHint")}</p>
+                  </div>
+                  <Switch
+                    aria-label={t("presets.highQuality")}
+                    checked={highQuality}
+                    onCheckedChange={setHighQuality}
+                    disabled={!canEdit || isBusy}
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <div>
                     <p className="text-sm font-medium">{t("presets.always.centeredTitle")}</p>
                     <p className="text-xs text-muted-foreground">
                       {t("presets.always.centeredDescription")}
@@ -790,6 +830,7 @@ const ProductImageStudioPage = () => {
                   </div>
                   <Switch
                     checked={softShadow}
+                    aria-label={t("presets.optional.softShadowTitle")}
                     onCheckedChange={setSoftShadow}
                     disabled={!canEdit}
                   />
@@ -803,6 +844,7 @@ const ProductImageStudioPage = () => {
                   </div>
                   <Switch
                     checked={tighterCrop}
+                    aria-label={t("presets.optional.tighterCropTitle")}
                     onCheckedChange={setTighterCrop}
                     disabled={!canEdit}
                   />
@@ -816,6 +858,7 @@ const ProductImageStudioPage = () => {
                   </div>
                   <Switch
                     checked={brighterPresentation}
+                    aria-label={t("presets.optional.brighterTitle")}
                     onCheckedChange={setBrighterPresentation}
                     disabled={!canEdit}
                   />
@@ -871,7 +914,7 @@ const ProductImageStudioPage = () => {
                   <Label>{t("preview.generated")}</Label>
                   {selectedJob ? (
                     <Badge variant={jobBadgeVariant(selectedJob.status)}>
-                      {selectedJob.status}
+                      {t(`status.${selectedJob.status}`)}
                     </Badge>
                   ) : null}
                 </div>
@@ -883,7 +926,17 @@ const ProductImageStudioPage = () => {
                         <div className="h-2 overflow-hidden rounded-full bg-secondary">
                           <div className="h-full w-2/3 animate-pulse rounded-full bg-primary/80" />
                         </div>
-                        <p>{t("preview.processing")}</p>
+                        <p>
+                          {selectedJob?.status === "QUEUED"
+                            ? t("preview.queued")
+                            : t("preview.processing")}
+                        </p>
+                        <p className="font-mono tabular-nums" role="status">
+                          {t("preview.elapsed", { seconds: elapsedSeconds })}
+                        </p>
+                        {elapsedSeconds >= 45 ? (
+                          <p className="text-xs">{t("preview.slow")}</p>
+                        ) : null}
                       </div>
                     </div>
                   ) : generatedPreviewUrl ? (
@@ -911,6 +964,7 @@ const ProductImageStudioPage = () => {
               <div className="flex items-center gap-3">
                 <Switch
                   checked={saveAsPrimary}
+                  aria-label={t("preview.setAsPrimary")}
                   onCheckedChange={setSaveAsPrimary}
                   disabled={!canEdit}
                 />
@@ -979,7 +1033,9 @@ const ProductImageStudioPage = () => {
                       className={selectedJobId === job.id ? "bg-secondary/30" : undefined}
                     >
                       <TableCell>
-                        <Badge variant={jobBadgeVariant(job.status)}>{job.status}</Badge>
+                        <Badge variant={jobBadgeVariant(job.status)}>
+                          {t(`status.${job.status}`)}
+                        </Badge>
                       </TableCell>
                       <TableCell>
                         {job.product ? (

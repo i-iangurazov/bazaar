@@ -11,6 +11,7 @@ export async function uploadBaamImage(
     file,
     maxImageBytes: 3 * 1024 * 1024,
     maxInputImageBytes: 32 * 1024 * 1024,
+    serverConversionMaxBytes: 3 * 1024 * 1024,
   });
   if (!prepared.ok) throw new Error(prepared.code);
   const form = new FormData();

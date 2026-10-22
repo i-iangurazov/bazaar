@@ -2147,7 +2147,9 @@
       "productPlaceholder": "Enter product",
       "clearProduct": "Clear product",
       "reviewNote": "Review note",
-      "sourceUploadSuccess": "Source upload completed."
+      "sourceUploadSuccess": "Source upload completed.",
+      "preparing": "Preparing photo…",
+      "uploading": "Uploading photo…"
     },
     "presets": {
       "title": "Presets",
@@ -2175,7 +2177,9 @@
         "tighterCropDescription": "Tighter crop description",
         "brighterTitle": "Brighter",
         "brighterDescription": "Brighter description"
-      }
+      },
+      "highQuality": "Maximum detail",
+      "highQualityHint": "Takes longer. Balanced rendering is used by default."
     },
     "preview": {
       "title": "Preview",
@@ -2188,7 +2192,10 @@
       "emptyGenerated": "Empty generated",
       "processing": "Processing",
       "setAsPrimary": "Set as primary",
-      "productRequired": "Product is required."
+      "productRequired": "Product is required.",
+      "elapsed": "Elapsed: {seconds} s",
+      "slow": "The image is still processing. You can use another page; the result will appear in studio history.",
+      "queued": "The image is queued for processing."
     },
     "actions": {
       "generate": "Generate",
@@ -2215,7 +2222,13 @@
     "jobQueuedSuccess": "Job queued completed.",
     "jobReused": "Job reused",
     "jobRetrySuccess": "Job retry completed.",
-    "saveSuccess": "Save completed."
+    "saveSuccess": "Save completed.",
+    "status": {
+      "QUEUED": "Queued",
+      "PROCESSING": "Processing",
+      "SUCCEEDED": "Ready",
+      "FAILED": "Failed"
+    }
   },
   "catalogPublic": {
     "logoAlt": "{store} store logo",

@@ -4,6 +4,7 @@ import { useRef } from "react";
 import { ImageSquare, Microphone, PaperPlaneTilt, Stop, X } from "@phosphor-icons/react";
 import { Spinner } from "./ui/spinner";
 import type { BaamController } from "./use-baam-companion";
+import { productPhotoAccept } from "@/lib/productImageUpload";
 
 const iconButton =
   "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-muted-foreground hover:bg-secondary focus-visible:outline focus-visible:outline-2 disabled:opacity-40";
@@ -153,7 +154,7 @@ export function BaamComposer({ c }: { c: BaamController }) {
             <input
               ref={fileRef}
               type="file"
-              accept="image/jpeg,image/png,image/webp,image/avif,image/heic,image/heif"
+              accept={productPhotoAccept}
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0];

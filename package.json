@@ -90,6 +90,7 @@
     "@trpc/next": "^10.45.2",
     "@trpc/react-query": "^10.45.2",
     "@trpc/server": "^10.45.2",
+    "@vercel/functions": "^3.10.3",
     "@zxing/browser": "0.1.5",
     "@zxing/library": "0.21.3",
     "bcryptjs": "^2.4.3",

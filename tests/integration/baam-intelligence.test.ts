@@ -339,6 +339,7 @@ describe.skipIf(!shouldRunDbTests)(
         }>
       ).filter((part) => part.type === "record");
       expect(cards[0].title).toBe("Rank product 2");
+      expect(cards).toHaveLength(1);
       expect(
         cards[0].displayFields?.find((field) => field.label === "Возвращённое количество")?.value,
       ).toBe("2 each");

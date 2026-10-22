@@ -6,11 +6,13 @@ import { answerBaamAnalytics, latestBaamAnalysis } from "./baamAnalytics";
 import { answerBaamRecords } from "./baamRecordAnswers";
 import { baamGuideContext } from "./baamGuideContext";
 import { parseLocalBaamProductPlan } from "./baamProductPlan";
+import { diagnosticBaamPlan } from "./baamLocalIntent";
+import { bindBaamRecentRecord, type BaamRecentRecord } from "./baamRecentRecords";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/server/db/prisma";
 import type { Context } from "@/server/trpc/trpc";
 import { baamText, type BaamPart, type BaamSend } from "@/lib/baam/companion";
-import { workflowTitle, type WorkflowValues } from "@/lib/baam/workflows";
+import { workflowTitle, mergeWorkflowCorrection, type WorkflowValues } from "@/lib/baam/workflows";
 import {
   appendBaamMessage,
   assertBaamTurnActive,
@@ -22,7 +24,12 @@ import { baamActions, businessCaller } from "./baamBusiness";
 import { baamHelp, baamSearch, baamInspect } from "./baamReadTools";
 import { getBaamSalesMetrics } from "./baamMetrics";
 import { AppError } from "./errors";
-import { parseBaamFastIntent, understandBaamIntent, baamChoiceText } from "./baamWorkflowIntent";
+import {
+  parseBaamFastIntent,
+  understandBaamIntent,
+  baamChoiceText,
+  isBaamExecutionConfirmation,
+} from "./baamWorkflowIntent";
 import {
   createBaamWorkflow,
   submitBaamWorkflow,
@@ -76,10 +83,13 @@ export async function sendBaamMessage(ctx: Context, input: BaamSend) {
         ? { kind: active.kind, parameters: active.parameters as WorkflowValues }
         : undefined;
     let intent = parseBaamFastIntent(input.text, input.command, current);
+    if (!intent && active?.status === "COMPLETED" && isBaamExecutionConfirmation(input.text))
+      intent = { kind: "confirm", parameters: {}, confidence: "high", source: "grammar" };
+    let recentRecords: BaamRecentRecord[] = [];
     if (intent?.kind === "help" && !input.command && resolveTextAiConfig()) intent = null;
     // Reuse the existing read planner for obvious product analytics, including
     // top-N. Keep action/correction parsing ahead of this read-only shortcut.
-    if (!intent && parseLocalBaamProductPlan(input.text)) {
+    if (!intent && (parseLocalBaamProductPlan(input.text) || diagnosticBaamPlan(input.text))) {
       intent = { kind: "analytics", parameters: {}, confidence: "high", source: "grammar" };
     }
     if (!intent) {
@@ -87,21 +97,59 @@ export async function sendBaamMessage(ctx: Context, input: BaamSend) {
         where: {
           conversationId: conversation.id,
           turn: { scopeRevision: turn.scopeRevision },
-          role: "user",
+          role: { in: ["user", "assistant"] },
           turnId: { not: turn.id },
         },
         orderBy: { sequence: "desc" },
-        take: 4,
+        take: 12,
       });
+      const dialogue = history.reverse().map((m) => ({
+        role: m.role,
+        // The model gets explanations and task context, never authoritative
+        // sales totals or record contents from the server's read results.
+        text:
+          m.role === "assistant" &&
+          Array.isArray(m.parts) &&
+          (m.parts as Array<{ type?: string }>).some((p) =>
+            ["analysisContext", "salesMetrics", "record", "evidence", "attachment"].includes(
+              p.type ?? "",
+            ),
+          )
+            ? "[The application displayed authorized business data; use the supplied analytical context for follow-ups.]"
+            : m.text.slice(0, 1200),
+      }));
       const images = await readBaamImages(ctx, conversation.id, input.attachmentIds);
       analyzedAttachment = images.length > 0;
+      const recentWorkflows = await prisma.baamWorkflow.findMany({
+        where: {
+          conversationId: conversation.id,
+          scopeRevision: conversation.revision,
+          status: { in: ["COMPLETED", "RECEIPT"] },
+          resourceId: { not: null },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 6,
+        select: { kind: true, resourceId: true, parameters: true },
+      });
+      recentRecords = recentWorkflows.map((w) => ({
+        kind: w.kind,
+        resourceId: w.resourceId!,
+        ...(typeof (w.parameters as WorkflowValues).name === "string"
+          ? { name: (w.parameters as WorkflowValues).name as string }
+          : {}),
+      }));
       intent = await understandBaamIntent({
         text: input.text,
         locale: input.locale,
-        history: history.reverse().map((m) => m.text.slice(0, 800)),
+        history: dialogue
+          .filter((m) => m.role === "user")
+          .slice(-4)
+          .map((m) => m.text.slice(0, 800)),
+        dialogue,
         active: current,
         previousAnalysis: (await latestBaamAnalysis(ctx, conversation.id))?.plan,
         page: input.page?.path,
+        recentRecords,
         images,
         signal: controller.signal,
         record: (details) => {
@@ -153,7 +201,14 @@ export async function sendBaamMessage(ctx: Context, input: BaamSend) {
           "Confirmation received. See the execution result below.",
           "Ырастоо алынды. Аткаруунун жыйынтыгы төмөнкү карточкада.",
         );
-      } else
+      } else if (active.status === "COMPLETED")
+        text = baamText(
+          input.locale,
+          "Это действие уже выполнено. Повторно ничего не создано; результат — в карточке ниже.",
+          "This action has already completed. Nothing was created again; see its result below.",
+          "Бул аракет мурда аткарылган. Эч нерсе кайра түзүлгөн жок; жыйынтыгы төмөнкү карточкада.",
+        );
+      else
         text = baamText(
           input.locale,
           "Проверьте текущую карточку: сначала заполните недостающие поля и уточните позиции. Уже выполненное действие повторно не запускается.",
@@ -248,8 +303,10 @@ export async function sendBaamMessage(ctx: Context, input: BaamSend) {
       } else {
         let parameters =
           intent.kind === "correction" && current
-            ? { ...current.parameters, ...intent.parameters }
+            ? mergeWorkflowCorrection(current.parameters, intent.parameters)
             : intent.parameters;
+        if (intent.kind === "action")
+          parameters = bindBaamRecentRecord(input.text, intent.action, parameters, recentRecords);
         if (
           input.attachmentIds.length &&
           ["product_create", "product_update"].includes(intent.action)
@@ -441,14 +498,46 @@ export async function sendBaamMessage(ctx: Context, input: BaamSend) {
     }
     await assertBaamTurnActive(ctx, turn.id);
     await finishBaamTurn(ctx, turn.id, "COMPLETED", text, parts);
+    const reportExecution = async (completed: Awaited<ReturnType<typeof submitBaamWorkflow>>) => {
+      const message =
+        completed.status === "COMPLETED"
+          ? baamText(
+              input.locale,
+              "Готово. Действие выполнено; результат и ссылка — в карточке ниже.",
+              "Done. The action completed; see the result and link below.",
+              "Даяр. Аракет аткарылды; жыйынтык жана шилтеме төмөнкү карточкада.",
+            )
+          : completed.status === "RECEIPT"
+            ? baamText(
+                input.locale,
+                "Чек подготовлен и пока не оплачен. Его можно проверить и продолжить в карточке ниже.",
+                "The receipt is prepared and remains unpaid. Review or continue it below.",
+                "Чек даярдалды, бирок төлөнө элек. Аны төмөнкү карточкадан текшерип, улантсаңыз болот.",
+              )
+            : completed.status === "FAILED"
+              ? baamText(
+                  input.locale,
+                  "Действие не выполнено. В карточке ниже указано, что нужно исправить.",
+                  "The action did not complete. The card below explains what to fix.",
+                  "Аракет аткарылган жок. Төмөнкү карточкада эмнени оңдоо керектиги көрсөтүлгөн.",
+                )
+              : null;
+      if (message)
+        await prisma.baamMessage.updateMany({
+          where: { conversationId: conversation.id, turnId: turn.id, role: "assistant" },
+          data: { text: message },
+        });
+    };
     if (confirmation)
-      await submitBaamWorkflow(ctx, {
-        id: confirmation.id,
-        revision: confirmation.revision,
-        parameters: confirmation.parameters as WorkflowValues,
-        clientRequestId: input.clientRequestId,
-        operation: "execute",
-      });
+      await reportExecution(
+        await submitBaamWorkflow(ctx, {
+          id: confirmation.id,
+          revision: confirmation.revision,
+          parameters: confirmation.parameters as WorkflowValues,
+          clientRequestId: input.clientRequestId,
+          operation: "execute",
+        }),
+      );
     if (
       workflow &&
       !analyzedAttachment &&
@@ -463,13 +552,15 @@ export async function sendBaamMessage(ctx: Context, input: BaamSend) {
         baamActions[workflow.kind].schema.safeParse(cleanWorkflowInput(workflow.kind, params))
           .success
       )
-        await submitBaamWorkflow(ctx, {
-          id: workflow.id,
-          revision: workflow.revision,
-          parameters: params,
-          clientRequestId: randomUUID(),
-          operation: "execute",
-        });
+        await reportExecution(
+          await submitBaamWorkflow(ctx, {
+            id: workflow.id,
+            revision: workflow.revision,
+            parameters: params,
+            clientRequestId: randomUUID(),
+            operation: "execute",
+          }),
+        );
     }
   } catch (error) {
     // Do not log prompts, provider bodies, credentials or customer records.

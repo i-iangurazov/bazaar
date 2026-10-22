@@ -372,7 +372,16 @@ describe("BAAM question interpretation and authoritative answers", () => {
     },
   );
 
-  it.each(["Sales in Store Unknown", "Sales during July", "Sales on 04/09/2026", "Compare stores"])(
+  it("uses the current Bishkek calendar year for a named month without asking again", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-22T12:00:00Z"));
+    const result = await askBaam({ ...input, question: "Sales during July" });
+    expect(result.status).toBe("answer");
+    expect(result.scope).toMatchObject({ dateFrom: "2026-07-01", dateTo: "2026-07-31" });
+    expect(mocks.metrics).toHaveBeenCalled();
+  });
+
+  it.each(["Sales in Store Unknown", "Sales on 04/09/2026", "Compare stores"])(
     "clarifies unresolved scope without figures or provider: %s",
     async (question) => {
       const result = await askBaam({ ...input, question });

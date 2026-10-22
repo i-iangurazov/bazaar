@@ -7,7 +7,12 @@ const now = new Date("2026-09-05T12:00:00Z");
 const resolve = (question: string, clock = now, stores: Array<{ id: string; name: string }> = []) =>
   resolveBaamQuestionScope({ question, selected, now: clock, stores });
 describe("BAAM server business-calendar scope grammar", () => {
-  it.each(["Show bottom 6 products this month", "Покажи 6 товаров без продаж за сегодня", "Какие 6 товаров чаще всего возвращают за месяц?", "Show top 100 products this month"])("keeps bounded product counts distinct from dates: %s", question => {
+  it.each([
+    "Show bottom 6 products this month",
+    "Покажи 6 товаров без продаж за сегодня",
+    "Какие 6 товаров чаще всего возвращают за месяц?",
+    "Show top 100 products this month",
+  ])("keeps bounded product counts distinct from dates: %s", (question) => {
     expect(resolve(question).status).toBe("resolved");
   });
   it.each([
@@ -16,13 +21,39 @@ describe("BAAM server business-calendar scope grammar", () => {
     ["Sales this week", "2026-08-31", "2026-09-05"],
     ["Продажи с 1 по 15 октября 2026", "2026-10-01", "2026-10-15"],
     ["Продажи с 01.10.2026 по 15.10.2026", "2026-10-01", "2026-10-15"],
+    ["Покажи продажи за 22 октября 2026 года", "2026-10-22", "2026-10-22"],
+    ["Как продавался товар AI-QA-3 за октябрь?", "2026-10-01", "2026-10-31"],
+    ["Покажи три самых продаваемых товара по выручке за октябрь", "2026-10-01", "2026-10-31"],
+    ["Покажи продажи с первого по пятнадцатое сентября 2026 года", "2026-09-01", "2026-09-15"],
+    ["Покажи продажи за двадцать второе октября 2026 года", "2026-10-22", "2026-10-22"],
+    ["Продажи с двадцать первого по тридцать первое октября", "2026-10-21", "2026-10-31"],
+    ["Show sales on October 22, 2026", "2026-10-22", "2026-10-22"],
+    ["Show sales on October 22nd 2026", "2026-10-22", "2026-10-22"],
+    ["Продажи с 30 сентября 2026 года по 2 октября 2026 года", "2026-09-30", "2026-10-02"],
+    ["July", "2026-07-01", "2026-07-31"],
+    ["август", "2026-08-01", "2026-08-31"],
+    ["September 3", "2026-09-03", "2026-09-03"],
+    ["2026-жылдын 22-октябрындагы сатуулар", "2026-10-22", "2026-10-22"],
+    ["2025-жылдын октябрындагы сатуулар", "2025-10-01", "2025-10-31"],
   ])("resolves common business date wording: %s", (question, dateFrom, dateTo) => {
     expect(resolve(question)).toMatchObject({ status: "resolved", range: { dateFrom, dateTo } });
   });
-  it.each(["Продажи с 31.02.2026 по 01.03.2026", "Продажи с 1 по 32 октября 2026"])("does not invent a valid date for %s", question => {
+  it.each([
+    "Продажи с 31.02.2026 по 01.03.2026",
+    "Продажи с 1 по 32 октября 2026",
+    "Продажи за 32 октября",
+    "Покажи продажи за тридцать второе октября",
+    "Продажи за 29 февраля 2026 года",
+    "Show sales for February 30, 2026",
+  ])("does not invent a valid date for %s", (question) => {
     expect(resolve(question).status).toBe("clarification");
   });
-  it.each(["Покажи топ-7 товаров за сегодня", "Show top 25 products this month", "Бул айдагы эң көп сатылган 6 товарды көрсөт", "Покажи 6 самых продаваемых товаров за сегодня"])("does not treat a ranking count as an unresolved date: %s", question => {
+  it.each([
+    "Покажи топ-7 товаров за сегодня",
+    "Show top 25 products this month",
+    "Бул айдагы эң көп сатылган 6 товарды көрсөт",
+    "Покажи 6 самых продаваемых товаров за сегодня",
+  ])("does not treat a ranking count as an unresolved date: %s", (question) => {
     expect(resolve(question).status).toBe("resolved");
   });
   it.each([
@@ -81,9 +112,6 @@ describe("BAAM server business-calendar scope grammar", () => {
     });
   });
   it.each([
-    "July",
-    "август",
-    "September 3",
     "04/09/2026",
     "2026-02-30",
     "2026-09-05 to 2026-09-01",

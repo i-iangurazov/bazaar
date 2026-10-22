@@ -53,15 +53,39 @@ export async function baamSearch(ctx: Context, input: z.infer<typeof baamSearchS
       );
       break;
     case "units":
-      items = await prisma.unit.findMany({
-        where: {
-          organizationId,
-          OR: [{ code: contains }, { labelRu: contains }, { labelKg: contains }],
-        },
-        select: { id: true, code: true, labelRu: true, labelKg: true },
-        ...page,
-        orderBy: { id: "asc" },
-      });
+      {
+        const unitAliases: Record<string, string[]> = {
+          штука: ["pcs", "pc", "piece", "each", "ea"],
+          штуки: ["pcs", "pc", "piece", "each", "ea"],
+          штук: ["pcs", "pc", "piece", "each", "ea"],
+          шт: ["pcs", "pc", "piece", "each", "ea"],
+          piece: ["pcs", "pc", "piece", "each", "ea"],
+          pieces: ["pcs", "pc", "piece", "each", "ea"],
+          даана: ["pcs", "pc", "piece", "each", "ea"],
+          килограмм: ["kg", "кг"],
+          килограмма: ["kg", "кг"],
+          килограммов: ["kg", "кг"],
+          грамм: ["g", "гр"],
+          литр: ["l", "л"],
+          метр: ["m", "м"],
+        };
+        const codes =
+          unitAliases[(input.query ?? "").trim().toLowerCase().replace(/\.$/, "")] ?? [];
+        items = await prisma.unit.findMany({
+          where: {
+            organizationId,
+            OR: [
+              { code: contains },
+              { labelRu: contains },
+              { labelKg: contains },
+              ...(codes.length ? [{ code: { in: codes, mode: "insensitive" as const } }] : []),
+            ],
+          },
+          select: { id: true, code: true, labelRu: true, labelKg: true },
+          ...page,
+          orderBy: { id: "asc" },
+        });
+      }
       break;
     case "attributes":
       items = await prisma.attributeDefinition.findMany({
@@ -132,27 +156,41 @@ export async function baamSearch(ctx: Context, input: z.infer<typeof baamSearchS
       break;
     case "orders":
     case "sales":
-      items = await prisma.customerOrder.findMany({
-        where: {
-          organizationId,
-          storeId,
-          isPosSale: input.kind === "sales",
-          OR: [{ number: contains }, { customerName: contains }],
-        },
-        select: {
-          id: true,
-          number: true,
-          status: true,
-          storeId: true,
-          registerId: true,
-          customerName: true,
-          totalKgs: true,
-          createdAt: true,
-          isHeld: true,
-        },
-        ...page,
-        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      });
+      {
+        const documentNumber = /^(S|SO|PO|R|COUNT)[\s-]*(\d{1,12})$/i.exec(
+          (input.query ?? "").trim(),
+        );
+        const canonicalNumber = documentNumber
+          ? `${documentNumber[1].toUpperCase()}-${String(Number(documentNumber[2])).padStart(6, "0")}`
+          : undefined;
+        items = await prisma.customerOrder.findMany({
+          where: {
+            organizationId,
+            storeId,
+            isPosSale: input.kind === "sales",
+            OR: [
+              { number: contains },
+              { customerName: contains },
+              ...(canonicalNumber
+                ? [{ number: { equals: canonicalNumber, mode: "insensitive" as const } }]
+                : []),
+            ],
+          },
+          select: {
+            id: true,
+            number: true,
+            status: true,
+            storeId: true,
+            registerId: true,
+            customerName: true,
+            totalKgs: true,
+            createdAt: true,
+            isHeld: true,
+          },
+          ...page,
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        });
+      }
       break;
     case "purchases":
       items = await prisma.purchaseOrder.findMany({

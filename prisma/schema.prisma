@@ -1746,6 +1746,7 @@ model ProductImageStudioJob {
   softShadow           Boolean                        @default(false)
   tighterCrop          Boolean                        @default(false)
   brighterPresentation Boolean                        @default(false)
+  highQuality          Boolean                        @default(true)
   provider             String
   providerJobId        String?
   requestPrompt        String?                        @db.Text

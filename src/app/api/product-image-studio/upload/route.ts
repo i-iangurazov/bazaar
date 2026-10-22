@@ -4,6 +4,7 @@ import {
   resolveProductImageProxyUploadMaxBytes,
 } from "@/lib/productImageUpload";
 import { uploadProductImageBuffer } from "@/server/services/productImageStorage";
+import { prepareProductStudioSource } from "@/server/services/productImageSourceUpload";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,6 +34,10 @@ const allowedMimeTypes = new Set([
   "image/webp",
   "image/heic",
   "image/heif",
+  "image/avif",
+  "image/gif",
+  "image/tiff",
+  "image/bmp",
 ]);
 const allowedExtensions = new Map<string, string>([
   ["jpg", "image/jpeg"],
@@ -44,6 +49,11 @@ const allowedExtensions = new Map<string, string>([
   ["heif", "image/heif"],
   ["heifs", "image/heif"],
   ["hif", "image/heif"],
+  ["avif", "image/avif"],
+  ["gif", "image/gif"],
+  ["tif", "image/tiff"],
+  ["tiff", "image/tiff"],
+  ["bmp", "image/bmp"],
 ]);
 
 const resolveUploadContentType = (file: File) => {
@@ -94,19 +104,22 @@ export const POST = async (request: Request) => {
   }
 
   try {
-    const buffer = Buffer.from(await file.arrayBuffer());
+    const prepared = await prepareProductStudioSource(file);
     const uploaded = await uploadProductImageBuffer({
       organizationId: String(token.organizationId),
-      buffer,
-      contentType,
+      buffer: prepared.buffer,
+      contentType: prepared.contentType,
       sourceFileName: file.name,
     });
     return Response.json(
       {
         url: uploaded.url,
-        size: file.size,
+        size: prepared.buffer.length,
         fileName: file.name,
-        mimeType: contentType,
+        mimeType:
+          prepared.contentType === "image/heic" || prepared.contentType === "image/heif"
+            ? "image/jpeg"
+            : prepared.contentType,
       },
       { status: 200 },
     );

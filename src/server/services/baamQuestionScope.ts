@@ -156,6 +156,58 @@ const monthPatterns = [
   "december|dec|декабр\\p{L}*",
 ];
 const monthSource = monthPatterns.map((pattern) => `(?:${pattern})`).join("|");
+const ordinalDays = [
+  "перв",
+  "втор",
+  "трет",
+  "четверт",
+  "пят",
+  "шест",
+  "седьм",
+  "восьм",
+  "девят",
+  "десят",
+  "одиннадцат",
+  "двенадцат",
+  "тринадцат",
+  "четырнадцат",
+  "пятнадцат",
+  "шестнадцат",
+  "семнадцат",
+  "восемнадцат",
+  "девятнадцат",
+  "двадцат",
+];
+const calendarDayWords = new Map<string, number>();
+for (let day = 1; day <= 31; day++) {
+  const stem =
+    day <= 20 ? ordinalDays[day - 1] : day === 30 ? "тридцат" : ordinalDays[(day % 10) - 1];
+  const prefix = day > 20 && day !== 30 ? (day < 30 ? "двадцать " : "тридцать ") : "";
+  for (const ending of day === 3 || day === 23 ? ["ье", "ьего"] : ["ое", "ого"])
+    calendarDayWords.set(prefix + stem + ending, day);
+}
+// Recognize impossible spoken days too, so "thirty-second" cannot degrade
+// into an apparently valid request for the whole month.
+for (const [tens, word] of [
+  [30, "тридцать"],
+  [40, "сорок"],
+  [50, "пятьдесят"],
+  [60, "шестьдесят"],
+  [70, "семьдесят"],
+  [80, "восемьдесят"],
+  [90, "девяносто"],
+] as const)
+  for (let unit = 1; unit <= 9; unit++)
+    for (const ending of unit === 3 ? ["ье", "ьего"] : ["ое", "ого"])
+      calendarDayWords.set(`${word} ${ordinalDays[unit - 1]}${ending}`, tens + unit);
+const normalizeCalendarDays = (text: string) =>
+  text.replace(
+    new RegExp(
+      `((?:с|за|по|до)\\s+)(${[...calendarDayWords.keys()].sort((a, b) => b.length - a.length).join("|")})(?=\\s+(?:по|до|${monthSource}))`,
+      "gu",
+    ),
+    (_, prefix: string, day: string) => prefix + calendarDayWords.get(day),
+  );
 const genericStore =
   /^(?:sales|returns|payments|refunds|receipts|performance|totals|revenue|results|discounts|income|profit|selected|all|my|our|the|these|those|this|scope|filters|in|for|of|выбран\p{L}*|все|всех|наш\p{L}*|моего|этот|этом|тандалган|бардык|баардык|менин|биздин|бул|ушул|боюнча|үчүн|продаж\p{L}*|возврат\p{L}*|платеж\p{L}*|сатуу\p{L}*|кайтаруу\p{L}*|төлөм\p{L}*)$/u;
 
@@ -238,8 +290,15 @@ export const resolveBaamQuestionScope = (input: {
       return { status: "clarification", clarification: "store" };
     text = blank(text, hit.index!, hit[0].length);
   }
-  text = normalizeNumbers(text);
+  text = normalizeCalendarDays(normalizeNumbers(text))
+    .replace(
+      new RegExp(`(?<!\\d)(\\d{4})[-\\s]+жыл\\p{L}*\\s+(\\d{1,2})[-\\s]+(${monthSource})`, "gu"),
+      "$2 $3 $1",
+    )
+    .replace(new RegExp(`(?<!\\d)(\\d{4})[-\\s]+жыл\\p{L}*\\s+(${monthSource})`, "gu"), "$2 $1")
+    .replace(new RegExp(`(?<!\\d)(\\d{1,2})-(${monthSource})`, "gu"), "$1 $2");
   const today = businessDateKey(input.now ?? new Date());
+  const currentYear = today.slice(0, 4);
   const candidates: Array<{ range: BaamRange; reason: BaamScopeReason }> = [];
   const consume = (match: RegExpMatchArray, range: BaamRange, reason: BaamScopeReason) => {
     candidates.push({ range, reason });
@@ -248,15 +307,70 @@ export const resolveBaamQuestionScope = (input: {
   const dotted = [...text.matchAll(/(?<!\d)(\d{1,2})\.(\d{1,2})\.(\d{4})(?!\d)/gu)];
   if (dotted.length > 2) return { status: "clarification", clarification: "date" };
   if (dotted.length) {
-    if (dotted.length === 2 && !/^(?:\s|по|до|—|–|-)+$/u.test(text.slice(dotted[0].index! + dotted[0][0].length, dotted[1].index!))) return { status: "clarification", clarification: "date" };
-    const date = (hit: RegExpMatchArray) => `${hit[3]}-${hit[2].padStart(2, "0")}-${hit[1].padStart(2, "0")}`;
-    candidates.push({ range: { dateFrom: date(dotted[0]), dateTo: date(dotted.at(-1)!) }, reason: "explicit_dates" });
+    if (
+      dotted.length === 2 &&
+      !/^(?:\s|по|до|—|–|-)+$/u.test(
+        text.slice(dotted[0].index! + dotted[0][0].length, dotted[1].index!),
+      )
+    )
+      return { status: "clarification", clarification: "date" };
+    const date = (hit: RegExpMatchArray) =>
+      `${hit[3]}-${hit[2].padStart(2, "0")}-${hit[1].padStart(2, "0")}`;
+    candidates.push({
+      range: { dateFrom: date(dotted[0]), dateTo: date(dotted.at(-1)!) },
+      reason: "explicit_dates",
+    });
     for (const hit of dotted) text = blank(text, hit.index!, hit[0].length);
   }
-  for (const hit of [...text.matchAll(new RegExp(`(?<!\\d)(\\d{1,2})\\s*(?:по|—|–|-)\\s*(\\d{1,2})\\s+(${monthSource})\\s+(\\d{4})(?!\\d)`, "gu"))]) {
-    const month = monthPatterns.findIndex(pattern => terms(pattern, hit[3]).length) + 1;
-    const prefix = `${hit[4]}-${String(month).padStart(2, "0")}-`;
-    consume(hit, { dateFrom: prefix + hit[1].padStart(2, "0"), dateTo: prefix + hit[2].padStart(2, "0") }, "explicit_dates");
+  const yearSuffix = "(?:\\s*(?:года?|жыл\\p{L}*))?";
+  for (const hit of [
+    ...text.matchAll(
+      new RegExp(
+        `(?<!\\d)(\\d{1,2})\\s*(?:по|до|—|–|-)\\s*(\\d{1,2})\\s+(${monthSource})(?:\\s+(\\d{4})${yearSuffix})?(?![\\p{L}\\d])`,
+        "gu",
+      ),
+    ),
+  ]) {
+    const month = monthPatterns.findIndex((pattern) => terms(pattern, hit[3]).length) + 1;
+    const prefix = `${hit[4] ?? currentYear}-${String(month).padStart(2, "0")}-`;
+    consume(
+      hit,
+      { dateFrom: prefix + hit[1].padStart(2, "0"), dateTo: prefix + hit[2].padStart(2, "0") },
+      "explicit_dates",
+    );
+  }
+  const namedDays = [
+    ...text.matchAll(
+      new RegExp(
+        `(?<![\\p{L}\\d])(\\d{1,2})\\s+(${monthSource})(?:\\s+(\\d{4})${yearSuffix})?(?![\\p{L}\\d])`,
+        "gu",
+      ),
+    ),
+  ].map((hit) => ({ hit, day: hit[1], month: hit[2], year: hit[3] ?? currentYear }));
+  for (const hit of text.matchAll(
+    new RegExp(
+      `(?<!\\p{L})(${monthSource})\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s+(\\d{4}))?(?![\\p{L}\\d])`,
+      "gu",
+    ),
+  ))
+    namedDays.push({ hit, day: hit[2], month: hit[1], year: hit[3] ?? currentYear });
+  namedDays.sort((a, b) => a.hit.index! - b.hit.index!);
+  if (namedDays.length > 2) return { status: "clarification", clarification: "date" };
+  if (namedDays.length) {
+    if (
+      namedDays.length === 2 &&
+      !/^(?:\s|по|до|to|through|—|–|-)+$/u.test(
+        text.slice(namedDays[0].hit.index! + namedDays[0].hit[0].length, namedDays[1].hit.index!),
+      )
+    )
+      return { status: "clarification", clarification: "date" };
+    const date = (value: (typeof namedDays)[number]) =>
+      `${value.year}-${String(monthPatterns.findIndex((pattern) => terms(pattern, value.month).length) + 1).padStart(2, "0")}-${value.day.padStart(2, "0")}`;
+    candidates.push({
+      range: { dateFrom: date(namedDays[0]), dateTo: date(namedDays.at(-1)!) },
+      reason: "explicit_dates",
+    });
+    for (const { hit } of namedDays) text = blank(text, hit.index!, hit[0].length);
   }
   const iso = [...text.matchAll(/(?<![\d])\d{4}-\d{2}-\d{2}(?![\d])/gu)];
   if (iso.length > 2) return { status: "clarification", clarification: "date" };
@@ -274,11 +388,11 @@ export const resolveBaamQuestionScope = (input: {
     });
     for (const hit of iso) text = blank(text, hit.index!, hit[0].length);
   }
-  // Locale-neutral named months require a year. July–August 2026 shares the
-  // explicit year; two independently specified years support year boundaries.
-  const named = [...text.matchAll(bounded(`(?:${monthSource})(?:\\s+(\\d{4}))?`))].filter(
-    (hit) => !(hit[0] === "may" && /^(?:\s+i\b)/u.test(text.slice(hit.index! + 3))),
-  );
+  // An omitted year means the current Bishkek calendar year and is always shown
+  // in the result. Explicit years still support ranges across year boundaries.
+  const named = [
+    ...text.matchAll(bounded(`(?:${monthSource})(?:\\s+(\\d{4})${yearSuffix})?`)),
+  ].filter((hit) => !(hit[0] === "may" && /^(?:\s+i\b)/u.test(text.slice(hit.index! + 3))));
   if (named.length > 2) return { status: "clarification", clarification: "date" };
   if (named.length) {
     if (
@@ -289,8 +403,7 @@ export const resolveBaamQuestionScope = (input: {
     )
       return { status: "clarification", clarification: "date" };
     const dates = named.map((hit) => {
-      const year = hit[1] ?? (named.length === 2 ? named[1][1] : undefined);
-      if (!year) return null;
+      const year = hit[1] ?? (named.length === 2 ? named[1][1] : undefined) ?? currentYear;
       const month = monthPatterns.findIndex((pattern) => terms(pattern, hit[0]).length) + 1;
       const value = `${year}-${String(month).padStart(2, "0")}-01`;
       return { dateFrom: value, dateTo: addBusinessDays(monthStart(value, 1), -1) };
@@ -345,16 +458,35 @@ export const resolveBaamQuestionScope = (input: {
     text,
   ))
     consume(hit, { dateFrom: monthStart(today, 0), dateTo: today }, "month_to_date");
-  for (const hit of terms("(?:this|current)\\s+week|(?:эт[ау]|текущ[ау]ю)\\s+недел\\p{L}*|(?:бул|ушул)\\s+(?:апта|жума)\\p{L}*", text)) {
+  for (const hit of terms(
+    "(?:this|current)\\s+week|(?:эт[ау]|текущ[ау]ю)\\s+недел\\p{L}*|(?:бул|ушул)\\s+(?:апта|жума)\\p{L}*",
+    text,
+  )) {
     const weekday = new Date(`${today}T00:00:00Z`).getUTCDay() || 7;
     consume(hit, { dateFrom: addBusinessDays(today, 1 - weekday), dateTo: today }, "calendar_week");
   }
-  for (const hit of terms("за\\s+неделю", text)) consume(hit, { dateFrom: addBusinessDays(today, -6), dateTo: today }, "controls");
-  const withoutRankingCount = /top|bottom|lowest|worst|least|топ|продаваем|популяр|selling|чаще|меньше|хуже|без продаж|no sales|zero.sales|сатылбаган|эң көп|эң аз/iu.test(text)
-    ? text
-        .replace(/((?:\btop|\bfirst|\bbottom|топ|первые|биринчи)\s*[-–]?\s*)\d{1,4}(?!\d)/giu, "$1")
-        .replace(/(?<!\d)\d{1,4}(?!\d)(?=\s+(?:(?:самых|лучших|популярных|продаваемых|сатылган|сатылуучу|best|selling|top)\s+)*(?:товар|products?\b|items?\b))/giu, "")
-    : text;
+  for (const hit of terms("за\\s+неделю", text))
+    consume(hit, { dateFrom: addBusinessDays(today, -6), dateTo: today }, "controls");
+  // An SKU such as AI-QA-3 is a product reference, not a leftover calendar day.
+  const withoutIdentifiers = text.replace(
+    /(?<![\p{L}\p{N}])[\p{L}][\p{L}\p{N}]*(?:[-_][\p{L}\p{N}]+)+/gu,
+    "",
+  );
+  const withoutRankingCount = (
+    /top|bottom|lowest|worst|least|топ|продаваем|популяр|selling|чаще|меньше|хуже|без продаж|no sales|zero.sales|сатылбаган|эң көп|эң аз/iu.test(
+      withoutIdentifiers,
+    )
+      ? withoutIdentifiers
+          .replace(
+            /((?:\btop|\bfirst|\bbottom|топ|первые|биринчи)\s*[-–]?\s*)\d{1,4}(?!\d)/giu,
+            "$1",
+          )
+          .replace(
+            /(?<!\d)\d{1,4}(?!\d)(?=\s+(?:(?:самых|лучших|популярных|продаваемых|сатылган|сатылуучу|best|selling|top)\s+)*(?:товар|products?\b|items?\b))/giu,
+            "",
+          )
+      : withoutIdentifiers
+  ).replace(/(?:товар\p{L}*|products?)\s+.*?(?=\s+(?:за|for|during|in)\s|$)/gu, "");
   // Residual calendar/location cues cannot silently become control-scope facts.
   const suspicious = terms(
     "today|yesterday|tomorrow|tonight|days?|weeks?|months?|quarters?|years?|past|rolling|since|between|before|after|last|previous|сегодня\\p{L}*|вчера\\p{L}*|завтра\\p{L}*|позавчера\\p{L}*|недел\\p{L}*|месяц\\p{L}*|квартал\\p{L}*|год\\p{L}*|дней|дня|день|жыл\\p{L}*|ай(?:да|дагы|дын|га|дан)?|күн(?:дө|дөгү|дүн|гө|дөн)?|эртең\\p{L}*|monday|tuesday|wednesday|thursday|friday|saturday|sunday|понедельник\\p{L}*|вторник\\p{L}*|сред[ауыое]|четверг\\p{L}*|пятниц\\p{L}*|суббот\\p{L}*|воскресень\\p{L}*|дүйшөмбү\\p{L}*|шейшемби\\p{L}*|шаршемби\\p{L}*|бейшемби\\p{L}*|ишемби\\p{L}*|жекшемби\\p{L}*",

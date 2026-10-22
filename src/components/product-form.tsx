@@ -86,6 +86,7 @@ import {
   fetchProductImageDirectUploadTarget,
   fetchProductImageUpload,
   normalizeImageMimeType,
+  isHeicLikeFile,
   prepareProductImageFileForUpload,
   putProductImageDirectUpload,
   resolveProductImageDirectUploadTimeoutMs,
@@ -2228,6 +2229,7 @@ export const ProductForm = ({
   };
 
   const uploadImageFile = async (file: File, onProgress?: (progress: number | null) => void) => {
+    if (isHeicLikeFile(file)) return uploadImageFileViaProxy(file);
     const directResult = await uploadImageFileDirectly(file, onProgress);
     if (directResult.url || directResult.attempted) {
       return directResult.url;
@@ -2670,6 +2672,7 @@ export const ProductForm = ({
       maxImageBytes: Math.min(maxImageBytes, maxProxyUploadBytes),
       maxInputImageBytes,
       optimizeAboveBytes: 512 * 1024,
+      serverConversionMaxBytes: isHeicLikeFile(upload.file) ? Math.min(maxImageBytes, maxProxyUploadBytes) : undefined,
       convertHeicToJpeg,
       optimizeImageToLimit: (file) => optimizeImageToLimit(file, Math.min(maxImageBytes, maxProxyUploadBytes)),
     });

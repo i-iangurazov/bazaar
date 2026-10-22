@@ -21,6 +21,32 @@ export const supportedProductImageUploadMimeTypes = new Set([
   "image/png",
   "image/webp",
 ]);
+const sourceImageMimeByExtension: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  avif: "image/avif",
+  gif: "image/gif",
+  bmp: "image/bmp",
+  tif: "image/tiff",
+  tiff: "image/tiff",
+  heic: "image/heic",
+  heics: "image/heic",
+  heif: "image/heif",
+  heifs: "image/heif",
+  hif: "image/heif",
+};
+export const productPhotoAccept = Object.entries(sourceImageMimeByExtension)
+  .flatMap(([extension, mime]) => [mime, `.${extension}`])
+  .filter((v, i, all) => all.indexOf(v) === i)
+  .join(",");
+export const resolveProductPhotoSourceMimeType = (file: Pick<File, "type" | "name">) => {
+  const type = normalizeImageMimeType(file.type);
+  return Object.values(sourceImageMimeByExtension).includes(type)
+    ? type
+    : (sourceImageMimeByExtension[file.name.split(".").at(-1)?.toLowerCase() ?? ""] ?? "");
+};
 
 const supportedProductImageMimeByExtension: Record<string, string> = {
   jpg: "image/jpeg",
@@ -34,6 +60,8 @@ export const normalizeImageMimeType = (value: string) => {
   if (normalized === "image/jpg" || normalized === "image/pjpeg") {
     return "image/jpeg";
   }
+  if (normalized === "image/x-ms-bmp") return "image/bmp";
+  if (normalized === "image/tif") return "image/tiff";
   if (normalized === "image/heic-sequence" || normalized === "image/x-heic") {
     return "image/heic";
   }
@@ -254,6 +282,8 @@ type PrepareProductImageFileInput = {
   convertHeicToJpeg: (file: File) => Promise<File | null>;
   optimizeImageToLimit: (file: File) => Promise<File | null>;
   optimizeAboveBytes?: number;
+  // Only opt in for an endpoint that actually decodes these formats server-side.
+  serverConversionMaxBytes?: number;
 };
 
 export type PrepareProductImageFileError =
@@ -287,6 +317,18 @@ export const prepareProductImageFileForUpload = async (
   }
 
   let file = input.file;
+  const sourceType = resolveProductPhotoSourceMimeType(file);
+  if (
+    input.serverConversionMaxBytes &&
+    sourceType &&
+    !supportedProductImageUploadMimeTypes.has(sourceType) &&
+    file.size <= input.serverConversionMaxBytes
+  ) {
+    return {
+      ok: true,
+      file: new File([file], file.name, { type: sourceType, lastModified: file.lastModified }),
+    };
+  }
   if (isHeicLikeFile(file)) {
     const converted = await input.convertHeicToJpeg(file);
     if (!converted) {

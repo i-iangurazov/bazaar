@@ -172,6 +172,7 @@ export const executeBaamProductPlan = async (input: {
         FROM population p LEFT JOIN grouped g ON g."productId" = p.id
         WHERE true ${search}
           ${plan.productAction === "zero_sales" ? Prisma.sql`AND COALESCE(g.sold, 0) = 0` : Prisma.empty}
+          ${plan.productAction === "ranking" && plan.metric === "return_units" ? Prisma.sql`AND COALESCE(g.returned, 0) > 0` : Prisma.empty}
       )
       SELECT *, COUNT(*) OVER()::int AS total, (SELECT COUNT(*)::int FROM population) AS population
       FROM filtered ORDER BY ${order} LIMIT ${plan.limit}
@@ -198,9 +199,12 @@ export const executeBaamProductPlan = async (input: {
     evidence.details.push(`${c.matches}: ${total}; ${c.shown}: ${rows.length}${rows[0] ? `; ${c.count}: ${rows[0].population}` : ""}`);
     const heading = plan.productAction === "performance" ? c.performance : plan.productAction === "zero_sales" ? c.zero : dated ? c.ranking : c.catalog;
     const ordering = plan.productAction === "ranking" ? ` ${plan.direction === "bottom" ? c.bottom : c.top}: ${plan.metric === "revenue" ? c.netRevenue : plan.metric === "return_units" ? c.returned : c.netUnits}.` : "";
+    const noMatch = plan.productAction === "ranking" && plan.metric === "return_units"
+      ? { ru: "За выбранный период завершённых возвратов этих товаров нет.", en: "No completed returns for these products in the selected period.", kg: "Тандалган мезгилде бул товарлардын аяктаган кайтаруулары жок." }[input.locale]
+      : c.noMatch;
     return {
       status: clarification ? "clarification" : "answer",
-      answer: `${heading}.${ordering} ${rows.length ? `${c.shown}: ${rows.length} / ${total}.` : c.noMatch}${clarification ? ` ${c.pick}` : ""}`,
+      answer: `${heading}.${ordering} ${rows.length ? `${c.shown}: ${rows.length} / ${total}.` : noMatch}${clarification ? ` ${c.pick}` : ""}`,
       cards, evidence,
       ...((!dated || plan.productAction === "performance") && total === 1 ? { contextProductId: rows[0].id } : {}),
     };

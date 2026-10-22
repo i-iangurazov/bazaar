@@ -1,5 +1,6 @@
 import {
   normalizeImageMimeType,
+  resolveProductPhotoSourceMimeType,
   prepareProductImageFileForUpload,
   type PrepareProductImageFileResult,
 } from "@/lib/productImageUpload";
@@ -156,7 +157,11 @@ const convertBrowserReadableImageToJpeg = async (file: File) => {
   }
 };
 
-const createImageOptimizer = (input: { maxImageBytes: number; logger?: ImagePrepLogger; fast?: boolean }) => {
+const createImageOptimizer = (input: {
+  maxImageBytes: number;
+  logger?: ImagePrepLogger;
+  fast?: boolean;
+}) => {
   const { logger, maxImageBytes } = input;
 
   return async (file: File) => {
@@ -200,9 +205,10 @@ const createImageOptimizer = (input: { maxImageBytes: number; logger?: ImagePrep
         const context = canvas.getContext("2d");
         if (context) {
           context.drawImage(image, 0, 0, canvas.width, canvas.height);
-          const type = normalizedType === "image/png"
-            ? "image/webp"
-            : normalizedType as "image/jpeg" | "image/webp";
+          const type =
+            normalizedType === "image/png"
+              ? "image/webp"
+              : (normalizedType as "image/jpeg" | "image/webp");
           const compact = await encodeCanvasToFile({
             canvas,
             type,
@@ -536,8 +542,14 @@ export const prepareManagedProductImageForUpload = async (input: {
   maxImageBytes: number;
   maxInputImageBytes: number;
   logger?: ImagePrepLogger;
+  serverConversionMaxBytes?: number;
 }): Promise<PrepareProductImageFileResult> => {
-  const { file, logger, maxImageBytes, maxInputImageBytes } = input;
+  const { logger, maxImageBytes, maxInputImageBytes } = input;
+  let file = input.file;
+  if (file.size <= maxInputImageBytes && resolveProductPhotoSourceMimeType(file) === "image/bmp") {
+    const converted = await convertBrowserReadableImageToJpeg(file);
+    if (converted) file = converted;
+  }
 
   return prepareProductImageFileForUpload({
     file,
@@ -545,5 +557,6 @@ export const prepareManagedProductImageForUpload = async (input: {
     maxInputImageBytes,
     convertHeicToJpeg: createHeicConverter(logger),
     optimizeImageToLimit: createImageOptimizer({ maxImageBytes, logger }),
+    serverConversionMaxBytes: input.serverConversionMaxBytes,
   });
 };

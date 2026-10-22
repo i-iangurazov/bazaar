@@ -13,6 +13,7 @@ import {
 import { prisma } from "@/server/db/prisma";
 import { assertExternalProviderCallAllowed } from "@/server/config/runtime";
 import { runJob, type JobPayload } from "@/server/jobs";
+import { keepBackgroundTaskAlive } from "@/server/jobs/background";
 import { writeAuditLog } from "@/server/services/audit";
 import { AppError } from "@/server/services/errors";
 import {
@@ -26,8 +27,8 @@ export const PRODUCT_IMAGE_STUDIO_JOB_NAME = "product-image-studio-process";
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const DEFAULT_OPENAI_AI_MODEL = "gpt-5-nano";
-const DEFAULT_OPENAI_IMAGE_MODEL = "gpt-image-1";
-const DEFAULT_OPENAI_IMAGE_QUALITY = "high";
+const DEFAULT_OPENAI_IMAGE_MODEL = "gpt-image-2.5-flare";
+const DEFAULT_OPENAI_IMAGE_QUALITY = "medium";
 const PROVIDER_NAME = "openai";
 const MANAGED_UPLOAD_PREFIX = "/uploads/imported-products/";
 const publicRootDir = resolve(process.cwd(), "public");
@@ -88,6 +89,7 @@ type ProductImageStudioPresetInput = {
   softShadow: boolean;
   tighterCrop: boolean;
   brighterPresentation: boolean;
+  highQuality?: boolean;
 };
 
 type ProductImageStudioSourceImage = {
@@ -502,7 +504,7 @@ const callOpenAiImageEnhancement = async (input: {
     model: config.imageModel,
     action: "edit",
     size: "1024x1024",
-    quality: config.imageQuality,
+    quality: input.presets.highQuality ? "high" : config.imageQuality,
     output_format: "jpeg",
     output_compression: 95,
     background: "opaque",
@@ -530,7 +532,9 @@ const callOpenAiImageEnhancement = async (input: {
   const requestBody = {
     model: config.model,
     store: false,
-    safety_identifier: createHash("sha256").update(`bazaar-image-studio:${input.jobId}`).digest("hex"),
+    safety_identifier: createHash("sha256")
+      .update(`bazaar-image-studio:${input.jobId}`)
+      .digest("hex"),
     input: [
       {
         role: "system",
@@ -559,6 +563,7 @@ const callOpenAiImageEnhancement = async (input: {
     tools: [imageGenerationTool],
   };
 
+  const deadline = Date.now() + PRODUCT_IMAGE_STUDIO_PROVIDER_TIMEOUT_MS;
   for (let attempt = 1; attempt <= OPENAI_MAX_ATTEMPTS; attempt += 1) {
     let response: Response;
     let responseBody: OpenAiImageResponseBody | null = null;
@@ -573,20 +578,18 @@ const callOpenAiImageEnhancement = async (input: {
           Authorization: `Bearer ${config.apiKey}`,
         },
         body: JSON.stringify(requestBody),
-        signal: AbortSignal.timeout(PRODUCT_IMAGE_STUDIO_PROVIDER_TIMEOUT_MS),
+        signal: AbortSignal.timeout(Math.max(1, deadline - Date.now())),
       });
       responseBody = (await response.json().catch(() => null)) as OpenAiImageResponseBody | null;
     } catch (error) {
       const normalized = normalizeProviderError({ error });
-      if (!normalized.retryable || attempt === OPENAI_MAX_ATTEMPTS) {
-        throw new AppError(
-          normalized.message || "productImageStudioProviderFailed",
-          "INTERNAL_SERVER_ERROR",
-          502,
-        );
-      }
-      await sleep(250 * attempt);
-      continue;
+      // A network timeout may still leave a paid image request running at the
+      // provider. Never secretly launch another generation after this outcome.
+      throw new AppError(
+        normalized.message || "productImageStudioProviderFailed",
+        "INTERNAL_SERVER_ERROR",
+        502,
+      );
     }
 
     if (!response.ok) {
@@ -594,7 +597,7 @@ const callOpenAiImageEnhancement = async (input: {
         status: response.status,
         body: responseBody,
       });
-      if (!normalized.retryable || attempt === OPENAI_MAX_ATTEMPTS) {
+      if (!normalized.retryable || attempt === OPENAI_MAX_ATTEMPTS || Date.now() >= deadline) {
         throw new AppError(
           normalized.message || "productImageStudioProviderFailed",
           "INTERNAL_SERVER_ERROR",
@@ -607,11 +610,7 @@ const callOpenAiImageEnhancement = async (input: {
 
     const generated = extractGeneratedImageResult(responseBody);
     if (!generated) {
-      if (attempt === OPENAI_MAX_ATTEMPTS) {
-        throw new AppError("productImageStudioProviderOutputMissing", "INTERNAL_SERVER_ERROR", 502);
-      }
-      await sleep(250 * attempt);
-      continue;
+      throw new AppError("productImageStudioProviderOutputMissing", "INTERNAL_SERVER_ERROR", 502);
     }
 
     const imageBuffer = Buffer.from(generated.imageBase64, "base64");
@@ -785,6 +784,7 @@ const productImageStudioJobSelect = {
   createdAt: true,
   updatedAt: true,
   completedAt: true,
+  highQuality: true,
   createdBy: {
     select: {
       id: true,
@@ -918,7 +918,9 @@ const dispatchProductImageStudioJob = (jobId: string, organizationId: string) =>
   if (process.env.NODE_ENV === "test") {
     return;
   }
-  void runJob(PRODUCT_IMAGE_STUDIO_JOB_NAME, { jobId, organizationId }).catch(() => null);
+  keepBackgroundTaskAlive(
+    runJob(PRODUCT_IMAGE_STUDIO_JOB_NAME, { jobId, organizationId }).catch(() => null),
+  );
 };
 
 export const createProductImageStudioJob = async (input: {
@@ -934,6 +936,7 @@ export const createProductImageStudioJob = async (input: {
   softShadow?: boolean;
   tighterCrop?: boolean;
   brighterPresentation?: boolean;
+  highQuality?: boolean;
 }) => {
   const presets: ProductImageStudioPresetInput = {
     backgroundMode: input.backgroundMode,
@@ -943,6 +946,7 @@ export const createProductImageStudioJob = async (input: {
     softShadow: Boolean(input.softShadow),
     tighterCrop: Boolean(input.tighterCrop),
     brighterPresentation: Boolean(input.brighterPresentation),
+    highQuality: Boolean(input.highQuality),
   };
   validatePresetSelection(presets);
 
@@ -971,6 +975,7 @@ export const createProductImageStudioJob = async (input: {
     softShadow: presets.softShadow,
     tighterCrop: presets.tighterCrop,
     brighterPresentation: presets.brighterPresentation,
+    highQuality: presets.highQuality,
     status: {
       in: [ProductImageStudioJobStatus.QUEUED, ProductImageStudioJobStatus.PROCESSING],
     },
@@ -1013,6 +1018,7 @@ export const createProductImageStudioJob = async (input: {
             softShadow: presets.softShadow,
             tighterCrop: presets.tighterCrop,
             brighterPresentation: presets.brighterPresentation,
+            highQuality: presets.highQuality,
             provider: PROVIDER_NAME,
             requestPrompt: prompt,
           },
@@ -1087,6 +1093,7 @@ export const retryProductImageStudioJob = async (input: {
       softShadow: true,
       tighterCrop: true,
       brighterPresentation: true,
+      highQuality: true,
     },
   });
 
@@ -1113,6 +1120,7 @@ export const retryProductImageStudioJob = async (input: {
     softShadow: job.softShadow,
     tighterCrop: job.tighterCrop,
     brighterPresentation: job.brighterPresentation,
+    highQuality: job.highQuality,
   });
 };
 
@@ -1369,6 +1377,7 @@ const processQueuedProductImageStudioJob = async (jobId?: string) => {
           brighterPresentation: running.brighterPresentation,
         }),
       presets: {
+        highQuality: running.highQuality,
         backgroundMode: running.backgroundMode,
         outputFormat: running.outputFormat,
         centered: running.centered,

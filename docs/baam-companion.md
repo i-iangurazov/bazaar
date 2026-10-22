@@ -1,5 +1,7 @@
 # BAAM companion: capability and verification matrix
 
+Последующая пользовательская проверка выявила дополнительные дефекты. Их исправления и отдельная повторная приёмка описаны в [отчёте от 22 октября](ai-recheck-2026-10-22.md); результаты прежней поставки ниже не заменяют этот отчёт.
+
 ## DeepSeek upgrade on playground, 2026-10-22
 
 Current implementation: `codex/playground`. This is a branch delivery; neither `main` nor production is deployed by this change. Verification details and commands are recorded in `ai-upgrade-verification-2026-10-22.json` after the final checks.

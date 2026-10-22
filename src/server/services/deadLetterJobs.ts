@@ -186,52 +186,55 @@ export const resolveDeadLetterJob = async (input: {
   const candidate = await prisma.deadLetterJob.findFirst({ where });
   if (!candidate) throw new AppError("jobNotFound", "NOT_FOUND", 404);
   if (candidate.resolvedAt) return candidate;
-  const locked = await withJobLock(candidate.jobName, () =>
-    prisma.$transaction(async (tx) => {
-      const job = await tx.deadLetterJob.findFirst({
-        where,
-      });
-      if (!job) {
-        throw new AppError("jobNotFound", "NOT_FOUND", 404);
-      }
-      if (job.resolvedAt) {
-        return job;
-      }
-      const resolved = await tx.deadLetterJob.updateMany({
-        where: {
-          id: job.id,
-          organizationId: job.organizationId,
-          resolvedAt: null,
-          retryAttemptId: job.retryAttemptId,
-        },
-        data: {
-          resolvedAt: new Date(),
-          resolvedById: input.actorId,
-          retryAttemptId: null,
-          retryStartedAt: null,
-        },
-      });
-      const updated = await tx.deadLetterJob.findUniqueOrThrow({ where: { id: job.id } });
-      if (resolved.count !== 1) {
-        if (updated.resolvedAt) return updated;
-        throw new AppError("jobRetryStateChanged", "CONFLICT", 409);
-      }
+  const locked = await withJobLock(
+    candidate.jobName,
+    () =>
+      prisma.$transaction(async (tx) => {
+        const job = await tx.deadLetterJob.findFirst({
+          where,
+        });
+        if (!job) {
+          throw new AppError("jobNotFound", "NOT_FOUND", 404);
+        }
+        if (job.resolvedAt) {
+          return job;
+        }
+        const resolved = await tx.deadLetterJob.updateMany({
+          where: {
+            id: job.id,
+            organizationId: job.organizationId,
+            resolvedAt: null,
+            retryAttemptId: job.retryAttemptId,
+          },
+          data: {
+            resolvedAt: new Date(),
+            resolvedById: input.actorId,
+            retryAttemptId: null,
+            retryStartedAt: null,
+          },
+        });
+        const updated = await tx.deadLetterJob.findUniqueOrThrow({ where: { id: job.id } });
+        if (resolved.count !== 1) {
+          if (updated.resolvedAt) return updated;
+          throw new AppError("jobRetryStateChanged", "CONFLICT", 409);
+        }
 
-      await writeDeadLetterActionAudit({
-        client: tx,
-        organizationId: input.organizationId,
-        jobOrganizationId: input.jobOrganizationId,
-        actorId: input.actorId,
-        action: "JOB_RESOLVE",
-        job,
-        updated,
-        before: job,
-        after: updated,
-        requestId: input.requestId,
-      });
+        await writeDeadLetterActionAudit({
+          client: tx,
+          organizationId: input.organizationId,
+          jobOrganizationId: input.jobOrganizationId,
+          actorId: input.actorId,
+          action: "JOB_RESOLVE",
+          job,
+          updated,
+          before: job,
+          after: updated,
+          requestId: input.requestId,
+        });
 
-      return updated;
-    }),
+        return updated;
+      }),
+    candidate.payload as JobPayload,
   );
   if (!locked.acquired) throw new AppError("jobRetryInProgress", "CONFLICT", 409);
   return locked.value;

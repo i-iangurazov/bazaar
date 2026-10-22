@@ -1,0 +1,198 @@
+{
+  "date": "2026-10-22",
+  "branch": "codex/playground",
+  "baseCommit": "45488f23cd1956271dc59f2bcc281a429fa60464",
+  "mainMerged": false,
+  "productionDeployed": false,
+  "credentialsCommitted": false,
+  "providers": {
+    "textAndVision": "deepseek-flash",
+    "speechRecognition": "existing OpenAI ASR",
+    "imageEdit": "gpt-image-2.5-flare, medium by default; explicit high option",
+    "readAloud": "browser speech synthesis",
+    "businessFigures": "authorized server services and PostgreSQL"
+  },
+  "automated": {
+    "fullRegression": {
+      "passed": 2514,
+      "files": 347,
+      "log": "tmp/ai-upgrade/recheck-full-tests-final.log",
+      "database": "bazaar_hardening_baam_tests; providers disabled"
+    },
+    "typecheck": "passed",
+    "lint": "passed without warnings",
+    "translations": "passed RU/EN/KG",
+    "productionBuild": {
+      "status": "passed",
+      "command": "node --import tsx scripts/baam/build.ts",
+      "log": "tmp/ai-upgrade/recheck-production-build.log"
+    },
+    "formattingNote": "Unrelated original formatting restored only after canonical Prettier output equality; JSON values equality checked."
+  },
+  "liveAcceptance": {
+    "reads": {
+      "passed": 25,
+      "total": 25,
+      "evidence": "artifacts/baam-companion/recheck/reads.json",
+      "cases": [
+        "explicit-spoken-day",
+        "top-seven-spoken",
+        "top-three-current-year",
+        "product-performance-sku-day-confusion",
+        "zero-sales",
+        "no-returns",
+        "comparison",
+        "ordinal-range",
+        "diagnostics-without-causes",
+        "product-search",
+        "receipt-search",
+        "supplier-search",
+        "stores",
+        "empty-search",
+        "variants-how-to",
+        "negated-write",
+        "page-context",
+        "capabilities",
+        "invalid-spoken-date",
+        "missing-fields",
+        "multiple-unrelated-writes",
+        "other-organization",
+        "unsupported-profit-tax",
+        "english-ranking",
+        "mixed-ranking"
+      ]
+    },
+    "voice": {
+      "passed": 25,
+      "total": 25,
+      "evidence": "artifacts/baam-companion/recheck/voice.json",
+      "cases": [
+        "explicit-spoken-day",
+        "top-seven-spoken",
+        "top-three-current-year",
+        "product-performance-sku-day-confusion",
+        "zero-sales",
+        "no-returns",
+        "comparison",
+        "ordinal-range",
+        "diagnostics-without-causes",
+        "product-search",
+        "receipt-search",
+        "supplier-search",
+        "stores",
+        "empty-search",
+        "variants-how-to",
+        "negated-write",
+        "page-context",
+        "capabilities",
+        "invalid-spoken-date",
+        "missing-fields",
+        "multiple-unrelated-writes",
+        "other-organization",
+        "unsupported-profit-tax",
+        "english-ranking",
+        "mixed-ranking"
+      ]
+    },
+    "actions": {
+      "passed": 9,
+      "total": 9,
+      "evidence": "artifacts/baam-companion/recheck/actions.json",
+      "cases": [
+        "create-product-with-spoken-unit",
+        "follow-up-price-without-repeating-product",
+        "create-supplier",
+        "missing-customer-contact-and-follow-up",
+        "receive-correct-confirm-and-no-duplicate",
+        "stock-count-create",
+        "unpaid-receipt-with-register-resolution",
+        "cancel-pending-operation",
+        "comparison-follow-up-context"
+      ]
+    },
+    "voice-actions": {
+      "passed": 9,
+      "total": 9,
+      "evidence": "artifacts/baam-companion/recheck/voice-actions.json",
+      "cases": [
+        "create-product-with-spoken-unit",
+        "follow-up-price-without-repeating-product",
+        "create-supplier",
+        "missing-customer-contact-and-follow-up",
+        "receive-correct-confirm-and-no-duplicate",
+        "stock-count-create",
+        "unpaid-receipt-with-register-resolution",
+        "cancel-pending-operation",
+        "comparison-follow-up-context"
+      ]
+    },
+    "all49ActionIntents": {
+      "passed": 49,
+      "total": 49,
+      "evidence": "tmp/ai-upgrade/live-actions-acceptance.json"
+    },
+    "broadMultilingualIntents": {
+      "passed": 36,
+      "total": 36,
+      "evidence": "tmp/ai-upgrade/live-intents-acceptance.json"
+    },
+    "media": {
+      "passed": 9,
+      "total": 9,
+      "evidence": "tmp/ai-upgrade/live-media-acceptance.json"
+    },
+    "clothingCategories": {
+      "passed": 1,
+      "total": 1,
+      "evidence": "tmp/ai-upgrade/live-catalog-acceptance.json"
+    },
+    "browser": {
+      "passed": 16,
+      "total": 16,
+      "evidence": "artifacts/baam-companion/recheck/browser.json",
+      "environment": "local production build; HTTPS; synthetic organization",
+      "previewRace": "Injected a stale PROCESSING details response while the list was already SUCCEEDED; details refetched and preview rendered."
+    },
+    "catalog": {
+      "passed": 3,
+      "total": 3,
+      "evidence": "artifacts/baam-companion/recheck/catalog.json"
+    },
+    "voiceBrowser": {
+      "source": "synthetic business speech via WebCodecs audio track; actual Chrome MediaRecorder; desktop browser at mobile viewport; no physical microphone claim",
+      "rawMediaRecorderUpload": true,
+      "providerStatus": 200,
+      "recognized": "Покажи топ 7 товаров по количеству за октябрь.",
+      "editable": true,
+      "editedQueryExecuted": true,
+      "resultCards": 5,
+      "recordingCancelDidNotUpload": true,
+      "deniedMicrophoneExplained": true,
+      "readAloudUiApiOnly": true,
+      "environment": "local production build; Chrome at mobile viewport; controlled synthetic audio stream"
+    }
+  },
+  "studioTiming": {
+    "realMediaCallMs": 25424,
+    "productionUiThroughSaveMs": 28882,
+    "developmentUiThroughSaveMs": 35246,
+    "model": "gpt-image-2.5-flare",
+    "quality": "medium",
+    "note": "Controlled synthetic images; not a latency guarantee for arbitrary photographs or provider load."
+  },
+  "limitations": [
+    "No physical user microphone or speakers were tested; Chrome MediaRecorder and real ASR were exercised with controlled synthetic speech.",
+    "49-operation corpus verifies interpretation; full end-to-end manual execution covered 9 chains in each input mode. Business services have independent regression coverage.",
+    "DeepSeek currently accepts text/images and returns text; ASR and image editing still require their separate OpenAI executors.",
+    "Image support means nine tested common raster formats under configured size limits, not RAW/SVG/all codecs or unlimited sizes.",
+    "Vercel waitUntil is covered by the host-lifetime contract test and production bundle; no production deployment was authorized or performed.",
+    "Provider errors, unclear requests, missing required fields and unavailable permissions still require a clear error or clarification; no unlimited success guarantee."
+  ],
+  "dataSafety": {
+    "liveDatabase": "bazaar_hardening_baam; never reset",
+    "automatedDisposableDatabase": "bazaar_hardening_baam_tests",
+    "localOnly": true,
+    "originalLocaleBackup": "bazaar_hardening_baam_original_c and owned temporary pg_dump",
+    "syntheticWritesOnly": true
+  }
+}
