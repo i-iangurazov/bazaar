@@ -2259,5 +2259,11 @@
       "unchangedPublicUrls": true,
       "evidence": "tmp/ai-upgrade/recheck-runtime-images.log"
     }
+  },
+  "ciStabilizationRegression": {
+    "initialRun": "https://github.com/i-iangurazov/bazaar/actions/runs/39776233161",
+    "initialFailure": "One historical stabilization assertion expected an unsold-filled sales top. Actual sold-only output was correct.",
+    "change": "Update sold-only expectation and separately verify return-only products remain in returns ranking.",
+    "applicationSourceUnchanged": true
   }
 }
