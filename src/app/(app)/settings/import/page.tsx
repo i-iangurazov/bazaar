@@ -122,7 +122,7 @@ type ImportUpdateField =
 type ProductExistingBehavior = "update" | "skip";
 type ProductEmptyValueBehavior = "keep" | "overwrite";
 type ProductStockBehavior = "ignore" | "set" | "add";
-type ProductImportRowAction = "create" | "update" | "skip";
+type ProductImportRowAction = "create" | "update" | "skip" | "connect";
 type ProductImportRowDecision = {
   sourceRowNumber: number;
   action: ProductImportRowAction;
@@ -133,6 +133,7 @@ type ImportRunSummary = {
   rows?: number;
   created?: number;
   updated?: number;
+  connected?: number;
   skipped?: number;
   source?: string;
   mode?: ImportMode;
@@ -898,6 +899,7 @@ type DryRunPreviewSummary = ImportDryRunPreviewData["summary"];
 const createEmptyDryRunSummary = (): DryRunPreviewSummary => ({
   creates: 0,
   updates: 0,
+  connected: 0,
   skipped: 0,
   warningCount: 0,
   blockingWarningCount: 0,
@@ -944,6 +946,7 @@ const mergeDryRunPreview = (
     summary: {
       creates: current.summary.creates + next.summary.creates,
       updates: current.summary.updates + next.summary.updates,
+      connected: (current.summary.connected ?? 0) + (next.summary.connected ?? 0),
       skipped: current.summary.skipped + next.summary.skipped,
       warningCount: current.summary.warningCount + next.summary.warningCount,
       blockingWarningCount:
@@ -1637,6 +1640,7 @@ const ImportPage = () => {
   const [dryRunPreviewError, setDryRunPreviewError] = useState<string | null>(null);
   const [dryRunPreviewPending, setDryRunPreviewPending] = useState(false);
   const dryRunRequestVersionRef = useRef(0);
+  const [previewRefreshKey, setPreviewRefreshKey] = useState(0);
   const productImportOperationRef = useRef<{ signature: string; key: string } | null>(null);
 
   useEffect(() => {
@@ -2163,7 +2167,7 @@ const ImportPage = () => {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [previewInput, tErrors]);
+  }, [previewInput, previewRefreshKey, tErrors]);
 
   const applyDetectedProductMapping = (nextHeaders: string[]) => {
     const nextMapping = buildDefaultMapping(nextHeaders);
@@ -2532,6 +2536,7 @@ const ImportPage = () => {
         aggregateSummary.rows = (aggregateSummary.rows ?? 0) + (summary.rows ?? 0);
         aggregateSummary.created = (aggregateSummary.created ?? 0) + (summary.created ?? 0);
         aggregateSummary.updated = (aggregateSummary.updated ?? 0) + (summary.updated ?? 0);
+        aggregateSummary.connected = (aggregateSummary.connected ?? 0) + (summary.connected ?? 0);
         aggregateSummary.skipped = (aggregateSummary.skipped ?? 0) + (summary.skipped ?? 0);
         aggregateSummary.targetStoreName =
           aggregateSummary.targetStoreName ?? summary.targetStoreName;
@@ -2636,10 +2641,10 @@ const ImportPage = () => {
         <div className="max-w-sm space-y-2">
           <Select
             value={targetStoreId}
-            onValueChange={setTargetStoreId}
-            disabled={storesQuery.isLoading || !stores.length}
+            onValueChange={(value) => { setTargetStoreId(value); setProductRowActions({}); }}
+            disabled={storesQuery.isLoading || !stores.length || isImporting}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label={t("targetStoreTitle")}>
               <SelectValue placeholder={t("targetStorePlaceholder")} />
             </SelectTrigger>
             <SelectContent>
@@ -2994,6 +2999,11 @@ const ImportPage = () => {
                 <p className="text-sm font-medium text-foreground">{t("dryRunTitle")}</p>
                 <p className="text-xs text-muted-foreground">{t("dryRunSubtitle")}</p>
               </div>
+              <Button type="button" size="sm" variant="secondary"
+                disabled={!previewInput || dryRunPreviewPending || isImporting}
+                onClick={() => setPreviewRefreshKey((value) => value + 1)}>
+                {t("dryRunRefresh")}
+              </Button>
               {dryRunPreviewPending ? (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <Spinner className="h-4 w-4" />
@@ -3007,6 +3017,7 @@ const ImportPage = () => {
                   preview={dryRunPreview}
                   rowActions={productRowActions}
                   onRowActionChange={handleProductRowActionChange}
+                  disabled={dryRunPreviewPending || isImporting}
                 />
               ) : dryRunPreviewError ? (
                 <p className="text-sm text-danger">{dryRunPreviewError}</p>
@@ -3254,6 +3265,7 @@ const ImportPage = () => {
                   {t("targetStoreApplied", { store: lastImportSummary.targetStoreName })}
                 </p>
               ) : null}
+              {lastImportSummary.connected ? <p className="mt-2 text-xs">{t("connectedCount", { count: lastImportSummary.connected })}</p> : null}
               <div className="mt-2 grid grid-cols-1 gap-2 text-xs sm:grid-cols-3">
                 <div className="rounded-lg border border-success/40 bg-card p-2">
                   <p className="text-muted-foreground">{t("historyColumns.created")}</p>
@@ -3333,15 +3345,7 @@ const ImportPage = () => {
                     </TableHeader>
                     <TableBody>
                       {visibleItems.map((batch) => {
-                        const summary = (batch.summary ?? {}) as {
-                          rows?: number;
-                          created?: number;
-                          updated?: number;
-                          skipped?: number;
-                          source?: string;
-                          mode?: ImportMode;
-                          targetStoreName?: string;
-                        };
+                        const summary = (batch.summary ?? {}) as ImportRunSummary;
                         const sourceLabel = summary.source
                           ? t(`source.${summary.source}`)
                           : t("source.csv");
@@ -3382,6 +3386,7 @@ const ImportPage = () => {
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground">
                               {summary.updated ?? 0}
+                              {summary.connected ? <p>{t("connectedCount", { count: summary.connected })}</p> : null}
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground">
                               {summary.skipped ?? 0}
@@ -3415,15 +3420,7 @@ const ImportPage = () => {
                 </div>
               )}
               renderMobile={(batch) => {
-                const summary = (batch.summary ?? {}) as {
-                  rows?: number;
-                  created?: number;
-                  updated?: number;
-                  skipped?: number;
-                  source?: string;
-                  mode?: ImportMode;
-                  targetStoreName?: string;
-                };
+                const summary = (batch.summary ?? {}) as ImportRunSummary;
                 const sourceLabel = summary.source
                   ? t(`source.${summary.source}`)
                   : t("source.csv");
@@ -3479,6 +3476,7 @@ const ImportPage = () => {
                           {t("historyColumns.updated")}
                         </p>
                         <p className="text-foreground/90">{summary.updated ?? 0}</p>
+                        {summary.connected ? <p>{t("connectedCount", { count: summary.connected })}</p> : null}
                       </div>
                       <div>
                         <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">

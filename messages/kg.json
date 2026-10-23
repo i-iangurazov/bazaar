@@ -5499,7 +5499,8 @@
     "onlineReturnFinancialEdit": "Аяктаган онлайн кайтаруунун каржылык маалыматтарын өзгөртүүгө болбойт. Эскертмени гана өзгөртө аласыз.",
     "loyaltyReceiptFinancialEdit": "Бонустук чекте аяктаган суммаларды жана товарларды өзгөртүүгө болбойт. Кайтарууну жана жаңы чекти түзүңүз.",
     "loyaltyInvalidPointValue": "Баллдын баасы 0,01 сомдон кем эмес, тыйынга чейин так болушу керек. Программанын жөндөөлөрүн текшериңиз.",
-    "onlineReturnRequiresPayment": "Кайтаруудан мурун заказ толук төлөнүшү керек."
+    "onlineReturnRequiresPayment": "Кайтаруудан мурун заказ толук төлөнүшү керек.",
+    "importProductMatchChanged": "Товар же анын коддору өзгөрдү. Импортту текшерүүнү жаңыртып, аракетти кайра тандаңыз."
   },
   "adminJobs": {
     "title": "Фондук иштер",
@@ -6054,7 +6055,7 @@
       "matched_name_category": "Аталыш жана категория боюнча дал келди",
       "matched_name_price": "Аталыш жана баа боюнча дал келди",
       "possible_duplicate": "Мүмкүн дубликат",
-      "cross_store_conflict": "Башка дүкөн менен конфликт",
+      "cross_store_conflict": "Жалпы базадан табылды",
       "error": "Ката"
     },
     "dryRunPossibleDuplicateDecision": "Аракетти тандаңыз",
@@ -6065,8 +6066,8 @@
     "dryRunShowingRows": "{total} текшерилген саптын {shown} көрсөтүлдү.",
     "dryRunRowLabel": "Сап {row}",
     "dryRunWarningBarcodeConflict": "Штрихкод {barcode} буга чейин {product} ({sku}) товарында колдонулуп жатат.",
-    "dryRunWarningCrossStoreSku": "SKU башка дүкөндүн товарыныкы: {product} ({sku}).",
-    "dryRunWarningCrossStoreBarcode": "{barcode} штрихкоду башка дүкөндүн товарыныкы: {product} ({sku}).",
+    "dryRunWarningCrossStoreSku": "SKU боюнча табылды, бирок тандалган дүкөнгө кошулган эмес: {product} ({sku}).",
+    "dryRunWarningCrossStoreBarcode": "{barcode} штрихкоду боюнча табылды, бирок тандалган дүкөнгө кошулган эмес: {product} ({sku}).",
     "dryRunWarningLikelyDuplicate": "{product} ({sku}) товарına окшош болушу мүмкүн.",
     "dryRunWarningArchivedRestore": "Архивдеги {product} ({sku}) товары калыбына келтирилет.",
     "dryRunWarningMissingExisting": "SKU учурдагы товарлардан табылган жок, бул сап тандалма жаңыртуу режиминде өткөрүлөт.",
@@ -6121,7 +6122,7 @@
     "rollbackTitle": "Импортту кайтаруу",
     "rollbackSubtitle": "Импорт күнү {date}",
     "rollbackSubtitleEmpty": "Кайтаруу үчүн импортту тандаңыз.",
-    "rollbackHint": "Кайтаруу түзүлгөн товарларды архивдейт жана байланышкан маалыматтарды өчүрөт. Кыймылдар өчүрүлбөйт, компенсацияланат.",
+    "rollbackHint": "Артка кайтаруу жаңы түзүлгөн товарларды архивдеп, кыймылдарды компенсациялайт. Кошулган жана жаңыртылган мурунку карточкалар сакталат.",
     "rollbackNothing": "Бул импортто көзөмөлдөнгөн жазуулар жок.",
     "rollbackMissing": "Импорттун деталдарын жүктөө мүмкүн болгон жок.",
     "rollbackConfirm": "Кайтарууну ырастоо",
@@ -6145,7 +6146,20 @@
       "reorderPolicy": "Минималдуу калдык саясаттары"
     },
     "errorCsvRowHeader": "Сап",
-    "errorCsvMessageHeader": "Ката"
+    "errorCsvMessageHeader": "Ката",
+    "dryRunConnectTitle": "Товарлар жалпы базада мурунтан бар",
+    "dryRunConnectHint": "Жалпы товар карточкасы жана өздүк наркы өзгөрбөйт. Импорт жөндөөлөрүнө ылайык баа, минималдуу калдык жана калдык тандалган дүкөнгө гана колдонулат.",
+    "dryRunConnectArchiveHint": "Архивдеги товарды калыбына келтирүү ал кошулган бардык дүкөндөргө таасир этет.",
+    "dryRunConnectShown": "Көрсөтүлгөндөрдү кошуу ({count})",
+    "dryRunActionConnect": "Дүкөнгө кошуу",
+    "dryRunActionRestoreConnect": "Калыбына келтирип кошуу",
+    "dryRunConnectedCount": "Дүкөнгө кошулат: {count}",
+    "connectedCount": "Дүкөнгө кошулду: {count}",
+    "dryRunRowDecision": "{row}-сап үчүн аракет",
+    "dryRunArchived": "Архивде",
+    "dryRunIdentifiersConflict": "SKU жана штрихкоддор ар башка товарларга таандык. Сапты оңдоңуз же өткөрүп жибериңиз.",
+    "dryRunDecisionRequired": "Аракетти тандаңыз",
+    "dryRunRefresh": "Текшерүүнү жаңыртуу"
   },
   "reports": {
     "title": "Отчёттор",

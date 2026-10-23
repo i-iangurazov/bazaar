@@ -5500,7 +5500,8 @@
     "onlineReturnFinancialEdit": "Финансовые данные завершённого онлайн-возврата нельзя изменить. Можно изменить только примечание.",
     "loyaltyReceiptFinancialEdit": "В чеке с бонусами нельзя менять проведённые суммы и товары. Оформите возврат и новый чек.",
     "loyaltyInvalidPointValue": "Стоимость балла должна быть не меньше 0,01 сома, с точностью до тыйынов. Проверьте настройки программы.",
-    "onlineReturnRequiresPayment": "Возврат доступен после полной оплаты заказа."
+    "onlineReturnRequiresPayment": "Возврат доступен после полной оплаты заказа.",
+    "importProductMatchChanged": "Товар или его коды изменились. Обновите проверку импорта и выберите действие заново."
   },
   "adminJobs": {
     "title": "Фоновые задачи",
@@ -6055,7 +6056,7 @@
       "matched_name_category": "Совпадение по названию и категории",
       "matched_name_price": "Совпадение по названию и цене",
       "possible_duplicate": "Возможный дубликат",
-      "cross_store_conflict": "Конфликт с другим магазином",
+      "cross_store_conflict": "Найден в общей базе",
       "error": "Ошибка"
     },
     "dryRunPossibleDuplicateDecision": "Выберите действие",
@@ -6066,8 +6067,8 @@
     "dryRunShowingRows": "Показано {shown} из {total} проверенных строк.",
     "dryRunRowLabel": "Строка {row}",
     "dryRunWarningBarcodeConflict": "Штрихкод {barcode} уже используется товаром {product} ({sku}).",
-    "dryRunWarningCrossStoreSku": "SKU принадлежит товару другого магазина: {product} ({sku}).",
-    "dryRunWarningCrossStoreBarcode": "Штрихкод {barcode} принадлежит товару другого магазина: {product} ({sku}).",
+    "dryRunWarningCrossStoreSku": "Найден по SKU, но не подключён к выбранному магазину: {product} ({sku}).",
+    "dryRunWarningCrossStoreBarcode": "Найден по штрихкоду {barcode}, но не подключён к выбранному магазину: {product} ({sku}).",
     "dryRunWarningLikelyDuplicate": "Похоже на существующий товар {product} ({sku}).",
     "dryRunWarningArchivedRestore": "Архивный товар {product} ({sku}) будет восстановлен.",
     "dryRunWarningMissingExisting": "SKU не найден среди существующих товаров, строка будет пропущена в режиме выборочного обновления.",
@@ -6122,7 +6123,7 @@
     "rollbackTitle": "Откатить импорт",
     "rollbackSubtitle": "Импорт от {date}",
     "rollbackSubtitleEmpty": "Выберите импорт для отката.",
-    "rollbackHint": "Откат архивирует созданные товары и удаляет связанные данные. Движения компенсируются, а не удаляются.",
+    "rollbackHint": "Откат архивирует созданные товары и компенсирует движения. Подключённые и обновлённые существующие карточки сохраняются.",
     "rollbackNothing": "В этом импорте нет отслеживаемых сущностей.",
     "rollbackMissing": "Не удалось загрузить детали импорта.",
     "rollbackConfirm": "Подтвердить откат",
@@ -6146,7 +6147,20 @@
       "reorderPolicy": "Политики минимального остатка"
     },
     "errorCsvRowHeader": "Строка",
-    "errorCsvMessageHeader": "Ошибка"
+    "errorCsvMessageHeader": "Ошибка",
+    "dryRunConnectTitle": "Товары уже есть в общей базе",
+    "dryRunConnectHint": "Общая карточка и себестоимость сохранятся. Цена, минимальный остаток и остаток применятся только к выбранному магазину по настройкам импорта.",
+    "dryRunConnectArchiveHint": "Восстановление архивного товара действует во всех магазинах, где он подключён.",
+    "dryRunConnectShown": "Добавить показанные ({count})",
+    "dryRunActionConnect": "Добавить в магазин",
+    "dryRunActionRestoreConnect": "Восстановить и добавить",
+    "dryRunConnectedCount": "Будет добавлено в магазин: {count}",
+    "connectedCount": "Добавлено в магазин: {count}",
+    "dryRunRowDecision": "Действие для строки {row}",
+    "dryRunArchived": "В архиве",
+    "dryRunIdentifiersConflict": "SKU и штрихкоды указывают на разные карточки. Исправьте строку или пропустите её.",
+    "dryRunDecisionRequired": "Выберите действие",
+    "dryRunRefresh": "Обновить проверку"
   },
   "reports": {
     "title": "Отчеты",

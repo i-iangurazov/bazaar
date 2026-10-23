@@ -475,6 +475,7 @@ export const previewProductsCsvImportMutation = async ({
       updateMask: input.updateMask as ImportUpdateField[] | undefined,
       existingBehavior: input.existingBehavior,
       previewLimit: input.previewLimit,
+      stockBehavior: input.stockBehavior,
       rowActions: input.rowActions,
       logger,
     });

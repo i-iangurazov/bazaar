@@ -91,14 +91,18 @@ export const runProductImport = async (input: RunProductImportInput) => {
       });
   const matchingStoreId =
     input.storeId ?? (matchingStores.length === 1 ? matchingStores[0]?.id : undefined);
-  const photoResolution = await resolveImportRowsPhotoUrlsForOrganization(
-    input.rows,
-    input.organizationId,
-  );
-  const rows = photoResolution.rows;
   const rowDecisionByNumber = new Map(
     (input.rowActions ?? []).map((decision) => [decision.sourceRowNumber, decision]),
   );
+  const photoResolution = await resolveImportRowsPhotoUrlsForOrganization(
+    input.rows.map((row, index) => {
+      const action = rowDecisionByNumber.get(row.sourceRowNumber ?? index + 1)?.action;
+      return action === "connect" || action === "skip"
+        ? { ...row, photoUrl: undefined, images: undefined } : row;
+    }),
+    input.organizationId,
+  );
+  const rows = photoResolution.rows;
   let netNewProducts = 0;
 
   if (matchingStoreId) {
@@ -176,6 +180,7 @@ export const runProductImport = async (input: RunProductImportInput) => {
     const created = results.filter((row) => row.action === "created").length;
     const updated = results.filter((row) => row.action === "updated").length;
     const skipped = results.filter((row) => row.action === "skipped").length;
+    const connected = results.filter((row) => row.action === "connected").length;
 
     const summary = {
       source: input.source ?? "csv",
@@ -190,6 +195,7 @@ export const runProductImport = async (input: RunProductImportInput) => {
       created,
       updated,
       skipped,
+      ...(connected ? { connected } : {}),
       images: {
         downloaded: photoResolution.summary.downloaded,
         fallback: photoResolution.summary.fallback,
@@ -247,6 +253,7 @@ export const runProductImport = async (input: RunProductImportInput) => {
         "summary.created",
         "summary.updated",
         "summary.skipped",
+        "summary.connected",
         "summary.images",
         "summary.images.downloaded",
         "summary.images.fallback",

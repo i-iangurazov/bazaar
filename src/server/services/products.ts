@@ -51,6 +51,7 @@ import { classifyDatabaseOperationFailure } from "@/server/services/databaseOper
 import { applyArchivedBarcodeTransfers, type ProductBarcodeTransfer } from "./products/barcodeTransfers";
 import { assertProductUnitPrecision } from "./products/unitChange";
 import {
+  canConnectProductImportMatch,
   productImportMatchIsBlocking,
   productImportMatchIsExisting,
   resolveProductImportMatch,
@@ -3777,7 +3778,7 @@ export type ProductEmptyValueImportBehavior = "keep" | "overwrite";
 export type ProductStockImportBehavior = "ignore" | "set" | "add";
 export type ProductImportRowDecision = {
   sourceRowNumber: number;
-  action: "create" | "update" | "skip";
+  action: "create" | "update" | "skip" | "connect";
   existingProductId?: string;
 };
 
@@ -4041,7 +4042,7 @@ export const importProductsTx = async (
   tx: Prisma.TransactionClient,
   input: ImportProductsInput,
 ) => {
-  const results: { sku: string; action: "created" | "updated" | "skipped" }[] = [];
+  const results: { sku: string; action: "created" | "updated" | "skipped" | "connected" }[] = [];
   const isUpdateSelectedMode = input.mode === "update_selected";
   const updateMask = new Set<ImportUpdateField>(input.updateMask ?? []);
   const shouldApplyField = (field: ImportUpdateField) =>
@@ -4401,10 +4402,6 @@ export const importProductsTx = async (
     const resolvedBaseCost = avgCostKgs ?? purchasePriceKgs;
     const normalizedRowCategories = normalizeImportRowCategories(row);
     const unitCode = row.unit?.trim() ?? "";
-    const baseUnit =
-      shouldApplyField("unit") && unitCode
-        ? await ensureUnitByCode(tx, input.organizationId, unitCode)
-        : null;
     const importMatch = matchingStoreId
       ? await resolveProductImportMatch({
           prisma: tx,
@@ -4417,6 +4414,60 @@ export const importProductsTx = async (
           basePriceKgs,
         })
       : ({ reason: "none", product: null } as const);
+    if (rowDecision?.action === "connect") {
+      if (
+        !input.storeId || !importMatch.product ||
+        importMatch.product.id !== rowDecision.existingProductId ||
+        !(await canConnectProductImportMatch({
+          prisma: tx, organizationId: input.organizationId, match: importMatch, sku, barcodes,
+        }))
+      ) {
+        throw new AppError("importProductMatchChanged", "CONFLICT", 409);
+      }
+      const product = importMatch.product;
+      if (product.isDeleted) {
+        await tx.product.update({ where: { id: product.id }, data: { isDeleted: false } });
+      }
+      // Reuse the card without importing its common fields or assigning legacy catalog peers.
+      const assignment = await assignProductToStore(tx, {
+        organizationId: input.organizationId, storeId: input.storeId,
+        productId: product.id, actorId: input.actorId, direct: true,
+      });
+      await tx.storeProduct.update({
+        where: { id: assignment.id }, data: { isDirect: true, isHistorical: false },
+      });
+      await ensureBaseSnapshots(
+        tx, input.organizationId, product.id, stores.filter((store) => store.id === input.storeId),
+      );
+      if (basePriceKgs !== undefined) {
+        const organization = await tx.organization.findUniqueOrThrow({
+          where: { id: input.organizationId }, select: { retailWholesaleEnabled: true },
+        });
+        if (organization.retailWholesaleEnabled) {
+          await saveProductPriceTypes(tx, {
+            organizationId: input.organizationId, storeId: input.storeId,
+            actorId: input.actorId, requestId: input.requestId, productId: product.id,
+            prices: [{ retailPriceKgs: basePriceKgs }],
+          });
+        } else {
+          await upsertStoreBasePrice(product.id, basePriceKgs);
+        }
+      }
+      await upsertMinStock(product.id, minStock);
+      await applyImportedStock(product.id, stockQty);
+      await writeAuditLog(tx, {
+        organizationId: input.organizationId, actorId: input.actorId,
+        action: "PRODUCT_UPDATE", entity: "Product", entityId: product.id,
+        before: toJson({ isDeleted: product.isDeleted }),
+        after: toJson({
+          isDeleted: false, connectedStoreId: input.storeId,
+          importBatchId: input.batchId ?? null, preservedProductFields: true,
+        }),
+        requestId: input.requestId,
+      });
+      results.push({ sku, action: "connected" });
+      continue;
+    }
     const rowRequestsSkip = rowDecision?.action === "skip";
     const rowRequestsCreate = rowDecision?.action === "create";
     const rowRequestsUpdate = rowDecision?.action === "update";
@@ -4459,6 +4510,9 @@ export const importProductsTx = async (
       continue;
     }
 
+    const baseUnit = shouldApplyField("unit") && unitCode
+      ? await ensureUnitByCode(tx, input.organizationId, unitCode)
+      : null;
     if (shouldApplyField("barcodes")) {
       await ensureBarcodesAvailable(tx, input.organizationId, barcodes, existing?.id);
     }

@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -27,7 +28,8 @@ type ImportPreviewRow = {
   sourceRowNumber: number;
   sku: string;
   name: string | null;
-  action: "create" | "update" | "skipped";
+  action: "create" | "update" | "skipped" | "connect";
+  canConnect?: boolean;
   matchStatus:
     | "new"
     | "matched_barcode"
@@ -77,6 +79,8 @@ type ImportPreviewRow = {
     after: ImportPreviewValue;
   }>;
   warnings: Array<
+    | { code: "importIdentifiersConflict"; severity: "blocking" }
+    | { code: "importProductMatchChanged"; severity: "blocking" }
     | {
         code: "barcodeConflict";
         severity: "blocking";
@@ -131,6 +135,7 @@ export type ImportDryRunPreviewData = {
   summary: {
     creates: number;
     updates: number;
+    connected?: number;
     skipped: number;
     warningCount: number;
     blockingWarningCount: number;
@@ -147,15 +152,16 @@ type ImportDryRunPreviewProps = {
     number,
     {
       sourceRowNumber: number;
-      action: "create" | "update" | "skip";
+      action: "create" | "update" | "skip" | "connect";
       existingProductId?: string;
     }
   >;
   onRowActionChange?: (
     sourceRowNumber: number,
-    action: "create" | "update" | "skip",
+    action: "create" | "update" | "skip" | "connect",
     existingProductId?: string,
   ) => void;
+  disabled?: boolean;
 };
 
 const formatPreviewValue = (value: ImportPreviewValue, fallback: string) => {
@@ -172,9 +178,11 @@ export const ImportDryRunPreview = ({
   preview,
   rowActions,
   onRowActionChange,
+  disabled = false,
 }: ImportDryRunPreviewProps) => {
   const t = useTranslations("imports");
   const tCommon = useTranslations("common");
+  const tErrors = useTranslations("errors");
 
   const resolveActionVariant = (
     action: ImportPreviewRow["action"],
@@ -186,16 +194,20 @@ export const ImportDryRunPreview = ({
     if (action === "create") {
       return "success" as const;
     }
-    if (action === "update") {
+    if (action === "update" || action === "connect") {
       return "warning" as const;
     }
     return "muted" as const;
   };
 
-  const resolveActionLabel = (action: ImportPreviewRow["action"]) => {
+  const resolveActionLabel = (row: ImportPreviewRow) => {
+    const action = row.action;
+    if (row.matchStatus === "cross_store_conflict" && !rowActions?.[row.sourceRowNumber])
+      return t("dryRunDecisionRequired");
     if (action === "create") {
       return t("dryRunActionCreate");
     }
+    if (action === "connect") return t("dryRunActionConnect");
     if (action === "update") {
       return t("dryRunActionUpdate");
     }
@@ -206,6 +218,44 @@ export const ImportDryRunPreview = ({
     t(`dryRunMatchStatus.${status}`);
 
   const renderRowDecision = (row: ImportPreviewRow) => {
+    if (row.matchStatus === "cross_store_conflict" && row.existingProduct && onRowActionChange) {
+      return (
+        <Select
+          value={
+            rowActions?.[row.sourceRowNumber]?.existingProductId === row.existingProduct.id
+              ? rowActions[row.sourceRowNumber].action
+              : ""
+          }
+          disabled={disabled}
+          onValueChange={(value) =>
+            onRowActionChange(
+              row.sourceRowNumber,
+              value as "connect" | "skip",
+              row.existingProduct?.id,
+            )
+          }
+        >
+          <SelectTrigger
+            className="h-9 min-w-[150px] text-xs"
+            aria-label={t("dryRunRowDecision", { row: row.sourceRowNumber })}
+          >
+            <SelectValue placeholder={t("dryRunPossibleDuplicateDecision")} />
+          </SelectTrigger>
+          <SelectContent>
+            {row.canConnect ? (
+              <SelectItem value="connect">
+                {t(
+                  row.existingProduct.isDeleted
+                    ? "dryRunActionRestoreConnect"
+                    : "dryRunActionConnect",
+                )}
+              </SelectItem>
+            ) : null}
+            <SelectItem value="skip">{t("dryRunActionSkip")}</SelectItem>
+          </SelectContent>
+        </Select>
+      );
+    }
     if (row.matchStatus !== "possible_duplicate" || !row.possibleDuplicate || !onRowActionChange) {
       return null;
     }
@@ -217,6 +267,7 @@ export const ImportDryRunPreview = ({
         </p>
         <Select
           value={selected}
+          disabled={disabled}
           onValueChange={(value) =>
             onRowActionChange(
               row.sourceRowNumber,
@@ -273,6 +324,20 @@ export const ImportDryRunPreview = ({
     row.warnings.length ? (
       <div className="space-y-1">
         {row.warnings.map((warning, index) => {
+          if (warning.code === "importProductMatchChanged") {
+            return (
+              <p key={`${warning.code}-${index}`} className="text-xs text-danger">
+                {tErrors("importProductMatchChanged")}
+              </p>
+            );
+          }
+          if (warning.code === "importIdentifiersConflict") {
+            return (
+              <p key={`${warning.code}-${index}`} className="text-xs text-danger">
+                {t("dryRunIdentifiersConflict")}
+              </p>
+            );
+          }
           if (warning.code === "barcodeConflict") {
             return (
               <p
@@ -351,8 +416,42 @@ export const ImportDryRunPreview = ({
       <span className="text-xs text-muted-foreground">{t("dryRunWarningsEmpty")}</span>
     );
 
+  const connectableRows = preview.rows.filter(
+    (row) => row.canConnect && row.existingProduct && !rowActions?.[row.sourceRowNumber],
+  );
+  const hasConnections = preview.rows.some((row) => row.canConnect || row.action === "connect");
+
   return (
     <div className="space-y-4">
+      {hasConnections ? (
+        <div className="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
+          <p className="font-medium">{t("dryRunConnectTitle")}</p>
+          <p className="text-xs text-muted-foreground">{t("dryRunConnectHint")}</p>
+          {preview.rows.some((row) => row.canConnect && row.existingProduct?.isDeleted) ? (
+            <p className="text-xs text-warning-foreground">{t("dryRunConnectArchiveHint")}</p>
+          ) : null}
+          {connectableRows.length && onRowActionChange ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              disabled={disabled}
+              onClick={() =>
+                connectableRows.forEach((row) =>
+                  onRowActionChange(row.sourceRowNumber, "connect", row.existingProduct?.id),
+                )
+              }
+            >
+              {t("dryRunConnectShown", { count: connectableRows.length })}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+      {preview.summary.connected ? (
+        <p className="text-sm font-medium">
+          {t("dryRunConnectedCount", { count: preview.summary.connected })}
+        </p>
+      ) : null}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
         <div className="rounded-md border border-success/30 bg-success/10 p-3">
           <p className="text-xs text-muted-foreground">{t("dryRunCreates")}</p>
@@ -419,7 +518,7 @@ export const ImportDryRunPreview = ({
                     </TableCell>
                     <TableCell>
                       <Badge variant={resolveActionVariant(row.action, row.hasBlockingWarnings)}>
-                        {resolveActionLabel(row.action)}
+                        {resolveActionLabel(row)}
                       </Badge>
                       <div className="mt-2">{renderRowDecision(row)}</div>
                     </TableCell>
@@ -437,7 +536,7 @@ export const ImportDryRunPreview = ({
                           <div className="flex flex-wrap items-center gap-2">
                             <Badge variant="muted">{row.existingProduct.sku}</Badge>
                             {row.existingProduct.isDeleted ? (
-                              <Badge variant="muted">{t("historyRolledBack")}</Badge>
+                              <Badge variant="muted">{t("dryRunArchived")}</Badge>
                             ) : null}
                             <Link
                               href={`/products/${row.existingProduct.id}`}
@@ -496,7 +595,7 @@ export const ImportDryRunPreview = ({
                 <p className="text-xs text-muted-foreground">{row.sku}</p>
               </div>
               <Badge variant={resolveActionVariant(row.action, row.hasBlockingWarnings)}>
-                {resolveActionLabel(row.action)}
+                {resolveActionLabel(row)}
               </Badge>
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-2">

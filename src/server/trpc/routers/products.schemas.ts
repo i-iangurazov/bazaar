@@ -34,7 +34,7 @@ export const importModeEnum = z.enum(["full", "update_selected"]);
 export const productExistingBehaviorEnum = z.enum(["update", "skip"]);
 export const productEmptyValueBehaviorEnum = z.enum(["keep", "overwrite"]);
 export const productStockBehaviorEnum = z.enum(["ignore", "set", "add"]);
-export const productImportRowActionEnum = z.enum(["create", "update", "skip"]);
+export const productImportRowActionEnum = z.enum(["create", "update", "skip", "connect"]);
 export const bulkCategoryModeEnum = z.enum(["add", "setPrimary", "replace"]);
 export const productExportColumnKeyEnum = z.enum([
   "sku",

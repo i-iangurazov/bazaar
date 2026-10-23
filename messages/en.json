@@ -5502,7 +5502,8 @@
     "onlineReturnFinancialEdit": "A completed online return’s financial details cannot be changed. You can edit its note.",
     "loyaltyReceiptFinancialEdit": "Items and amounts on a loyalty receipt cannot be changed after completion. Create a return and a new sale.",
     "loyaltyInvalidPointValue": "Point value must be at least 0.01 KGS with no more than two decimal places. Check loyalty settings.",
-    "onlineReturnRequiresPayment": "The order must be fully paid before a return."
+    "onlineReturnRequiresPayment": "The order must be fully paid before a return.",
+    "importProductMatchChanged": "The product or its identifiers have changed. Refresh the import preview and choose an action again."
   },
   "adminJobs": {
     "title": "Admin jobs",
@@ -6057,7 +6058,7 @@
       "matched_name_category": "Matched by name + category",
       "matched_name_price": "Matched by name + price",
       "possible_duplicate": "Possible duplicate",
-      "cross_store_conflict": "Other-store conflict",
+      "cross_store_conflict": "Found in shared records",
       "error": "Error"
     },
     "dryRunPossibleDuplicateDecision": "Choose action",
@@ -6068,8 +6069,8 @@
     "dryRunShowingRows": "Showing {shown} of {total} checked rows.",
     "dryRunRowLabel": "Dry run row label {row}",
     "dryRunWarningBarcodeConflict": "Dry run warning barcode conflict {barcode} {product} {sku}",
-    "dryRunWarningCrossStoreSku": "SKU belongs to another store product {product} ({sku}).",
-    "dryRunWarningCrossStoreBarcode": "Barcode {barcode} belongs to another store product {product} ({sku}).",
+    "dryRunWarningCrossStoreSku": "Found by SKU, but not assigned to the selected store: {product} ({sku}).",
+    "dryRunWarningCrossStoreBarcode": "Found by barcode {barcode}, but not assigned to the selected store: {product} ({sku}).",
     "dryRunWarningLikelyDuplicate": "Dry run warning likely duplicate {product} {sku}",
     "dryRunWarningArchivedRestore": "Dry run warning archived restore {product} {sku}",
     "dryRunWarningMissingExisting": "Dry run warning missing existing",
@@ -6124,7 +6125,7 @@
     "rollbackTitle": "Rollback",
     "rollbackSubtitle": "Rollback subtitle {date}",
     "rollbackSubtitleEmpty": "No rollback subtitle.",
-    "rollbackHint": "Rollback hint",
+    "rollbackHint": "Rollback archives newly created products and reverses stock movements. Existing products that were connected or updated are retained.",
     "rollbackNothing": "Rollback nothing",
     "rollbackMissing": "Rollback missing",
     "rollbackConfirm": "Rollback confirm",
@@ -6148,7 +6149,20 @@
       "reorderPolicy": "Reorder policy"
     },
     "errorCsvRowHeader": "Error CSV row header",
-    "errorCsvMessageHeader": "Error CSV message header"
+    "errorCsvMessageHeader": "Error CSV message header",
+    "dryRunConnectTitle": "These products already exist",
+    "dryRunConnectHint": "The shared product details and cost stay unchanged. Only the selected store’s price, minimum stock and stock quantity are applied according to your import settings.",
+    "dryRunConnectArchiveHint": "Restoring an archived product affects every store it is assigned to.",
+    "dryRunConnectShown": "Add shown products ({count})",
+    "dryRunActionConnect": "Add to store",
+    "dryRunActionRestoreConnect": "Restore and add",
+    "dryRunConnectedCount": "To be added to store: {count}",
+    "connectedCount": "Added to store: {count}",
+    "dryRunRowDecision": "Action for row {row}",
+    "dryRunArchived": "Archived",
+    "dryRunIdentifiersConflict": "The SKU and barcodes belong to different products. Correct or skip this row.",
+    "dryRunDecisionRequired": "Choose an action",
+    "dryRunRefresh": "Refresh preview"
   },
   "reports": {
     "title": "Reports",

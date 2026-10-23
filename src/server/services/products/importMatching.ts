@@ -249,3 +249,39 @@ export const productImportMatchIsExisting = (match: ProductImportMatch) =>
 
 export const productImportMatchIsBlocking = (match: ProductImportMatch) =>
   match.reason === "cross_store_barcode" || match.reason === "cross_store_sku";
+
+/** Connecting reuses an exact identity; conflicting identifiers must never merge cards. */
+export const canConnectProductImportMatch = async ({
+  prisma,
+  organizationId,
+  match,
+  sku,
+  barcodes,
+}: {
+  prisma: PrismaDbClient;
+  organizationId: string;
+  match: ProductImportMatch;
+  sku: string;
+  barcodes?: string[];
+}) => {
+  if (
+    !match.product ||
+    !["sku", "barcode", "cross_store_sku", "cross_store_barcode"].includes(match.reason)
+  ) {
+    return false;
+  }
+  const [skuOwner, barcodeOwners] = await Promise.all([
+    prisma.product.findUnique({
+      where: { organizationId_sku: { organizationId, sku: sku.trim() } },
+      select: { id: true },
+    }),
+    prisma.productBarcode.findMany({
+      where: { organizationId, value: { in: normalizeImportBarcodesForMatch(barcodes) } },
+      select: { productId: true },
+    }),
+  ]);
+  return (
+    (!skuOwner || skuOwner.id === match.product.id) &&
+    barcodeOwners.every((owner) => owner.productId === match.product?.id)
+  );
+};
