@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
-import { BackIcon, EmptyIcon } from "@/components/icons";
+import { CloseIcon, EmptyIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
@@ -56,7 +56,9 @@ const Photo = ({ url, name }: PosProductPhoto) => {
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [attempt, setAttempt] = useState(0);
   return (
-    <div className="relative grid min-h-40 w-full place-items-center">
+    <div
+      className={`relative grid place-items-center ${status !== "ready" ? "min-h-44 min-w-64 rounded-2xl bg-card text-card-foreground" : ""}`}
+    >
       {status === "error" ? (
         <div
           role="alert"
@@ -95,7 +97,7 @@ const Photo = ({ url, name }: PosProductPhoto) => {
             draggable={false}
             onLoad={() => setStatus("ready")}
             onError={() => setStatus("error")}
-            className="h-auto max-h-[min(72dvh,40rem)] w-auto max-w-full select-none object-contain"
+            className="block h-auto max-h-[min(80dvh,52rem)] w-auto max-w-[min(calc(100vw-3rem),80rem)] select-none rounded-2xl object-contain shadow-[0_24px_80px_rgba(0,0,0,0.22)] sm:max-w-[min(86vw,80rem)]"
           />
         </>
       )}
@@ -122,7 +124,7 @@ export const PosProductPhotoDialog = ({
       <DialogContent
         size="xl"
         showClose={false}
-        overlayProps={{ onClick: onClose }}
+        overlayProps={{ onClick: onClose, className: "bg-black/35 backdrop-blur-[5px]" }}
         aria-describedby={undefined}
         data-testid="pos-photo-dialog"
         onClick={onClose}
@@ -138,19 +140,21 @@ export const PosProductPhotoDialog = ({
             if (target?.isConnected) target.focus({ preventScroll: true });
           });
         }}
-        className="max-h-[85dvh] w-[calc(100vw-2rem)] cursor-zoom-out bg-black text-white"
+        className="max-h-none w-max max-w-[calc(100vw-3rem)] cursor-zoom-out overflow-visible rounded-2xl border-0 bg-transparent p-0 shadow-none sm:max-h-none sm:max-w-[min(86vw,80rem)]"
       >
         <DialogTitle className="sr-only">{photo?.name}</DialogTitle>
-        <div className="pointer-events-none flex shrink-0 items-start gap-3 p-3">
-          <Button variant="secondary" className="pointer-events-auto min-h-11 shrink-0">
-            <BackIcon className="h-4 w-4" aria-hidden />
-            {common("back")}
-          </Button>
-          <p aria-hidden className="line-clamp-2 min-w-0 break-words pt-2 text-sm font-medium">
-            {photo?.name}
-          </p>
-        </div>
         {photo ? <Photo key={photo.url} {...photo} /> : null}
+        <button
+          type="button"
+          aria-label={common("close")}
+          onClick={(event) => {
+            event.stopPropagation();
+            onClose();
+          }}
+          className="absolute -right-3 -top-3 grid h-10 w-10 cursor-pointer place-items-center rounded-full bg-card/95 text-foreground shadow-md ring-1 ring-border/60 backdrop-blur transition-colors hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <CloseIcon className="h-[18px] w-[18px]" aria-hidden />
+        </button>
       </DialogContent>
     </Dialog>
   );

@@ -277,6 +277,13 @@ export async function verifyPosPhotoAndWholesale(
         );
         assert(box.width > Math.min(300, width * 0.7));
         await expect(photo).toHaveCSS("object-fit", "contain");
+        const picture = await photo.boundingBox();
+        assert(
+          picture &&
+            Math.abs(box.width - picture.width) < 2 &&
+            Math.abs(box.height - picture.height) < 2,
+          "The photo preview must fit the image without a fixed frame or header",
+        );
         await current.screenshot({ path: `${output}/photo-${width}.png` });
         if (width === 1440) {
           let scans = 0;
@@ -308,11 +315,11 @@ export async function verifyPosPhotoAndWholesale(
         await expect(dialog).toBeHidden();
         await activate(thumb);
         await dialog.waitFor();
-        await activate(dialog.getByRole("button", { name: "Назад", exact: true }));
+        await activate(dialog.getByRole("button", { name: "Закрыть", exact: true }));
         await expect(dialog).toBeHidden();
         assert.deepEqual(await saleState(), before);
         checks.push(
-          `POS photo ${width}px: large contained preview closes by photo/background/Escape/Back; search and receipt are preserved`,
+          `POS photo ${width}px: image-sized preview closes by photo/background/Escape/close button; search and receipt are preserved`,
         );
       }
       assert.deepEqual(touchErrors, []);
@@ -365,6 +372,14 @@ export async function verifyPosPhotoAndWholesale(
       const portrait = await photo.boundingBox();
       assert(
         portrait && portrait.height > 400 && portrait.y > 0 && portrait.y + portrait.height < 844,
+      );
+      const portraitDialog = await dialog.boundingBox();
+      assert(
+        portraitDialog &&
+          portrait &&
+          Math.abs(portraitDialog.width - portrait.width) < 2 &&
+          Math.abs(portraitDialog.height - portrait.height) < 2,
+        "Portrait photos must not have empty side panels",
       );
       await faultPage.screenshot({ path: `${output}/photo-portrait-mobile.png` });
       await photo.click();
