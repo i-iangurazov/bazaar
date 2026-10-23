@@ -2681,6 +2681,8 @@
       "done": "Готово",
       "outOfStock": "Нет в наличии",
       "priceMissing": "Цена не указана",
+      "viewPhoto": "Открыть фото: {name}",
+      "photoLoadFailed": "Не удалось загрузить фото.",
       "priceMissingCannotSell": "У товара не указана цена. Добавьте цену перед продажей.",
       "insufficientStock": "Недостаточно товара на складе.",
       "negativeStockAllowed": "Продажа уйдёт в минус",

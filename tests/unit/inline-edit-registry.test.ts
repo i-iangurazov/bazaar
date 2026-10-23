@@ -3,6 +3,42 @@ import { describe, expect, it } from "vitest";
 import { inlineEditRegistry } from "@/lib/inlineEdit/registry";
 
 describe("inline edit registry", () => {
+  it("edits only store wholesale in the displayed currency, including zero and clearing", () => {
+    const row = {
+      id: "p",
+      name: "Product",
+      category: null,
+      unit: "шт",
+      baseUnitId: "u",
+      basePriceKgs: 100,
+      onHandQty: 5,
+    };
+    const context = {
+      storeId: "s",
+      wholesalePricesEnabled: true,
+      categories: [],
+      stockAdjustReason: "edit",
+      currencyCode: "USD",
+      currencyRateKgsPerUnit: 86,
+    };
+    const definition = inlineEditRegistry.products.wholesalePrice;
+    expect(definition.parser("1,5", row, context)).toEqual({ ok: true, value: 129 });
+    expect(definition.parser("0", row, context)).toEqual({ ok: true, value: 0 });
+    expect(definition.parser("", row, context)).toEqual({ ok: true, value: null });
+    expect(definition.parser("-1", row, context).ok).toBe(false);
+    expect(definition.mutation(row, 129, context)).toEqual({
+      route: "storePrices.upsert",
+      input: { storeId: "s", productId: "p", variantId: null, wholesalePriceKgs: 129 },
+    });
+    for (const role of ["ADMIN", "MANAGER"])
+      expect(definition.permissionCheck(role, row, context)).toBe(true);
+    for (const role of ["STAFF", "CASHIER"])
+      expect(definition.permissionCheck(role, row, context)).toBe(false);
+    expect(definition.permissionCheck("ADMIN", row, { ...context, storeId: null })).toBe(false);
+    expect(
+      definition.permissionCheck("ADMIN", row, { ...context, wholesalePricesEnabled: false }),
+    ).toBe(false);
+  });
   it("sends an absolute stock target with the displayed baseline", () => {
     const row = {
       id: "product-1",

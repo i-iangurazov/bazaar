@@ -50,12 +50,13 @@ export const DialogContent = React.forwardRef<
     VariantProps<typeof dialogContentVariants> & {
       showClose?: boolean;
       closeLabel?: string;
+      overlayProps?: React.ComponentPropsWithoutRef<typeof DialogOverlay>;
     }
->(({ className, children, size, showClose = true, closeLabel, ...props }, ref) => {
+>(({ className, children, size, showClose = true, closeLabel, overlayProps, ...props }, ref) => {
   const tCommon = useTranslations("common");
   return (
     <DialogPortal>
-      <DialogOverlay />
+      <DialogOverlay {...overlayProps} />
       <DialogPrimitive.Content
         ref={ref}
         className={cn(dialogContentVariants({ size }), className)}

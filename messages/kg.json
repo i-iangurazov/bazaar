@@ -2681,6 +2681,8 @@
       "done": "Даяр",
       "outOfStock": "Кампада жок",
       "priceMissing": "Баасы көрсөтүлгөн эмес",
+      "viewPhoto": "Сүрөттү ачуу: {name}",
+      "photoLoadFailed": "Сүрөт жүктөлгөн жок.",
       "priceMissingCannotSell": "Бул товардын баасы көрсөтүлгөн эмес. Сатуудан мурун баасын кошуңуз.",
       "insufficientStock": "Кампада товар жетишсиз.",
       "negativeStockAllowed": "Сатуу терс калдыкка алып келет",

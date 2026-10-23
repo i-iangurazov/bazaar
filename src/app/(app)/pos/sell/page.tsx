@@ -52,6 +52,7 @@ import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { SearchInput } from "@/components/search-input";
 import { ScanInput } from "@/components/ScanInput";
 import { PosPaymentMethodControl } from "@/components/pos/payment-method-control";
+import { PosProductPhotoButton, PosProductPhotoDialog, type PosProductPhoto } from "@/components/pos/product-photo-dialog";
 import { LoyaltyDialog } from "@/components/pos/loyalty-dialog";
 import { LoyaltyButton, CompletedLoyaltySummary } from "@/components/pos/loyalty-panel";
 import { ContextualHelpButton } from "@/components/help/ContextualHelpButton";
@@ -377,6 +378,7 @@ type PosProductButtonProps = {
   stockMeta: (stockQty: number | null, unit?: PosQuantityUnit | null) => ProductStockMeta;
   onProductClick: (product: PosCatalogProduct) => void;
   onProductDecrement: (product: PosCatalogProduct) => void;
+  onPhotoPreview: (photo: PosProductPhoto) => void;
 };
 
 const PosProductButton = memo(function PosProductButton({
@@ -392,10 +394,11 @@ const PosProductButton = memo(function PosProductButton({
   stockMeta,
   onProductClick,
   onProductDecrement,
+  onPhotoPreview,
 }: PosProductButtonProps) {
   const priceKgs = product.effectivePriceKgs ?? product.basePriceKgs ?? null;
   const stockQty = product.onHandQty ?? null;
-  const primaryImage = product.images?.[0]?.url ?? product.photoUrl;
+  const primaryImage = product.images?.[0]?.url ?? product.primaryImage ?? product.photoUrl;
   const stock = stockMeta(stockQty, product.baseUnit);
   const priceMissing = priceKgs === null;
 
@@ -429,23 +432,16 @@ const PosProductButton = memo(function PosProductButton({
           : "min-h-[72px] grid-cols-[56px_minmax(0,1fr)_116px] px-3 py-2"
       }`}
     >
-      <span
-        data-pos-product-image
-        className="relative grid h-14 w-14 place-items-center overflow-hidden rounded-md border border-border bg-muted/30"
-      >
-        {primaryImage ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={primaryImage}
-            alt={product.name}
-            loading="lazy"
-            decoding="async"
-            className="absolute inset-0 h-full w-full bg-card object-contain"
-          />
-        ) : (
+      {primaryImage ? (
+        <PosProductPhotoButton photo={{ name: product.name, url: primaryImage }}
+          onPreview={onPhotoPreview} disabled={disabled}
+          className="grid h-14 w-14 place-items-center rounded-md border border-border bg-muted/30"
+          imageClassName="absolute inset-0 h-full w-full bg-card object-contain" />
+      ) : (
+        <span data-pos-product-image className="relative grid h-14 w-14 place-items-center overflow-hidden rounded-md border border-border bg-muted/30">
           <EmptyIcon className="h-5 w-5 text-muted-foreground" aria-hidden />
-        )}
-      </span>
+        </span>
+      )}
 
       <div
         className={
@@ -545,6 +541,7 @@ const PosSellPage = () => {
   const [saleId, setSaleId] = useState<string | null>(null);
   const [lineSearch, setLineSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
+  const [photoPreview, setPhotoPreview] = useState<PosProductPhoto | null>(null);
   const [catalogPage, setCatalogPage] = useState(1);
   const [markingInput, setMarkingInput] = useState<Record<string, string>>({});
   const [payments, setPaymentsState] = useState<PosPaymentDraft[]>(() => [
@@ -2328,7 +2325,7 @@ const PosSellPage = () => {
   }, []);
 
   useEffect(() => {
-    if (!hasOpenShift || loyaltyOpen || transferOpen || variantChoice || priceConfirmation || cartPriceSync || typeof window === "undefined") {
+    if (!hasOpenShift || loyaltyOpen || transferOpen || variantChoice || priceConfirmation || cartPriceSync || photoPreview || typeof window === "undefined") {
       return;
     }
 
@@ -2428,7 +2425,7 @@ const PosSellPage = () => {
       window.removeEventListener("keydown", handleGlobalScannerInput);
       resetKeyboardScanBuffer();
     };
-  }, [hasOpenShift, loyaltyOpen, transferOpen, variantChoice, priceConfirmation, cartPriceSync, handleScanResolved, tErrors, toast, trpcUtils.products.lookupScan]);
+  }, [hasOpenShift, loyaltyOpen, transferOpen, variantChoice, priceConfirmation, cartPriceSync, photoPreview, handleScanResolved, tErrors, toast, trpcUtils.products.lookupScan]);
 
   const handleUpdateQty = (lineId: string, raw: string) => {
     if (cartPriceSyncRef.current) return;
@@ -5587,6 +5584,7 @@ const PosSellPage = () => {
                       stockMeta={stockMeta}
                       onProductClick={handleProductClick}
                       onProductDecrement={handleProductDecrement}
+                      onPhotoPreview={setPhotoPreview}
                     />
                   ))}
                 </div>
@@ -5793,14 +5791,9 @@ const PosSellPage = () => {
                           >
                             <div className="flex gap-2">
                               {line.product.primaryImage ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                  src={line.product.primaryImage}
-                                  alt={line.product.name}
-                                  loading="lazy"
-                                  decoding="async"
-                                  className="h-8 w-8 shrink-0 rounded-md border border-border object-cover"
-                                />
+                                <PosProductPhotoButton photo={{ name: line.product.name, url: line.product.primaryImage }}
+                                  onPreview={setPhotoPreview} className="h-8 w-8 shrink-0 rounded-md border border-border"
+                                  imageClassName="h-full w-full object-cover" />
                               ) : (
                                 <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-dashed border-border bg-muted/40 text-muted-foreground">
                                   <EmptyIcon className="h-4 w-4" aria-hidden />
@@ -6896,26 +6889,26 @@ const PosSellPage = () => {
                   Math.max(0, line.lineTotalKgs - lineDiscountKgs),
                 );
                 return (
-                  <button
+                  <div
                     key={line.id}
-                    type="button"
+                    role="button"
+                    tabIndex={0}
                     className="flex min-h-[62px] w-full items-center gap-2.5 py-2 text-left"
                     data-testid="pos-cart-line"
                     data-product-id={getCartLineProductId(line)}
                     onClick={() => openMobileLineSheet(line.id, "qty")}
+                    onKeyDown={(event) => {
+                      if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
+                        event.preventDefault(); openMobileLineSheet(line.id, "qty");
+                      }
+                    }}
                   >
-                    <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-[9px] bg-secondary text-secondary-foreground">
-                      {line.product.primaryImage ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={line.product.primaryImage}
-                          alt={line.product.name}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <EmptyIcon className="h-5 w-5" aria-hidden />
-                      )}
-                    </span>
+                    {line.product.primaryImage ? (
+                      <PosProductPhotoButton photo={{ name: line.product.name, url: line.product.primaryImage }}
+                        onPreview={setPhotoPreview}
+                        className="grid h-10 w-10 shrink-0 place-items-center rounded-[9px] bg-secondary text-secondary-foreground"
+                        imageClassName="h-full w-full object-cover" />
+                    ) : <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[9px] bg-secondary text-secondary-foreground"><EmptyIcon className="h-5 w-5" aria-hidden /></span>}
                     <span className="min-w-0 flex-1">
                       <span className="line-clamp-2 text-[14px] font-semibold leading-tight text-foreground">
                         {line.product.name}{line.variant?.name ? ` · ${line.variant.name}` : ""}{line.manualPrice ? <span className="ml-1 text-xs text-muted-foreground" title={t("tools.manualPrice")} aria-label={t("tools.manualPrice")}>*</span> : null}
@@ -6927,7 +6920,7 @@ const PosSellPage = () => {
                     <span className="shrink-0 text-right text-[14px] font-semibold text-foreground">
                       {formatSaleMoney(lineNetTotalKgs)}
                     </span>
-                  </button>
+                  </div>
                 );
               })}
             </div>
@@ -7280,41 +7273,32 @@ const PosSellPage = () => {
               <div className="divide-y divide-border">
                 {visibleProducts.map((product) => {
                   const priceKgs = product.effectivePriceKgs ?? product.basePriceKgs ?? null;
-                  const primaryImage = product.images?.[0]?.url ?? product.photoUrl;
+                  const primaryImage = product.images?.[0]?.url ?? product.primaryImage ?? product.photoUrl;
                   const stock = stockMeta(product.onHandQty ?? null, product.baseUnit);
                   const isPendingProduct = mobilePendingProductId === product.id;
+                  const disabled = !hasOpenShift || isPendingProduct || cancelDraftMutation.isLoading || completeMutation.isLoading;
                   return (
-                    <button
+                    <div
                       key={product.id}
-                      type="button"
+                      role="button"
+                      tabIndex={disabled ? -1 : 0}
+                      aria-disabled={disabled}
                       data-testid="pos-product-button"
                       data-product-id={product.id}
                       className="grid min-h-[72px] w-full grid-cols-[56px_minmax(0,1fr)_112px] items-center gap-2.5 px-3 py-2 text-left"
-                      onClick={() => handleMobileProductSelect(product)}
-                      disabled={
-                        !hasOpenShift ||
-                        isPendingProduct ||
-                        cancelDraftMutation.isLoading ||
-                        completeMutation.isLoading
-                      }
+                      onClick={() => { if (!disabled) handleMobileProductSelect(product); }}
+                      onKeyDown={(event) => {
+                        if (!disabled && event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
+                          event.preventDefault(); handleMobileProductSelect(product);
+                        }
+                      }}
                     >
-                      <span
-                        data-pos-product-image
-                        className="relative grid h-14 w-14 place-items-center overflow-hidden rounded-[10px] bg-secondary text-secondary-foreground"
-                      >
-                        {primaryImage ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={primaryImage}
-                            alt={product.name}
-                            loading="lazy"
-                            decoding="async"
-                            className="absolute inset-0 h-full w-full bg-card object-contain"
-                          />
-                        ) : (
-                          <EmptyIcon className="h-5 w-5" aria-hidden />
-                        )}
-                      </span>
+                      {primaryImage ? (
+                        <PosProductPhotoButton photo={{ name: product.name, url: primaryImage }}
+                          onPreview={setPhotoPreview} disabled={disabled}
+                          className="grid h-14 w-14 place-items-center rounded-[10px] bg-secondary text-secondary-foreground"
+                          imageClassName="absolute inset-0 h-full w-full bg-card object-contain" />
+                      ) : <span data-pos-product-image className="grid h-14 w-14 place-items-center rounded-[10px] bg-secondary text-secondary-foreground"><EmptyIcon className="h-5 w-5" aria-hidden /></span>}
                       <span data-pos-product-name className="min-w-0 break-words text-[14px] font-medium leading-5 text-foreground [overflow-wrap:anywhere]">
                         {product.name}
                       </span>
@@ -7328,7 +7312,7 @@ const PosSellPage = () => {
                             : formatSaleMoney(priceKgs)}
                         </span>
                       </span>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
@@ -7936,6 +7920,7 @@ const PosSellPage = () => {
                     stockMeta={stockMeta}
                     onProductClick={handleProductClick}
                     onProductDecrement={handleProductDecrement}
+                    onPhotoPreview={setPhotoPreview}
                   />
                 ))}
               </div>
@@ -8207,14 +8192,9 @@ const PosSellPage = () => {
                             >
                               <div className="flex gap-3">
                                 {line.product.primaryImage ? (
-                                  // eslint-disable-next-line @next/next/no-img-element
-                                  <img
-                                    src={line.product.primaryImage}
-                                    alt={line.product.name}
-                                    loading="lazy"
-                                    decoding="async"
-                                    className="h-14 w-14 shrink-0 border border-border object-cover"
-                                  />
+                                  <PosProductPhotoButton photo={{ name: line.product.name, url: line.product.primaryImage }}
+                                    onPreview={setPhotoPreview} className="h-14 w-14 shrink-0 border border-border"
+                                    imageClassName="h-full w-full object-cover" />
                                 ) : (
                                   <span className="grid h-14 w-14 shrink-0 place-items-center border border-dashed border-border bg-muted/40 text-muted-foreground">
                                     <EmptyIcon className="h-4 w-4" aria-hidden />
@@ -8699,6 +8679,7 @@ const PosSellPage = () => {
   return <>
     {isPhoneScreen ? MobilePosView() : DesktopPosSaleView()}
     {loyaltyDialog}
+    <PosProductPhotoDialog photo={photoPreview} onClose={() => setPhotoPreview(null)} />
   </>;
 };
 

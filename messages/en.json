@@ -2681,6 +2681,8 @@
       "done": "Done",
       "outOfStock": "Out of stock",
       "priceMissing": "Price missing",
+      "viewPhoto": "View photo: {name}",
+      "photoLoadFailed": "Could not load the photo.",
       "priceMissingCannotSell": "This product has no price. Add a price before selling.",
       "insufficientStock": "Insufficient stock.",
       "negativeStockAllowed": "Sale will create negative stock",

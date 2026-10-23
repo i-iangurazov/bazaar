@@ -216,6 +216,7 @@ const productVisibleColumnSchema = z.enum([
   "unit",
   "onHandQty",
   "salePrice",
+  "wholesalePrice",
   "avgCost",
   "barcodes",
   "readiness",
@@ -620,6 +621,7 @@ const ProductsPage = () => {
       { key: "unit", label: t("unit") },
       { key: "onHandQty", label: tInventory("onHand") },
       { key: "salePrice", label: t("salePrice") },
+      { key: "wholesalePrice", label: t("wholesalePrice") },
       { key: "avgCost", label: t("avgCost") },
       { key: "barcodes", label: t("barcodes") },
       { key: "readiness", label: t("readinessColumn") },
@@ -695,6 +697,7 @@ const ProductsPage = () => {
   );
   const enableSku = selectedStore?.enableSku ?? true;
   const enableBarcode = selectedStore?.enableBarcode ?? true;
+  const wholesalePricesEnabled = Boolean(storeId && storeId === productsBootstrapQuery.data?.selectedStoreId && productsBootstrapQuery.data?.list.priceTypesEnabled);
   const productSearchPlaceholder = useMemo(() => {
     if (enableSku && enableBarcode) {
       return t("searchPlaceholderFull");
@@ -710,6 +713,7 @@ const ProductsPage = () => {
   const productColumnOptions = useMemo(
     () =>
       baseProductColumnOptions.filter((column) => {
+        if (column.key === "wholesalePrice") return wholesalePricesEnabled;
         if (column.key === "sku") {
           return enableSku;
         }
@@ -718,7 +722,7 @@ const ProductsPage = () => {
         }
         return true;
       }),
-    [baseProductColumnOptions, enableBarcode, enableSku],
+    [baseProductColumnOptions, enableBarcode, enableSku, wholesalePricesEnabled],
   );
   const productExportColumns = useMemo(
     () =>
@@ -736,6 +740,7 @@ const ProductsPage = () => {
     () =>
       new Set<ProductVisibleColumnKey>(
         visibleProductColumns.filter((column) => {
+          if (column === "wholesalePrice") return wholesalePricesEnabled;
           if (column === "sku") {
             return enableSku;
           }
@@ -745,7 +750,7 @@ const ProductsPage = () => {
           return true;
         }),
       ),
-    [enableBarcode, enableSku, visibleProductColumns],
+    [enableBarcode, enableSku, visibleProductColumns, wholesalePricesEnabled],
   );
   useEffect(() => {
     if (!enableBarcode && readiness === "missingBarcode") {
@@ -1235,6 +1240,7 @@ const ProductsPage = () => {
   const inlineProductsContext = useMemo<InlineProductsContext>(
     () => ({
       storeId: storeId || null,
+      wholesalePricesEnabled,
       currencyCode: selectedStore?.currencyCode ?? null,
       currencyRateKgsPerUnit: selectedStore?.currencyRateKgsPerUnit ?? null,
       categories,
@@ -1245,6 +1251,7 @@ const ProductsPage = () => {
       selectedStore?.currencyCode,
       selectedStore?.currencyRateKgsPerUnit,
       storeId,
+      wholesalePricesEnabled,
       tInventory,
     ],
   );
@@ -1331,11 +1338,10 @@ const ProductsPage = () => {
       }
 
       if (operation.route === "storePrices.upsert") {
-        applyProductListPatch(operation.input.productId, (item) => ({
-          ...item,
-          effectivePriceKgs: operation.input.priceKgs,
-          priceOverridden: true,
-        }));
+        const input = operation.input;
+        applyProductListPatch(input.productId, (item) => input.wholesalePriceKgs !== undefined
+          ? { ...item, wholesalePriceKgs: input.wholesalePriceKgs }
+          : { ...item, effectivePriceKgs: input.priceKgs, priceOverridden: true });
         try {
           await inlineStorePriceMutation.mutateAsync(operation.input);
         } catch (error) {
@@ -1876,6 +1882,20 @@ const ProductsPage = () => {
     [],
   );
   type ProductRow = NonNullable<typeof products>[number];
+  const wholesalePriceCell = useCallback((product: ProductRow) => (
+    <InlineEditableCell rowId={product.id} row={product} value={product.wholesalePriceKgs}
+      definition={inlineEditRegistry.products.wholesalePrice} context={inlineProductsContext}
+      role={role} locale={locale} columnLabel={t("wholesalePrice")} tTable={t} tCommon={tCommon}
+      enabled={inlineEditingEnabled} executeMutation={executeInlineProductMutation}
+      className="justify-end font-semibold text-foreground" />
+  ), [inlineProductsContext, role, locale, t, tCommon, inlineEditingEnabled, executeInlineProductMutation]);
+  const renderWholesalePrice = (product: ProductRow, className = "flex items-center justify-between gap-2") =>
+    visibleProductColumnSet.has("wholesalePrice") ? (
+      <div className={className} data-product-wholesale-price>
+        <span>{t("wholesalePrice")}</span>
+        {wholesalePriceCell(product)}
+      </div>
+    ) : null;
   const getProductReadiness = useCallback(
     (product: ProductRow) => {
       const price = showEffectivePrice ? product.effectivePriceKgs : product.basePriceKgs;
@@ -2653,6 +2673,16 @@ const ProductsPage = () => {
       );
     }
 
+    if (visibleProductColumnSet.has("wholesalePrice")) {
+      columns.push({
+        id: "wholesalePrice",
+        header: t("wholesalePrice"),
+        enableSorting: false,
+        cell: ({ row }) => <div data-product-wholesale-price>{wholesalePriceCell(row.original)}</div>,
+        meta: { className: "min-w-[9rem]", headerClassName: "text-right", cellClassName: "text-right" },
+      });
+    }
+
     if (visibleProductColumnSet.has("avgCost")) {
       columns.push(
         sortableColumn(
@@ -2784,6 +2814,7 @@ const ProductsPage = () => {
     hasProductImage,
     inlineEditingEnabled,
     inlineProductsContext,
+    wholesalePriceCell,
     locale,
     resolveBarcodeSortValue,
     resolveSalePriceForSort,
@@ -4107,6 +4138,7 @@ const ProductsPage = () => {
                                   className="text-sm font-semibold text-foreground"
                                 />
                               </div>
+                              {renderWholesalePrice(product, "space-y-1 rounded-lg bg-muted/35 p-2")}
                               <div className="rounded-lg bg-muted/35 p-2">
                                 <p className="font-medium">{tInventory("onHand")}</p>
                                 <InlineEditableCell
@@ -4266,6 +4298,7 @@ const ProductsPage = () => {
                             className="justify-end text-sm font-semibold text-foreground"
                           />
                         </div>
+                        {renderWholesalePrice(product)}
                         <div className="flex items-center justify-between gap-2">
                           <span>{tInventory("onHand")}</span>
                           <InlineEditableCell
@@ -4402,6 +4435,7 @@ const ProductsPage = () => {
                           className="justify-end text-foreground"
                         />
                       </div>
+                      {renderWholesalePrice(product)}
                       <div className="flex items-center justify-between gap-2">
                         <span>{tInventory("onHand")}</span>
                         <InlineEditableCell

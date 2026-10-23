@@ -1245,8 +1245,8 @@ export const listProducts = async ({
     }),
   );
 
-  const items = products.map((product) =>
-    serializeProductListItem({
+  const items = products.map((product) => ({
+    ...serializeProductListItem({
       product: filterProductInventorySnapshots(product, visibleSnapshotStoreIds),
       selectedStoreId: input?.storeId,
       avgCostKgs: avgCostByProductId.get(product.id) ?? null,
@@ -1256,13 +1256,17 @@ export const listProducts = async ({
         ? (storePriceByProductId.get(product.id) ?? null)
         : undefined,
     }),
-  );
+    wholesalePriceKgs: priceTypesEnabled
+      ? decimalToNumber(extrasByProduct.get(product.id)?.wholesalePriceKgs)
+      : null,
+  }));
 
   return {
     items,
     total,
     page,
     pageSize,
+    priceTypesEnabled,
   };
 };
 
