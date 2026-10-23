@@ -15,6 +15,7 @@ import { verifyProductUnitChange } from "./product-unit-change-check";
 import { verifyProductCameraSearch } from "./product-camera-search-check";
 import { verifyInventoryMinStock } from "./inventory-min-stock-check";
 import { verifyImportConnections } from "./import-connect-check";
+import { verifyReceivingSelection } from "./receiving-selection-check";
 import { verifyStockCountSearch } from "./stock-count-search-check";
 const base = process.env.UX_HTTPS === "1" ? "https://localhost:3122" : "http://localhost:3122";
 const f = JSON.parse(await readFile("artifacts/ux/fixture.json", "utf8"));
@@ -704,6 +705,7 @@ try {
   for (const check of await withEditorPage((page) => verifyInventoryMinStock(page, base, f, (name, input, mutation) => api(admin, name, input, mutation), `${directory}/min-stock`))) record(check);
   for (const check of await withEditorPage((page) => verifyStockCountSearch(page, base, f, (name, input, mutation) => api(admin, name, input, mutation), `${directory}/stock-count-search`))) record(check);
   for (const check of await withEditorPage((page) => verifyImportConnections(page, base, f, (name, input, mutation) => api(admin, name, input, mutation), `${directory}/import-connect`))) record(check);
+  for (const check of await withEditorPage((page) => verifyReceivingSelection(page, base, f, (name, input, mutation) => api(admin, name, input, mutation), `${directory}/receiving-selection`))) record(check);
   record("Product create/edit sections match; retail validation, feature toggles and full mobile names work");
   assert.deepEqual(errors, []);
 } catch (error) {

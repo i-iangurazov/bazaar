@@ -55,6 +55,7 @@ type ReceivingLine = ReceivingDraftLine;
 
 type ReceivingInputField = "quantity" | "unitCost";
 type ReceivingInputViewport = "desktop" | "mobile";
+type ReceivingInputFocusOptions = { selectContents?: boolean; preventScroll?: boolean };
 
 const toDateTimeLocalValue = (date: Date) => {
   const offsetMs = date.getTimezoneOffset() * 60_000;
@@ -75,11 +76,12 @@ const receivingProductSearchFields: ["name"] = ["name"];
 const focusReceivingInputElement = (
   input: HTMLInputElement | null | undefined,
   selectContents = false,
+  preventScroll = false,
 ) => {
   if (!input || input.disabled || input.readOnly) {
     return;
   }
-  input.focus();
+  input.focus({ preventScroll });
   if (!selectContents) {
     return;
   }
@@ -394,7 +396,7 @@ export const InventoryReceivingPage = ({
       key: string,
       field: ReceivingInputField,
       viewport?: ReceivingInputViewport,
-      options?: { selectContents?: boolean },
+      options?: ReceivingInputFocusOptions,
     ) => {
       window.setTimeout(() => {
         const viewportKey =
@@ -403,14 +405,18 @@ export const InventoryReceivingPage = ({
           receivingInputRefs.current.get(receivingInputRefKey(key, field, viewportKey)) ??
           receivingInputRefs.current.get(receivingInputRefKey(key, field, "desktop")) ??
           receivingInputRefs.current.get(receivingInputRefKey(key, field, "mobile"));
-        focusReceivingInputElement(input, options?.selectContents ?? false);
+        focusReceivingInputElement(
+          input,
+          options?.selectContents ?? false,
+          options?.preventScroll ?? false,
+        );
       }, 0);
     },
     [],
   );
 
   const focusQuantity = useCallback(
-    (key: string, options?: { selectContents?: boolean }) => {
+    (key: string, options?: ReceivingInputFocusOptions) => {
       focusReceivingInput(key, "quantity", undefined, options);
     },
     [focusReceivingInput],
@@ -496,7 +502,12 @@ export const InventoryReceivingPage = ({
           },
         ];
       });
-      focusQuantity(key, { selectContents: options?.selectQuantity ?? false });
+      // Keep quantity entry ready without pulling the operator away from the
+      // catalog. Scanning and explicit product-creation handoffs may reveal it.
+      focusQuantity(key, {
+        selectContents: options?.selectQuantity ?? false,
+        preventScroll: mode === "manual" && !options?.selectQuantity,
+      });
       clearDuplicateHint(key);
     },
     [clearDuplicateHint, enableBarcode, enableSku, focusQuantity, getPreviewUrl],
