@@ -41,13 +41,20 @@ const enabled = shouldRunDbTests && process.env.RUN_POOLING_TESTS === "1";
   });
 
   it("reproduces direct-connection exhaustion but serves 30 warm clients through two server connections", async () => {
-    const directClients = clients(direct);
+    const directUrl = new URL(direct);
+    directUrl.searchParams.set("connection_limit", "1");
+    const directClients = clients(directUrl.toString());
     try {
-      const results = await Promise.allSettled(directClients.map(db => db.$queryRaw`SELECT 1`));
-      expect(results.filter(result => result.status === "fulfilled")).toHaveLength(4);
-      const failures = results.filter(result => result.status === "rejected");
-      expect(failures).toHaveLength(26);
-      for (const result of failures) {
+      // Fill the role's four slots before the burst. Racing all 30 connection
+      // startups can reject even the first four while authentication overlaps.
+      for (const db of directClients.slice(0, 4)) await db.$queryRaw`SELECT 1`;
+      const [{ count }] = await admin.$queryRaw<{ count: number }[]>`
+        SELECT count(*)::int AS count FROM pg_stat_activity WHERE usename = 'pool_worker'
+      `;
+      expect(count).toBe(4);
+      const results = await Promise.allSettled(directClients.slice(4).map(db => db.$queryRaw`SELECT 1`));
+      expect(results.filter(result => result.status === "rejected")).toHaveLength(26);
+      for (const result of results) {
         if (result.status === "rejected") {
           expect(String(result.reason)).toMatch(/too many (?:database )?connections/i);
         }
