@@ -64,6 +64,7 @@ async function graph(tx: Tx, organizationId: string) {
         productId: true,
         product: { select: { isDeleted: true } },
         isActive: true,
+        isHidden: true,
         isDirect: true,
         isHistorical: true,
         updatedAt: true,
@@ -119,13 +120,13 @@ async function graph(tx: Tx, organizationId: string) {
       memberIds: unique([
         ...c.products.map((p) => p.productId),
         ...allAssignments
-          .filter((a) => a.isActive && legacyIds.includes(a.storeId))
+          .filter((a) => (a.isActive || a.isHidden) && legacyIds.includes(a.storeId))
           .map((a) => a.productId),
       ]),
       productIds: unique([
         ...c.products.filter((p) => !p.product.isDeleted).map((p) => p.productId),
         ...assignments
-          .filter((a) => a.isActive && legacyIds.includes(a.storeId))
+          .filter((a) => (a.isActive || a.isHidden) && legacyIds.includes(a.storeId))
           .map((a) => a.productId),
       ]),
     });
@@ -145,13 +146,13 @@ async function graph(tx: Tx, organizationId: string) {
       memberIds: unique([
         ...(baseline?.memberIds ?? []),
         ...allAssignments
-          .filter((a) => a.storeId === s.id && a.isDirect && a.isActive)
+          .filter((a) => a.storeId === s.id && a.isDirect && (a.isActive || a.isHidden))
           .map((a) => a.productId),
       ]),
       productIds: unique([
         ...(baseline?.productIds ?? []),
         ...assignments
-          .filter((a) => a.storeId === s.id && a.isDirect && a.isActive)
+          .filter((a) => a.storeId === s.id && a.isDirect && (a.isActive || a.isHidden))
           .map((a) => a.productId),
       ]),
     });
@@ -430,6 +431,9 @@ async function impact(tx: Tx, organizationId: string, raw: CatalogSettings) {
       }
     }
   }
+  // A local exclusion does not change the shared source's membership.
+  for (const assignment of g.assignments)
+    if (assignment.storeId === store.id && assignment.isHidden) desired.delete(assignment.productId);
   const removed = [...current].filter((id) => !desired.has(id)),
     added = [...desired].filter((id) => !current.has(id));
   const [stock, documents, products] = await Promise.all([
@@ -505,7 +509,7 @@ async function impact(tx: Tx, organizationId: string, raw: CatalogSettings) {
         for (const id of confirmed) ids.add(id);
       }
       const fresh = [...ids].filter(
-        (id) => !g.assignments.some((a) => a.storeId === s.id && a.productId === id && a.isActive),
+        (id) => !g.assignments.some((a) => a.storeId === s.id && a.productId === id && (a.isActive || a.isHidden)),
       );
       return fresh.length ? [{ storeId: s.id, name: s.name, added: fresh.length }] : [];
     });

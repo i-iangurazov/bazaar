@@ -16,6 +16,7 @@ import { verifyProductCameraSearch } from "./product-camera-search-check";
 import { verifyInventoryMinStock } from "./inventory-min-stock-check";
 import { verifyImportConnections } from "./import-connect-check";
 import { verifyReceivingSelection } from "./receiving-selection-check";
+import { verifyStoreVisibilityAndTransfer } from "./store-visibility-transfer-check";
 import { verifyPosPhotoAndWholesale } from "./pos-photo-wholesale-check";
 import { verifyStockCountSearch } from "./stock-count-search-check";
 const base = process.env.UX_HTTPS === "1" ? "https://localhost:3122" : "http://localhost:3122";
@@ -707,6 +708,7 @@ try {
   for (const check of await withEditorPage((page) => verifyStockCountSearch(page, base, f, (name, input, mutation) => api(admin, name, input, mutation), `${directory}/stock-count-search`))) record(check);
   for (const check of await withEditorPage((page) => verifyImportConnections(page, base, f, (name, input, mutation) => api(admin, name, input, mutation), `${directory}/import-connect`))) record(check);
   for (const check of await withEditorPage((page) => verifyReceivingSelection(page, base, f, (name, input, mutation) => api(admin, name, input, mutation), `${directory}/receiving-selection`))) record(check);
+  for (const check of await withEditorPage((page) => verifyStoreVisibilityAndTransfer(page, base, f, (name, input, mutation) => api(admin, name, input, mutation), `${directory}/store-visibility-transfer`))) record(check);
   for (const check of await withEditorPage((page) => verifyPosPhotoAndWholesale(page, base, f, (name, input, mutation) => api(admin, name, input, mutation), `${directory}/photo-wholesale`))) record(check);
   record("Product create/edit sections match; retail validation, feature toggles and full mobile names work");
   assert.deepEqual(errors, []);

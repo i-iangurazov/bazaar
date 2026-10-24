@@ -4223,6 +4223,7 @@ export const ProductForm = ({
           </div>
         ) : null}
       </div>
+      <p className="mt-2 text-xs text-muted-foreground">{t("duplicateAssortmentHint")}</p>
       <div className="mt-3 space-y-2">
         {enableSku && duplicateDiagnosticsQuery.data?.exactSkuMatch ? (
           <div className="rounded-md border border-danger/30 bg-background p-3">
@@ -6509,6 +6510,7 @@ export const ProductForm = ({
                           </div>
                         ) : null}
                       </div>
+                      <p className="text-xs text-muted-foreground">{t("duplicateAssortmentHint")}</p>
                       {enableSku && duplicateDiagnosticsQuery.data?.exactSkuMatch ? (
                         <div className="mt-3 rounded-md border border-danger/30 bg-background p-3">
                           <p className="text-xs font-medium text-danger">

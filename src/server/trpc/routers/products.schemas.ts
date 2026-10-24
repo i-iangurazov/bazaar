@@ -163,6 +163,12 @@ export const assignProductsToStoreInputSchema = z.object({
   productIds: z.array(z.string().min(1)).min(1).max(500),
 });
 
+export const productStoreVisibilityInputSchema = z.object({
+  storeId: z.string().min(1),
+  productIds: z.array(z.string().min(1)).min(1).max(500),
+  hidden: z.boolean(),
+});
+
 export const exportProductsInputSchema = productListIdsInputSchema.unwrap().extend({
   columns: z.array(productExportColumnKeyEnum).min(1).max(productExportColumnKeys.length).optional(),
   ids: z.array(z.string().min(1)).max(10000).optional(),

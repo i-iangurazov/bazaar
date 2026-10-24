@@ -132,7 +132,12 @@ const buildProductListWhere = (
   if (readinessProductIds) {
     filters.push({ id: { in: readinessProductIds.length ? readinessProductIds : ["__none__"] } });
   }
-  if (input?.storeId) {
+  if (input?.includeArchived && (input.storeId || scopedStoreIds)) {
+    filters.push({ storeProducts: { some: {
+      storeId: { in: input.storeId ? [input.storeId] : scopedStoreIds },
+      OR: [{ isActive: true }, { isHidden: true }],
+    } } });
+  } else if (input?.storeId) {
     filters.push(productStoreAssignmentWhere(input.storeId));
   } else if (scopedStoreIds) {
     filters.push(productStoreAssignmentInWhere(scopedStoreIds));
@@ -252,6 +257,7 @@ const productListSelect = {
   baseUnit: { select: { code: true, labelRu: true, labelKg: true, quantityPrecision: true } },
   isBundle: true,
   isDeleted: true,
+  storeProducts: { where: { isHidden: true }, select: { storeId: true } },
   photoUrl: true,
   basePriceKgs: true,
   createdAt: true,
@@ -478,7 +484,9 @@ export const buildProductSqlBase = ({
         SELECT 1 FROM "StoreProduct" assignment
         WHERE assignment."productId" = p.id
           AND assignment."storeId" IN (${Prisma.join(scopedStoreIds)})
-          AND assignment."isActive" = true
+          AND ${input?.includeArchived
+            ? Prisma.sql`(assignment."isActive" = true OR assignment."isHidden" = true)`
+            : Prisma.sql`assignment."isActive" = true`}
       )`);
     }
   }
@@ -1259,6 +1267,7 @@ export const listProducts = async ({
     wholesalePriceKgs: priceTypesEnabled
       ? decimalToNumber(extrasByProduct.get(product.id)?.wholesalePriceKgs)
       : null,
+    hiddenInStore: Boolean(input?.storeId && product.storeProducts.some((row) => row.storeId === input.storeId)),
   }));
 
   return {

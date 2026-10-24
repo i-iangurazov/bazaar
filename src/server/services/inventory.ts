@@ -1464,7 +1464,7 @@ export const transferStock = async (input: TransferStockInput) => {
     );
 
     return transfer;
-  });
+  }, { maxWait: 10_000, timeout: 120_000 });
 
   changedItems.forEach((item) => {
     eventBus.publish({

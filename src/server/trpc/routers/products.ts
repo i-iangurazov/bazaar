@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 
 import { adminProcedure, managerProcedure, protectedProcedure, rateLimit, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
+import { setProductStoreVisibility } from "@/server/services/productStoreVisibility";
 import {
   archiveProductMutation,
   arrangeClothingCategoriesMutation,
@@ -61,6 +62,7 @@ import {
   productListInputSchema,
   productPricingInputSchema,
   productStorePricingInputSchema,
+  productStoreVisibilityInputSchema,
   productsByIdsInputSchema,
   searchQuickProductsInputSchema,
   startProductDescriptionGenerationJobInputSchema,
@@ -544,6 +546,16 @@ export const productsRouter = router({
       ids: input?.ids,
     }),
   ),
+
+  setStoreVisibility: managerProcedure
+    .input(productStoreVisibilityInputSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await setProductStoreVisibility({ ...input, user: ctx.user, requestId: ctx.requestId });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
 
   archive: managerProcedure
     .input(archiveProductInputSchema)

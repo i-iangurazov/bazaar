@@ -880,6 +880,28 @@ const ProductsPage = () => {
     },
     [productsBootstrapInput, showArchived, trpcUtils.products.bootstrap],
   );
+  const storeVisibilityMutation = trpc.products.setStoreVisibility.useMutation();
+  const changeStoreVisibility = useCallback(async (productIds: string[], hidden: boolean) => {
+    if (!storeId || !productIds.length || storeVisibilityMutation.isLoading) return;
+    if (!(await confirm({ description: t(hidden ? "confirmHideInStore" : "confirmShowInStore", {
+      store: selectedStore?.name ?? storeId, count: productIds.length,
+    }) }))) return;
+    try {
+      for (let index = 0; index < productIds.length; index += 500) {
+        const batch = productIds.slice(index, index + 500);
+        await storeVisibilityMutation.mutateAsync({ storeId, productIds: batch, hidden });
+        setSelectedIds((current) => new Set([...current].filter((id) => !batch.includes(id))));
+      }
+      toast({ variant: "success", description: t(hidden ? "hiddenInStoreSuccess" : "shownInStoreSuccess") });
+    } catch (error) {
+      toast({ variant: "error", description: translateError(tErrors, error as Parameters<typeof translateError>[1]) });
+    } finally {
+      await Promise.all([
+        trpcUtils.products.bootstrap.invalidate(), trpcUtils.products.list.invalidate(),
+        trpcUtils.products.byIds.invalidate(), trpcUtils.inventory.searchProducts.invalidate(),
+      ]);
+    }
+  }, [confirm, selectedStore?.name, storeId, storeVisibilityMutation, t, tErrors, toast, trpcUtils]);
   const archiveMutation = trpc.products.archive.useMutation({
     onMutate: async ({ productId }) => {
       await trpcUtils.products.bootstrap.cancel(productsBootstrapInput);
@@ -1886,7 +1908,7 @@ const ProductsPage = () => {
     <InlineEditableCell rowId={product.id} row={product} value={product.wholesalePriceKgs}
       definition={inlineEditRegistry.products.wholesalePrice} context={inlineProductsContext}
       role={role} locale={locale} columnLabel={t("wholesalePrice")} tTable={t} tCommon={tCommon}
-      enabled={inlineEditingEnabled} executeMutation={executeInlineProductMutation}
+      enabled={inlineEditingEnabled && !product.hiddenInStore} executeMutation={executeInlineProductMutation}
       className="justify-end font-semibold text-foreground" />
   ), [inlineProductsContext, role, locale, t, tCommon, inlineEditingEnabled, executeInlineProductMutation]);
   const renderWholesalePrice = (product: ProductRow, className = "flex items-center justify-between gap-2") =>
@@ -2308,6 +2330,13 @@ const ProductsPage = () => {
         ];
       }
 
+      if (product.hiddenInStore && !product.isDeleted) {
+        return [{
+          key: "show-in-store", label: t("showInStore"), icon: RestoreIcon,
+          disabled: storeVisibilityMutation.isLoading,
+          onSelect: () => changeStoreVisibility([product.id], false),
+        }];
+      }
       const managementActions = product.isDeleted
         ? [
             {
@@ -2370,9 +2399,14 @@ const ProductsPage = () => {
                 setDuplicateTarget({ id: product.id, name: product.name });
               },
             },
+            ...(storeId ? [{
+              key: "hide-in-store", label: t("hideInStore"), icon: ArchiveIcon,
+              disabled: storeVisibilityMutation.isLoading,
+              onSelect: () => changeStoreVisibility([product.id], true),
+            }] : []),
             {
               key: "archive",
-              label: tCommon("archive"),
+              label: t("archiveEverywhere"),
               icon: ArchiveIcon,
               variant: "danger" as const,
               onSelect: async () => {
@@ -2390,6 +2424,8 @@ const ProductsPage = () => {
     },
     [
       archiveMutation,
+      changeStoreVisibility,
+      storeVisibilityMutation.isLoading,
       buildProductListLaunchedHref,
       canManageProducts,
       confirm,
@@ -2524,11 +2560,12 @@ const ProductsPage = () => {
                     columnLabel={t("name")}
                     tTable={t}
                     tCommon={tCommon}
-                    enabled={inlineEditingEnabled}
+                    enabled={inlineEditingEnabled && !product.hiddenInStore}
                     executeMutation={executeInlineProductMutation}
                     className="font-semibold text-foreground"
                   />
                   {product.isBundle ? <Badge variant="muted">{t("typeBundle")}</Badge> : null}
+                  {product.hiddenInStore ? <Badge variant="muted">{t("hiddenInStore")}</Badge> : null}
                   {product.isDeleted ? <Badge variant="muted">{t("archived")}</Badge> : null}
                 </div>
               </div>
@@ -2563,7 +2600,7 @@ const ProductsPage = () => {
                   columnLabel={t("category")}
                   tTable={t}
                   tCommon={tCommon}
-                  enabled={inlineEditingEnabled}
+                  enabled={inlineEditingEnabled && !product.hiddenInStore}
                   executeMutation={executeInlineProductMutation}
                 />
                 {productCategories
@@ -2613,7 +2650,7 @@ const ProductsPage = () => {
                 columnLabel={tInventory("onHand")}
                 tTable={t}
                 tCommon={tCommon}
-                enabled={inlineEditingEnabled}
+                enabled={inlineEditingEnabled && !product.hiddenInStore}
                 executeMutation={executeInlineProductMutation}
                 className={
                   readinessState.negativeStock
@@ -2653,7 +2690,7 @@ const ProductsPage = () => {
                   columnLabel={t("salePrice")}
                   tTable={t}
                   tCommon={tCommon}
-                  enabled={inlineEditingEnabled}
+                  enabled={inlineEditingEnabled && !product.hiddenInStore}
                   executeMutation={executeInlineProductMutation}
                   className="font-semibold text-foreground"
                 />
@@ -2702,7 +2739,7 @@ const ProductsPage = () => {
                 columnLabel={t("avgCost")}
                 tTable={t}
                 tCommon={tCommon}
-                enabled={inlineEditingEnabled}
+                enabled={inlineEditingEnabled && !product.hiddenInStore}
                 executeMutation={executeInlineProductMutation}
                 className="justify-end font-semibold text-foreground"
               />
@@ -3342,6 +3379,11 @@ const ProductsPage = () => {
                         </Link>
                       </DropdownMenuItem>
                     ) : null}
+                    {isAdmin && storeId ? <DropdownMenuItem asChild>
+                      <Link href={`/settings/store-groups?storeId=${encodeURIComponent(storeId)}`}>
+                        {t("configureStoreAssortment")}
+                      </Link>
+                    </DropdownMenuItem> : null}
                     <DropdownMenuItem disabled={!storeId} onSelect={openAssignExistingProducts}>
                       <CopyIcon className="h-4 w-4" aria-hidden />
                       {t("addExistingProducts")}
@@ -3870,6 +3912,16 @@ const ProductsPage = () => {
                       </DropdownMenuItem>
                       {canManageProducts ? (
                         <>
+                          {storeId ? <>
+                            <DropdownMenuItem disabled={storeVisibilityMutation.isLoading || hasArchivedSelected && !hasOffPageSelected}
+                              onSelect={() => { pendingBulkConfirmationRef.current = () => void changeStoreVisibility(selectedList, true); }}>
+                              <ArchiveIcon className="h-4 w-4" aria-hidden />{t("hideInStore")}
+                            </DropdownMenuItem>
+                            {showArchived ? <DropdownMenuItem disabled={storeVisibilityMutation.isLoading}
+                              onSelect={() => { pendingBulkConfirmationRef.current = () => void changeStoreVisibility(selectedList, false); }}>
+                              <RestoreIcon className="h-4 w-4" aria-hidden />{t("showInStore")}
+                            </DropdownMenuItem> : null}
+                          </> : null}
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
                             disabled={aiFeaturesVisuallyDisabled || arrangeCategoriesRunning}
@@ -4103,6 +4155,7 @@ const ProductsPage = () => {
                               <Badge variant="muted">
                                 {product.isBundle ? t("typeBundle") : t("typeProduct")}
                               </Badge>
+                              {product.hiddenInStore ? <Badge variant="muted">{t("hiddenInStore")}</Badge> : null}
                               {product.isDeleted ? (
                                 <Badge variant="muted">{t("archived")}</Badge>
                               ) : null}
@@ -4133,7 +4186,7 @@ const ProductsPage = () => {
                                   columnLabel={t("salePrice")}
                                   tTable={t}
                                   tCommon={tCommon}
-                                  enabled={inlineEditingEnabled}
+                                  enabled={inlineEditingEnabled && !product.hiddenInStore}
                                   executeMutation={executeInlineProductMutation}
                                   className="text-sm font-semibold text-foreground"
                                 />
@@ -4152,7 +4205,7 @@ const ProductsPage = () => {
                                   columnLabel={tInventory("onHand")}
                                   tTable={t}
                                   tCommon={tCommon}
-                                  enabled={inlineEditingEnabled}
+                                  enabled={inlineEditingEnabled && !product.hiddenInStore}
                                   executeMutation={executeInlineProductMutation}
                                   className="text-sm font-semibold text-foreground"
                                 />
@@ -4170,7 +4223,7 @@ const ProductsPage = () => {
                                   columnLabel={t("avgCost")}
                                   tTable={t}
                                   tCommon={tCommon}
-                                  enabled={inlineEditingEnabled}
+                                  enabled={inlineEditingEnabled && !product.hiddenInStore}
                                   executeMutation={executeInlineProductMutation}
                                   className="text-sm font-semibold text-foreground"
                                 />
@@ -4263,7 +4316,8 @@ const ProductsPage = () => {
                             <Badge variant="muted">
                               {product.isBundle ? t("typeBundle") : t("typeProduct")}
                             </Badge>
-                            {product.isDeleted ? (
+                            {product.hiddenInStore ? <Badge variant="muted">{t("hiddenInStore")}</Badge> : null}
+                              {product.isDeleted ? (
                               <Badge variant="muted">{t("archived")}</Badge>
                             ) : null}
                             <Badge variant={readinessSummary.variant}>
@@ -4293,7 +4347,7 @@ const ProductsPage = () => {
                             columnLabel={t("salePrice")}
                             tTable={t}
                             tCommon={tCommon}
-                            enabled={inlineEditingEnabled}
+                            enabled={inlineEditingEnabled && !product.hiddenInStore}
                             executeMutation={executeInlineProductMutation}
                             className="justify-end text-sm font-semibold text-foreground"
                           />
@@ -4312,7 +4366,7 @@ const ProductsPage = () => {
                             columnLabel={tInventory("onHand")}
                             tTable={t}
                             tCommon={tCommon}
-                            enabled={inlineEditingEnabled}
+                            enabled={inlineEditingEnabled && !product.hiddenInStore}
                             executeMutation={executeInlineProductMutation}
                             className="justify-end text-sm font-semibold text-foreground"
                           />
@@ -4330,7 +4384,7 @@ const ProductsPage = () => {
                             columnLabel={t("avgCost")}
                             tTable={t}
                             tCommon={tCommon}
-                            enabled={inlineEditingEnabled}
+                            enabled={inlineEditingEnabled && !product.hiddenInStore}
                             executeMutation={executeInlineProductMutation}
                             className="justify-end text-sm font-semibold text-foreground"
                           />
@@ -4381,7 +4435,8 @@ const ProductsPage = () => {
                             <Badge variant="muted">
                               {product.isBundle ? t("typeBundle") : t("typeProduct")}
                             </Badge>
-                            {product.isDeleted ? (
+                            {product.hiddenInStore ? <Badge variant="muted">{t("hiddenInStore")}</Badge> : null}
+                              {product.isDeleted ? (
                               <Badge variant="muted">{t("archived")}</Badge>
                             ) : null}
                             <Badge variant={readinessSummary.variant}>
@@ -4430,7 +4485,7 @@ const ProductsPage = () => {
                           columnLabel={t("salePrice")}
                           tTable={t}
                           tCommon={tCommon}
-                          enabled={inlineEditingEnabled}
+                          enabled={inlineEditingEnabled && !product.hiddenInStore}
                           executeMutation={executeInlineProductMutation}
                           className="justify-end text-foreground"
                         />
@@ -4449,7 +4504,7 @@ const ProductsPage = () => {
                           columnLabel={tInventory("onHand")}
                           tTable={t}
                           tCommon={tCommon}
-                          enabled={inlineEditingEnabled}
+                          enabled={inlineEditingEnabled && !product.hiddenInStore}
                           executeMutation={executeInlineProductMutation}
                           className="justify-end text-foreground"
                         />
@@ -4467,7 +4522,7 @@ const ProductsPage = () => {
                           columnLabel={t("avgCost")}
                           tTable={t}
                           tCommon={tCommon}
-                          enabled={inlineEditingEnabled}
+                          enabled={inlineEditingEnabled && !product.hiddenInStore}
                           executeMutation={executeInlineProductMutation}
                           className="justify-end text-foreground"
                         />

@@ -8,6 +8,7 @@ import { resolveRuntimeDatabaseUrl } from "../../src/server/db/connection";
 
 // Review each additive migration before adding it to the production rollout.
 export const approvedProductionMigrations = {
+  "20261024090000_store_product_visibility": "06f0cd5ff4cf9b3e1de17b0fccb891e05eb8e6239ba50d726551e921188e4f88",
   "20261007155000_fractional_product_quantities": "56adfd70e51aaa098f6116de7470856e59260ef5f77dc7fb71d108c7d8522a30",
   "20261002010000_organization_price_types": "728a6ca4e0b566c2a81c228267c17aa0db7439a48556d4f8cd5e1bee283ca0e2",
   "20260930120000_loyalty_foundation": "86bafee280af9b8e9095167ea17889220b163d1965056c02bd5f309c820cc7cc",
