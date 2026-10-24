@@ -1,0 +1,2 @@
+"bazaar_test" "bazaar_test_only"
+"pool_worker" "pool_worker_test_only"
