@@ -1175,14 +1175,19 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                 aria-label={tNav("modules")}
                 className="sticky top-0 hidden h-screen w-12 shrink-0 flex-col items-center gap-2 border-r border-sidebar-border bg-sidebar py-3 md:flex"
               >
-                <Link
-                  href="/dashboard"
-                  prefetch={false}
-                  aria-label={tNav("brand")}
-                  className="mb-2 flex h-8 w-8 items-center justify-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <Image src="/brand/icon.png" alt="" width={32} height={32} />
-                </Link>
+                <div className="mb-2 h-8 w-8 shrink-0">
+                  {!desktopSidebarOpen ? (
+                    <Link
+                      href="/dashboard"
+                      prefetch={false}
+                      aria-label={tNav("brand")}
+                      data-bazaar-brand="dock"
+                      className="flex h-8 w-8 items-center justify-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <Image src="/brand/icon.png" alt="" width={32} height={32} />
+                    </Link>
+                  ) : null}
+                </div>
                 {desktopNavGroups.map((group) => {
                   const Icon = desktopGroupIcons[group.id];
                   const selected = selectedDesktopGroup?.id === group.id;
@@ -1223,6 +1228,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                   <Link
                     href="/dashboard"
                     prefetch={false}
+                    data-bazaar-brand="sidebar"
                     className="flex min-h-10 items-center rounded-lg no-underline hover:no-underline group-data-[state=collapsed]/sidebar-wrapper:justify-center"
                     aria-label={tNav("brand")}
                   >
