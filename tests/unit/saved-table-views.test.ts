@@ -52,6 +52,7 @@ describe("saved table views", () => {
         },
       ],
       defaultViewId: "view-1",
+      activeViewId: null,
     });
   });
 
@@ -80,5 +81,42 @@ describe("saved table views", () => {
     });
     expect(overwritten.state).toEqual({ search: "tea", pageSize: 25 });
     expect(overwritten.updatedAt).toBeGreaterThanOrEqual(renamed.updatedAt);
+  });
+
+  it("keeps the explicitly selected view when two names share the same settings", () => {
+    const first = createSavedTableView({
+      name: "First",
+      state: { search: "tea", page: 3, pageSize: 25 },
+    });
+    const second = { ...first, id: "second", name: "Second" };
+    const selected = findMatchingSavedTableView(
+      [first, second],
+      { ...first.state, page: 1 },
+      second.id,
+    );
+    expect(selected?.id).toBe(second.id);
+    expect(
+      findMatchingSavedTableView([first, second], { ...first.state, page: 8 }, second.id)?.id,
+    ).toBe(second.id);
+    expect(
+      findMatchingSavedTableView([first, second], { ...first.state, search: "coffee" }, second.id),
+    ).toBeNull();
+    expect(
+      findMatchingSavedTableView([first, second], { ...first.state, pageSize: 50 }, second.id),
+    ).toBeNull();
+  });
+
+  it("retains valid view identity on reload and safely migrates old preferences", () => {
+    const view = createSavedTableView({ name: "Tea", state: { search: "tea" } });
+    const parse = (value: unknown) => value as typeof view.state;
+    const stored = { views: [view], defaultViewId: view.id, activeViewId: view.id };
+    expect(parseSavedTableViews(JSON.stringify(stored), parse).activeViewId).toBe(view.id);
+    expect(
+      parseSavedTableViews(JSON.stringify({ ...stored, activeViewId: "deleted" }), parse)
+        .activeViewId,
+    ).toBeNull();
+    expect(
+      parseSavedTableViews(JSON.stringify({ views: [view], defaultViewId: view.id }), parse),
+    ).toEqual({ ...stored, activeViewId: null });
   });
 });

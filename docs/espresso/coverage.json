@@ -109,8 +109,11 @@
     },
     {
       "source": "src/app/(app)/inventory/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "artifacts/ux/espresso/screenshots/inventory-saved-view-identity-dark.png",
+        "docs/espresso/inventory-verification.json"
+      ]
     },
     {
       "source": "src/app/(app)/inventory/receiving/[id]/edit/page.tsx",
@@ -119,8 +122,11 @@
     },
     {
       "source": "src/app/(app)/inventory/receiving/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "artifacts/ux/espresso/screenshots/receiving-document-desktop-dark.png",
+        "docs/espresso/inventory-verification.json"
+      ]
     },
     {
       "source": "src/app/(app)/inventory/transfers/[id]/edit/page.tsx",
@@ -129,8 +135,11 @@
     },
     {
       "source": "src/app/(app)/inventory/transfers/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "artifacts/ux/espresso/screenshots/transfer-document-desktop-dark.png",
+        "docs/espresso/inventory-verification.json"
+      ]
     },
     {
       "source": "src/app/(app)/inventory/write-offs/[id]/edit/page.tsx",
@@ -139,8 +148,11 @@
     },
     {
       "source": "src/app/(app)/inventory/write-offs/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "artifacts/ux/espresso/screenshots/write-off-document-desktop-dark.png",
+        "docs/espresso/inventory-verification.json"
+      ]
     },
     {
       "source": "src/app/(app)/onboarding/page.tsx",
@@ -703,7 +715,7 @@
     "singleBrand": "Show exactly one Bazaar brand mark in desktop navigation: full logo when the sidebar is expanded, icon in the module dock when collapsed."
   },
   "progress": {
-    "stage": "Foundation, product documents and list controls; full redesign remains in progress",
+    "stage": "Foundation, product and stock documents, list controls; full redesign remains in progress",
     "foundation": [
       "Pinned MIT Espresso semantic tokens and component CSS",
       "Self-hosted Inter Variable",
@@ -782,6 +794,31 @@
         "evidence": [
           "artifacts/ux/espresso/screenshots/product-document-desktop-dark-en.png"
         ]
+      },
+      {
+        "check": "Stock document operations through normal production UI",
+        "result": "Admin, RU, dark: receiving 2 units at 85 KGS, transfer 1 unit Bishkek to Osh, write-off 1 unit Bishkek; resulting stock verified in the isolated database: Bishkek 3, Osh 1. Receiving draft survives product-create/back round trip; zero quantity disables posting; same-store transfer disables posting; write-off reason is required.",
+        "evidence": [
+          "docs/espresso/inventory-verification.json",
+          "artifacts/ux/espresso/screenshots/receiving-document-mobile-dark.png"
+        ]
+      },
+      {
+        "check": "Saved table view identity in inventory and products",
+        "result": "Two names with identical settings remain distinct. Inventory B survives reload and pagination, A can be applied explicitly. Products new same-settings view remains selected after reload.",
+        "evidence": [
+          "artifacts/ux/espresso/screenshots/inventory-saved-view-identity-dark.png",
+          "artifacts/ux/espresso/inventory-focused-final.log"
+        ]
+      },
+      {
+        "check": "Final stock document columns and responsive controls",
+        "result": "Desktop final receiving and transfer headers measured without overflow; 820px cards and 390px mobile fields are 40px with no page overflow. KG mobile write-off and EN desktop inspected, RU restored.",
+        "evidence": [
+          "artifacts/ux/espresso/screenshots/receiving-document-desktop-dark.png",
+          "artifacts/ux/espresso/screenshots/transfer-document-desktop-dark.png",
+          "artifacts/ux/espresso/screenshots/write-off-document-mobile-dark-kg.png"
+        ]
       }
     ],
     "remaining": [
@@ -791,21 +828,21 @@
       "Admin/manager/staff/cashier and store/plan gates in the rendered UI",
       "Modal, dropdown, focus, keyboard, loading, empty, retry and recovery flows across page families",
       "Broader database integration regression and final production smoke on the isolated app",
-      "Audit autofocus dialogs across other route families for explicit return-focus targets; saved-view forms now have explicit trigger refs.",
-      "Review saved-view identity when multiple named views have identical settings; the existing matcher currently picks the first matching state."
+      "Audit autofocus dialogs across other route families for explicit return-focus targets; saved-view forms now have explicit trigger refs."
     ],
     "unitTests": {
-      "files": 254,
-      "tests": 1854,
-      "status": "passed",
-      "evidence": "artifacts/ux/espresso/document-unit-isolated.log",
+      "files": 255,
+      "tests": 1858,
+      "status": "passed before final column-width refinement; focused 32 tests passed again afterwards",
+      "evidence": "artifacts/ux/espresso/inventory-unit-isolated-retry.log",
+      "followUpEvidence": "artifacts/ux/espresso/inventory-focused-final.log",
       "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit"
     },
     "databaseRegression": {
       "files": 3,
       "tests": 87,
       "status": "passed",
-      "evidence": "artifacts/ux/espresso/document-db.log",
+      "evidence": "artifacts/ux/espresso/inventory-db.log",
       "database": "bazaar_hardening_ci",
       "postgresPort": 55440,
       "providers": "disabled"

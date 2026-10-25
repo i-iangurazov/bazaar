@@ -265,7 +265,7 @@ html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
   }
 
   .bazaar-doc-search-list {
-    @apply relative z-10 mt-3 max-h-[25rem] overflow-y-auto rounded-xl border border-border bg-card shadow-lg;
+    @apply relative z-10 mt-3 max-h-64 overflow-y-auto rounded-md border border-border bg-card shadow-none;
     scrollbar-width: thin;
     scrollbar-color: hsl(var(--border)) transparent;
   }
@@ -302,7 +302,7 @@ html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
   }
 
   .bazaar-doc-line-index {
-    @apply flex h-7 min-w-7 shrink-0 items-center justify-center rounded-lg border border-border bg-muted/50 px-1 text-xs font-semibold tabular-nums text-muted-foreground;
+    @apply flex h-6 min-w-6 shrink-0 items-center justify-center px-1 text-xs tabular-nums text-muted-foreground;
   }
 
   .bazaar-doc-line-thumb {
@@ -322,7 +322,23 @@ html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
   }
 
   .bazaar-doc-mobile-actions {
-    @apply fixed inset-x-3 z-40 rounded-2xl border border-border bg-card p-2.5 shadow-lg;
+    @apply fixed inset-x-3 z-40 rounded-lg border border-border bg-card p-2.5 shadow-md;
+  }
+
+  [data-inventory-document] {
+    @apply min-w-0 rounded-lg border border-border bg-card;
+  }
+
+  [data-inventory-document] .bazaar-doc-surface {
+    @apply min-w-0 rounded-none border-0 border-b border-border bg-transparent p-4 sm:p-5;
+  }
+
+  [data-inventory-document] .bazaar-doc-summary {
+    @apply rounded-none border-0 bg-transparent p-4 sm:p-5;
+  }
+
+  [data-inventory-document] .bazaar-doc-line-row {
+    @apply rounded-none border-0 border-b border-border bg-transparent shadow-none last:border-b-0 hover:bg-muted/40;
   }
 
   .bazaar-admin-surface {

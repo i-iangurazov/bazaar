@@ -1,0 +1,87 @@
+{
+  "status": "local-checkpoint-verified-full-redesign-in-progress",
+  "scope": [
+    "Stock receiving, transfers and write-off forms",
+    "Saved-view identity in products and inventory lists"
+  ],
+  "environment": "standalone production app; bazaar_espresso_ui localhost:55440; external providers disabled",
+  "product": {
+    "id": "f7fe73a3-9d24-42f5-9b37-ff19ef6ca2b6",
+    "sku": "ESPRESSO-DOC-20261026"
+  },
+  "browserTransactions": [
+    {
+      "type": "STOCK_RECEIVING",
+      "id": "ecd2519e-1b6a-4deb-ad17-596c31146d83",
+      "quantity": 2,
+      "unitCostKgs": 85,
+      "totalKgs": 170
+    },
+    {
+      "type": "TRANSFER",
+      "id": "e58f5871-0225-4d27-b6a3-1811526aa397",
+      "quantity": 1,
+      "from": "Бишкек · Центр",
+      "to": "Ош · Южный"
+    },
+    {
+      "type": "WRITE_OFF",
+      "id": "0ce20342-8a83-42ce-8d42-9c983a8f824a",
+      "quantity": 1,
+      "store": "Бишкек · Центр",
+      "reason": "Для внутреннего использования"
+    }
+  ],
+  "databaseReadback": {
+    "before": {
+      "Бишкек · Центр": 3
+    },
+    "after": {
+      "Бишкек · Центр": 3,
+      "Ош · Южный": 1
+    },
+    "movements": {
+      "openingAdjustment": 3,
+      "receive": 2,
+      "transferOut": -1,
+      "transferIn": 1,
+      "writeOff": -1
+    },
+    "duplicates": false
+  },
+  "verified": [
+    "Receiving draft restores search, lines, quantity, cost and reference after product-create/back navigation",
+    "Picker opens with search focus; Escape closes and returns focus; search survives reopening",
+    "Receiving quantity zero disables posting and sets aria-invalid",
+    "Same-store transfer clears stale lines and disables posting",
+    "Write-off requires a reason before posting",
+    "Mobile receiving at 390px has no horizontal page overflow; footer above navigation; normal UI posting succeeds",
+    "All three operations navigate to a posted document with product detail links",
+    "Final RU table headers measured without overflow at 1440px: receiving quantity 92px/cost 136px; transfer quantity 92px/stock 104px/cost 136px; visually inspected final screenshots",
+    "820px receiving document switches to two-column line cards, quantity field is 40px high, no page overflow",
+    "KG write-off at 390px: translated labels, 40px quantity input, no horizontal page overflow; EN desktop labels and KGS formatting inspected; RU restored",
+    "Inventory saved views A and B with identical settings: B stays selected after reload and pagination; selecting A chooses A and resets pagination",
+    "Products: saving a new named view with the same settings keeps the new name after reload",
+    "Single brand confirmed again in current build: expanded sidebar only; collapsed dock only; collapsed sidebar has aria-hidden=true and final brand width zero"
+  ],
+  "pending": [
+    "Posted-document edit routes and stock-count pages require the remaining route-family visual audit",
+    "Complete inventory admin/manager/staff/cashier, store/plan, light/dark, RU/KG/EN visual matrix",
+    "Broader loading/error/retry, scanner hardware, focus and print matrix across the full redesign"
+  ],
+  "checks": {
+    "unit": "255 files / 1858 tests passed; inventory-unit-isolated-retry.log",
+    "focusedAfterColumnRefinement": "7 files / 32 tests passed; inventory-focused-final.log",
+    "database": "3 files / 87 tests passed; inventory-db.log",
+    "productionBuild": "passed current application code; build-inventory-final.log; UX_SUITE=espresso CIRCLE_NODE_TOTAL=3 NODE_OPTIONS=--max-old-space-size=6144 node --import tsx scripts/ux/build.ts",
+    "typecheck": "passed; typecheck-inventory.log; final production build also checks types",
+    "lint": "passed without errors/warnings; lint-inventory.log; final build also checks lint",
+    "translations": "passed; i18n-inventory.log"
+  },
+  "infrastructure": [
+    "First build failed during standalone copy because disk was full; compiler cache only was removed. An overlapping unit attempt was interrupted and is not counted as passed.",
+    "Full unit suite and separate DB regressions completed after a successful production build.",
+    "Final verification rebuild uses CIRCLE_NODE_TOTAL=3 to limit local build workers; completed webpack cache was removed after compilation to retain disk headroom."
+  ],
+  "delivery": "Local playground checkpoint; full redesign remains in progress; no main merge or deployment"
+}

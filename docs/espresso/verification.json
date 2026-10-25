@@ -1,5 +1,5 @@
 {
-  "status": "product-documents-and-list-controls-verified-full-redesign-in-progress",
+  "status": "product-and-stock-documents-local-checkpoint-full-redesign-in-progress",
   "branch": "codex/playground",
   "reference": "Frappe Framework Espresso e8d41dd0061a32ee781caefe5d0b0d2bb7c15362",
   "checks": [
@@ -48,6 +48,27 @@
       "command": "pnpm exec vitest run tests/unit/saved-table-views-ui.test.tsx tests/unit/ui-sharp-primitives.test.tsx tests/unit/mobile-more-menu-focus.test.tsx",
       "result": "3 files, 17 tests passed, including explicit return-focus targets",
       "log": "artifacts/ux/espresso/document-focus-unit.log"
+    },
+    {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
+      "result": "255 files, 1858 tests passed before final column-width refinement; focused 32 tests passed again after it",
+      "log": "artifacts/ux/espresso/inventory-unit-isolated-retry.log"
+    },
+    {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts",
+      "result": "3 files, 87 real database integration tests passed",
+      "log": "artifacts/ux/espresso/inventory-db.log",
+      "database": "bazaar_hardening_ci; separate from browser fixtures"
+    },
+    {
+      "command": "UX_SUITE=espresso CIRCLE_NODE_TOTAL=3 NODE_OPTIONS=--max-old-space-size=6144 node --import tsx scripts/ux/build.ts",
+      "result": "Final application production build passed, including type/lint and 125 static pages",
+      "log": "artifacts/ux/espresso/build-inventory-final.log"
+    },
+    {
+      "command": "CUA normal UI stock document and saved view checks",
+      "result": "Receiving, transfer and write-off posted successfully, DB ledger readback agrees; draft round trip, validation, responsive fields, header widths, KG/EN, duplicate-setting view identity and single-brand states checked",
+      "evidence": "docs/espresso/inventory-verification.json"
     }
   ],
   "environment": {
@@ -64,8 +85,7 @@
     "Dark theme and RU/KG/EN visual matrix",
     "Admin/manager/staff/cashier and store/plan gates in the rendered UI",
     "Modal, dropdown, focus, keyboard, loading, empty, retry and recovery flows across page families",
-    "Broader database integration regression and final production smoke on the isolated app",
-    "Saved views with identical settings currently match the first state; review the existing view-identity behavior before final acceptance."
+    "Broader database integration regression and final production smoke on the isolated app"
   ],
   "delivery": "Local review checkpoint only; not a full redesign completion; no main merge, main push or deployment",
   "infrastructureNotes": [

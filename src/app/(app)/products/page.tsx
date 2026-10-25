@@ -462,7 +462,7 @@ const ProductsPage = () => {
     defaultValue: defaultProductsTableState,
     parse: parseProductsTableState,
   });
-  const defaultProductsSavedViewsState = useMemo(() => ({ views: [], defaultViewId: null }), []);
+  const defaultProductsSavedViewsState = useMemo(() => ({ views: [], defaultViewId: null, activeViewId: null }), []);
   const productsSavedViewsStorageKey = useMemo(
     () =>
       buildScopedStorageKey({
@@ -610,8 +610,8 @@ const ProductsPage = () => {
     [setProductsTableState],
   );
   const matchingProductsSavedView = useMemo(
-    () => findMatchingSavedTableView(productsSavedViewsState.views, productsTableState),
-    [productsSavedViewsState.views, productsTableState],
+    () => findMatchingSavedTableView(productsSavedViewsState.views, productsTableState, productsSavedViewsState.activeViewId),
+    [productsSavedViewsState.views, productsSavedViewsState.activeViewId, productsTableState],
   );
   const baseProductColumnOptions = useMemo(
     () => [
@@ -1158,6 +1158,7 @@ const ProductsPage = () => {
       return;
     }
     setProductsTableState(defaultView.state);
+    setProductsSavedViewsState((current) => ({ ...current, activeViewId: defaultView.id }));
   }, [
     hasStoredProductsTableState,
     productsSavedViewsReady,
@@ -1165,6 +1166,7 @@ const ProductsPage = () => {
     productsSavedViewsState.views,
     productsTableStateReady,
     setProductsTableState,
+    setProductsSavedViewsState,
   ]);
 
   useEffect(() => {
@@ -1752,16 +1754,19 @@ const ProductsPage = () => {
         return;
       }
       setProductsTableState({ ...view.state, page: 1 });
+      setProductsSavedViewsState((current) => ({ ...current, activeViewId: view.id }));
       setSelectedIds(new Set());
     },
-    [productsSavedViewsState.views, setProductsTableState],
+    [productsSavedViewsState.views, setProductsTableState, setProductsSavedViewsState],
   );
 
   const saveProductsView = useCallback(
     (name: string) => {
+      const view = createSavedTableView({ name, state: productsTableState });
       setProductsSavedViewsState((current) => ({
         ...current,
-        views: [...current.views, createSavedTableView({ name, state: productsTableState })],
+        views: [...current.views, view],
+        activeViewId: view.id,
       }));
     },
     [productsTableState, setProductsSavedViewsState],
@@ -1786,6 +1791,7 @@ const ProductsPage = () => {
         views: current.views.map((view) =>
           view.id === viewId ? overwriteSavedTableView(view, productsTableState) : view,
         ),
+        activeViewId: viewId,
       }));
     },
     [productsTableState, setProductsSavedViewsState],
@@ -1794,7 +1800,9 @@ const ProductsPage = () => {
   const deleteProductsView = useCallback(
     (viewId: string) => {
       setProductsSavedViewsState((current) => ({
+        ...current,
         views: current.views.filter((view) => view.id !== viewId),
+        activeViewId: current.activeViewId === viewId ? null : current.activeViewId,
         defaultViewId: current.defaultViewId === viewId ? null : current.defaultViewId,
       }));
     },

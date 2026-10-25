@@ -461,7 +461,7 @@ const InventoryPage = () => {
     defaultValue: defaultInventoryTableState,
     parse: parseInventoryTableState,
   });
-  const defaultInventorySavedViewsState = useMemo(() => ({ views: [], defaultViewId: null }), []);
+  const defaultInventorySavedViewsState = useMemo(() => ({ views: [], defaultViewId: null, activeViewId: null }), []);
   const inventorySavedViewsStorageKey = useMemo(
     () =>
       buildScopedStorageKey({
@@ -591,8 +591,8 @@ const InventoryPage = () => {
     [locale, selectedStore],
   );
   const matchingInventorySavedView = useMemo(
-    () => findMatchingSavedTableView(inventorySavedViewsState.views, inventoryTableState),
-    [inventorySavedViewsState.views, inventoryTableState],
+    () => findMatchingSavedTableView(inventorySavedViewsState.views, inventoryTableState, inventorySavedViewsState.activeViewId),
+    [inventorySavedViewsState.views, inventorySavedViewsState.activeViewId, inventoryTableState],
   );
   const baseInventoryColumnOptions = useMemo(
     () => [
@@ -1188,16 +1188,19 @@ const InventoryPage = () => {
         return;
       }
       setInventoryTableState({ ...view.state, page: 1 });
+      setInventorySavedViewsState((current) => ({ ...current, activeViewId: view.id }));
       setSelectedIds(new Set());
     },
-    [inventorySavedViewsState.views, setInventoryTableState],
+    [inventorySavedViewsState.views, setInventoryTableState, setInventorySavedViewsState],
   );
 
   const saveInventoryView = useCallback(
     (name: string) => {
+      const view = createSavedTableView({ name, state: inventoryTableState });
       setInventorySavedViewsState((current) => ({
         ...current,
-        views: [...current.views, createSavedTableView({ name, state: inventoryTableState })],
+        views: [...current.views, view],
+        activeViewId: view.id,
       }));
     },
     [inventoryTableState, setInventorySavedViewsState],
@@ -1222,6 +1225,7 @@ const InventoryPage = () => {
         views: current.views.map((view) =>
           view.id === viewId ? overwriteSavedTableView(view, inventoryTableState) : view,
         ),
+        activeViewId: viewId,
       }));
     },
     [inventoryTableState, setInventorySavedViewsState],
@@ -1230,7 +1234,9 @@ const InventoryPage = () => {
   const deleteInventoryView = useCallback(
     (viewId: string) => {
       setInventorySavedViewsState((current) => ({
+        ...current,
         views: current.views.filter((view) => view.id !== viewId),
+        activeViewId: current.activeViewId === viewId ? null : current.activeViewId,
         defaultViewId: current.defaultViewId === viewId ? null : current.defaultViewId,
       }));
     },
@@ -1264,6 +1270,7 @@ const InventoryPage = () => {
       return;
     }
     setInventoryTableState(defaultView.state);
+    setInventorySavedViewsState((current) => ({ ...current, activeViewId: defaultView.id }));
   }, [
     hasStoredInventoryTableState,
     inventorySavedViewsReady,
@@ -1271,6 +1278,7 @@ const InventoryPage = () => {
     inventorySavedViewsState.views,
     inventoryTableStateReady,
     setInventoryTableState,
+    setInventorySavedViewsState,
   ]);
 
   useEffect(() => {
@@ -2418,7 +2426,7 @@ const InventoryPage = () => {
                   />
                 ) : null}
               </div>
-              <div className="inline-flex w-full shrink-0 items-center gap-1 rounded-lg border border-border p-1 sm:w-auto">
+              <div className="inline-flex w-full shrink-0 items-center gap-1 rounded-md bg-muted p-0.5 sm:w-auto">
                 <Button
                   type="button"
                   size="sm"
@@ -2426,6 +2434,7 @@ const InventoryPage = () => {
                   className="flex-1 sm:flex-none"
                   onClick={() => setViewMode("table")}
                   aria-label={t("viewTable")}
+                  aria-pressed={viewMode === "table"}
                 >
                   <TableViewIcon className="h-4 w-4" aria-hidden />
                   {t("viewTable")}
@@ -2437,6 +2446,7 @@ const InventoryPage = () => {
                   className="flex-1 sm:flex-none"
                   onClick={() => setViewMode("grid")}
                   aria-label={t("viewGrid")}
+                  aria-pressed={viewMode === "grid"}
                 >
                   <GridViewIcon className="h-4 w-4" aria-hidden />
                   {t("viewGrid")}

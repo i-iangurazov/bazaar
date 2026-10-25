@@ -54,12 +54,11 @@ describe("mobile inventory source", () => {
     expect(inventorySource).toContain("renderMobile={(item) =>");
     expect(inventorySource).toContain('variant: "success" as const');
     expect(inventorySource).toContain("mobileSheet");
-    expect(receivingSource).toContain('className="overflow-x-hidden pb-[15rem] md:pb-0"');
+    expect(receivingSource).toContain('className="overflow-x-clip pb-[15rem] md:pb-0"');
+    expect(receivingSource).toContain("data-inventory-document");
+    expect(receivingSource).toContain("<DocumentProductPicker");
     expect(receivingSource).toContain(
-      'className="grid items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]"',
-    );
-    expect(receivingSource).toContain(
-      "md:grid-cols-[minmax(0,1fr)_5rem_5.5rem_5.25rem_4.5rem_2rem]",
+      "xl:grid-cols-[minmax(0,1fr)_5.75rem_8.5rem_7rem_7rem_2.5rem]",
     );
     expect(receivingSource).toContain("data-receiving-line-row");
     expect(receivingSource).toContain("lines.map((line, index) =>");
@@ -72,7 +71,7 @@ describe("mobile inventory source", () => {
       "focusReceivingInput(nextLine.key, field, viewport, { selectContents: true })",
     );
     expect(receivingSource).toContain("bazaar-doc-mobile-actions");
-    expect(receivingSource).toContain("bottom-[calc(4.25rem+env(safe-area-inset-bottom))]");
+    expect(receivingSource).toContain("bottom-[calc(var(--mobile-bottom-nav-height)+0.75rem)]");
     expect(receivingSource).toContain("receivingProductsCountShort");
     expect(receivingSource).toContain("receivingTotalQuantityShort");
     expect(receivingSource).toContain("pb-[env(safe-area-inset-bottom)]");

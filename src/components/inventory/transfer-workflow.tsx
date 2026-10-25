@@ -8,6 +8,7 @@ import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 
+import { DocumentProductPicker } from "@/components/inventory/document-product-picker";
 import { PageHeader } from "@/components/page-header";
 import { PageLoading } from "@/components/page-loading";
 import {
@@ -577,8 +578,11 @@ export const InventoryTransfersPage = ({
       );
     },
     onError: (error) => {
-      setPostingError(!error.data || error.data.code === "INTERNAL_SERVER_ERROR"
-        ? t("transferPostFailed") : translateError(tErrors, error));
+      setPostingError(
+        !error.data || error.data.code === "INTERNAL_SERVER_ERROR"
+          ? t("transferPostFailed")
+          : translateError(tErrors, error),
+      );
     },
   });
   const editMutation = trpc.inventory.editProductMovementDocument.useMutation({
@@ -596,8 +600,11 @@ export const InventoryTransfersPage = ({
       );
     },
     onError: (error) => {
-      setPostingError(!error.data || error.data.code === "INTERNAL_SERVER_ERROR"
-        ? t("transferPostFailed") : translateError(tErrors, error));
+      setPostingError(
+        !error.data || error.data.code === "INTERNAL_SERVER_ERROR"
+          ? t("transferPostFailed")
+          : translateError(tErrors, error),
+      );
     },
   });
 
@@ -621,9 +628,13 @@ export const InventoryTransfersPage = ({
       fromStoreId,
       toStoreId,
       note: note.trim() || null,
-      lines: isEditMode ? normalizedLines : normalizedLines.map((line) => ({
-        productId: line.productId, variantId: line.variantId, qty: line.quantity,
-      })),
+      lines: isEditMode
+        ? normalizedLines
+        : normalizedLines.map((line) => ({
+            productId: line.productId,
+            variantId: line.variantId,
+            qty: line.quantity,
+          })),
     });
     if (postingOperationRef.current?.signature !== signature) {
       postingOperationRef.current = { signature, key: crypto.randomUUID() };
@@ -734,25 +745,41 @@ export const InventoryTransfersPage = ({
   }
 
   return (
-    <div className="overflow-x-hidden pb-[15rem] md:pb-0">
+    <div className="overflow-x-clip pb-[15rem] md:pb-0">
       <PageHeader
         title={pageTitle}
         subtitle={pageSubtitle}
         action={
-          <Button asChild variant="secondary">
-            <Link href={backHref}>
-              <BackIcon className="h-4 w-4" aria-hidden />
-              {isEditMode ? t("backToMovements") : tCommon("back")}
-            </Link>
-          </Button>
+          <>
+            <Button asChild variant="secondary">
+              <Link href={backHref}>
+                <BackIcon className="h-4 w-4" aria-hidden />
+                {isEditMode ? t("backToMovements") : tCommon("back")}
+              </Link>
+            </Button>
+            <Button
+              type="button"
+              data-baam-obstacle="action"
+              onClick={handlePost}
+              disabled={saving || Boolean(validationMessage)}
+            >
+              {saving ? (
+                <Spinner className="h-4 w-4" />
+              ) : (
+                <TransferIcon className="h-4 w-4" aria-hidden />
+              )}
+              {saving ? tCommon("saving") : submitLabel}
+            </Button>
+          </>
         }
         actionClassName="hidden md:flex"
+        className="bg-background md:sticky md:top-14 md:z-30 md:py-3 [&_p]:text-xs"
       />
 
-      <div className="space-y-6">
+      <div data-inventory-document>
         <section className="bazaar-doc-surface p-4">
           <div className="mb-4 flex items-center justify-between gap-3">
-            <h3 className="text-base font-semibold text-foreground">{t("transferDetailsTitle")}</h3>
+            <h3 className="text-sm font-medium text-foreground">{t("transferDetailsTitle")}</h3>
             <Button asChild variant="ghost" size="sm" className="md:hidden">
               <Link href={backHref}>
                 <BackIcon className="h-4 w-4" aria-hidden />
@@ -804,20 +831,19 @@ export const InventoryTransfersPage = ({
           </div>
         </section>
 
-        <div className="grid min-w-0 grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-          <section className="bazaar-doc-surface min-w-0 p-4">
-            <div className="mb-4 flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-              <h3 className="text-base font-semibold text-foreground">
-                {t("transferSearchTitle")}
-              </h3>
-              {fromStore && toStore ? (
+        <div className="contents">
+          <DocumentProductPicker
+            title={t("transferSearchTitle")}
+            action={
+              fromStore && toStore ? (
                 <Badge variant={storesAreSame ? "warning" : "muted"} className="min-w-0 max-w-full">
                   <span className="min-w-0 truncate">
                     {fromStore.name} → {toStore.name}
                   </span>
                 </Badge>
-              ) : null}
-            </div>
+              ) : null
+            }
+          >
             <div className="relative">
               <SearchInput
                 ref={searchInputRef}
@@ -827,8 +853,6 @@ export const InventoryTransfersPage = ({
                 placeholder={t("transferSearchPlaceholderShort")}
                 aria-label={t("transferSearchPlaceholderShort")}
                 disabled={!canSearch}
-
-
               />
             </div>
             <div className="bazaar-doc-search-list">
@@ -894,19 +918,19 @@ export const InventoryTransfersPage = ({
                 </div>
               )}
             </div>
-          </section>
+          </DocumentProductPicker>
 
           <section className="bazaar-doc-surface min-w-0 p-4">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <h3 className="text-base font-semibold text-foreground">{t("transferTableTitle")}</h3>
+              <h3 className="text-sm font-medium text-foreground">{t("transferTableTitle")}</h3>
               <Badge variant={validationMessage ? "warning" : "success"}>
                 {validationMessage || t("transferValidationReady")}
               </Badge>
             </div>
 
             {lines.length ? (
-              <div className="space-y-3">
-                <div className="hidden px-3 text-[11px] font-medium text-muted-foreground lg:grid lg:grid-cols-[minmax(0,1fr)_3.75rem_4rem_4rem_4.25rem_4.25rem_2rem] lg:gap-1.5">
+              <div className="overflow-hidden rounded-md border border-border">
+                <div className="hidden border-b border-border bg-muted/50 px-3 py-2 text-xs font-medium text-muted-foreground xl:grid xl:grid-cols-[minmax(0,1fr)_5.75rem_6.5rem_6.5rem_8.5rem_7rem_2.5rem] xl:gap-1.5 [&>span]:min-w-0 [&>span]:break-words">
                   <span>{tCommon("product")}</span>
                   <span>{t("transferQty")}</span>
                   <span>{t("transferSourceAfter")}</span>
@@ -922,9 +946,9 @@ export const InventoryTransfersPage = ({
                     <div
                       key={line.key}
                       data-transfer-line-row
-                      className="bazaar-doc-line-row grid gap-3 lg:grid-cols-[minmax(0,1fr)_3.75rem_4rem_4rem_4.25rem_4.25rem_2rem] lg:items-center lg:gap-1.5"
+                      className="bazaar-doc-line-row grid grid-cols-2 gap-3 xl:grid-cols-[minmax(0,1fr)_5.75rem_6.5rem_6.5rem_8.5rem_7rem_2.5rem] xl:items-center xl:gap-1.5"
                     >
-                      <div className="flex min-w-0 items-center gap-2.5">
+                      <div className="col-span-2 flex min-w-0 items-center gap-2.5 xl:col-span-1">
                         <span className="bazaar-doc-line-index">{lineNumber}</span>
                         <span className="bazaar-doc-line-thumb">
                           {line.imageUrl ? (
@@ -939,7 +963,7 @@ export const InventoryTransfersPage = ({
                           )}
                         </span>
                         <div className="min-w-0 flex-1">
-                          <p className="whitespace-normal break-words text-sm font-semibold leading-snug text-foreground">
+                          <p className="whitespace-normal break-words text-sm font-medium leading-snug text-foreground">
                             {line.variantName
                               ? `${line.productName} • ${line.variantName}`
                               : line.productName}
@@ -949,7 +973,7 @@ export const InventoryTransfersPage = ({
                               .filter(Boolean)
                               .join(" • ") || tCommon("notAvailable")}
                           </p>
-                          <p className="whitespace-normal break-words text-xs leading-snug text-muted-foreground lg:hidden">
+                          <p className="whitespace-normal break-words text-xs leading-snug text-muted-foreground xl:hidden">
                             {t("transferSourceStock")}: {formatNumber(line.sourceStock, locale)}
                             <span className="px-1 text-muted-foreground/60">·</span>
                             {t("transferDestinationStock")}:{" "}
@@ -962,11 +986,17 @@ export const InventoryTransfersPage = ({
                           ) : null}
                         </div>
                       </div>
-                      <div className="space-y-1 lg:space-y-0">
-                        <Label className="block text-[11px] leading-4 lg:hidden">
+                      <div className="space-y-1 xl:space-y-0">
+                        <Label
+                          htmlFor={`transfer-quantity-${line.key}`}
+                          className="block text-xs leading-4 xl:hidden"
+                        >
                           {t("transferQty")}
                         </Label>
                         <Input
+                          id={`transfer-quantity-${line.key}`}
+                          aria-label={`${t("transferQty")} · ${line.productName}`}
+                          aria-invalid={!metric?.quantityValid}
                           ref={(node) => {
                             setTransferInputRef(line.key, "desktop", node);
                           }}
@@ -980,11 +1010,14 @@ export const InventoryTransfersPage = ({
                           min={1}
                           step={0.001}
                           data-transfer-input="quantity"
-                          className={cn("h-8 px-2", !metric?.quantityValid && "border-danger/60")}
+                          className={cn(
+                            "h-10 px-2 xl:h-8",
+                            !metric?.quantityValid && "border-danger/60",
+                          )}
                         />
                       </div>
                       <div>
-                        <p className="text-[11px] leading-4 text-muted-foreground lg:hidden">
+                        <p className="text-xs leading-4 text-muted-foreground xl:hidden">
                           {t("transferSourceAfter")}
                         </p>
                         <p
@@ -999,7 +1032,7 @@ export const InventoryTransfersPage = ({
                         </p>
                       </div>
                       <div>
-                        <p className="text-[11px] leading-4 text-muted-foreground lg:hidden">
+                        <p className="text-xs leading-4 text-muted-foreground xl:hidden">
                           {t("transferDestinationAfter")}
                         </p>
                         <p className="flex h-8 items-center text-sm font-semibold text-foreground">
@@ -1007,7 +1040,7 @@ export const InventoryTransfersPage = ({
                         </p>
                       </div>
                       <div>
-                        <p className="text-[11px] leading-4 text-muted-foreground lg:hidden">
+                        <p className="text-xs leading-4 text-muted-foreground xl:hidden">
                           {t("unitCost")}
                         </p>
                         <p className="flex h-8 items-center text-sm font-semibold text-foreground">
@@ -1015,7 +1048,7 @@ export const InventoryTransfersPage = ({
                         </p>
                       </div>
                       <div>
-                        <p className="text-[11px] leading-4 text-muted-foreground lg:hidden">
+                        <p className="text-xs leading-4 text-muted-foreground xl:hidden">
                           {t("receivingLineTotal")}
                         </p>
                         <p className="flex h-8 items-center text-sm font-semibold text-foreground">
@@ -1026,7 +1059,7 @@ export const InventoryTransfersPage = ({
                         type="button"
                         variant="ghost"
                         size="icon"
-                        className="self-start lg:h-8 lg:w-8 lg:self-center lg:justify-self-end"
+                        className="self-start xl:h-8 xl:w-8 xl:self-center xl:justify-self-end"
                         aria-label={t("transferRemoveLine")}
                         onClick={() => removeLine(line.key)}
                       >
@@ -1047,29 +1080,16 @@ export const InventoryTransfersPage = ({
 
         <section className="hidden md:block">
           <div className="bazaar-doc-summary">
-            {postingError ? <p role="alert" className="mb-3 rounded-md border border-danger/30 bg-danger/5 p-3 text-sm text-danger">{postingError}</p> : null}
+            {postingError ? (
+              <p
+                role="alert"
+                className="mb-3 rounded-md border border-danger/30 bg-danger/5 p-3 text-sm text-danger"
+              >
+                {postingError}
+              </p>
+            ) : null}
             <div className="flex flex-wrap items-center justify-between gap-4">
-              <h3 className="text-base font-semibold text-foreground">
-                {t("transferSummaryTitle")}
-              </h3>
-              <div className="flex flex-wrap gap-2">
-                <Button asChild variant="secondary">
-                  <Link href={backHref}>{tCommon("cancel")}</Link>
-                </Button>
-                <Button
-                  type="button"
-                  data-baam-obstacle="action"
-                  onClick={handlePost}
-                  disabled={saving || Boolean(validationMessage)}
-                >
-                  {saving ? (
-                    <Spinner className="h-4 w-4" />
-                  ) : (
-                    <TransferIcon className="h-4 w-4" aria-hidden />
-                  )}
-                  {saving ? tCommon("saving") : submitLabel}
-                </Button>
-              </div>
+              <h3 className="text-sm font-medium text-foreground">{t("transferSummaryTitle")}</h3>
             </div>
             <dl className="mt-4 grid gap-3 text-sm lg:grid-cols-4">
               <div className="flex items-center justify-between gap-4">
@@ -1116,9 +1136,19 @@ export const InventoryTransfersPage = ({
         </section>
       </div>
 
-      <div className="bazaar-doc-mobile-actions bottom-[calc(4.25rem+env(safe-area-inset-bottom))] md:hidden">
+      <div
+        data-baam-obstacle="inventory-actions"
+        className="bazaar-doc-mobile-actions bottom-[calc(var(--mobile-bottom-nav-height)+0.75rem)] md:hidden"
+      >
         <div className="mx-auto max-w-screen-sm space-y-2 pb-[env(safe-area-inset-bottom)]">
-          {postingError ? <p role="alert" className="rounded-md border border-danger/30 bg-danger/5 p-2 text-xs text-danger">{postingError}</p> : null}
+          {postingError ? (
+            <p
+              role="alert"
+              className="rounded-md border border-danger/30 bg-danger/5 p-2 text-xs text-danger"
+            >
+              {postingError}
+            </p>
+          ) : null}
           <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
             <div className="min-w-0">
               <span className="font-semibold text-foreground">
