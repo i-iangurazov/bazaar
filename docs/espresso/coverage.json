@@ -241,8 +241,15 @@
     },
     {
       "source": "src/app/(app)/products/[id]/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "artifacts/ux/espresso/screenshots/product-document-desktop-light.png",
+        "artifacts/ux/espresso/screenshots/product-document-mobile-dark.png",
+        "artifacts/ux/espresso/screenshots/product-document-mobile-dark-kg.png",
+        "artifacts/ux/espresso/screenshots/product-document-staff-readonly.png",
+        "artifacts/ux/espresso/screenshots/product-document-desktop-dark.png",
+        "artifacts/ux/espresso/screenshots/product-document-desktop-dark-en.png"
+      ]
     },
     {
       "source": "src/app/(app)/products/new/page.tsx",
@@ -255,7 +262,9 @@
       "source": "src/app/(app)/products/page.tsx",
       "status": "in_review",
       "evidence": [
-        "artifacts/ux/espresso/screenshots/product-created-desktop-light.png"
+        "artifacts/ux/espresso/screenshots/product-created-desktop-light.png",
+        "artifacts/ux/espresso/screenshots/products-saved-view-desktop-dark.png",
+        "artifacts/ux/espresso/screenshots/products-view-controls-mobile-dark.png"
       ]
     },
     {
@@ -587,8 +596,11 @@
     },
     {
       "source": "src/components/ui/modal.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "artifacts/ux/espresso/document-unit-isolated.log",
+        "artifacts/ux/espresso/document-focus-unit.log"
+      ]
     },
     {
       "source": "src/components/ui/pagination.tsx",
@@ -647,8 +659,11 @@
     },
     {
       "source": "src/components/ui/tabs.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "artifacts/ux/espresso/document-unit-isolated.log",
+        "artifacts/ux/espresso/document-focus-unit.log"
+      ]
     },
     {
       "source": "src/components/ui/textarea.tsx",
@@ -672,22 +687,23 @@
     }
   ],
   "verification": {
-    "desktop": "partial: representative light states only",
-    "mobile": "partial: 390px Baam, More menu and integrations",
-    "themes": "pending",
-    "rolesAndScopes": "pending",
-    "functionalRegression": "partial: UI product creation/search and shared control tests",
-    "productionBuild": "passed for the current foundation; full redesign acceptance remains pending"
+    "desktop": "partial: dashboard, product lists/documents and shared controls at 1440px",
+    "mobile": "partial: 390px product documents, Baam, More and integrations",
+    "themes": "partial: product documents inspected in light/dark; remaining families pending",
+    "rolesAndScopes": "partial: product flows checked under all four roles; manager store scoping verified; other routes/plans/currencies pending",
+    "functionalRegression": "87 database regressions passed on a separate resettable CI DB; product create/edit/search and shared-control UI flows verified; full application acceptance pending",
+    "productionBuild": "passed for current product-document/list checkpoint; full redesign acceptance remains pending"
   },
   "requirements": {
     "visualFidelity": "Match current ERPNext/Espresso geometry, typography, neutral surfaces, controls and analogous screen composition; compare rendered screens to references.",
     "brand": "Preserve Bazaar logo and existing blue primary actions, active states, selection and focus in both themes. Confirmed by user on 2026-10-26.",
     "scope": "All 97 page sources and 32 shared components; no theme-only completion claim.",
     "businessLogic": "Preserve domain behavior, data, authorization, store scopes, billing gates and idempotency.",
-    "delivery": "Keep improvements on codex/playground; no main merge or production deployment."
+    "delivery": "Keep improvements on codex/playground; no main merge or production deployment.",
+    "singleBrand": "Show exactly one Bazaar brand mark in desktop navigation: full logo when the sidebar is expanded, icon in the module dock when collapsed."
   },
   "progress": {
-    "stage": "Foundation and first representative screens; full redesign remains in progress",
+    "stage": "Foundation, product documents and list controls; full redesign remains in progress",
     "foundation": [
       "Pinned MIT Espresso semantic tokens and component CSS",
       "Self-hosted Inter Variable",
@@ -723,6 +739,49 @@
       {
         "check": "QA startup disables external providers after loading local environment files",
         "result": "verified Baam reports provider unconfigured; real AI, payment and email calls are outside this UI test run"
+      },
+      {
+        "check": "Product document: empty-name validation, normal UI create/search/edit, category, price, opening stock",
+        "result": "passed on bazaar_espresso_ui; SKU ESPRESSO-DOC-20261026; created at 129.50 KGS / cost 80 / stock 3; updated store price to 139.50 while preserving base price 129.50 and stock 3"
+      },
+      {
+        "check": "Product document: desktop/mobile, dark theme, KG text, toolbar and keyboard focus",
+        "result": "inspected at 1440 and 390 px; no horizontal page overflow; mobile toolbar controls are 40 px; desktop sticky header top 56 px; selected price field remains below header and above mobile save bar; print setup closes with Escape and restores trigger focus"
+      },
+      {
+        "check": "Product permissions in the rendered UI: administrator, manager, staff, cashier",
+        "result": "administrator can create and edit; manager has enabled save and sees only two granted stores; staff and cashier see disabled product fields and no save/actions; direct new-product route rejects both with insufficient permissions; fixture organization is ENTERPRISE"
+      },
+      {
+        "check": "Single desktop brand: expanded, collapsed, reopened",
+        "result": "passed in production browser; visible brand targets were sidebar, dock, sidebar respectively; blue brand preserved",
+        "evidence": [
+          "artifacts/ux/espresso/screenshots/single-brand-expanded-dark.png",
+          "artifacts/ux/espresso/screenshots/single-brand-collapsed-dark.png"
+        ],
+        "commit": "60a8136"
+      },
+      {
+        "check": "Saved table views: labelled name, blank validation, save/rename with Enter and focus restoration",
+        "result": "passed in production browser after explicit return-focus refs were added; save returns to Save view, rename returns to View actions",
+        "evidence": [
+          "artifacts/ux/espresso/screenshots/products-saved-view-desktop-dark.png",
+          "artifacts/ux/espresso/document-focus-unit.log"
+        ]
+      },
+      {
+        "check": "Mobile product list view controls and shared pagination",
+        "result": "390px, no page overflow; view options expand; pagination buttons measure 40 by 40 px",
+        "evidence": [
+          "artifacts/ux/espresso/screenshots/products-view-controls-mobile-dark.png"
+        ]
+      },
+      {
+        "check": "English product document text after removing placeholder-like labels",
+        "result": "verified rendered base-price/store-price/profitability hints, product type and inline edit labels; RU restored afterwards",
+        "evidence": [
+          "artifacts/ux/espresso/screenshots/product-document-desktop-dark-en.png"
+        ]
       }
     ],
     "remaining": [
@@ -731,13 +790,25 @@
       "Dark theme and RU/KG/EN visual matrix",
       "Admin/manager/staff/cashier and store/plan gates in the rendered UI",
       "Modal, dropdown, focus, keyboard, loading, empty, retry and recovery flows across page families",
-      "Broader database integration regression and final production smoke on the isolated app"
+      "Broader database integration regression and final production smoke on the isolated app",
+      "Audit autofocus dialogs across other route families for explicit return-focus targets; saved-view forms now have explicit trigger refs.",
+      "Review saved-view identity when multiple named views have identical settings; the existing matcher currently picks the first matching state."
     ],
     "unitTests": {
-      "files": 253,
-      "tests": 1851,
+      "files": 254,
+      "tests": 1854,
       "status": "passed",
-      "evidence": "artifacts/ux/espresso/unit-green.log"
+      "evidence": "artifacts/ux/espresso/document-unit-isolated.log",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit"
+    },
+    "databaseRegression": {
+      "files": 3,
+      "tests": 87,
+      "status": "passed",
+      "evidence": "artifacts/ux/espresso/document-db.log",
+      "database": "bazaar_hardening_ci",
+      "postgresPort": 55440,
+      "providers": "disabled"
     }
   }
 }

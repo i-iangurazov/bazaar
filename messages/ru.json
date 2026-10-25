@@ -182,6 +182,7 @@
       "defaultBadge": "По умолчанию",
       "actions": "Действия вида",
       "namePlaceholder": "Например, Мои товары",
+      "nameLabel": "Название вида",
       "columns": "Колонки",
       "columnsTitle": "Видимые колонки"
     }

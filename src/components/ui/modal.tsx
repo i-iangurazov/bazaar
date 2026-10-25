@@ -20,6 +20,7 @@ export const Modal = ({
   usePortal = true,
   mobileSheet = false,
   animated = false,
+  returnFocusRef,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -32,6 +33,7 @@ export const Modal = ({
   usePortal?: boolean;
   mobileSheet?: boolean;
   animated?: boolean;
+  returnFocusRef?: React.RefObject<HTMLElement>;
 }) => {
   const tCommon = useTranslations("common");
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
@@ -53,7 +55,7 @@ export const Modal = ({
         }}
         onCloseAutoFocus={(event) => {
           event.preventDefault();
-          const previouslyFocused = previouslyFocusedRef.current;
+          const previouslyFocused = returnFocusRef?.current ?? previouslyFocusedRef.current;
           previouslyFocusedRef.current = null;
           queueMicrotask(() => {
             if (previouslyFocused?.isConnected) {

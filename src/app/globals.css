@@ -256,13 +256,6 @@ html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
     background-color: hsl(var(--secondary)) !important;
   }
 
-  html.dark .bazaar-mobile-header-button,
-  .dark .bazaar-mobile-header-button {
-    background-color: hsl(var(--primary) / 0.16) !important;
-    border-color: hsl(var(--primary) / 0.34) !important;
-    color: hsl(var(--primary)) !important;
-  }
-
   .bazaar-doc-surface {
     @apply rounded-lg border border-border bg-card shadow-none;
   }

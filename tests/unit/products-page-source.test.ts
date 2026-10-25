@@ -127,7 +127,7 @@ describe("index page source layout", () => {
       'const canManageProducts = role === "ADMIN" || role === "MANAGER";',
     );
     expect(detailSource).toContain("const productActions = canManageProducts ? (");
-    expect(detailSource).toContain("{canManageProducts ? (\n        <ProductEditorSaveBar");
+    expect(detailSource).toMatch(/saveBar=\{\s*canManageProducts \? \(\s*<ProductEditorSaveBar/);
     expect(createSource).toContain(
       "const [productFormDirty, setProductFormDirty] = useState(false);",
     );
@@ -312,9 +312,14 @@ describe("index page source layout", () => {
 
   it("keeps shared mobile list pagination touch-friendly", async () => {
     const responsiveListSource = await readSource("src/components/responsive-data-list.tsx");
+    const buttonSource = await readSource("src/components/ui/button.tsx");
+    const selectSource = await readSource("src/components/ui/select.tsx");
+    const globalsSource = await readSource("src/app/globals.css");
 
-    expect(responsiveListSource).toContain('className="h-10 sm:h-8"');
-    expect(responsiveListSource).toContain('className="h-10 w-10 sm:h-8 sm:w-8"');
+    expect(responsiveListSource).toContain('size="icon"');
+    expect(buttonSource).toContain("h-[var(--control-height)] w-[var(--control-height)]");
+    expect(selectSource).toContain("h-[var(--control-height)]");
+    expect(globalsSource).toContain("--control-height: 2.5rem;");
   });
 
   it("does not show barcode UI on product edit before store settings are loaded", async () => {

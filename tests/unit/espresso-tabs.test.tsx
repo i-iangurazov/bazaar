@@ -50,5 +50,19 @@ describe("Espresso tab navigation", () => {
     const selected = screen.getByRole("tab", { name: "Selected" });
     expect(selected.getAttribute("data-state")).toBe("active");
     expect(selected.tabIndex).toBe(0);
+    expect(selected.className).toContain("text-primary");
+  });
+
+  it("uses explicit aria-selected for appearance and keyboard state even if active disagrees", () => {
+    render(
+      <TabsTrigger active aria-selected={false}>
+        Unselected
+      </TabsTrigger>,
+    );
+    const unselected = screen.getByRole("tab", { name: "Unselected" });
+    expect(unselected.getAttribute("aria-selected")).toBe("false");
+    expect(unselected.getAttribute("data-state")).toBe("inactive");
+    expect(unselected.tabIndex).toBe(-1);
+    expect(unselected.className).not.toContain("text-primary");
   });
 });

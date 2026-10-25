@@ -1,37 +1,53 @@
 {
-  "status": "foundation-verified-full-redesign-in-progress",
+  "status": "product-documents-and-list-controls-verified-full-redesign-in-progress",
   "branch": "codex/playground",
   "reference": "Frappe Framework Espresso e8d41dd0061a32ee781caefe5d0b0d2bb7c15362",
   "checks": [
     {
       "command": "pnpm exec tsc --noEmit --incremental",
       "result": "passed",
-      "log": "artifacts/ux/espresso/typecheck.log"
+      "log": "artifacts/ux/espresso/typecheck-document.log"
     },
     {
       "command": "pnpm lint",
       "result": "passed without warnings",
-      "log": "artifacts/ux/espresso/lint.log"
+      "log": "artifacts/ux/espresso/lint-document.log"
     },
     {
       "command": "pnpm i18n:check",
       "result": "passed",
-      "log": "artifacts/ux/espresso/i18n.log"
+      "log": "artifacts/ux/espresso/i18n-document.log"
     },
     {
-      "command": "pnpm exec vitest run tests/unit",
-      "result": "253 files, 1851 tests passed",
-      "log": "artifacts/ux/espresso/unit-green.log"
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
+      "result": "254 files, 1854 tests passed with disabled providers and isolated local DB/Redis; no unhandled errors",
+      "log": "artifacts/ux/espresso/document-unit-isolated.log"
     },
     {
       "command": "UX_SUITE=espresso NODE_OPTIONS=--max-old-space-size=6144 node --import tsx scripts/ux/build.ts",
-      "result": "passed, including application type/lint checks and static page generation",
-      "log": "artifacts/ux/espresso/production-build.log"
+      "result": "passed for current application code, including type/lint checks and static page generation",
+      "log": "artifacts/ux/espresso/build-document-current.log"
     },
     {
       "command": "Browser verification through CUA against localhost:3122",
-      "result": "representative light desktop/mobile states, real product create/search, production login, dock, nested select and focus verified",
+      "result": "product create/edit/search, validation, print modal focus, all four product roles, manager store scoping, RU/KG/EN, light/dark product states, mobile controls, saved-view keyboard/focus and single-logo collapse states verified; other route families remain pending",
       "screenshots": "artifacts/ux/espresso/screenshots/"
+    },
+    {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts",
+      "result": "3 files, 87 database integration tests passed",
+      "log": "artifacts/ux/espresso/document-db.log",
+      "database": "bazaar_hardening_ci, localhost:55440; separate from browser fixtures"
+    },
+    {
+      "command": "pnpm exec vitest run tests/unit/app-shell-navigation-source.test.ts tests/unit/baam-navigation-icons.test.ts",
+      "result": "2 files, 10 tests passed after single-logo correction",
+      "log": "artifacts/ux/espresso/single-brand-unit.log"
+    },
+    {
+      "command": "pnpm exec vitest run tests/unit/saved-table-views-ui.test.tsx tests/unit/ui-sharp-primitives.test.tsx tests/unit/mobile-more-menu-focus.test.tsx",
+      "result": "3 files, 17 tests passed, including explicit return-focus targets",
+      "log": "artifacts/ux/espresso/document-focus-unit.log"
     }
   ],
   "environment": {
@@ -48,7 +64,12 @@
     "Dark theme and RU/KG/EN visual matrix",
     "Admin/manager/staff/cashier and store/plan gates in the rendered UI",
     "Modal, dropdown, focus, keyboard, loading, empty, retry and recovery flows across page families",
-    "Broader database integration regression and final production smoke on the isolated app"
+    "Broader database integration regression and final production smoke on the isolated app",
+    "Saved views with identical settings currently match the first state; review the existing view-identity behavior before final acceptance."
   ],
-  "delivery": "Local review checkpoint only; not a full redesign completion; no main merge, main push or deployment"
+  "delivery": "Local review checkpoint only; not a full redesign completion; no main merge, main push or deployment",
+  "infrastructureNotes": [
+    "Do not run the prebuild Prisma client generator concurrently with tests or a running server that loads the same generated library. One overlapping run passed its test assertions but failed with an unhandled partial-library load; the sequential rerun completed 254 files / 1854 tests without that error.",
+    "The browser fixture database was not reset; destructive integration checks used a separately created allowlisted local database, with external providers disabled."
+  ]
 }

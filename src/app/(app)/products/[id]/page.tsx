@@ -944,8 +944,7 @@ const ProductDetailPage = () => {
     <>
       {enableBarcode ? (
         <Button
-          className="w-full sm:w-auto"
-          size="sm"
+          variant="secondary"
           onClick={() => void handleProductLabelPdf("print")}
           disabled={Boolean(labelAction)}
         >
@@ -959,7 +958,7 @@ const ProductDetailPage = () => {
       ) : null}
       <DropdownMenu open={actionsMenuOpen} onOpenChange={handleActionsMenuOpenChange}>
         <DropdownMenuTrigger asChild>
-          <Button type="button" variant="secondary" size="sm" className="w-full sm:w-auto">
+          <Button type="button" variant="secondary">
             <MoreIcon className="h-4 w-4" aria-hidden />
             {tCommon("actions")}
           </Button>
@@ -1167,35 +1166,35 @@ const ProductDetailPage = () => {
           </span>
         }
         actions={productActions}
+        saveBar={
+          canManageProducts ? (
+            <ProductEditorSaveBar
+              label={
+                updateMutation.isLoading
+                  ? t("saveBarSaving")
+                  : productEditorDirty
+                    ? t("saveBarUnsavedChanges")
+                    : t("saveBarSaved")
+              }
+              actions={
+                <Button
+                  type="submit"
+                  form={productEditFormId}
+                  className="min-w-24"
+                  disabled={updateMutation.isLoading}
+                >
+                  {updateMutation.isLoading ? (
+                    <Spinner className="h-4 w-4" />
+                  ) : (
+                    <StatusSuccessIcon className="h-4 w-4" aria-hidden />
+                  )}
+                  {updateMutation.isLoading ? t("saving") : t("save")}
+                </Button>
+              }
+            />
+          ) : null
+        }
       />
-
-      {canManageProducts ? (
-        <ProductEditorSaveBar
-          label={
-            updateMutation.isLoading
-              ? t("saveBarSaving")
-              : productEditorDirty
-                ? t("saveBarUnsavedChanges")
-                : t("saveBarSaved")
-          }
-          actions={
-            <Button
-              type="submit"
-              form={productEditFormId}
-              size="sm"
-              className="min-w-24"
-              disabled={updateMutation.isLoading}
-            >
-              {updateMutation.isLoading ? (
-                <Spinner className="h-4 w-4" />
-              ) : (
-                <StatusSuccessIcon className="h-4 w-4" aria-hidden />
-              )}
-              {updateMutation.isLoading ? t("saving") : t("save")}
-            </Button>
-          }
-        />
-      ) : null}
 
       <ProductEditorGrid
         main={
@@ -1231,9 +1230,9 @@ const ProductDetailPage = () => {
               shopifyEditorLayout
             />
 
-            <Card className="product-editor-card-form rounded-lg border-border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.08)]">
-              <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <CardTitle>{t("currentStoreStockTitle")}</CardTitle>
+            <Card className="product-editor-card-form rounded-none border-x-0 border-t-0 shadow-none last:border-b-0">
+              <CardHeader className="border-b-0 pb-0 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <CardTitle className="font-medium">{t("currentStoreStockTitle")}</CardTitle>
                 {selectedPricingStore ? (
                   <p className="text-xs text-muted-foreground">
                     {t("currentStoreStockHint", { store: selectedPricingStore.storeName })}
@@ -1277,9 +1276,9 @@ const ProductDetailPage = () => {
               </CardContent>
             </Card>
 
-            <Card className="product-editor-card-form rounded-lg border-border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.08)]">
-              <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <CardTitle>{t("storePricingTitle")}</CardTitle>
+            <Card className="product-editor-card-form rounded-none border-x-0 border-t-0 shadow-none last:border-b-0">
+              <CardHeader className="border-b-0 pb-0 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <CardTitle className="font-medium">{t("storePricingTitle")}</CardTitle>
                 <p className="text-xs text-muted-foreground">{t(selectedSettingsStore?.retailWholesaleEnabled ? "storePriceModesHint" : "storePricingHint")}</p>
               </CardHeader>
               <CardContent>
@@ -1461,9 +1460,9 @@ const ProductDetailPage = () => {
               </CardContent>
             </Card>
 
-            <Card className="product-editor-card-form rounded-lg border-border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.08)]">
-              <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <CardTitle>{t("profitabilityTitle")}</CardTitle>
+            <Card className="product-editor-card-form rounded-none border-x-0 border-t-0 shadow-none last:border-b-0">
+              <CardHeader className="border-b-0 pb-0 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <CardTitle className="font-medium">{t("profitabilityTitle")}</CardTitle>
                 <div className="w-full sm:max-w-xs">
                   <Select
                     value={pricingStoreId}
@@ -1519,9 +1518,9 @@ const ProductDetailPage = () => {
               </CardContent>
             </Card>
 
-            <Card className="product-editor-card-form rounded-lg border-border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.08)]">
-              <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <CardTitle>{t("bundleTitle")}</CardTitle>
+            <Card className="product-editor-card-form rounded-none border-x-0 border-t-0 shadow-none last:border-b-0">
+              <CardHeader className="border-b-0 pb-0 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <CardTitle className="font-medium">{t("bundleTitle")}</CardTitle>
                 <div className="flex flex-wrap items-center gap-2">
                   {canManageBundles ? (
                     <Button
@@ -1683,9 +1682,9 @@ const ProductDetailPage = () => {
             </Card>
 
             {showProductExpiryLotsSection ? (
-              <Card className="product-editor-card-form rounded-lg border-border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.08)]">
-                <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <CardTitle>{t("expiryLotsTitle")}</CardTitle>
+              <Card className="product-editor-card-form rounded-none border-x-0 border-t-0 shadow-none last:border-b-0">
+                <CardHeader className="border-b-0 pb-0 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <CardTitle className="font-medium">{t("expiryLotsTitle")}</CardTitle>
                   <Button
                     variant="ghost"
                     size="sm"

@@ -66,24 +66,28 @@ export const TabsTrigger = React.forwardRef<HTMLButtonElement, TabsTriggerProps>
       ...props
     },
     ref,
-  ) => (
-    <button
-      ref={ref}
-      type={type}
-      role={role}
-      aria-selected={ariaSelected ?? active}
-      data-state={
-        (ariaSelected ?? active) === true || ariaSelected === "true" ? "active" : "inactive"
-      }
-      tabIndex={tabIndex ?? ((ariaSelected ?? active) === true || ariaSelected === "true" ? 0 : -1)}
-      className={cn(
-        "es-tabs__tab relative inline-flex min-h-10 shrink-0 items-center justify-center border-b-2 border-transparent px-0 text-sm font-medium text-muted-foreground transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50",
-        active ? "border-primary bg-transparent text-primary shadow-none" : "hover:text-foreground",
-        className,
-      )}
-      {...props}
-    />
-  ),
+  ) => {
+    const selected = ariaSelected ?? active;
+    const isActive = selected === true || selected === "true";
+    return (
+      <button
+        ref={ref}
+        type={type}
+        role={role}
+        aria-selected={isActive}
+        data-state={isActive ? "active" : "inactive"}
+        tabIndex={tabIndex ?? (isActive ? 0 : -1)}
+        className={cn(
+          "es-tabs__tab relative inline-flex min-h-10 shrink-0 items-center justify-center border-b-2 border-transparent px-0 text-sm font-medium text-muted-foreground transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50",
+          isActive
+            ? "border-primary bg-transparent text-primary shadow-none"
+            : "hover:text-foreground",
+          className,
+        )}
+        {...props}
+      />
+    );
+  },
 );
 TabsTrigger.displayName = "TabsTrigger";
 

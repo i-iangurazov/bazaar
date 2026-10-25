@@ -4787,7 +4787,7 @@ export const ProductForm = ({
       <Form {...form}>
         <form
           id={formId}
-          className="space-y-3 sm:space-y-4"
+          className="min-w-0"
           onSubmit={form.handleSubmit(handleSubmit, handleInvalidSubmit)}
         >
           <TooltipProvider>

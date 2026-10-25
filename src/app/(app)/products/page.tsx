@@ -15,6 +15,7 @@ import {
 } from "@prisma/client";
 
 import { commonListFields, useScopedListState } from "@/lib/useScopedListState";
+import { cn } from "@/lib/utils";
 import { ListViewOptions, ListToolbar, ListSearch, FilterField } from "@/components/list-toolbar";
 import { PageHeader } from "@/components/page-header";
 import { ColumnVisibilityMenu } from "@/components/column-visibility-menu";
@@ -3681,7 +3682,7 @@ const ProductsPage = () => {
         </FilterField>
       </ListToolbar>
 
-      <Card className="overflow-hidden border-border/80 bg-card/95 shadow-sm">
+      <Card className="overflow-hidden">
         <CardHeader className="flex flex-col gap-3 border-b border-border bg-card md:flex-row md:items-center md:justify-between">
           <div>
             <CardTitle className="tracking-tight">{t("title")}</CardTitle>
@@ -3720,14 +3721,15 @@ const ProductsPage = () => {
                   />
                 ) : null}
               </div>
-              <div className="flex shrink-0 items-center gap-1 rounded-lg border border-border/80 bg-background/70 p-1 shadow-sm">
+              <div className="flex shrink-0 items-center gap-0.5 rounded-md bg-secondary p-0.5">
                 <Button
                   type="button"
                   size="sm"
                   variant={viewMode === "table" ? "secondary" : "ghost"}
-                  className="flex-1 sm:flex-none"
+                  className={cn("flex-1 sm:flex-none", viewMode === "table" && "bg-card shadow-sm")}
                   onClick={() => setViewMode("table")}
                   aria-label={t("viewTable")}
+                  aria-pressed={viewMode === "table"}
                 >
                   <TableViewIcon className="h-4 w-4" aria-hidden />
                   {t("viewTable")}
@@ -3736,9 +3738,10 @@ const ProductsPage = () => {
                   type="button"
                   size="sm"
                   variant={viewMode === "grid" ? "secondary" : "ghost"}
-                  className="flex-1 sm:flex-none"
+                  className={cn("flex-1 sm:flex-none", viewMode === "grid" && "bg-card shadow-sm")}
                   onClick={() => setViewMode("grid")}
                   aria-label={t("viewGrid")}
+                  aria-pressed={viewMode === "grid"}
                 >
                   <GridViewIcon className="h-4 w-4" aria-hidden />
                   {t("viewGrid")}
@@ -4107,7 +4110,7 @@ const ProductsPage = () => {
                       return (
                         <div
                           key={product.id}
-                          className="overflow-hidden rounded-lg border border-border/80 bg-card/95 shadow-sm transition hover:border-primary/25 hover:shadow-md"
+                          className="overflow-hidden rounded-lg border border-border bg-card transition-colors hover:border-primary/25"
                         >
                           <div className="relative aspect-[4/3] bg-muted/45">
                             {previewImageUrl ? (
@@ -4263,7 +4266,7 @@ const ProductsPage = () => {
                 // a photo-first product card so the catalog does not become a squeezed table.
                 if (renderPhotoFirstMobileCard) {
                   return (
-                    <div className="rounded-lg border border-border/80 bg-card/95 p-3 shadow-sm">
+                    <div className="rounded-lg border border-border bg-card p-3">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
                           <p
@@ -4403,7 +4406,7 @@ const ProductsPage = () => {
                 }
 
                 return (
-                  <div className="rounded-lg border border-border/80 bg-card/95 p-4 shadow-sm">
+                  <div className="rounded-lg border border-border bg-card p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-start gap-3">
                         {canSelectProducts ? (

@@ -405,30 +405,31 @@ const NewProductPage = () => {
           </Link>
         }
         title={pageTitle}
-      />
-      <ProductEditorSaveBar
-        label={
-          createMutation.isLoading
-            ? t("saveBarSaving")
-            : productFormDirty
-              ? t("saveBarUnsavedProduct")
-              : t("saveBarNewProduct")
-        }
-        actions={
-          <Button
-            type="submit"
-            form={productCreateFormId}
-            size="sm"
-            className="min-w-24"
-            disabled={!selectedStore || createMutation.isLoading}
-          >
-            {createMutation.isLoading ? (
-              <Spinner className="h-4 w-4" />
-            ) : (
-              <StatusSuccessIcon className="h-4 w-4" aria-hidden />
-            )}
-            {createMutation.isLoading ? t("saving") : t("save")}
-          </Button>
+        saveBar={
+          <ProductEditorSaveBar
+            label={
+              createMutation.isLoading
+                ? t("saveBarSaving")
+                : productFormDirty
+                  ? t("saveBarUnsavedProduct")
+                  : t("saveBarNewProduct")
+            }
+            actions={
+              <Button
+                type="submit"
+                form={productCreateFormId}
+                className="min-w-24"
+                disabled={!selectedStore || createMutation.isLoading}
+              >
+                {createMutation.isLoading ? (
+                  <Spinner className="h-4 w-4" />
+                ) : (
+                  <StatusSuccessIcon className="h-4 w-4" aria-hidden />
+                )}
+                {createMutation.isLoading ? t("saving") : t("save")}
+              </Button>
+            }
+          />
         }
       />
       <ProductEditorGrid
