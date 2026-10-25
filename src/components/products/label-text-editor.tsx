@@ -221,7 +221,7 @@ export function LabelPdfPreview({ input }: { input: LabelPreviewInput }) {
           <iframe
             title={t("pdfPreview")}
             src={`${url}#toolbar=0&navpanes=0&view=FitH`}
-            className="h-[420px] w-full border bg-white"
+            className="h-[420px] w-full border bg-card"
           />
           <a className="text-sm underline" href={url} download="label-preview.pdf">
             {t("download")}

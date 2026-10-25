@@ -269,7 +269,7 @@ const StockCountsPage = () => {
               {Array.from({ length: 5 }).map((_, index) => (
                 <div
                   key={index}
-                  className="grid gap-3 rounded-xl border border-border/65 bg-card/95 p-3 md:grid-cols-[1.2fr_1fr_0.7fr_1fr_1fr_3rem]"
+                  className="grid gap-3 rounded-lg border border-border/65 bg-card/95 p-3 md:grid-cols-[1.2fr_1fr_0.7fr_1fr_1fr_3rem]"
                 >
                   <Skeleton className="h-4 w-28" />
                   <Skeleton className="h-4 w-20" />
@@ -345,7 +345,7 @@ const StockCountsPage = () => {
                 </div>
               )}
               renderMobile={(count) => (
-                <div className="rounded-xl border border-border/65 bg-card/95 p-3 shadow-sm">
+                <div className="rounded-lg border border-border/65 bg-card/95 p-3 shadow-sm">
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <p className="text-sm font-medium text-foreground">{count.code}</p>

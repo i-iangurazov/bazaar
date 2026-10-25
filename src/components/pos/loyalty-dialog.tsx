@@ -440,7 +440,7 @@ export function LoyaltyDialog({
                   width={220}
                   height={220}
                   unoptimized
-                  className="mx-auto rounded-md bg-white"
+                  className="mx-auto rounded-md bg-card"
                 />
                 <p>{t("posSignupHint")}</p>
               </div>

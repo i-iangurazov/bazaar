@@ -17,14 +17,14 @@ import {
 import Link from "next/link";
 import { CustomerOrderStatus, PosPaymentMethod } from "@prisma/client";
 import {
-  CalendarBlank,
-  ChatCircle,
-  ClipboardText,
-  Coins,
-  Hash,
-  Storefront,
-  User as UserGlyph,
-} from "@phosphor-icons/react";
+  CalendarIcon as CalendarBlank,
+  ChatIcon as ChatCircle,
+  ClipboardIcon as ClipboardText,
+  CoinsIcon as Coins,
+  HashIcon as Hash,
+  StoresIcon as Storefront,
+  UserIcon as UserGlyph,
+} from "@/components/icons";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
@@ -4323,7 +4323,7 @@ const PosSellPage = () => {
         }}
         title={t("sell.receiptJournal")}
         subtitle={selectedRegisterLabel}
-        className="h-[100dvh] max-h-[100dvh] max-w-none overflow-y-auto rounded-none border-0 sm:h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-2rem)] sm:w-[calc(100vw-2rem)] sm:max-w-[1440px] sm:rounded-xl sm:border"
+        className="h-[100dvh] max-h-[100dvh] max-w-none overflow-y-auto rounded-none border-0 sm:h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-2rem)] sm:w-[calc(100vw-2rem)] sm:max-w-[1440px] sm:rounded-lg sm:border"
         bodyClassName="overflow-visible p-3 sm:p-5"
         mobileSheet
       >
@@ -5761,7 +5761,7 @@ const PosSellPage = () => {
                   {!hasCartLines && !saleQuery.isLoading && !saleQuery.error ? (
                     <div className="grid min-h-[300px] place-items-center p-6 text-center">
                       <div>
-                        <div className="mx-auto grid h-12 w-12 place-items-center rounded-xl border border-dashed border-border bg-muted/30 text-muted-foreground">
+                        <div className="mx-auto grid h-12 w-12 place-items-center rounded-lg border border-dashed border-border bg-muted/30 text-muted-foreground">
                           <EmptyIcon className="h-5 w-5" aria-hidden />
                         </div>
                         <p className="mt-4 text-sm font-medium text-foreground">

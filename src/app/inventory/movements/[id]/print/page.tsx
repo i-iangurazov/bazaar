@@ -111,7 +111,7 @@ const MovementPrintPage = async ({ params, searchParams }: PageProps) => {
   ).toString()}`;
 
   return (
-    <main className="movement-print-page min-h-screen bg-slate-100 py-1 print:bg-white">
+    <main className="movement-print-page min-h-screen bg-muted py-1 print:bg-card">
       <MovementPrintToolbar
         autoPrint={getSearchParam(searchParams, "auto") === "1"}
         backHref={detailHref}

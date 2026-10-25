@@ -630,7 +630,7 @@ const ProductImageStudioPage = () => {
                 <Label>{t("input.uploadLabel")}</Label>
                 <button
                   type="button"
-                  className="flex w-full flex-col items-center justify-center rounded-xl border border-dashed border-border/80 bg-muted/25 px-6 py-10 text-center transition hover:border-primary/40 hover:bg-primary/[0.035]"
+                  className="flex w-full flex-col items-center justify-center rounded-lg border border-dashed border-border/80 bg-muted/25 px-6 py-10 text-center transition hover:border-primary/40 hover:bg-primary/[0.035]"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={!canEdit || uploadingSource}
                 >
@@ -710,7 +710,7 @@ const ProductImageStudioPage = () => {
                   </div>
                 ) : null}
                 {!selectedProduct && productSearch.trim().length >= 2 ? (
-                  <div className="overflow-hidden rounded-xl border border-border/70 bg-card">
+                  <div className="overflow-hidden rounded-lg border border-border/70 bg-card">
                     {productSearchQuery.isLoading ? (
                       <div className="px-3 py-3 text-sm text-muted-foreground">
                         {tCommon("loading")}

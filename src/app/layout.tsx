@@ -71,11 +71,12 @@ const RootLayout = async ({ children }: { children: React.ReactNode }) => {
     <html lang={locale} className={htmlClassName} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: forceLandingLightThemeScript }} />
+        <link rel="preload" href="/fonts/inter/InterVariable.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link rel="stylesheet" href={bazaarBaseFontStylesheetHref} />
       </head>
-      <body className="font-sans min-h-screen bg-gradient-to-br from-background via-background to-secondary/40">
+      <body className="font-sans min-h-screen bg-background">
         <Providers locale={locale} messages={messages} timeZone={defaultTimeZone}>
           <GlobalNumberInputGuard />
           {children}

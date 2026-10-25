@@ -1,0 +1,743 @@
+{
+  "scope": "All Bazaar application, authentication, public catalog, help and public pages; all shared controls and states. Preserve custom merchant branding and print document semantics.",
+  "baseline": {
+    "main": "5a27b8e",
+    "playgroundBeforeSync": "8463ba9",
+    "syncedCommit": "1fcdfd4"
+  },
+  "reference": {
+    "project": "Frappe Framework Espresso",
+    "revision": "e8d41dd0061a32ee781caefe5d0b0d2bb7c15362",
+    "license": "MIT"
+  },
+  "routes": [
+    {
+      "source": "src/app/(app)/admin/jobs/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/admin/metrics/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/admin/support/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/baam/page.tsx",
+      "status": "in_review",
+      "evidence": [
+        "artifacts/ux/espresso/screenshots/baam-mobile-light.png"
+      ]
+    },
+    {
+      "source": "src/app/(app)/billing/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/cash/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/customers/new/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/customers/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/dashboard/page.tsx",
+      "status": "in_review",
+      "evidence": [
+        "artifacts/ux/espresso/screenshots/dashboard-desktop-light.png",
+        "artifacts/ux/espresso/screenshots/dashboard-loading-desktop-light.png",
+        "artifacts/ux/espresso/screenshots/dashboard-production-desktop-light.png"
+      ]
+    },
+    {
+      "source": "src/app/(app)/dev/scanner-test/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/finance/expense/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/finance/income/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/help/compliance/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/inventory/counts/[id]/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/inventory/counts/new/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/inventory/counts/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/inventory/movements/[id]/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/inventory/movements/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/inventory/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/inventory/receiving/[id]/edit/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/inventory/receiving/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/inventory/transfers/[id]/edit/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/inventory/transfers/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/inventory/write-offs/[id]/edit/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/inventory/write-offs/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/onboarding/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/operations/integrations/bakai-store/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/operations/integrations/bazaar-api/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/operations/integrations/bazaar-catalog/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/operations/integrations/email-marketing/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/operations/integrations/m-market/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/operations/integrations/o-market/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/operations/integrations/page.tsx",
+      "status": "in_review",
+      "evidence": [
+        "artifacts/ux/espresso/screenshots/integrations-mobile-light.png"
+      ]
+    },
+    {
+      "source": "src/app/(app)/operations/integrations/product-image-studio/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/orders/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/platform/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/pos/debts/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/pos/history/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/pos/kkm/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/pos/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/pos/receipts/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/pos/registers/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/pos/sell/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/pos/shifts/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/products/[id]/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/products/new/page.tsx",
+      "status": "in_review",
+      "evidence": [
+        "artifacts/ux/espresso/screenshots/product-created-desktop-light.png"
+      ]
+    },
+    {
+      "source": "src/app/(app)/products/page.tsx",
+      "status": "in_review",
+      "evidence": [
+        "artifacts/ux/espresso/screenshots/product-created-desktop-light.png"
+      ]
+    },
+    {
+      "source": "src/app/(app)/purchase-orders/[id]/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/purchase-orders/new/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/purchase-orders/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/reports/analytics/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/reports/close/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/reports/exports/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/reports/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/reports/receipts/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/sales/orders/[id]/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/sales/orders/metrics/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/sales/orders/new/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/sales/orders/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/settings/attributes/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/settings/categories/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/settings/diagnostics/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/settings/import/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/settings/loyalty/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/settings/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/settings/printing/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/settings/profile/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/settings/store-groups/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/settings/units/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/settings/users/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/settings/whats-new/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/stores/[id]/compliance/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/stores/[id]/hardware/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/stores/new/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/stores/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/suppliers/new/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(app)/suppliers/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(guide)/help/[category]/[guide]/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(guide)/help/[category]/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/(guide)/help/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/[locale]/[...slug]/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/[locale]/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/c/[slug]/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/developers/bazaar-api/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/inventory/movements/[id]/print/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/invite/[token]/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/invite/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/login/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/loyalty/card/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/loyalty/join/[programStoreId]/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/privacy/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/register-business/[token]/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/reset/[token]/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/reset/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/signup/page.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/app/verify/[token]/page.tsx",
+      "status": "pending",
+      "evidence": []
+    }
+  ],
+  "components": [
+    {
+      "source": "src/components/ui/action-menu.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/components/ui/alert.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/components/ui/badge.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/components/ui/breadcrumb.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/components/ui/button.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/components/ui/card.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/components/ui/checkbox.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/components/ui/data-table.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/components/ui/dialog.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/components/ui/dropdown-menu.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/components/ui/empty-state.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/components/ui/form.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/components/ui/icon-button.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/components/ui/input.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/components/ui/label.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/components/ui/modal.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/components/ui/pagination.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/components/ui/password-input.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/components/ui/popover.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/components/ui/select.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/components/ui/separator.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/components/ui/sheet.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/components/ui/sidebar.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/components/ui/skeleton.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/components/ui/spinner.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/components/ui/switch.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/components/ui/table.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/components/ui/tabs.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/components/ui/textarea.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/components/ui/toast.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/components/ui/tooltip.tsx",
+      "status": "pending",
+      "evidence": []
+    },
+    {
+      "source": "src/components/ui/use-confirm-dialog.tsx",
+      "status": "pending",
+      "evidence": []
+    }
+  ],
+  "verification": {
+    "desktop": "partial: representative light states only",
+    "mobile": "partial: 390px Baam, More menu and integrations",
+    "themes": "pending",
+    "rolesAndScopes": "pending",
+    "functionalRegression": "partial: UI product creation/search and shared control tests",
+    "productionBuild": "passed for the current foundation; full redesign acceptance remains pending"
+  },
+  "requirements": {
+    "visualFidelity": "Match current ERPNext/Espresso geometry, typography, neutral surfaces, controls and analogous screen composition; compare rendered screens to references.",
+    "brand": "Preserve Bazaar logo and existing blue primary actions, active states, selection and focus in both themes. Confirmed by user on 2026-10-26.",
+    "scope": "All 97 page sources and 32 shared components; no theme-only completion claim.",
+    "businessLogic": "Preserve domain behavior, data, authorization, store scopes, billing gates and idempotency.",
+    "delivery": "Keep improvements on codex/playground; no main merge or production deployment."
+  },
+  "progress": {
+    "stage": "Foundation and first representative screens; full redesign remains in progress",
+    "foundation": [
+      "Pinned MIT Espresso semantic tokens and component CSS",
+      "Self-hosted Inter Variable",
+      "Lucide icons with the existing Bazaar export API; Phosphor removed",
+      "Desktop module dock and contextual sidebar; mobile neutral menu",
+      "Blue primary actions, selections and focus preserved",
+      "Shared controls, form labels, overlays, badges, cards, tables and tabs adapted",
+      "Node 20 compatible PostCSS import integration"
+    ],
+    "manualChecks": [
+      {
+        "check": "Desktop admin: dashboard, products, module selection and Baam",
+        "result": "passed for inspected light states only",
+        "width": 1440
+      },
+      {
+        "check": "Mobile admin: Baam, More menu and integration cards",
+        "result": "passed for inspected light states only; no horizontal page overflow",
+        "width": 390
+      },
+      {
+        "check": "Normal UI create product, category selection, price/cost/opening stock, save, SKU search",
+        "result": "passed on the isolated bazaar_espresso_ui database; SKU ESPRESSO-QA-20261026; row has 5 units and 125.50 KGS; search resolves to exactly one row"
+      },
+      {
+        "check": "Standalone production build: fresh production login, module collapse and reopening through dock",
+        "result": "passed; collapsed sidebar is aria-hidden and width 0; dock remains 48px"
+      },
+      {
+        "check": "Baam modal: nested store Select stacking, two Escape steps and launcher focus restoration",
+        "result": "passed; list is above dialog at z-index 1100; first Escape keeps dialog open; second restores launcher focus"
+      },
+      {
+        "check": "QA startup disables external providers after loading local environment files",
+        "result": "verified Baam reports provider unconfigured; real AI, payment and email calls are outside this UI test run"
+      }
+    ],
+    "remaining": [
+      "Review and adapt all remaining route families and page-specific controls",
+      "Current ERPNext reference comparison for analogous full screen layouts",
+      "Dark theme and RU/KG/EN visual matrix",
+      "Admin/manager/staff/cashier and store/plan gates in the rendered UI",
+      "Modal, dropdown, focus, keyboard, loading, empty, retry and recovery flows across page families",
+      "Broader database integration regression and final production smoke on the isolated app"
+    ],
+    "unitTests": {
+      "files": 253,
+      "tests": 1851,
+      "status": "passed",
+      "evidence": "artifacts/ux/espresso/unit-green.log"
+    }
+  }
+}

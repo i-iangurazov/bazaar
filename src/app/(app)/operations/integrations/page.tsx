@@ -8,7 +8,7 @@ import { useSession } from "next-auth/react";
 import { CopyIcon, IntegrationsIcon, ViewIcon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
 import { trpc } from "@/lib/trpc";
@@ -33,16 +33,16 @@ const IntegrationTile = ({
   actions: ReactNode;
   className?: string;
 }) => (
-  <Card className={`bazaar-admin-surface flex min-h-[220px] flex-col ${className ?? ""}`}>
-    <CardHeader className="border-b border-border/60 bg-muted/20 px-5 py-5">
-      <div className="flex items-start justify-between gap-4">
+  <Card className={`flex flex-col ${className ?? ""}`}>
+    <CardHeader className="px-4 py-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
-            <IntegrationsIcon className="h-5 w-5" aria-hidden />
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-secondary text-muted-foreground">
+            <IntegrationsIcon className="h-4 w-4" aria-hidden />
           </div>
           <div className="min-w-0 space-y-1">
-            <CardTitle className="truncate text-lg leading-tight">{title}</CardTitle>
-            <p className="line-clamp-2 text-sm leading-6 text-muted-foreground">{description}</p>
+            <CardTitle className="text-base leading-6">{title}</CardTitle>
+            <p className="text-sm leading-5 text-muted-foreground">{description}</p>
           </div>
         </div>
         <Badge variant={statusVariant} className="shrink-0">
@@ -50,11 +50,9 @@ const IntegrationTile = ({
         </Badge>
       </div>
     </CardHeader>
-    <CardContent className="flex flex-1 flex-col justify-between gap-4 px-5 py-4">
-      <div className="min-h-6 text-sm leading-6 text-muted-foreground">{detail}</div>
-      <div className="flex flex-wrap gap-2 [&>a]:w-full sm:[&>a]:w-auto [&_button]:w-full sm:[&_button]:w-auto">
-        {actions}
-      </div>
+    <CardContent className="mt-auto flex flex-col gap-3 px-4 pb-4 pt-0">
+      {detail ? <div className="text-sm leading-5 text-muted-foreground">{detail}</div> : null}
+      <div className="flex flex-wrap gap-2">{actions}</div>
     </CardContent>
   </Card>
 );
@@ -68,7 +66,11 @@ const ActionLink = ({
   children: ReactNode;
   external?: boolean;
 }) => (
-  <Link href={href} {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}>
+  <Link
+    href={href}
+    className={buttonVariants({ variant: "secondary" })}
+    {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+  >
     {children}
   </Link>
 );
@@ -228,16 +230,12 @@ const IntegrationsPage = () => {
           }
           actions={
             <>
-              <ActionLink href={settingsHref}>
-                <Button>{t("bazaarCatalog.openSettings")}</Button>
-              </ActionLink>
+              <ActionLink href={settingsHref}>{t("bazaarCatalog.openSettings")}</ActionLink>
               {catalogUrl ? (
                 <>
                   <ActionLink href={catalogUrl} external>
-                    <Button variant="secondary">
-                      <ViewIcon className="h-4 w-4" aria-hidden />
-                      {t("bazaarCatalog.openCatalog")}
-                    </Button>
+                    <ViewIcon className="h-4 w-4" aria-hidden />
+                    {t("bazaarCatalog.openCatalog")}
                   </ActionLink>
                   <Button type="button" variant="outline" onClick={handleCopyLink}>
                     <CopyIcon className="h-4 w-4" aria-hidden />
@@ -255,11 +253,7 @@ const IntegrationsPage = () => {
           status={activeApiKeyCount > 0 ? t("status.ready") : t("status.notConfigured")}
           statusVariant={activeApiKeyCount > 0 ? "success" : "muted"}
           detail={t("bazaarApi.activeKeys", { count: activeApiKeyCount })}
-          actions={
-            <ActionLink href={apiSettingsHref}>
-              <Button>{t("bazaarApi.manageKeys")}</Button>
-            </ActionLink>
-          }
+          actions={<ActionLink href={apiSettingsHref}>{t("bazaarApi.manageKeys")}</ActionLink>}
         />
 
         {canManageApiKeys ? (
@@ -279,7 +273,7 @@ const IntegrationsPage = () => {
             })}
             actions={
               <ActionLink href="/operations/integrations/email-marketing">
-                <Button>{t("emailMarketing.open")}</Button>
+                {t("emailMarketing.open")}
               </ActionLink>
             }
           />
@@ -293,11 +287,11 @@ const IntegrationsPage = () => {
           actions={
             <>
               <ActionLink href="/operations/integrations/m-market">
-                <Button>{t("mMarket.openSettings")}</Button>
+                {t("mMarket.openSettings")}
               </ActionLink>
               {mMarketOverviewQuery.data?.configured ? (
                 <ActionLink href="/operations/integrations/m-market">
-                  <Button variant="secondary">{t("mMarket.openExport")}</Button>
+                  {t("mMarket.openExport")}
                 </ActionLink>
               ) : null}
             </>
@@ -312,11 +306,11 @@ const IntegrationsPage = () => {
           actions={
             <>
               <ActionLink href="/operations/integrations/bakai-store">
-                <Button>{t("bakaiStore.openSettings")}</Button>
+                {t("bakaiStore.openSettings")}
               </ActionLink>
               {bakaiStoreOverviewQuery.data?.configured ? (
                 <ActionLink href="/operations/integrations/bakai-store">
-                  <Button variant="secondary">{t("bakaiStore.openExport")}</Button>
+                  {t("bakaiStore.openExport")}
                 </ActionLink>
               ) : null}
             </>
@@ -341,11 +335,11 @@ const IntegrationsPage = () => {
           actions={
             <>
               <ActionLink href="/operations/integrations/o-market">
-                <Button>{t("oMarket.openSettings")}</Button>
+                {t("oMarket.openSettings")}
               </ActionLink>
               {oMarketOverviewQuery.data?.configured ? (
                 <ActionLink href="/operations/integrations/o-market">
-                  <Button variant="secondary">{t("oMarket.openExport")}</Button>
+                  {t("oMarket.openExport")}
                 </ActionLink>
               ) : null}
             </>
@@ -365,10 +359,10 @@ const IntegrationsPage = () => {
           actions={
             <>
               <ActionLink href="/operations/integrations/product-image-studio">
-                <Button>{t("productImageStudio.openStudio")}</Button>
+                {t("productImageStudio.openStudio")}
               </ActionLink>
               <ActionLink href="/operations/integrations/product-image-studio">
-                <Button variant="secondary">{t("productImageStudio.openHistory")}</Button>
+                {t("productImageStudio.openHistory")}
               </ActionLink>
             </>
           }

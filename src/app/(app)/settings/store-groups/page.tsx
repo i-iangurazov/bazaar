@@ -315,7 +315,7 @@ export default function StoreGroupsPage() {
         <p>{t("noStores")}</p>
       ) : (
         <div className="grid items-start gap-5 lg:grid-cols-[240px_minmax(0,1fr)]">
-          <aside className="rounded-xl border border-border bg-card p-3">
+          <aside className="rounded-lg border border-border bg-card p-3">
             <label
               htmlFor="assortment-store-mobile"
               className="mb-2 block text-sm font-medium lg:hidden"

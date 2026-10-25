@@ -684,7 +684,7 @@ export const InventoryTransfersPage = ({
             </Button>
           }
         />
-        <div className="rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
+        <div className="rounded-lg border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
           {t("transferPermissionDenied")}
         </div>
       </div>
@@ -726,7 +726,7 @@ export const InventoryTransfersPage = ({
             </Button>
           }
         />
-        <div className="rounded-xl border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
+        <div className="rounded-lg border border-danger/30 bg-danger/5 p-4 text-sm text-danger">
           {translateError(tErrors, editableDocumentQuery.error)}
         </div>
       </div>

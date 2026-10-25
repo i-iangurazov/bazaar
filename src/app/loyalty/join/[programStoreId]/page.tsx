@@ -21,7 +21,7 @@ const JoinPage = async ({ params }: { params: { programStoreId: string } }) => {
         </p>
       </div>
       {target?.enabled ? (
-        <div className="rounded-xl border border-border bg-card p-5">
+        <div className="rounded-lg border border-border bg-card p-5">
           <LoyaltyJoinForm programStoreId={target.programStoreId} />
           <p className="mt-4 text-xs text-muted-foreground">{t("joinHint")}</p>
           <Link

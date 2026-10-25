@@ -3,7 +3,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useLocale } from "next-intl";
-import { ArrowUpRight } from "@phosphor-icons/react";
+import { ExternalLinkIcon as ArrowUpRight } from "@/components/icons";
 import {
   Dialog,
   DialogContent,
@@ -71,7 +71,7 @@ export function BaamLauncher({
       data-baam-launcher
       data-baam-docked="header"
       aria-label={baamCopy(locale, "open")}
-      className="h-11 w-11 shrink-0 gap-2 rounded-lg p-0 md:h-10 md:w-full md:px-3"
+      className="h-10 w-10 shrink-0 gap-1.5 p-0 md:h-8 md:w-auto md:px-3"
       onClick={
         pathname === "/baam"
           ? () => {
@@ -85,8 +85,8 @@ export function BaamLauncher({
           : undefined
       }
     >
-      <BaamIcon className="h-6 w-6 shrink-0" />
-      <span className="hidden text-xs font-bold tracking-wide md:inline">
+      <BaamIcon className="h-4 w-4 shrink-0" />
+      <span className="hidden text-sm font-medium md:inline">
         {baamCopy(locale, "name")}
       </span>
     </Button>
@@ -102,7 +102,7 @@ export function BaamLauncher({
             ? { height: viewport.height, maxHeight: viewport.height, top: viewport.top }
             : undefined
         }
-        className="bottom-0 left-0 right-0 top-auto h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 rounded-none pb-[env(safe-area-inset-bottom,0px)] sm:bottom-4 sm:left-auto sm:right-4 sm:h-[min(48rem,calc(100dvh-2rem))] sm:max-h-[calc(100dvh-2rem)] sm:max-w-[29rem] sm:rounded-2xl"
+        className="bottom-0 left-0 right-0 top-auto h-[100dvh] max-h-[100dvh] w-full max-w-none translate-x-0 translate-y-0 rounded-none pb-[env(safe-area-inset-bottom,0px)] sm:bottom-4 sm:left-auto sm:right-4 sm:h-[min(48rem,calc(100dvh-2rem))] sm:max-h-[calc(100dvh-2rem)] sm:max-w-[29rem] sm:rounded-lg"
         onOpenAutoFocus={(e) => {
           e.preventDefault();
           requestAnimationFrame(() =>

@@ -19,7 +19,7 @@ export const FormSection = ({
   <section className={cn("space-y-3 sm:space-y-4", className)}>
     {title ? (
       <div className="space-y-1">
-        <h3 className="text-base font-semibold text-foreground">{title}</h3>
+        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
         {description ? (
           <p className="text-sm leading-6 text-muted-foreground">{description}</p>
         ) : null}
@@ -54,7 +54,7 @@ export const Field = ({
     {label ? (
       <Label
         htmlFor={htmlFor}
-        className={cn("text-sm font-medium text-foreground", labelClassName)}
+        className={cn("text-sm font-normal text-muted-foreground", labelClassName)}
       >
         {label}
       </Label>

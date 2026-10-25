@@ -62,9 +62,11 @@ describe("conservative app shell navigation source", () => {
   it("keeps the sidebar CTA compact in collapsed mode and adds permission filtering in place", () => {
     expect(source).toContain('aria-label={tCommand("openButton")}');
     expect(source).toContain("<CirclePlusIcon");
-    expect(source).toContain(
-      'className="h-10 w-full rounded-lg bg-sidebar-primary text-sidebar-primary-foreground shadow-md shadow-sidebar-primary/15 hover:bg-sidebar-primary/90',
-    );
+    expect(source).toContain("setCommandPaletteOpen(true)");
+    expect(source).toContain("data-module-dock");
+    expect(source).toContain('aria-controls="desktop-module-navigation"');
+    expect(source).toContain("isGroupAllowedByRole(group)");
+    expect(source).toContain("group.items.some((item) => isItemVisible(item))");
     expect(source).toContain("group-data-[state=collapsed]/sidebar-wrapper:w-10");
     expect(source).toContain("group-data-[state=collapsed]/sidebar-wrapper:shadow-none");
     expect(source).toContain("requiredPermission?: AppPermission");

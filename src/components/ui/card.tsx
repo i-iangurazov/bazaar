@@ -5,12 +5,12 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 export const cardVariants = cva(
-  "min-w-0 max-w-full rounded-xl border bg-card text-card-foreground shadow-sm dark:shadow-none",
+  "min-w-0 max-w-full rounded-lg border bg-card text-card-foreground shadow-none",
   {
     variants: {
       variant: {
         default: "border-border",
-        subtle: "border-border bg-muted/30",
+        subtle: "border-border bg-muted",
         flat: "border-border/70 shadow-none ring-0",
       },
     },
@@ -33,7 +33,7 @@ export const CardHeader = ({ className, ...props }: HTMLAttributes<HTMLDivElemen
 );
 
 export const CardTitle = ({ className, ...props }: HTMLAttributes<HTMLHeadingElement>) => (
-  <h3 className={cn("text-base font-semibold tracking-tight", className)} {...props} />
+  <h3 className={cn("text-sm font-semibold tracking-normal", className)} {...props} />
 );
 
 export const CardContent = ({ className, ...props }: HTMLAttributes<HTMLDivElement>) => (

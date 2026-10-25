@@ -717,7 +717,7 @@ const CustomerDatabasePage = () => {
                     role="radio"
                     aria-checked={selected}
                     className={cn(
-                      "button-focus-ring rounded-xl border p-4 text-left transition",
+                      "button-focus-ring rounded-lg border p-4 text-left transition",
                       selected
                         ? "border-primary bg-primary/10 ring-1 ring-primary/20"
                         : "border-border bg-card hover:border-primary/45 hover:bg-muted/40",
@@ -781,7 +781,7 @@ const CustomerDatabasePage = () => {
                 </Button>
               </div>
             </div>
-            <div className="grid gap-2 rounded-xl border border-border bg-muted/20 p-3 sm:grid-cols-2">
+            <div className="grid gap-2 rounded-lg border border-border bg-muted/20 p-3 sm:grid-cols-2">
               {exportColumns.map((column) => {
                 const checked = selectedExportColumnSet.has(column.key);
                 return (

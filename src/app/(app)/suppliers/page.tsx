@@ -353,7 +353,7 @@ const SuppliersPage = () => {
             }
           }}
           title={editingId ? t("editSupplier") : t("newSupplier")}
-          className="rounded-xl"
+          className="rounded-lg"
           bodyClassName="p-4 sm:p-6"
         >
           <Form {...form}>

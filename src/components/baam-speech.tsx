@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { SpeakerHigh, Stop } from "@phosphor-icons/react";
+import { SpeakerIcon as SpeakerHigh, StopIcon as Stop } from "@/components/icons";
 import { baamCopy } from "@/lib/baam/copy";
 
 let finishActiveSpeech: (() => void) | undefined;

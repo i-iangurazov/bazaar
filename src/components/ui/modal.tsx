@@ -40,7 +40,7 @@ export const Modal = ({
     <>
       <DialogPrimitive.Overlay
         className={cn(
-          "fixed inset-0 z-[1000] bg-black/40 backdrop-blur-[1px]",
+          "fixed inset-0 z-[1000] bg-black/40",
           animated &&
             "transition-opacity duration-200 data-[state=closed]:opacity-0 data-[state=open]:opacity-100",
         )}
@@ -81,7 +81,7 @@ export const Modal = ({
           )}
         >
           <div>
-            <DialogPrimitive.Title className="text-lg font-semibold text-foreground">
+            <DialogPrimitive.Title className="text-lg font-semibold tracking-tight text-foreground">
               {title}
             </DialogPrimitive.Title>
             {subtitle ? (
@@ -93,7 +93,7 @@ export const Modal = ({
           <DialogPrimitive.Close asChild>
             <Button
               type="button"
-              variant="secondary"
+              variant="ghost"
               size="icon"
               aria-label={tCommon("close")}
               title={tCommon("close")}

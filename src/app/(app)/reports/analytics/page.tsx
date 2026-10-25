@@ -370,14 +370,14 @@ function AnalyticsReportContent() {
       </ReportPeriodControls>
       <CustomerReportFilter enabled={enabled} storeId={state.storeId} customerId={state.customerId} customerName={data?.customer?.name}
         onChange={customerId => update({ customerId, customerKey: undefined, productId: undefined, variantKey: undefined, documentId: undefined, kind: undefined, view: "products" })} />
-      {state.customerId ? <section className="space-y-2 rounded-xl border border-border bg-card p-4">
+      {state.customerId ? <section className="space-y-2 rounded-lg border border-border bg-card p-4">
         <h2 className="font-semibold">{data?.customer?.name ?? customerText("selected")}</h2>
         <p className="text-sm text-muted-foreground">{state.dateFrom} — {state.dateTo} · {scope.visibleStores?.find(store => store.id === state.storeId)?.name ?? customerText("permittedStores")} · {channelText(state.saleChannel)}</p>
         <p className="text-xs text-muted-foreground">{customerText("legacyHint")}</p>
         <div className="flex flex-wrap gap-2"><Button variant="secondary" onClick={() => update({ view: "products", productId: undefined, variantKey: undefined, documentId: undefined, kind: undefined })}>{customerText("products")}</Button><Button variant="secondary" onClick={() => update({ view: "documents", productId: undefined, variantKey: undefined, documentId: undefined, kind: undefined, sort: "date" })}>{customerText("receipts")}</Button></div>
       </section> : null}
       <section
-        className="space-y-3 rounded-xl border border-border bg-card p-4"
+        className="space-y-3 rounded-lg border border-border bg-card p-4"
         aria-label={t("refine")}
       >
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -580,7 +580,7 @@ function AnalyticsReportContent() {
           </div>
           {(totals.unknownCostLines > 0 || totals.amountConflictDocuments > 0) && (
             <div
-              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warning/40 bg-warning/5 p-4"
+              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warning/40 bg-warning/5 p-4"
               role="status"
             >
               <div className="max-w-3xl">
@@ -611,7 +611,7 @@ function AnalyticsReportContent() {
             </p>
           ) : null}
           <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)]">
-            <section className="min-w-0 rounded-xl border border-border bg-card p-4 sm:p-5">
+            <section className="min-w-0 rounded-lg border border-border bg-card p-4 sm:p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h2 className="font-semibold">{t("trend")}</h2>
@@ -649,7 +649,7 @@ function AnalyticsReportContent() {
                 </div>
               )}
             </section>
-            <section className="rounded-xl border border-border bg-card p-4 sm:p-5">
+            <section className="rounded-lg border border-border bg-card p-4 sm:p-5">
               <h2 className="font-semibold">{t("resultDrivers")}</h2>
               <dl className="mt-3 divide-y divide-border">
                 {[
@@ -676,7 +676,7 @@ function AnalyticsReportContent() {
               </Button>
             </section>
           </div>
-          <section ref={detailSectionRef} tabIndex={-1} aria-label={t("detail")} className="min-w-0 scroll-mt-20 overflow-hidden rounded-xl border border-border bg-card" aria-busy={detailLoading}>
+          <section ref={detailSectionRef} tabIndex={-1} aria-label={t("detail")} className="min-w-0 scroll-mt-20 overflow-hidden rounded-lg border border-border bg-card" aria-busy={detailLoading}>
             <div className="space-y-4 border-b border-border p-4 sm:p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -890,7 +890,7 @@ function AnalyticsReportContent() {
               </div>
             </div>
           </section>
-          <details className="rounded-xl border border-border bg-card p-4 text-sm">
+          <details className="rounded-lg border border-border bg-card p-4 text-sm">
             <summary className="cursor-pointer font-medium">{t("methodology")}</summary>
             <div className="mt-3 max-w-4xl space-y-2 leading-6 text-muted-foreground">
               <p>{t("salesMethod")}</p>

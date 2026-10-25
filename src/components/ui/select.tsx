@@ -74,7 +74,7 @@ const SelectTrigger = React.forwardRef<
       ref={mergedRef}
       {...attributes}
       className={cn(
-        "flex h-10 w-full min-w-0 items-center justify-between gap-2 rounded-md border border-input bg-card px-3 py-2 text-base text-foreground transition-colors hover:border-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm [&>span]:min-w-0 [&>span]:truncate [&>svg]:shrink-0",
+        "flex h-[var(--control-height)] w-full min-w-0 items-center justify-between gap-2 rounded-[var(--radius)] border border-transparent bg-secondary px-2.5 py-1.5 text-base text-foreground transition-colors hover:bg-accent focus:border-input focus:bg-card focus:outline-none focus:ring-2 focus:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm [&>span]:min-w-0 [&>span]:truncate [&>svg]:shrink-0",
         className,
       )}
       {...props}
@@ -101,7 +101,7 @@ const SelectContent = React.forwardRef<
       <SelectPrimitive.Content
         ref={ref}
         className={cn(
-          "z-[1100] w-[var(--radix-select-trigger-width)] min-w-[8rem] overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-md",
+          "z-[1100] w-[var(--radix-select-trigger-width)] min-w-[8rem] overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-md",
           position === "popper" && "translate-y-1 data-[side=top]:-translate-y-1",
           className,
         )}
@@ -147,7 +147,7 @@ const SelectItem = React.forwardRef<
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex w-full cursor-default select-none items-center rounded-md py-2 pl-8 pr-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      "relative flex w-full cursor-default select-none items-center min-h-9 rounded-[var(--radius-sm)] py-1.5 pl-8 pr-2 text-sm md:min-h-8 outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
       className,
     )}
     {...props}

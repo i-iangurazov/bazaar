@@ -20,7 +20,7 @@ export const SheetOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Overlay
     ref={ref}
-    className={cn("fixed inset-0 z-[1000] bg-black/40 backdrop-blur-[1px]", className)}
+    className={cn("fixed inset-0 z-[1000] bg-black/40", className)}
     {...props}
   />
 ));
@@ -33,7 +33,7 @@ export const sheetContentVariants = cva(
       side: {
         right: "inset-y-0 right-0 h-full w-[min(34rem,calc(100vw-1rem))] border-l",
         left: "inset-y-0 left-0 h-full w-[min(34rem,calc(100vw-1rem))] border-r",
-        bottom: "inset-x-0 bottom-0 max-h-[92dvh] rounded-t-md border-t",
+        bottom: "inset-x-0 bottom-0 max-h-[92dvh] rounded-t-lg border-t",
         fullscreen: "inset-0 h-[100dvh] w-screen border-0",
       },
     },
@@ -63,7 +63,7 @@ export const SheetContent = React.forwardRef<
         {children}
         {showClose ? (
           <DialogPrimitive.Close
-            className="button-focus-ring absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-secondary text-muted-foreground shadow-sm transition hover:bg-secondary/80 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="button-focus-ring absolute right-4 top-4 inline-flex h-10 w-10 items-center justify-center rounded-md border border-transparent bg-transparent text-muted-foreground transition hover:bg-secondary hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background md:h-8 md:w-8"
             aria-label={closeLabel ?? tCommon("close")}
           >
             <CloseIcon className="h-4 w-4" aria-hidden />

@@ -298,7 +298,7 @@ function MetricsContent() {
       />
       <section
         aria-label={r("filters")}
-        className="grid gap-3 rounded-xl border border-border bg-card p-4 sm:grid-cols-2 xl:grid-cols-4"
+        className="grid gap-3 rounded-lg border border-border bg-card p-4 sm:grid-cols-2 xl:grid-cols-4"
       >
         <ReportSelect
           label={r("store")}
@@ -437,7 +437,7 @@ function MetricsContent() {
                 ))}
             </div>
           </section>
-          <section className="grid gap-5 rounded-xl border border-border bg-card p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+          <section className="grid gap-5 rounded-lg border border-border bg-card p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
             <div>
               <h2 className="font-semibold">{t("sections.sales30d")}</h2>
               <p className="mt-2 text-xs leading-5 text-muted-foreground">
@@ -469,7 +469,7 @@ function MetricsContent() {
               </p>
             )}
           </section>
-          <section className="min-w-0 overflow-hidden rounded-xl border border-border bg-card">
+          <section className="min-w-0 overflow-hidden rounded-lg border border-border bg-card">
             <div className="space-y-4 border-b border-border p-4">
               <div className="flex flex-wrap items-end justify-between gap-3">
                 <nav className="flex flex-wrap gap-2" aria-label={r("dimensions")}>
@@ -693,7 +693,7 @@ function MetricsContent() {
               />
             )}
           </section>
-          <details className="rounded-xl border border-border bg-card p-4 text-sm">
+          <details className="rounded-lg border border-border bg-card p-4 text-sm">
             <summary className="cursor-pointer font-medium">{r("methodology")}</summary>
             <p className="mt-3 max-w-4xl leading-6 text-muted-foreground">
               {r("operationNotes.stock")} {r("potentialMethod")}

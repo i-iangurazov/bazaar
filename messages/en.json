@@ -775,6 +775,7 @@
     "platform": "Platform",
     "platformOwner": "Platform owner",
     "brand": "BAZAAR",
+    "modules": "Modules",
     "groups": {
       "core": "Core",
       "operations": "Operations",

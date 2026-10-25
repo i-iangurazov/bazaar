@@ -711,7 +711,7 @@ const SortableBlock = ({
         transition,
       }}
       className={cn(
-        "group relative rounded-md border bg-white shadow-sm transition",
+        "group relative rounded-md border bg-card shadow-sm transition",
         selected ? "border-primary ring-2 ring-primary/15" : "border-transparent hover:border-border",
         isDragging && "z-20 opacity-70",
       )}
@@ -1780,7 +1780,7 @@ export const EmailMarketingWorkspace = () => {
 
               <div
                 className={cn(
-                  "mx-auto w-full rounded-md border border-border bg-white shadow-sm transition-all",
+                  "mx-auto w-full rounded-md border border-border bg-card shadow-sm transition-all",
                   previewMode === "mobile" ? "max-w-[390px]" : "max-w-[680px]",
                 )}
                 style={{ backgroundColor: contentBackgroundColor, color: textColor }}
@@ -2061,7 +2061,7 @@ export const EmailMarketingWorkspace = () => {
         </div>
 
         <Modal open={previewOpen} onOpenChange={setPreviewOpen} title="Предпросмотр" className="max-w-4xl">
-          <div ref={previewContentRef} className="bazaar-admin-preview-frame max-h-[70vh] overflow-auto bg-white p-0">
+          <div ref={previewContentRef} className="bazaar-admin-preview-frame max-h-[70vh] overflow-auto bg-card p-0">
             {previewHtml ? (
               <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
             ) : (

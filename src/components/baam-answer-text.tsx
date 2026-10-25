@@ -63,7 +63,7 @@ export function BaamAnswerText({ text, links = [] }: { text: string; links?: str
             return (
               <div
                 key={i}
-                className="max-w-full overflow-x-auto rounded-xl border border-border"
+                className="max-w-full overflow-x-auto rounded-lg border border-border"
                 tabIndex={0}
               >
                 <table className="w-full border-collapse text-left text-sm">

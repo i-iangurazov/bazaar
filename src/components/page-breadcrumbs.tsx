@@ -232,7 +232,7 @@ export const PageBreadcrumbs = () => {
       aria-label={tBreadcrumbs("ariaLabel")}
       className="scrollbar-none -mx-1 mb-3 overflow-x-auto px-1 pb-1"
     >
-      <ol className="inline-flex max-w-full items-center gap-1 rounded-md border border-border/80 bg-background/90 p-1 text-xs text-muted-foreground shadow-sm">
+      <ol className="inline-flex max-w-full items-center gap-1 text-xs text-muted-foreground">
         {crumbs.map((crumb, index) => {
           const isLast = index === crumbs.length - 1;
           return (
@@ -247,8 +247,8 @@ export const PageBreadcrumbs = () => {
                 <span
                   aria-current={isLast ? "page" : undefined}
                   className={cn(
-                    "inline-flex h-7 max-w-[54vw] items-center truncate rounded-md px-2.5 font-semibold sm:max-w-[280px]",
-                    isLast ? "bg-primary/10 text-primary" : "text-muted-foreground",
+                    "inline-flex h-7 max-w-[54vw] items-center truncate rounded-sm px-1 font-normal sm:max-w-[280px]",
+                    isLast ? "text-foreground" : "text-muted-foreground",
                   )}
                 >
                   <span className="truncate">{crumb.label}</span>
@@ -257,7 +257,7 @@ export const PageBreadcrumbs = () => {
                 <Link
                   href={crumb.href === returnPath ? returnTo : crumb.href}
                   aria-label={index === 0 ? crumb.label : undefined}
-                  className="inline-flex h-7 max-w-[44vw] items-center gap-1 rounded-md px-2.5 font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:max-w-[240px]"
+                  className="inline-flex h-7 max-w-[44vw] items-center gap-1 rounded-sm px-1 font-normal text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:max-w-[240px]"
                 >
                   {index === 0 ? <HomeIcon className="h-3.5 w-3.5 shrink-0" aria-hidden /> : null}
                   <span className={cn("truncate", index === 0 ? "hidden sm:inline" : null)}>

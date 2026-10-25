@@ -282,7 +282,7 @@ const StockCountDetailPage = () => {
           <CardContent className="space-y-4 p-6" data-stock-count-detail-skeleton>
             <div className="grid gap-3 md:grid-cols-4">
               {Array.from({ length: 4 }).map((_, index) => (
-                <div key={index} className="rounded-xl border border-border/65 bg-muted/25 p-3">
+                <div key={index} className="rounded-lg border border-border/65 bg-muted/25 p-3">
                   <Skeleton className="mb-2 h-3 w-20" />
                   <Skeleton className="h-4 w-28" />
                 </div>
@@ -290,7 +290,7 @@ const StockCountDetailPage = () => {
             </div>
             <div className="space-y-2">
               {Array.from({ length: 6 }).map((_, index) => (
-                <Skeleton key={index} className="h-12 rounded-xl" />
+                <Skeleton key={index} className="h-12 rounded-lg" />
               ))}
             </div>
           </CardContent>
@@ -564,7 +564,7 @@ const StockCountDetailPage = () => {
                 ];
 
                 return (
-                  <div className="rounded-xl border border-border/65 bg-card/95 p-3 shadow-sm">
+                  <div className="rounded-lg border border-border/65 bg-card/95 p-3 shadow-sm">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium text-foreground">
@@ -630,7 +630,7 @@ const StockCountDetailPage = () => {
               <span>{t("shortages")}</span>
               <span className="font-semibold text-danger">{summary.shortages}</span>
             </div>
-            <div className="rounded-xl border border-border/70 bg-muted/30 p-3 text-xs text-muted-foreground">
+            <div className="rounded-lg border border-border/70 bg-muted/30 p-3 text-xs text-muted-foreground">
               {t("summaryHint")}
             </div>
           </CardContent>
@@ -817,7 +817,7 @@ const StockCountDetailPage = () => {
               </div>
             )}
             renderMobile={(movement) => (
-              <div className="rounded-xl border border-border/65 bg-card/95 p-3 shadow-sm">
+              <div className="rounded-lg border border-border/65 bg-card/95 p-3 shadow-sm">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-foreground">

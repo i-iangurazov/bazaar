@@ -118,7 +118,7 @@ export function ListToolbar({
       data-list-toolbar
       aria-busy={loading || undefined}
       aria-label={t("searchAndFilters")}
-      className={cn("mb-4 min-w-0 rounded-xl border border-border bg-card p-3 sm:p-4", className)}
+      className={cn("mb-4 min-w-0 rounded-lg border border-border bg-card p-3 sm:p-4", className)}
     >
       <div className="flex min-w-0 flex-wrap items-end gap-3">
         {children}

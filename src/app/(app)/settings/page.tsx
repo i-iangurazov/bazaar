@@ -58,7 +58,7 @@ export default function SettingsIndexPage() {
             key={link.key}
             href={link.href}
             className={cn(
-              "rounded-xl border border-border bg-card p-4 text-sm font-medium transition",
+              "rounded-lg border border-border bg-card p-4 text-sm font-medium transition",
               "hover:border-primary/40 hover:bg-secondary focus-visible:outline focus-visible:outline-2",
             )}
           >

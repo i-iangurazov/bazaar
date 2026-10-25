@@ -246,7 +246,7 @@ const ImportPreviewTable = dynamic(() => import("@/components/import-preview-tab
   ssr: false,
   loading: () => (
     <div
-      className="h-32 animate-pulse rounded-xl border border-dashed border-border bg-muted/30"
+      className="h-32 animate-pulse rounded-lg border border-dashed border-border bg-muted/30"
       aria-hidden
     />
   ),
@@ -1419,7 +1419,7 @@ const CustomerImportPanel = ({
           {preview ? (
             <>
               {preview.summary.errors > 0 ? (
-                <div className="rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm text-muted-foreground">
+                <div className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-muted-foreground">
                   {t("customerImport.partialImportHint", {
                     valid: importableCustomerRows,
                     skipped: preview.summary.skipped,
@@ -1536,7 +1536,7 @@ const CustomerImportPanel = ({
             </Button>
           </div>
           {isImporting ? (
-            <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm text-muted-foreground">
+            <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm text-muted-foreground">
               <Spinner className="h-4 w-4" />
               <div className="space-y-1">
                 <p className="font-medium text-foreground">
@@ -1550,7 +1550,7 @@ const CustomerImportPanel = ({
             </div>
           ) : null}
           {lastSummary ? (
-            <div className="rounded-xl border border-success/40 bg-success/10 p-3 text-sm">
+            <div className="rounded-lg border border-success/40 bg-success/10 p-3 text-sm">
               <p className="font-medium">{t("importResultTitle")}</p>
               <p className="text-xs text-muted-foreground">
                 {t("targetStoreApplied", {
@@ -3070,7 +3070,7 @@ const ImportPage = () => {
             </div>
           ) : null}
           {shortNameErrors.length ? (
-            <div className="space-y-2 rounded-xl border border-primary/30 bg-primary/10 p-3">
+            <div className="space-y-2 rounded-lg border border-primary/30 bg-primary/10 p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-xs font-medium text-foreground">
                   {t("shortNameResolveTitle", { count: shortNameErrors.length })}
@@ -3115,7 +3115,7 @@ const ImportPage = () => {
             </div>
           ) : null}
           {missingUnitErrors.length ? (
-            <div className="space-y-2 rounded-xl border border-secondary/70 bg-secondary/30 p-3">
+            <div className="space-y-2 rounded-lg border border-secondary/70 bg-secondary/30 p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-xs font-medium text-foreground">
                   {t("missingUnitResolveTitle", { count: missingUnitErrors.length })}
@@ -3167,7 +3167,7 @@ const ImportPage = () => {
             </div>
           ) : null}
           {duplicateBarcodeErrors.length ? (
-            <div className="space-y-2 rounded-xl border border-warning/40 bg-warning/10 p-3">
+            <div className="space-y-2 rounded-lg border border-warning/40 bg-warning/10 p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-xs font-medium text-foreground">
                   {t("duplicateResolveTitle", { count: duplicateBarcodeErrors.length })}
@@ -3252,7 +3252,7 @@ const ImportPage = () => {
             <p className="text-sm text-danger">{translateError(tErrors, importMutation.error)}</p>
           ) : null}
           {lastImportSummary ? (
-            <div className="rounded-xl border border-success/40 bg-success/10 p-3 text-sm text-foreground">
+            <div className="rounded-lg border border-success/40 bg-success/10 p-3 text-sm text-foreground">
               <p className="font-medium">{t("importResultTitle")}</p>
               <p className="mt-1 text-xs text-muted-foreground">
                 {t("importSuccess", { count: lastImportSummary.rows ?? 0 })}

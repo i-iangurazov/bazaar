@@ -281,7 +281,7 @@ const ToggleRow = ({
   disabled: boolean;
   onChange: (checked: boolean) => void;
 }) => (
-  <label className="flex items-center justify-between gap-3 rounded-xl border border-border/65 bg-muted/30 p-3 text-sm">
+  <label className="flex items-center justify-between gap-3 rounded-lg border border-border/65 bg-muted/30 p-3 text-sm">
     <span>{label}</span>
     <Switch checked={checked} onCheckedChange={onChange} disabled={disabled} aria-label={label} />
   </label>
@@ -303,7 +303,7 @@ const MobileWizardStep = ({
   <Card className="bazaar-admin-surface">
     <CardHeader className="bazaar-admin-section-header px-4 py-4">
       <div className="flex items-start gap-3">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-primary/30 bg-primary/10 text-sm font-semibold text-primary">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 text-sm font-semibold text-primary">
           {step}
         </span>
         <div className="min-w-0 flex-1">
@@ -342,7 +342,7 @@ const MobileStatusRow = ({
   value: string;
   ready?: boolean;
 }) => (
-  <div className="flex items-start justify-between gap-3 rounded-xl border border-border/65 bg-muted/30 p-3 text-sm">
+  <div className="flex items-start justify-between gap-3 rounded-lg border border-border/65 bg-muted/30 p-3 text-sm">
     <span className="text-muted-foreground">{label}</span>
     <span
       className={`max-w-[58%] text-right font-medium ${
@@ -1074,7 +1074,7 @@ const PrintingSettingsPage = () => {
               </div>
               <div className="overflow-auto">
                 <div
-                  className="border border-border bg-white p-3 text-xs text-black shadow-sm"
+                  className="border border-border bg-card p-3 text-xs text-black shadow-sm"
                   style={{ width: Math.min(300, receiptPreviewWidth) }}
                 >
                   <div className="text-center font-bold">{sample.receiptHeading}</div>
@@ -1523,7 +1523,7 @@ const PrintingSettingsPage = () => {
                 </ol>
               </div>
               {values.receiptPrintProvider === "QZ_TRAY" ? (
-                <div className="space-y-3 rounded-xl border border-border/65 bg-muted/25 p-4">
+                <div className="space-y-3 rounded-lg border border-border/65 bg-muted/25 p-4">
                   <div className="flex flex-wrap items-center gap-3">
                     {qzTrustStatus !== "certificate-missing" ? (
                       <Button asChild type="button" variant="secondary">
@@ -1536,7 +1536,7 @@ const PrintingSettingsPage = () => {
                       {t("downloadQzCertificateHint")}
                     </span>
                   </div>
-                  <label className="flex items-center justify-between gap-3 rounded-xl border border-border/65 bg-card p-3 text-sm">
+                  <label className="flex items-center justify-between gap-3 rounded-lg border border-border/65 bg-card p-3 text-sm">
                     <span className="space-y-1">
                       <span className="block font-medium text-foreground">
                         {t("qzClientProvisionConfirm")}
@@ -1773,7 +1773,7 @@ const PrintingSettingsPage = () => {
               <CardContent>
                 <div className="bazaar-admin-preview-frame overflow-auto">
                   <div
-                    className="rounded-lg border border-border bg-white p-4 text-black shadow-sm"
+                    className="rounded-lg border border-border bg-card p-4 text-black shadow-sm"
                     style={{ width: receiptPreviewWidth }}
                   >
                     <div className="text-center font-bold">{sample.receiptHeading}</div>
@@ -1874,7 +1874,7 @@ const PrintingSettingsPage = () => {
                         onClick={() => updateValue("labelLayoutOrder", value)}
                       >
                         <span className="block font-medium text-foreground">{t(label)}</span>
-                        <span className="block rounded-lg border border-border bg-white p-2 text-center text-[10px] text-black">
+                        <span className="block rounded-lg border border-border bg-card p-2 text-center text-[10px] text-black">
                           {value.includes("PRICE") && value.startsWith("PRICE") ? <b>{sample.price}</b> : null}
                           {value.includes("NAME") ? <span className="block">{sample.productName}</span> : null}
                           <span className="my-1 block h-5 bg-[repeating-linear-gradient(90deg,#000_0_2px,#fff_2px_4px,#000_4px_7px,#fff_7px_10px)]" />

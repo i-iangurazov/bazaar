@@ -1,12 +1,12 @@
 "use client";
 import { useState } from "react";
 import {
-  ClockCounterClockwise,
-  PencilSimple,
-  Plus,
-  Trash,
-  ListBullets,
-} from "@phosphor-icons/react";
+  ProductMovementIcon as ClockCounterClockwise,
+  EditIcon as PencilSimple,
+  AddIcon as Plus,
+  DeleteIcon as Trash,
+  TableViewIcon as ListBullets,
+} from "@/components/icons";
 import { baamText } from "@/lib/baam/companion";
 import { workflowTitle, type WorkflowAction } from "@/lib/baam/workflows";
 import {
@@ -56,7 +56,7 @@ function History({ c }: { c: BaamController }) {
               <button
                 type="button"
                 className={cn(
-                  "w-full rounded-xl p-3 text-left transition-colors hover:bg-secondary focus-visible:outline focus-visible:outline-2",
+                  "w-full rounded-lg p-3 text-left transition-colors hover:bg-secondary focus-visible:outline focus-visible:outline-2",
                   item.id === c.identity.activeId && "bg-secondary",
                 )}
                 onClick={() => {

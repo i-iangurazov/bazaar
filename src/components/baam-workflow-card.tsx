@@ -4,7 +4,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { localizeWorkflowFields } from "@/lib/baam/workflowLabels";
-import { CaretDown, Plus, X, ImageSquare } from "@phosphor-icons/react";
+import {
+  ChevronDownIcon as CaretDown,
+  AddIcon as Plus,
+  CloseIcon as X,
+  ImagePlusIcon as ImageSquare,
+} from "@/components/icons";
 import { trpc } from "@/lib/trpc";
 import { baamText, isBaamLink, type BaamActionResult } from "@/lib/baam/companion";
 import {
@@ -612,7 +617,7 @@ function WorkflowCard({ initial, c }: { initial: Workflow; c: BaamController }) 
   return (
     <section
       data-baam-workflow={wf.id}
-      className="min-w-0 space-y-4 rounded-xl border bg-card p-4 shadow-sm"
+      className="min-w-0 space-y-4 rounded-lg border bg-card p-4 shadow-sm"
     >
       <div className="flex items-start justify-between gap-2">
         <h3 className="text-base font-semibold">{workflowTitle(wf.kind, c.locale)}</h3>

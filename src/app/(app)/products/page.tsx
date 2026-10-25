@@ -4107,7 +4107,7 @@ const ProductsPage = () => {
                       return (
                         <div
                           key={product.id}
-                          className="overflow-hidden rounded-xl border border-border/80 bg-card/95 shadow-sm transition hover:border-primary/25 hover:shadow-md"
+                          className="overflow-hidden rounded-lg border border-border/80 bg-card/95 shadow-sm transition hover:border-primary/25 hover:shadow-md"
                         >
                           <div className="relative aspect-[4/3] bg-muted/45">
                             {previewImageUrl ? (
@@ -4263,7 +4263,7 @@ const ProductsPage = () => {
                 // a photo-first product card so the catalog does not become a squeezed table.
                 if (renderPhotoFirstMobileCard) {
                   return (
-                    <div className="rounded-xl border border-border/80 bg-card/95 p-3 shadow-sm">
+                    <div className="rounded-lg border border-border/80 bg-card/95 p-3 shadow-sm">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
                           <p
@@ -4403,7 +4403,7 @@ const ProductsPage = () => {
                 }
 
                 return (
-                  <div className="rounded-xl border border-border/80 bg-card/95 p-4 shadow-sm">
+                  <div className="rounded-lg border border-border/80 bg-card/95 p-4 shadow-sm">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-start gap-3">
                         {canSelectProducts ? (
@@ -4554,7 +4554,7 @@ const ProductsPage = () => {
                 icon={<EmptyIcon className="h-6 w-6" aria-hidden />}
                 title={t("storeEmptyTitle")}
                 description={t("storeEmptySubtitle", { store: selectedStore.name })}
-                className="mt-4 rounded-xl bg-muted/20"
+                className="mt-4 rounded-lg bg-muted/20"
                 action={
                   <div className="flex flex-col gap-2 sm:flex-row">
                     {canManageProducts ? (
@@ -4614,7 +4614,7 @@ const ProductsPage = () => {
                     </Button>
                   ) : undefined
                 }
-                className="m-4 rounded-xl bg-muted/20"
+                className="m-4 rounded-lg bg-muted/20"
               />
             )
           ) : null}

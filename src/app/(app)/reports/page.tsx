@@ -193,7 +193,7 @@ function ReportsContent() {
         </ReportSelect>
       </ReportPeriodControls>
       {scope.error && (
-        <p role="alert" className="rounded-xl border border-danger/30 p-4 text-sm text-danger">
+        <p role="alert" className="rounded-lg border border-danger/30 p-4 text-sm text-danger">
           {scope.error}
         </p>
       )}
@@ -265,7 +265,7 @@ function ReportsContent() {
               },
               { title: "moneyGroup", note: "moneyGroupNote", links: ["payments", "cash", "debts"] },
             ].map((group) => (
-              <section key={group.title} className="rounded-xl border border-border bg-card p-5">
+              <section key={group.title} className="rounded-lg border border-border bg-card p-5">
                 <h2 className="text-lg font-semibold">{t(group.title)}</h2>
                 <p className="mt-2 min-h-12 text-sm leading-6 text-muted-foreground">
                   {t(group.note)}
@@ -289,7 +289,7 @@ function ReportsContent() {
               </section>
             ))}
           </div>
-          <section className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border bg-card p-5">
+          <section className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-border bg-card p-5">
             <div>
               <h2 className="font-semibold">{t("documentsAndControl")}</h2>
               <p className="mt-1 text-sm text-muted-foreground">{t("documentsAndControlNote")}</p>
@@ -322,7 +322,7 @@ function ReportsContent() {
       )}
       {!overview && data && (
         <>
-          <section className="space-y-3 rounded-xl border border-border bg-card p-4 sm:p-5">
+          <section className="space-y-3 rounded-lg border border-border bg-card p-4 sm:p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h2 className="text-lg font-semibold">{t(`operations.${state.view}`)}</h2>
@@ -404,7 +404,7 @@ function ReportsContent() {
               ))}
             </dl>
           )}
-          <section className="min-w-0 overflow-hidden rounded-xl border border-border bg-card">
+          <section className="min-w-0 overflow-hidden rounded-lg border border-border bg-card">
             <div className="grid items-end gap-3 border-b border-border p-4 sm:grid-cols-2 xl:grid-cols-[minmax(180px,1fr)_180px_180px_100px_auto]">
               <ReportField label={t("search")}>
                 <Input

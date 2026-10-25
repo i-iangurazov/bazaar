@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { createElement, type ComponentType } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { IconProps } from "@phosphor-icons/react";
+import type { LucideProps } from "lucide-react";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
@@ -158,10 +158,10 @@ const sidebarEntries = () => {
 };
 
 const geometry = ({ exported }: IconEntry) => {
-  const icon = icons[exported] as ComponentType<IconProps>;
-  // Normalize weight and styling so aliases cannot become "unique" merely by
-  // differing names, classes, colors or regular/duotone defaults.
-  const svg = renderToStaticMarkup(createElement(icon, { weight: "regular", size: 24 }));
+  const icon = icons[exported] as ComponentType<LucideProps>;
+  // Normalize styling so aliases cannot become "unique" merely by differing
+  // names, classes, colors or stroke defaults.
+  const svg = renderToStaticMarkup(createElement(icon, { strokeWidth: 1.6, size: 24 }));
   const shapes = [
     ...svg.matchAll(/<(path|rect|circle|ellipse|line|polyline|polygon|g)\b([^>]*)>/g),
   ].map((match) => {

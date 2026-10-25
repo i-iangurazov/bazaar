@@ -725,7 +725,7 @@ const ProductMovementsPage = () => {
         </div>
         <div className="space-y-1">
           <Label>{t("dateRange")}</Label>
-          <div className="rounded-xl border border-input bg-card px-2 py-1 shadow-sm">
+          <div className="rounded-lg border border-input bg-card px-2 py-1 shadow-sm">
             <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1">
               <Input
                 type="date"
@@ -806,7 +806,7 @@ const ProductMovementsPage = () => {
           </Select>
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/55 bg-card/70 p-2 shadow-inner shadow-foreground/[0.015]">
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/55 bg-card/70 p-2 shadow-inner shadow-foreground/[0.015]">
         <Button
           type="button"
           variant="secondary"
@@ -837,7 +837,7 @@ const ProductMovementsPage = () => {
         </Button>
       </div>
       {additionalFiltersOpen ? (
-        <div className="rounded-xl border border-border/60 bg-card/80 p-3 shadow-sm">
+        <div className="rounded-lg border border-border/60 bg-card/80 p-3 shadow-sm">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
             <div className="space-y-1">
               <Label>{t("paymentStatus")}</Label>
@@ -981,7 +981,7 @@ const ProductMovementsPage = () => {
       />
 
       {movementQuery.error ? (
-        <div className="mb-4 rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+        <div className="mb-4 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
           {translateError(tErrors, movementQuery.error)}
         </div>
       ) : null}
@@ -1005,7 +1005,7 @@ const ProductMovementsPage = () => {
             paginationKey="product-movements"
             scrollToTopOnPageChange
             empty={
-              <div className="flex min-h-[12rem] flex-col items-center justify-center rounded-xl border border-dashed border-border/70 bg-muted/30 p-6 text-center text-sm text-muted-foreground">
+              <div className="flex min-h-[12rem] flex-col items-center justify-center rounded-lg border border-dashed border-border/70 bg-muted/30 p-6 text-center text-sm text-muted-foreground">
                 <EmptyIcon className="mb-3 h-8 w-8" aria-hidden />
                 {movementQuery.isLoading ? tCommon("loading") : t("empty")}
               </div>
@@ -1032,7 +1032,7 @@ const ProductMovementsPage = () => {
               />
             )}
             renderMobile={(movement) => (
-              <div className="rounded-xl border border-border/65 bg-card p-3 shadow-sm">
+              <div className="rounded-lg border border-border/65 bg-card p-3 shadow-sm">
                 <div className="flex items-start justify-between gap-3">
                   {renderDocument(movement)}
                   <Badge variant={statusVariant(movement.status)}>

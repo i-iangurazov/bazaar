@@ -108,7 +108,7 @@ export default function LoyaltySettingsPage() {
         <Skeleton className="h-96" />
       ) : (
         <>
-          <section className="space-y-4 rounded-xl border border-border bg-card p-4 sm:p-5">
+          <section className="space-y-4 rounded-lg border border-border bg-card p-4 sm:p-5">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h2 className="font-semibold">{t("enableTitle")}</h2>
@@ -126,7 +126,7 @@ export default function LoyaltySettingsPage() {
             )}
           </section>
 
-          <section className="grid gap-4 rounded-xl border border-border bg-card p-4 sm:grid-cols-2 sm:p-5">
+          <section className="grid gap-4 rounded-lg border border-border bg-card p-4 sm:grid-cols-2 sm:p-5">
             {(
               [
                 ["memberDiscountPercent", t("memberDiscount")],
@@ -163,7 +163,7 @@ export default function LoyaltySettingsPage() {
             </label>
           </section>
 
-          <section className="space-y-3 rounded-xl border border-border bg-card p-4 sm:p-5">
+          <section className="space-y-3 rounded-lg border border-border bg-card p-4 sm:p-5">
             <h2 className="font-semibold">{t("storesTitle")}</h2>
             <div className="grid gap-2 sm:grid-cols-2">
               {(stores.data ?? []).map((store) => (
@@ -185,7 +185,7 @@ export default function LoyaltySettingsPage() {
             </div>
           </section>
 
-          <section className="space-y-4 rounded-xl border border-border bg-card p-4 sm:p-5">
+          <section className="space-y-4 rounded-lg border border-border bg-card p-4 sm:p-5">
             <div>
               <h2 className="font-semibold">{t("qrRegistrationTitle")}</h2>
               <p className="mt-1 text-xs text-muted-foreground">{t("qrRegistrationNote")}</p>

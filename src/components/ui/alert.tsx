@@ -3,14 +3,14 @@ import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "@/lib/utils";
 
-export const alertVariants = cva("rounded-md border px-4 py-3 text-sm", {
+export const alertVariants = cva("rounded-md border border-transparent px-3 py-2.5 text-sm", {
   variants: {
     variant: {
       default: "border-border bg-card text-card-foreground",
-      info: "border-primary/25 bg-primary/10 text-foreground",
-      success: "border-success/30 bg-success/10 text-foreground",
-      warning: "border-warning/35 bg-warning/10 text-foreground",
-      destructive: "border-danger/30 bg-danger/10 text-danger",
+      info: "bg-info/10 text-foreground",
+      success: "bg-success/10 text-foreground",
+      warning: "bg-warning/10 text-foreground",
+      destructive: "bg-danger/10 text-danger",
     },
   },
   defaultVariants: {

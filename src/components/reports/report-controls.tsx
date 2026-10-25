@@ -186,7 +186,7 @@ export function ReportPeriodControls({
   return (
     <section
       aria-label={t("filters")}
-      className="space-y-3 rounded-xl border border-border bg-card p-4"
+      className="space-y-3 rounded-lg border border-border bg-card p-4"
     >
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 [&>label:first-child]:col-span-2 [&>label:last-child]:col-span-2 sm:[&>label]:col-span-1">
         <ReportSelect

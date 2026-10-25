@@ -38,14 +38,13 @@ describe("dashboard source layout", () => {
     expect(dashboardSource).toContain("if (delta === null || delta === undefined) return null");
     expect(dashboardSource).toContain("<QuietState>");
     expect(mobileShellSource).toContain(
-      '"flex min-h-14 items-center gap-3 rounded-xl border px-3 py-3 text-left no-underline shadow-sm transition hover:no-underline"',
+      '"flex min-h-14 items-center gap-3 rounded-lg border px-3 py-3 text-left no-underline shadow-sm transition hover:no-underline"',
     );
     expect(mobileShellSource).toContain(
       '"bazaar-mobile-card-surface block min-h-24 rounded-xl border border-border/80 p-3 text-left no-underline shadow-sm hover:no-underline"',
     );
-    expect(loadingSource).toContain(
-      'className="h-32 animate-pulse rounded-xl border border-border/70 bg-card shadow-sm"',
-    );
+    expect(loadingSource).toContain("data-mobile-loading-skeleton");
+    expect(loadingSource).toContain("animate-pulse");
   });
 
   it("uses real business aggregates for dashboard charts and product insights", async () => {

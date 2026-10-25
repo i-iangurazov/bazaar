@@ -10,7 +10,7 @@ export default function BaamPage() {
   const locale = useLocale();
   return <div className="mx-auto min-w-0 max-w-4xl space-y-5" data-testid="baam-page" data-baam-workspace tabIndex={-1}>
     <PageHeader title={t("title")} subtitle={baamCopy(locale, "subtitle")} />
-    <div className="overflow-hidden rounded-2xl border border-border/80 bg-card shadow-sm">
+    <div className="overflow-hidden rounded-lg border border-border/80 bg-card shadow-sm">
       <BaamAssistant />
     </div>
   </div>;

@@ -775,6 +775,7 @@
     "platform": "Платформа",
     "platformOwner": "Владелец платформы",
     "brand": "BAZAAR",
+    "modules": "Разделы",
     "groups": {
       "core": "Основное",
       "operations": "Операции",

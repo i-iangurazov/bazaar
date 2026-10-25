@@ -22,7 +22,7 @@ const LoyaltyCardPage = async () => {
       {view ? (
         <LoyaltyCard view={view} />
       ) : (
-        <div className="rounded-xl border border-border bg-card p-5 text-sm text-muted-foreground">
+        <div className="rounded-lg border border-border bg-card p-5 text-sm text-muted-foreground">
           {t("noSession")}
         </div>
       )}

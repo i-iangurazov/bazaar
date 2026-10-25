@@ -54,7 +54,7 @@ export const ProductEditorSaveBar = ({
 }) => (
   <div
     data-baam-obstacle
-    className="fixed inset-x-3 bottom-[calc(var(--mobile-bottom-nav-height)+0.75rem)] z-30 rounded-xl border border-border bg-card p-2 text-card-foreground shadow-md sm:sticky sm:inset-x-auto sm:bottom-auto sm:top-3 sm:z-10 sm:mb-4 sm:p-2"
+    className="fixed inset-x-3 bottom-[calc(var(--mobile-bottom-nav-height)+0.75rem)] z-30 rounded-lg border border-border bg-card p-2 text-card-foreground shadow-md sm:sticky sm:inset-x-auto sm:bottom-auto sm:top-3 sm:z-10 sm:mb-4 sm:p-2"
   >
     <div className="mx-auto flex min-h-10 w-full max-w-[1120px] items-center justify-between gap-3 sm:min-h-9 sm:max-w-none">
       <div className="min-w-0 truncate px-2 text-sm font-semibold text-foreground">{label}</div>
@@ -89,7 +89,7 @@ export const ProductEditorCard = ({
 }) => (
   <section
     className={cn(
-      "min-w-0 rounded-xl border border-border bg-card shadow-sm dark:shadow-none",
+      "min-w-0 rounded-lg border border-border bg-card shadow-sm dark:shadow-none",
       className,
     )}
   >

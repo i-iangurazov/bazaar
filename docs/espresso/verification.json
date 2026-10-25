@@ -1,0 +1,54 @@
+{
+  "status": "foundation-verified-full-redesign-in-progress",
+  "branch": "codex/playground",
+  "reference": "Frappe Framework Espresso e8d41dd0061a32ee781caefe5d0b0d2bb7c15362",
+  "checks": [
+    {
+      "command": "pnpm exec tsc --noEmit --incremental",
+      "result": "passed",
+      "log": "artifacts/ux/espresso/typecheck.log"
+    },
+    {
+      "command": "pnpm lint",
+      "result": "passed without warnings",
+      "log": "artifacts/ux/espresso/lint.log"
+    },
+    {
+      "command": "pnpm i18n:check",
+      "result": "passed",
+      "log": "artifacts/ux/espresso/i18n.log"
+    },
+    {
+      "command": "pnpm exec vitest run tests/unit",
+      "result": "253 files, 1851 tests passed",
+      "log": "artifacts/ux/espresso/unit-green.log"
+    },
+    {
+      "command": "UX_SUITE=espresso NODE_OPTIONS=--max-old-space-size=6144 node --import tsx scripts/ux/build.ts",
+      "result": "passed, including application type/lint checks and static page generation",
+      "log": "artifacts/ux/espresso/production-build.log"
+    },
+    {
+      "command": "Browser verification through CUA against localhost:3122",
+      "result": "representative light desktop/mobile states, real product create/search, production login, dock, nested select and focus verified",
+      "screenshots": "artifacts/ux/espresso/screenshots/"
+    }
+  ],
+  "environment": {
+    "database": "bazaar_espresso_ui",
+    "postgresPort": 55440,
+    "redisDatabase": 4,
+    "redisPrefix": "espresso-ui-test",
+    "externalProviders": "disabled",
+    "startCommand": "UX_SUITE=espresso node --import tsx scripts/espresso/start.ts"
+  },
+  "limits": [
+    "Review and adapt all remaining route families and page-specific controls",
+    "Current ERPNext reference comparison for analogous full screen layouts",
+    "Dark theme and RU/KG/EN visual matrix",
+    "Admin/manager/staff/cashier and store/plan gates in the rendered UI",
+    "Modal, dropdown, focus, keyboard, loading, empty, retry and recovery flows across page families",
+    "Broader database integration regression and final production smoke on the isolated app"
+  ],
+  "delivery": "Local review checkpoint only; not a full redesign completion; no main merge, main push or deployment"
+}

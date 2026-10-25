@@ -92,14 +92,14 @@ export function LoyaltyCard({ view: initialView }: { view: CardView }) {
 
   return (
     <div className="space-y-5">
-      {requests.map((request) => <section key={request.id} className="space-y-3 rounded-xl border border-primary bg-card p-4">
+      {requests.map((request) => <section key={request.id} className="space-y-3 rounded-lg border border-primary bg-card p-4">
         <h2 className="font-semibold">{t("consentTitle")}</h2>
         <p className="text-sm">{request.store} · {request.number}</p>
         <p>{t("consentAmounts", {points: request.points, amount: formatKgsMoney(request.payableKgs, locale, baseAccountingCurrency)})}</p>
         <Button disabled={consentBusy || request.approved} onClick={() => void approve(request.id)}>{t(request.approved ? "consentApproved" : "consentApprove")}</Button>
       </section>)}
       {consentError ? <p role="alert" className="text-sm text-danger">{t("consentFailed")}</p> : null}
-      <div className="rounded-xl border border-border bg-card p-5 text-center">
+      <div className="rounded-lg border border-border bg-card p-5 text-center">
         <p className="text-sm text-muted-foreground">{view.store?.name ?? t("programme")}</p>
         <p className="mt-2 text-4xl font-semibold tabular-nums">{view.availablePoints}</p>
         <p className="text-sm text-muted-foreground">{t("availablePoints")}</p>
@@ -140,13 +140,13 @@ export function LoyaltyCard({ view: initialView }: { view: CardView }) {
       </dl>
 
       {view.rulesText && (
-        <details className="rounded-xl border border-border bg-card p-4 text-sm">
+        <details className="rounded-lg border border-border bg-card p-4 text-sm">
           <summary className="cursor-pointer font-medium">{t("rules")}</summary>
           <p className="mt-2 text-muted-foreground">{view.rulesText}</p>
         </details>
       )}
 
-      <section className="rounded-xl border border-border bg-card">
+      <section className="rounded-lg border border-border bg-card">
         <h2 className="border-b border-border p-4 font-semibold">{t("history")}</h2>
         {view.history.length ? (
           <ul className="divide-y divide-border">

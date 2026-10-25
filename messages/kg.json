@@ -775,6 +775,7 @@
     "platform": "Платформа",
     "platformOwner": "Платформа ээси",
     "brand": "BAZAAR",
+    "modules": "Бөлүмдөр",
     "groups": {
       "core": "Негизги",
       "operations": "Операциялар",

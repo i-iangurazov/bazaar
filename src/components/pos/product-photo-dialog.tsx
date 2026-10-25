@@ -57,7 +57,7 @@ const Photo = ({ url, name }: PosProductPhoto) => {
   const [attempt, setAttempt] = useState(0);
   return (
     <div
-      className={`relative grid place-items-center ${status !== "ready" ? "min-h-44 min-w-64 rounded-2xl bg-card text-card-foreground" : ""}`}
+      className={`relative grid place-items-center ${status !== "ready" ? "min-h-44 min-w-64 rounded-lg bg-card text-card-foreground" : ""}`}
     >
       {status === "error" ? (
         <div
@@ -97,7 +97,7 @@ const Photo = ({ url, name }: PosProductPhoto) => {
             draggable={false}
             onLoad={() => setStatus("ready")}
             onError={() => setStatus("error")}
-            className="block h-auto max-h-[min(80dvh,52rem)] w-auto max-w-[min(calc(100vw-3rem),80rem)] select-none rounded-2xl object-contain shadow-[0_24px_80px_rgba(0,0,0,0.22)] sm:max-w-[min(86vw,80rem)]"
+            className="block h-auto max-h-[min(80dvh,52rem)] w-auto max-w-[min(calc(100vw-3rem),80rem)] select-none rounded-lg object-contain shadow-[0_24px_80px_rgba(0,0,0,0.22)] sm:max-w-[min(86vw,80rem)]"
           />
         </>
       )}
@@ -140,7 +140,7 @@ export const PosProductPhotoDialog = ({
             if (target?.isConnected) target.focus({ preventScroll: true });
           });
         }}
-        className="max-h-none w-max max-w-[calc(100vw-3rem)] cursor-zoom-out overflow-visible rounded-2xl border-0 bg-transparent p-0 shadow-none sm:max-h-none sm:max-w-[min(86vw,80rem)]"
+        className="max-h-none w-max max-w-[calc(100vw-3rem)] cursor-zoom-out overflow-visible rounded-lg border-0 bg-transparent p-0 shadow-none sm:max-h-none sm:max-w-[min(86vw,80rem)]"
       >
         <DialogTitle className="sr-only">{photo?.name}</DialogTitle>
         {photo ? <Photo key={photo.url} {...photo} /> : null}

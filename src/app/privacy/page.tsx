@@ -16,7 +16,7 @@ const sections = ["data", "purpose", "permissions", "security", "sharing", "cont
 const PrivacyPage = async () => {
   const t = await getTranslations("privacy");
   return (
-    <main className="min-h-screen bg-slate-950 px-5 py-12 text-slate-100 sm:px-8 sm:py-16">
+    <main className="min-h-screen bg-card px-5 py-12 text-slate-100 sm:px-8 sm:py-16">
       <article className="mx-auto max-w-3xl">
         <Link
           href="/"
@@ -29,7 +29,7 @@ const PrivacyPage = async () => {
         </p>
         <h1 className="mt-3 text-4xl font-bold tracking-tight sm:text-5xl">{t("title")}</h1>
         <p className="mt-5 max-w-2xl text-lg leading-8 text-slate-300">{t("intro")}</p>
-        <p className="mt-3 text-sm text-slate-500">{t("updated")}</p>
+        <p className="mt-3 text-sm text-muted-foreground">{t("updated")}</p>
 
         <div className="mt-12 space-y-9">
           {sections.map((section) => (
@@ -40,12 +40,12 @@ const PrivacyPage = async () => {
           ))}
         </div>
 
-        <section className="mt-12 rounded-2xl border border-sky-400/20 bg-sky-400/5 p-6">
+        <section className="mt-12 rounded-lg border border-sky-400/20 bg-sky-400/5 p-6">
           <h2 className="text-xl font-semibold">{t("supportTitle")}</h2>
           <p className="mt-2 leading-7 text-slate-300">{t("supportBody")}</p>
           <Link
             href="/help"
-            className="mt-4 inline-flex min-h-11 items-center rounded-xl bg-sky-500 px-5 font-semibold text-white outline-none hover:bg-sky-400 focus-visible:ring-2 focus-visible:ring-sky-300"
+            className="mt-4 inline-flex min-h-11 items-center rounded-lg bg-sky-500 px-5 font-semibold text-white outline-none hover:bg-sky-400 focus-visible:ring-2 focus-visible:ring-sky-300"
           >
             {t("supportAction")}
           </Link>

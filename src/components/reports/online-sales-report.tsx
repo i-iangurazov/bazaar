@@ -198,7 +198,7 @@ export function OnlineSalesReport({ scope }: { scope: ReportScope }) {
 
       {data && (
         <>
-          <section className="space-y-4 rounded-xl border border-border bg-card p-4 sm:p-5">
+          <section className="space-y-4 rounded-lg border border-border bg-card p-4 sm:p-5">
             <div>
               <h2 className="font-semibold">{t("created.title")}</h2>
               <p className="mt-1 text-xs text-muted-foreground">{t("created.note")}</p>
@@ -257,7 +257,7 @@ export function OnlineSalesReport({ scope }: { scope: ReportScope }) {
             )}
           </section>
 
-          <section className="space-y-4 rounded-xl border border-border bg-card p-4 sm:p-5">
+          <section className="space-y-4 rounded-lg border border-border bg-card p-4 sm:p-5">
             <div>
               <h2 className="font-semibold">{t("sales.title")}</h2>
               <p className="mt-1 text-xs text-muted-foreground">{t("sales.note")}</p>
@@ -318,7 +318,7 @@ export function OnlineSalesReport({ scope }: { scope: ReportScope }) {
             </dl>
           </section>
 
-          <section className="min-w-0 rounded-xl border border-border bg-card p-4 sm:p-5">
+          <section className="min-w-0 rounded-lg border border-border bg-card p-4 sm:p-5">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="font-semibold">{t("chart.title")}</h2>
@@ -359,7 +359,7 @@ export function OnlineSalesReport({ scope }: { scope: ReportScope }) {
           </section>
 
           {loyalty.data ? (
-            <section className="space-y-3 rounded-xl border border-border bg-card p-4 sm:p-5">
+            <section className="space-y-3 rounded-lg border border-border bg-card p-4 sm:p-5">
               <div>
                 <h2 className="font-semibold">{t("loyaltyTitle")}</h2>
                 <p className="mt-1 text-xs text-muted-foreground">{t("loyaltyNote")}</p>
@@ -383,7 +383,7 @@ export function OnlineSalesReport({ scope }: { scope: ReportScope }) {
             </section>
           ) : null}
 
-          <section className="min-w-0 overflow-hidden rounded-xl border border-border bg-card">
+          <section className="min-w-0 overflow-hidden rounded-lg border border-border bg-card">
             <div className="space-y-4 border-b border-border p-4 sm:p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -491,7 +491,7 @@ export function OnlineSalesReport({ scope }: { scope: ReportScope }) {
             />
           </section>
 
-          <details className="rounded-xl border border-border bg-card p-4 text-sm">
+          <details className="rounded-lg border border-border bg-card p-4 text-sm">
             <summary className="cursor-pointer font-medium">{r("methodology")}</summary>
             <div className="mt-3 max-w-4xl space-y-2 leading-6 text-muted-foreground">
               <p>{t("method")}</p>

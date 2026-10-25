@@ -834,7 +834,7 @@ const StoresPage = () => {
         onOpenChange={setStoreDialogOpen}
         title={editingStore ? t("editStore") : t("addStore")}
         subtitle={editingStore?.code ?? t("storeFormHint")}
-        className="rounded-xl"
+        className="rounded-lg"
         bodyClassName="p-4 sm:p-6"
       >
         <Form {...storeForm}>

@@ -33,7 +33,7 @@ export function CustomerReportFilter(props: {
     { enabled: props.enabled && open, keepPreviousData: false },
   );
   return (
-    <div className="space-y-3 rounded-xl border border-border bg-card p-4">
+    <div className="space-y-3 rounded-lg border border-border bg-card p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-medium">
           {props.customerId ? (props.customerName ?? t("selected")) : t("allCustomers")}

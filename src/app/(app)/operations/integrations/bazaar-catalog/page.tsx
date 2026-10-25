@@ -908,7 +908,7 @@ const BazaarCatalogSettingsPage = () => {
                 </div>
               </div>
 
-              <div className="overflow-hidden rounded-xl border border-border/70 bg-muted/20">
+              <div className="overflow-hidden rounded-lg border border-border/70 bg-muted/20">
                 <button
                   type="button"
                   className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold"
@@ -997,7 +997,7 @@ const BazaarCatalogSettingsPage = () => {
               >
                 <p className="mb-3 text-sm text-muted-foreground">{t("previewTitle")}</p>
                 <div
-                  className="rounded-xl border border-border/70 bg-background p-3"
+                  className="rounded-lg border border-border/70 bg-background p-3"
                   style={previewFontStyle(formState.fontFamily)}
                 >
                   <div

@@ -147,13 +147,13 @@ const ProductMovementDocumentPage = () => {
       />
 
       {documentQuery.error ? (
-        <div className="mb-4 rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+        <div className="mb-4 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
           {translateError(tErrors, documentQuery.error)}
         </div>
       ) : null}
 
       {sourceDocumentMissing ? (
-        <div className="mb-4 rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-foreground">
+        <div className="mb-4 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-foreground">
           {t("sourceDocumentNotFound")}
         </div>
       ) : null}
@@ -163,7 +163,7 @@ const ProductMovementDocumentPage = () => {
           <CardContent className="space-y-4 p-6" data-movement-detail-skeleton>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               {Array.from({ length: 8 }).map((_, index) => (
-                <div key={index} className="rounded-xl border border-border/65 bg-muted/25 p-3">
+                <div key={index} className="rounded-lg border border-border/65 bg-muted/25 p-3">
                   <Skeleton className="mb-2 h-3 w-20" />
                   <Skeleton className="h-4 w-32" />
                 </div>
@@ -171,7 +171,7 @@ const ProductMovementDocumentPage = () => {
             </div>
             <div className="space-y-2">
               {Array.from({ length: 5 }).map((_, index) => (
-                <Skeleton key={index} className="h-12 rounded-xl" />
+                <Skeleton key={index} className="h-12 rounded-lg" />
               ))}
             </div>
           </CardContent>
@@ -338,7 +338,7 @@ const ProductMovementDocumentPage = () => {
                   </div>
                 )}
                 renderMobile={(line) => (
-                  <div className="rounded-xl border border-border/65 bg-card/95 p-3 shadow-sm">
+                  <div className="rounded-lg border border-border/65 bg-card/95 p-3 shadow-sm">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <Link

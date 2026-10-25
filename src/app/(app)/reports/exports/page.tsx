@@ -276,7 +276,7 @@ const ExportsPage = () => {
       <div className="grid gap-3 md:grid-cols-4">
         <Card variant="subtle">
           <CardContent className="flex items-center gap-3">
-            <span className="rounded-xl bg-primary/10 p-2 text-primary">
+            <span className="rounded-lg bg-primary/10 p-2 text-primary">
               <ReportsIcon className="h-5 w-5" aria-hidden />
             </span>
             <div>
@@ -454,7 +454,7 @@ const ExportsPage = () => {
                       type="button"
                       onClick={() => selectExportType(type)}
                       className={cn(
-                        "rounded-xl border bg-card p-4 text-left transition hover:border-primary/40 hover:bg-primary/5",
+                        "rounded-lg border bg-card p-4 text-left transition hover:border-primary/40 hover:bg-primary/5",
                         "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-2",
                         isSelected
                           ? "border-primary/60 bg-primary/10 shadow-sm"
@@ -517,7 +517,7 @@ const ExportsPage = () => {
           {jobsQuery.isLoading ? (
             <div className="space-y-2">
               {Array.from({ length: 5 }).map((_, index) => (
-                <Skeleton key={index} className="h-14 w-full rounded-xl" />
+                <Skeleton key={index} className="h-14 w-full rounded-lg" />
               ))}
             </div>
           ) : jobsQuery.error ? (
@@ -538,7 +538,7 @@ const ExportsPage = () => {
                 />
               }
               renderDesktop={(visibleItems) => (
-                <div className="overflow-x-auto rounded-xl border border-border/70">
+                <div className="overflow-x-auto rounded-lg border border-border/70">
                   <Table className="min-w-[860px]" data-tour="exports-jobs">
                     <TableHeader>
                       <TableRow>
@@ -684,7 +684,7 @@ const ExportsPage = () => {
                 ];
 
                 return (
-                  <div className="rounded-xl border border-border/70 bg-card p-4 shadow-sm">
+                  <div className="rounded-lg border border-border/70 bg-card p-4 shadow-sm">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold text-foreground">
