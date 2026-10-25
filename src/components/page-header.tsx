@@ -27,7 +27,6 @@ export const PageHeader = ({
   filters,
   actionClassName,
   filtersClassName,
-  className,
 }: {
   title: string;
   subtitle?: string;
@@ -35,9 +34,8 @@ export const PageHeader = ({
   filters?: ReactNode;
   actionClassName?: string;
   filtersClassName?: string;
-  className?: string;
 }) => (
-  <header data-page-header className={cn("mb-5 min-w-0 space-y-4", className)}>
+  <header data-page-header className="mb-5 min-w-0 space-y-4">
     <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-3">
       <div className="min-w-0 flex-1 basis-56">
         <PageBreadcrumbs />

@@ -9,6 +9,9 @@
 
 ## Quality of every delivery
 
+- The human confirmed on 2026-10-26 that the two-column operational layouts were requested by customers. Preserve the established column order, proportions, always-visible product selection, action placement and responsive behavior in receiving, transfers, write-offs and stock counts. The reference before the unrequested rearrangement is `c276f30`; stock counts retain their existing lines/summary columns. Espresso styling does not authorize replacing these workflows with a single-column document or collapsed product picker.
+- Distinguish a demonstrated defect from a design preference. Do not call an established layout a defect because it differs from ERPNext. Preserve customer workflows during the redesign; change them only on an explicit human request.
+
 - Treat this branch with the same care as production. A playground branch is a place to accumulate finished improvements, not permission for unfinished behavior or lower quality.
 - Understand the complete affected user flow, domain rules, authorization, data model and integrations before changing them. Preserve existing capabilities, records and previously granted access unless the requested change explicitly requires otherwise.
 - Finish the requested behavior, including loading, empty, error, retry and recovery states where relevant. Do not represent a stub, simulated payment, untested provider or partial flow as complete.

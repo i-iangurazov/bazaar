@@ -1,5 +1,5 @@
 {
-  "status": "product-and-stock-documents-local-checkpoint-full-redesign-in-progress",
+  "status": "customer-operational-layouts-restored-full-redesign-in-progress",
   "branch": "codex/playground",
   "reference": "Frappe Framework Espresso e8d41dd0061a32ee781caefe5d0b0d2bb7c15362",
   "checks": [
@@ -69,6 +69,26 @@
       "command": "CUA normal UI stock document and saved view checks",
       "result": "Receiving, transfer and write-off posted successfully, DB ledger readback agrees; draft round trip, validation, responsive fields, header widths, KG/EN, duplicate-setting view identity and single-brand states checked",
       "evidence": "docs/espresso/inventory-verification.json"
+    },
+    {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
+      "result": "254 files, 1856 tests passed after restoration",
+      "log": "artifacts/ux/espresso/restore-layout-unit.log"
+    },
+    {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts",
+      "result": "3 files, 87 DB tests passed after restoration",
+      "log": "artifacts/ux/espresso/restore-layout-db.log"
+    },
+    {
+      "command": "UX_SUITE=espresso CIRCLE_NODE_TOTAL=3 NODE_OPTIONS=--max-old-space-size=6144 node --import tsx scripts/ux/build.ts",
+      "result": "passed after restoration, including type/lint checks",
+      "log": "artifacts/ux/espresso/build-restore-operational-layout.log"
+    },
+    {
+      "command": "CUA geometry and selection checks",
+      "result": "Original simultaneous two-column layouts confirmed for all four operational screens; receiving, transfer and write-off selection works; mobile receiving 390px without page overflow",
+      "evidence": "docs/espresso/redesign-change-audit.json"
     }
   ],
   "environment": {
@@ -91,5 +111,7 @@
   "infrastructureNotes": [
     "Do not run the prebuild Prisma client generator concurrently with tests or a running server that loads the same generated library. One overlapping run passed its test assertions but failed with an unhandled partial-library load; the sequential rerun completed 254 files / 1854 tests without that error.",
     "The browser fixture database was not reset; destructive integration checks used a separately created allowlisted local database, with external providers disabled."
-  ]
+  ],
+  "correction": "Warehouse column and interaction rearrangements from 5a1e7ac were rejected by the human and restored. Historical checks do not validate customer workflow suitability.",
+  "currentAudit": "docs/espresso/redesign-change-audit.json"
 }

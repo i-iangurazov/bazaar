@@ -8,7 +8,6 @@ import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 
-import { DocumentProductPicker } from "@/components/inventory/document-product-picker";
 import { PageHeader } from "@/components/page-header";
 import { PageLoading } from "@/components/page-loading";
 import { Badge } from "@/components/ui/badge";
@@ -927,41 +926,27 @@ export const InventoryReceivingPage = ({
   }
 
   return (
-    <div className="overflow-x-clip pb-[15rem] md:pb-0">
+    <div className="overflow-x-hidden pb-[15rem] md:pb-0">
       <PageHeader
         title={pageTitle}
         subtitle={pageSubtitle}
         action={
-          <>
-            <Button asChild variant="secondary">
-              <Link href={backHref} onClick={clearReceivingDraft}>
-                <BackIcon className="h-4 w-4" aria-hidden />
-                {isEditMode ? t("backToMovements") : tCommon("back")}
-              </Link>
-            </Button>
-            <Button
-              type="button"
-              data-baam-obstacle="action"
-              onClick={handlePost}
-              disabled={saving || Boolean(validationMessage)}
-            >
-              {saving ? (
-                <Spinner className="h-4 w-4" />
-              ) : (
-                <ReceiveIcon className="h-4 w-4" aria-hidden />
-              )}
-              {saving ? tCommon("saving") : submitLabel}
-            </Button>
-          </>
+          <Button asChild variant="secondary">
+            <Link href={backHref} onClick={clearReceivingDraft}>
+              <BackIcon className="h-4 w-4" aria-hidden />
+              {isEditMode ? t("backToMovements") : tCommon("back")}
+            </Link>
+          </Button>
         }
         actionClassName="hidden md:flex"
-        className="bg-background md:sticky md:top-14 md:z-30 md:py-3 [&_p]:text-xs"
       />
 
-      <div data-inventory-document>
+      <div className="space-y-6">
         <section className="bazaar-doc-surface p-4">
           <div className="mb-4 flex items-center justify-between gap-3">
-            <h3 className="text-sm font-medium text-foreground">{t("receivingDetailsTitle")}</h3>
+            <h3 className="text-base font-semibold text-foreground">
+              {t("receivingDetailsTitle")}
+            </h3>
             <Button asChild variant="ghost" size="sm" className="md:hidden">
               <Link href={backHref} onClick={clearReceivingDraft}>
                 <BackIcon className="h-4 w-4" aria-hidden />
@@ -1060,11 +1045,12 @@ export const InventoryReceivingPage = ({
           </div>
         </section>
 
-        <div className="contents">
-          <DocumentProductPicker
-            title={t("receivingSearchTitle")}
-            initiallyOpen={Boolean(returningDraftKey)}
-            action={
+        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+          <section className="bazaar-doc-surface p-4">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <h3 className="text-base font-semibold text-foreground">
+                {t("receivingSearchTitle")}
+              </h3>
               <Button
                 type="button"
                 variant="secondary"
@@ -1075,8 +1061,7 @@ export const InventoryReceivingPage = ({
                 <AddIcon className="h-4 w-4" aria-hidden />
                 {t("receivingCreateProduct")}
               </Button>
-            }
-          >
+            </div>
             <div className="relative">
               <SearchInput
                 ref={searchInputRef}
@@ -1194,19 +1179,21 @@ export const InventoryReceivingPage = ({
                 </div>
               )}
             </div>
-          </DocumentProductPicker>
+          </section>
 
           <section className="bazaar-doc-surface p-4">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <h3 className="text-sm font-medium text-foreground">{t("receivingTableTitle")}</h3>
+              <h3 className="text-base font-semibold text-foreground">
+                {t("receivingTableTitle")}
+              </h3>
               <Badge variant={validationMessage ? "warning" : "success"}>
                 {validationMessage || t("receivingValidationReady")}
               </Badge>
             </div>
 
             {lines.length ? (
-              <div className="overflow-hidden rounded-md border border-border">
-                <div className="hidden border-b border-border bg-muted/50 px-3 py-2 text-xs font-medium text-muted-foreground xl:grid xl:grid-cols-[minmax(0,1fr)_5.75rem_8.5rem_7rem_7rem_2.5rem] xl:gap-2 [&>span]:min-w-0 [&>span]:break-words">
+              <div className="space-y-3">
+                <div className="hidden px-3 text-[11px] font-medium text-muted-foreground md:grid md:grid-cols-[minmax(0,1fr)_5rem_5.5rem_5.25rem_4.5rem_2rem] md:gap-2">
                   <span>{tCommon("product")}</span>
                   <span>{t("receiveQty")}</span>
                   <span>{t("unitCost")}</span>
@@ -1221,9 +1208,9 @@ export const InventoryReceivingPage = ({
                     <div
                       key={line.key}
                       data-receiving-line-row
-                      className="bazaar-doc-line-row grid grid-cols-2 gap-3 xl:grid-cols-[minmax(0,1fr)_5.75rem_8.5rem_7rem_7rem_2.5rem] xl:items-center xl:gap-2"
+                      className="bazaar-doc-line-row grid gap-3 md:grid-cols-[minmax(0,1fr)_5rem_5.5rem_5.25rem_4.5rem_2rem] md:items-center md:gap-2"
                     >
-                      <div className="col-span-2 flex min-w-0 items-center gap-2.5 xl:col-span-1">
+                      <div className="flex min-w-0 items-center gap-2.5">
                         <span className="bazaar-doc-line-index">{lineNumber}</span>
                         <span className="bazaar-doc-line-thumb">
                           {line.imageUrl ? (
@@ -1238,7 +1225,7 @@ export const InventoryReceivingPage = ({
                           )}
                         </span>
                         <div className="min-w-0 flex-1">
-                          <p className="whitespace-normal break-words text-sm font-medium leading-snug text-foreground">
+                          <p className="whitespace-normal break-words text-sm font-semibold leading-snug text-foreground">
                             {line.variantName
                               ? `${line.productName} • ${line.variantName}`
                               : line.productName}
@@ -1248,7 +1235,7 @@ export const InventoryReceivingPage = ({
                               .filter(Boolean)
                               .join(" • ") || tCommon("notAvailable")}
                           </p>
-                          <p className="text-xs text-muted-foreground xl:hidden">
+                          <p className="text-xs text-muted-foreground md:hidden">
                             {t("onHand")}: {formatNumber(line.currentStock, locale)}
                           </p>
                           {line.duplicateHint ? (
@@ -1263,17 +1250,11 @@ export const InventoryReceivingPage = ({
                           ) : null}
                         </div>
                       </div>
-                      <div className="space-y-1 xl:space-y-0">
-                        <Label
-                          htmlFor={`receiving-quantity-${line.key}`}
-                          className="block text-xs leading-4 xl:hidden"
-                        >
+                      <div className="space-y-1 md:space-y-0">
+                        <Label className="block text-[11px] leading-4 md:hidden">
                           {t("receiveQty")}
                         </Label>
                         <Input
-                          id={`receiving-quantity-${line.key}`}
-                          aria-label={`${t("receiveQty")} · ${line.productName}`}
-                          aria-invalid={!metric?.quantityValid}
                           ref={(node) => {
                             setReceivingInputRef(line.key, "quantity", "desktop", node);
                           }}
@@ -1296,23 +1277,14 @@ export const InventoryReceivingPage = ({
                           min={1}
                           step={0.001}
                           data-receiving-input="quantity"
-                          className={cn(
-                            "h-10 px-2 xl:h-8",
-                            !metric?.quantityValid && "border-danger/60",
-                          )}
+                          className={cn("h-8 px-2", !metric?.quantityValid && "border-danger/60")}
                         />
                       </div>
-                      <div className="space-y-1 xl:space-y-0">
-                        <Label
-                          htmlFor={`receiving-cost-${line.key}`}
-                          className="block text-xs leading-4 xl:hidden"
-                        >
+                      <div className="space-y-1 md:space-y-0">
+                        <Label className="block text-[11px] leading-4 md:hidden">
                           {t("unitCost")}
                         </Label>
                         <Input
-                          id={`receiving-cost-${line.key}`}
-                          aria-label={`${t("unitCost")} · ${line.productName}`}
-                          aria-invalid={!metric?.unitCostValid}
                           ref={(node) => {
                             setReceivingInputRef(line.key, "unitCost", "desktop", node);
                           }}
@@ -1335,14 +1307,11 @@ export const InventoryReceivingPage = ({
                           min={0}
                           step="0.01"
                           data-receiving-input="unitCost"
-                          className={cn(
-                            "h-10 px-2 xl:h-8",
-                            !metric?.unitCostValid && "border-danger/60",
-                          )}
+                          className={cn("h-8 px-2", !metric?.unitCostValid && "border-danger/60")}
                         />
                       </div>
                       <div>
-                        <p className="text-xs leading-4 text-muted-foreground xl:hidden">
+                        <p className="text-[11px] leading-4 text-muted-foreground md:hidden">
                           {t("receivingLineTotal")}
                         </p>
                         <p className="flex h-8 items-center text-sm font-semibold text-foreground">
@@ -1350,7 +1319,7 @@ export const InventoryReceivingPage = ({
                         </p>
                       </div>
                       <div>
-                        <p className="text-xs leading-4 text-muted-foreground xl:hidden">
+                        <p className="text-[11px] leading-4 text-muted-foreground md:hidden">
                           {t("receivingNewStock")}
                         </p>
                         <p className="flex h-8 items-center text-sm font-semibold text-foreground">
@@ -1361,7 +1330,7 @@ export const InventoryReceivingPage = ({
                         type="button"
                         variant="ghost"
                         size="icon"
-                        className="self-start xl:h-8 xl:w-8 xl:self-center xl:justify-self-end"
+                        className="self-start md:h-8 md:w-8 md:self-center md:justify-self-end"
                         aria-label={t("receivingRemoveLine")}
                         onClick={() => removeLine(line.key)}
                       >
@@ -1383,7 +1352,29 @@ export const InventoryReceivingPage = ({
         <section className="hidden md:block">
           <div className="bazaar-doc-summary">
             <div className="flex flex-wrap items-center justify-between gap-4">
-              <h3 className="text-sm font-medium text-foreground">{t("receivingSummaryTitle")}</h3>
+              <h3 className="text-base font-semibold text-foreground">
+                {t("receivingSummaryTitle")}
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                <Button asChild variant="secondary">
+                  <Link href={backHref} onClick={clearReceivingDraft}>
+                    {tCommon("cancel")}
+                  </Link>
+                </Button>
+                <Button
+                  type="button"
+                  data-baam-obstacle="action"
+                  onClick={handlePost}
+                  disabled={saving || Boolean(validationMessage)}
+                >
+                  {saving ? (
+                    <Spinner className="h-4 w-4" />
+                  ) : (
+                    <ReceiveIcon className="h-4 w-4" aria-hidden />
+                  )}
+                  {saving ? tCommon("saving") : submitLabel}
+                </Button>
+              </div>
             </div>
             <dl className="mt-4 grid gap-3 text-sm lg:grid-cols-4">
               <div className="flex items-center justify-between gap-4">
@@ -1427,10 +1418,7 @@ export const InventoryReceivingPage = ({
           </div>
         </section>
       </div>
-      <div
-        data-baam-obstacle="inventory-actions"
-        className="bazaar-doc-mobile-actions bottom-[calc(var(--mobile-bottom-nav-height)+0.75rem)] md:hidden"
-      >
+      <div className="bazaar-doc-mobile-actions bottom-[calc(4.25rem+env(safe-area-inset-bottom))] md:hidden">
         <div className="mx-auto max-w-screen-sm space-y-2 pb-[env(safe-area-inset-bottom)]">
           <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
             <div className="min-w-0">

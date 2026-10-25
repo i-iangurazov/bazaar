@@ -1,0 +1,612 @@
+{
+  "status": "operational-layouts-restored-other-redesign-changes-explicitly-disclosed",
+  "scope": "Redesign changes since 1fcdfd4, including the current worktree; not an audit of every earlier playground improvement.",
+  "humanCorrection": "Customer-requested two-column operational layouts must be preserved. A difference from ERPNext is not evidence of a defect.",
+  "restored": [
+    {
+      "source": "src/components/inventory/receiving-workflow.tsx",
+      "baseline": "c276f30",
+      "exactMatch": true,
+      "sha256": "3f77205aeaff4d89947098896c6e86459da522b3c7783110d68ccb1ade6f6c16"
+    },
+    {
+      "source": "src/components/inventory/transfer-workflow.tsx",
+      "baseline": "c276f30",
+      "exactMatch": true,
+      "sha256": "07b1ba3e01544bf470537fe4cd0fc24f23369732aed33f8722c99ee6ccc64307"
+    },
+    {
+      "source": "src/components/inventory/write-off-workflow.tsx",
+      "baseline": "c276f30",
+      "exactMatch": true,
+      "sha256": "d28439fc45ef22a5276e616a8e2088da7b5afb04a40cbde635f2b89a3311ccaa"
+    },
+    {
+      "source": "src/app/(app)/inventory/counts/[id]/page.tsx",
+      "baseline": "c276f30",
+      "exactMatch": true,
+      "sha256": "daf57fddea2b1905c11168a1244994fc8f6b701291de4f6c432160029b97f620"
+    }
+  ],
+  "removed": [
+    "Collapsed product picker and single-column stock document layout",
+    "Relocation of desktop stock posting actions from summary to page header",
+    "Uncommitted stock-count, movement-detail, list, row-action and print-toolbar changes from the interrupted iteration"
+  ],
+  "stillPresentLayoutChanges": [
+    {
+      "area": "Product create/detail forms",
+      "sources": [
+        "src/components/product-editor-layout.tsx",
+        "src/app/(app)/products/new/page.tsx",
+        "src/app/(app)/products/[id]/page.tsx",
+        "src/components/product-form.tsx"
+      ],
+      "changes": [
+        "Desktop save bar integrated into page heading instead of a separate bar",
+        "Page maximum width 1120 to 1280px, side column 320 to 260px",
+        "Independent section cards joined into one bordered document",
+        "Desktop metadata column is no longer sticky; heading is sticky"
+      ],
+      "acceptance": "Disclosed for user review; green tests do not prove workflow suitability. Do not extend these rearrangements without human direction."
+    },
+    {
+      "area": "Desktop navigation",
+      "sources": [
+        "src/components/app-shell.tsx",
+        "src/components/ui/sidebar.tsx"
+      ],
+      "changes": [
+        "48px module dock added; contextual sidebar shows selected module",
+        "Sidebar collapse now hides contextual panel while dock remains",
+        "Sidebar width 240 to 224px"
+      ],
+      "acceptance": "Part of the ERPNext visual translation, disclosed as a navigation behavior change, not just color styling."
+    },
+    {
+      "area": "Mobile navigation",
+      "sources": [
+        "src/components/mobile-app-shell.tsx",
+        "src/app/globals.css"
+      ],
+      "changes": [
+        "Floating bottom navigation became edge-to-edge bottom bar",
+        "Bottom navigation height token 4.5 to 4.25rem plus safe area"
+      ],
+      "acceptance": "Disclosed as geometry/placement changes."
+    },
+    {
+      "area": "Integration cards",
+      "sources": [
+        "src/app/(app)/operations/integrations/page.tsx"
+      ],
+      "changes": [
+        "Removed fixed minimum tile height",
+        "Changed title/action wrapping and density",
+        "Descriptions are no longer clamped to two lines"
+      ],
+      "acceptance": "Disclosed as tile composition changes."
+    }
+  ],
+  "stillPresentInteractionChanges": [
+    {
+      "area": "Saved table views",
+      "changes": "Explicit view identity persists across reload and pagination; forms support Enter, labelled fields and return focus.",
+      "sources": [
+        "src/lib/saved-table-views.ts",
+        "src/components/saved-table-views.tsx",
+        "src/components/ui/modal.tsx",
+        "src/app/(app)/products/page.tsx",
+        "src/app/(app)/inventory/page.tsx"
+      ]
+    },
+    {
+      "area": "Tabs",
+      "changes": "Arrow/Home/End navigation, disabled-item skipping and roving focus were added; aria-selected and visual selection share one state.",
+      "sources": [
+        "src/components/ui/tabs.tsx"
+      ]
+    },
+    {
+      "area": "Integration links",
+      "changes": "Nested button-in-link markup replaced by a styled link with the same destinations.",
+      "sources": [
+        "src/app/(app)/operations/integrations/page.tsx"
+      ]
+    },
+    {
+      "area": "Overlays",
+      "changes": "Select/dropdown/popover stacking raised above modals; existing close/focus interactions remain, with explicit saved-view return-focus refs.",
+      "sources": [
+        "src/components/ui/select.tsx",
+        "src/components/ui/dropdown-menu.tsx",
+        "src/components/ui/popover.tsx",
+        "src/components/ui/modal.tsx"
+      ]
+    }
+  ],
+  "appearanceChanges": [
+    "Espresso neutral colors and Bazaar blue; Inter font; Lucide icons",
+    "Control heights, table density, spacing, borders, shadows and radii changed across shared controls",
+    "Russian/Kyrgyz/English saved-view label and English product copy corrections"
+  ],
+  "serverScopeEvidence": {
+    "command": "git diff --name-only 1fcdfd4 -- src/server prisma src/app/api",
+    "changedFiles": [],
+    "meaning": "No server services, API routes or database schema files changed during this redesign. This alone is not proof that every UI workflow is unaffected."
+  },
+  "sourceReview": {
+    "base": "1fcdfd4",
+    "method": "AST comparison excluding JSX className/style and formatting; this does not prove layout approval or semantic equivalence for CSS",
+    "files": [
+      {
+        "path": "src/app/(app)/admin/metrics/page.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/app/(app)/baam/page.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/app/(app)/customers/page.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/app/(app)/dashboard/page.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/app/(app)/inventory/counts/[id]/page.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/app/(app)/inventory/counts/page.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/app/(app)/inventory/movements/[id]/page.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/app/(app)/inventory/movements/page.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/app/(app)/inventory/page.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/app/(app)/operations/integrations/bazaar-catalog/page.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/app/(app)/operations/integrations/email-marketing/workspace.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/app/(app)/operations/integrations/page.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/app/(app)/operations/integrations/product-image-studio/page.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/app/(app)/pos/sell/page.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/app/(app)/products/[id]/page.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/app/(app)/products/new/page.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/app/(app)/products/page.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/app/(app)/reports/analytics/page.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/app/(app)/reports/exports/page.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/app/(app)/reports/page.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/app/(app)/settings/import/page.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/app/(app)/settings/loyalty/page.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/app/(app)/settings/page.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/app/(app)/settings/printing/page.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/app/(app)/settings/store-groups/page.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/app/(app)/stores/page.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/app/(app)/suppliers/page.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/app/developers/bazaar-api/page.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/app/inventory/movements/[id]/print/page.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/app/layout.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/app/loyalty/card/card-view.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/app/loyalty/card/page.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/app/loyalty/join/[programStoreId]/page.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/app/privacy/page.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/app-shell.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/components/baam-answer-text.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/baam-assistant-panel.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/baam-companion-panel.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/components/baam-composer.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/components/baam-launcher.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/components/baam-message-list.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/components/baam-speech.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/components/baam-workflow-card.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/components/column-visibility-menu.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/components/form-layout.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/help/HelpIcon.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/components/icons-ssr.ts",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/components/icons.ts",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/components/inventory/receiving-workflow.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/inventory/transfer-workflow.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/inventory/write-off-workflow.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/list-toolbar.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/mobile-app-shell.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/native/native-runtime.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/page-breadcrumbs.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/page-header.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/page-loading.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/pos/customer-loyalty-history.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/pos/loyalty-dialog.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/pos/product-photo-dialog.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/product-editor-layout.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/components/product-form.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/products/label-text-editor.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/pwa-install-button.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/reports/customer-report-filter.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/reports/online-sales-report.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/reports/report-controls.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/responsive-data-list.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/saved-table-views.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/components/ui/action-menu.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/ui/alert.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/components/ui/badge.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/components/ui/button.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/components/ui/card.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/components/ui/checkbox.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/ui/data-table.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/ui/dialog.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/components/ui/dropdown-menu.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/ui/empty-state.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/ui/icon-button.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/ui/input.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/ui/label.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/ui/modal.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/components/ui/pagination.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/ui/popover.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/ui/select.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/ui/sheet.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/components/ui/sidebar.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/components/ui/switch.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/ui/table.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/ui/tabs.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/components/ui/textarea.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/ui/tooltip.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/lib/saved-table-views.ts",
+        "classification": "requires-semantic-review"
+      }
+    ]
+  },
+  "geometryTokenReview": [
+    {
+      "path": "src/components/mobile-app-shell.tsx",
+      "removed": [
+        "inset-x-3",
+        "bottom-3"
+      ],
+      "added": []
+    },
+    {
+      "path": "src/components/responsive-data-list.tsx",
+      "removed": [
+        "w-[96px]",
+        "sm:w-[88px]"
+      ],
+      "added": []
+    }
+  ],
+  "browserEvidence": {
+    "receiving": {
+      "columnsPx": [
+        441.594,
+        662.406
+      ],
+      "sameTop": true,
+      "catalogVisibleInitially": true,
+      "selectedProductLine": true,
+      "screenshot": "artifacts/ux/espresso/screenshots/receiving-two-columns-restored.png"
+    },
+    "transfer": {
+      "columnsPx": [
+        441.594,
+        662.406
+      ],
+      "sameTop": true,
+      "catalogVisibleInitially": true,
+      "selectedProductLine": true,
+      "screenshot": "artifacts/ux/espresso/screenshots/transfer-two-columns-restored.png"
+    },
+    "writeOff": {
+      "columnsPx": [
+        441.594,
+        662.406
+      ],
+      "sameTop": true,
+      "catalogVisibleInitially": true,
+      "selectedProductLine": true,
+      "screenshot": "artifacts/ux/espresso/screenshots/write-off-two-columns-restored.png"
+    },
+    "count": {
+      "columnsPx": [
+        736,
+        368
+      ],
+      "composition": "Original lines/summary columns, unchanged",
+      "screenshot": "artifacts/ux/espresso/screenshots/count-two-columns-preserved.png"
+    },
+    "mobileReceiving": {
+      "width": 390,
+      "scrollWidth": 390,
+      "screenshot": "artifacts/ux/espresso/screenshots/receiving-restored-mobile.png"
+    }
+  },
+  "checks": {
+    "unit": {
+      "files": 254,
+      "tests": 1856,
+      "result": "passed",
+      "log": "artifacts/ux/espresso/restore-layout-unit.log"
+    },
+    "database": {
+      "files": 3,
+      "tests": 87,
+      "result": "passed",
+      "log": "artifacts/ux/espresso/restore-layout-db.log",
+      "database": "bazaar_hardening_ci; separate from browser fixture DB"
+    },
+    "build": {
+      "result": "passed including type and lint checks",
+      "log": "artifacts/ux/espresso/build-restore-operational-layout.log"
+    },
+    "i18n": {
+      "result": "passed",
+      "log": "artifacts/ux/espresso/restore-layout-i18n.log"
+    }
+  },
+  "limitations": [
+    "This audit identifies source and interaction changes; it does not claim complete acceptance or runtime verification of all 97 routes.",
+    "The unrequested layout acceptance claims in the previous inventory checkpoint are withdrawn.",
+    "No further customer workflow rearrangements are authorized by a mere visual difference from ERPNext."
+  ],
+  "delivery": "codex/playground only; no main merge or production deployment"
+}

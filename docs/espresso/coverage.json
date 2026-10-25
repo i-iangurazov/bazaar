@@ -84,8 +84,11 @@
     },
     {
       "source": "src/app/(app)/inventory/counts/[id]/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "artifacts/ux/espresso/screenshots/count-two-columns-preserved.png",
+        "docs/espresso/redesign-change-audit.json"
+      ]
     },
     {
       "source": "src/app/(app)/inventory/counts/new/page.tsx",
@@ -124,8 +127,8 @@
       "source": "src/app/(app)/inventory/receiving/page.tsx",
       "status": "in_review",
       "evidence": [
-        "artifacts/ux/espresso/screenshots/receiving-document-desktop-dark.png",
-        "docs/espresso/inventory-verification.json"
+        "artifacts/ux/espresso/screenshots/receiving-two-columns-restored.png",
+        "docs/espresso/redesign-change-audit.json"
       ]
     },
     {
@@ -137,8 +140,8 @@
       "source": "src/app/(app)/inventory/transfers/page.tsx",
       "status": "in_review",
       "evidence": [
-        "artifacts/ux/espresso/screenshots/transfer-document-desktop-dark.png",
-        "docs/espresso/inventory-verification.json"
+        "artifacts/ux/espresso/screenshots/transfer-two-columns-restored.png",
+        "docs/espresso/redesign-change-audit.json"
       ]
     },
     {
@@ -150,8 +153,8 @@
       "source": "src/app/(app)/inventory/write-offs/page.tsx",
       "status": "in_review",
       "evidence": [
-        "artifacts/ux/espresso/screenshots/write-off-document-desktop-dark.png",
-        "docs/espresso/inventory-verification.json"
+        "artifacts/ux/espresso/screenshots/write-off-two-columns-restored.png",
+        "docs/espresso/redesign-change-audit.json"
       ]
     },
     {
@@ -707,15 +710,16 @@
     "productionBuild": "passed for current product-document/list checkpoint; full redesign acceptance remains pending"
   },
   "requirements": {
-    "visualFidelity": "Match current ERPNext/Espresso geometry, typography, neutral surfaces, controls and analogous screen composition; compare rendered screens to references.",
+    "visualFidelity": "Match Espresso typography, palette, surfaces and components while preserving customer workflows; analogous screen comparison must respect the human-confirmed operational layouts.",
     "brand": "Preserve Bazaar logo and existing blue primary actions, active states, selection and focus in both themes. Confirmed by user on 2026-10-26.",
     "scope": "All 97 page sources and 32 shared components; no theme-only completion claim.",
     "businessLogic": "Preserve domain behavior, data, authorization, store scopes, billing gates and idempotency.",
     "delivery": "Keep improvements on codex/playground; no main merge or production deployment.",
-    "singleBrand": "Show exactly one Bazaar brand mark in desktop navigation: full logo when the sidebar is expanded, icon in the module dock when collapsed."
+    "singleBrand": "Show exactly one Bazaar brand mark in desktop navigation: full logo when the sidebar is expanded, icon in the module dock when collapsed.",
+    "customerWorkflows": "Preserve the customer-requested two-column operational layouts and established interactions. The visual reference does not authorize replacing them; see AGENTS.md and redesign-change-audit.json."
   },
   "progress": {
-    "stage": "Foundation, product and stock documents, list controls; full redesign remains in progress",
+    "stage": "Redesign in progress; customer operational layouts restored and other composition changes disclosed",
     "foundation": [
       "Pinned MIT Espresso semantic tokens and component CSS",
       "Self-hosted Inter Variable",
@@ -818,6 +822,14 @@
           "artifacts/ux/espresso/screenshots/receiving-document-desktop-dark.png",
           "artifacts/ux/espresso/screenshots/transfer-document-desktop-dark.png",
           "artifacts/ux/espresso/screenshots/write-off-document-mobile-dark-kg.png"
+        ],
+        "superseded": "Layout rejected by human; operational layout restored. See redesign-change-audit.json."
+      },
+      {
+        "check": "Restore customer-requested operational layouts",
+        "result": "All four source files exactly match c276f30. Production browser confirms original simultaneous 2:3 picker/lines panels for receiving, transfers and write-off, original 2:1 lines/summary for stock counts; mobile receiving has no horizontal page overflow.",
+        "evidence": [
+          "docs/espresso/redesign-change-audit.json"
         ]
       }
     ],
@@ -828,21 +840,21 @@
       "Admin/manager/staff/cashier and store/plan gates in the rendered UI",
       "Modal, dropdown, focus, keyboard, loading, empty, retry and recovery flows across page families",
       "Broader database integration regression and final production smoke on the isolated app",
-      "Audit autofocus dialogs across other route families for explicit return-focus targets; saved-view forms now have explicit trigger refs."
+      "Audit autofocus dialogs across other route families for explicit return-focus targets; saved-view forms now have explicit trigger refs.",
+      "Review the explicitly disclosed product-form and navigation composition changes with the human; do not treat test success as workflow approval."
     ],
     "unitTests": {
-      "files": 255,
-      "tests": 1858,
-      "status": "passed before final column-width refinement; focused 32 tests passed again afterwards",
-      "evidence": "artifacts/ux/espresso/inventory-unit-isolated-retry.log",
-      "followUpEvidence": "artifacts/ux/espresso/inventory-focused-final.log",
+      "files": 254,
+      "tests": 1856,
+      "status": "passed after layout restoration",
+      "evidence": "artifacts/ux/espresso/restore-layout-unit.log",
       "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit"
     },
     "databaseRegression": {
       "files": 3,
       "tests": 87,
       "status": "passed",
-      "evidence": "artifacts/ux/espresso/inventory-db.log",
+      "evidence": "artifacts/ux/espresso/restore-layout-db.log",
       "database": "bazaar_hardening_ci",
       "postgresPort": 55440,
       "providers": "disabled"

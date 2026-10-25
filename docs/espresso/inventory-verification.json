@@ -1,5 +1,5 @@
 {
-  "status": "local-checkpoint-verified-full-redesign-in-progress",
+  "status": "historical-checkpoint-layout-rejected-and-restored",
   "scope": [
     "Stock receiving, transfers and write-off forms",
     "Saved-view identity in products and inventory lists"
@@ -83,5 +83,7 @@
     "Full unit suite and separate DB regressions completed after a successful production build.",
     "Final verification rebuild uses CIRCLE_NODE_TOTAL=3 to limit local build workers; completed webpack cache was removed after compilation to retain disk headroom."
   ],
-  "delivery": "Local playground checkpoint; full redesign remains in progress; no main merge or deployment"
+  "delivery": "Local playground checkpoint; full redesign remains in progress; no main merge or deployment",
+  "supersededBy": "docs/espresso/redesign-change-audit.json",
+  "correction": "The single-column/collapsed-picker redesign was not appropriate for the customer-requested workflow. Those layout changes have been restored to c276f30. Prior operation-test results are historical evidence, not approval of that layout."
 }
