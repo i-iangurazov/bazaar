@@ -132,9 +132,11 @@ export const InventoryTransfersPage = ({
   const [note, setNote] = useState("");
   const [search, setSearch] = useState("");
   const [lines, setLines] = useState<TransferLine[]>([]);
+  const [postingError, setPostingError] = useState<string | null>(null);
   const transferInputRefs = useRef(new Map<string, HTMLInputElement>());
   const searchInputRef = useRef<HTMLInputElement>(null);
   const handledPrefillRef = useRef("");
+  const postingOperationRef = useRef<{ signature: string; key: string } | null>(null);
 
   const fromStore = stores.find((store) => store.id === fromStoreId) ?? null;
   const toStore = stores.find((store) => store.id === toStoreId) ?? null;
@@ -564,6 +566,7 @@ export const InventoryTransfersPage = ({
 
   const transferMutation = trpc.inventory.transfer.useMutation({
     onSuccess: async (result) => {
+      setPostingError(null);
       await trpcUtils.inventory.list.invalidate();
       await trpcUtils.inventory.searchProducts.invalidate();
       await trpcUtils.inventory.productMovements.invalidate();
@@ -574,14 +577,13 @@ export const InventoryTransfersPage = ({
       );
     },
     onError: (error) => {
-      toast({
-        variant: "error",
-        description: translateError(tErrors, error) || t("transferPostFailed"),
-      });
+      setPostingError(!error.data || error.data.code === "INTERNAL_SERVER_ERROR"
+        ? t("transferPostFailed") : translateError(tErrors, error));
     },
   });
   const editMutation = trpc.inventory.editProductMovementDocument.useMutation({
     onSuccess: async () => {
+      setPostingError(null);
       await trpcUtils.inventory.list.invalidate();
       await trpcUtils.inventory.searchProducts.invalidate();
       await trpcUtils.inventory.productMovements.invalidate();
@@ -594,10 +596,8 @@ export const InventoryTransfersPage = ({
       );
     },
     onError: (error) => {
-      toast({
-        variant: "error",
-        description: translateError(tErrors, error) || t("transferPostFailed"),
-      });
+      setPostingError(!error.data || error.data.code === "INTERNAL_SERVER_ERROR"
+        ? t("transferPostFailed") : translateError(tErrors, error));
     },
   });
 
@@ -614,6 +614,21 @@ export const InventoryTransfersPage = ({
       quantity: metricByKey.get(line.key)?.quantity ?? 0,
       unitCostKgs: line.unitCostKgs,
     }));
+    setPostingError(null);
+    // A lost response must replay the same operation, even after the button is enabled again.
+    const signature = JSON.stringify({
+      editDocumentKey: editDocumentKey ?? null,
+      fromStoreId,
+      toStoreId,
+      note: note.trim() || null,
+      lines: isEditMode ? normalizedLines : normalizedLines.map((line) => ({
+        productId: line.productId, variantId: line.variantId, qty: line.quantity,
+      })),
+    });
+    if (postingOperationRef.current?.signature !== signature) {
+      postingOperationRef.current = { signature, key: crypto.randomUUID() };
+    }
+    const idempotencyKey = postingOperationRef.current.key;
 
     if (isEditMode && editDocumentKey) {
       editMutation.mutate({
@@ -623,7 +638,7 @@ export const InventoryTransfersPage = ({
         notes: note.trim() || undefined,
         reason: note.trim() || t("transferEditReason"),
         lines: normalizedLines,
-        idempotencyKey: crypto.randomUUID(),
+        idempotencyKey,
       });
       return;
     }
@@ -637,7 +652,7 @@ export const InventoryTransfersPage = ({
         variantId: line.variantId,
         qty: line.quantity,
       })),
-      idempotencyKey: crypto.randomUUID(),
+      idempotencyKey,
     });
   };
 
@@ -789,8 +804,8 @@ export const InventoryTransfersPage = ({
           </div>
         </section>
 
-        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-          <section className="bazaar-doc-surface p-4">
+        <div className="grid min-w-0 grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+          <section className="bazaar-doc-surface min-w-0 p-4">
             <div className="mb-4 flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
               <h3 className="text-base font-semibold text-foreground">
                 {t("transferSearchTitle")}
@@ -881,7 +896,7 @@ export const InventoryTransfersPage = ({
             </div>
           </section>
 
-          <section className="bazaar-doc-surface p-4">
+          <section className="bazaar-doc-surface min-w-0 p-4">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <h3 className="text-base font-semibold text-foreground">{t("transferTableTitle")}</h3>
               <Badge variant={validationMessage ? "warning" : "success"}>
@@ -1032,6 +1047,7 @@ export const InventoryTransfersPage = ({
 
         <section className="hidden md:block">
           <div className="bazaar-doc-summary">
+            {postingError ? <p role="alert" className="mb-3 rounded-md border border-danger/30 bg-danger/5 p-3 text-sm text-danger">{postingError}</p> : null}
             <div className="flex flex-wrap items-center justify-between gap-4">
               <h3 className="text-base font-semibold text-foreground">
                 {t("transferSummaryTitle")}
@@ -1102,6 +1118,7 @@ export const InventoryTransfersPage = ({
 
       <div className="bazaar-doc-mobile-actions bottom-[calc(4.25rem+env(safe-area-inset-bottom))] md:hidden">
         <div className="mx-auto max-w-screen-sm space-y-2 pb-[env(safe-area-inset-bottom)]">
+          {postingError ? <p role="alert" className="rounded-md border border-danger/30 bg-danger/5 p-2 text-xs text-danger">{postingError}</p> : null}
           <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
             <div className="min-w-0">
               <span className="font-semibold text-foreground">

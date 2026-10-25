@@ -446,6 +446,14 @@ const ProductDetailPage = () => {
       void Promise.all([storePricingQuery.refetch(), productQuery.refetch()]);
     },
   });
+  const storeVisibilityMutation = trpc.products.setStoreVisibility.useMutation({
+    onSuccess: async (_result, input) => {
+      await Promise.all([trpcUtils.products.bootstrap.invalidate(), trpcUtils.products.list.invalidate()]);
+      toast({ variant: "success", description: t("hiddenInStoreSuccess") });
+      router.push(`/products?storeId=${encodeURIComponent(input.storeId)}`);
+    },
+    onError: (error) => toast({ variant: "error", description: translateError(tErrors, error) }),
+  });
   const archiveMutation = trpc.products.archive.useMutation({
     onSuccess: async () => {
       await Promise.all([
@@ -1007,6 +1015,18 @@ const ProductDetailPage = () => {
             <CopyIcon className="h-4 w-4" aria-hidden />
             {t("selectiveDuplicate")}
           </DropdownMenuItem>
+          {selectedSettingsStore ? <DropdownMenuItem disabled={storeVisibilityMutation.isLoading}
+            onSelect={() => {
+              const store = selectedSettingsStore;
+              actionAfterMenuCloseRef.current = () => {
+                void (async () => {
+                  if (await confirm({ description: t("confirmHideInStore", { store: store.storeName, count: 1 }) }))
+                    storeVisibilityMutation.mutate({ storeId: store.storeId, productIds: [productId], hidden: true });
+                })();
+              };
+            }}>
+            <ArchiveIcon className="h-4 w-4" aria-hidden />{t("hideInStore")}
+          </DropdownMenuItem> : null}
           <DropdownMenuItem
             className="text-danger focus:text-danger"
             disabled={archiveMutation.isLoading}
@@ -1027,7 +1047,7 @@ const ProductDetailPage = () => {
             ) : (
               <ArchiveIcon className="h-4 w-4" aria-hidden />
             )}
-            {archiveMutation.isLoading ? tCommon("loading") : t("archive")}
+            {archiveMutation.isLoading ? tCommon("loading") : t("archiveEverywhere")}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

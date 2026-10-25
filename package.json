@@ -18,6 +18,7 @@
     "test": "vitest",
     "i18n:check": "node --import tsx scripts/i18n-check.ts",
     "test:ci": "pnpm prisma:generate && pnpm typecheck && pnpm lint && pnpm exec vitest run && pnpm i18n:check",
+    "test:pooling": "node --import tsx scripts/pooling/run.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
     "prisma:reset": "prisma migrate reset --force --skip-generate",

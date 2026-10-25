@@ -156,7 +156,7 @@ export const syncProductCatalogAssignments = async (
     where: {
       organizationId: input.organizationId,
       storeId: { in: storeIds },
-      isActive: true,
+      OR: [{ isActive: true }, { isHidden: true }],
       product: {
         organizationId: input.organizationId,
         isDeleted: false,

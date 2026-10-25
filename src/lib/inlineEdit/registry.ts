@@ -63,8 +63,10 @@ export type InlineMutationInputByRoute = {
     storeId: string;
     productId: string;
     variantId: string | null;
-    priceKgs: number;
-  };
+  } & (
+    | { priceKgs: number; wholesalePriceKgs?: never }
+    | { wholesalePriceKgs: number | null; priceKgs?: never }
+  );
   "inventory.setMinStock": {
     storeId: string;
     productId: string;
@@ -175,6 +177,7 @@ export type InlineProductsRow = {
 
 export type InlineProductsContext = {
   storeId?: string | null;
+  wholesalePricesEnabled?: boolean;
   currencyCode?: string | null;
   currencyRateKgsPerUnit?: number | string | null;
   categories: string[];
@@ -416,6 +419,7 @@ export type InlineEditRegistry = {
     name: InlineEditColumnDefinition<InlineProductsRow, string, InlineProductsContext>;
     category: InlineEditColumnDefinition<InlineProductsRow, string | null, InlineProductsContext>;
     salePrice: InlineEditColumnDefinition<InlineProductsRow, number | null, InlineProductsContext>;
+    wholesalePrice: InlineEditColumnDefinition<InlineProductsRow, number | null, InlineProductsContext>;
     avgCost: InlineEditColumnDefinition<InlineProductsRow, number | null, InlineProductsContext>;
     onHand: InlineEditColumnDefinition<InlineProductsRow, number, InlineProductsContext>;
   };
@@ -515,6 +519,28 @@ export const inlineEditRegistry: InlineEditRegistry = {
         };
       },
       permissionCheck: (role) => isManagerOrAdmin(role),
+      equals: moneyEquals,
+    },
+    wholesalePrice: {
+      tableKey: "products",
+      columnKey: "wholesalePrice",
+      inputType: "money",
+      formatter: (value, _row, context, display) =>
+        formatMoney(value, context, display.locale, display.notAvailableLabel),
+      editorValue: (value, _row, context) => formatMoneyEditorValue(value, context),
+      parser: (raw, _row, context) =>
+        raw.trim() === "" ? { ok: true, value: null } : parseNonNegativeMoneyKgs(raw, context),
+      mutation: (row, value, context) => ({
+        route: "storePrices.upsert",
+        input: {
+          storeId: context.storeId ?? "",
+          productId: row.id,
+          variantId: null,
+          wholesalePriceKgs: value,
+        },
+      }),
+      permissionCheck: (role, _row, context) =>
+        isManagerOrAdmin(role) && Boolean(context.storeId && context.wholesalePricesEnabled),
       equals: moneyEquals,
     },
     avgCost: {

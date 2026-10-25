@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 
 import { adminProcedure, managerProcedure, protectedProcedure, rateLimit, router } from "@/server/trpc/trpc";
 import { toTRPCError } from "@/server/trpc/errors";
+import { setProductStoreVisibility } from "@/server/services/productStoreVisibility";
 import {
   archiveProductMutation,
   arrangeClothingCategoriesMutation,
@@ -61,6 +62,7 @@ import {
   productListInputSchema,
   productPricingInputSchema,
   productStorePricingInputSchema,
+  productStoreVisibilityInputSchema,
   productsByIdsInputSchema,
   searchQuickProductsInputSchema,
   startProductDescriptionGenerationJobInputSchema,
@@ -503,26 +505,34 @@ export const productsRouter = router({
     .use(rateLimit({ windowMs: 60_000, max: 120, prefix: "products-import" }))
     .input(importProductsCsvInputSchema)
     .mutation(async ({ ctx, input }) => {
-      await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
-      return importProductsCsvMutation({
-        organizationId: ctx.user.organizationId,
-        actorId: ctx.user.id,
-        requestId: ctx.requestId,
-        input,
-      });
+      try {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+        return await importProductsCsvMutation({
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+          input,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
     }),
 
   previewImportCsv: adminProcedure
     .use(rateLimit({ windowMs: 60_000, max: 120, prefix: "products-import-preview" }))
     .input(previewProductsImportCsvInputSchema)
     .mutation(async ({ ctx, input }) => {
-      await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
-      return previewProductsCsvImportMutation({
-        prisma: ctx.prisma,
-        organizationId: ctx.user.organizationId,
-        input,
-        logger: ctx.logger,
-      });
+      try {
+        await assertUserCanAccessStore(ctx.prisma, ctx.user, input.storeId);
+        return await previewProductsCsvImportMutation({
+          prisma: ctx.prisma,
+          organizationId: ctx.user.organizationId,
+          input,
+          logger: ctx.logger,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
     }),
 
   exportCsv: protectedProcedure.input(exportProductsInputSchema).query(({ ctx, input }) =>
@@ -536,6 +546,16 @@ export const productsRouter = router({
       ids: input?.ids,
     }),
   ),
+
+  setStoreVisibility: managerProcedure
+    .input(productStoreVisibilityInputSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await setProductStoreVisibility({ ...input, user: ctx.user, requestId: ctx.requestId });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
 
   archive: managerProcedure
     .input(archiveProductInputSchema)

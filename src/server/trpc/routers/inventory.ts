@@ -204,7 +204,6 @@ const buildInventorySnapshotSql = (
     LEFT JOIN "StoreProduct" sp
       ON sp."storeId" = s."storeId"
      AND sp."productId" = s."productId"
-     AND sp."isActive" = true
     LEFT JOIN "ReorderPolicy" rp
       ON rp."storeId" = s."storeId"
      AND rp."productId" = s."productId"
@@ -225,8 +224,8 @@ const buildInventorySnapshotSql = (
     WHERE s."storeId" = ${input.storeId}
       AND p."organizationId" = ${organizationId}
       AND (sp."organizationId" = ${organizationId} OR sp.id IS NULL)
-      AND (sp."isActive" = true OR EXISTS (SELECT 1 FROM "Store" ws WHERE ws.id=s."storeId" AND ws."catalogSourcesConfigured"))
-      ${input.stockFilter === "notInAssortment" ? Prisma.sql`AND sp.id IS NULL` : Prisma.empty}
+      AND (sp."isActive" = true OR sp."isHidden" = true OR EXISTS (SELECT 1 FROM "Store" ws WHERE ws.id=s."storeId" AND ws."catalogSourcesConfigured"))
+      ${input.stockFilter === "notInAssortment" ? Prisma.sql`AND sp."isActive" IS DISTINCT FROM true` : Prisma.empty}
       AND p."isDeleted" = false
       ${input.stockFilter === "negativeStock" ? Prisma.sql`AND s."onHand" < 0` : Prisma.empty}
       ${input.stockFilter === "outOfStock" ? Prisma.sql`AND s."onHand" = 0` : Prisma.empty}

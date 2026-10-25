@@ -19,8 +19,11 @@ export async function assertSaleAssortment(
     where: { id: storeId, organizationId },
     select: { catalogSourcesConfigured: true },
   });
-  if (!store?.catalogSourcesConfigured) return; // Keep untouched stores' existing document policy.
   const ids = [...new Set(productIds)];
+  if (await tx.storeProduct.count({
+    where: { organizationId, storeId, productId: { in: ids }, isHidden: true },
+  })) throw new AppError("productNotAvailableInStore", "FORBIDDEN", 403);
+  if (!store?.catalogSourcesConfigured) return; // Keep untouched stores' existing document policy.
   const count = await tx.storeProduct.count({
     where: {
       organizationId,

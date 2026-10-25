@@ -1652,6 +1652,7 @@ model StoreProduct {
   storeId        String
   productId      String
   isActive       Boolean  @default(true)
+  isHidden       Boolean  @default(false)
   isDirect       Boolean  @default(false)
   isHistorical   Boolean  @default(true)
   assignedById   String?

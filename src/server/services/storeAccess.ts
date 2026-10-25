@@ -161,6 +161,7 @@ export const productStoreAssignmentWhere = (storeId?: string | null): Prisma.Pro
 export const inventoryProductAccessWhere = (storeId: string): Prisma.ProductWhereInput => ({
   OR: [
     productStoreAssignmentWhere(storeId),
+    { storeProducts: { some: { storeId, isHidden: true } } },
     { inventorySnapshots: { some: { storeId, store: { catalogSourcesConfigured: true } } } },
   ],
 });

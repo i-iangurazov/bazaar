@@ -466,6 +466,7 @@ describeDb("import batches", () => {
     });
 
     expect(fullPreview.summary).toEqual({
+      connected: 0,
       creates: 1,
       updates: 1,
       skipped: 0,
@@ -511,6 +512,7 @@ describeDb("import batches", () => {
     });
 
     expect(selectivePreview.summary).toEqual({
+      connected: 0,
       creates: 0,
       updates: 1,
       skipped: 1,

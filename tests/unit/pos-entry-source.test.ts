@@ -371,9 +371,8 @@ describe("pos entry navigation", () => {
     expect(pageSource).toContain(
       '<header className="sticky top-0 z-30 border-b border-border bg-background/95 px-3 py-3 shadow-sm backdrop-blur md:hidden">',
     );
-    expect(pageSource).toContain(
-      "const primaryImage = product.images?.[0]?.url ?? product.photoUrl;",
-    );
+    // Photo rendering and interactions are covered by the runtime photo-button
+    // tests and scripts/ux/pos-photo-wholesale-check.ts, rather than source spelling.
     expect(pageSource).toContain('variant="mobile"');
     expect(pageSource).toContain("currentCustomerLabel");
     expect(pageSource).toContain("handleSelectCustomer({");

@@ -102,6 +102,8 @@ jobs:
         run: node --test scripts/deployment/public-smoke.test.mjs
       - name: Run checks
         run: pnpm test:ci
+      - name: Verify database connection pooling and business transactions
+        run: pnpm test:pooling
       - name: Verify movement A4 printing
         run: |
           pnpm exec playwright install --with-deps chromium
