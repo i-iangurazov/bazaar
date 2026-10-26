@@ -1,0 +1,188 @@
+{
+  "meta": {
+    "title": "Bazaar — a system for the modern store",
+    "description": "POS, products, stock, customers, analytics and connected sales channels in one Bazaar system.",
+    "socialTitle": "Bazaar — your entire store in one system",
+    "imageAlt": "Bazaar business dashboard",
+    "structuredDescription": "A retail system for POS, products, inventory, customers, analytics and integrations."
+  },
+  "nav": {
+    "home": "Bazaar home",
+    "primary": "Main navigation",
+    "mobile": "Mobile navigation",
+    "open": "Open menu",
+    "close": "Close menu",
+    "product": "Product",
+    "features": "Features",
+    "integrations": "Integrations",
+    "pricing": "Plans",
+    "signIn": "Sign in",
+    "signInBazaar": "Sign in to Bazaar",
+    "start": "Start for free"
+  },
+  "hero": {
+    "kicker": "A system for the modern store",
+    "title": "Your entire store. In one system.",
+    "lead": "Sales, products, stock, customers and analytics are connected in one system. Add online stores and sales channels as your business grows.",
+    "view": "See Bazaar in action",
+    "note": "No installation · Works in your browser · Mobile/PWA",
+    "desktopAlt": "The actual Bazaar desktop POS with a product catalog and current receipt",
+    "mobileAlt": "The actual Bazaar mobile POS interface",
+    "activityLabel": "Example store activity",
+    "sale": "Sale completed",
+    "stock": "Stock updated",
+    "product": "Yuzu matcha",
+    "channelActivity": "Example catalog synchronization",
+    "systemsLabel": "Bazaar modules",
+    "systems": [
+      "POS",
+      "Products",
+      "Inventory",
+      "Customers",
+      "Analytics",
+      "Marketplaces",
+      "Bazaar API",
+      "Mobile / PWA"
+    ]
+  },
+  "platform": {
+    "eyebrow": "One operating system",
+    "line1": "All your working modules.",
+    "line2": "One flow of data.",
+    "body": "A sale updates stock, and analytics shows the result. Once channels are connected, Bazaar integrations exchange products, prices and orders.",
+    "tabs": "Bazaar features"
+  },
+  "features": {
+    "cashier": {
+      "label": "POS",
+      "eyebrow": "POS / Checkout",
+      "title": "A sale without extra screens",
+      "body": "The catalog, current receipt, discount, customer and payment share one workspace.",
+      "details": ["Barcode and search", "Split payments", "Hold and resume"],
+      "alt": "Bazaar POS interface"
+    },
+    "inventory": {
+      "label": "Inventory",
+      "eyebrow": "Inventory / Movement",
+      "title": "Stock with a clear history",
+      "body": "Every change is tied to a sale, delivery, transfer, write-off or stock count.",
+      "details": ["By store", "By variant", "With a complete history"],
+      "alt": "Bazaar stock movement journal"
+    },
+    "products": {
+      "label": "Products",
+      "eyebrow": "Products / Catalog",
+      "title": "A catalog for your sales channels",
+      "body": "Prices, variants, barcodes, photos and availability by store are managed centrally.",
+      "details": ["Variants and options", "Prices and discounts", "Imports and bulk actions"],
+      "alt": "Bazaar product catalog"
+    },
+    "customers": {
+      "label": "Customers",
+      "eyebrow": "Customers / History",
+      "title": "Keep the customer in the picture",
+      "body": "Contacts, orders and email eligibility are collected in one customer database.",
+      "details": ["Order history", "Segments", "Email Marketing"],
+      "alt": "Bazaar dashboard with store data"
+    },
+    "commerce": {
+      "label": "Sales channels",
+      "eyebrow": "Channels / API",
+      "title": "One source of data for your channels",
+      "body": "Configure Bazaar API and marketplaces to exchange products, prices, stock and orders within each channel's capabilities.",
+      "details": ["Bazaar API", "M-Market and Bakai Store", "O! Market"],
+      "alt": "Bazaar integrations"
+    },
+    "analytics": {
+      "label": "Analytics",
+      "eyebrow": "Analytics / Decisions",
+      "title": "Numbers tied to operations",
+      "body": "Sales, costs, margins and inventory are calculated from actual business movements.",
+      "details": ["Revenue", "Gross profit", "Top products"],
+      "alt": "Bazaar analytics"
+    }
+  },
+  "stories": {
+    "pos": {
+      "eyebrow": "POS",
+      "title": "Sell in seconds",
+      "description": "Bazaar POS brings search, the current receipt, customer and payment together for a fast, accurate sale.",
+      "bullets": [
+        "Search and barcodes",
+        "Customer, discount and split payments",
+        "Held receipts, returns and journal"
+      ],
+      "alt": "Bazaar desktop POS"
+    },
+    "inventory": {
+      "eyebrow": "Inventory",
+      "title": "Every product under control",
+      "description": "Receipts, transfers, write-offs and counts create a transparent movement history for each store and variant.",
+      "bullets": [
+        "Current and minimum stock",
+        "Receiving, transfers and write-offs",
+        "Stock movements and costs"
+      ],
+      "alt": "Stock movement history in Bazaar"
+    },
+    "analytics": {
+      "eyebrow": "Analytics",
+      "title": "See the numbers. Understand the business.",
+      "description": "Bazaar connects sales, inventory value and costs so the numbers answer an owner's everyday questions.",
+      "bullets": [
+        "Revenue and gross profit",
+        "Inventory value and potential margin",
+        "Top products and store comparisons"
+      ],
+      "alt": "Bazaar business dashboard with sales and margins"
+    }
+  },
+  "commerce": {
+    "eyebrow": "Sales channels",
+    "line1": "One catalog.",
+    "line2": "Your sales channels.",
+    "body": "Bazaar API, marketplaces and customer communications work around a shared catalog. Data exchange availability and schedules depend on integration settings.",
+    "alt": "Bazaar integration center",
+    "label": "Example data exchange through Bazaar integrations",
+    "title": "One Bazaar catalog",
+    "subtitle": "One source of data for channels you connect",
+    "demo": "Demonstration",
+    "status": "Data exchange",
+    "pipeline": ["Products", "Prices", "Stock", "Orders"],
+    "catalogOrders": "Products · stock · orders",
+    "catalogPrices": "Catalog · prices · availability",
+    "customersCampaigns": "Customers · campaigns"
+  },
+  "mobile": {
+    "eyebrow": "Mobile / PWA",
+    "title": "Bazaar goes with you",
+    "body": "Sales, the catalog and working operations adapt to phones and tablets. Mobile workflows account for smaller screens and touch controls.",
+    "badges": ["Install as an app", "Scan with your camera", "Light and dark themes"],
+    "tabletAlt": "Bazaar on a tablet",
+    "phoneAlt": "Bazaar mobile POS"
+  },
+  "proof": {
+    "eyebrow": "Trust",
+    "title": "Verified customer experience.",
+    "body": "Only verified case studies, logos and results will appear here, with customer permission. Until then, Bazaar does not publish invented reviews or statistics."
+  },
+  "final": {
+    "tag": "A system for your store · Bazaar",
+    "line1": "Your store is already running.",
+    "line2": "Bring its work together in one system.",
+    "start": "Start with Bazaar"
+  },
+  "footer": {
+    "description": "A system for the modern store.",
+    "product": "Product",
+    "solutions": "Solutions",
+    "integrations": "Integrations",
+    "company": "Company / Support",
+    "legal": "Legal information",
+    "contact": "Contact us",
+    "signup": "Sign up",
+    "marketplaces": "Marketplaces",
+    "privacy": "Privacy",
+    "made": "Built for retail in Kyrgyzstan"
+  }
+}

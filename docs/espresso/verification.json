@@ -1,5 +1,5 @@
 {
-  "status": "public-consumer-checkpoint-in-review-full-redesign-in-progress",
+  "status": "marketing-checkpoint-in-review-full-redesign-in-progress",
   "branch": "codex/playground",
   "reference": "Frappe Framework Espresso e8d41dd0061a32ee781caefe5d0b0d2bb7c15362",
   "checks": [
@@ -532,6 +532,11 @@
       "command": "Public-consumer checkpoint: full unit, isolated DB, types/lint/i18n/build and browser",
       "result": "2091unit/35DB passed;48selected UI captures and real network recovery; data preservation verified",
       "evidence": "docs/espresso/public-consumer-verification.json"
+    },
+    {
+      "command": "Marketing checkpoint: full unit, isolated authentication DB, types/lint/i18n/build and actual production browser",
+      "result": "2113unit/9DB passed;60matrix section captures across12states plus4supplemental; locale network recovery, keyboard/focus and485business-row preservation verified",
+      "evidence": "docs/espresso/marketing-verification.json"
     }
   ],
   "environment": {
@@ -569,5 +574,6 @@
   "currentIntegrationsCheckpoint": "docs/espresso/integrations-verification.json",
   "currentAdministrationCheckpoint": "docs/espresso/administration-verification.json",
   "currentPublicGuideCheckpoint": "docs/espresso/public-guide-verification.json",
-  "currentPublicConsumerCheckpoint": "docs/espresso/public-consumer-verification.json"
+  "currentPublicConsumerCheckpoint": "docs/espresso/public-consumer-verification.json",
+  "currentMarketingCheckpoint": "docs/espresso/marketing-verification.json"
 }

@@ -1,7 +1,11 @@
+import { marketingCaptures } from "@/content/marketing/assets";
 import Image from "next/image";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { getLocale, getTranslations } from "next-intl/server";
+import { getMarketingCopy, type MarketingCopy } from "@/content/marketing";
+import { formatCurrency } from "@/lib/i18nFormat";
+import { MarketingLocaleSwitcher } from "./MarketingLocaleSwitcher";
 import { getPlanCatalogEntries } from "@/server/billing/planCatalog";
 import { MarketingPricing } from "./MarketingPricing";
 
@@ -119,70 +123,68 @@ const Story = ({
   </section>
 );
 
-const integrationChannels = [
-  { mark: "API", label: "Bazaar API", data: "Товары · остатки · заказы" },
-  { mark: "M", label: "M-Market", data: "Каталог · цены · наличие" },
-  { mark: "B", label: "Bakai Store", data: "Каталог · цены · наличие" },
-  { mark: "O!", label: "O! Market", data: "Товары · остатки · заказы" },
-  { mark: "@", label: "Email Marketing", data: "Клиенты · кампании" },
-] as const;
-
-const IntegrationFlow = () => (
-  <div
-    className={styles.integrationConsole}
-    aria-label="Каналы продаж, синхронизированные с Bazaar"
-  >
-    <div className={styles.integrationConsoleHeader}>
-      <div className={styles.integrationIdentity}>
-        <Image src="/brand/icon.png" width={42} height={42} alt="" />
-        <p>
-          <strong>Единый каталог Bazaar</strong>
-          <span>Один источник данных для всех каналов</span>
-        </p>
-      </div>
-      <span className={styles.liveStatus}>
-        <i aria-hidden="true" />
-        Синхронизация включена
-      </span>
-    </div>
-    <div className={styles.integrationPipeline} aria-hidden="true">
-      <span>Товары</span>
-      <b>→</b>
-      <span>Цены</span>
-      <b>→</b>
-      <span>Остатки</span>
-      <b>→</b>
-      <span>Заказы</span>
-    </div>
-    <div className={styles.integrationChannels}>
-      {integrationChannels.map((channel) => (
-        <div className={styles.integrationChannel} key={channel.label}>
-          <b>{channel.mark}</b>
+const IntegrationFlow = ({ copy }: { copy: MarketingCopy }) => {
+  const channels = [
+    { mark: "API", label: "Bazaar API", data: copy.commerce.catalogOrders },
+    { mark: "M", label: "M-Market", data: copy.commerce.catalogPrices },
+    { mark: "B", label: "Bakai Store", data: copy.commerce.catalogPrices },
+    { mark: "O!", label: "O! Market", data: copy.commerce.catalogOrders },
+    { mark: "@", label: "Email Marketing", data: copy.commerce.customersCampaigns },
+  ];
+  return (
+    <div className={styles.integrationConsole} aria-label={copy.commerce.label}>
+      <div className={styles.integrationConsoleHeader}>
+        <div className={styles.integrationIdentity}>
+          <Image src="/brand/icon.png" width={42} height={42} alt="" />
           <p>
-            <strong>{channel.label}</strong>
-            <span>{channel.data}</span>
+            <strong>{copy.commerce.title}</strong>
+            <span>{copy.commerce.subtitle}</span>
           </p>
-          <small>
-            <i aria-hidden="true" />
-            Актуально
-          </small>
         </div>
-      ))}
+        <span className={styles.liveStatus}>
+          <i aria-hidden="true" />
+          {copy.commerce.demo}
+        </span>
+      </div>
+      <div className={styles.integrationPipeline} aria-hidden="true">
+        {copy.commerce.pipeline.map((label, index) => (
+          <Fragment key={label}>
+            {index ? <b>→</b> : null}
+            <span>{label}</span>
+          </Fragment>
+        ))}
+      </div>
+      <div className={styles.integrationChannels}>
+        {channels.map((channel) => (
+          <div className={styles.integrationChannel} key={channel.label}>
+            <b>{channel.mark}</b>
+            <p>
+              <strong>{channel.label}</strong>
+              <span>{channel.data}</span>
+            </p>
+            <small>
+              <i aria-hidden="true" />
+              {copy.commerce.status}
+            </small>
+          </div>
+        ))}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 export const MarketingLanding = async () => {
   const [t, locale] = await Promise.all([getTranslations("billing"), getLocale()]);
   const plans = getPlanCatalogEntries();
+  const copy = getMarketingCopy(locale);
   const structuredData = {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     name: "Bazaar",
     applicationCategory: "BusinessApplication",
     operatingSystem: "Web, iOS PWA, Android PWA",
-    description:
-      "Retail Operating System для кассы, товаров, запасов, клиентов, аналитики и каналов продаж.",
+    description: copy.meta.structuredDescription,
+    inLanguage: locale === "kg" ? "ky" : locale,
     url: "https://www.bazaar.kg/",
     offers: plans.map((plan) => ({
       "@type": "Offer",
@@ -198,7 +200,7 @@ export const MarketingLanding = async () => {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
       />
-      <MarketingNav />
+      <MarketingNav copy={copy.nav} />
 
       <section className={styles.hero} aria-labelledby="hero-title">
         <div className={styles.heroGlow} aria-hidden="true" />
@@ -206,36 +208,33 @@ export const MarketingLanding = async () => {
           <div className={styles.heroCopy}>
             <p className={styles.heroKicker}>
               <span />
-              Retail OS для современного магазина
+              {copy.hero.kicker}
             </p>
-            <h1 id="hero-title">Весь ваш магазин. В одной системе.</h1>
-            <p className={styles.heroLead}>
-              Продажи, товары, остатки, клиенты, интернет-магазины и аналитика — синхронизированы в
-              реальном времени.
-            </p>
+            <h1 id="hero-title">{copy.hero.title}</h1>
+            <p className={styles.heroLead}>{copy.hero.lead}</p>
             <div className={styles.heroActions}>
               <Link className={styles.primaryCta} href="/signup">
-                Начать бесплатно
+                {copy.nav.start}
                 <Arrow />
               </Link>
               <a className={styles.secondaryCta} href="#platform">
-                Посмотреть Bazaar в действии
+                {copy.hero.view}
               </a>
             </div>
-            <p className={styles.heroNote}>Без установки · Работает в браузере · Mobile/PWA</p>
+            <p className={styles.heroNote}>{copy.hero.note}</p>
           </div>
 
           <div className={styles.heroVisual}>
             <div className={styles.heroDesktop}>
               <ProductWindow
-                src="/marketing/captures/pos-desktop-wide.webp"
-                alt="Настоящий интерфейс настольной кассы Bazaar с каталогом и текущим чеком"
+                src={marketingCaptures.posDesktop}
+                alt={copy.hero.desktopAlt}
                 priority
               />
             </div>
             <div className={styles.heroProducts} aria-hidden="true">
               <Image
-                src="/marketing/captures/products-wide.webp"
+                src={marketingCaptures.products}
                 alt=""
                 width={1920}
                 height={1080}
@@ -245,49 +244,40 @@ export const MarketingLanding = async () => {
             <div className={styles.heroPhone}>
               <div className={styles.phoneSpeaker} aria-hidden="true" />
               <Image
-                src="/marketing/captures/pos-mobile.webp"
-                alt="Настоящий мобильный интерфейс Bazaar POS"
+                src={marketingCaptures.posMobile}
+                alt={copy.hero.mobileAlt}
                 width={780}
                 height={1688}
                 sizes="(max-width: 767px) 36vw, 230px"
               />
             </div>
-            <div className={styles.activityStack} aria-label="Примеры активности магазина">
+            <div className={styles.activityStack} aria-label={copy.hero.activityLabel}>
               <div>
                 <Glyph>✓</Glyph>
                 <p>
-                  <b>Продажа завершена</b>
-                  <span>3 220 сом</span>
+                  <b>{copy.hero.sale}</b>
+                  <span>{formatCurrency(3220, locale, "KGS")}</span>
                 </p>
               </div>
               <div>
                 <Glyph>−2</Glyph>
                 <p>
-                  <b>Остаток обновлён</b>
-                  <span>Матча Yuzu</span>
+                  <b>{copy.hero.stock}</b>
+                  <span>{copy.hero.product}</span>
                 </p>
               </div>
               <div>
                 <Glyph>O!</Glyph>
                 <p>
                   <b>O! Market</b>
-                  <span>128 товаров синхронизировано</span>
+                  <span>{copy.hero.channelActivity}</span>
                 </p>
               </div>
             </div>
           </div>
         </div>
-        <div className={styles.heroSystems} aria-label="Системы Bazaar">
-          {[
-            "POS",
-            "Products",
-            "Inventory",
-            "Customers",
-            "Analytics",
-            "Marketplaces",
-            "Bazaar API",
-            "Mobile / PWA",
-          ].map((system) => (
+        <div className={styles.heroSystems} aria-label={copy.hero.systemsLabel}>
+          {copy.hero.systems.map((system) => (
             <span key={system}>{system}</span>
           ))}
         </div>
@@ -296,57 +286,33 @@ export const MarketingLanding = async () => {
       <section id="platform" className={styles.platformIntro}>
         <div className={styles.sectionHeading} data-reveal>
           <p className={styles.eyebrow}>
-            <span>01</span>Одна операционная система
+            <span>01</span>
+            {copy.platform.eyebrow}
           </p>
           <h2>
-            Не набор модулей.
+            {copy.platform.line1}
             <br />
-            Один поток данных.
+            {copy.platform.line2}
           </h2>
-          <p>
-            Продажа меняет остаток. Остаток обновляет каналы. Каналы возвращают заказы. Аналитика
-            показывает результат — без ручной сверки между системами.
-          </p>
+          <p>{copy.platform.body}</p>
         </div>
-        <FeatureShowcase />
+        <FeatureShowcase featureCopy={copy.features} label={copy.platform.tabs} />
       </section>
 
       <Story
         id="pos"
         number="02"
-        eyebrow="POS"
-        title="Продавайте за секунды"
-        description="Касса Bazaar оставляет кассиру только то, что нужно для быстрой и точной продажи — от сканирования до фискального результата."
-        bullets={[
-          "Поиск и штрихкод",
-          "Клиент, скидка и разделённая оплата",
-          "Отложенные чеки, возвраты и журнал",
-        ]}
-        visual={
-          <ProductWindow
-            src="/marketing/captures/pos-desktop-wide.webp"
-            alt="Настольная касса Bazaar"
-          />
-        }
+        {...copy.stories.pos}
+        visual={<ProductWindow src={marketingCaptures.posDesktop} alt={copy.stories.pos.alt} />}
         dark
       />
 
       <Story
         id="inventory"
         number="03"
-        eyebrow="Inventory"
-        title="Каждый товар под контролем"
-        description="Поступления, перемещения, списания и пересчёты формируют одну прозрачную историю движения по каждому магазину и варианту."
-        bullets={[
-          "Текущий и минимальный остаток",
-          "Оприходование, перемещение и списание",
-          "Product Movement и себестоимость",
-        ]}
+        {...copy.stories.inventory}
         visual={
-          <ProductWindow
-            src="/marketing/captures/movements-wide.webp"
-            alt="История движения товаров в Bazaar"
-          />
+          <ProductWindow src={marketingCaptures.movements} alt={copy.stories.inventory.alt} />
         }
         reverse
       />
@@ -354,25 +320,20 @@ export const MarketingLanding = async () => {
       <section id="commerce" className={styles.commerceSection}>
         <div className={styles.commerceHeading} data-reveal>
           <p className={styles.eyebrow}>
-            <span>04</span>Commerce
+            <span>04</span>
+            {copy.commerce.eyebrow}
           </p>
           <h2>
-            Один каталог.
+            {copy.commerce.line1}
             <br />
-            Все каналы продаж.
+            {copy.commerce.line2}
           </h2>
-          <p>
-            Bazaar API, маркетплейсы и коммуникации с клиентами работают вокруг одного каталога,
-            одной цены и одного остатка.
-          </p>
+          <p>{copy.commerce.body}</p>
         </div>
         <div className={styles.commerceGrid}>
-          <IntegrationFlow />
+          <IntegrationFlow copy={copy} />
           <div className={styles.commerceScreenshot} data-reveal>
-            <ProductWindow
-              src="/marketing/captures/integrations-wide.webp"
-              alt="Центр интеграций Bazaar"
-            />
+            <ProductWindow src={marketingCaptures.integrations} alt={copy.commerce.alt} />
           </div>
         </div>
       </section>
@@ -380,19 +341,9 @@ export const MarketingLanding = async () => {
       <Story
         id="analytics"
         number="05"
-        eyebrow="Analytics"
-        title="Видите не отчёты. Видите бизнес."
-        description="Bazaar соединяет продажи, стоимость запасов и себестоимость, чтобы цифры отвечали на ежедневные вопросы владельца."
-        bullets={[
-          "Выручка и валовая прибыль",
-          "Стоимость запасов и потенциальная маржа",
-          "Топ товаров и сравнение магазинов",
-        ]}
+        {...copy.stories.analytics}
         visual={
-          <ProductWindow
-            src="/marketing/captures/dashboard-wide.webp"
-            alt="Бизнес-панель Bazaar с продажами и маржой"
-          />
+          <ProductWindow src={marketingCaptures.dashboard} alt={copy.stories.analytics.alt} />
         }
         dark
       />
@@ -400,24 +351,22 @@ export const MarketingLanding = async () => {
       <section id="mobile" className={styles.mobileSection}>
         <div className={styles.mobileCopy} data-reveal>
           <p className={styles.eyebrow}>
-            <span>06</span>Mobile / PWA
+            <span>06</span>
+            {copy.mobile.eyebrow}
           </p>
-          <h2>Bazaar всегда с вами</h2>
-          <p>
-            Продажа, каталог и рабочие операции адаптированы под телефон и планшет. Это не
-            уменьшенный desktop — мобильный сценарий собран отдельно.
-          </p>
+          <h2>{copy.mobile.title}</h2>
+          <p>{copy.mobile.body}</p>
           <div className={styles.mobileBadges}>
-            <span>Установка как приложение</span>
-            <span>Сканирование камерой</span>
-            <span>Светлая и тёмная темы</span>
+            <span>{copy.mobile.badges[0]}</span>
+            <span>{copy.mobile.badges[1]}</span>
+            <span>{copy.mobile.badges[2]}</span>
           </div>
         </div>
         <div className={styles.deviceStage} data-reveal>
           <div className={styles.tabletFrame}>
             <Image
-              src="/marketing/captures/dashboard-wide.webp"
-              alt="Bazaar на планшете"
+              src={marketingCaptures.dashboard}
+              alt={copy.mobile.tabletAlt}
               width={1920}
               height={1080}
               sizes="700px"
@@ -426,8 +375,8 @@ export const MarketingLanding = async () => {
           <div className={styles.mobilePhoneFrame}>
             <div aria-hidden="true" />
             <Image
-              src="/marketing/captures/pos-mobile.webp"
-              alt="Мобильная касса Bazaar"
+              src={marketingCaptures.posMobile}
+              alt={copy.mobile.phoneAlt}
               width={780}
               height={1688}
               sizes="240px"
@@ -439,74 +388,73 @@ export const MarketingLanding = async () => {
       <section className={styles.proofSection} aria-labelledby="proof-title">
         <div data-reveal>
           <p className={styles.eyebrow}>
-            <span>07</span>Trust
+            <span>07</span>
+            {copy.proof.eyebrow}
           </p>
-          <h2 id="proof-title">Доказательства, а не придуманные цифры.</h2>
+          <h2 id="proof-title">{copy.proof.title}</h2>
         </div>
-        <p data-reveal>
-          Здесь появятся только подтверждённые кейсы, логотипы и показатели — после согласия
-          клиентов. До этого Bazaar не публикует вымышленные отзывы или статистику.
-        </p>
+        <p data-reveal>{copy.proof.body}</p>
       </section>
 
       <MarketingPricing plans={plans} locale={locale} t={t} />
 
       <section className={styles.finalCta}>
         <div data-reveal>
-          <p>Retail OS · Bazaar</p>
+          <p>{copy.final.tag}</p>
           <h2>
-            Ваш магазин уже работает.
+            {copy.final.line1}
             <br />
-            Теперь пусть он работает как система.
+            {copy.final.line2}
           </h2>
           <Link href="/signup">
-            Начать с Bazaar <Arrow />
+            {copy.final.start} <Arrow />
           </Link>
         </div>
       </section>
 
       <footer className={styles.footer}>
         <div className={styles.footerBrand}>
-          <Link href="/" aria-label="Bazaar — на главную">
+          <Link href="/" aria-label={copy.nav.home}>
             <Image src="/brand/icon.png" alt="" width={34} height={34} />
             <span>BAZAAR</span>
           </Link>
-          <p>Retail Operating System для современного магазина.</p>
+          <p>{copy.footer.description}</p>
         </div>
         <div className={styles.footerLinks}>
           <div>
-            <h3>Product</h3>
-            <a href="#pos">Касса</a>
-            <a href="#inventory">Запасы</a>
-            <a href="#analytics">Аналитика</a>
+            <h3>{copy.footer.product}</h3>
+            <a href="#pos">{copy.stories.pos.eyebrow}</a>
+            <a href="#inventory">{copy.stories.inventory.eyebrow}</a>
+            <a href="#analytics">{copy.stories.analytics.eyebrow}</a>
           </div>
           <div>
-            <h3>Solutions</h3>
+            <h3>{copy.footer.solutions}</h3>
             <a href="#platform">Retail OS</a>
             <a href="#mobile">Mobile / PWA</a>
-            <a href="#pricing">Тарифы</a>
+            <a href="#pricing">{copy.nav.pricing}</a>
           </div>
           <div>
-            <h3>Integrations</h3>
-            <a href="#commerce">Commerce</a>
+            <h3>{copy.footer.integrations}</h3>
+            <a href="#commerce">{copy.commerce.eyebrow}</a>
             <Link href="/developers/bazaar-api">Bazaar API</Link>
-            <a href="#commerce">Маркетплейсы</a>
+            <a href="#commerce">{copy.footer.marketplaces}</a>
           </div>
           <div>
-            <h3>Company / Support</h3>
-            <a href={whatsappUrl}>Связаться</a>
-            <Link href="/login">Войти</Link>
-            <Link href="/signup">Регистрация</Link>
+            <h3>{copy.footer.company}</h3>
+            <a href={whatsappUrl}>{copy.footer.contact}</a>
+            <Link href="/login">{copy.nav.signIn}</Link>
+            <Link href="/signup">{copy.footer.signup}</Link>
           </div>
           <div>
-            <h3>Legal</h3>
-            <a href={`${whatsappUrl}?text=Legal%20information`}>Правовая информация</a>
-            <a href={`${whatsappUrl}?text=Privacy%20request`}>Конфиденциальность</a>
+            <h3>{copy.footer.legal}</h3>
+            <a href={`${whatsappUrl}?text=Legal%20information`}>{copy.footer.legal}</a>
+            <Link href="/privacy">{copy.footer.privacy}</Link>
           </div>
         </div>
         <div className={styles.footerBottom}>
           <span>© {new Date().getFullYear()} Bazaar</span>
-          <span>Сделано для розничной торговли Кыргызстана</span>
+          <MarketingLocaleSwitcher />
+          <span>{copy.footer.made}</span>
         </div>
       </footer>
     </main>

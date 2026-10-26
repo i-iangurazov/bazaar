@@ -10,16 +10,17 @@ describe("Bazaar Retail OS marketing landing", () => {
   it("uses isolated marketing components and real optimized Bazaar captures", async () => {
     const page = await readSource("src/app/page.tsx");
     const landing = await readSource("src/components/marketing/MarketingLanding.tsx");
+    const assets = await readSource("src/content/marketing/assets.ts");
 
     expect(page).toContain("@/components/marketing/MarketingLanding");
     expect(page).not.toContain("@/components/ui/");
     expect(landing).toContain('from "next/image"');
-    expect(landing).toContain("/marketing/captures/pos-desktop-wide.webp");
-    expect(landing).toContain("/marketing/captures/pos-mobile.webp");
-    expect(landing).toContain("/marketing/captures/products-wide.webp");
-    expect(landing).toContain("/marketing/captures/movements-wide.webp");
-    expect(landing).toContain("/marketing/captures/dashboard-wide.webp");
-    expect(landing).toContain("/marketing/captures/integrations-wide.webp");
+    expect(assets).toContain("/marketing/captures/pos-desktop-wide.webp");
+    expect(assets).toContain("/marketing/captures/pos-mobile.webp");
+    expect(assets).toContain("/marketing/captures/products-wide.webp");
+    expect(assets).toContain("/marketing/captures/movements-wide.webp");
+    expect(assets).toContain("/marketing/captures/dashboard-wide.webp");
+    expect(assets).toContain("/marketing/captures/integrations-wide.webp");
     expect(landing).not.toContain("data:image");
   });
 
@@ -39,16 +40,8 @@ describe("Bazaar Retail OS marketing landing", () => {
     expect(sitemap).toContain('url: "https://www.bazaar.kg/"');
     expect(sitemap).toContain('url: "https://www.bazaar.kg/signup"');
     expect(landing).toContain('"@type": "SoftwareApplication"');
-    expect(landing).toContain("Весь ваш магазин. В одной системе.");
-    expect(landing).toContain("Продавайте за секунды");
-    expect(landing).toContain("Каждый товар под контролем");
-    expect(landing).toContain("Один каталог.");
-    expect(landing).toContain("Все каналы продаж.");
-    expect(landing).toContain("Видите не отчёты. Видите бизнес.");
-    expect(landing).toContain("Bazaar всегда с вами");
     expect(landing).toContain("getPlanCatalogEntries()");
     expect(landing).toContain("price: String(plan.monthlyPriceKgs)");
-    expect(landing).toContain("не публикует вымышленные отзывы или статистику");
   });
 
   it("limits hydration and provides keyboard and reduced-motion behavior", async () => {
@@ -72,7 +65,6 @@ describe("Bazaar Retail OS marketing landing", () => {
     expect(landing).toContain("width={1920}");
     expect(landing).toContain("height={1080}");
     expect(landing).toContain("integrationConsole");
-    expect(landing).toContain("Один источник данных для всех каналов");
     expect(styles).toContain("aspect-ratio: 16 / 9");
     expect(styles).not.toContain(".flowLines");
     expect(styles).not.toContain(".integrationNode");

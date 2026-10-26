@@ -737,8 +737,10 @@
     },
     {
       "source": "src/app/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/marketing-verification.json"
+      ]
     },
     {
       "source": "src/app/privacy/page.tsx",
@@ -966,12 +968,12 @@
     }
   ],
   "verification": {
-    "desktop": "partial:96/97 page sources in_review, one pending, zero fully accepted; public-consumer checkpoint",
-    "mobile": "partial:48 final public/loyalty states at actual1280/390 across3languages/2themes; full shared/state acceptance pending",
-    "themes": "public catalog/join/card selected-state matrix passed in both themes and3languages; earlier family limits retained",
-    "rolesAndScopes": "partial: true signed-out public access, actual QA sign-out/sign-in restoration and nine real authentication DB cases; existing policy unchanged",
-    "functionalRegression": "2091 full unit tests and35 isolated public/loyalty database cases passed;48 final browser captures, actual network recovery and485 selected business rows unchanged",
-    "productionBuild": "passed after all public-consumer source changes; no live provider acceptance"
+    "desktop": "partial:97/97page sources in_review, zero pending/accepted; primary source inventory only",
+    "mobile": "partial:marketing12language/theme/width combinations,60section captures and4supplemental; historical family evidence retained; final acceptance pending",
+    "themes": "Marketing selected-state matrix passed in both themes/RU/KG/EN; earlier family limits retained",
+    "rolesAndScopes": "Authenticated root redirect and actual QA logout/login preserved;9real DB authentication cases passed; existing policy unchanged",
+    "functionalRegression": "2113full unit/9authentication DB tests passed; marketing keyboard/locale real-network recovery and485business-row preservation verified",
+    "productionBuild": "passed after all marketing application changes; no live provider acceptance"
   },
   "requirements": {
     "visualFidelity": "Match Espresso typography, palette, surfaces and components while preserving customer workflows; analogous screen comparison must respect the human-confirmed operational layouts.",
@@ -983,7 +985,7 @@
     "customerWorkflows": "Preserve the customer-requested two-column operational layouts and established interactions. The visual reference does not authorize replacing them; see AGENTS.md and redesign-change-audit.json."
   },
   "progress": {
-    "stage": "public-consumer-checkpoint-in-review-full-redesign-in-progress",
+    "stage": "marketing-checkpoint-in-review-full-redesign-in-progress",
     "foundation": [
       "Pinned MIT Espresso semantic tokens and component CSS",
       "Self-hosted Inter Variable",
@@ -1153,10 +1155,15 @@
         "check": "Public catalog/join/card primary acceptance and real network recovery",
         "result": "48 final selected-state captures; normal OTP/QR flow through dev outbox and real DB sessions; one unpaid catalog order; existing485business rows unchanged",
         "evidence": "docs/espresso/public-consumer-verification.json"
+      },
+      {
+        "check": "Public marketing: theme/localization/keyboard/real-network recovery and current product captures",
+        "result": "12combinations/60section captures plus4supplemental, one source;297existing CSSrule geometry preserved; authenticated redirect and485business rows unchanged; in_review only",
+        "evidence": "docs/espresso/marketing-verification.json"
       }
     ],
     "remaining": [
-      "Review and adapt all remaining route families and page-specific controls",
+      "Complete final page-specific/shared-control state acceptance after the97/97primary source pass",
       "Current ERPNext reference comparison for analogous full screen layouts",
       "Dark theme and RU/KG/EN visual matrix",
       "Admin/manager/staff/cashier and store/plan gates in the rendered UI",
@@ -1172,13 +1179,16 @@
       "Complete report/shared-component acceptance permutations listed in reports-verification.json; page captures and DB regressions do not establish final overall redesign acceptance.",
       "Complete integration/provider/editor/query-state and legacy translation acceptance listed in integrations-verification.json; base captures and mocks are not live provider acceptance.",
       "Complete administration/shared-shell plan, title-fallback and state permutations listed in administration-verification.json. Current page/control totals are recorded in the public-consumer checkpoint; administration limitations still apply.",
-      "One public marketing page source and26 separately unreviewed shared controls remain; finish legacy help/public copy, mobile title fallback and complete shared/state/visual acceptance. Field focus now has direct browser evidence but no every-browser claim."
+      "No primary page-source pending:97in_review/0accepted.26shared controls pending; legacy copy/accessibility, mobile title fallback and complete shared/state/visual acceptance remain."
     ],
     "unitTests": {
-      "files": 272,
-      "tests": 2091,
-      "result": "passed",
-      "log": "artifacts/ux/espresso/public-consumer-unit-final.log"
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
+      "files": 274,
+      "tests": 2113,
+      "result": "passed after all application changes",
+      "log": "artifacts/ux/espresso/marketing-unit-final.log",
+      "newTests": 22,
+      "note": "Net increase relative to the2091-case public-consumer checkpoint. New cases are included in2113."
     },
     "databaseRegression": {
       "files": 3,
@@ -1291,6 +1301,14 @@
       "result": "passed",
       "log": "artifacts/ux/espresso/public-consumer-database.log",
       "scope": "Public catalog search/pagination/variants/discounts/checkout, member authentication, OTP delivery acceptance/failure, QR lifecycle, ledger and online/order loyalty. Overlaps earlier family suites; do not sum them as unique cases."
+    },
+    "marketingAuthenticationDatabaseRegression": {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts authentication",
+      "files": 1,
+      "tests": 9,
+      "database": "bazaar_hardening_ci; Redis DB5; isolated resettable regression infrastructure",
+      "result": "passed",
+      "log": "artifacts/ux/espresso/marketing-auth-database-final.log"
     }
   }
 }

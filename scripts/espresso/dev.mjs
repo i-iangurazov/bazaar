@@ -27,7 +27,11 @@ if (loyaltyOutbox) {
 // Use the standard CLI in a separate project root, rather than sharing .next.
 const manifest = resolve(root, ".next/standalone/.next/server/middleware-manifest.json");
 const originalManifest = await readFile(manifest);
-const family = loyaltyOutbox ? "public-consumer" : "scanner";
+const familyIndex = process.argv.indexOf("--family");
+const requestedFamily = familyIndex >= 0 ? process.argv[familyIndex + 1] : "scanner";
+assert(["scanner", "marketing", "shared-controls"].includes(requestedFamily), "Unknown QA source family");
+assert(!loyaltyOutbox || familyIndex < 0, "Choose either the loyalty outbox or a screen family");
+const family = loyaltyOutbox ? "public-consumer" : requestedFamily;
 const workspace = resolve(root, `artifacts/ux/espresso/${family}-dev-${Date.now()}`);
 await mkdir(workspace, { recursive: true });
 await cp(resolve(root, "src"), resolve(workspace, "src"), { recursive: true });

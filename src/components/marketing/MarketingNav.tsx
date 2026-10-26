@@ -4,16 +4,17 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
+import type { MarketingCopy } from "@/content/marketing";
+
 import styles from "./marketing.module.css";
 
-const links = [
-  { href: "#platform", label: "Продукт" },
-  { href: "#pos", label: "Возможности" },
-  { href: "#commerce", label: "Интеграции" },
-  { href: "#pricing", label: "Тарифы" },
-];
-
-export const MarketingNav = () => {
+export const MarketingNav = ({ copy }: { copy: MarketingCopy["nav"] }) => {
+  const links = [
+    { href: "#platform", label: copy.product },
+    { href: "#pos", label: copy.features },
+    { href: "#commerce", label: copy.integrations },
+    { href: "#pricing", label: copy.pricing },
+  ];
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
@@ -123,7 +124,15 @@ export const MarketingNav = () => {
             { once: true },
           );
         }
-      } else menuButton?.focus({ preventScroll: true });
+      } else {
+        // The mobile trigger disappears at the desktop breakpoint. Keep focus
+        // on the visible brand link when resize closes the menu.
+        const target =
+          window.innerWidth >= 1000
+            ? navigation.querySelector<HTMLAnchorElement>("a[href]")
+            : menuButton;
+        target?.focus({ preventScroll: true });
+      }
     };
   }, [open]);
 
@@ -133,7 +142,7 @@ export const MarketingNav = () => {
       className={open ? styles.navOverlay : undefined}
       role={open ? "dialog" : undefined}
       aria-modal={open ? true : undefined}
-      aria-label={open ? "Мобильная навигация" : undefined}
+      aria-label={open ? copy.mobile : undefined}
     >
       <header
         className={`${styles.nav} ${scrolled ? styles.navScrolled : ""} ${open ? styles.navOpen : ""}`}
@@ -142,13 +151,13 @@ export const MarketingNav = () => {
           <Link
             href="/"
             className={styles.brand}
-            aria-label="Bazaar — на главную"
+            aria-label={copy.home}
             onClick={() => setOpen(false)}
           >
             <Image src="/brand/icon.png" width={34} height={34} alt="" priority />
             <span>BAZAAR</span>
           </Link>
-          <nav className={styles.desktopNav} aria-label="Основная навигация">
+          <nav className={styles.desktopNav} aria-label={copy.primary}>
             {links.map((link) => (
               <a key={link.href} href={link.href}>
                 {link.label}
@@ -156,17 +165,17 @@ export const MarketingNav = () => {
             ))}
           </nav>
           <div className={styles.navActions}>
-            <Link href="/login">Войти</Link>
+            <Link href="/login">{copy.signIn}</Link>
             <Link className={styles.navCta} href="/signup">
-              Начать бесплатно
+              {copy.start}
             </Link>
             <button
               ref={menuButtonRef}
               type="button"
               className={styles.menuButton}
-              aria-label={open ? "Закрыть меню" : "Открыть меню"}
+              aria-label={open ? copy.close : copy.open}
               aria-expanded={open}
-              aria-controls="marketing-mobile-navigation"
+              aria-controls={open ? "marketing-mobile-navigation" : undefined}
               onClick={() => setOpen((current) => !current)}
             >
               <span />
@@ -178,7 +187,7 @@ export const MarketingNav = () => {
       {/* Outside the filtered header: fixed positioning must remain relative to the viewport. */}
       {open ? (
         <div ref={mobileNavRef} id="marketing-mobile-navigation" className={styles.mobileNav}>
-          <nav aria-label="Мобильная навигация">
+          <nav aria-label={copy.mobile}>
             {links.map((link) => (
               <a
                 key={link.href}
@@ -194,10 +203,10 @@ export const MarketingNav = () => {
             ))}
           </nav>
           <Link href="/login" onClick={() => setOpen(false)}>
-            Войти в Bazaar
+            {copy.signInBazaar}
           </Link>
           <Link href="/signup" className={styles.mobileNavCta} onClick={() => setOpen(false)}>
-            Начать бесплатно
+            {copy.start}
           </Link>
         </div>
       ) : null}

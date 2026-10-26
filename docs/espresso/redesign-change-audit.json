@@ -1,5 +1,5 @@
 {
-  "status": "public-consumer-checkpoint-in-review-full-redesign-in-progress",
+  "status": "marketing-checkpoint-in-review-full-redesign-in-progress",
   "scope": "Redesign changes since1fcdfd4 with family checkpoints through public catalog/consumer loyalty; not an audit of every earlier playground improvement.",
   "humanCorrection": "Customer-requested two-column operational layouts must be preserved. A difference from ERPNext is not evidence of a defect.",
   "restored": [
@@ -298,13 +298,14 @@
       "src/server/services/reports.ts",
       "src/server/trpc/routers/pos.ts"
     ],
-    "result": "Five previously disclosed corrective service/router files plus two public loyalty REST transport corrections in this checkpoint. Card GET/QR POST retain authoritative AppError status, return500/genericMessage for unexpected failures and no-store. No Prisma schema diff; middleware cookie agreement remains separately disclosed.",
+    "result": "Seven previously disclosed corrective service/router/API files remain relative to1fcdfd4. No new server/API/Prisma source change in the marketing checkpoint. Middleware cookie agreement remains separately disclosed.",
     "evidence": [
       "docs/espresso/loyalty-timezone-verification.json",
       "docs/espresso/refund-preview-verification.json",
       "docs/espresso/report-timestamps-verification.json",
       "docs/espresso/legacy-report-dates-verification.json",
-      "docs/espresso/public-consumer-verification.json"
+      "docs/espresso/public-consumer-verification.json",
+      "docs/espresso/marketing-verification.json"
     ]
   },
   "sourceReview": {
@@ -560,6 +561,10 @@
         "classification": "added-or-removed-requires-semantic-review"
       },
       {
+        "path": "src/app/page.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
         "path": "src/app/privacy/page.tsx",
         "classification": "requires-semantic-review"
       },
@@ -684,6 +689,22 @@
         "classification": "requires-semantic-review"
       },
       {
+        "path": "src/components/marketing/FeatureShowcase.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/components/marketing/MarketingLanding.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/components/marketing/MarketingLocaleSwitcher.tsx",
+        "classification": "added-or-removed-requires-semantic-review"
+      },
+      {
+        "path": "src/components/marketing/MarketingNav.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
         "path": "src/components/mobile-app-shell.tsx",
         "classification": "jsx-style-attributes-only"
       },
@@ -769,6 +790,10 @@
       },
       {
         "path": "src/components/saved-table-views.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/components/theme-sync.tsx",
         "classification": "requires-semantic-review"
       },
       {
@@ -874,6 +899,14 @@
       {
         "path": "src/content/help/search-core.ts",
         "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/content/marketing/assets.ts",
+        "classification": "added-or-removed-requires-semantic-review"
+      },
+      {
+        "path": "src/content/marketing/index.ts",
+        "classification": "added-or-removed-requires-semantic-review"
       },
       {
         "path": "src/hooks/use-locale-change.ts",
@@ -1039,7 +1072,7 @@
     "Public guide and field sources remain in_review; documented render/DOM and selected focus evidence is not full editorial, every-browser, provider or whole-redesign acceptance."
   ],
   "delivery": "codex/playground only; no main merge or production deployment",
-  "currentCheckpoint": "docs/espresso/public-consumer-verification.json",
+  "currentCheckpoint": "docs/espresso/marketing-verification.json",
   "previousCheckpoints": [
     "docs/espresso/directory-verification.json",
     "docs/espresso/auth-verification.json",
@@ -1049,49 +1082,43 @@
     "docs/espresso/reports-verification.json",
     "docs/espresso/integrations-verification.json",
     "docs/espresso/administration-verification.json",
-    "docs/espresso/public-guide-verification.json"
+    "docs/espresso/public-guide-verification.json",
+    "docs/espresso/public-consumer-verification.json"
   ],
   "currentCheckpointChecks": {
     "unit": {
       "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
-      "files": 272,
-      "tests": 2091,
+      "files": 274,
+      "tests": 2113,
       "result": "passed after all application changes",
-      "log": "artifacts/ux/espresso/public-consumer-unit-final.log",
-      "newTests": 25,
-      "note": "The 25 new cases are included in 2091. Existing OTP recovery also gained an actual-focus assertion."
-    },
-    "focused": {
-      "files": 5,
-      "tests": 30,
-      "result": "passed before the final OTP-focus refinement; final full suite above includes the focus refinement",
-      "log": "artifacts/ux/espresso/public-consumer-focused-final.log"
+      "log": "artifacts/ux/espresso/marketing-unit-final.log",
+      "newTests": 22,
+      "note": "Net increase relative to the2091-case public-consumer checkpoint. New cases are included in2113."
     },
     "database": {
-      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts public",
-      "database": "bazaar_hardening_ci; separate resettable database, Redis DB5",
-      "files": 8,
-      "tests": 35,
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts authentication",
+      "files": 1,
+      "tests": 9,
+      "database": "bazaar_hardening_ci; Redis DB5; isolated resettable regression infrastructure",
       "result": "passed",
-      "log": "artifacts/ux/espresso/public-consumer-database.log",
-      "scope": "Public catalog search/pagination/variants/discounts/checkout, member authentication, OTP delivery acceptance/failure, QR lifecycle, ledger and online/order loyalty. Overlaps earlier family suites; do not sum them as unique cases."
+      "log": "artifacts/ux/espresso/marketing-auth-database-final.log"
     },
     "types": {
       "result": "passed",
-      "log": "artifacts/ux/espresso/public-consumer-types-final.log"
+      "log": "artifacts/ux/espresso/marketing-types-final.log"
     },
     "lint": {
       "result": "passed without warnings",
-      "log": "artifacts/ux/espresso/public-consumer-lint-final.log"
+      "log": "artifacts/ux/espresso/marketing-lint-final.log"
     },
     "translations": {
-      "result": "passed; four new loyalty messages in RU/KG/EN",
-      "log": "artifacts/ux/espresso/public-consumer-i18n.log"
+      "result": "passed; marketing dictionary shapes/SSR additionally checked by TypeScript and runtime unit tests",
+      "log": "artifacts/ux/espresso/marketing-i18n-final.log"
     },
     "productionBuild": {
       "command": "UX_SUITE=espresso node --import tsx scripts/ux/build.ts",
-      "result": "passed after final OTP focus and duplicate accessible-name corrections, including type/lint checks and static page generation",
-      "log": "artifacts/ux/espresso/build-public-consumer-final.log"
+      "result": "passed after final application changes; includes types/lint and125 generated static pages",
+      "log": "artifacts/ux/espresso/build-marketing-final.log"
     }
   },
   "customerLayoutRecheck": [
@@ -1152,5 +1179,14 @@
     ],
     "change": "Unexpected failures return500/genericMessage/no-store; genuine AppError401 remains unauthorized. No service calculation/schema/authorization change.",
     "evidence": "docs/espresso/public-consumer-verification.json"
-  }
+  },
+  "marketingBehaviorChanges": [
+    "Complete typed RU/KG/EN marketing dictionaries replace mixed-language body copy. Server sends selected locale and client islands receive only their needed copy. Metadata/OpenGraph/JSON-LD are localized; canonical destination and authoritative subscription prices/grants/limits remain unchanged.",
+    "Root no longer forces light theme. Anonymous root respects the server-selected theme; authenticated root still redirects to dashboard. Shared HTML lang uses the existing canonical Intl helper:ru,ky-KG,en-US. No authentication or permission policy change.",
+    "All feature tabs reference one existing stable panel. Home/End and arrow wrap work with one tab stop and selected-tab labelling. All six existing features retained.",
+    "Mobile navigation retains its modal/body-lock/anchor behavior. Desktop resize now restores focus to the visible brand instead of losing focus onBODY. Escape returns focus to the mobile trigger.",
+    "New native footer locale select calls the existing locale API and refreshes. Busy state prevents duplicate requests; HTTP/network failure retains the confirmed language and provides translated retry feedback. Public cookie only; no staff preference mutation.",
+    "Footer privacy opens the actual privacy page. Other external contact destinations retained; no external message sent.",
+    "Connected-channel copy and static integration graphic are explicitly described as configured integrations/a demonstration. Unqualified fiscal-result claim removed. No invented testimonials or business statistics added."
+  ]
 }
