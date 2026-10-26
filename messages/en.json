@@ -200,6 +200,7 @@
     "signIn": "Sign in",
     "signingIn": "Signing in...",
     "invalidCredentials": "Invalid email or password.",
+    "loginUnavailable": "Could not complete sign-in. Check your connection and try again.",
     "loginRateLimited": "Too many sign-in attempts. Try again later.",
     "loginLocked": "Sign-in is temporarily locked after several failed attempts.",
     "loginBackoff": "Attempts are too frequent. Wait a bit and try again.",
@@ -476,7 +477,8 @@
     "acceptedHint": "Check your email and confirm it before signing in.",
     "acceptedEmailFailedHint": "Invite accepted, but the confirmation email was not sent. You can sign in after confirming your email.",
     "goToLogin": "Go to sign in",
-    "invalidInvite": "The invite is invalid or expired."
+    "invalidInvite": "The invite is invalid or expired.",
+    "tryAnotherInvite": "Enter another invitation"
   },
   "verify": {
     "title": "Email confirmation",
@@ -5259,8 +5261,8 @@
     "baamNotConfigured": "BAAM is not connected yet. An administrator needs to configure the AI connection before questions can be answered.",
     "baamUnavailable": "BAAM could not answer right now. Your question is kept; try again shortly.",
     "baamScopeChanged": "Your store access changed while BAAM was checking. Refresh your access and try again.",
-    "genericTitle": "Generic",
-    "genericMessage": "Something went wrong.",
+    "genericTitle": "Something went wrong",
+    "genericMessage": "Reload the page or try again later.",
     "serviceUnavailable": "Service unavailable",
     "nativeOffline": "No connection. The operation was not completed; reconnect and try again.",
     "tryAgain": "Try again.",

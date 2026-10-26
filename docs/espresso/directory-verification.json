@@ -149,7 +149,11 @@
     {
       "area": "Sign-in landing for STAFF/CASHIER",
       "observation": "During role verification, plain /login led to /dashboard, whose data request was denied. Role navigation correctly hides dashboard. Authentication route handling needs its own verification before the complete redesign can be accepted.",
-      "status": "pending-authentication-family-review"
+      "status": "resolved-in-authentication-checkpoint",
+      "resolution": {
+        "evidence": "docs/espresso/auth-verification.json",
+        "result": "Default login now uses existing role-home policy; all four roles verified in the isolated rendered app."
+      }
     }
   ],
   "sourceFingerprints": {

@@ -77,7 +77,11 @@
       ],
       "observations": [
         "During the directory role matrix, plain /login reached /dashboard for STAFF/CASHIER and dashboard data was denied. Investigate role landing behavior in the authentication family before final acceptance."
-      ]
+      ],
+      "observationResolution": {
+        "status": "fixed-and-replayed-for-all-four-roles",
+        "evidence": "docs/espresso/auth-verification.json"
+      }
     },
     {
       "source": "src/app/(app)/dev/scanner-test/page.tsx",
@@ -518,21 +522,31 @@
     },
     {
       "source": "src/app/invite/[token]/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/auth-verification.json"
+      ]
     },
     {
       "source": "src/app/invite/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/auth-verification.json"
+      ]
     },
     {
       "source": "src/app/login/page.tsx",
-      "status": "pending",
-      "evidence": [],
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/auth-verification.json"
+      ],
       "observations": [
         "During the directory role matrix, plain /login reached /dashboard for STAFF/CASHIER and dashboard data was denied. Investigate role landing behavior in the authentication family before final acceptance."
-      ]
+      ],
+      "observationResolution": {
+        "status": "fixed-and-replayed-for-all-four-roles",
+        "evidence": "docs/espresso/auth-verification.json"
+      }
     },
     {
       "source": "src/app/loyalty/card/page.tsx",
@@ -556,28 +570,38 @@
     },
     {
       "source": "src/app/register-business/[token]/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/auth-verification.json"
+      ]
     },
     {
       "source": "src/app/reset/[token]/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/auth-verification.json"
+      ]
     },
     {
       "source": "src/app/reset/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/auth-verification.json"
+      ]
     },
     {
       "source": "src/app/signup/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/auth-verification.json"
+      ]
     },
     {
       "source": "src/app/verify/[token]/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/auth-verification.json"
+      ]
     }
   ],
   "components": [
@@ -754,12 +778,12 @@
     }
   ],
   "verification": {
-    "desktop": "partial: dashboard, product lists/documents and shared controls at 1440px",
-    "mobile": "partial: 390px product documents, Baam, More and integrations",
-    "themes": "partial: product documents inspected in light/dark; remaining families pending",
+    "desktop": "partial: inspected dashboard, product/inventory documents, directories and eight auth route sources at 1440px; no full-application acceptance claim",
+    "mobile": "partial: 390px product/inventory documents, directories, Baam, integrations and auth states; remaining families/states pending",
+    "themes": "partial: product documents and auth family light/dark review; the full route/theme matrix remains pending",
     "rolesAndScopes": "partial: product flows checked under all four roles; manager store scoping verified; other routes/plans/currencies pending",
-    "functionalRegression": "87 database regressions passed on a separate resettable CI DB; product create/edit/search and shared-control UI flows verified; full application acceptance pending",
-    "productionBuild": "passed for current product-document/list checkpoint; full redesign acceptance remains pending"
+    "functionalRegression": "checkpoint reports record separate isolated DB suites; latest auth checkpoint has 1892 unit tests and 9 real DB auth-entry tests. Successful browser credential creation/reset and complete application acceptance remain pending.",
+    "productionBuild": "passed for the current authentication checkpoint; full redesign acceptance remains pending"
   },
   "requirements": {
     "visualFidelity": "Match Espresso typography, palette, surfaces and components while preserving customer workflows; analogous screen comparison must respect the human-confirmed operational layouts.",
@@ -771,7 +795,7 @@
     "customerWorkflows": "Preserve the customer-requested two-column operational layouts and established interactions. The visual reference does not authorize replacing them; see AGENTS.md and redesign-change-audit.json."
   },
   "progress": {
-    "stage": "directory-workflows-and-focus-checked-full-redesign-still-in-progress",
+    "stage": "authentication-workflows-and-two-theme-review-checked-full-redesign-in-progress",
     "foundation": [
       "Pinned MIT Espresso semantic tokens and component CSS",
       "Self-hosted Inter Variable",
@@ -890,6 +914,13 @@
         "evidence": [
           "docs/espresso/directory-verification.json"
         ]
+      },
+      {
+        "check": "Authentication family preserves field composition and supports role landing, translated errors and recovery",
+        "result": "Existing ADMIN/MANAGER reach dashboard; STAFF/CASHIER reach POS. Safe explicit next links preserved. Desktop light and mobile dark/locale states reviewed; business registration additionally checked at 390px in light theme. Credentials were not created or changed.",
+        "evidence": [
+          "docs/espresso/auth-verification.json"
+        ]
       }
     ],
     "remaining": [
@@ -901,13 +932,14 @@
       "Broader database integration regression and final production smoke on the isolated app",
       "Audit autofocus dialogs across other route families for explicit return-focus targets; saved-view forms now have explicit trigger refs.",
       "Review the explicitly disclosed product-form and navigation composition changes with the human; do not treat test success as workflow approval.",
-      "Investigate the observed STAFF/CASHIER plain-login landing on /dashboard in the authentication family; this checkpoint does not claim that flow is fixed."
+      "Final authentication acceptance: successful invite/signup/onboarding and reset-token lifecycle under isolated tests; live SMTP and browser credential entry are not claimed by the current checkpoint."
     ],
     "unitTests": {
-      "files": 256,
-      "tests": 1863,
-      "status": "passed after directory fixes",
-      "evidence": "artifacts/ux/espresso/directories-unit-final.log",
+      "files": 258,
+      "tests": 1892,
+      "result": "passed",
+      "log": "artifacts/ux/espresso/auth-all-unit.log",
+      "status": "passed after authentication and locale validation corrections",
       "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit"
     },
     "databaseRegression": {
@@ -928,6 +960,14 @@
       "postgresPort": 55440,
       "providers": "disabled",
       "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts directories"
+    },
+    "authenticationDatabaseRegression": {
+      "files": 1,
+      "tests": 9,
+      "result": "passed; real bcrypt, PostgreSQL users, signed JWTs, session callbacks and Redis auth limiter",
+      "database": "bazaar_hardening_ci on 127.0.0.1:55440; separate from browser fixtures",
+      "log": "artifacts/ux/espresso/auth-entry-db.log",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts authentication"
     }
   }
 }

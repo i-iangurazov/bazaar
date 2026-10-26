@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { trpc } from "@/lib/trpc";
+import { QueryErrorState } from "@/components/query-error-state";
+import { Alert } from "@/components/ui/alert";
 
 const VerifyPage = () => {
   const params = useParams();
@@ -18,7 +20,7 @@ const VerifyPage = () => {
   const t = useTranslations("verify");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
-  const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
+  const [status, setStatus] = useState<"loading" | "success" | "invalid" | "error">("loading");
   const [nextPath, setNextPath] = useState("/login");
   const requestedTokenRef = useRef<string | null>(null);
 
@@ -27,9 +29,9 @@ const VerifyPage = () => {
       setNextPath(result.nextPath ?? "/login");
       setStatus("success");
     },
-    onError: () => {
-      // A conflict can mean an expired token; it does not prove verification.
-      setStatus("error");
+    onError: (error) => {
+      const code = error.data?.code;
+      setStatus(code === "NOT_FOUND" || code === "BAD_REQUEST" || code === "CONFLICT" ? "invalid" : "error");
     },
   });
 
@@ -38,6 +40,8 @@ const VerifyPage = () => {
       return;
     }
     requestedTokenRef.current = token;
+    setStatus("loading");
+    setNextPath("/login");
     verifyMutation.mutate({ token });
   }, [token, verifyMutation]);
 
@@ -60,7 +64,12 @@ const VerifyPage = () => {
               {tCommon("loading")}
             </div>
           ) : status === "error" ? (
-            <p>{tErrors("tokenInvalid")}</p>
+            <QueryErrorState onRetry={() => {
+              setStatus("loading");
+              verifyMutation.mutate({ token });
+            }} />
+          ) : status === "invalid" ? (
+            <Alert variant="destructive" role="alert">{tErrors("tokenInvalid")}</Alert>
           ) : (
             <p>{t("success")}</p>
           )}

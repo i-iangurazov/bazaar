@@ -1,5 +1,5 @@
 {
-  "status": "customer-operational-layouts-restored-directory-checkpoint-in-review-full-redesign-in-progress",
+  "status": "customer-operational-layouts-preserved-authentication-checkpoint-in-review-full-redesign-in-progress",
   "branch": "codex/playground",
   "reference": "Frappe Framework Espresso e8d41dd0061a32ee781caefe5d0b0d2bb7c15362",
   "checks": [
@@ -110,6 +110,47 @@
       "result": "Final directory build passed, including type/lint checks and 125 static pages; one-shot creation and role/focus recovery verified through CUA",
       "log": "artifacts/ux/espresso/build-directories-final.log",
       "evidence": "docs/espresso/directory-verification.json"
+    },
+    {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
+      "result": "258 files, 1892 tests passed after authentication and locale validation corrections",
+      "log": "artifacts/ux/espresso/auth-all-unit.log",
+      "evidence": "docs/espresso/auth-verification.json"
+    },
+    {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts authentication",
+      "result": "1 file, 9 real DB auth-entry tests passed on separate PostgreSQL/Redis regression infrastructure",
+      "log": "artifacts/ux/espresso/auth-entry-db.log",
+      "evidence": "docs/espresso/auth-verification.json"
+    },
+    {
+      "command": "pnpm exec tsc --noEmit --incremental",
+      "result": "passed",
+      "log": "artifacts/ux/espresso/auth-typecheck.log",
+      "evidence": "docs/espresso/auth-verification.json"
+    },
+    {
+      "command": "pnpm lint",
+      "result": "passed without warnings",
+      "log": "artifacts/ux/espresso/auth-lint.log",
+      "evidence": "docs/espresso/auth-verification.json"
+    },
+    {
+      "command": "pnpm i18n:check",
+      "result": "passed",
+      "log": "artifacts/ux/espresso/auth-i18n.log",
+      "evidence": "docs/espresso/auth-verification.json"
+    },
+    {
+      "command": "UX_SUITE=espresso CIRCLE_NODE_TOTAL=3 NODE_OPTIONS=--max-old-space-size=6144 node --import tsx scripts/ux/build.ts",
+      "result": "passed with final auth application sources, type/lint checks and 125 static pages",
+      "log": "artifacts/ux/espresso/build-auth-final.log",
+      "evidence": "docs/espresso/auth-verification.json"
+    },
+    {
+      "command": "CUA browser auth replay on localhost:3122",
+      "result": "All four existing-account role destinations, safe next links, failure recovery, desktop light and mobile dark auth states, RU/KG/EN validation preserving form values. Test preferences restored to RU/dark. No credentials created or changed.",
+      "evidence": "docs/espresso/auth-verification.json"
     }
   ],
   "environment": {
@@ -135,5 +176,6 @@
   ],
   "correction": "Warehouse column and interaction rearrangements from 5a1e7ac were rejected by the human and restored. Historical checks do not validate customer workflow suitability.",
   "currentAudit": "docs/espresso/redesign-change-audit.json",
-  "currentDirectoryCheckpoint": "docs/espresso/directory-verification.json"
+  "currentDirectoryCheckpoint": "docs/espresso/directory-verification.json",
+  "currentAuthenticationCheckpoint": "docs/espresso/auth-verification.json"
 }

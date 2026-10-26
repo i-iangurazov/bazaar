@@ -1,6 +1,6 @@
 {
   "status": "operational-layouts-restored-other-redesign-changes-explicitly-disclosed",
-  "scope": "Redesign changes since 1fcdfd4, including the directory verification checkpoint; not an audit of every earlier playground improvement.",
+  "scope": "Redesign changes since 1fcdfd4, including directory and authentication checkpoints; not an audit of every earlier playground improvement.",
   "humanCorrection": "Customer-requested two-column operational layouts must be preserved. A difference from ERPNext is not evidence of a defect.",
   "restored": [
     {
@@ -139,13 +139,31 @@
         "src/app/(app)/customers/page.tsx"
       ],
       "evidence": "docs/espresso/directory-verification.json"
+    },
+    {
+      "area": "Authentication presentation and recovery",
+      "changes": "Default sign-in uses existing role-home policy; explicit safe next remains. Network/session failures recover visibly, invalid invitations and service failures have separate states, and displayed form errors follow interface locale without clearing fields. Existing field order, widths, mutation inputs, verification requirements and backend permissions are retained.",
+      "sources": [
+        "src/app/login/page.tsx",
+        "src/app/signup/page.tsx",
+        "src/app/reset/page.tsx",
+        "src/app/reset/[token]/page.tsx",
+        "src/app/invite/page.tsx",
+        "src/app/invite/[token]/page.tsx",
+        "src/app/verify/[token]/page.tsx",
+        "src/app/register-business/[token]/page.tsx",
+        "src/components/login-form.tsx",
+        "src/hooks/use-locale-change.ts"
+      ],
+      "evidence": "docs/espresso/auth-verification.json"
     }
   ],
   "appearanceChanges": [
     "Espresso neutral colors and Bazaar blue; Inter font; Lucide icons",
     "Control heights, table density, spacing, borders, shadows and radii changed across shared controls",
     "Russian/Kyrgyz/English saved-view label and English product copy corrections",
-    "Localized Suppliers mobile title and hardware breadcrumb, corrected English directory/store/compliance copy and Kyrgyz directory heading. Normal directory and store form composition is retained."
+    "Localized Suppliers mobile title and hardware breadcrumb, corrected English directory/store/compliance copy and Kyrgyz directory heading. Normal directory and store form composition is retained.",
+    "Reset and invite pages show the existing AuthBrand once, using shared Espresso controls and alerts; form field order and widths remain unchanged."
   ],
   "serverScopeEvidence": {
     "command": "git diff --name-only 1fcdfd4 -- src/server prisma src/app/api",
@@ -273,6 +291,14 @@
         "classification": "jsx-style-attributes-only"
       },
       {
+        "path": "src/app/invite/[token]/page.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/app/invite/page.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
         "path": "src/app/layout.tsx",
         "classification": "requires-semantic-review"
       },
@@ -291,6 +317,26 @@
       {
         "path": "src/app/privacy/page.tsx",
         "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/app/register-business/[token]/page.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/app/reset/[token]/page.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/app/reset/page.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/app/signup/page.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/app/verify/[token]/page.tsx",
+        "classification": "requires-semantic-review"
       },
       {
         "path": "src/components/app-shell.tsx",
@@ -363,6 +409,10 @@
       {
         "path": "src/components/list-toolbar.tsx",
         "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/login-form.tsx",
+        "classification": "requires-semantic-review"
       },
       {
         "path": "src/components/mobile-app-shell.tsx",
@@ -533,6 +583,10 @@
         "classification": "jsx-style-attributes-only"
       },
       {
+        "path": "src/hooks/use-locale-change.ts",
+        "classification": "requires-semantic-review"
+      },
+      {
         "path": "src/lib/saved-table-views.ts",
         "classification": "requires-semantic-review"
       }
@@ -630,5 +684,49 @@
     "No further customer workflow rearrangements are authorized by a mere visual difference from ERPNext."
   ],
   "delivery": "codex/playground only; no main merge or production deployment",
-  "currentCheckpoint": "docs/espresso/directory-verification.json"
+  "currentCheckpoint": "docs/espresso/auth-verification.json",
+  "previousCheckpoints": [
+    "docs/espresso/directory-verification.json"
+  ],
+  "currentCheckpointChecks": {
+    "unit": {
+      "files": 258,
+      "tests": 1892,
+      "result": "passed",
+      "log": "artifacts/ux/espresso/auth-all-unit.log"
+    },
+    "focusedUnit": {
+      "files": 5,
+      "tests": 41,
+      "result": "passed",
+      "log": "artifacts/ux/espresso/auth-focused-unit.log"
+    },
+    "database": {
+      "files": 1,
+      "tests": 9,
+      "result": "passed; real bcrypt, PostgreSQL users, signed JWTs, session callbacks and Redis auth limiter",
+      "database": "bazaar_hardening_ci on 127.0.0.1:55440; separate from browser fixtures",
+      "log": "artifacts/ux/espresso/auth-entry-db.log"
+    },
+    "typecheck": {
+      "result": "passed",
+      "log": "artifacts/ux/espresso/auth-typecheck.log"
+    },
+    "lint": {
+      "result": "passed without warnings",
+      "log": "artifacts/ux/espresso/auth-lint.log"
+    },
+    "i18n": {
+      "result": "passed",
+      "log": "artifacts/ux/espresso/auth-i18n.log"
+    },
+    "productionBuild": {
+      "result": "passed; final application sources, type/lint checks and 125 static pages",
+      "log": "artifacts/ux/espresso/build-auth-final.log"
+    }
+  },
+  "customerLayoutRecheck": {
+    "evidence": "docs/espresso/auth-verification.json",
+    "result": "All four operational sources still match c276f30 byte for byte after authentication work."
+  }
 }

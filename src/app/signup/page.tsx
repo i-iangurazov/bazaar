@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { useLocaleChange } from "@/hooks/use-locale-change";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
@@ -71,7 +72,7 @@ const SignupPage = () => {
     name: "",
     preferredLocale: initialLocale,
   });
-  const [formError, setFormError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<Parameters<typeof translateError>[1]>(null);
   const [emailDeliveryFailed, setEmailDeliveryFailed] = useState(false);
   const [requestFieldErrors, setRequestFieldErrors] = useState<
     Partial<Record<keyof RequestValues, string>>
@@ -113,6 +114,16 @@ const SignupPage = () => {
     }
     return errors;
   };
+  useLocaleChange(() => {
+    if (Object.values(requestFieldErrors).some(Boolean)) {
+      const result = requestSchema.safeParse(requestValues);
+      setRequestFieldErrors(result.success ? {} : buildFieldErrors(result.error.issues));
+    }
+    if (Object.values(signupFieldErrors).some(Boolean)) {
+      const result = signupSchema.safeParse(signupValues);
+      setSignupFieldErrors(result.success ? {} : buildFieldErrors(result.error.issues));
+    }
+  });
 
   const requestMutation = trpc.publicAuth.requestAccess.useMutation({
     onSuccess: () => {
@@ -122,7 +133,7 @@ const SignupPage = () => {
     },
     onError: (error) => {
       const message = translateError(tErrors, error);
-      setFormError(message);
+      setFormError(error);
       toast({ variant: "error", description: message });
     },
   });
@@ -168,7 +179,7 @@ const SignupPage = () => {
     onError: (error) => {
       setRedirectingToBusiness(false);
       const message = translateError(tErrors, error);
-      setFormError(message);
+      setFormError(error);
       toast({ variant: "error", description: message });
     },
   });
@@ -266,7 +277,7 @@ const SignupPage = () => {
           <CardTitle>{t("title")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          {formError ? <p className="text-sm font-medium text-danger">{formError}</p> : null}
+          {formError ? <p className="text-sm font-medium text-danger">{translateError(tErrors, formError)}</p> : null}
           {mode === "invite_only" ? (
             <form onSubmit={handleRequestSubmit}>
               <FormStack>

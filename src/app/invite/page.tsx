@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { AuthBrand } from "@/components/auth-brand";
 
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { Button } from "@/components/ui/button";
@@ -28,10 +29,11 @@ const InviteEntryPage = () => {
   const t = useTranslations("invite");
   const router = useRouter();
   const [input, setInput] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(false);
 
   return (
     <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-4 px-4 py-8 sm:py-12">
+      <div className="flex justify-center"><AuthBrand /></div>
       <div className="flex justify-end">
         <LanguageSwitcher />
       </div>
@@ -46,10 +48,10 @@ const InviteEntryPage = () => {
               event.preventDefault();
               const token = resolveToken(input);
               if (!token) {
-                setError(t("entryInvalid"));
+                setError(true);
                 return;
               }
-              setError(null);
+              setError(false);
               router.push(`/invite/${token}`);
             }}
           >
@@ -63,7 +65,7 @@ const InviteEntryPage = () => {
                   placeholder={t("entryPlaceholder")}
                 />
               </div>
-              {error ? <p className="text-xs font-medium text-danger">{error}</p> : null}
+              {error ? <p className="text-xs font-medium text-danger">{t("entryInvalid")}</p> : null}
               <Button type="submit" className="w-full">
                 {t("entrySubmit")}
               </Button>

@@ -2,10 +2,14 @@
 
 import { useState } from "react";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { useLocaleChange } from "@/hooks/use-locale-change";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { z } from "zod";
+import { AuthBrand } from "@/components/auth-brand";
+import { QueryErrorState } from "@/components/query-error-state";
+import { Alert } from "@/components/ui/alert";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,7 +34,7 @@ const InvitePage = () => {
   const { toast } = useToast();
   const [accepted, setAccepted] = useState(false);
   const [emailDeliveryFailed, setEmailDeliveryFailed] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<Parameters<typeof translateError>[1]>(null);
   const [values, setValues] = useState<{ name: string; password: string; preferredLocale: Locale }>({
     name: "",
     password: "",
@@ -44,6 +48,12 @@ const InvitePage = () => {
     name: z.string().min(2, t("nameRequired")),
     password: z.string().min(8, t("passwordMin")),
     preferredLocale: z.enum(locales),
+  });
+  useLocaleChange(() => {
+    if (Object.values(fieldErrors).some(Boolean)) {
+      const result = schema.safeParse(values);
+      setFieldErrors(result.success ? {} : Object.fromEntries(result.error.issues.map((issue) => [String(issue.path[0]), issue.message])));
+    }
   });
 
   const acceptMutation = trpc.publicAuth.acceptInvite.useMutation({
@@ -64,7 +74,7 @@ const InvitePage = () => {
     },
     onError: (error) => {
       const message = translateError(tErrors, error);
-      setFormError(message);
+      setFormError(error);
       toast({ variant: "error", description: message });
     },
   });
@@ -92,6 +102,7 @@ const InvitePage = () => {
   if (accepted) {
     return (
       <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-4 px-4 py-8 sm:py-12">
+        <div className="flex justify-center"><AuthBrand /></div>
         <div className="flex justify-end">
           <LanguageSwitcher />
         </div>
@@ -112,6 +123,7 @@ const InvitePage = () => {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-4 px-4 py-8 sm:py-12">
+      <div className="flex justify-center"><AuthBrand /></div>
       <div className="flex justify-end">
         <LanguageSwitcher />
       </div>
@@ -125,9 +137,18 @@ const InvitePage = () => {
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
+          ) : inviteQuery.error ? (
+            inviteQuery.error.data?.code === "NOT_FOUND" || inviteQuery.error.data?.code === "BAD_REQUEST" ? (
+              <div className="space-y-3">
+                <Alert variant="destructive" role="alert">{t("invalidInvite")}</Alert>
+                <Link href="/invite" className="text-sm font-semibold text-primary hover:text-primary/80">
+                  {t("tryAnotherInvite")}
+                </Link>
+              </div>
+            ) : <QueryErrorState onRetry={() => inviteQuery.refetch()} />
           ) : inviteQuery.data ? (
             <>
-              {formError ? <p className="text-sm font-medium text-danger">{formError}</p> : null}
+              {formError ? <p className="text-sm font-medium text-danger">{translateError(tErrors, formError)}</p> : null}
               <div className="rounded-md border border-border/70 bg-muted/30 p-3 text-sm text-muted-foreground">
                 <p>{t("inviteFor", { org: inviteQuery.data.organizationName })}</p>
                 <p>{t("inviteEmail", { email: inviteQuery.data.email })}</p>
@@ -176,7 +197,7 @@ const InvitePage = () => {
                     ) : null}
                   </div>
                   <div className="space-y-1">
-                    <label className="text-sm font-medium text-foreground">{t("preferredLocale")}</label>
+                    <label htmlFor="invite-locale" className="text-sm font-medium text-foreground">{t("preferredLocale")}</label>
                     <Select
                       value={values.preferredLocale}
                       onValueChange={(value) => {
@@ -186,7 +207,7 @@ const InvitePage = () => {
                         }
                       }}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger id="invite-locale">
                         <SelectValue placeholder={t("selectLocale")} />
                       </SelectTrigger>
                       <SelectContent>
