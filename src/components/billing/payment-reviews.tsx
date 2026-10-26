@@ -44,7 +44,7 @@ export function PaymentReviews({ enabled }: { enabled: boolean }) {
         {query.isLoading ? (
           <p>{common("loading")}</p>
         ) : query.isError ? (
-          <QueryErrorState onRetry={() => void query.refetch()} />
+          <QueryErrorState error={query.error} onRetry={() => void query.refetch()} />
         ) : query.data?.length ? (
           <ul className="space-y-3">
             {query.data.map((invoice) => (

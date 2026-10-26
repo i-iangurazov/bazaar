@@ -1061,6 +1061,18 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
     .map(toMobileShellItem);
 
   const mobilePageTitle = useMemo(() => {
+    const administrationTitle = [
+      ["/admin/jobs", "adminJobs"],
+      ["/admin/metrics", "adminMetrics"],
+      ["/admin/support", "adminSupport"],
+      ["/billing", "billing"],
+      ["/onboarding", "onboarding"],
+      ["/platform", "platformOwner"],
+      ["/help", "help"],
+    ].find(([prefix]) => normalizedPath === prefix || normalizedPath.startsWith(`${prefix}/`));
+    if (administrationTitle) {
+      return tNav(administrationTitle[1]);
+    }
     if (normalizedPath === "/" || normalizedPath.startsWith("/dashboard")) {
       return tBreadcrumbs("home");
     }

@@ -13,18 +13,24 @@
   "routes": [
     {
       "source": "src/app/(app)/admin/jobs/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/administration-verification.json"
+      ]
     },
     {
       "source": "src/app/(app)/admin/metrics/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/administration-verification.json"
+      ]
     },
     {
       "source": "src/app/(app)/admin/support/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/administration-verification.json"
+      ]
     },
     {
       "source": "src/app/(app)/baam/page.tsx",
@@ -35,8 +41,10 @@
     },
     {
       "source": "src/app/(app)/billing/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/administration-verification.json"
+      ]
     },
     {
       "source": "src/app/(app)/cash/page.tsx",
@@ -87,8 +95,10 @@
     },
     {
       "source": "src/app/(app)/dev/scanner-test/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/administration-verification.json"
+      ]
     },
     {
       "source": "src/app/(app)/finance/expense/page.tsx",
@@ -106,8 +116,10 @@
     },
     {
       "source": "src/app/(app)/help/compliance/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/administration-verification.json"
+      ]
     },
     {
       "source": "src/app/(app)/inventory/counts/[id]/page.tsx",
@@ -200,8 +212,10 @@
     },
     {
       "source": "src/app/(app)/onboarding/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/administration-verification.json"
+      ]
     },
     {
       "source": "src/app/(app)/operations/integrations/bakai-store/page.tsx",
@@ -269,8 +283,10 @@
     },
     {
       "source": "src/app/(app)/platform/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/administration-verification.json"
+      ]
     },
     {
       "source": "src/app/(app)/pos/debts/page.tsx",
@@ -923,12 +939,12 @@
     }
   ],
   "verification": {
-    "desktop": "partial: 79 of 97 route sources have checkpoint evidence; 18 pending and zero fully accepted.",
-    "mobile": "partial: nine integration/documentation sources inspected at 390px; previous family evidence retained. Full route/state/theme matrix pending.",
-    "themes": "partial: nine integration sources in desktop RU light/dark and mobile dark; selected EN/light desktop and KG/light mobile. Full matrix pending.",
-    "rolesAndScopes": "partial: final fresh manager/staff/cashier/admin logins and eight integration route paths replayed; manager API selector limited to assigned stores. Full role/plan/currency permutations pending.",
-    "functionalRegression": "Integration checkpoint: 1988 unit tests, 94 integration DB tests and 9 authentication DB tests passed. Selected 11 business-model hashes unchanged; one local image asset and one QA email draft disclosed.",
-    "productionBuild": "passed with final integration/cookie sources, type/lint and 125 generated static pages"
+    "desktop": "partial: 87 of 97 page sources have checkpoint evidence; 10 pending and zero fully accepted.",
+    "mobile": "partial: administrative family captured at 390px; separate actual dev-scanner keyboard input verified. Previous family evidence retained; complete shared/state matrix pending.",
+    "themes": "partial: seven production administrative sources RU light/dark desktop and dark mobile, selected EN/KG light states. Full matrix pending.",
+    "rolesAndScopes": "partial: 21 fresh manager/staff/cashier checks, ordinary ADMIN owner-panel denial and actual QA owner access. Starter plan lock and canceled dialogs inspected. Full policy/state matrix remains pending.",
+    "functionalRegression": "Current full unit suite 2028 passed; administration DB 58 and reports DB 44 passed with three overlapping date cases. Eleven selected business-model hashes unchanged; additive administrative fixtures disclosed.",
+    "productionBuild": "passed with final administrative/date-binding sources, type/lint and 125 generated static pages; dev build isolated and final production manifest retained"
   },
   "requirements": {
     "visualFidelity": "Match Espresso typography, palette, surfaces and components while preserving customer workflows; analogous screen comparison must respect the human-confirmed operational layouts.",
@@ -940,7 +956,7 @@
     "customerWorkflows": "Preserve the customer-requested two-column operational layouts and established interactions. The visual reference does not authorize replacing them; see AGENTS.md and redesign-change-audit.json."
   },
   "progress": {
-    "stage": "integrations-checkpoint-in-review-full-redesign-in-progress",
+    "stage": "administration-checkpoint-in-review-full-redesign-in-progress",
     "foundation": [
       "Pinned MIT Espresso semantic tokens and component CSS",
       "Self-hosted Inter Variable",
@@ -1095,6 +1111,11 @@
         "check": "Integrations and public API documentation, existing role gates, retry states and fresh session-cookie agreement",
         "result": "32 base captures, 24 fresh-role path checks, assigned-store selection, local HEIC conversion and email draft/preview; no external operations. In_review only.",
         "evidence": "docs/espresso/integrations-verification.json"
+      },
+      {
+        "check": "Administration, billing, onboarding, compliance and dev scanner",
+        "result": "26 production captures, 21 fresh-role checks, dialogs canceled with focus return, metrics search/filter/pagination/keyboard pan and separate dev scanner input; in_review only.",
+        "evidence": "docs/espresso/administration-verification.json"
       }
     ],
     "remaining": [
@@ -1112,14 +1133,15 @@
       "Finish warehouse acceptance permutations listed in warehouse-documents-verification.json, including native date-picker/multi-page navigation; current in_review evidence is not full acceptance.",
       "Complete commerce acceptance permutations listed in commerce-verification.json; current screen and cash-cycle evidence is not acceptance of every order, provider or state flow.",
       "Complete report/shared-component acceptance permutations listed in reports-verification.json; page captures and DB regressions do not establish final overall redesign acceptance.",
-      "Complete integration/provider/editor/query-state and legacy translation acceptance listed in integrations-verification.json; base captures and mocks are not live provider acceptance."
+      "Complete integration/provider/editor/query-state and legacy translation acceptance listed in integrations-verification.json; base captures and mocks are not live provider acceptance.",
+      "Complete administration/shared-shell plan, title-fallback and state permutations listed in administration-verification.json. Ten public/help page sources and 29 separately unreviewed shared controls remain before final whole-system acceptance."
     ],
     "unitTests": {
-      "files": 264,
-      "tests": 1988,
-      "result": "passed after final runtime changes",
+      "files": 265,
+      "tests": 2028,
+      "result": "passed after all application changes",
       "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
-      "log": "artifacts/ux/espresso/integrations-unit-final.log"
+      "log": "artifacts/ux/espresso/admin-all-unit-final.log"
     },
     "databaseRegression": {
       "files": 3,
@@ -1187,12 +1209,12 @@
       "note": "Overlaps POS and reservation-timezone cases in commerce; do not add these counts as unique tests."
     },
     "reportsDatabaseRegression": {
-      "files": 10,
-      "tests": 41,
-      "result": "passed on separate bazaar_hardening_ci database",
+      "files": 11,
+      "tests": 44,
+      "result": "passed after report date-binding correction",
       "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts reports",
-      "log": "artifacts/ux/espresso/reports-db-timestamp-final.log",
-      "scope": "Sales, operational and online populations, customer reports, historical cost evidence, roles/store/organization access, all export types, duplicate period closing and timestamp transport."
+      "log": "artifacts/ux/espresso/admin-reports-regression-final.log",
+      "overlap": "The same three date-binding test cases also run in the 58-test administration selection; do not count 102 distinct tests."
     },
     "integrationsDatabaseRegression": {
       "files": 14,
@@ -1208,6 +1230,14 @@
       "result": "passed on separate resettable DB/Redis; real credentials, claims and role destinations",
       "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts authentication",
       "log": "artifacts/ux/espresso/integrations-auth-database.log"
+    },
+    "administrationDatabaseRegression": {
+      "files": 8,
+      "tests": 58,
+      "result": "passed on separate bazaar_hardening_ci; providers disabled or mocked",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts administration",
+      "log": "artifacts/ux/espresso/admin-database-final.log",
+      "scope": "Admin metrics, tariff/subscription policies, signed payment processing/idempotency, platform security/export, support roles/plan gate, onboarding evidence and legacy report date binding. Provider protocol tests are not live merchant acceptance."
     }
   }
 }

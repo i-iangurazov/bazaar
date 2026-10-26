@@ -56,7 +56,7 @@ const ComplianceHelpPage = () => {
               <CardHeader>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <CardTitle>{article.title}</CardTitle>
+                    <CardTitle id={`compliance-${article.id}-title`}>{article.title}</CardTitle>
                     <p className="text-sm text-muted-foreground">{article.summary}</p>
                   </div>
                   <Button
@@ -64,6 +64,8 @@ const ComplianceHelpPage = () => {
                     variant="ghost"
                     size="icon"
                     aria-label={t("toggleArticle", { title: article.title })}
+                    aria-expanded={isOpen}
+                    aria-controls={isOpen ? `compliance-${article.id}-content` : undefined}
                     onClick={() => setOpenId(isOpen ? null : article.id)}
                   >
                     <ChevronDownIcon
@@ -74,7 +76,7 @@ const ComplianceHelpPage = () => {
                 </div>
               </CardHeader>
               {isOpen ? (
-                <CardContent className="space-y-3 text-sm text-muted-foreground">
+                <CardContent id={`compliance-${article.id}-content`} role="region" aria-labelledby={`compliance-${article.id}-title`} className="space-y-3 text-sm text-muted-foreground">
                   {article.body.map((paragraph, index) => (
                     <p key={`${article.id}-${index}`}>{paragraph}</p>
                   ))}

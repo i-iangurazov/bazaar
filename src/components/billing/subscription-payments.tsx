@@ -119,7 +119,7 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
             {common("loading")}
           </p>
         ) : settings.isError ? (
-          <QueryErrorState onRetry={() => void settings.refetch()} />
+          <QueryErrorState error={settings.error} onRetry={() => void settings.refetch()} />
         ) : settings.data ? (
           <>
             {settings.data.mode === "sandbox" && settings.data.available ? (
@@ -252,7 +252,7 @@ export function SubscriptionPayments({ onUpdated }: { onUpdated: () => void }) {
               {history.isLoading ? (
                 <p className="text-sm text-muted-foreground">{common("loading")}</p>
               ) : history.isError ? (
-                <QueryErrorState onRetry={() => void history.refetch()} />
+                <QueryErrorState error={history.error} onRetry={() => void history.refetch()} />
               ) : records.length ? (
                 <ul className="space-y-2">
                   {records.map((invoice) => (

@@ -49,6 +49,7 @@ const sorts = [
   "warnings",
 ] as const;
 function MetricsContent() {
+  const common = useTranslations("common");
   const t = useTranslations("adminMetrics"),
     r = useTranslations("reporting"),
     errors = useTranslations("errors"),
@@ -276,6 +277,9 @@ function MetricsContent() {
         channel: "all",
       })
     : "/reports/analytics";
+  if (status !== "authenticated" || session?.user.role !== "ADMIN") {
+    return <div className="space-y-5"><PageHeader title={r("inventoryValuation")} subtitle={r("adminPurpose")} /><p role={status === "authenticated" ? "alert" : "status"}>{status === "authenticated" ? errors("forbidden") : common("loading")}</p></div>;
+  }
   return (
     <div className="min-w-0 space-y-5">
       <PageHeader
@@ -356,7 +360,7 @@ function MetricsContent() {
           {errors("invalidInput")}
         </p>
       )}
-      {enabled && query.error && <QueryErrorState onRetry={() => void query.refetch()} />}
+      {enabled && query.error && <QueryErrorState error={query.error} onRetry={() => void query.refetch()} />}
       {enabled && query.isLoading && (
         <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
           {[1, 2, 3, 4].map((key) => (

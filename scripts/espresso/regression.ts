@@ -61,6 +61,7 @@ const suites = {
     "tests/integration/loyalty-reservation-timezone.test.ts",
   ],
   reports: [
+    "tests/integration/legacy-report-date-binding.test.ts",
     "tests/integration/reports.test.ts",
     "tests/integration/analytics.test.ts",
     "tests/integration/reporting-sales.test.ts",
@@ -88,11 +89,21 @@ const suites = {
     "tests/integration/email-marketing-idempotency.test.ts",
     "tests/integration/email-marketing-products.test.ts",
   ],
+  administration: [
+    "tests/integration/legacy-report-date-binding.test.ts",
+    "tests/integration/admin-metrics.test.ts",
+    "tests/integration/billing.test.ts",
+    "tests/integration/subscription-payments.test.ts",
+    "tests/integration/b0-platform-p0-verification.test.ts",
+    "tests/integration/b1-platform-export-http-security.test.ts",
+    "tests/integration/support.test.ts",
+    "tests/integration/onboarding-workspace-access.test.ts",
+  ],
   unit: ["tests/unit"],
 } as const;
 if (!Object.prototype.hasOwnProperty.call(suites, suite)) {
   throw new Error(
-    "Choose database, directories, authentication, settings, warehouse, commerce, loyalty, reports, integrations or unit",
+    "Choose database, directories, authentication, settings, warehouse, commerce, loyalty, reports, integrations, administration or unit",
   );
 }
 const require = createRequire(import.meta.url);

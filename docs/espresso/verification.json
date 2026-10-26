@@ -1,5 +1,5 @@
 {
-  "status": "integrations-checkpoint-in-review-full-redesign-in-progress",
+  "status": "administration-checkpoint-in-review-full-redesign-in-progress",
   "branch": "codex/playground",
   "reference": "Frappe Framework Espresso e8d41dd0061a32ee781caefe5d0b0d2bb7c15362",
   "checks": [
@@ -452,6 +452,46 @@
       "command": "CUA production UI integration review",
       "result": "32 base captures over 9 sources; final fresh role logins, assigned-store selection, local HEIC conversion, named email draft/save/preview and documentation contrast/keyboard pan. Full provider/state acceptance remains pending.",
       "evidence": "docs/espresso/integrations-verification.json"
+    },
+    {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
+      "result": "265 files / 2028 passed",
+      "log": "artifacts/ux/espresso/admin-all-unit-final.log"
+    },
+    {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts administration",
+      "result": "8 files / 58 passed on isolated regression DB",
+      "log": "artifacts/ux/espresso/admin-database-final.log"
+    },
+    {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts reports",
+      "result": "11 files / 44 passed; three date cases overlap administration",
+      "log": "artifacts/ux/espresso/admin-reports-regression-final.log"
+    },
+    {
+      "command": "pnpm exec tsc --noEmit --incremental",
+      "result": "passed; final production build also validates types",
+      "log": "artifacts/ux/espresso/admin-types-acceptance.log"
+    },
+    {
+      "command": "pnpm lint",
+      "result": "passed without warnings; final production build includes the last label-only change",
+      "log": "artifacts/ux/espresso/admin-lint-acceptance.log"
+    },
+    {
+      "command": "pnpm i18n:check",
+      "result": "passed; existing RU/KG/EN keys reused",
+      "log": "artifacts/ux/espresso/admin-i18n-acceptance.log"
+    },
+    {
+      "command": "UX_SUITE=espresso CIRCLE_NODE_TOTAL=3 NODE_OPTIONS=--max-old-space-size=6144 node --import tsx scripts/ux/build.ts",
+      "result": "passed with all final application sources, types/lint and 125 generated static pages",
+      "log": "artifacts/ux/espresso/build-admin-recovered-final.log"
+    },
+    {
+      "command": "CUA production administrative matrix and isolated dev scanner",
+      "result": "26 production captures, 21 role checks and actual dev keyboard input; limitations retained",
+      "evidence": "docs/espresso/administration-verification.json"
     }
   ],
   "environment": {
@@ -468,13 +508,15 @@
     "Dark theme and RU/KG/EN visual matrix",
     "Admin/manager/staff/cashier and store/plan gates in the rendered UI",
     "Modal, dropdown, focus, keyboard, loading, empty, retry and recovery flows across page families",
-    "Broader database integration regression and final production smoke on the isolated app"
+    "Broader database integration regression and final production smoke on the isolated app",
+    "87/97 sources in_review is partial checkpoint coverage. Remaining ten pages, shared components and final acceptance are listed in administration-verification.json."
   ],
   "delivery": "Local review checkpoint only; not a full redesign completion; no main merge, main push or deployment",
   "infrastructureNotes": [
     "Do not run the prebuild Prisma client generator concurrently with tests or a running server that loads the same generated library. One overlapping run passed its test assertions but failed with an unhandled partial-library load; the sequential rerun completed 254 files / 1854 tests without that error.",
     "The browser fixture database was not reset; destructive integration checks used a separately created allowlisted local database, with external providers disabled.",
-    "Local PostgreSQL C locale was reproduced as the cause of two Cyrillic-search test failures. Both isolated QA databases were preserved into ICU und databases with all-table row-hash equality and retained backups; regression runner checks the Unicode contract. See warehouse checkpoint."
+    "Local PostgreSQL C locale was reproduced as the cause of two Cyrillic-search test failures. Both isolated QA databases were preserved into ICU und databases with all-table row-hash equality and retained backups; regression runner checks the Unicode contract. See warehouse checkpoint.",
+    "The first custom dev-server attempt shared root .next because Next 14 custom-server preparation reloads configuration and ignores the passed conf. It removed local QA production manifests and caused local 500s. Stopped the owned dev/production processes, moved dev into a disposable source+messages snapshot with the standard CLI and separate localhost cookie host, rebuilt production, then replayed final browser captures and scanner checks. Initial snapshot omission of messages was fixed before successful sign-in. Root Next/TypeScript configuration is unchanged. Final evidence: artifacts/ux/espresso/scanner-dev-isolation.json and build-admin-recovered-final.log."
   ],
   "correction": "Warehouse column and interaction rearrangements from 5a1e7ac were rejected by the human and restored. Historical checks do not validate customer workflow suitability.",
   "currentAudit": "docs/espresso/redesign-change-audit.json",
@@ -484,5 +526,6 @@
   "currentWarehouseCheckpoint": "docs/espresso/warehouse-documents-verification.json",
   "currentCommerceCheckpoint": "docs/espresso/commerce-verification.json",
   "currentReportsCheckpoint": "docs/espresso/reports-verification.json",
-  "currentIntegrationsCheckpoint": "docs/espresso/integrations-verification.json"
+  "currentIntegrationsCheckpoint": "docs/espresso/integrations-verification.json",
+  "currentAdministrationCheckpoint": "docs/espresso/administration-verification.json"
 }

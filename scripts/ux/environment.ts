@@ -8,6 +8,7 @@ export const uxDatabaseUrl =
 export function uxEnvironment() {
   return {
     ...baamTestEnvironment(),
+    ...(espressoSuite ? { PLATFORM_OWNER_EMAILS: "platform@espresso.example.invalid" } : {}),
     DATABASE_URL: uxDatabaseUrl,
     DATABASE_TEST_URL: uxDatabaseUrl,
     EXPECTED_TEST_DB_NAME: databaseName,

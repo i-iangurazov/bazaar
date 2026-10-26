@@ -1,0 +1,232 @@
+{
+  "status": "administration-checkpoint-in-review-full-redesign-in-progress",
+  "branch": "codex/playground",
+  "baseline": "d70b1c6",
+  "mainUnchanged": "5a27b8e",
+  "date": "2026-10-26",
+  "scope": {
+    "routeSources": [
+      "src/app/(app)/admin/jobs/page.tsx",
+      "src/app/(app)/admin/metrics/page.tsx",
+      "src/app/(app)/admin/support/page.tsx",
+      "src/app/(app)/billing/page.tsx",
+      "src/app/(app)/dev/scanner-test/page.tsx",
+      "src/app/(app)/help/compliance/page.tsx",
+      "src/app/(app)/onboarding/page.tsx",
+      "src/app/(app)/platform/page.tsx"
+    ],
+    "routes": [
+      "/admin/jobs",
+      "/admin/metrics",
+      "/admin/support",
+      "/billing",
+      "/dev/scanner-test",
+      "/help/compliance",
+      "/onboarding",
+      "/platform"
+    ],
+    "note": "Eight sources reviewed; seven normal production routes and one existing development-only diagnostic route. No route enabled in production."
+  },
+  "appearance": [
+    "Support flag cards use full shared border; onboarding progress track uses shared muted paint. Established grids, widths, field/action order and operational workflows retain their composition.",
+    "Existing shared Espresso controls apply to admin, subscription and onboarding screens. Seven mobile title prefixes now use existing localized navigation titles instead of falling back to the brand; navigation membership/order and permissions are unchanged."
+  ],
+  "explicitInteractionChanges": [
+    {
+      "area": "Session and role boundaries",
+      "behavior": "Jobs, support, billing and onboarding require an authenticated ADMIN before queries and render. Metrics and platform now present accessible loading/forbidden feedback before data controls. Cached data is hidden while session status is loading. Billing read enablement now matches its existing ADMIN-only server procedure; server permissions are unchanged."
+    },
+    {
+      "area": "Failed reads and recovery",
+      "behavior": "Actual translated errors feed existing retry states in jobs, metrics, support, billing and payment history/settings/reviews. Platform summary/organizations/upgrade requests gain targeted retries and no stale summary on failed refresh. Onboarding progress/store failures show independent retries instead of fake incomplete steps or an empty-store form. No mutation is triggered by retry."
+    },
+    {
+      "area": "Accessible fields and articles",
+      "behavior": "Owner plan/status/day inputs receive existing translated accessible names; upgrade comment is a real label linked to its textarea. Compliance disclosure buttons expose expanded/controls and open bodies are named regions. Existing content, direct hashes and disclosure behavior remain."
+    }
+  ],
+  "correctiveServerChange": {
+    "commit": "351095a",
+    "evidence": "docs/espresso/legacy-report-dates-verification.json",
+    "source": "src/server/services/reports.ts",
+    "trigger": "The existing B0 Bishkek business-day assertion failed on the Asia/Bishkek test database; three-case controlled-zone matrix reproduced implicit timestamp reinterpretation.",
+    "change": "Seven range comparisons across stockouts/slow movers/shrinkage bind ISO text as explicit UTC-storage timestamps; optional transaction query client permits controlled real SQL tests. Scope, formulas, grouping and pagination are retained; no migration or stored transaction change.",
+    "verification": "54 real report SQL calls across three DB zones, three runtime zones, three reports and first/empty-next page; three automated matrix cases. Administration 58 and reports 44 passed after correction; same three cases overlap."
+  },
+  "browser": {
+    "environment": "Isolated bazaar_espresso_ui on PostgreSQL 55440; Redis DB4/prefix espresso-ui-test; production-mode local build localhost:3122. Providers disabled. No customer database reset.",
+    "before": "artifacts/ux/espresso/admin-before.json",
+    "matrix": "artifacts/ux/espresso/admin-base-matrix-final.json",
+    "captures": 26,
+    "productionRouteSources": 7,
+    "variants": "Jobs/metrics/support/billing/onboarding/compliance in RU desktop dark, mobile 390 dark, desktop light (18); owner platform same three (3); Starter mobile billing (1); EN light desktop metrics/billing (2); KG light mobile onboarding/compliance (2). These are 26 captures, not 26 routes or the complete matrix.",
+    "overflow": "All 26 captures have pageWidth equal to viewport width. Wide metrics table retains its own named scroll region; ArrowRight moved its scrollLeft to 40 at viewport 390.",
+    "roles": {
+      "evidence": "artifacts/ux/espresso/admin-role-matrix-final.json",
+      "checks": 21,
+      "result": "For each MANAGER/STAFF/CASHIER: six protected paths redirect to dashboard/POS with matching from; compliance remains accessible. Ordinary ADMIN platform denial and actual allowlisted owner access verified separately in workflow details/base captures."
+    },
+    "workflows": {
+      "evidence": "artifacts/ux/espresso/admin-workflow-details-final.json",
+      "metrics": "UX-0001 search returns two store rows, negativeStock warning one row, page 2 returns 25 rows and URL state persists; stores two groups and categories four. Fixture sales remain net 217 KGS, cost 67.34, gross profit 149.66, margin 68.97%; inventory cost 205003.29, 155 store-product rows/146 unique products.",
+      "jobs": "Synthetic claimed job retry disabled; resolution initially requires acknowledgment; cancel closes dialog and restores trigger focus. No resolution/retry.",
+      "ownerBilling": "Starter dialog opens with date application unchecked and day inputs disabled; named plan/status/day controls verified on final mobile build; cancel returns focus. No billing changes.",
+      "upgrade": "Starter request dialog opens with named comment field; cancel returns focus. No request sent.",
+      "compliance": "Direct periodClose hash opens the requested article; keyboard Enter opens accountant export with linked expanded region.",
+      "plan": "Starter support displays actual translated plan lock. Existing visible forms disclosed as remaining acceptance, no support mutation attempted.",
+      "buildPhases": "Selected controller/focus/metrics interactions were inspected before the final mobile-title and accessible-name-only rebuild; final 26 base captures and named billing fields were replayed on the recovered final production build."
+    },
+    "scanner": {
+      "evidence": "artifacts/ux/espresso/admin-scanner-verification-final.json",
+      "source": "scripts/espresso/dev.mjs",
+      "host": "http://espresso-qa.localhost:3123",
+      "result": "Fresh isolated dev-copy sign-in; SKU UX-0002 + Enter and barcode 2900000000002 + Tab resolve the existing product; unknown input reports Not found without navigation/mutation; mobile 390 SKU Enter repeats correctly. Sign-out then dev shutdown completed. Production localhost:3122/dev/scanner-test stays 404.",
+      "limits": "Browser keyboard input only; no hardware/camera or performance claim."
+    },
+    "restoration": "Main admin, owner QA and Starter QA restored to RU/DARK; main tab handed off on /admin/metrics with no dialog/filter. Scanner tab signed out/closed and separate dev server stopped."
+  },
+  "preservation": {
+    "businessEvidence": [
+      "artifacts/ux/espresso/admin-business-before.json",
+      "artifacts/ux/espresso/admin-business-after.json"
+    ],
+    "result": "Exact row-JSON SHA256 equality for eleven selected main-organization models, not the entire DB or authentication/profile metadata.",
+    "counts": {
+      "inventorySnapshot": 155,
+      "stockMovement": 166,
+      "productCost": 146,
+      "customerOrder": 4,
+      "saleReturn": 2,
+      "salePayment": 4,
+      "cashDrawerMovement": 2,
+      "registerShift": 2,
+      "purchaseOrder": 1,
+      "stockCount": 3,
+      "periodClose": 0
+    },
+    "administrationEvidence": "artifacts/ux/espresso/admin-state-readback-final.json",
+    "administrationResult": "Both organization billing modes remain MANUAL/ACTIVE, Enterprise and Starter plans retained, billing dates null; zero upgrade requests, impersonations, flags and subscription invoices. Synthetic job attempts/resolution/claim unchanged. Starter has no sales, payments, inventory or movements.",
+    "expectedAdditions": "One empty Starter QA organization/store, two dedicated QA users, one pre-claimed synthetic dead-letter with no queued handler. Existing user passwords not overwritten. Normal profile/theme/locale/auth and onboarding evidence metadata can change. No new asset this checkpoint.",
+    "protectedSources": [
+      {
+        "source": "src/components/inventory/receiving-workflow.tsx",
+        "baseline": "c276f30",
+        "exactMatch": true,
+        "sha256": "3f77205aeaff4d89947098896c6e86459da522b3c7783110d68ccb1ade6f6c16"
+      },
+      {
+        "source": "src/components/inventory/transfer-workflow.tsx",
+        "baseline": "c276f30",
+        "exactMatch": true,
+        "sha256": "07b1ba3e01544bf470537fe4cd0fc24f23369732aed33f8722c99ee6ccc64307"
+      },
+      {
+        "source": "src/components/inventory/write-off-workflow.tsx",
+        "baseline": "c276f30",
+        "exactMatch": true,
+        "sha256": "d28439fc45ef22a5276e616a8e2088da7b5afb04a40cbde635f2b89a3311ccaa"
+      },
+      {
+        "source": "src/app/(app)/inventory/counts/[id]/page.tsx",
+        "baseline": "c276f30",
+        "exactMatch": true,
+        "sha256": "daf57fddea2b1905c11168a1244994fc8f6b701291de4f6c432160029b97f620"
+      }
+    ],
+    "serverScope": {
+      "base": "1fcdfd4",
+      "changedFiles": [
+        "src/server/services/loyalty/ledger.ts",
+        "src/server/services/pos.ts",
+        "src/server/services/reporting/operations.ts",
+        "src/server/services/reports.ts",
+        "src/server/trpc/routers/pos.ts"
+      ],
+      "note": "Five accumulated corrective server files are disclosed separately; this checkpoint adds only reports.ts. Prior middleware cookie agreement remains separately documented. No REST route/Prisma schema diff."
+    }
+  },
+  "qaHarnessCorrection": {
+    "defect": "The first custom dev-server attempt shared root .next because Next 14 custom-server preparation reloads configuration and ignores the passed conf. It removed local QA production manifests and caused local 500s.",
+    "correction": "Stopped the owned dev/production processes, moved dev into a disposable source+messages snapshot with the standard CLI and separate localhost cookie host, rebuilt production, then replayed final browser captures and scanner checks. Initial snapshot omission of messages was fixed before successful sign-in. Root Next/TypeScript configuration is unchanged.",
+    "evidence": [
+      "scripts/espresso/dev.mjs",
+      "artifacts/ux/espresso/server-scanner-validated-final.log",
+      "artifacts/ux/espresso/scanner-dev-isolation.json",
+      "artifacts/ux/espresso/build-admin-recovered-final.log",
+      "artifacts/ux/espresso/server-admin-restored-final.log"
+    ],
+    "result": "The final dev run exited cleanly and production middleware manifest remained byte-identical. Local QA harness fault, not a product/payment failure; no main merge, external provider operation or customer database affected."
+  },
+  "checks": {
+    "unit": {
+      "files": 265,
+      "tests": 2028,
+      "result": "passed after all application changes",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
+      "log": "artifacts/ux/espresso/admin-all-unit-final.log"
+    },
+    "recovery": {
+      "source": "tests/unit/admin-workspace-recovery.test.tsx",
+      "tests": 40,
+      "result": "passed within final full suite; real pages and payment components rendered with explicit deterministic procedure mocks",
+      "before": "artifacts/ux/espresso/admin-recovery-before.log",
+      "beforeResult": "40 failed before corrections",
+      "focusedLog": "artifacts/ux/espresso/admin-recovery-after.log",
+      "focusedResult": "48 passed across two files, including eight existing jobs UI cases; these are included in the full unit count",
+      "scope": "Thirteen failed-read retries refetch only the failed query and invoke no mutation. Existing ADMIN/platform-owner policy, session-loading cached data, compliance expanded state and direct article hash are covered."
+    },
+    "database": {
+      "files": 8,
+      "tests": 58,
+      "result": "passed on separate bazaar_hardening_ci; providers disabled or mocked",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts administration",
+      "log": "artifacts/ux/espresso/admin-database-final.log",
+      "scope": "Admin metrics, tariff/subscription policies, signed payment processing/idempotency, platform security/export, support roles/plan gate, onboarding evidence and legacy report date binding. Provider protocol tests are not live merchant acceptance."
+    },
+    "reportsDatabase": {
+      "files": 11,
+      "tests": 44,
+      "result": "passed after report date-binding correction",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts reports",
+      "log": "artifacts/ux/espresso/admin-reports-regression-final.log",
+      "overlap": "The same three date-binding test cases also run in the 58-test administration selection; do not count 102 distinct tests."
+    },
+    "onboardingDatabase": {
+      "source": "tests/integration/onboarding-workspace-access.test.ts",
+      "tests": 4,
+      "result": "passed within administration selection; non-admin get/skip rejected before progress creation; repeated admin reads derive persisted facts, retain pending steps and create one metadata progress row without operational transactions"
+    },
+    "typecheck": {
+      "result": "passed; final production build also validates types",
+      "log": "artifacts/ux/espresso/admin-types-acceptance.log"
+    },
+    "lint": {
+      "result": "passed without warnings; final production build includes the last label-only change",
+      "log": "artifacts/ux/espresso/admin-lint-acceptance.log"
+    },
+    "i18n": {
+      "result": "passed; existing RU/KG/EN keys reused",
+      "log": "artifacts/ux/espresso/admin-i18n-acceptance.log"
+    },
+    "productionBuild": {
+      "result": "passed with all final application sources, types/lint and 125 generated static pages",
+      "command": "UX_SUITE=espresso CIRCLE_NODE_TOTAL=3 NODE_OPTIONS=--max-old-space-size=6144 node --import tsx scripts/ux/build.ts",
+      "log": "artifacts/ux/espresso/build-admin-recovered-final.log"
+    },
+    "developmentIsolation": {
+      "result": "actual scanner dev run completed; production manifest byte-identical after shutdown",
+      "evidence": "artifacts/ux/espresso/scanner-dev-isolation.json",
+      "source": "scripts/espresso/dev.mjs"
+    }
+  },
+  "remainingAcceptance": [
+    "Full redesign remains active: 87 of 97 page sources in_review, 10 pending, zero fully accepted. This is checkpoint coverage, not 87 pages accepted in every state.",
+    "Ten remaining sources cover three guide pages, two localized public entry/catch-all pages, merchant catalog, two public loyalty pages, root and privacy. Shared-component inventory remains 32 controls, with three separately in_review and 29 pending detailed review.",
+    "Complete analogous Espresso comparison and the remaining theme/language/focus/loading/empty/error/state permutations across all families; retain earlier product/navigation composition disclosures and customer workflow constraints.",
+    "Mobile titles were corrected for this administrative family, but the shared fallback still repeats BAZAAR on scanner and other unmapped routes. Global single-brand acceptance remains pending shared-shell review.",
+    "Starter support tools show the real translated plan lock through the error state; existing impersonation/export forms remain visible. Complete deliberate plan-state presentation/interaction review without disabling unrelated actions merely because a read failed.",
+    "No live subscription payment, refund, merchant reconciliation, support impersonation/export, feature-flag update, owner plan/date update or provider retry was performed in the browser. Relevant DB tests do not establish live provider acceptance.",
+    "Scanner evidence covers browser keyboard-wedge input only. USB hardware, camera, native printing, microphone and physical device latency were not exercised. The development screen remains intentionally unavailable in production."
+  ],
+  "delivery": "Local codex/playground checkpoint only; full goal remains active. No push, PR, main merge or production deployment."
+}

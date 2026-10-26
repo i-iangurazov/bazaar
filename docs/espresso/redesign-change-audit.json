@@ -1,6 +1,6 @@
 {
-  "status": "integrations-checkpoint-in-review-full-redesign-in-progress",
-  "scope": "Redesign changes since 1fcdfd4, including directory, authentication, settings and warehouse-document checkpoints; not an audit of every earlier playground improvement.",
+  "status": "administration-checkpoint-in-review-full-redesign-in-progress",
+  "scope": "Redesign changes since 1fcdfd4, with separate family checkpoints through administration; not an audit of every earlier playground improvement.",
   "humanCorrection": "Customer-requested two-column operational layouts must be preserved. A difference from ERPNext is not evidence of a defect.",
   "restored": [
     {
@@ -198,6 +198,33 @@
       "area": "Integration recovery, role feedback and named documentation-table focus",
       "scope": "Explicit semantic changes, not paint-only. Includes studio unknown-provider generation guard and email read-failure validation. Existing field/action order and customer layouts retained.",
       "evidence": "docs/espresso/integrations-verification.json"
+    },
+    {
+      "area": "Administrative loading/roles, failed-read recovery and accessible fields/disclosures",
+      "changes": [
+        {
+          "area": "Session and role boundaries",
+          "behavior": "Jobs, support, billing and onboarding require an authenticated ADMIN before queries and render. Metrics and platform now present accessible loading/forbidden feedback before data controls. Cached data is hidden while session status is loading. Billing read enablement now matches its existing ADMIN-only server procedure; server permissions are unchanged."
+        },
+        {
+          "area": "Failed reads and recovery",
+          "behavior": "Actual translated errors feed existing retry states in jobs, metrics, support, billing and payment history/settings/reviews. Platform summary/organizations/upgrade requests gain targeted retries and no stale summary on failed refresh. Onboarding progress/store failures show independent retries instead of fake incomplete steps or an empty-store form. No mutation is triggered by retry."
+        },
+        {
+          "area": "Accessible fields and articles",
+          "behavior": "Owner plan/status/day inputs receive existing translated accessible names; upgrade comment is a real label linked to its textarea. Compliance disclosure buttons expose expanded/controls and open bodies are named regions. Existing content, direct hashes and disclosure behavior remain."
+        }
+      ],
+      "sources": [
+        "src/app/(app)/admin/jobs/page.tsx",
+        "src/app/(app)/admin/metrics/page.tsx",
+        "src/app/(app)/admin/support/page.tsx",
+        "src/app/(app)/billing/page.tsx",
+        "src/app/(app)/help/compliance/page.tsx",
+        "src/app/(app)/onboarding/page.tsx",
+        "src/app/(app)/platform/page.tsx"
+      ],
+      "evidence": "docs/espresso/administration-verification.json"
     }
   ],
   "appearanceChanges": [
@@ -217,6 +244,14 @@
         "No operational two-column source was touched. All four remain byte-exact c276f30. Email canvas/output colors and merchant branding are retained."
       ],
       "evidence": "docs/espresso/integrations-verification.json"
+    },
+    {
+      "area": "Administrative family",
+      "changes": [
+        "Support flag cards use full shared border; onboarding progress track uses shared muted paint. Established grids, widths, field/action order and operational workflows retain their composition.",
+        "Existing shared Espresso controls apply to admin, subscription and onboarding screens. Seven mobile title prefixes now use existing localized navigation titles instead of falling back to the brand; navigation membership/order and permissions are unchanged."
+      ],
+      "evidence": "docs/espresso/administration-verification.json"
     }
   ],
   "serverScopeEvidence": {
@@ -230,13 +265,15 @@
       "src/server/services/loyalty/ledger.ts",
       "src/server/services/pos.ts",
       "src/server/services/reporting/operations.ts",
+      "src/server/services/reports.ts",
       "src/server/trpc/routers/pos.ts"
     ],
-    "result": "Four corrective server sources are explicitly disclosed: loyalty reservation timestamp binding, authoritative read-only POS refund quotes/shared allocation, and operational report timestamp serialization. No REST route or Prisma schema diff.",
+    "result": "Five corrective server files: loyalty reservation timestamp binding, authoritative read-only POS refund quotes/shared allocation, operational report timestamp serialization and legacy report range binding. The last was reproduced in existing B0 and controlled-zone SQL tests and committed separately as 351095a. No REST route or Prisma schema diff; middleware cookie agreement remains separately disclosed.",
     "evidence": [
       "docs/espresso/loyalty-timezone-verification.json",
       "docs/espresso/refund-preview-verification.json",
-      "docs/espresso/report-timestamps-verification.json"
+      "docs/espresso/report-timestamps-verification.json",
+      "docs/espresso/legacy-report-dates-verification.json"
     ]
   },
   "sourceReview": {
@@ -244,12 +281,24 @@
     "method": "Recursive TypeScript AST comparison omits only JSX className/style attributes, traverses retained attribute initializers and render callbacks. Classification does not establish CSS layout approval or runtime acceptance. Semantic changes require the separate checkpoint explanations and tests.",
     "files": [
       {
+        "path": "src/app/(app)/admin/jobs/page.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
         "path": "src/app/(app)/admin/metrics/page.tsx",
-        "classification": "jsx-style-attributes-only"
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/app/(app)/admin/support/page.tsx",
+        "classification": "requires-semantic-review"
       },
       {
         "path": "src/app/(app)/baam/page.tsx",
         "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/app/(app)/billing/page.tsx",
+        "classification": "requires-semantic-review"
       },
       {
         "path": "src/app/(app)/customers/page.tsx",
@@ -258,6 +307,10 @@
       {
         "path": "src/app/(app)/dashboard/page.tsx",
         "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/app/(app)/help/compliance/page.tsx",
+        "classification": "requires-semantic-review"
       },
       {
         "path": "src/app/(app)/inventory/counts/[id]/page.tsx",
@@ -277,6 +330,10 @@
       },
       {
         "path": "src/app/(app)/inventory/page.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/app/(app)/onboarding/page.tsx",
         "classification": "requires-semantic-review"
       },
       {
@@ -309,6 +366,10 @@
       },
       {
         "path": "src/app/(app)/operations/integrations/product-image-studio/page.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/app/(app)/platform/page.tsx",
         "classification": "requires-semantic-review"
       },
       {
@@ -505,6 +566,14 @@
       },
       {
         "path": "src/components/baam-workflow-card.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/components/billing/payment-reviews.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/components/billing/subscription-payments.tsx",
         "classification": "requires-semantic-review"
       },
       {
@@ -760,6 +829,10 @@
         "classification": "requires-semantic-review"
       },
       {
+        "path": "src/server/services/reports.ts",
+        "classification": "requires-semantic-review"
+      },
+      {
         "path": "src/server/trpc/routers/pos.ts",
         "classification": "requires-semantic-review"
       }
@@ -794,6 +867,7 @@
       "src/server/services/loyalty/ledger.ts",
       "src/server/services/pos.ts",
       "src/server/services/reporting/operations.ts",
+      "src/server/services/reports.ts",
       "src/server/trpc/routers/pos.ts"
     ]
   },
@@ -887,81 +961,85 @@
     "This audit identifies source and interaction changes; it does not claim complete acceptance or runtime verification of all 97 routes.",
     "The unrequested layout acceptance claims in the previous inventory checkpoint are withdrawn.",
     "No further customer workflow rearrangements are authorized by a mere visual difference from ERPNext.",
-    "Integration sources are in_review only; external operations and remaining editor/translation/plan states are explicitly listed in integrations-verification.json."
+    "Integration sources are in_review only; external operations and remaining editor/translation/plan states are explicitly listed in integrations-verification.json.",
+    "Administration sources are in_review only. Mobile brand-title fallback, Starter support plan-state presentation, remaining state matrices and dev hardware/provider limitations are explicit in administration-verification.json."
   ],
   "delivery": "codex/playground only; no main merge or production deployment",
-  "currentCheckpoint": "docs/espresso/integrations-verification.json",
+  "currentCheckpoint": "docs/espresso/administration-verification.json",
   "previousCheckpoints": [
     "docs/espresso/directory-verification.json",
     "docs/espresso/auth-verification.json",
     "docs/espresso/settings-verification.json",
     "docs/espresso/warehouse-documents-verification.json",
     "docs/espresso/commerce-verification.json",
-    "docs/espresso/reports-verification.json"
+    "docs/espresso/reports-verification.json",
+    "docs/espresso/integrations-verification.json"
   ],
   "currentCheckpointChecks": {
     "unit": {
-      "files": 264,
-      "tests": 1988,
-      "result": "passed after final runtime changes",
+      "files": 265,
+      "tests": 2028,
+      "result": "passed after all application changes",
       "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
-      "log": "artifacts/ux/espresso/integrations-unit-final.log"
+      "log": "artifacts/ux/espresso/admin-all-unit-final.log"
     },
     "recovery": {
-      "files": 1,
-      "tests": 56,
-      "result": "passed within final full suite; real page components and shared controls rendered with deterministic failed reads, existing role policy and genuine empty-store states",
-      "source": "tests/unit/integration-workspace-recovery.test.tsx",
-      "before": "artifacts/ux/espresso/integrations-recovery-before.log",
-      "beforeResult": "Initial 39-case subset: 30 failed and 9 passed before changes. The final suite adds 17 independent query/empty-state checks.",
-      "focusedLog": "artifacts/ux/espresso/integrations-recovery-after.log",
-      "focusedNote": "57 focused tests include 56 recovery cases and the existing MMarket manager-permissions source test; do not add them to the full-suite count."
+      "source": "tests/unit/admin-workspace-recovery.test.tsx",
+      "tests": 40,
+      "result": "passed within final full suite; real pages and payment components rendered with explicit deterministic procedure mocks",
+      "before": "artifacts/ux/espresso/admin-recovery-before.log",
+      "beforeResult": "40 failed before corrections",
+      "focusedLog": "artifacts/ux/espresso/admin-recovery-after.log",
+      "focusedResult": "48 passed across two files, including eight existing jobs UI cases; these are included in the full unit count",
+      "scope": "Thirteen failed-read retries refetch only the failed query and invoke no mutation. Existing ADMIN/platform-owner policy, session-loading cached data, compliance expanded state and direct article hash are covered."
     },
     "database": {
-      "files": 14,
-      "tests": 94,
-      "result": "passed on separate bazaar_hardening_ci; provider requests mocked or disabled",
-      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts integrations",
-      "log": "artifacts/ux/espresso/integrations-database.log",
-      "scope": "API/catalog payloads, store scope, external identities/operation idempotency, catalog source/discount behavior, marketplace payload/job lifecycle, image processing/storage/job lifecycle and email delivery/idempotency/product selection. Three new characterization cases preserve manager reads and reject STAFF/CASHIER without keys/config/jobs/campaign creation."
+      "files": 8,
+      "tests": 58,
+      "result": "passed on separate bazaar_hardening_ci; providers disabled or mocked",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts administration",
+      "log": "artifacts/ux/espresso/admin-database-final.log",
+      "scope": "Admin metrics, tariff/subscription policies, signed payment processing/idempotency, platform security/export, support roles/plan gate, onboarding evidence and legacy report date binding. Provider protocol tests are not live merchant acceptance."
     },
-    "authenticationDatabase": {
-      "files": 1,
-      "tests": 9,
-      "result": "passed on separate resettable DB/Redis; real credentials, claims and role destinations",
-      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts authentication",
-      "log": "artifacts/ux/espresso/integrations-auth-database.log"
+    "reportsDatabase": {
+      "files": 11,
+      "tests": 44,
+      "result": "passed after report date-binding correction",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts reports",
+      "log": "artifacts/ux/espresso/admin-reports-regression-final.log",
+      "overlap": "The same three date-binding test cases also run in the 58-test administration selection; do not count 102 distinct tests."
     },
-    "sessionCookie": {
-      "files": 1,
-      "tests": 6,
-      "result": "passed within final full suite using real signed/encrypted NextAuth tokens",
-      "source": "tests/unit/middleware-session-cookie.test.ts",
-      "before": "artifacts/ux/espresso/integrations-session-before.log",
-      "beforeResult": "4 failed / 2 passed before correction; final 6 passed",
-      "scope": "Production HTTPS and local HTTP, development HTTP and HTTPS, stale mixed cookie names and rejection of an invalid secure cookie even beside a valid development cookie."
+    "onboardingDatabase": {
+      "source": "tests/integration/onboarding-workspace-access.test.ts",
+      "tests": 4,
+      "result": "passed within administration selection; non-admin get/skip rejected before progress creation; repeated admin reads derive persisted facts, retain pending steps and create one metadata progress row without operational transactions"
     },
     "typecheck": {
       "result": "passed; final production build also validates types",
-      "log": "artifacts/ux/espresso/integrations-types.log"
+      "log": "artifacts/ux/espresso/admin-types-acceptance.log"
     },
     "lint": {
-      "result": "passed without warnings; final build also runs lint",
-      "log": "artifacts/ux/espresso/integrations-lint.log"
+      "result": "passed without warnings; final production build includes the last label-only change",
+      "log": "artifacts/ux/espresso/admin-lint-acceptance.log"
     },
     "i18n": {
-      "result": "passed; no new user-facing translation keys introduced",
-      "log": "artifacts/ux/espresso/integrations-i18n.log"
+      "result": "passed; existing RU/KG/EN keys reused",
+      "log": "artifacts/ux/espresso/admin-i18n-acceptance.log"
     },
     "productionBuild": {
-      "result": "passed with final sources, type/lint and 125 generated static pages",
-      "log": "artifacts/ux/espresso/build-integrations-final.log",
-      "command": "UX_SUITE=espresso CIRCLE_NODE_TOTAL=3 NODE_OPTIONS=--max-old-space-size=6144 node --import tsx scripts/ux/build.ts"
+      "result": "passed with all final application sources, types/lint and 125 generated static pages",
+      "command": "UX_SUITE=espresso CIRCLE_NODE_TOTAL=3 NODE_OPTIONS=--max-old-space-size=6144 node --import tsx scripts/ux/build.ts",
+      "log": "artifacts/ux/espresso/build-admin-recovered-final.log"
+    },
+    "developmentIsolation": {
+      "result": "actual scanner dev run completed; production manifest byte-identical after shutdown",
+      "evidence": "artifacts/ux/espresso/scanner-dev-isolation.json",
+      "source": "scripts/espresso/dev.mjs"
     }
   },
   "customerLayoutRecheck": {
-    "evidence": "docs/espresso/integrations-verification.json",
-    "result": "Four operational sources remain byte-exact c276f30; selected pre/post integration-review business hashes unchanged. One synthetic local source image and one QA email draft disclosed separately."
+    "evidence": "docs/espresso/administration-verification.json",
+    "result": "Four operational sources remain byte-exact c276f30. Eleven selected pre/post administrative-review business-model hashes unchanged. Additive isolated QA fixtures and normal metadata writes disclosed separately."
   },
   "authenticationTransportCorrection": {
     "source": "src/middleware.ts",
@@ -975,5 +1053,17 @@
       "artifacts/ux/espresso/integrations-role-matrix-final.json"
     ],
     "replay": "Fresh sign-out/sign-in for manager, staff, cashier and admin succeeded in the final production build. All eight protected integration paths then used the actual new role: manager retained routes; staff/cashier redirected to POS with the matching from parameter."
+  },
+  "qaHarnessCorrection": {
+    "defect": "The first custom dev-server attempt shared root .next because Next 14 custom-server preparation reloads configuration and ignores the passed conf. It removed local QA production manifests and caused local 500s.",
+    "correction": "Stopped the owned dev/production processes, moved dev into a disposable source+messages snapshot with the standard CLI and separate localhost cookie host, rebuilt production, then replayed final browser captures and scanner checks. Initial snapshot omission of messages was fixed before successful sign-in. Root Next/TypeScript configuration is unchanged.",
+    "evidence": [
+      "scripts/espresso/dev.mjs",
+      "artifacts/ux/espresso/server-scanner-validated-final.log",
+      "artifacts/ux/espresso/scanner-dev-isolation.json",
+      "artifacts/ux/espresso/build-admin-recovered-final.log",
+      "artifacts/ux/espresso/server-admin-restored-final.log"
+    ],
+    "result": "The final dev run exited cleanly and production middleware manifest remained byte-identical. Local QA harness fault, not a product/payment failure; no main merge, external provider operation or customer database affected."
   }
 }

@@ -9,6 +9,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 import { PageHeader } from "@/components/page-header";
+import { QueryErrorState } from "@/components/query-error-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -59,7 +60,7 @@ const OnboardingPage = () => {
   const tErrors = useTranslations("errors");
   const tStores = useTranslations("stores");
   const { data: session, status } = useSession();
-  const isAdmin = session?.user?.role === "ADMIN";
+  const isAdmin = status === "authenticated" && session?.user?.role === "ADMIN";
   const isForbidden = status === "authenticated" && !isAdmin;
   const { toast } = useToast();
 
@@ -217,11 +218,21 @@ const OnboardingPage = () => {
     return <Badge variant="warning">{t("status.pending")}</Badge>;
   };
 
-  if (isForbidden) {
+  if (status !== "authenticated" || isForbidden) {
     return (
       <div>
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
-        <p className="mt-4 text-sm text-danger">{tErrors("forbidden")}</p>
+        <p role={isForbidden ? "alert" : "status"} className="mt-4 text-sm text-danger">{isForbidden ? tErrors("forbidden") : tCommon("loading")}</p>
+      </div>
+    );
+  }
+
+  if (onboardingQuery.error || storesQuery.error) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title={t("title")} subtitle={t("subtitle")} />
+        {onboardingQuery.error ? <QueryErrorState error={onboardingQuery.error} onRetry={() => void onboardingQuery.refetch()} /> : null}
+        {storesQuery.error ? <QueryErrorState error={storesQuery.error} onRetry={() => void storesQuery.refetch()} /> : null}
       </div>
     );
   }
@@ -274,7 +285,7 @@ const OnboardingPage = () => {
             <span>{t("progressLabel", { done: doneCount, total: totalCount })}</span>
             <span>{progressPercent}%</span>
           </div>
-          <div className="h-2 w-full rounded-md bg-muted/40">
+          <div className="h-2 w-full rounded-md bg-muted">
             <div
               className="h-2 rounded-md bg-success"
               style={{ width: `${progressPercent}%` }}

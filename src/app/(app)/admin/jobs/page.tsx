@@ -34,7 +34,7 @@ const AdminJobsPage = () => {
   const tErrors = useTranslations("errors");
   const locale = useLocale();
   const { data: session, status } = useSession();
-  const isAdmin = session?.user?.role === "ADMIN";
+  const isAdmin = status === "authenticated" && session?.user?.role === "ADMIN";
   const isForbidden = status === "authenticated" && !isAdmin;
   const { toast } = useToast();
 
@@ -75,11 +75,11 @@ const AdminJobsPage = () => {
   });
   const actionsBusy = retryMutation.isLoading || resolveMutation.isLoading || jobsQuery.isFetching;
 
-  if (isForbidden) {
+  if (status !== "authenticated" || isForbidden) {
     return (
       <div>
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
-        <p className="mt-4 text-sm text-danger">{tErrors("forbidden")}</p>
+        <p role={isForbidden ? "alert" : "status"} className="mt-4 text-sm text-danger">{isForbidden ? tErrors("forbidden") : tCommon("loading")}</p>
       </div>
     );
   }
@@ -99,7 +99,7 @@ const AdminJobsPage = () => {
               {tCommon("loading")}
             </div>
           ) : jobsQuery.isError ? (
-            <QueryErrorState onRetry={() => void jobsQuery.refetch()} />
+            <QueryErrorState error={jobsQuery.error} onRetry={() => void jobsQuery.refetch()} />
           ) : !(jobsQuery.data ?? []).length ? (
             <p className="text-sm text-muted-foreground">{t("empty")}</p>
           ) : (

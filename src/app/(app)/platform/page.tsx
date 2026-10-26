@@ -6,6 +6,7 @@ import { useLocale, useTranslations } from "next-intl";
 
 import { PaymentReviews } from "@/components/billing/payment-reviews";
 import { PageHeader } from "@/components/page-header";
+import { QueryErrorState } from "@/components/query-error-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -161,13 +162,13 @@ const PlatformPage = () => {
     }
   };
 
-  if (isForbidden) {
+  if (status !== "authenticated" || isForbidden) {
     return (
       <div>
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
         <Card>
-          <CardContent className="py-8 text-sm text-muted-foreground">
-            {tCommon("notAvailable")}
+          <CardContent role={isForbidden ? "alert" : "status"} className="py-8 text-sm text-muted-foreground">
+            {isForbidden ? tErrors("forbidden") : tCommon("loading")}
           </CardContent>
         </Card>
       </div>
@@ -179,14 +180,10 @@ const PlatformPage = () => {
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
       {summaryQuery.error ? (
-        <Card>
-          <CardContent className="py-4 text-sm text-danger">
-            {translateError(tErrors, summaryQuery.error)}
-          </CardContent>
-        </Card>
+        <QueryErrorState error={summaryQuery.error} onRetry={() => void summaryQuery.refetch()} />
       ) : null}
 
-      {summaryQuery.data ? (
+      {summaryQuery.data && !summaryQuery.error ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           <Card>
             <CardHeader className="pb-2">
@@ -264,9 +261,7 @@ const PlatformPage = () => {
         </CardHeader>
         <CardContent>
           {upgradeRequestsQuery.error ? (
-            <p className="text-sm text-danger">
-              {translateError(tErrors, upgradeRequestsQuery.error)}
-            </p>
+            <QueryErrorState error={upgradeRequestsQuery.error} onRetry={() => void upgradeRequestsQuery.refetch()} />
           ) : upgradeRequestsQuery.isLoading ? (
             <div className="py-6">
               <Spinner className="h-5 w-5" />
@@ -363,7 +358,7 @@ const PlatformPage = () => {
         </CardHeader>
         <CardContent>
           {orgsQuery.error ? (
-            <p className="text-sm text-danger">{translateError(tErrors, orgsQuery.error)}</p>
+            <QueryErrorState error={orgsQuery.error} onRetry={() => void orgsQuery.refetch()} />
           ) : orgsQuery.isLoading ? (
             <div className="py-6">
               <Spinner className="h-5 w-5" />
@@ -555,7 +550,7 @@ const PlatformPage = () => {
                     )
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger aria-label={t("plan")}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -581,7 +576,7 @@ const PlatformPage = () => {
                     )
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger aria-label={t("subscriptionStatus")}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -596,6 +591,7 @@ const PlatformPage = () => {
                 <p className="text-sm font-medium text-foreground">{t("trialDays")}</p>
                 <Input
                   type="number"
+                  aria-label={t("trialDays")}
                   min={0}
                   max={365}
                   disabled={!applyBillingDates || updateBillingMutation.isLoading}
@@ -616,6 +612,7 @@ const PlatformPage = () => {
                 <p className="text-sm font-medium text-foreground">{t("currentPeriodDays")}</p>
                 <Input
                   type="number"
+                  aria-label={t("currentPeriodDays")}
                   min={1}
                   max={365}
                   disabled={!applyBillingDates || updateBillingMutation.isLoading}
