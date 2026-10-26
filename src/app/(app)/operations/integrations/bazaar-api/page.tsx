@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 
 import { PageHeader } from "@/components/page-header";
+import { QueryErrorState } from "@/components/query-error-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,6 +37,8 @@ const BazaarApiSettingsPage = () => {
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const locale = useLocale();
+  const { data: session } = useSession();
+  const canView = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
   const searchParams = useSearchParams();
   const storeIdParam = searchParams.get("storeId");
   const { toast } = useToast();
@@ -43,7 +47,7 @@ const BazaarApiSettingsPage = () => {
   const [newToken, setNewToken] = useState<string | null>(null);
   const [apiBaseUrl, setApiBaseUrl] = useState("/api/bazaar/v1");
 
-  const storesQuery = trpc.bazaarApi.listStores.useQuery();
+  const storesQuery = trpc.bazaarApi.listStores.useQuery(undefined, { enabled: canView });
   const stores = useMemo(() => storesQuery.data ?? [], [storesQuery.data]);
 
   useEffect(() => {
@@ -55,7 +59,10 @@ const BazaarApiSettingsPage = () => {
     });
   }, [stores]);
 
-  const apiKeysQuery = trpc.bazaarApi.apiKeys.useQuery({ storeId }, { enabled: Boolean(storeId) });
+  const apiKeysQuery = trpc.bazaarApi.apiKeys.useQuery(
+    { storeId },
+    { enabled: canView && Boolean(storeId) },
+  );
   const utils = trpc.useUtils();
   const selectedStore = stores.find((store) => store.storeId === storeId) ?? null;
   const activeKeyCount = useMemo(
@@ -87,13 +94,28 @@ const BazaarApiSettingsPage = () => {
     setApiBaseUrl(`${window.location.origin}/api/bazaar/v1`);
   }, []);
 
+  if (!canView || storesQuery.error) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title={t("title")} subtitle={t("subtitle")} />
+        {!canView ? (
+          <p role={session?.user ? "alert" : "status"}>
+            {session?.user ? tErrors("forbidden") : tCommon("loading")}
+          </p>
+        ) : (
+          <QueryErrorState error={storesQuery.error} onRetry={() => void storesQuery.refetch()} />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
       <div className="space-y-6">
         <Card className="bazaar-admin-surface">
-          <CardHeader className="border-b border-border/60 bg-muted/20">
+          <CardHeader className="border-b border-border bg-card">
             <CardTitle>{t("storeTitle")}</CardTitle>
           </CardHeader>
           <CardContent className="max-w-sm space-y-2">
@@ -102,7 +124,7 @@ const BazaarApiSettingsPage = () => {
               onValueChange={setStoreId}
               disabled={storesQuery.isLoading || !stores.length}
             >
-              <SelectTrigger>
+              <SelectTrigger aria-label={t("storeTitle")}>
                 <SelectValue placeholder={t("storePlaceholder")} />
               </SelectTrigger>
               <SelectContent>
@@ -122,7 +144,7 @@ const BazaarApiSettingsPage = () => {
         </Card>
 
         <Card className="bazaar-admin-surface">
-          <CardHeader className="space-y-2 border-b border-border/60 bg-muted/20">
+          <CardHeader className="space-y-2 border-b border-border bg-card">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <CardTitle>{t("statusTitle")}</CardTitle>
               <Badge variant={activeKeyCount > 0 ? "success" : "muted"}>
@@ -147,12 +169,13 @@ const BazaarApiSettingsPage = () => {
         </Card>
 
         <Card className="bazaar-admin-surface">
-          <CardHeader className="border-b border-border/60 bg-muted/20">
+          <CardHeader className="border-b border-border bg-card">
             <CardTitle>{t("keysTitle")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex flex-col gap-2 sm:flex-row">
               <Input
+                aria-label={t("keyNamePlaceholder")}
                 value={keyName}
                 onChange={(event) => setKeyName(event.target.value)}
                 placeholder={t("keyNamePlaceholder")}
@@ -167,10 +190,16 @@ const BazaarApiSettingsPage = () => {
               </Button>
             </div>
 
-            <div className="bazaar-admin-table-shell">
-              <div className="bazaar-admin-table-scroll">
-              <Table className="min-w-[720px]">
-                <TableHeader>
+            {apiKeysQuery.error ? (
+              <QueryErrorState
+                error={apiKeysQuery.error}
+                onRetry={() => void apiKeysQuery.refetch()}
+              />
+            ) : (
+              <div className="bazaar-admin-table-shell">
+                <div className="bazaar-admin-table-scroll">
+                  <Table className="min-w-[720px]">
+                    <TableHeader>
                   <TableRow>
                     <TableHead>{t("columns.name")}</TableHead>
                     <TableHead>{t("columns.prefix")}</TableHead>
@@ -180,22 +209,24 @@ const BazaarApiSettingsPage = () => {
                     <TableHead className="text-right">{tCommon("actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody>
-                  {(apiKeysQuery.data ?? []).length ? (
-                    (apiKeysQuery.data ?? []).map((apiKey) => (
-                      <TableRow key={apiKey.id}>
-                        <TableCell className="font-medium">{apiKey.name}</TableCell>
-                        <TableCell className="font-mono text-xs">{apiKey.tokenPrefix}</TableCell>
-                        <TableCell>{formatDateTime(apiKey.createdAt, locale)}</TableCell>
-                        <TableCell>
+                    <TableBody>
+                      {(apiKeysQuery.data ?? []).length ? (
+                        (apiKeysQuery.data ?? []).map((apiKey) => (
+                          <TableRow key={apiKey.id}>
+                            <TableCell className="font-medium">{apiKey.name}</TableCell>
+                            <TableCell className="font-mono text-xs">
+                              {apiKey.tokenPrefix}
+                            </TableCell>
+                            <TableCell>{formatDateTime(apiKey.createdAt, locale)}</TableCell>
+                            <TableCell>
                           {apiKey.lastUsedAt ? formatDateTime(apiKey.lastUsedAt, locale) : "-"}
                         </TableCell>
-                        <TableCell>
+                            <TableCell>
                           <Badge variant={apiKey.revokedAt ? "muted" : "success"}>
                             {apiKey.revokedAt ? t("status.revoked") : t("status.active")}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-right">
+                            <TableCell className="text-right">
                           <Button
                             type="button"
                             variant="danger"
@@ -205,22 +236,25 @@ const BazaarApiSettingsPage = () => {
                             {t("revoke")}
                           </Button>
                         </TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell
+                          </TableRow>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell
                         colSpan={6}
                         className="py-10 text-center text-sm text-muted-foreground"
                       >
-                        {apiKeysQuery.isLoading ? tCommon("loading") : t("empty")}
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+                            {!storeId
+                              ? tCommon("selectStore")
+                              : apiKeysQuery.isLoading ? tCommon("loading") : t("empty")}
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
               </div>
-            </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -236,9 +270,7 @@ const BazaarApiSettingsPage = () => {
         subtitle={t("tokenSubtitle")}
       >
         <div className="space-y-4">
-          <div className="bazaar-admin-modal-card break-all font-mono text-xs">
-            {newToken}
-          </div>
+          <div className="bazaar-admin-modal-card break-all font-mono text-xs">{newToken}</div>
           <ModalFooter>
             <Button type="button" onClick={() => setNewToken(null)}>
               {tCommon("close")}

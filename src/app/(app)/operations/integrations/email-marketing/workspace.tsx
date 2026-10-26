@@ -35,6 +35,7 @@ import {
   EmailCampaignType,
 } from "@prisma/client";
 import { useLocale, useTranslations } from "next-intl";
+import { useSession } from "next-auth/react";
 
 import {
   AddIcon,
@@ -61,6 +62,7 @@ import {
   StatusSuccessIcon,
 } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
+import { QueryErrorState } from "@/components/query-error-state";
 import { ActionMenu, ActionMenuItem } from "@/components/ui/action-menu";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -531,7 +533,10 @@ const blockNeedsDeleteConfirmation = (block: CampaignBlock) =>
   builderBlockHasMeaningfulContent(block);
 
 const editableTextValue = (element: HTMLElement, multiline?: boolean) => {
-  const value = (multiline ? element.innerText : element.textContent ?? "").replace(/\u00a0/g, " ");
+  const value = (multiline ? element.innerText : (element.textContent ?? "")).replace(
+    /\u00a0/g,
+    " ",
+  );
   return multiline ? value.replace(/\n{3,}/g, "\n\n") : value.replace(/\s+/g, " ").trim();
 };
 
@@ -808,6 +813,8 @@ const useMediaQuery = (query: string) => {
 export const EmailMarketingWorkspace = () => {
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
+  const { data: session } = useSession();
+  const canView = session?.user?.role === "ADMIN" || session?.user?.role === "MANAGER";
   const locale = useLocale();
   const { toast } = useToast();
   const { confirm, confirmDialog } = useConfirmDialog();
@@ -861,7 +868,7 @@ export const EmailMarketingWorkspace = () => {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [senderForm, setSenderForm] = useState({ displayName: "", fromEmail: "", replyToEmail: "" });
 
-  const storesQuery = trpc.stores.list.useQuery();
+  const storesQuery = trpc.stores.list.useQuery(undefined, { enabled: canView });
   const stores = useMemo(() => storesQuery.data ?? [], [storesQuery.data]);
   const selectedStore = stores.find((store) => store.id === storeId) ?? null;
   const selectedBlock = blocks.find((block) => block.id === selectedBlockId) ?? blocks[0] ?? null;
@@ -883,11 +890,11 @@ export const EmailMarketingWorkspace = () => {
 
   const overviewQuery = trpc.emailMarketing.overview.useQuery(
     { storeId, source },
-    { enabled: Boolean(storeId) },
+    { enabled: canView && Boolean(storeId) },
   );
   const historyQuery = trpc.emailMarketing.history.useQuery(
     { storeId, limit: 50 },
-    { enabled: Boolean(storeId) },
+    { enabled: canView && Boolean(storeId) },
   );
   const hasSendingCampaigns = useMemo(
     () =>
@@ -916,18 +923,20 @@ export const EmailMarketingWorkspace = () => {
       recipientPage: recipientDetailPage,
       recipientPageSize: 100,
     },
-    { enabled: Boolean(campaignDetailId) },
+    { enabled: canView && Boolean(campaignDetailId) },
   );
   const sendersQuery = trpc.emailMarketing.senders.useQuery(
     { storeId },
-    { enabled: Boolean(storeId) },
+    { enabled: canView && Boolean(storeId) },
   );
   const automationsQuery = trpc.emailMarketing.automations.useQuery(
     { storeId },
-    { enabled: Boolean(storeId) },
+    { enabled: canView && Boolean(storeId) },
   );
   const { refetch: refetchEmailMarketingOverview } = overviewQuery;
-  const logoGalleryQuery = trpc.emailMarketing.logoGallery.useQuery();
+  const logoGalleryQuery = trpc.emailMarketing.logoGallery.useQuery(undefined, {
+    enabled: canView,
+  });
   const customersQuery = trpc.emailMarketing.customers.useQuery(
     {
       storeId,
@@ -937,7 +946,10 @@ export const EmailMarketingWorkspace = () => {
       pageSize: 20,
       includeSelectableIds: audienceMode === "manual",
     },
-    { enabled: Boolean(storeId && builderOpen && builderMode === "campaign"), keepPreviousData: true },
+    {
+      enabled: canView && Boolean(storeId && builderOpen && builderMode === "campaign"),
+      keepPreviousData: true,
+    },
   );
   const productsQuery = trpc.emailMarketing.products.useQuery(
     {
@@ -949,9 +961,10 @@ export const EmailMarketingWorkspace = () => {
     },
     {
       enabled: Boolean(
+        canView &&
         storeId &&
-          builderOpen &&
-          (selectedBlock?.type === "products" || selectedProductIdsForQuery.length > 0),
+        builderOpen &&
+        (selectedBlock?.type === "products" || selectedProductIdsForQuery.length > 0),
       ),
     },
   );
@@ -985,13 +998,13 @@ export const EmailMarketingWorkspace = () => {
   }, [primarySenderId, senderIdentityId, senderOptions, senderOptionsKey, sendersQuery.data]);
 
   useEffect(() => {
-    if (!hasSendingCampaigns) return;
+    if (!canView || !hasSendingCampaigns) return;
     const interval = window.setInterval(() => {
       void refetchCampaignHistory();
       void refetchEmailMarketingOverview();
     }, 5_000);
     return () => window.clearInterval(interval);
-  }, [hasSendingCampaigns, refetchCampaignHistory, refetchEmailMarketingOverview]);
+  }, [canView, hasSendingCampaigns, refetchCampaignHistory, refetchEmailMarketingOverview]);
 
   const selectedBlockIndex = selectedBlock ? blocks.findIndex((block) => block.id === selectedBlock.id) : -1;
   const productItems = useMemo(() => productsQuery.data?.items ?? [], [productsQuery.data?.items]);
@@ -1095,11 +1108,11 @@ export const EmailMarketingWorkspace = () => {
     });
   }, [previewMutation.data?.rendered.html]);
   useEffect(() => {
-    if (!builderOpen || !storeId) return;
+    if (!canView || !builderOpen || !storeId) return;
     const timeout = window.setTimeout(() => previewMutation.mutate(campaignInput), 250);
     return () => window.clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [builderOpen, builderMode, campaignInput, storeId]);
+  }, [canView, builderOpen, builderMode, campaignInput, storeId]);
 
   useEffect(() => {
     if (!previewOpen) return;
@@ -1317,7 +1330,13 @@ export const EmailMarketingWorkspace = () => {
   );
 
   useEffect(() => {
-    if (!sendingCampaignId || sendCampaignMutation.isLoading || resumeCampaignMutation.isLoading || autoResumeCampaignLoading) {
+    if (
+      !canView ||
+      !sendingCampaignId ||
+      sendCampaignMutation.isLoading ||
+      resumeCampaignMutation.isLoading ||
+      autoResumeCampaignLoading
+    ) {
       return;
     }
     const timeout = window.setTimeout(() => {
@@ -1327,6 +1346,7 @@ export const EmailMarketingWorkspace = () => {
   }, [
     autoResumeCampaign,
     autoResumeCampaignLoading,
+    canView,
     resumeCampaignMutation.isLoading,
     sendCampaignMutation.isLoading,
     sendingCampaignId,
@@ -1629,7 +1649,12 @@ export const EmailMarketingWorkspace = () => {
     { key: "subject", label: "Тема письма указана", ok: Boolean(subject.trim()), critical: true },
     { key: "content", label: "Письмо содержит контент", ok: blocks.some(blockHasContent), critical: true },
   ];
-  const canSend = validation.every((item) => !item.critical || item.ok);
+  const canSend =
+    canView &&
+    !storesQuery.error &&
+    !overviewQuery.error &&
+    !sendersQuery.error &&
+    validation.every((item) => !item.critical || item.ok);
 
   const handleLogoUpload = async (file: File | null) => {
     if (!file || !storeId) return;
@@ -1654,6 +1679,21 @@ export const EmailMarketingWorkspace = () => {
       setUploadingLogo(false);
     }
   };
+
+  if (!canView || (!builderOpen && storesQuery.error)) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Email-маркетинг" />
+        {!canView ? (
+          <p role={session?.user ? "alert" : "status"}>
+            {session?.user ? tErrors("forbidden") : tCommon("loading")}
+          </p>
+        ) : (
+          <QueryErrorState error={storesQuery.error} onRetry={() => void storesQuery.refetch()} />
+        )}
+      </div>
+    );
+  }
 
   if (builderOpen) {
     return (
@@ -1742,7 +1782,8 @@ export const EmailMarketingWorkspace = () => {
               ))}
             </div>
             <div className="bazaar-admin-notice mt-5 text-xs leading-5">
-              Переменные: {"{{customerName}}, {{storeName}}, {{orderNumber}}, {{orderStatus}}, {{orderPreviousStatus}}, {{orderTotal}}, {{unsubscribeLink}}"}
+              Переменные:{" "}
+              {"{{customerName}}, {{storeName}}, {{orderNumber}}, {{orderStatus}}, {{orderPreviousStatus}}, {{orderTotal}}, {{unsubscribeLink}}"}
             </div>
           </aside>
 
@@ -1885,7 +1926,9 @@ export const EmailMarketingWorkspace = () => {
                   <h2 className="text-sm font-semibold">Аудитория</h2>
                   <Field label="Режим">
                     <Select value={audienceMode} onValueChange={(value) => setAudienceMode(value as AudienceMode)}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="segment">Сегмент</SelectItem>
                         <SelectItem value="manual">Вручную</SelectItem>
@@ -1895,7 +1938,9 @@ export const EmailMarketingWorkspace = () => {
                   {audienceMode === "segment" ? (
                     <Field label="Сегмент">
                       <Select value={audienceSegment} onValueChange={(value) => setAudienceSegment(value as AudienceSegment)}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="all">Все клиенты с email</SelectItem>
                           <SelectItem value="new">Новые клиенты</SelectItem>
@@ -1919,11 +1964,15 @@ export const EmailMarketingWorkspace = () => {
                   )}
                   <Field label="Источник">
                     <Select value={source} onValueChange={(value) => setSource(value as "ALL" | CustomerSource)}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="ALL">Все источники</SelectItem>
                         {sourceValues.map((value) => (
-                          <SelectItem key={value} value={value}>{sourceLabels[value]}</SelectItem>
+                          <SelectItem key={value} value={value}>
+                            {sourceLabels[value]}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -1985,7 +2034,9 @@ export const EmailMarketingWorkspace = () => {
                 </Field>
                 <Field label="Магазин логотипа">
                   <Select value={logoStoreId || storeId || "__none__"} onValueChange={(value) => setLogoStoreId(value === "__none__" ? "" : value)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__none__">Текущий магазин</SelectItem>
                       {(logoGalleryQuery.data ?? []).map((logo) => (
@@ -2108,10 +2159,18 @@ export const EmailMarketingWorkspace = () => {
         >
           <div className="space-y-4">
             <div className="bazaar-admin-info-tile text-sm leading-6">
-              <p><strong>Кампания:</strong> {campaignName}</p>
-              <p><strong>Тема:</strong> {subject}</p>
-              <p><strong>Получателей:</strong> {audienceSummary.validRecipients}</p>
-              <p><strong>Отправитель:</strong> {currentSenderLabel}</p>
+              <p>
+                <strong>Кампания:</strong> {campaignName}
+              </p>
+              <p>
+                <strong>Тема:</strong> {subject}
+              </p>
+              <p>
+                <strong>Получателей:</strong> {audienceSummary.validRecipients}
+              </p>
+              <p>
+                <strong>Отправитель:</strong> {currentSenderLabel}
+              </p>
             </div>
             <ModalFooter>
               <Button type="button" variant="secondary" onClick={() => setConfirmOpen(false)}>Отмена</Button>
@@ -2120,15 +2179,15 @@ export const EmailMarketingWorkspace = () => {
               </Button>
             </ModalFooter>
           </div>
-	        </Modal>
-	        <LogoFileInput
-	          inputRef={logoInputRef}
-	          onFile={(file) => void handleLogoUpload(file)}
-	        />
-	        {uploadingLogo ? <span className="sr-only">Загрузка логотипа</span> : null}
-	        {confirmDialog}
-	      </div>
-	    );
+        </Modal>
+        <LogoFileInput
+	        inputRef={logoInputRef}
+	        onFile={(file) => void handleLogoUpload(file)}
+	      />
+        {uploadingLogo ? <span className="sr-only">Загрузка логотипа</span> : null}
+        {confirmDialog}
+      </div>
+    );
   }
 
   return (
@@ -2137,6 +2196,10 @@ export const EmailMarketingWorkspace = () => {
         title="Email-маркетинг"
         subtitle="Кампании, отправители и автоматические письма для клиентов выбранного магазина."
       />
+
+      {overviewQuery.error ? (
+        <QueryErrorState error={overviewQuery.error} onRetry={() => void overviewQuery.refetch()} />
+      ) : null}
 
       {!builderDesktopReady ? (
         <Card className="bazaar-admin-status-tile-warning">
@@ -2163,12 +2226,21 @@ export const EmailMarketingWorkspace = () => {
                   {selectedStore?.name ?? "Выберите магазин"}
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {overviewQuery.data?.reachableCustomers ?? 0} клиентов доступны для рассылки.
+                  {overviewQuery.error
+                    ? tCommon("notAvailable")
+                    : overviewQuery.isLoading
+                      ? tCommon("loading")
+                      : `${overviewQuery.data?.reachableCustomers ?? 0} клиентов доступны для рассылки.`}
                 </p>
               </div>
               <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,220px),1fr))] gap-2">
-                <Select value={storeId} onValueChange={setStoreId}>
+                <Select
+                  value={storeId}
+                  onValueChange={setStoreId}
+                  disabled={storesQuery.isLoading || !stores.length}
+                >
                   <SelectTrigger
+                    aria-label={tCommon("selectStore")}
                     className="min-w-0 gap-2 [&>span]:min-w-0 [&>span]:truncate [&>svg]:shrink-0"
                     title={selectedStore?.name}
                   >
@@ -2176,14 +2248,16 @@ export const EmailMarketingWorkspace = () => {
                   </SelectTrigger>
                   <SelectContent>
                     {stores.map((store) => (
-                      <SelectItem key={store.id} value={store.id}>{store.name}</SelectItem>
+                      <SelectItem key={store.id} value={store.id}>
+                        {store.name}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
                 <Button
                   type="button"
                   onClick={openNewCampaign}
-                  disabled={!builderDesktopReady}
+                  disabled={!builderDesktopReady || !storeId}
                   title={!builderDesktopReady ? builderUnavailableMessage : undefined}
                 >
                   <AddIcon className="h-4 w-4" aria-hidden />
@@ -2202,7 +2276,13 @@ export const EmailMarketingWorkspace = () => {
 
         <Card className="bazaar-admin-surface">
           <CardContent className="p-4">
-            <div className="flex items-start gap-3">
+            {sendersQuery.error ? (
+              <QueryErrorState
+                error={sendersQuery.error}
+                onRetry={() => void sendersQuery.refetch()}
+              />
+            ) : (
+              <div className="flex items-start gap-3">
               {sendersQuery.data?.senders.some((sender) => sender.status === "VERIFIED") ? (
                 <StatusSuccessIcon className="mt-0.5 h-5 w-5 text-success" aria-hidden />
               ) : (
@@ -2217,6 +2297,7 @@ export const EmailMarketingWorkspace = () => {
                 </p>
               </div>
             </div>
+            )}
           </CardContent>
         </Card>
       </section>
@@ -2237,7 +2318,13 @@ export const EmailMarketingWorkspace = () => {
 
         {activeTab === "campaigns" ? (
           <TabsPanel>
-            <CampaignsDashboard
+            {historyQuery.error ? (
+              <QueryErrorState
+                error={historyQuery.error}
+                onRetry={() => void historyQuery.refetch()}
+              />
+            ) : (
+              <CampaignsDashboard
               campaigns={historyQuery.data ?? []}
               loading={historyQuery.isLoading}
               locale={locale}
@@ -2274,12 +2361,14 @@ export const EmailMarketingWorkspace = () => {
                 null
               }
             />
+            )}
           </TabsPanel>
         ) : null}
 
         {activeTab === "senders" ? (
           <TabsPanel>
-            <SendersPanel
+            {!sendersQuery.error ? (
+              <SendersPanel
               data={sendersQuery.data}
               loading={sendersQuery.isLoading}
               form={senderForm}
@@ -2290,12 +2379,19 @@ export const EmailMarketingWorkspace = () => {
               checking={checkDomainMutation.isLoading}
               onArchive={(senderId) => archiveSenderMutation.mutate({ senderId })}
             />
+            ) : null}
           </TabsPanel>
         ) : null}
 
         {activeTab === "automations" ? (
           <TabsPanel>
-            <AutomationsPanel
+            {automationsQuery.error ? (
+              <QueryErrorState
+                error={automationsQuery.error}
+                onRetry={() => void automationsQuery.refetch()}
+              />
+            ) : (
+              <AutomationsPanel
               automations={automationsQuery.data ?? []}
               loading={automationsQuery.isLoading}
               senders={sendersQuery.data?.senders ?? []}
@@ -2321,6 +2417,7 @@ export const EmailMarketingWorkspace = () => {
               setTestEmail={setTestEmail}
               onTest={(automationId) => testAutomationMutation.mutate({ automationId, to: testEmail })}
             />
+            )}
           </TabsPanel>
         ) : null}
 
@@ -2387,7 +2484,9 @@ export const EmailMarketingWorkspace = () => {
             ) : null}
           </div>
           {campaignDetailQuery.isLoading ? (
-            <div className="flex min-h-40 items-center justify-center"><Spinner /></div>
+            <div className="flex min-h-40 items-center justify-center">
+              <Spinner />
+            </div>
           ) : (
             <div className="max-h-[60vh] overflow-auto rounded-lg border">
               <Table>
@@ -2409,7 +2508,9 @@ export const EmailMarketingWorkspace = () => {
                       </TableCell>
                       <TableCell>{recipientStatusLabel(recipient.status)}</TableCell>
                       <TableCell className="max-w-md">
-                        <p className="break-words text-sm">{recipient.providerReason ?? recipient.errorMessage ?? "—"}</p>
+                        <p className="break-words text-sm">
+                          {recipient.providerReason ?? recipient.errorMessage ?? "—"}
+                        </p>
                         <p className="mt-1 text-xs text-muted-foreground">
                           {recipient.normalizedErrorCategory}
                           {recipient.providerStatus ? ` · ${recipient.providerStatus}` : ""}
@@ -2436,7 +2537,8 @@ export const EmailMarketingWorkspace = () => {
           )}
           <div className="flex flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
             <span>
-              Показано {(campaignDetailQuery.data?.campaign.recipients ?? []).length} из {campaignDetailQuery.data?.recipientPage.total ?? 0}.
+              Показано {(campaignDetailQuery.data?.campaign.recipients ?? []).length} из{" "}
+              {campaignDetailQuery.data?.recipientPage.total ?? 0}.
             </span>
             <div className="flex items-center gap-2">
               <Button
@@ -2449,7 +2551,8 @@ export const EmailMarketingWorkspace = () => {
                 Назад
               </Button>
               <span>
-                {campaignDetailQuery.data?.recipientPage.page ?? recipientDetailPage} / {campaignDetailQuery.data?.recipientPage.pageCount ?? 1}
+                {campaignDetailQuery.data?.recipientPage.page ?? recipientDetailPage} /{" "}
+                {campaignDetailQuery.data?.recipientPage.pageCount ?? 1}
               </span>
               <Button
                 type="button"
@@ -2471,7 +2574,7 @@ export const EmailMarketingWorkspace = () => {
         </div>
       </Modal>
 
-	      <LogoFileInput
+      <LogoFileInput
 	        inputRef={logoInputRef}
 	        onFile={(file) => void handleLogoUpload(file)}
 	      />
@@ -2699,12 +2802,13 @@ const EmailBlockPreview = ({
     const ids = block.productIds ?? [];
     return (
       <div className={cn("grid gap-3 px-6 py-5", block.layout === "one" ? "grid-cols-1" : "sm:grid-cols-2")}>
-        {ids.length ? ids.map((id) => {
-          const product = products.get(id);
-          const buttonHref = productButtonUrlForPreview(block, id);
-          return (
-            <div key={id} className={cn("rounded-md border p-3", alignedClassName)} style={{ borderColor }}>
-              {block.showImage === false ? null : (
+        {ids.length ? (
+          ids.map((id) => {
+            const product = products.get(id);
+            const buttonHref = productButtonUrlForPreview(block, id);
+            return (
+              <div key={id} className={cn("rounded-md border p-3", alignedClassName)} style={{ borderColor }}>
+                {block.showImage === false ? null : (
                 <PreviewImageFrame
                   src={product?.imageUrl}
                   alt={product?.name ?? ""}
@@ -2713,17 +2817,18 @@ const EmailBlockPreview = ({
                   fallback={<span className="text-xs text-muted-foreground">Фото товара</span>}
                 />
               )}
-              <p className="mt-3 truncate font-semibold">{product?.name ?? id}</p>
-              {block.showDescription === false || !product?.description ? null : (
+                <p className="mt-3 truncate font-semibold">{product?.name ?? id}</p>
+                {block.showDescription === false || !product?.description ? null : (
                 <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
                   {product.description}
                 </p>
               )}
-              {block.showPrice === false ? null : (
-                <p className="text-sm text-muted-foreground">{product?.priceText ?? "Цена не указана"}</p>
-              )}
-              {block.showButton === false ? null : (
-                buttonHref ? (
+                {block.showPrice === false ? null : (
+                  <p className="text-sm text-muted-foreground">
+                    {product?.priceText ?? "Цена не указана"}
+                  </p>
+                )}
+                {block.showButton === false ? null : buttonHref ? (
                   <a
                     href={buttonHref}
                     onClick={(event) => event.preventDefault()}
@@ -2740,11 +2845,11 @@ const EmailBlockPreview = ({
                   >
                     {block.buttonText || "Подробнее"}
                   </span>
-                )
-              )}
-            </div>
-          );
-        }) : (
+                )}
+              </div>
+            );
+          })
+        ) : (
           <div className="col-span-full rounded-md border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
             Выберите товары в настройках блока.
           </div>
@@ -2832,7 +2937,11 @@ const EmailBlockPreview = ({
     );
   }
   if (block.type === "divider") {
-    return <div className="px-8 py-4"><div className="border-t" style={{ borderColor }} /></div>;
+    return (
+      <div className="px-8 py-4">
+        <div className="border-t" style={{ borderColor }} />
+      </div>
+    );
   }
   return (
     <div className={cn("border-t px-8 py-5 text-xs leading-5", alignedClassName)} style={{ borderColor, color: mutedTextColor }}>
@@ -2941,8 +3050,14 @@ const BlockSettings = ({
             placeholder="Короткое приветствие"
           />
         </Field>
-        <label className="flex items-center gap-2 text-sm"><input className={checkboxClass} type="checkbox" checked={block.showStoreName ?? true} onChange={(event) => update({ showStoreName: event.target.checked })} />Показывать магазин</label>
-        <label className="flex items-center gap-2 text-sm"><input className={checkboxClass} type="checkbox" checked={block.showLogo ?? true} onChange={(event) => update({ showLogo: event.target.checked })} />Показывать логотип</label>
+        <label className="flex items-center gap-2 text-sm">
+          <input className={checkboxClass} type="checkbox" checked={block.showStoreName ?? true} onChange={(event) => update({ showStoreName: event.target.checked })} />
+          Показывать магазин
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input className={checkboxClass} type="checkbox" checked={block.showLogo ?? true} onChange={(event) => update({ showLogo: event.target.checked })} />
+          Показывать логотип
+        </label>
       </div>
     );
   }
@@ -2956,9 +3071,15 @@ const BlockSettings = ({
         <Field label="Описание">
           <Textarea value={block.subtitle ?? ""} onChange={(event) => update({ subtitle: event.target.value })} rows={4} />
         </Field>
-        <Field label="URL изображения"><Input value={block.imageUrl ?? ""} onChange={(event) => update({ imageUrl: event.target.value })} placeholder="https://..." /></Field>
-        <Field label="Текст кнопки"><Input value={block.buttonText ?? ""} onChange={(event) => update({ buttonText: event.target.value })} /></Field>
-        <Field label="Ссылка кнопки"><Input value={block.buttonUrl ?? ""} onChange={(event) => update({ buttonUrl: event.target.value })} /></Field>
+        <Field label="URL изображения">
+          <Input value={block.imageUrl ?? ""} onChange={(event) => update({ imageUrl: event.target.value })} placeholder="https://..." />
+        </Field>
+        <Field label="Текст кнопки">
+          <Input value={block.buttonText ?? ""} onChange={(event) => update({ buttonText: event.target.value })} />
+        </Field>
+        <Field label="Ссылка кнопки">
+          <Input value={block.buttonUrl ?? ""} onChange={(event) => update({ buttonUrl: event.target.value })} />
+        </Field>
       </div>
     );
   }
@@ -3134,7 +3255,9 @@ const BlockSettings = ({
                 <span className="block truncate text-xs text-muted-foreground">
                   {[product.sku, product.barcode].filter(Boolean).join(" · ") || "Без SKU/штрихкода"}
                 </span>
-                <span className="text-xs text-muted-foreground">{product.priceText ?? "Нет цены"}</span>
+                <span className="text-xs text-muted-foreground">
+                  {product.priceText ?? "Нет цены"}
+                </span>
               </span>
             </button>
           ))}
@@ -3146,19 +3269,37 @@ const BlockSettings = ({
         </div>
         <Field label="Макет">
           <Select value={block.layout ?? "two"} onValueChange={(value) => update({ layout: value as "one" | "two" })}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
             <SelectContent>
               <SelectItem value="one">Один товар в ряд</SelectItem>
               <SelectItem value="two">Два товара в ряд</SelectItem>
             </SelectContent>
           </Select>
         </Field>
-        <label className="flex items-center gap-2 text-sm"><input className={checkboxClass} type="checkbox" checked={block.showImage ?? true} onChange={(event) => update({ showImage: event.target.checked })} />Показывать фото</label>
-        <label className="flex items-center gap-2 text-sm"><input className={checkboxClass} type="checkbox" checked={block.showPrice ?? true} onChange={(event) => update({ showPrice: event.target.checked })} />Показывать цену</label>
-        <label className="flex items-center gap-2 text-sm"><input className={checkboxClass} type="checkbox" checked={block.showDescription ?? true} onChange={(event) => update({ showDescription: event.target.checked })} />Показывать описание</label>
-        <label className="flex items-center gap-2 text-sm"><input className={checkboxClass} type="checkbox" checked={block.showButton ?? true} onChange={(event) => update({ showButton: event.target.checked })} />Показывать кнопку</label>
-        <Field label="Текст кнопки"><Input value={block.buttonText ?? ""} onChange={(event) => update({ buttonText: event.target.value })} /></Field>
-        <Field label="Общая ссылка"><Input value={block.buttonUrl ?? ""} onChange={(event) => update({ buttonUrl: event.target.value })} /></Field>
+        <label className="flex items-center gap-2 text-sm">
+          <input className={checkboxClass} type="checkbox" checked={block.showImage ?? true} onChange={(event) => update({ showImage: event.target.checked })} />
+          Показывать фото
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input className={checkboxClass} type="checkbox" checked={block.showPrice ?? true} onChange={(event) => update({ showPrice: event.target.checked })} />
+          Показывать цену
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input className={checkboxClass} type="checkbox" checked={block.showDescription ?? true} onChange={(event) => update({ showDescription: event.target.checked })} />
+          Показывать описание
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input className={checkboxClass} type="checkbox" checked={block.showButton ?? true} onChange={(event) => update({ showButton: event.target.checked })} />
+          Показывать кнопку
+        </label>
+        <Field label="Текст кнопки">
+          <Input value={block.buttonText ?? ""} onChange={(event) => update({ buttonText: event.target.value })} />
+        </Field>
+        <Field label="Общая ссылка">
+          <Input value={block.buttonUrl ?? ""} onChange={(event) => update({ buttonUrl: event.target.value })} />
+        </Field>
       </div>
     );
   }
@@ -3209,9 +3350,18 @@ const BlockSettings = ({
             rows={3}
           />
         </Field>
-        <label className="flex items-center gap-2 text-sm"><input className={checkboxClass} type="checkbox" checked={block.showSummary ?? true} onChange={(event) => update({ showSummary: event.target.checked })} />Показывать строку заказа</label>
-        <label className="flex items-center gap-2 text-sm"><input className={checkboxClass} type="checkbox" checked={block.showItems ?? true} onChange={(event) => update({ showItems: event.target.checked })} />Показывать товары</label>
-        <label className="flex items-center gap-2 text-sm"><input className={checkboxClass} type="checkbox" checked={block.showTotals ?? true} onChange={(event) => update({ showTotals: event.target.checked })} />Показывать итог</label>
+        <label className="flex items-center gap-2 text-sm">
+          <input className={checkboxClass} type="checkbox" checked={block.showSummary ?? true} onChange={(event) => update({ showSummary: event.target.checked })} />
+          Показывать строку заказа
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input className={checkboxClass} type="checkbox" checked={block.showItems ?? true} onChange={(event) => update({ showItems: event.target.checked })} />
+          Показывать товары
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input className={checkboxClass} type="checkbox" checked={block.showTotals ?? true} onChange={(event) => update({ showTotals: event.target.checked })} />
+          Показывать итог
+        </label>
       </div>
     );
   }
@@ -3219,12 +3369,24 @@ const BlockSettings = ({
     return (
       <div className="space-y-3">
         <AlignmentControl value={block.alignment} onChange={(alignment) => update({ alignment })} />
-        <Field label="Название акции"><Input value={block.title ?? ""} onChange={(event) => update({ title: event.target.value })} /></Field>
-        <Field label="Промокод"><Input value={block.discountCode ?? ""} onChange={(event) => update({ discountCode: event.target.value })} /></Field>
-        <Field label="Описание"><Textarea value={block.description ?? ""} onChange={(event) => update({ description: event.target.value })} rows={4} /></Field>
-        <Field label="Срок действия"><Input value={block.expiryText ?? ""} onChange={(event) => update({ expiryText: event.target.value })} /></Field>
-        <Field label="Текст кнопки"><Input value={block.buttonText ?? ""} onChange={(event) => update({ buttonText: event.target.value })} /></Field>
-        <Field label="Ссылка кнопки"><Input value={block.buttonUrl ?? ""} onChange={(event) => update({ buttonUrl: event.target.value })} /></Field>
+        <Field label="Название акции">
+          <Input value={block.title ?? ""} onChange={(event) => update({ title: event.target.value })} />
+        </Field>
+        <Field label="Промокод">
+          <Input value={block.discountCode ?? ""} onChange={(event) => update({ discountCode: event.target.value })} />
+        </Field>
+        <Field label="Описание">
+          <Textarea value={block.description ?? ""} onChange={(event) => update({ description: event.target.value })} rows={4} />
+        </Field>
+        <Field label="Срок действия">
+          <Input value={block.expiryText ?? ""} onChange={(event) => update({ expiryText: event.target.value })} />
+        </Field>
+        <Field label="Текст кнопки">
+          <Input value={block.buttonText ?? ""} onChange={(event) => update({ buttonText: event.target.value })} />
+        </Field>
+        <Field label="Ссылка кнопки">
+          <Input value={block.buttonUrl ?? ""} onChange={(event) => update({ buttonUrl: event.target.value })} />
+        </Field>
       </div>
     );
   }
@@ -3232,12 +3394,25 @@ const BlockSettings = ({
     return (
       <div className="space-y-3">
         <AlignmentControl value={block.alignment} onChange={(alignment) => update({ alignment })} />
-        <Field label="Название магазина"><Input value={block.storeName ?? ""} onChange={(event) => update({ storeName: event.target.value })} /></Field>
-        <Field label="Текст подвала"><Textarea value={block.text ?? ""} onChange={(event) => update({ text: event.target.value })} rows={4} /></Field>
-        <Field label="Телефон"><Input value={block.phone ?? ""} onChange={(event) => update({ phone: event.target.value })} /></Field>
-        <Field label="Адрес"><Input value={block.address ?? ""} onChange={(event) => update({ address: event.target.value })} /></Field>
-        <Field label="Текст отписки"><Input value={block.unsubscribeText ?? ""} onChange={(event) => update({ unsubscribeText: event.target.value })} /></Field>
-        <label className="flex items-center gap-2 text-sm"><input className={checkboxClass} type="checkbox" checked={block.showUnsubscribe ?? true} onChange={(event) => update({ showUnsubscribe: event.target.checked })} />Показывать отписку</label>
+        <Field label="Название магазина">
+          <Input value={block.storeName ?? ""} onChange={(event) => update({ storeName: event.target.value })} />
+        </Field>
+        <Field label="Текст подвала">
+          <Textarea value={block.text ?? ""} onChange={(event) => update({ text: event.target.value })} rows={4} />
+        </Field>
+        <Field label="Телефон">
+          <Input value={block.phone ?? ""} onChange={(event) => update({ phone: event.target.value })} />
+        </Field>
+        <Field label="Адрес">
+          <Input value={block.address ?? ""} onChange={(event) => update({ address: event.target.value })} />
+        </Field>
+        <Field label="Текст отписки">
+          <Input value={block.unsubscribeText ?? ""} onChange={(event) => update({ unsubscribeText: event.target.value })} />
+        </Field>
+        <label className="flex items-center gap-2 text-sm">
+          <input className={checkboxClass} type="checkbox" checked={block.showUnsubscribe ?? true} onChange={(event) => update({ showUnsubscribe: event.target.checked })} />
+          Показывать отписку
+        </label>
       </div>
     );
   }
@@ -3290,19 +3465,30 @@ const ManualAudiencePicker = ({
                   )
                 }
               />
-              <span className="min-w-0"><span className="block truncate font-semibold">{customer.name}</span><span className="block truncate text-xs text-muted-foreground">{customer.email ?? "Нет email"}</span></span>
+              <span className="min-w-0">
+                <span className="block truncate font-semibold">{customer.name}</span>
+                <span className="block truncate text-xs text-muted-foreground">
+                  {customer.email ?? "Нет email"}
+                </span>
+              </span>
             </label>
           );
         })}
         {queryLoading ? <p className="p-3 text-sm text-muted-foreground">Загрузка...</p> : null}
-        {!queryLoading && !customers.length ? <p className="p-3 text-sm text-muted-foreground">Клиенты не найдены.</p> : null}
+        {!queryLoading && !customers.length ? (
+          <p className="p-3 text-sm text-muted-foreground">Клиенты не найдены.</p>
+        ) : null}
       </div>
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span>Выбрано: {selectedIds.length}</span>
         <div className="flex items-center gap-2">
-          <Button type="button" size="icon" variant="secondary" disabled={page <= 1} onClick={() => setPage(Math.max(1, page - 1))}><ChevronLeftIcon className="h-4 w-4" /></Button>
+          <Button type="button" size="icon" variant="secondary" disabled={page <= 1} onClick={() => setPage(Math.max(1, page - 1))}>
+            <ChevronLeftIcon className="h-4 w-4" />
+          </Button>
           <span>{page}</span>
-          <Button type="button" size="icon" variant="secondary" disabled={page * 20 >= total} onClick={() => setPage(page + 1)}><ChevronRightIcon className="h-4 w-4" /></Button>
+          <Button type="button" size="icon" variant="secondary" disabled={page * 20 >= total} onClick={() => setPage(page + 1)}>
+            <ChevronRightIcon className="h-4 w-4" />
+          </Button>
         </div>
       </div>
     </div>
@@ -3375,7 +3561,9 @@ const CampaignsDashboard = ({
                   <p className="truncate font-semibold">{campaign.name}</p>
                   <p className="mt-1 truncate text-sm text-muted-foreground">{campaign.subject}</p>
                 </div>
-                <Badge variant={campaignStatusVariant(campaign.status)}>{campaignStatusLabel(campaign.status)}</Badge>
+                <Badge variant={campaignStatusVariant(campaign.status)}>
+                  {campaignStatusLabel(campaign.status)}
+                </Badge>
               </div>
               <div className="mt-4 grid gap-2 text-sm sm:grid-cols-3 xl:grid-cols-5">
                 <Metric label="Аудитория" value={campaign.recipientCount} />
@@ -3393,9 +3581,11 @@ const CampaignsDashboard = ({
               </div>
               {campaign.status !== EmailCampaignStatus.DRAFT ? (
                 <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                  Доставлено: {campaign.deliveredCount} / {campaign.recipientCount} ({campaign.recipientCount > 0 ? Math.round((campaign.deliveredCount / campaign.recipientCount) * 100) : 0}%).
-                  {" "}Ожидает сверки: {campaign.unresolvedCount}.
-                  {" "}Постоянные ошибки: {campaign.bouncedCount + campaign.droppedCount + campaign.suppressedCount + campaign.complainedCount + campaign.failedCount}.
+                  Доставлено: {campaign.deliveredCount} / {campaign.recipientCount} (
+                  {campaign.recipientCount > 0 ? Math.round((campaign.deliveredCount / campaign.recipientCount) * 100) : 0}
+                  %). Ожидает сверки: {campaign.unresolvedCount}. Постоянные ошибки:{" "}
+                  {campaign.bouncedCount + campaign.droppedCount + campaign.suppressedCount + campaign.complainedCount + campaign.failedCount}
+                  .
                 </p>
               ) : null}
               <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -3591,13 +3781,19 @@ const SendersPanel = ({
 }) => (
   <div className="grid gap-4 xl:grid-cols-[420px_minmax(0,1fr)]">
     <Card className="bazaar-admin-surface">
-      <CardHeader className="bazaar-admin-section-header"><CardTitle>Настроить отправителя</CardTitle></CardHeader>
+      <CardHeader className="bazaar-admin-section-header">
+        <CardTitle>Настроить отправителя</CardTitle>
+      </CardHeader>
       <CardContent className="space-y-4">
-        <Field label="Имя отправителя"><Input value={form.displayName} onChange={(event) => setForm({ ...form, displayName: event.target.value })} placeholder="Avantehnik" /></Field>
+        <Field label="Имя отправителя">
+          <Input value={form.displayName} onChange={(event) => setForm({ ...form, displayName: event.target.value })} placeholder="Avantehnik" />
+        </Field>
         <Field label="From email" hint="Адрес должен принадлежать домену, который вы подтвердите через DNS.">
           <Input value={form.fromEmail} onChange={(event) => setForm({ ...form, fromEmail: event.target.value })} placeholder="news@example.kg" />
         </Field>
-        <Field label="Reply-to"><Input value={form.replyToEmail} onChange={(event) => setForm({ ...form, replyToEmail: event.target.value })} placeholder="support@example.kg" /></Field>
+        <Field label="Reply-to">
+          <Input value={form.replyToEmail} onChange={(event) => setForm({ ...form, replyToEmail: event.target.value })} placeholder="support@example.kg" />
+        </Field>
         <Button type="button" className="w-full" disabled={creating || !form.displayName || !form.fromEmail} onClick={onCreate}>
           {creating ? <Spinner className="h-4 w-4" /> : <AddIcon className="h-4 w-4" aria-hidden />}
           Добавить отправителя
@@ -3607,7 +3803,9 @@ const SendersPanel = ({
     <div className="space-y-4">
       {data?.senderHealth ? (
         <Card className="bazaar-admin-surface">
-          <CardHeader className="bazaar-admin-section-header"><CardTitle>Здоровье отправителя</CardTitle></CardHeader>
+          <CardHeader className="bazaar-admin-section-header">
+            <CardTitle>Здоровье отправителя</CardTitle>
+          </CardHeader>
           <CardContent className="space-y-3 text-sm">
             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
               <Metric label="Активный From" value={data.senderHealth.customDomainVerified ? 1 : 0} />
@@ -3615,22 +3813,38 @@ const SendersPanel = ({
               <Metric label="Принято провайдером" value={data.senderHealth.acceptedTotal} />
             </div>
             <p className="break-all text-xs text-muted-foreground">
-              Фактически используется: {data.senderHealth.activeFromEmail}. {data.senderHealth.fallbackPermitted ? "Fallback Bazaar разрешен: подтвержденного custom-домена нет." : "Fallback Bazaar заблокирован: используется подтвержденный custom-домен."}
+              Фактически используется: {data.senderHealth.activeFromEmail}.{" "}
+              {data.senderHealth.fallbackPermitted ? "Fallback Bazaar разрешен: подтвержденного custom-домена нет." : "Fallback Bazaar заблокирован: используется подтвержденный custom-домен."}
             </p>
             <div className="flex flex-wrap gap-2">
-              <Badge variant={data.senderHealth.customDomainVerified ? "success" : data.senderHealth.customDomainRequired ? "danger" : "muted"}>Домен {data.senderHealth.customDomainVerified ? "подтвержден" : "не подтвержден"}</Badge>
-              <Badge variant={data.senderHealth.dkim.verified ? "success" : "warning"}>DKIM {data.senderHealth.dkim.verified ? "OK" : data.senderHealth.dkim.visible ? "ожидает" : "нет данных"}</Badge>
-              <Badge variant={data.senderHealth.spfOrMailFrom.verified ? "success" : "warning"}>SPF / MAIL FROM {data.senderHealth.spfOrMailFrom.verified ? "OK" : data.senderHealth.spfOrMailFrom.visible ? "ожидает" : "нет данных"}</Badge>
-              <Badge variant={data.senderHealth.dmarc.visible ? "success" : "warning"}>DMARC {data.senderHealth.dmarc.visible ? "виден" : "нет данных"}</Badge>
+              <Badge variant={data.senderHealth.customDomainVerified ? "success" : data.senderHealth.customDomainRequired ? "danger" : "muted"}>
+                Домен {data.senderHealth.customDomainVerified ? "подтвержден" : "не подтвержден"}
+              </Badge>
+              <Badge variant={data.senderHealth.dkim.verified ? "success" : "warning"}>
+                DKIM{" "}
+                {data.senderHealth.dkim.verified ? "OK" : data.senderHealth.dkim.visible ? "ожидает" : "нет данных"}
+              </Badge>
+              <Badge variant={data.senderHealth.spfOrMailFrom.verified ? "success" : "warning"}>
+                SPF / MAIL FROM{" "}
+                {data.senderHealth.spfOrMailFrom.verified ? "OK" : data.senderHealth.spfOrMailFrom.visible ? "ожидает" : "нет данных"}
+              </Badge>
+              <Badge variant={data.senderHealth.dmarc.visible ? "success" : "warning"}>
+                DMARC {data.senderHealth.dmarc.visible ? "виден" : "нет данных"}
+              </Badge>
             </div>
             <p className="text-xs text-muted-foreground">
-              Bounce rate: {(data.senderHealth.bounceRate * 100).toFixed(2)}% ({data.senderHealth.bounceCount}). Complaint rate: {(data.senderHealth.complaintRate * 100).toFixed(2)}% ({data.senderHealth.complaintCount}).
+              Bounce rate: {(data.senderHealth.bounceRate * 100).toFixed(2)}% (
+              {data.senderHealth.bounceCount}). Complaint rate:{" "}
+              {(data.senderHealth.complaintRate * 100).toFixed(2)}% (
+              {data.senderHealth.complaintCount}).
             </p>
           </CardContent>
         </Card>
       ) : null}
       <Card className="bazaar-admin-surface">
-        <CardHeader className="bazaar-admin-section-header"><CardTitle>Отправители</CardTitle></CardHeader>
+        <CardHeader className="bazaar-admin-section-header">
+          <CardTitle>Отправители</CardTitle>
+        </CardHeader>
         <CardContent className="space-y-3">
           {data?.defaultSender ? (
             <div className="bazaar-admin-info-tile">
@@ -3663,21 +3877,33 @@ const SendersPanel = ({
                   <p className="truncate text-sm text-muted-foreground">{sender.fromEmail}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  {data?.primarySenderId === sender.id ? <Badge variant="success">Основной</Badge> : null}
-                  <Badge variant={sender.status === "VERIFIED" ? "success" : sender.status === "FAILED" ? "danger" : "warning"}>{senderStatusLabel(sender.status)}</Badge>
-                  <Button type="button" size="icon" variant="ghost" onClick={() => onArchive(sender.id)} aria-label="Архивировать"><ArchiveIcon className="h-4 w-4" /></Button>
+                  {data?.primarySenderId === sender.id ? (
+                    <Badge variant="success">Основной</Badge>
+                  ) : null}
+                  <Badge variant={sender.status === "VERIFIED" ? "success" : sender.status === "FAILED" ? "danger" : "warning"}>
+                    {senderStatusLabel(sender.status)}
+                  </Badge>
+                  <Button type="button" size="icon" variant="ghost" onClick={() => onArchive(sender.id)} aria-label="Архивировать">
+                    <ArchiveIcon className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
             </div>
           ))}
-          {!loading && !(data?.senders ?? []).length ? <p className="text-sm text-muted-foreground">Брендированных отправителей пока нет.</p> : null}
+          {!loading && !(data?.senders ?? []).length ? (
+            <p className="text-sm text-muted-foreground">Брендированных отправителей пока нет.</p>
+          ) : null}
         </CardContent>
       </Card>
       <Card className="bazaar-admin-surface">
-        <CardHeader className="bazaar-admin-section-header"><CardTitle>Домены и DNS</CardTitle></CardHeader>
+        <CardHeader className="bazaar-admin-section-header">
+          <CardTitle>Домены и DNS</CardTitle>
+        </CardHeader>
         <CardContent className="space-y-4">
           {(data?.domains ?? []).map((domain) => {
-            const records = Array.isArray(domain.recordsJson) ? domain.recordsJson as Array<Record<string, unknown>> : [];
+            const records = Array.isArray(domain.recordsJson)
+              ? (domain.recordsJson as Array<Record<string, unknown>>)
+              : [];
             const dmarcName = "_dmarc";
             const dmarcValue = `v=DMARC1; p=none; rua=mailto:postmaster@${domain.domain}`;
             return (
@@ -3685,9 +3911,13 @@ const SendersPanel = ({
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="font-semibold">{domain.domain}</p>
-                    <p className="text-xs text-muted-foreground">{domain.lastCheckedAt ? `Проверен: ${formatDateTime(domain.lastCheckedAt, "ru")}` : "Еще не проверялся"}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {domain.lastCheckedAt ? `Проверен: ${formatDateTime(domain.lastCheckedAt, "ru")}` : "Еще не проверялся"}
+                    </p>
                   </div>
-                  <Badge variant={domain.status === "VERIFIED" ? "success" : domain.status === "FAILED" ? "danger" : "warning"}>{senderStatusLabel(domain.status)}</Badge>
+                  <Badge variant={domain.status === "VERIFIED" ? "success" : domain.status === "FAILED" ? "danger" : "warning"}>
+                    {senderStatusLabel(domain.status)}
+                  </Badge>
                 </div>
                 <div className="bazaar-admin-table-shell mt-3 overflow-auto">
                   <Table className="min-w-[820px] text-xs">
@@ -3708,13 +3938,17 @@ const SendersPanel = ({
                             <TableCell className="p-2">{String(record.type ?? "")}</TableCell>
                             <TableCell className="p-2">
                               <div className="grid grid-cols-[minmax(0,1fr)_28px] items-center gap-2">
-                                <code className="truncate font-mono" title={name}>{name}</code>
+                                <code className="truncate font-mono" title={name}>
+                                  {name}
+                                </code>
                                 <CopyDnsValue value={name} label="Скопировать имя записи" />
                               </div>
                             </TableCell>
                             <TableCell className="p-2">
                               <div className="grid grid-cols-[minmax(0,1fr)_28px] items-center gap-2">
-                                <code className="truncate font-mono" title={value}>{value}</code>
+                                <code className="truncate font-mono" title={value}>
+                                  {value}
+                                </code>
                                 <CopyDnsValue value={value} label="Скопировать значение записи" />
                               </div>
                             </TableCell>
@@ -3729,11 +3963,15 @@ const SendersPanel = ({
                   <p className="text-xs font-semibold text-muted-foreground">Рекомендуется добавить DMARC TXT</p>
                   <div className="mt-2 grid gap-2 md:grid-cols-[220px_minmax(0,1fr)]">
                     <div className="grid grid-cols-[minmax(0,1fr)_28px] items-center gap-2 rounded-md bg-background px-2 py-1.5">
-                      <code className="truncate text-xs" title={dmarcName}>{dmarcName}</code>
+                      <code className="truncate text-xs" title={dmarcName}>
+                        {dmarcName}
+                      </code>
                       <CopyDnsValue value={dmarcName} label="Скопировать имя DMARC" />
                     </div>
                     <div className="grid grid-cols-[minmax(0,1fr)_28px] items-center gap-2 rounded-md bg-background px-2 py-1.5">
-                      <code className="truncate text-xs" title={dmarcValue}>{dmarcValue}</code>
+                      <code className="truncate text-xs" title={dmarcValue}>
+                        {dmarcValue}
+                      </code>
                       <CopyDnsValue value={dmarcValue} label="Скопировать значение DMARC" />
                     </div>
                   </div>
@@ -3745,7 +3983,9 @@ const SendersPanel = ({
               </div>
             );
           })}
-          {!loading && !(data?.domains ?? []).length ? <p className="text-sm text-muted-foreground">Добавьте отправителя, чтобы получить DNS записи Resend.</p> : null}
+          {!loading && !(data?.domains ?? []).length ? (
+            <p className="text-sm text-muted-foreground">Добавьте отправителя, чтобы получить DNS записи Resend.</p>
+          ) : null}
         </CardContent>
       </Card>
     </div>
@@ -3786,26 +4026,36 @@ const AutomationsPanel = ({
               <CardTitle>{triggerLabel(automation.trigger)}</CardTitle>
               <p className="mt-1 text-sm text-muted-foreground">{automation.subject}</p>
             </div>
-            <Badge variant={automation.status === EmailAutomationStatus.ACTIVE ? "success" : "muted"}>{automationStatusLabel(automation.status)}</Badge>
+            <Badge variant={automation.status === EmailAutomationStatus.ACTIVE ? "success" : "muted"}>
+              {automationStatusLabel(automation.status)}
+            </Badge>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-2 sm:grid-cols-3">
             <Metric label="Отправлено" value={automation.sentCount} />
             <Metric label="Ошибки" value={automation.failedCount} />
-              <div className="bazaar-admin-info-tile p-2">
+            <div className="bazaar-admin-info-tile p-2">
               <p className="text-xs text-muted-foreground">Последний запуск</p>
-              <p className="mt-1 truncate text-xs font-semibold">{automation.lastTriggeredAt ? formatDateTime(automation.lastTriggeredAt, "ru") : "Нет"}</p>
+              <p className="mt-1 truncate text-xs font-semibold">
+                {automation.lastTriggeredAt ? formatDateTime(automation.lastTriggeredAt, "ru") : "Нет"}
+              </p>
             </div>
           </div>
           <Field label="Отправитель">
             <Select value={automation.senderIdentityId ?? primarySenderId ?? "__none__"} onValueChange={(value) => onSender(automation.id, value)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
-                {primarySenderId ? null : <SelectItem value="__none__">Автоматически: Bazaar KG</SelectItem>}
+                {primarySenderId ? null : (
+                  <SelectItem value="__none__">Автоматически: Bazaar KG</SelectItem>
+                )}
                 {senders.map((sender) => (
-                  <SelectItem key={sender.id} value={sender.id} disabled={sender.status !== "VERIFIED"}>{sender.displayName} · {sender.fromEmail}</SelectItem>
-                ))}
+                          <SelectItem key={sender.id} value={sender.id} disabled={sender.status !== "VERIFIED"}>
+                            {sender.displayName} · {sender.fromEmail}
+                          </SelectItem>
+                        ))}
               </SelectContent>
             </Select>
           </Field>
@@ -3823,7 +4073,9 @@ const AutomationsPanel = ({
             >
               Редактировать письмо
             </Button>
-            <Button type="button" onClick={() => onToggle(automation)}>{automation.status === EmailAutomationStatus.ACTIVE ? "Пауза" : "Активировать"}</Button>
+            <Button type="button" onClick={() => onToggle(automation)}>
+              {automation.status === EmailAutomationStatus.ACTIVE ? "Пауза" : "Активировать"}
+            </Button>
           </div>
           {!builderAvailable ? (
             <p className="text-xs leading-5 text-muted-foreground">
@@ -3834,7 +4086,9 @@ const AutomationsPanel = ({
       </Card>
     ))}
     {!loading && !automations.length ? (
-      <Card className="bazaar-admin-surface xl:col-span-2"><CardContent className="bazaar-admin-empty m-4 min-h-[10rem]">Автоматизации будут созданы после выбора магазина.</CardContent></Card>
+      <Card className="bazaar-admin-surface xl:col-span-2">
+        <CardContent className="bazaar-admin-empty m-4 min-h-[10rem]">Автоматизации будут созданы после выбора магазина.</CardContent>
+      </Card>
     ) : null}
   </div>
 );

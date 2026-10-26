@@ -1,5 +1,5 @@
 {
-  "status": "reports-checkpoint-in-review-full-redesign-in-progress",
+  "status": "integrations-checkpoint-in-review-full-redesign-in-progress",
   "branch": "codex/playground",
   "reference": "Frappe Framework Espresso e8d41dd0061a32ee781caefe5d0b0d2bb7c15362",
   "checks": [
@@ -399,6 +399,59 @@
       "name": "sourceAudit",
       "result": "Four customer operational sources exactly match c276f30; server diff since this checkpoint baseline is limited to operational timestamp transport.",
       "evidence": "artifacts/ux/espresso/reports-source-audit-final.json"
+    },
+    {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
+      "result": "passed after final runtime changes",
+      "log": "artifacts/ux/espresso/integrations-unit-final.log",
+      "evidence": "docs/espresso/integrations-verification.json",
+      "files": 264,
+      "tests": 1988
+    },
+    {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts integrations",
+      "result": "passed on separate bazaar_hardening_ci; provider requests mocked or disabled",
+      "log": "artifacts/ux/espresso/integrations-database.log",
+      "evidence": "docs/espresso/integrations-verification.json",
+      "files": 14,
+      "tests": 94
+    },
+    {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts authentication",
+      "result": "passed on separate resettable DB/Redis; real credentials, claims and role destinations",
+      "log": "artifacts/ux/espresso/integrations-auth-database.log",
+      "evidence": "docs/espresso/integrations-verification.json",
+      "files": 1,
+      "tests": 9
+    },
+    {
+      "command": "typecheck",
+      "result": "passed; final production build also validates types",
+      "log": "artifacts/ux/espresso/integrations-types.log",
+      "evidence": "docs/espresso/integrations-verification.json"
+    },
+    {
+      "command": "lint",
+      "result": "passed without warnings; final build also runs lint",
+      "log": "artifacts/ux/espresso/integrations-lint.log",
+      "evidence": "docs/espresso/integrations-verification.json"
+    },
+    {
+      "command": "i18n",
+      "result": "passed; no new user-facing translation keys introduced",
+      "log": "artifacts/ux/espresso/integrations-i18n.log",
+      "evidence": "docs/espresso/integrations-verification.json"
+    },
+    {
+      "command": "UX_SUITE=espresso CIRCLE_NODE_TOTAL=3 NODE_OPTIONS=--max-old-space-size=6144 node --import tsx scripts/ux/build.ts",
+      "result": "passed with final sources, type/lint and 125 generated static pages",
+      "log": "artifacts/ux/espresso/build-integrations-final.log",
+      "evidence": "docs/espresso/integrations-verification.json"
+    },
+    {
+      "command": "CUA production UI integration review",
+      "result": "32 base captures over 9 sources; final fresh role logins, assigned-store selection, local HEIC conversion, named email draft/save/preview and documentation contrast/keyboard pan. Full provider/state acceptance remains pending.",
+      "evidence": "docs/espresso/integrations-verification.json"
     }
   ],
   "environment": {
@@ -430,5 +483,6 @@
   "currentSettingsCheckpoint": "docs/espresso/settings-verification.json",
   "currentWarehouseCheckpoint": "docs/espresso/warehouse-documents-verification.json",
   "currentCommerceCheckpoint": "docs/espresso/commerce-verification.json",
-  "currentReportsCheckpoint": "docs/espresso/reports-verification.json"
+  "currentReportsCheckpoint": "docs/espresso/reports-verification.json",
+  "currentIntegrationsCheckpoint": "docs/espresso/integrations-verification.json"
 }

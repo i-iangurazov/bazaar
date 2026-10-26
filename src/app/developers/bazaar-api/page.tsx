@@ -367,7 +367,7 @@ const errors = [
 ];
 
 const CodeBlock = ({ children }: { children: string }) => (
-  <pre className="overflow-x-auto rounded-md border border-border bg-card p-4 text-sm leading-6 text-slate-100 shadow-sm">
+  <pre className="overflow-x-auto rounded-md border border-border bg-card p-4 text-sm leading-6 text-foreground shadow-none">
     <code>{children}</code>
   </pre>
 );
@@ -378,8 +378,8 @@ const MethodBadge = ({ method }: { method: string }) => {
     <span
       className={
         isPost
-          ? "rounded-md bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700"
-          : "rounded-md bg-blue-100 px-2.5 py-1 text-xs font-bold text-blue-700"
+          ? "rounded-md bg-success/10 px-2.5 py-1 text-xs font-bold text-success"
+          : "rounded-md bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary"
       }
     >
       {method}
@@ -394,7 +394,12 @@ const DataTable = ({
   headers: string[];
   rows: string[][];
 }) => (
-  <div className="overflow-x-auto rounded-md border border-border bg-card">
+  <div
+    role="region"
+    aria-label={headers.join(", ")}
+    tabIndex={0}
+    className="overflow-x-auto rounded-md border border-border bg-card focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+  >
     <table className="min-w-[720px] text-sm">
       <thead className="bg-muted">
         <tr>
@@ -405,7 +410,7 @@ const DataTable = ({
           ))}
         </tr>
       </thead>
-      <tbody className="divide-y divide-slate-200">
+      <tbody className="divide-y divide-border">
         {rows.map((row) => (
           <tr key={row.join(":")}>
             {row.map((cell, index) => (
@@ -436,8 +441,10 @@ const Section = ({
   children: React.ReactNode;
 }) => (
   <section id={id} className="scroll-mt-24 border-t border-border py-12">
-    <p className="text-sm font-semibold uppercase tracking-[0.14em] text-blue-700">{eyebrow}</p>
-    <h2 className="mt-2 text-2xl font-semibold tracking-normal text-foreground md:text-3xl">{title}</h2>
+    <p className="text-sm font-semibold uppercase tracking-[0.14em] text-primary">{eyebrow}</p>
+    <h2 className="mt-2 text-2xl font-semibold tracking-normal text-foreground md:text-3xl">
+      {title}
+    </h2>
     <div className="mt-6 space-y-6">{children}</div>
   </section>
 );
@@ -449,7 +456,7 @@ const BazaarApiDocsPage = () => (
         <div className="min-w-0">
           <Link href="/" className="inline-flex items-center gap-3 text-foreground">
             <Image src="/brand/logo.png" alt="Bazaar" width={144} height={36} className="h-9 w-auto" priority />
-            <span className="rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
+            <span className="rounded-md border border-primary/20 bg-primary/5 px-2.5 py-1 text-xs font-semibold text-primary">
               API v1
             </span>
           </Link>
@@ -463,7 +470,7 @@ const BazaarApiDocsPage = () => (
           <div className="mt-7 flex flex-wrap gap-3">
             <a
               href="#products"
-              className="inline-flex h-11 items-center gap-2 rounded-md bg-blue-700 px-4 text-sm font-semibold text-white hover:bg-blue-800"
+              className="inline-flex h-11 items-center gap-2 rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
             >
               Смотреть методы
               <ExternalLinkIcon className="h-4 w-4" aria-hidden />
@@ -477,27 +484,27 @@ const BazaarApiDocsPage = () => (
           </div>
         </div>
 
-        <div className="w-full max-w-md rounded-md border border-border bg-card p-5 text-slate-100 shadow-xl lg:shrink-0">
+        <div className="w-full max-w-md rounded-md border border-border bg-card p-5 text-foreground shadow-none lg:shrink-0">
           <div className="mb-4 flex items-center justify-between gap-3">
-            <p className="text-sm font-semibold text-slate-300">Base URL</p>
-            <span className="rounded bg-emerald-400/10 px-2 py-1 text-xs font-semibold text-emerald-300">
+            <p className="text-sm font-semibold text-muted-foreground">Base URL</p>
+            <span className="rounded bg-success/10 px-2 py-1 text-xs font-semibold text-success">
               Store-scoped
             </span>
           </div>
-          <code className="block break-all rounded-md bg-card/5 p-3 text-sm text-slate-100">
+          <code className="block break-all rounded-md bg-muted p-3 text-sm text-foreground">
             {baseUrl}
           </code>
-          <div className="mt-5 grid gap-3 text-sm text-slate-300">
+          <div className="mt-5 grid gap-3 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
-              <KeyIcon className="h-4 w-4 text-emerald-300" aria-hidden />
+              <KeyIcon className="h-4 w-4 text-success" aria-hidden />
               Authorization: Bearer API key
             </div>
             <div className="flex items-center gap-2">
-              <ShieldCheckIcon className="h-4 w-4 text-emerald-300" aria-hidden />
+              <ShieldCheckIcon className="h-4 w-4 text-success" aria-hidden />
               Один ключ даёт доступ к одному магазину
             </div>
             <div className="flex items-center gap-2">
-              <StatusSuccessIcon className="h-4 w-4 text-emerald-300" aria-hidden />
+              <StatusSuccessIcon className="h-4 w-4 text-success" aria-hidden />
               Максимум 100 товаров на страницу
             </div>
           </div>
@@ -523,14 +530,14 @@ const BazaarApiDocsPage = () => (
         </nav>
       </aside>
 
-      <div className="min-w-0 rounded-md border border-border bg-card px-5 py-2 shadow-sm md:px-8">
+      <div className="min-w-0 rounded-md border border-border bg-card px-5 py-2 shadow-none md:px-8">
         <Section id="overview" eyebrow="Overview" title="Назначение API">
           <div className="grid gap-4 md:grid-cols-3">
             {endpoints.map((endpoint) => {
               const Icon = endpoint.icon;
               return (
                 <div key={endpoint.path} className="rounded-md border border-border bg-card p-5">
-                  <Icon className="h-6 w-6 text-blue-700" aria-hidden />
+                  <Icon className="h-6 w-6 text-primary" aria-hidden />
                   <div className="mt-4 flex items-center gap-2">
                     <MethodBadge method={endpoint.method} />
                     <code className="rounded bg-muted px-2 py-1 text-sm text-foreground">
@@ -538,15 +545,18 @@ const BazaarApiDocsPage = () => (
                     </code>
                   </div>
                   <h3 className="mt-4 text-lg font-semibold text-foreground">{endpoint.title}</h3>
-                  <p className="mt-2 text-sm leading-6 text-muted-foreground">{endpoint.description}</p>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    {endpoint.description}
+                  </p>
                 </div>
               );
             })}
           </div>
-          <p className="rounded-md border border-blue-200 bg-blue-50 p-4 text-sm leading-6 text-blue-950">
-            API работает в модели <code className="rounded bg-card px-1.5 py-0.5">store-scoped access</code>:
-            каждый API-ключ привязан к одному магазину. Внешняя система видит и создаёт данные
-            только в рамках этого магазина.
+          <p className="rounded-md border border-primary/20 bg-primary/5 p-4 text-sm leading-6 text-foreground">
+            API работает в модели{" "}
+            <code className="rounded bg-card px-1.5 py-0.5">store-scoped access</code>: каждый
+            API-ключ привязан к одному магазину. Внешняя система видит и создаёт данные только в
+            рамках этого магазина.
           </p>
         </Section>
 
@@ -559,8 +569,8 @@ Content-Type: application/json`}</CodeBlock>
             поэтому его нужно сохранить сразу после создания.
           </p>
           <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
-            Если ключ отозван или передан неверно, API возвращает HTTP <code>401</code> и
-            сообщение <code>apiUnauthorized</code>.
+            Если ключ отозван или передан неверно, API возвращает HTTP <code>401</code> и сообщение{" "}
+            <code>apiUnauthorized</code>.
           </div>
         </Section>
 
@@ -596,7 +606,7 @@ Content-Type: application/json`}</CodeBlock>
             <DataTable headers={["Поле", "Описание"]} rows={importantProductFields} />
           </div>
 
-          <p className="rounded-md border border-emerald-200 bg-emerald-50 p-4 text-sm leading-6 text-emerald-950">
+          <p className="rounded-md border border-success/20 bg-success/10 p-4 text-sm leading-6 text-foreground">
             Закрытые внутренние поля, включая себестоимость и бухгалтерские данные, через API не
             передаются.
           </p>
@@ -770,7 +780,7 @@ curl -X GET "${baseUrl}/orders/MARKET-10001" \\
           </ol>
           <div className="rounded-md border border-border bg-muted p-5">
             <div className="flex items-start gap-3">
-              <BookOpenIcon className="mt-1 h-5 w-5 text-blue-700" aria-hidden />
+              <BookOpenIcon className="mt-1 h-5 w-5 text-primary" aria-hidden />
               <div>
                 <h3 className="font-semibold text-foreground">Публичная ссылка</h3>
                 <p className="mt-1 text-sm leading-6 text-muted-foreground">

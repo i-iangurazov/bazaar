@@ -12,6 +12,7 @@ import {
 } from "@prisma/client";
 
 import { PageHeader } from "@/components/page-header";
+import { QueryErrorState } from "@/components/query-error-state";
 import {
   isDescriptionGenerationJobRunning,
   ProductDescriptionGenerationProgress,
@@ -185,7 +186,7 @@ const BakaiStorePage = () => {
   const templateInputRef = useRef<HTMLInputElement | null>(null);
 
   const role = session?.user?.role ?? "STAFF";
-  const canView = role === "ADMIN" || role === "MANAGER" || role === "STAFF";
+  const canView = role === "ADMIN" || role === "MANAGER";
   const canEdit = role === "ADMIN" || role === "MANAGER";
   const [activeStoreId, setActiveStoreId] = useState("");
 
@@ -359,8 +360,7 @@ const BakaiStorePage = () => {
     { jobId: descriptionGenerationJobId ?? "" },
     {
       enabled: Boolean(descriptionGenerationJobId),
-      refetchInterval: (job) =>
-        isDescriptionGenerationJobRunning(job?.status) ? 2_000 : false,
+      refetchInterval: (job) => (isDescriptionGenerationJobRunning(job?.status) ? 2_000 : false),
       onSuccess: async (job) => {
         if (!isDescriptionGenerationJobRunning(job.status)) {
           await Promise.all([preflightQuery.refetch(), productsQuery.refetch()]);
@@ -830,7 +830,22 @@ const BakaiStorePage = () => {
       : "";
 
   if (!canView) {
-    return null;
+    return (
+      <div className="space-y-6">
+        <PageHeader title={t("title")} subtitle={t("subtitle")} />
+        <p role={session?.user ? "alert" : "status"}>
+          {session?.user ? tErrors("forbidden") : tCommon("loading")}
+        </p>
+      </div>
+    );
+  }
+  if (settingsQuery.error) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title={t("title")} subtitle={t("subtitle")} />
+        <QueryErrorState error={settingsQuery.error} onRetry={() => void settingsQuery.refetch()} />
+      </div>
+    );
   }
 
   return (
@@ -937,9 +952,7 @@ const BakaiStorePage = () => {
               </p>
             </div>
           ) : (
-            <div className="bazaar-admin-empty min-h-[7rem]">
-              {t("overview.uploadHint")}
-            </div>
+            <div className="bazaar-admin-empty min-h-[7rem]">{t("overview.uploadHint")}</div>
           )}
 
           {settingsQuery.data?.integration.lastErrorSummary ? (
@@ -1052,9 +1065,7 @@ const BakaiStorePage = () => {
                   })
                 : t("settings.endpointPending")}
             </p>
-            {isApiMode ? (
-              <p className="mt-2 text-xs">{t("settings.apiSubsetWarning")}</p>
-            ) : null}
+            {isApiMode ? <p className="mt-2 text-xs">{t("settings.apiSubsetWarning")}</p> : null}
           </div>
 
           <FormActions className="justify-start">
@@ -1389,9 +1400,10 @@ const BakaiStorePage = () => {
               {tCommon("loading")}
             </div>
           ) : productsQuery.error ? (
-            <div className="bazaar-admin-error">
-              {translateError(tErrors, productsQuery.error)}
-            </div>
+            <QueryErrorState
+              error={productsQuery.error}
+              onRetry={() => void productsQuery.refetch()}
+            />
           ) : (
             <ResponsiveDataList
               items={productItems}
@@ -1723,9 +1735,7 @@ const BakaiStorePage = () => {
                   </div>
                 </div>
               ) : (
-                <div className="bazaar-admin-empty min-h-[7rem]">
-                  {t("preflight.table.empty")}
-                </div>
+                <div className="bazaar-admin-empty min-h-[7rem]">{t("preflight.table.empty")}</div>
               )}
             </div>
           ) : null}
@@ -1866,9 +1876,7 @@ const BakaiStorePage = () => {
               {tCommon("loading")}
             </div>
           ) : jobsQuery.error ? (
-            <div className="bazaar-admin-error">
-              {translateError(tErrors, jobsQuery.error)}
-            </div>
+            <QueryErrorState error={jobsQuery.error} onRetry={() => void jobsQuery.refetch()} />
           ) : jobsQuery.data?.length ? (
             <div className="bazaar-admin-table-shell">
               <div className="bazaar-admin-table-scroll">
@@ -1964,9 +1972,7 @@ const BakaiStorePage = () => {
               </div>
             </div>
           ) : (
-            <div className="bazaar-admin-empty min-h-[8rem]">
-              {t("history.empty")}
-            </div>
+            <div className="bazaar-admin-empty min-h-[8rem]">{t("history.empty")}</div>
           )}
         </CardContent>
       </Card>

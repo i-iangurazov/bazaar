@@ -72,11 +72,27 @@ const suites = {
     "tests/integration/exports.test.ts",
     "tests/integration/period-close.test.ts",
   ],
+  integrations: [
+    "tests/integration/integration-workspace-access.test.ts",
+    "tests/integration/bazaar-api.test.ts",
+    "tests/integration/bazaar-api-external-identity.test.ts",
+    "tests/integration/bazaar-api-operation-request.test.ts",
+    "tests/integration/bazaar-catalog.test.ts",
+    "tests/integration/catalog-discounts.test.ts",
+    "tests/integration/catalog-sources.test.ts",
+    "tests/integration/m-market.test.ts",
+    "tests/integration/bakai-store.test.ts",
+    "tests/integration/o-market-job-lifecycle.test.ts",
+    "tests/integration/product-image-studio.test.ts",
+    "tests/integration/email-marketing-delivery.test.ts",
+    "tests/integration/email-marketing-idempotency.test.ts",
+    "tests/integration/email-marketing-products.test.ts",
+  ],
   unit: ["tests/unit"],
 } as const;
 if (!Object.prototype.hasOwnProperty.call(suites, suite)) {
   throw new Error(
-    "Choose database, directories, authentication, settings, warehouse, commerce, loyalty, reports or unit",
+    "Choose database, directories, authentication, settings, warehouse, commerce, loyalty, reports, integrations or unit",
   );
 }
 const require = createRequire(import.meta.url);

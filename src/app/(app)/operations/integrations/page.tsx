@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, type ReactNode } from "react";
+import { useMemo, type ComponentProps, type ReactNode } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 
 import { CopyIcon, IntegrationsIcon, ViewIcon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
+import { QueryErrorState } from "@/components/query-error-state";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +17,15 @@ import { trpc } from "@/lib/trpc";
 type SummaryStatus = "NOT_CONFIGURED" | "DRAFT" | "PUBLISHED";
 type BadgeVariant = "default" | "success" | "warning" | "danger" | "muted";
 
+const queryState = (query: {
+  error: ComponentProps<typeof QueryErrorState>["error"] | null;
+  isLoading: boolean;
+  refetch: () => unknown;
+}) => ({
+  failure: query.error ? { error: query.error, onRetry: () => void query.refetch() } : undefined,
+  pending: query.isLoading,
+});
+
 const IntegrationTile = ({
   title,
   description,
@@ -24,6 +34,8 @@ const IntegrationTile = ({
   detail,
   actions,
   className,
+  failure,
+  pending,
 }: {
   title: string;
   description: string;
@@ -32,11 +44,15 @@ const IntegrationTile = ({
   detail?: ReactNode;
   actions: ReactNode;
   className?: string;
-}) => (
-  <Card className={`flex flex-col ${className ?? ""}`}>
-    <CardHeader className="px-4 py-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex min-w-0 gap-3">
+  failure?: ComponentProps<typeof QueryErrorState>;
+  pending?: boolean;
+}) => {
+  const tCommon = useTranslations("common");
+  return (
+    <Card className={`flex flex-col ${className ?? ""}`}>
+      <CardHeader className="px-4 py-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex min-w-0 gap-3">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-secondary text-muted-foreground">
             <IntegrationsIcon className="h-4 w-4" aria-hidden />
           </div>
@@ -45,17 +61,25 @@ const IntegrationTile = ({
             <p className="text-sm leading-5 text-muted-foreground">{description}</p>
           </div>
         </div>
-        <Badge variant={statusVariant} className="shrink-0">
-          {status}
-        </Badge>
-      </div>
-    </CardHeader>
-    <CardContent className="mt-auto flex flex-col gap-3 px-4 pb-4 pt-0">
-      {detail ? <div className="text-sm leading-5 text-muted-foreground">{detail}</div> : null}
-      <div className="flex flex-wrap gap-2">{actions}</div>
-    </CardContent>
-  </Card>
-);
+          <Badge
+            variant={failure ? "danger" : pending ? "muted" : statusVariant}
+            className="shrink-0"
+          >
+            {failure ? tCommon("notAvailable") : pending ? tCommon("loading") : status}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="mt-auto flex flex-col gap-3 px-4 pb-4 pt-0">
+        {failure ? (
+          <QueryErrorState {...failure} />
+        ) : !pending && detail ? (
+          <div className="text-sm leading-5 text-muted-foreground">{detail}</div>
+        ) : null}
+        <div className="flex flex-wrap gap-2">{actions}</div>
+      </CardContent>
+    </Card>
+  );
+};
 
 const ActionLink = ({
   href,
@@ -89,16 +113,27 @@ const resolveAbsoluteCatalogUrl = (publicUrlPath: string) => {
 const IntegrationsPage = () => {
   const t = useTranslations("integrations");
   const tCommon = useTranslations("common");
+  const tErrors = useTranslations("errors");
   const { toast } = useToast();
   const { data: session } = useSession();
   const role = session?.user?.role;
   const canManageApiKeys = role === "ADMIN" || role === "MANAGER";
 
-  const storesQuery = trpc.bazaarCatalog.listStores.useQuery();
-  const mMarketOverviewQuery = trpc.mMarket.overview.useQuery();
-  const bakaiStoreOverviewQuery = trpc.bakaiStore.overview.useQuery();
-  const oMarketOverviewQuery = trpc.oMarket.overview.useQuery();
-  const productImageStudioOverviewQuery = trpc.productImageStudio.overview.useQuery();
+  const storesQuery = trpc.bazaarCatalog.listStores.useQuery(undefined, {
+    enabled: canManageApiKeys,
+  });
+  const mMarketOverviewQuery = trpc.mMarket.overview.useQuery(undefined, {
+    enabled: canManageApiKeys,
+  });
+  const bakaiStoreOverviewQuery = trpc.bakaiStore.overview.useQuery(undefined, {
+    enabled: canManageApiKeys,
+  });
+  const oMarketOverviewQuery = trpc.oMarket.overview.useQuery(undefined, {
+    enabled: canManageApiKeys,
+  });
+  const productImageStudioOverviewQuery = trpc.productImageStudio.overview.useQuery(undefined, {
+    enabled: canManageApiKeys,
+  });
   const emailMarketingOverviewQuery = trpc.emailMarketing.overview.useQuery(undefined, {
     enabled: canManageApiKeys,
   });
@@ -207,6 +242,17 @@ const IntegrationsPage = () => {
       : productImageStudioOverviewQuery.data?.status === "ERROR"
         ? t("productImageStudio.status.error")
         : t("productImageStudio.status.notConfigured");
+
+  if (!canManageApiKeys) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title={t("title")} subtitle={t("subtitle")} />
+        <p role={session?.user ? "alert" : "status"}>
+          {session?.user ? tErrors("forbidden") : tCommon("loading")}
+        </p>
+      </div>
+    );
+  }
   return (
     <div className="space-y-6">
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
@@ -214,6 +260,7 @@ const IntegrationsPage = () => {
       <div className="grid max-w-[1500px] gap-4 md:grid-cols-2 xl:grid-cols-3">
         <IntegrationTile
           title={t("bazaarCatalog.title")}
+          {...queryState(storesQuery)}
           description={t("bazaarCatalog.description")}
           status={t(`status.${statusLabelKey}`)}
           statusVariant={
@@ -249,6 +296,7 @@ const IntegrationsPage = () => {
 
         <IntegrationTile
           title={t("bazaarApi.title")}
+          {...queryState(storesQuery.error || storesQuery.isLoading || !defaultStoreId ? storesQuery : apiKeysQuery)}
           description={t("bazaarApi.description")}
           status={activeApiKeyCount > 0 ? t("status.ready") : t("status.notConfigured")}
           statusVariant={activeApiKeyCount > 0 ? "success" : "muted"}
@@ -259,6 +307,7 @@ const IntegrationsPage = () => {
         {canManageApiKeys ? (
           <IntegrationTile
             title={t("emailMarketing.title")}
+            {...queryState(emailMarketingOverviewQuery)}
             description={t("emailMarketing.description")}
             status={
               emailMarketingOverviewQuery.data?.status === "READY"
@@ -281,6 +330,7 @@ const IntegrationsPage = () => {
 
         <IntegrationTile
           title={t("mMarket.title")}
+          {...queryState(mMarketOverviewQuery)}
           description={t("mMarket.description")}
           status={mMarketStatus}
           statusVariant={mMarketStatusVariant}
@@ -300,6 +350,7 @@ const IntegrationsPage = () => {
 
         <IntegrationTile
           title={t("bakaiStore.title")}
+          {...queryState(bakaiStoreOverviewQuery)}
           description={t("bakaiStore.description")}
           status={bakaiStoreStatus}
           statusVariant={bakaiStoreStatusVariant}
@@ -319,6 +370,7 @@ const IntegrationsPage = () => {
 
         <IntegrationTile
           title={t("oMarket.title")}
+          {...queryState(oMarketOverviewQuery)}
           description={t("oMarket.description")}
           status={oMarketStatus}
           statusVariant={oMarketStatusVariant}
@@ -348,6 +400,7 @@ const IntegrationsPage = () => {
 
         <IntegrationTile
           title={t("productImageStudio.title")}
+          {...queryState(productImageStudioOverviewQuery)}
           description={t("productImageStudio.description")}
           status={imageStudioStatus}
           statusVariant={productImageStudioOverviewQuery.data?.configured ? "success" : "muted"}

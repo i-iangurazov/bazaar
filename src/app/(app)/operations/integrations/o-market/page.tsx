@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 
 import { BackIcon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
+import { QueryErrorState } from "@/components/query-error-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -130,13 +131,15 @@ const money = (value: number | null) =>
 
 const OMarketPage = () => {
   const t = useTranslations("integrations.oMarketPage");
+  const tErrors = useTranslations("errors");
+  const tCommon = useTranslations("common");
   const { data: session } = useSession();
   const role = session?.user?.role;
   const canManage = role === "ADMIN" || role === "MANAGER";
   const { toast } = useToast();
   const trpcUtils = trpc.useUtils();
 
-  const settingsQuery = trpc.oMarket.settings.useQuery();
+  const settingsQuery = trpc.oMarket.settings.useQuery(undefined, { enabled: canManage });
   const [activeStoreId, setActiveStoreId] = useState("");
   const [baseUrl, setBaseUrl] = useState("https://api-market.o.kg");
   const [apiToken, setApiToken] = useState("");
@@ -186,18 +189,19 @@ const OMarketPage = () => {
       page,
       pageSize: 10,
     },
-    { enabled: Boolean(activeStoreId) },
+    { enabled: canManage && Boolean(activeStoreId) },
   );
   const preflightQuery = trpc.oMarket.preflight.useQuery(
     { storeId: activeStoreId, jobType },
     {
-      enabled: Boolean(activeStoreId),
+      enabled: canManage && Boolean(activeStoreId),
       refetchInterval: false,
     },
   );
   const jobsQuery = trpc.oMarket.jobs.useQuery(
     { limit: 25 },
     {
+      enabled: canManage,
       refetchInterval: (data) =>
         data?.some(
           (job) =>
@@ -303,8 +307,30 @@ const OMarketPage = () => {
   });
 
   const preflight = preflightQuery.data;
-  const canRunAll = Boolean(preflight?.actionability.canRunAll);
-  const canRunReadyOnly = Boolean(preflight?.actionability.canRunReadyOnly);
+  const canRunAll = !preflightQuery.error && Boolean(preflight?.actionability.canRunAll);
+  const canRunReadyOnly =
+    !preflightQuery.error && Boolean(preflight?.actionability.canRunReadyOnly);
+
+  if (!canManage || settingsQuery.error) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+        title={t("title")}
+        subtitle={t("subtitle")}
+      />
+        {!canManage ? (
+          <p role={session?.user ? "alert" : "status"}>
+            {session?.user ? tErrors("forbidden") : tCommon("loading")}
+          </p>
+        ) : (
+          <QueryErrorState
+            error={settingsQuery.error}
+            onRetry={() => void settingsQuery.refetch()}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -315,13 +341,11 @@ const OMarketPage = () => {
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
         <Card className="bazaar-admin-surface">
-          <CardHeader className="border-b border-border/60 bg-muted/20">
+          <CardHeader className="border-b border-border bg-card">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <CardTitle>{t("connection.title")}</CardTitle>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {t("connection.description")}
-                </p>
+                <p className="mt-1 text-sm text-muted-foreground">{t("connection.description")}</p>
               </div>
               <Badge variant={statusVariant(settingsQuery.data?.integration.status)}>
                 {settingsQuery.data?.integration.status ?? t("common.loading")}
@@ -362,7 +386,7 @@ const OMarketPage = () => {
         </Card>
 
         <Card className="bazaar-admin-surface">
-          <CardHeader className="border-b border-border/60 bg-muted/20">
+          <CardHeader className="border-b border-border bg-card">
             <CardTitle>{t("credentials.title")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 p-5">
@@ -444,11 +468,9 @@ const OMarketPage = () => {
 
       <div className="grid gap-4 xl:grid-cols-2">
         <Card className="bazaar-admin-surface">
-          <CardHeader className="border-b border-border/60 bg-muted/20">
+          <CardHeader className="border-b border-border bg-card">
             <CardTitle>{t("storeMapping.title")}</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              {t("storeMapping.description")}
-            </p>
+            <p className="text-sm text-muted-foreground">{t("storeMapping.description")}</p>
           </CardHeader>
           <CardContent className="space-y-3 p-5">
             {(settingsQuery.data?.stores ?? []).map((store) => (
@@ -488,11 +510,9 @@ const OMarketPage = () => {
         </Card>
 
         <Card className="bazaar-admin-surface">
-          <CardHeader className="border-b border-border/60 bg-muted/20">
+          <CardHeader className="border-b border-border bg-card">
             <CardTitle>{t("categoryMapping.title")}</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              {t("categoryMapping.description")}
-            </p>
+            <p className="text-sm text-muted-foreground">{t("categoryMapping.description")}</p>
           </CardHeader>
           <CardContent className="max-h-[520px] space-y-3 overflow-y-auto p-5">
             {(settingsQuery.data?.categoryMappings ?? []).length === 0 ? (
@@ -579,13 +599,11 @@ const OMarketPage = () => {
       </div>
 
       <Card className="bazaar-admin-surface">
-        <CardHeader className="border-b border-border/60 bg-muted/20">
+        <CardHeader className="border-b border-border bg-card">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <CardTitle>{t("productExport.title")}</CardTitle>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {t("productExport.description")}
-              </p>
+              <p className="mt-1 text-sm text-muted-foreground">{t("productExport.description")}</p>
             </div>
             <div className="flex min-w-[240px] flex-col gap-2 sm:flex-row">
               <Select value={activeStoreId} onValueChange={setActiveStoreId}>
@@ -623,10 +641,14 @@ const OMarketPage = () => {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-md border p-3">
               <p className="text-xs uppercase text-muted-foreground">{t("productExport.store")}</p>
-              <p className="mt-1 font-medium">{activeStore?.storeName ?? t("productExport.selectStore")}</p>
+              <p className="mt-1 font-medium">
+                {activeStore?.storeName ?? t("productExport.selectStore")}
+              </p>
             </div>
             <div className="rounded-md border p-3">
-              <p className="text-xs uppercase text-muted-foreground">{t("productExport.considered")}</p>
+              <p className="text-xs uppercase text-muted-foreground">
+                {t("productExport.considered")}
+              </p>
               <p className="mt-1 font-medium">{preflight?.summary.productsConsidered ?? 0}</p>
             </div>
             <div className="rounded-md border p-3">
@@ -634,7 +656,9 @@ const OMarketPage = () => {
               <p className="mt-1 font-medium">{preflight?.summary.productsReady ?? 0}</p>
             </div>
             <div className="rounded-md border p-3">
-              <p className="text-xs uppercase text-muted-foreground">{t("productExport.failedSkipped")}</p>
+              <p className="text-xs uppercase text-muted-foreground">
+                {t("productExport.failedSkipped")}
+              </p>
               <p className="mt-1 font-medium">{preflight?.summary.productsFailed ?? 0}</p>
             </div>
           </div>
@@ -712,9 +736,15 @@ const OMarketPage = () => {
               </div>
             </div>
 
-            <TableContainer>
-              <Table>
-                <TableHeader>
+            {productsQuery.error ? (
+              <QueryErrorState
+                error={productsQuery.error}
+                onRetry={() => void productsQuery.refetch()}
+              />
+            ) : (
+              <TableContainer>
+                <Table>
+                  <TableHeader>
                   <TableRow>
                     <TableHead>{t("table.product")}</TableHead>
                     <TableHead>{t("table.category")}</TableHead>
@@ -724,12 +754,12 @@ const OMarketPage = () => {
                     <TableHead>{t("table.action")}</TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody>
-                  {(productsQuery.data?.items ?? []).map((product) => (
-                    <TableRow key={product.id}>
-                      <TableCell>
-                        <div className="flex min-w-[220px] items-center gap-3">
-                          {product.imageUrl ? (
+                  <TableBody>
+                    {(productsQuery.data?.items ?? []).map((product) => (
+                      <TableRow key={product.id}>
+                        <TableCell>
+                          <div className="flex min-w-[220px] items-center gap-3">
+                            {product.imageUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
                               src={product.imageUrl}
@@ -739,21 +769,23 @@ const OMarketPage = () => {
                           ) : (
                             <div className="h-10 w-10 rounded-md border bg-muted" />
                           )}
-                          <div className="min-w-0">
-                            <p className="truncate font-medium">{product.name}</p>
-                            <p className="truncate text-xs text-muted-foreground">{product.sku}</p>
+                            <div className="min-w-0">
+                              <p className="truncate font-medium">{product.name}</p>
+                              <p className="truncate text-xs text-muted-foreground">
+                                {product.sku}
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>{product.category ?? t("common.missing")}</TableCell>
-                      <TableCell>{money(product.priceKgs)}</TableCell>
-                      <TableCell>{product.onHandQty}</TableCell>
-                      <TableCell>
+                        </TableCell>
+                        <TableCell>{product.category ?? t("common.missing")}</TableCell>
+                        <TableCell>{money(product.priceKgs)}</TableCell>
+                        <TableCell>{product.onHandQty}</TableCell>
+                        <TableCell>
                         <Badge variant={product.included ? "success" : "muted"}>
                           {product.exportStatus}
                         </Badge>
                       </TableCell>
-                      <TableCell>
+                        <TableCell>
                         <Button
                           type="button"
                           size="sm"
@@ -770,11 +802,12 @@ const OMarketPage = () => {
                           {product.included ? t("productExport.exclude") : t("productExport.include")}
                         </Button>
                       </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
           </div>
           <div className="flex items-center justify-between gap-3">
             <Button
@@ -805,10 +838,16 @@ const OMarketPage = () => {
       </Card>
 
       <Card className="bazaar-admin-surface">
-        <CardHeader className="border-b border-border/60 bg-muted/20">
+        <CardHeader className="border-b border-border bg-card">
           <CardTitle>{t("validation.title")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 p-5">
+          {preflightQuery.error ? (
+            <QueryErrorState
+              error={preflightQuery.error}
+              onRetry={() => void preflightQuery.refetch()}
+            />
+          ) : null}
           {preflightQuery.isLoading ? (
             <p className="text-sm text-muted-foreground">{t("validation.loading")}</p>
           ) : null}
@@ -853,12 +892,17 @@ const OMarketPage = () => {
       </Card>
 
       <Card className="bazaar-admin-surface">
-        <CardHeader className="border-b border-border/60 bg-muted/20">
+        <CardHeader className="border-b border-border bg-card">
           <CardTitle>{t("jobs.title")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 p-5">
-          {(jobsQuery.data ?? []).length === 0 ? (
-            <p className="text-sm text-muted-foreground">{t("jobs.empty")}</p>
+          {jobsQuery.error ? (
+            <QueryErrorState error={jobsQuery.error} onRetry={() => void jobsQuery.refetch()} />
+          ) : null}
+          {!jobsQuery.error && (jobsQuery.data ?? []).length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              {jobsQuery.isLoading ? tCommon("loading") : t("jobs.empty")}
+            </p>
           ) : null}
           {(jobsQuery.data ?? []).map((job) => {
             const results = getProductResults(job.responseJson);
@@ -904,9 +948,7 @@ const OMarketPage = () => {
                             <TableCell>{result.sku}</TableCell>
                             <TableCell>{result.name ?? ""}</TableCell>
                             <TableCell>
-                              <Badge variant={statusVariant(result.status)}>
-                                {result.status}
-                              </Badge>
+                              <Badge variant={statusVariant(result.status)}>{result.status}</Badge>
                             </TableCell>
                             <TableCell>{result.reason ?? ""}</TableCell>
                           </TableRow>
