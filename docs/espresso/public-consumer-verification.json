@@ -1,0 +1,140 @@
+{
+  "status": "public-consumer-checkpoint-in-review-full-redesign-in-progress",
+  "branch": "codex/playground",
+  "baseline": "acf4611",
+  "date": "2026-10-26",
+  "mainUnchanged": "5a27b8e",
+  "scope": {
+    "routeSources": [
+      "src/app/c/[slug]/page.tsx",
+      "src/app/loyalty/card/page.tsx",
+      "src/app/loyalty/join/[programStoreId]/page.tsx"
+    ],
+    "note": "Three page sources with selected public/consumer states. Merchant branding, fonts, image geometry, existing grids/widths, category ordering and checkout composition are preserved. No claim that all shared components or the complete redesign are accepted."
+  },
+  "appearance": [
+    "Public catalog uses opaque themed surfaces and borders with smaller floating-cart shadows. The merchant accent/font/header/logo remain authoritative; accent actions choose black or white text from relative luminance, including a white merchant accent verified in the rendered unit test.",
+    "Loyalty keeps the existing max-w-md card/join layout, three-column rules and history order. QR retains its outer 224px square, now with a white 8px quiet-area padding in both themes. New errors add contextual recovery panels only when an operation fails.",
+    "Catalog search focus has one 1px blue border, outline:none and box-shadow:none in the final real mobile browser. The earlier shared-field focus rules are retained; no global removal of control focus was added."
+  ],
+  "explicitBehaviorChanges": [
+    "Catalog retry increments its actual client-fetch dependency instead of calling router.refresh(), which did not refetch the client-loaded data. Real stopped-server/restarted-server UI recovery retains the search condition and an off-page cart product.",
+    "A true 404 has the existing missing-catalog message; HTTP/network failures have a generic translated error and working retry, without raw network details. Initial skeleton is an accessible loading status. Category disclosure has expanded/controls relationships, checkout errors are alerts, cart close has an explicit focus target and uses search after the cart trigger disappears.",
+    "The public catalog brand link no longer announces BAZAAR twice. The image and destination are preserved. Legacy English empty-cart copy is corrected.",
+    "Initial loyalty card/join server read errors show a retry component instead of false no-session/unavailable copy. Genuine unauthorized, missing and disabled states keep their existing policy.",
+    "Card/consent read failures visibly retain the last confirmed card and can retry. Poll responses are ordered and ignored after unmount or session rejection; an old poll cannot overwrite a newer confirmed balance. A real 401 hides the card and QR.",
+    "QR failures are visible and retryable; malformed/expired QR payloads are rejected. A still-valid previous QR is retained on transient refresh failure. Normal QR expiry hides its image. Sign-out checks HTTP/network success and reports failure without pretending the session ended.",
+    "The code-stage field receives focus after an accepted OTP request; changing email clears stale form errors. Verification, OTP policy, session issuance, authorization and all monetary/loyalty calculations are unchanged.",
+    "Two REST transport corrections are explicitly included: card GET and QR POST use AppError status/message, classify unexpected failures as 500/genericMessage instead of false 401/raw exception details, and return no-store. No Prisma schema or loyalty calculation/service change in this checkpoint."
+  ],
+  "tests": {
+    "unit": {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
+      "files": 272,
+      "tests": 2091,
+      "result": "passed after all application changes",
+      "log": "artifacts/ux/espresso/public-consumer-unit-final.log",
+      "newTests": 25,
+      "note": "The 25 new cases are included in 2091. Existing OTP recovery also gained an actual-focus assertion."
+    },
+    "focused": {
+      "files": 5,
+      "tests": 30,
+      "result": "passed before the final OTP-focus refinement; final full suite above includes the focus refinement",
+      "log": "artifacts/ux/espresso/public-consumer-focused-final.log"
+    },
+    "database": {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts public",
+      "database": "bazaar_hardening_ci; separate resettable database, Redis DB5",
+      "files": 8,
+      "tests": 35,
+      "result": "passed",
+      "log": "artifacts/ux/espresso/public-consumer-database.log",
+      "scope": "Public catalog search/pagination/variants/discounts/checkout, member authentication, OTP delivery acceptance/failure, QR lifecycle, ledger and online/order loyalty. Overlaps earlier family suites; do not sum them as unique cases."
+    },
+    "types": {
+      "result": "passed",
+      "log": "artifacts/ux/espresso/public-consumer-types-final.log"
+    },
+    "lint": {
+      "result": "passed without warnings",
+      "log": "artifacts/ux/espresso/public-consumer-lint-final.log"
+    },
+    "translations": {
+      "result": "passed; four new loyalty messages in RU/KG/EN",
+      "log": "artifacts/ux/espresso/public-consumer-i18n-final.log"
+    },
+    "productionBuild": {
+      "command": "UX_SUITE=espresso node --import tsx scripts/ux/build.ts",
+      "result": "passed after final OTP focus and duplicate accessible-name corrections, including type/lint checks and static page generation",
+      "log": "artifacts/ux/espresso/build-public-consumer-final.log"
+    }
+  },
+  "browser": {
+    "environment": "Final standalone production build on localhost:3122, isolated bazaar_espresso_ui/PostgreSQL55440 and Redis DB4. External providers disabled. Codex in-app browser on macOS; no specific engine/physical-device claim.",
+    "matrix": {
+      "captures": 48,
+      "composition": "Catalog, join, no-session card and authenticated card with QR/rules/history: four states of three page sources × RU/KG/EN × light/dark ×1280/390. All actual viewport/page widths and locales/themes are asserted; selected screenshots visually inspected. These are not 48 distinct routes.",
+      "evidence": "artifacts/ux/espresso/public-consumer-matrix-final.json",
+      "result": "48 unique final captures, no horizontal document overflow",
+      "discardedAttempt": "artifacts/ux/espresso/public-consumer-matrix-viewport-rejected.json",
+      "methodCorrection": "An earlier override affected the last browser tab while another tab stayed at1280. Incorrectly labelled mobile rows were rejected; final capture uses the responsive tab and asserts actual width before recording. Only the final file contributes the48 captures."
+    },
+    "workflows": {
+      "evidence": "artifacts/ux/espresso/public-consumer-workflows-final.json",
+      "verified": [
+        "Real24+2 pagination, category collapse/expand, variant selection, quantity and search with an off-page cart product.",
+        "Required checkout fields, one real unpaid CONFIRMED catalog order SO-000001 for the selected variant, close/Escape and search focus restoration.",
+        "Genuine catalog404 and missing loyalty programme; production OTP delivery failure stays on the email form with a translated error.",
+        "Normal development-outbox OTP request, wrong-code rejection and correct-code recovery, final numeric-code focus; ordinary verification issues the real member session.",
+        "Confirmed member sessions issued on local development ports are read normally by the production app on the same cookie host; no cookie injection or client auth bypass.",
+        "Real production QR issuance/refresh, visible120-second expiry, history and rules; card/consent read, QR and sign-out network errors during a deliberate QA server stop; last confirmed125points retained; polling and QR retry recover when the server returns.",
+        "Final production catalog network failure/retry retains query Чай and the240KGS off-page cart item.",
+        "Successful sign-out confirmed by reloading the card on both QA cookie hosts; no active member sessions remain. QA staff preferences restored to RU/DARK with original name."
+      ]
+    },
+    "otpDeliveryLimit": "The ordinary application development outbox is explicitly enabled only in a separate guarded dev source copy on3123. Live Resend/SMTP delivery is not accepted here. The production app correctly rejects the disabled log-only delivery provider; no false code stage.",
+    "finalBuildReplay": "All48 final captures, numeric OTP focus/wrong-code recovery, production QR generation, sign-out and the real catalog network/retry flow use final source/build. The single unpaid checkout was created before the last two changes (OTP focus and duplicate footer accessible name); checkout code was unchanged by them and the final full rendered regression suite covers submission recovery/idempotency.",
+    "focus": {
+      "evidence": "artifacts/ux/espresso/public-consumer-focus-final.json",
+      "result": "Actual390px search: focused=true, 1px blue border, outline:none, boxShadow:none."
+    },
+    "screenshots": [
+      "artifacts/ux/espresso/screenshots/catalog-search-focus-dark-mobile-final.png",
+      "artifacts/ux/espresso/screenshots/loyalty-card-dark-mobile-proof-final.png",
+      "artifacts/ux/espresso/screenshots/public-loyalty-join-kg-light-390-final.png",
+      "artifacts/ux/espresso/screenshots/public-catalog-en-light-1280-final.png"
+    ]
+  },
+  "dataPreservation": {
+    "existingOrganization": "UI QA · Базар Маркет",
+    "before": "artifacts/ux/espresso/public-consumer-business-before.json",
+    "after": "artifacts/ux/espresso/public-consumer-business-after.json",
+    "result": "All485 selected rows across11 business models retain exact hashes. Customer-requested receiving/transfer/write-off/count sources remain byte-exact c276f30.",
+    "newFixtures": "Additive separate UI QA · Espresso Public organization with26products, one variant, catalog and programme/member. Synthetic initial125-point ledger adjustment uses the normal applyEntry service and an idempotent event key; no existing organization is seeded or reset.",
+    "readback": "artifacts/ux/espresso/public-consumer-readback-final.json",
+    "observed": "Exactly one real isolated110KGS catalog order with one selected variant and qty1; zero sale payments and stock movements. Member125points/reserved0/one initial ledger entry unchanged; ten short-lived QR tokens issued; both member sessions signed out. QA profile ru/DARK/Admin User restored."
+  },
+  "qaIsolation": {
+    "script": "scripts/espresso/dev.mjs --loyalty-outbox",
+    "evidence": "artifacts/ux/espresso/public-consumer-dev-isolation.json",
+    "result": "Separate source workspace/port3123; final production middleware manifest byte-identical before/after; dev process stopped. Production QA remains on3122; user3121server/tabs untouched."
+  },
+  "sourceAudit": "artifacts/ux/espresso/public-consumer-source-audit-final.json",
+  "remaining": [
+    "One pending page source: public marketing root src/app/page.tsx and its bespoke components/copy. Final source coverage96in_review/1pending/0accepted of97.",
+    "Shared control inventory remains6in_review/26pending/0accepted of32; final cross-state, role/store/plan, responsive and reference-fidelity acceptance continues.",
+    "Previously disclosed product-form/navigation composition changes, mobile title fallback and legacy copy/accessibility issues still require their own acceptance. Do not infer full acceptance from page-source coverage or green tests.",
+    "Live mail/provider acceptance, physical mobile scanners/keyboards and all-browser coverage remain outside this isolated UI checkpoint."
+  ],
+  "delivery": "Local playground checkpoint only. No main merge, push, production deploy or provider activation.",
+  "sourceAuditSummary": {
+    "files": 149,
+    "classifications": {
+      "requires-semantic-review": 100,
+      "jsx-style-attributes-only": 47,
+      "added-or-removed-requires-semantic-review": 2
+    },
+    "note": "AST classification omits only JSX className/style, not semantic proof or final acceptance. Four protected operational sources match c276f30 exactly."
+  }
+}

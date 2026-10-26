@@ -1,5 +1,5 @@
 {
-  "status": "public-guide-and-field-focus-checkpoint-in-review-full-redesign-in-progress",
+  "status": "public-consumer-checkpoint-in-review-full-redesign-in-progress",
   "branch": "codex/playground",
   "reference": "Frappe Framework Espresso e8d41dd0061a32ee781caefe5d0b0d2bb7c15362",
   "checks": [
@@ -527,6 +527,11 @@
       "command": "CUA final public and field-focus checks",
       "result": "48 base captures,99 localized guide/category renders,16 focus cases and selected workflows",
       "evidence": "docs/espresso/public-guide-verification.json"
+    },
+    {
+      "command": "Public-consumer checkpoint: full unit, isolated DB, types/lint/i18n/build and browser",
+      "result": "2091unit/35DB passed;48selected UI captures and real network recovery; data preservation verified",
+      "evidence": "docs/espresso/public-consumer-verification.json"
     }
   ],
   "environment": {
@@ -563,5 +568,6 @@
   "currentReportsCheckpoint": "docs/espresso/reports-verification.json",
   "currentIntegrationsCheckpoint": "docs/espresso/integrations-verification.json",
   "currentAdministrationCheckpoint": "docs/espresso/administration-verification.json",
-  "currentPublicGuideCheckpoint": "docs/espresso/public-guide-verification.json"
+  "currentPublicGuideCheckpoint": "docs/espresso/public-guide-verification.json",
+  "currentPublicConsumerCheckpoint": "docs/espresso/public-consumer-verification.json"
 }

@@ -1,6 +1,6 @@
 {
-  "status": "public-guide-and-field-focus-checkpoint-in-review-full-redesign-in-progress",
-  "scope": "Redesign changes since1fcdfd4, with separate family checkpoints through public guide/privacy and field focus; not an audit of every earlier playground improvement.",
+  "status": "public-consumer-checkpoint-in-review-full-redesign-in-progress",
+  "scope": "Redesign changes since1fcdfd4 with family checkpoints through public catalog/consumer loyalty; not an audit of every earlier playground improvement.",
   "humanCorrection": "Customer-requested two-column operational layouts must be preserved. A difference from ERPNext is not evidence of a defect.",
   "restored": [
     {
@@ -290,18 +290,21 @@
       "prisma"
     ],
     "changedFiles": [
+      "src/app/api/loyalty/card/qr/route.ts",
+      "src/app/api/loyalty/card/route.ts",
       "src/server/services/loyalty/ledger.ts",
       "src/server/services/pos.ts",
       "src/server/services/reporting/operations.ts",
       "src/server/services/reports.ts",
       "src/server/trpc/routers/pos.ts"
     ],
-    "result": "Five corrective server files: loyalty reservation timestamp binding, authoritative read-only POS refund quotes/shared allocation, operational report timestamp serialization and legacy report range binding. The last was reproduced in existing B0 and controlled-zone SQL tests and committed separately as 351095a. No REST route or Prisma schema diff; middleware cookie agreement remains separately disclosed.",
+    "result": "Five previously disclosed corrective service/router files plus two public loyalty REST transport corrections in this checkpoint. Card GET/QR POST retain authoritative AppError status, return500/genericMessage for unexpected failures and no-store. No Prisma schema diff; middleware cookie agreement remains separately disclosed.",
     "evidence": [
       "docs/espresso/loyalty-timezone-verification.json",
       "docs/espresso/refund-preview-verification.json",
       "docs/espresso/report-timestamps-verification.json",
-      "docs/espresso/legacy-report-dates-verification.json"
+      "docs/espresso/legacy-report-dates-verification.json",
+      "docs/espresso/public-consumer-verification.json"
     ]
   },
   "sourceReview": {
@@ -509,6 +512,14 @@
         "classification": "requires-semantic-review"
       },
       {
+        "path": "src/app/api/loyalty/card/qr/route.ts",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/app/api/loyalty/card/route.ts",
+        "classification": "requires-semantic-review"
+      },
+      {
         "path": "src/app/developers/bazaar-api/page.tsx",
         "classification": "requires-semantic-review"
       },
@@ -530,15 +541,23 @@
       },
       {
         "path": "src/app/loyalty/card/card-view.tsx",
-        "classification": "jsx-style-attributes-only"
+        "classification": "requires-semantic-review"
       },
       {
         "path": "src/app/loyalty/card/page.tsx",
-        "classification": "jsx-style-attributes-only"
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/app/loyalty/join/[programStoreId]/join-form.tsx",
+        "classification": "requires-semantic-review"
       },
       {
         "path": "src/app/loyalty/join/[programStoreId]/page.tsx",
-        "classification": "jsx-style-attributes-only"
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/app/loyalty/load-error.tsx",
+        "classification": "added-or-removed-requires-semantic-review"
       },
       {
         "path": "src/app/privacy/page.tsx",
@@ -606,6 +625,10 @@
       },
       {
         "path": "src/components/billing/subscription-payments.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/components/catalog/public-catalog-page.tsx",
         "classification": "requires-semantic-review"
       },
       {
@@ -912,6 +935,8 @@
       }
     ],
     "changedServerFiles": [
+      "src/app/api/loyalty/card/qr/route.ts",
+      "src/app/api/loyalty/card/route.ts",
       "src/server/services/loyalty/ledger.ts",
       "src/server/services/pos.ts",
       "src/server/services/reporting/operations.ts",
@@ -1014,7 +1039,7 @@
     "Public guide and field sources remain in_review; documented render/DOM and selected focus evidence is not full editorial, every-browser, provider or whole-redesign acceptance."
   ],
   "delivery": "codex/playground only; no main merge or production deployment",
-  "currentCheckpoint": "docs/espresso/public-guide-verification.json",
+  "currentCheckpoint": "docs/espresso/public-consumer-verification.json",
   "previousCheckpoints": [
     "docs/espresso/directory-verification.json",
     "docs/espresso/auth-verification.json",
@@ -1023,63 +1048,78 @@
     "docs/espresso/commerce-verification.json",
     "docs/espresso/reports-verification.json",
     "docs/espresso/integrations-verification.json",
-    "docs/espresso/administration-verification.json"
+    "docs/espresso/administration-verification.json",
+    "docs/espresso/public-guide-verification.json"
   ],
   "currentCheckpointChecks": {
     "unit": {
-      "files": 268,
-      "tests": 2066,
-      "result": "passed with final TS/TSX; the subsequent CSS selector-specificity refinement is verified by final production build and actual browser focus checks",
       "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
-      "log": "artifacts/ux/espresso/public-help-inputs-unit-final.log"
+      "files": 272,
+      "tests": 2091,
+      "result": "passed after all application changes",
+      "log": "artifacts/ux/espresso/public-consumer-unit-final.log",
+      "newTests": 25,
+      "note": "The 25 new cases are included in 2091. Existing OTP recovery also gained an actual-focus assertion."
     },
-    "newCases": {
-      "tests": 38,
-      "files": 3,
-      "includedInFullSuite": true,
-      "sources": [
-        "tests/unit/help-workspace-navigation.test.tsx",
-        "tests/unit/help-quick-search.test.ts",
-        "tests/unit/public-help-entrypoints.test.tsx"
-      ],
-      "scope": "17 rendered navigation/recovery cases across RU/KG/EN; 14 advertised-search/Unicode cases; seven structured-language/not-found/legacy-component redirect characterizations. These counts are part of 2066, not additional tests.",
-      "before": [
-        "artifacts/ux/espresso/public-help-navigation-before.log",
-        "artifacts/ux/espresso/public-help-quick-search-before.log"
-      ],
-      "beforeResult": "Initial navigation/recovery: 17 failed and one unhandled network rejection in the old component. Advertised searches/normalization: 2 failed, 12 passed. The actual browser also reproduced Escape retaining an unsuccessful query and the receiving chip returning no results.",
-      "focusedLog": "artifacts/ux/espresso/public-help-search-final.log",
-      "focusedResult": "52 passed across four files, including pre-existing search cases; not 52 new cases."
+    "focused": {
+      "files": 5,
+      "tests": 30,
+      "result": "passed before the final OTP-focus refinement; final full suite above includes the focus refinement",
+      "log": "artifacts/ux/espresso/public-consumer-focused-final.log"
     },
-    "authenticationDatabase": {
-      "files": 1,
-      "tests": 9,
-      "result": "passed on separate bazaar_hardening_ci and Redis DB5; real credentials/claims/role homes, providers disabled",
-      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts authentication",
-      "log": "artifacts/ux/espresso/public-help-auth-database-final.log"
+    "database": {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts public",
+      "database": "bazaar_hardening_ci; separate resettable database, Redis DB5",
+      "files": 8,
+      "tests": 35,
+      "result": "passed",
+      "log": "artifacts/ux/espresso/public-consumer-database.log",
+      "scope": "Public catalog search/pagination/variants/discounts/checkout, member authentication, OTP delivery acceptance/failure, QR lifecycle, ledger and online/order loyalty. Overlaps earlier family suites; do not sum them as unique cases."
     },
-    "typecheck": {
-      "result": "passed; final production build also validates types",
-      "log": "artifacts/ux/espresso/public-fields-types-final.log"
+    "types": {
+      "result": "passed",
+      "log": "artifacts/ux/espresso/public-consumer-types-final.log"
     },
     "lint": {
-      "result": "passed without warnings; final build also runs lint",
-      "log": "artifacts/ux/espresso/public-fields-lint-final.log"
+      "result": "passed without warnings",
+      "log": "artifacts/ux/espresso/public-consumer-lint-final.log"
     },
-    "i18n": {
-      "result": "passed; no new displayed strings or translation keys; search aliases retain the existing multilingual content contract",
-      "log": "artifacts/ux/espresso/public-fields-i18n-final.log"
+    "translations": {
+      "result": "passed; four new loyalty messages in RU/KG/EN",
+      "log": "artifacts/ux/espresso/public-consumer-i18n.log"
     },
     "productionBuild": {
-      "result": "passed with final source, types/lint and 125 generated static pages",
-      "command": "UX_SUITE=espresso CIRCLE_NODE_TOTAL=3 NODE_OPTIONS=--max-old-space-size=6144 node --import tsx scripts/ux/build.ts",
-      "log": "artifacts/ux/espresso/build-public-fields-acceptance-final.log"
+      "command": "UX_SUITE=espresso node --import tsx scripts/ux/build.ts",
+      "result": "passed after final OTP focus and duplicate accessible-name corrections, including type/lint checks and static page generation",
+      "log": "artifacts/ux/espresso/build-public-consumer-final.log"
     }
   },
-  "customerLayoutRecheck": {
-    "evidence": "docs/espresso/public-guide-verification.json",
-    "result": "All four protected operational sources remain byte-exact c276f30;485 selected pre/post UI business rows retain exact hashes. No new server/schema change."
-  },
+  "customerLayoutRecheck": [
+    {
+      "source": "src/components/inventory/receiving-workflow.tsx",
+      "baseline": "c276f30",
+      "exactMatch": true,
+      "sha256": "3f77205aeaff4d89947098896c6e86459da522b3c7783110d68ccb1ade6f6c16"
+    },
+    {
+      "source": "src/components/inventory/transfer-workflow.tsx",
+      "baseline": "c276f30",
+      "exactMatch": true,
+      "sha256": "07b1ba3e01544bf470537fe4cd0fc24f23369732aed33f8722c99ee6ccc64307"
+    },
+    {
+      "source": "src/components/inventory/write-off-workflow.tsx",
+      "baseline": "c276f30",
+      "exactMatch": true,
+      "sha256": "d28439fc45ef22a5276e616a8e2088da7b5afb04a40cbde635f2b89a3311ccaa"
+    },
+    {
+      "source": "src/app/(app)/inventory/counts/[id]/page.tsx",
+      "baseline": "c276f30",
+      "exactMatch": true,
+      "sha256": "daf57fddea2b1905c11168a1244994fc8f6b701291de4f6c432160029b97f620"
+    }
+  ],
   "authenticationTransportCorrection": {
     "source": "src/middleware.ts",
     "trigger": "After the old session expired during QA, sign-in authenticated the test admin but redirected back to login in the local production build.",
@@ -1104,5 +1144,13 @@
       "artifacts/ux/espresso/server-admin-restored-final.log"
     ],
     "result": "The final dev run exited cleanly and production middleware manifest remained byte-identical. Local QA harness fault, not a product/payment failure; no main merge, external provider operation or customer database affected."
+  },
+  "publicConsumerTransportCorrection": {
+    "sources": [
+      "src/app/api/loyalty/card/route.ts",
+      "src/app/api/loyalty/card/qr/route.ts"
+    ],
+    "change": "Unexpected failures return500/genericMessage/no-store; genuine AppError401 remains unauthorized. No service calculation/schema/authorization change.",
+    "evidence": "docs/espresso/public-consumer-verification.json"
   }
 }

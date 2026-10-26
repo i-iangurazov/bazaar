@@ -674,8 +674,10 @@
     },
     {
       "source": "src/app/c/[slug]/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/public-consumer-verification.json"
+      ]
     },
     {
       "source": "src/app/developers/bazaar-api/page.tsx",
@@ -721,13 +723,17 @@
     },
     {
       "source": "src/app/loyalty/card/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/public-consumer-verification.json"
+      ]
     },
     {
       "source": "src/app/loyalty/join/[programStoreId]/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/public-consumer-verification.json"
+      ]
     },
     {
       "source": "src/app/page.tsx",
@@ -960,12 +966,12 @@
     }
   ],
   "verification": {
-    "desktop": "partial: 93/97 page sources in_review, four pending and zero fully accepted; see public guide checkpoint",
-    "mobile": "partial: final public four-screen matrix at390 plus all33 help addresses in three languages; selected global-field focus checks; full shared/state acceptance pending",
-    "themes": "partial: public four-screen full RU/KG/EN light/dark desktop/mobile matrix complete; earlier family limitations retained",
+    "desktop": "partial:96/97 page sources in_review, one pending, zero fully accepted; public-consumer checkpoint",
+    "mobile": "partial:48 final public/loyalty states at actual1280/390 across3languages/2themes; full shared/state acceptance pending",
+    "themes": "public catalog/join/card selected-state matrix passed in both themes and3languages; earlier family limits retained",
     "rolesAndScopes": "partial: true signed-out public access, actual QA sign-out/sign-in restoration and nine real authentication DB cases; existing policy unchanged",
-    "functionalRegression": "2066 full unit tests and nine isolated authentication DB tests passed; 16 real field-focus cases, 99 help URL/language render checks, selected workflows and 485 selected business rows retained",
-    "productionBuild": "passed with final public/search/field-focus sources, types/lint and125 generated static pages"
+    "functionalRegression": "2091 full unit tests and35 isolated public/loyalty database cases passed;48 final browser captures, actual network recovery and485 selected business rows unchanged",
+    "productionBuild": "passed after all public-consumer source changes; no live provider acceptance"
   },
   "requirements": {
     "visualFidelity": "Match Espresso typography, palette, surfaces and components while preserving customer workflows; analogous screen comparison must respect the human-confirmed operational layouts.",
@@ -977,7 +983,7 @@
     "customerWorkflows": "Preserve the customer-requested two-column operational layouts and established interactions. The visual reference does not authorize replacing them; see AGENTS.md and redesign-change-audit.json."
   },
   "progress": {
-    "stage": "public-guide-and-field-focus-checkpoint-in-review-full-redesign-in-progress",
+    "stage": "public-consumer-checkpoint-in-review-full-redesign-in-progress",
     "foundation": [
       "Pinned MIT Espresso semantic tokens and component CSS",
       "Self-hosted Inter Variable",
@@ -1142,6 +1148,11 @@
         "check": "Public guide/privacy, compatibility entries and field focus",
         "result": "48 final base captures, 99 actual help URL/language renders, 16 pointer/keyboard field states and successful workflow checks; in_review only.",
         "evidence": "docs/espresso/public-guide-verification.json"
+      },
+      {
+        "check": "Public catalog/join/card primary acceptance and real network recovery",
+        "result": "48 final selected-state captures; normal OTP/QR flow through dev outbox and real DB sessions; one unpaid catalog order; existing485business rows unchanged",
+        "evidence": "docs/espresso/public-consumer-verification.json"
       }
     ],
     "remaining": [
@@ -1160,15 +1171,14 @@
       "Complete commerce acceptance permutations listed in commerce-verification.json; current screen and cash-cycle evidence is not acceptance of every order, provider or state flow.",
       "Complete report/shared-component acceptance permutations listed in reports-verification.json; page captures and DB regressions do not establish final overall redesign acceptance.",
       "Complete integration/provider/editor/query-state and legacy translation acceptance listed in integrations-verification.json; base captures and mocks are not live provider acceptance.",
-      "Complete administration/shared-shell plan, title-fallback and state permutations listed in administration-verification.json. Current page/control totals are recorded in the public-guide checkpoint; administration limitations still apply.",
-      "Four public page sources and 26 separately unreviewed shared controls remain; finish legacy help/public copy, mobile title fallback and complete shared/state/visual acceptance. Field focus now has direct browser evidence but no every-browser claim."
+      "Complete administration/shared-shell plan, title-fallback and state permutations listed in administration-verification.json. Current page/control totals are recorded in the public-consumer checkpoint; administration limitations still apply.",
+      "One public marketing page source and26 separately unreviewed shared controls remain; finish legacy help/public copy, mobile title fallback and complete shared/state/visual acceptance. Field focus now has direct browser evidence but no every-browser claim."
     ],
     "unitTests": {
-      "files": 268,
-      "tests": 2066,
-      "result": "passed with final TS/TSX; the subsequent CSS selector-specificity refinement is verified by final production build and actual browser focus checks",
-      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
-      "log": "artifacts/ux/espresso/public-help-inputs-unit-final.log"
+      "files": 272,
+      "tests": 2091,
+      "result": "passed",
+      "log": "artifacts/ux/espresso/public-consumer-unit-final.log"
     },
     "databaseRegression": {
       "files": 3,
@@ -1272,6 +1282,15 @@
       "result": "passed on separate bazaar_hardening_ci and Redis DB5; real credentials/claims/role homes, providers disabled",
       "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts authentication",
       "log": "artifacts/ux/espresso/public-help-auth-database-final.log"
+    },
+    "publicConsumerDatabaseRegression": {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts public",
+      "database": "bazaar_hardening_ci; separate resettable database, Redis DB5",
+      "files": 8,
+      "tests": 35,
+      "result": "passed",
+      "log": "artifacts/ux/espresso/public-consumer-database.log",
+      "scope": "Public catalog search/pagination/variants/discounts/checkout, member authentication, OTP delivery acceptance/failure, QR lifecycle, ledger and online/order loyalty. Overlaps earlier family suites; do not sum them as unique cases."
     }
   }
 }

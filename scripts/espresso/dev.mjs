@@ -15,12 +15,20 @@ Object.assign(process.env, uxEnvironment(), {
   NODE_ENV: "development", NEXTAUTH_URL: "http://espresso-qa.localhost:3123", NEXT_TELEMETRY_DISABLED: "1",
 });
 assertUxDatabase();
+const loyaltyOutbox = process.argv.includes("--loyalty-outbox");
+if (loyaltyOutbox) {
+  // Use the application's existing development mail catcher, never a live provider
+  // or a production delivery bypass. OTP verification/session issuance stay real.
+  process.env.LOYALTY_OTP_DEV_OUTBOX = "1";
+  process.env.LOYALTY_OTP_OUTBOX_PATH = resolve(root, "artifacts/ux/espresso/loyalty-otp-outbox.log");
+}
 
 // Next 14's custom-server prepare() reloads config and ignores options.conf.
 // Use the standard CLI in a separate project root, rather than sharing .next.
 const manifest = resolve(root, ".next/standalone/.next/server/middleware-manifest.json");
 const originalManifest = await readFile(manifest);
-const workspace = resolve(root, `artifacts/ux/espresso/scanner-dev-${Date.now()}`);
+const family = loyaltyOutbox ? "public-consumer" : "scanner";
+const workspace = resolve(root, `artifacts/ux/espresso/${family}-dev-${Date.now()}`);
 await mkdir(workspace, { recursive: true });
 await cp(resolve(root, "src"), resolve(workspace, "src"), { recursive: true });
 await cp(resolve(root, "messages"), resolve(workspace, "messages"), { recursive: true });
@@ -44,9 +52,10 @@ const result = await new Promise((done, reject) => {
   child.once("close", (code, signal) => done({ code, signal }));
 });
 assert((await readFile(manifest)).equals(originalManifest), "Development QA changed the production middleware manifest");
-await writeFile(resolve(root, "artifacts/ux/espresso/scanner-dev-isolation.json"), JSON.stringify({
+await writeFile(resolve(root, `artifacts/ux/espresso/${family}-dev-isolation.json`), JSON.stringify({
   workspace, database: "bazaar_espresso_ui", url: "http://espresso-qa.localhost:3123",
   productionManifestUnchanged: true,
+  loyaltyDelivery: loyaltyOutbox ? "local-development-outbox" : "disabled",
   productionManifestSha256: createHash("sha256").update(originalManifest).digest("hex"),
   result,
 }, null, 2) + "\n");

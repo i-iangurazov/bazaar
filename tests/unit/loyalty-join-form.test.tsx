@@ -57,6 +57,7 @@ describe("loyalty join recovery", () => {
     await screen.findByRole("alert");
     fireEvent.click(screen.getByRole("button", { name: "loyalty.getCode" }));
     const code = await screen.findByLabelText("loyalty.codeLabel");
+    expect(document.activeElement).toBe(code);
     expect(screen.queryByRole("alert")).toBeNull();
     fireEvent.change(code, { target: { value: "123456" } });
     fireEvent.click(screen.getByRole("button", { name: "loyalty.confirm" }));
