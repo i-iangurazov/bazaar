@@ -103,7 +103,7 @@ describe("Espresso UI primitives", () => {
     expect(screen.getByText("Active").className).toContain("es-badge");
     expect(screen.getByText("Active").className).toContain("bg-secondary");
     expect(screen.getByText("Missing price").className).toContain("bg-danger/10");
-    expect(screen.getByText("Saved").className).toContain("rounded-md");
+    expect(screen.getByText("Saved").className).toContain("es-alert");
   });
 
   it("renders layout surfaces with small rounded corners", () => {

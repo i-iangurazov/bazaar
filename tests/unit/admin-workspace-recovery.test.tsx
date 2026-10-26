@@ -8,6 +8,8 @@ const state = vi.hoisted(() => ({
   owner: false,
   status: "authenticated",
   failed: "",
+  errorMessage: "serviceUnavailable",
+  errorCode: "INTERNAL_SERVER_ERROR",
   queries: [] as Array<{ path: string; enabled: boolean }>,
   retries: [] as string[],
   mutate: vi.fn(),
@@ -121,7 +123,7 @@ vi.mock("@/lib/trpc", () => {
       if (path === "billing.payments.invoices") data = { pages: [{ items: [], nextCursor: null }] };
       const error =
         state.failed === path
-          ? { message: "serviceUnavailable", data: { code: "INTERNAL_SERVER_ERROR" } }
+          ? { message: state.errorMessage, data: { code: state.errorCode } }
           : null;
       return {
         data: error ? undefined : data,
@@ -191,12 +193,45 @@ beforeEach(() => {
   state.owner = false;
   state.status = "authenticated";
   state.failed = "";
+  state.errorMessage = "serviceUnavailable";
+  state.errorCode = "INTERNAL_SERVER_ERROR";
   state.queries = [];
   state.retries = [];
   window.history.replaceState(null, "", "/");
 });
 
 describe("administration workspace recovery", () => {
+  it.each(["featureLockedSupportToolkit", "errors.featureLockedSupportToolkit"])("explains the confirmed support plan gate: %s", (message) => {
+    state.failed = "adminSupport.storeFlags";
+    state.errorCode = "FORBIDDEN";
+    state.errorMessage = message;
+    render(<Support />);
+    expect(screen.getByRole("link", { name: "adminSupport.viewPlans" }).getAttribute("href")).toBe("/billing");
+    expect(screen.queryByRole("button", { name: "adminSupport.bundleAction" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "adminSupport.impersonationStart" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "common.tryAgain" })).toBeNull();
+    expect(state.mutate).not.toHaveBeenCalled();
+  });
+  it("does not infer a plan lock from another forbidden read", () => {
+    state.failed = "adminSupport.storeFlags";
+    state.errorCode = "FORBIDDEN";
+    state.errorMessage = "forbidden";
+    render(<Support />);
+    expect(screen.getByRole("button", { name: "adminSupport.bundleAction" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "common.tryAgain" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "adminSupport.viewPlans" })).toBeNull();
+  });
+  it("restores the normal support controls after the server no longer reports a plan lock", () => {
+    state.failed = "adminSupport.storeFlags";
+    state.errorCode = "FORBIDDEN";
+    state.errorMessage = "featureLockedSupportToolkit";
+    const { rerender } = render(<Support />);
+    state.failed = "";
+    rerender(<Support />);
+    expect(screen.getByRole("button", { name: "adminSupport.bundleAction" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "adminSupport.viewPlans" })).toBeNull();
+    expect(state.mutate).not.toHaveBeenCalled();
+  });
   it.each(reads)("recovers %s without invoking operational mutations", (_name, Page, path) => {
     state.owner = true;
     state.failed = path;

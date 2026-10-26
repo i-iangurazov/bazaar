@@ -1278,6 +1278,14 @@
           "COMPLETED_WITH_ERRORS": "Завершено с замечаниями",
           "FAILED": "Ошибка",
           "TIMED_OUT": "Превышено время"
+        },
+        "resultStatus": {
+          "pending": "Ожидает",
+          "processing": "Обрабатывается",
+          "exported": "Выгружен",
+          "updated": "Обновлён",
+          "skipped": "Пропущен",
+          "failed": "Ошибка"
         }
       },
       "toasts": {
@@ -5508,7 +5516,7 @@
     "featureLockedExports": "Модуль экспорта недоступен на вашем тарифе.",
     "featureLockedAnalytics": "Модуль аналитики недоступен на вашем тарифе.",
     "featureLockedCompliance": "Модуль комплаенса недоступен на вашем тарифе.",
-    "featureLockedSupportToolkit": "Инструменты поддержки доступны только на старших тарифах.",
+    "featureLockedSupportToolkit": "Инструменты поддержки доступны на тарифе «Монополист».",
     "featureLockedPos": "Модуль кассы недоступен на вашем тарифе.",
     "featureLockedStockCounts": "Модуль инвентаризаций недоступен на вашем тарифе.",
     "featureLockedPriceTags": "Модуль печати ценников недоступен на вашем тарифе.",
@@ -5672,7 +5680,9 @@
     "flagKeyPlaceholder": "Ключ флага",
     "flagAdd": "Добавить флаг",
     "flagKeyRequired": "Введите ключ флага.",
-    "flagUpdatedAt": "Обновлено: {date}"
+    "flagUpdatedAt": "Обновлено: {date}",
+    "planLockedTitle": "Инструменты недоступны на вашем тарифе",
+    "viewPlans": "Посмотреть тарифы"
   },
   "adminMetrics": {
     "title": "Метрики бизнеса",

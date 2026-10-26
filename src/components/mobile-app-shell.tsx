@@ -150,14 +150,18 @@ export const MobileTopBar = ({
         <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
           {storeName ?? "BAZAAR"}
         </p>
-        <div className="mt-0.5 flex min-w-0 items-center gap-2">
-          <p className="truncate text-base font-semibold text-foreground">{pageTitle}</p>
-          {statusLabel ? (
-            <span className="shrink-0 rounded-md border border-success/30 bg-success/10 px-2 py-0.5 text-[11px] font-semibold text-success">
-              {statusLabel}
-            </span>
-          ) : null}
-        </div>
+        {pageTitle || statusLabel ? (
+          <div className="mt-0.5 flex min-w-0 items-center gap-2">
+            {pageTitle ? (
+              <p className="truncate text-base font-semibold text-foreground">{pageTitle}</p>
+            ) : null}
+            {statusLabel ? (
+              <span className="shrink-0 rounded-md border border-success/30 bg-success/10 px-2 py-0.5 text-[11px] font-semibold text-success">
+                {statusLabel}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
       </div>
       <div className="flex shrink-0 items-center gap-1">
         <PageTipsButton className="bazaar-mobile-header-button" />
@@ -302,8 +306,7 @@ export const MobileMoreMenu = ({
                 onClick={onClose}
                 className={cn(
                   "flex min-h-11 items-center gap-3 rounded-md border border-transparent bg-transparent px-3 py-2 text-sm font-normal text-foreground no-underline transition hover:bg-secondary hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                  item.active &&
-                    "bg-primary/10 text-primary",
+                  item.active && "bg-primary/10 text-primary",
                 )}
               >
                 <item.icon className="h-4 w-4 shrink-0" aria-hidden />

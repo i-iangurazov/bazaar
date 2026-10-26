@@ -1278,6 +1278,14 @@
           "COMPLETED_WITH_ERRORS": "Эскертүүлөр менен аяктады",
           "FAILED": "Ката",
           "TIMED_OUT": "Убакыт бүттү"
+        },
+        "resultStatus": {
+          "pending": "Күтүүдө",
+          "processing": "Иштетилүүдө",
+          "exported": "Жүктөлдү",
+          "updated": "Жаңыртылды",
+          "skipped": "Өткөрүлдү",
+          "failed": "Ката"
         }
       },
       "toasts": {
@@ -5507,7 +5515,7 @@
     "featureLockedExports": "Экспорт модулу сиздин тарифте жеткиликсиз.",
     "featureLockedAnalytics": "Аналитика модулу сиздин тарифте жеткиликсиз.",
     "featureLockedCompliance": "Комплаенс модулу сиздин тарифте жеткиликсиз.",
-    "featureLockedSupportToolkit": "Колдоо инструменттери жогорку тарифтерде гана бар.",
+    "featureLockedSupportToolkit": "Колдоо куралдары «Монополист» тарифинде жеткиликтүү.",
     "featureLockedPos": "Касса модулу сиздин тарифте жеткиликсиз.",
     "featureLockedStockCounts": "Инвентаризация модулу сиздин тарифте жеткиликсиз.",
     "featureLockedPriceTags": "Баа кагаздарын басуу модулу сиздин тарифте жеткиликсиз.",
@@ -5671,7 +5679,9 @@
     "flagKeyPlaceholder": "Флаг ачкычы",
     "flagAdd": "Флаг кошуу",
     "flagKeyRequired": "Флаг ачкычын жазыңыз.",
-    "flagUpdatedAt": "Жаңыртылганы: {date}"
+    "flagUpdatedAt": "Жаңыртылганы: {date}",
+    "planLockedTitle": "Бул тарифте колдоо куралдары жеткиликсиз",
+    "viewPlans": "Тарифтерди көрүү"
   },
   "adminMetrics": {
     "title": "Бизнес метрикалары",

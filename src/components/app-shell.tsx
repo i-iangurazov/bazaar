@@ -1,6 +1,7 @@
 "use client";
 
 import { appRoutes } from "@/lib/appRoutes";
+import { getMobilePageTitle } from "@/lib/mobile-page-title";
 
 import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import Link from "next/link";
@@ -165,6 +166,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
   const tNav = useTranslations("nav");
   const tCommon = useTranslations("common");
   const tBreadcrumbs = useTranslations("breadcrumbs");
+  const tScanner = useTranslations("scannerTest");
   const tHeader = useTranslations("appHeader");
   const tCommand = useTranslations("commandPalette");
   const tWorkspace = useTranslations("workspace");
@@ -1060,63 +1062,11 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
     .filter(isMobileNavCandidateAllowed)
     .map(toMobileShellItem);
 
-  const mobilePageTitle = useMemo(() => {
-    const administrationTitle = [
-      ["/admin/jobs", "adminJobs"],
-      ["/admin/metrics", "adminMetrics"],
-      ["/admin/support", "adminSupport"],
-      ["/billing", "billing"],
-      ["/onboarding", "onboarding"],
-      ["/platform", "platformOwner"],
-      ["/help", "help"],
-    ].find(([prefix]) => normalizedPath === prefix || normalizedPath.startsWith(`${prefix}/`));
-    if (administrationTitle) {
-      return tNav(administrationTitle[1]);
-    }
-    if (normalizedPath === "/" || normalizedPath.startsWith("/dashboard")) {
-      return tBreadcrumbs("home");
-    }
-    if (normalizedPath.startsWith("/pos")) {
-      return tNav("pos");
-    }
-    if (normalizedPath.startsWith("/products")) {
-      return tNav("products");
-    }
-    if (normalizedPath.startsWith("/inventory")) {
-      return tNav("inventory");
-    }
-    if (normalizedPath.startsWith("/sales")) {
-      return tNav("sales");
-    }
-    if (normalizedPath === appRoutes.purchaseOrders || normalizedPath.startsWith(`${appRoutes.purchaseOrders}/`)) {
-      return tNav("purchaseOrders");
-    }
-    if (normalizedPath.startsWith("/customers")) {
-      return tNav("customers");
-    }
-    if (normalizedPath === "/suppliers" || normalizedPath.startsWith("/suppliers/")) {
-      return tNav("suppliers");
-    }
-    if (normalizedPath === "/baam" || normalizedPath.startsWith("/baam/")) {
-      return tNav("baam");
-    }
-    if (normalizedPath.startsWith("/reports")) {
-      return tNav("reports");
-    }
-    if (normalizedPath.startsWith("/operations/integrations")) {
-      return tNav("integrations");
-    }
-    if (normalizedPath.startsWith("/stores")) {
-      return tNav("stores");
-    }
-    if (normalizedPath.startsWith("/settings/printing")) {
-      return tNav("printing");
-    }
-    if (normalizedPath.startsWith("/settings")) {
-      return tBreadcrumbs("settings");
-    }
-    return tNav("brand");
-  }, [normalizedPath, tBreadcrumbs, tNav]);
+  const mobilePageTitle = useMemo(() => getMobilePageTitle(normalizedPath, {
+    nav: tNav,
+    breadcrumbs: tBreadcrumbs,
+    scanner: tScanner,
+  }), [normalizedPath, tBreadcrumbs, tNav, tScanner]);
 
   // Store scope belongs to the current page; the first accessible store is not its selection.
   const mobileStoreName = null;
@@ -1191,7 +1141,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
               <nav
                 data-module-dock
                 aria-label={tNav("modules")}
-                className="sticky top-0 hidden h-screen w-12 shrink-0 flex-col items-center gap-2 border-r border-sidebar-border bg-sidebar py-3 md:flex"
+                className="sticky top-0 hidden h-screen w-[57px] shrink-0 flex-col items-center gap-1 border-r border-sidebar-border bg-sidebar pb-3 pt-2 md:flex"
               >
                 <div className="mb-2 h-8 w-8 shrink-0">
                   {!desktopSidebarOpen ? (
@@ -1224,12 +1174,12 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                             setDesktopSidebarOpen(true);
                           }}
                           className={cn(
-                            "h-8 w-8 rounded-md",
+                            "h-[34px] w-[34px] rounded-md",
                             selected &&
                               "bg-sidebar-accent text-sidebar-primary hover:text-sidebar-primary",
                           )}
                         >
-                          <Icon className="h-4 w-4" aria-hidden />
+                          <Icon className="h-[22px] w-[22px]" aria-hidden />
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent side="right">{tNav(group.labelKey)}</TooltipContent>

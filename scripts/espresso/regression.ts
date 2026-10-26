@@ -111,11 +111,14 @@ const suites = {
   ],
   unit: ["tests/unit"],
 } as const;
-if (!Object.prototype.hasOwnProperty.call(suites, suite)) {
+if (suite !== "acceptance" && !Object.prototype.hasOwnProperty.call(suites, suite)) {
   throw new Error(
-    "Choose database, directories, authentication, settings, warehouse, commerce, loyalty, public, reports, integrations, administration or unit",
+    "Choose database, directories, authentication, settings, warehouse, commerce, loyalty, public, reports, integrations, administration, acceptance or unit",
   );
 }
+const suiteFiles = suite === "acceptance"
+  ? [...new Set(Object.entries(suites).filter(([name]) => name !== "unit").flatMap(([, files]) => [...files]))]
+  : suites[suite as keyof typeof suites];
 const require = createRequire(import.meta.url);
 createRequire(require.resolve("next/package.json"))("@next/env").loadEnvConfig(
   process.cwd(),
@@ -178,7 +181,7 @@ if (focusedUnitFiles.length && (suite !== "unit" || focusedUnitFiles.some((path)
 }
 const result = spawnSync(
   "pnpm",
-  ["exec", "vitest", "run", ...(focusedUnitFiles.length ? focusedUnitFiles : suites[suite as keyof typeof suites])],
+  ["exec", "vitest", "run", ...(focusedUnitFiles.length ? focusedUnitFiles : suiteFiles)],
   { env, stdio: "inherit" },
 );
 process.exit(result.status ?? 1);

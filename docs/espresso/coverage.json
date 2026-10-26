@@ -13,58 +13,72 @@
   "routes": [
     {
       "source": "src/app/(app)/admin/jobs/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/administration-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/admin/metrics/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/administration-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/admin/support/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/administration-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/baam/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "artifacts/ux/espresso/screenshots/baam-mobile-light.png"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/billing/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/administration-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/cash/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/commerce-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/customers/new/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/directory-verification.json",
         "artifacts/ux/espresso/screenshots/customer-staff-denied-final.png",
         "artifacts/ux/espresso/screenshots/customer-cashier-denied-final.png"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/customers/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/directory-verification.json",
         "artifacts/ux/espresso/screenshots/customers-desktop-dark.png",
@@ -75,11 +89,13 @@
         "artifacts/ux/espresso/screenshots/customer-cashier-denied-final.png",
         "artifacts/ux/espresso/screenshots/customers-desktop-dark-final.png",
         "artifacts/ux/espresso/screenshots/customers-mobile-dark-final.png"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/dashboard/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "artifacts/ux/espresso/screenshots/dashboard-desktop-light.png",
         "artifacts/ux/espresso/screenshots/dashboard-loading-desktop-light.png",
@@ -91,278 +107,350 @@
       "observationResolution": {
         "status": "fixed-and-replayed-for-all-four-roles",
         "evidence": "docs/espresso/auth-verification.json"
-      }
+      },
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/dev/scanner-test/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/administration-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/finance/expense/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/commerce-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/finance/income/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/commerce-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/help/compliance/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/administration-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/inventory/counts/[id]/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "artifacts/ux/espresso/screenshots/count-two-columns-preserved.png",
         "docs/espresso/redesign-change-audit.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/inventory/counts/new/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/warehouse-documents-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/inventory/counts/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/warehouse-documents-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/inventory/movements/[id]/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/warehouse-documents-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/inventory/movements/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/warehouse-documents-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/inventory/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "artifacts/ux/espresso/screenshots/inventory-saved-view-identity-dark.png",
         "docs/espresso/inventory-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/inventory/receiving/[id]/edit/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/warehouse-documents-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/inventory/receiving/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "artifacts/ux/espresso/screenshots/receiving-two-columns-restored.png",
         "docs/espresso/redesign-change-audit.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/inventory/transfers/[id]/edit/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/warehouse-documents-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/inventory/transfers/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "artifacts/ux/espresso/screenshots/transfer-two-columns-restored.png",
         "docs/espresso/redesign-change-audit.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/inventory/write-offs/[id]/edit/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/warehouse-documents-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/inventory/write-offs/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "artifacts/ux/espresso/screenshots/write-off-two-columns-restored.png",
         "docs/espresso/redesign-change-audit.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/onboarding/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/administration-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/operations/integrations/bakai-store/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/integrations-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/operations/integrations/bazaar-api/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/integrations-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/operations/integrations/bazaar-catalog/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/integrations-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/operations/integrations/email-marketing/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/integrations-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/operations/integrations/m-market/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/integrations-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/operations/integrations/o-market/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/integrations-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/operations/integrations/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "artifacts/ux/espresso/screenshots/integrations-mobile-light.png",
         "docs/espresso/integrations-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/operations/integrations/product-image-studio/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/integrations-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/orders/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/commerce-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/platform/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/administration-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/pos/debts/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/commerce-verification.json",
         "artifacts/ux/espresso/screenshots/commerce-pos-debts-desktop-dark-final.png",
         "artifacts/ux/espresso/screenshots/commerce-pos-debts-mobile-dark-final.png"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/pos/history/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/commerce-verification.json",
         "artifacts/ux/espresso/screenshots/commerce-pos-history-desktop-dark-final.png",
         "artifacts/ux/espresso/screenshots/commerce-pos-history-mobile-dark-final.png"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/pos/kkm/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/commerce-verification.json",
         "artifacts/ux/espresso/screenshots/commerce-pos-kkm-desktop-dark-final.png",
         "artifacts/ux/espresso/screenshots/commerce-pos-kkm-mobile-dark-final.png"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/pos/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/commerce-verification.json",
         "artifacts/ux/espresso/screenshots/commerce-pos-entry-desktop-dark-final.png",
         "artifacts/ux/espresso/screenshots/commerce-pos-entry-mobile-dark-final.png"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/pos/receipts/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/commerce-verification.json",
         "artifacts/ux/espresso/screenshots/commerce-pos-receipts-desktop-dark-final.png",
         "artifacts/ux/espresso/screenshots/commerce-pos-receipts-mobile-dark-final.png"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/pos/registers/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/commerce-verification.json",
         "artifacts/ux/espresso/screenshots/commerce-pos-registers-desktop-dark-final.png",
         "artifacts/ux/espresso/screenshots/commerce-pos-registers-mobile-dark-final.png"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/pos/sell/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/commerce-verification.json",
         "artifacts/ux/espresso/screenshots/commerce-pos-sell-desktop-dark-final.png",
         "artifacts/ux/espresso/screenshots/commerce-pos-sell-mobile-dark-final.png"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/pos/shifts/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/commerce-verification.json",
         "artifacts/ux/espresso/screenshots/commerce-pos-shifts-desktop-dark-final.png",
         "artifacts/ux/espresso/screenshots/commerce-pos-shifts-mobile-dark-final.png"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/products/[id]/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "artifacts/ux/espresso/screenshots/product-document-desktop-light.png",
         "artifacts/ux/espresso/screenshots/product-document-mobile-dark.png",
@@ -370,264 +458,328 @@
         "artifacts/ux/espresso/screenshots/product-document-staff-readonly.png",
         "artifacts/ux/espresso/screenshots/product-document-desktop-dark.png",
         "artifacts/ux/espresso/screenshots/product-document-desktop-dark-en.png"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/products/new/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "artifacts/ux/espresso/screenshots/product-created-desktop-light.png"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/products/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "artifacts/ux/espresso/screenshots/product-created-desktop-light.png",
         "artifacts/ux/espresso/screenshots/products-saved-view-desktop-dark.png",
         "artifacts/ux/espresso/screenshots/products-view-controls-mobile-dark.png"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/purchase-orders/[id]/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/commerce-verification.json",
         "artifacts/ux/espresso/screenshots/commerce-purchase-detail-desktop-dark-final.png",
         "artifacts/ux/espresso/screenshots/commerce-purchase-detail-mobile-dark-final.png"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/purchase-orders/new/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/commerce-verification.json",
         "artifacts/ux/espresso/screenshots/commerce-purchase-new-desktop-dark-final.png",
         "artifacts/ux/espresso/screenshots/commerce-purchase-new-mobile-dark-final.png"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/purchase-orders/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/commerce-verification.json",
         "artifacts/ux/espresso/screenshots/commerce-purchase-orders-desktop-dark-final.png",
         "artifacts/ux/espresso/screenshots/commerce-purchase-orders-mobile-dark-final.png"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/reports/analytics/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/reports-verification.json",
         "artifacts/ux/espresso/screenshots/reports-analytics-desktop-dark-final.png",
         "artifacts/ux/espresso/screenshots/reports-analytics-mobile-dark-final.png"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/reports/close/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/reports-verification.json",
         "artifacts/ux/espresso/screenshots/reports-period-close-desktop-dark-final.png",
         "artifacts/ux/espresso/screenshots/reports-period-close-mobile-dark-final.png"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/reports/exports/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/reports-verification.json",
         "artifacts/ux/espresso/screenshots/reports-exports-desktop-dark-final.png",
         "artifacts/ux/espresso/screenshots/reports-exports-mobile-dark-final.png"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/reports/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/reports-verification.json",
         "artifacts/ux/espresso/screenshots/reports-hub-desktop-dark-final.png",
         "artifacts/ux/espresso/screenshots/reports-hub-mobile-dark-final.png"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/reports/receipts/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/reports-verification.json",
         "artifacts/ux/espresso/screenshots/reports-receipt-registry-desktop-dark-final.png",
         "artifacts/ux/espresso/screenshots/reports-receipt-registry-mobile-dark-final.png"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/sales/orders/[id]/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/commerce-verification.json",
         "artifacts/ux/espresso/screenshots/commerce-sales-detail-desktop-dark-final.png",
         "artifacts/ux/espresso/screenshots/commerce-sales-detail-mobile-dark-final.png"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/sales/orders/metrics/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/commerce-verification.json",
         "artifacts/ux/espresso/screenshots/commerce-sales-metrics-desktop-dark-final.png",
         "artifacts/ux/espresso/screenshots/commerce-sales-metrics-mobile-dark-final.png"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/sales/orders/new/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/commerce-verification.json",
         "artifacts/ux/espresso/screenshots/commerce-sales-new-desktop-dark-final.png",
         "artifacts/ux/espresso/screenshots/commerce-sales-new-mobile-dark-final.png"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/sales/orders/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/commerce-verification.json",
         "artifacts/ux/espresso/screenshots/commerce-sales-orders-desktop-dark-final.png",
         "artifacts/ux/espresso/screenshots/commerce-sales-orders-mobile-dark-final.png"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/settings/attributes/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/settings-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/settings/categories/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/settings-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/settings/diagnostics/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/settings-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/settings/import/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/settings-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/settings/loyalty/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/settings-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/settings/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/settings-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/settings/printing/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/settings-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/settings/profile/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/settings-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/settings/store-groups/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/settings-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/settings/units/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/settings-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/settings/users/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/settings-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/settings/whats-new/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/settings-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/stores/[id]/compliance/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/directory-verification.json",
         "artifacts/ux/espresso/screenshots/store-compliance-desktop-dark.png",
         "artifacts/ux/espresso/screenshots/store-compliance-mobile-dark.png",
         "artifacts/ux/espresso/screenshots/store-compliance-manager-light-en.png"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/stores/[id]/hardware/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/directory-verification.json",
         "artifacts/ux/espresso/screenshots/store-hardware-desktop-dark.png",
         "artifacts/ux/espresso/screenshots/store-hardware-mobile-kg.png",
         "artifacts/ux/espresso/screenshots/store-hardware-staff-read-only.png"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/stores/new/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/directory-verification.json",
         "artifacts/ux/espresso/screenshots/store-form-desktop-light-en-final.png"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/stores/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/directory-verification.json",
         "artifacts/ux/espresso/screenshots/stores-desktop-dark.png"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/suppliers/new/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/directory-verification.json",
         "artifacts/ux/espresso/screenshots/supplier-form-desktop-dark.png",
         "artifacts/ux/espresso/screenshots/supplier-form-mobile-dark.png"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(app)/suppliers/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/directory-verification.json",
         "artifacts/ux/espresso/screenshots/suppliers-desktop-light-en-final.png",
@@ -635,81 +787,103 @@
         "artifacts/ux/espresso/screenshots/supplier-confirmation-mobile-final.png",
         "artifacts/ux/espresso/screenshots/suppliers-mobile-dark-kg.png",
         "artifacts/ux/espresso/screenshots/suppliers-mobile-dark-final.png"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(guide)/help/[category]/[guide]/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/public-guide-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(guide)/help/[category]/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/public-guide-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/(guide)/help/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/public-guide-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/[locale]/[...slug]/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/public-guide-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/[locale]/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/public-guide-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/c/[slug]/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/public-consumer-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/developers/bazaar-api/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/integrations-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/inventory/movements/[id]/print/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/warehouse-documents-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/invite/[token]/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/auth-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/invite/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/auth-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/login/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/auth-verification.json"
       ],
@@ -719,313 +893,398 @@
       "observationResolution": {
         "status": "fixed-and-replayed-for-all-four-roles",
         "evidence": "docs/espresso/auth-verification.json"
-      }
+      },
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/loyalty/card/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/public-consumer-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/loyalty/join/[programStoreId]/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/public-consumer-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/marketing-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/privacy/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/public-guide-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/register-business/[token]/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/auth-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/reset/[token]/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/auth-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/reset/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/auth-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/signup/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/auth-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/app/verify/[token]/page.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/auth-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     }
   ],
   "components": [
     {
       "source": "src/components/ui/action-menu.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/shared-controls-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/components/ui/alert.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/shared-controls-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/components/ui/badge.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/shared-controls-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/components/ui/breadcrumb.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/shared-controls-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/components/ui/button.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/shared-controls-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/components/ui/card.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/shared-controls-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/components/ui/checkbox.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/shared-controls-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/components/ui/data-table.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/shared-controls-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/components/ui/dialog.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/shared-controls-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/components/ui/dropdown-menu.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "tests/unit/row-actions-focus.test.tsx",
         "docs/espresso/directory-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/components/ui/empty-state.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/shared-controls-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/components/ui/form.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/shared-controls-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/components/ui/icon-button.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/shared-controls-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/components/ui/input.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/public-guide-verification.json",
         "artifacts/ux/espresso/public-field-focus-final.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/components/ui/label.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/shared-controls-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/components/ui/modal.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "artifacts/ux/espresso/document-unit-isolated.log",
         "artifacts/ux/espresso/document-focus-unit.log",
         "tests/unit/row-actions-focus.test.tsx",
         "docs/espresso/directory-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/components/ui/pagination.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/shared-controls-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/components/ui/password-input.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/shared-controls-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/components/ui/popover.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/shared-controls-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/components/ui/select.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/public-guide-verification.json",
         "artifacts/ux/espresso/public-field-focus-final.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/components/ui/separator.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/shared-controls-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/components/ui/sheet.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/shared-controls-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/components/ui/sidebar.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/shared-controls-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/components/ui/skeleton.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/shared-controls-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/components/ui/spinner.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/shared-controls-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/components/ui/switch.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/shared-controls-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/components/ui/table.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/shared-controls-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/components/ui/tabs.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "artifacts/ux/espresso/document-unit-isolated.log",
         "artifacts/ux/espresso/document-focus-unit.log"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/components/ui/textarea.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/public-guide-verification.json",
         "artifacts/ux/espresso/public-field-focus-final.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/components/ui/toast.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/shared-controls-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/components/ui/tooltip.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/shared-controls-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     },
     {
       "source": "src/components/ui/use-confirm-dialog.tsx",
-      "status": "in_review",
+      "status": "reviewed_selected_states",
       "evidence": [
         "docs/espresso/shared-controls-verification.json"
-      ]
+      ],
+      "primaryStatusBeforeFinalGate": "in_review",
+      "finalAcceptance": "docs/espresso/final-acceptance.json"
     }
   ],
   "verification": {
-    "desktop": "Primary inventory97/97page sources and32/32shared controls in_review;zero pending/accepted. Final visual and cross-screen acceptance remains.",
-    "mobile": "Shared-control selected states at390px inboth themes;KG/EN default labels checked. Previous family evidence/limits retained.",
-    "themes": "Marketing selected-state matrix passed in both themes/RU/KG/EN; earlier family limits retained",
-    "rolesAndScopes": "Authenticated root redirect and actual QA logout/login preserved;9real DB authentication cases passed; existing policy unchanged",
-    "functionalRegression": "2131full unit/47settings-family DB tests passed;30shared-control captures and actual standalone profile validation/save/focus recovery;485business-row hashes unchanged",
-    "productionBuild": "passed after final shared-component changes;actual profile workflow verified on the standalone build"
+    "desktop": "97/97page sources and32/32shared controls reviewed with family evidence; final bounded product gate passed. Not97distinct URLs or all state combinations.",
+    "mobile": "Recorded390px family/shared-control states and final support/O! Market/receiving replay; no page overflow in captured states.",
+    "themes": "Both themes for shared controls and recorded family matrices; deliberate Bazaar blue retained.",
+    "rolesAndScopes": "Actual manager/staff/cashier/admin/platform-owner sessions plus Starter support gate; route-policy corrections in final report.",
+    "functionalRegression": "2148unit/520deduplicated real DB tests passed;485business-row hashes unchanged.",
+    "productionBuild": "Final release build passed;last application edits replayed in standalone production.",
+    "finalAcceptance": "docs/espresso/final-acceptance.json"
   },
   "requirements": {
     "visualFidelity": "Match Espresso typography, palette, surfaces and components while preserving customer workflows; analogous screen comparison must respect the human-confirmed operational layouts.",
@@ -1037,7 +1296,7 @@
     "customerWorkflows": "Preserve the customer-requested two-column operational layouts and established interactions. The visual reference does not authorize replacing them; see AGENTS.md and redesign-change-audit.json."
   },
   "progress": {
-    "stage": "shared-controls-checkpoint-in-review-final-acceptance-pending",
+    "stage": "implementation-complete-bounded-acceptance-passed",
     "foundation": [
       "Pinned MIT Espresso semantic tokens and component CSS",
       "Self-hosted Inter Variable",
@@ -1084,7 +1343,9 @@
       },
       {
         "check": "Product permissions in the rendered UI: administrator, manager, staff, cashier",
-        "result": "administrator can create and edit; manager has enabled save and sees only two granted stores; staff and cashier see disabled product fields and no save/actions; direct new-product route rejects both with insufficient permissions; fixture organization is ENTERPRISE"
+        "result": "Corrected:ADMIN/MANAGERmay manage products subject to store scope;CASHIERproduct fields readonly/no save;STAFFproduct/inventory routes denied by unchanged middleware. Historical component state is not proof of route access.",
+        "historicalResultSuperseded": "administrator can create and edit; manager has enabled save and sees only two granted stores; staff and cashier see disabled product fields and no save/actions; direct new-product route rejects both with insufficient permissions; fixture organization is ENTERPRISE",
+        "correctionEvidence": "docs/espresso/final-acceptance.json"
       },
       {
         "check": "Single desktop brand: expanded, collapsed, reopened",
@@ -1217,34 +1478,20 @@
         "check": "Dedicated shared-control review and actual final profile workflow",
         "result": "26previously pending controls now in_review;30selected captures,18new unit cases,47DB cases and final standalone profile validation/save/focus. Final whole-product acceptance pending.",
         "evidence": "docs/espresso/shared-controls-verification.json"
+      },
+      {
+        "check": "Final product acceptance",
+        "result": "Final shared-style/reference,role/plan/store,mobile-title/field-name,warehouse-date/pagination,build and data-preservation gates passed within recorded matrix.",
+        "evidence": "docs/espresso/final-acceptance.json"
       }
     ],
-    "remaining": [
-      "Complete final page-specific/shared-control state acceptance after the97/97primary source pass",
-      "Current ERPNext reference comparison for analogous full screen layouts",
-      "Dark theme and RU/KG/EN visual matrix",
-      "Admin/manager/staff/cashier and store/plan gates in the rendered UI",
-      "Modal, dropdown, focus, keyboard, loading, empty, retry and recovery flows across page families",
-      "Broader database integration regression and final production smoke on the isolated app",
-      "Audit autofocus dialogs across other route families for explicit return-focus targets; saved-view forms now have explicit trigger refs.",
-      "Review the explicitly disclosed product-form and navigation composition changes with the human; do not treat test success as workflow approval.",
-      "Final authentication acceptance: successful invite/signup/onboarding and reset-token lifecycle under isolated tests; live SMTP and browser credential entry are not claimed by the current checkpoint.",
-      "Complete the legacy English copy audit; settings-verification.json lists observed unfinished template/import labels.",
-      "Complete bespoke printing/import accessible control labels, successful upload/invitation browser paths and remaining settings state/plan permutations; current in_review status is not full acceptance.",
-      "Finish warehouse acceptance permutations listed in warehouse-documents-verification.json, including native date-picker/multi-page navigation; current in_review evidence is not full acceptance.",
-      "Complete commerce acceptance permutations listed in commerce-verification.json; current screen and cash-cycle evidence is not acceptance of every order, provider or state flow.",
-      "Complete report/shared-component acceptance permutations listed in reports-verification.json; page captures and DB regressions do not establish final overall redesign acceptance.",
-      "Complete integration/provider/editor/query-state and legacy translation acceptance listed in integrations-verification.json; base captures and mocks are not live provider acceptance.",
-      "Complete administration/shared-shell plan, title-fallback and state permutations listed in administration-verification.json. Current page/control totals are recorded in the public-consumer checkpoint; administration limitations still apply.",
-      "No primary source/control inventory remains pending:97page sources and32shared controls in_review, zero fully accepted. Finish final visual/state/cross-screen acceptance and tracked concrete issues."
-    ],
+    "remaining": [],
     "unitTests": {
       "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
-      "files": 275,
-      "tests": 2131,
-      "newTests": 18,
-      "result": "passed after all application changes;18new cases included in2131",
-      "log": "artifacts/ux/espresso/shared-controls-unit-final.log"
+      "files": 276,
+      "tests": 2148,
+      "result": "passed",
+      "log": "artifacts/ux/espresso/final-release-unit.log"
     },
     "databaseRegression": {
       "files": 3,
@@ -1374,6 +1621,42 @@
       "database": "bazaar_hardening_ci; Redis DB5; separate resettable database, UI fixtures not reset",
       "scope": "Attributes, catalog sources, profile preferences, product units, users and imports",
       "log": "artifacts/ux/espresso/shared-controls-database-final.log"
+    },
+    "historicalRemainingBeforeFinalGate": [
+      "Complete final page-specific/shared-control state acceptance after the97/97primary source pass",
+      "Current ERPNext reference comparison for analogous full screen layouts",
+      "Dark theme and RU/KG/EN visual matrix",
+      "Admin/manager/staff/cashier and store/plan gates in the rendered UI",
+      "Modal, dropdown, focus, keyboard, loading, empty, retry and recovery flows across page families",
+      "Broader database integration regression and final production smoke on the isolated app",
+      "Audit autofocus dialogs across other route families for explicit return-focus targets; saved-view forms now have explicit trigger refs.",
+      "Review the explicitly disclosed product-form and navigation composition changes with the human; do not treat test success as workflow approval.",
+      "Final authentication acceptance: successful invite/signup/onboarding and reset-token lifecycle under isolated tests; live SMTP and browser credential entry are not claimed by the current checkpoint.",
+      "Complete the legacy English copy audit; settings-verification.json lists observed unfinished template/import labels.",
+      "Complete bespoke printing/import accessible control labels, successful upload/invitation browser paths and remaining settings state/plan permutations; current in_review status is not full acceptance.",
+      "Finish warehouse acceptance permutations listed in warehouse-documents-verification.json, including native date-picker/multi-page navigation; current in_review evidence is not full acceptance.",
+      "Complete commerce acceptance permutations listed in commerce-verification.json; current screen and cash-cycle evidence is not acceptance of every order, provider or state flow.",
+      "Complete report/shared-component acceptance permutations listed in reports-verification.json; page captures and DB regressions do not establish final overall redesign acceptance.",
+      "Complete integration/provider/editor/query-state and legacy translation acceptance listed in integrations-verification.json; base captures and mocks are not live provider acceptance.",
+      "Complete administration/shared-shell plan, title-fallback and state permutations listed in administration-verification.json. Current page/control totals are recorded in the public-consumer checkpoint; administration limitations still apply.",
+      "No primary source/control inventory remains pending:97page sources and32shared controls in_review, zero fully accepted. Finish final visual/state/cross-screen acceptance and tracked concrete issues."
+    ],
+    "finalAcceptance": "docs/espresso/final-acceptance.json",
+    "acceptanceLimits": [
+      "97 is the number of page source files, including redirects, dynamic templates and diagnostic pages; it is not a count of distinct URLs or all possible business states. 32 is the shared-control inventory. Final acceptance combines their recorded family reviews with shared-style verification and selected cross-screen tests.",
+      "The source of visual truth is pinned MIT Frappe Espresso e8d41dd0061a32ee781caefe5d0b0d2bb7c15362. The original CSS was rendered in a clearly labelled component probe, not in a running ERPNext instance. No whole-screen pixel-identity claim is made for different Bazaar and ERPNext modules.",
+      "Intentional differences: Bazaar blue and one brand mark; customer-confirmed operational columns; existing POS, print and merchant-brand workflows; mobile touch targets; permanent module dock behavior. Product document/navigation composition changes remain explicitly disclosed in redesign-change-audit.json and were checked through the recorded workflows; test success does not constitute human preference approval.",
+      "Selected RU/KG/EN, desktop/mobile and light/dark states were checked by family and for shared controls. This does not assert a Cartesian product of all routes, roles, stores, plans, themes, languages and states, or full editorial translation of pre-existing public API documentation, email-editor copy and technical provider identifiers.",
+      "No live AI/voice model-quality, real marketplace publication, acquiring, email delivery, physical printer, camera/USB scanner, native mobile or every-browser certification is claimed by this visual redesign. Their configured-provider/device acceptance is independent of the preserved UI and isolated domain regressions.",
+      "Historical family reports are point-in-time evidence. Old pending counts and initial role claims are superseded only where explicitly reconciled below. Local screenshot/log evidence stays in ignored artifacts; tracked reports link to it."
+    ],
+    "finalDatabaseRegression": {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts acceptance",
+      "files": 65,
+      "tests": 520,
+      "result": "passed",
+      "log": "artifacts/ux/espresso/final-acceptance-database.log",
+      "scope": "All twelve existing regression families, deduplicated. Separate resettable bazaar_hardening_ci / Redis DB5; real database, disabled or mocked providers. Ran before final presentation-only Support/O! Market changes; database/server/schema sources unchanged afterwards. Counts are not added to overlapping historical family runs."
     }
   }
 }

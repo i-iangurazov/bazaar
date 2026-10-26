@@ -123,7 +123,6 @@ describe("conservative app shell navigation source", () => {
     expect(mobileMoreSource).toContain('label: tNav("integrations")');
     expect(mobileMoreSource).toContain('href: "/operations/integrations"');
     expect(mobileMoreSource).toContain('requiredPermission: "manageIntegrations"');
-    expect(source).toContain('normalizedPath.startsWith("/operations/integrations")');
   });
 
   it("keeps POS sell as a standalone cashier workspace outside the admin shell", () => {

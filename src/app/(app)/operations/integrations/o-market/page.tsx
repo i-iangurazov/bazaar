@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { OMarketExportJobStatus, OMarketJobType } from "@prisma/client";
 import { useSession } from "next-auth/react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 
 import { BackIcon } from "@/components/icons";
 import { PageHeader } from "@/components/page-header";
@@ -34,6 +34,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import { trpc } from "@/lib/trpc";
+import { formatCurrency, formatDateTime } from "@/lib/i18nFormat";
 
 type BadgeVariant = "default" | "success" | "warning" | "danger" | "muted";
 
@@ -71,20 +72,6 @@ const statusVariant = (status?: string | null): BadgeVariant => {
   return "muted";
 };
 
-const formatDate = (value?: Date | string | null) => {
-  if (!value) {
-    return "Never";
-  }
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "Never";
-  }
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
-};
-
 const asRecord = (value: unknown): Record<string, unknown> | null => {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null;
@@ -120,19 +107,17 @@ const getProductResults = (value: unknown): ProductResult[] => {
   return mapped;
 };
 
-const money = (value: number | null) =>
-  value === null
-    ? "Missing"
-    : new Intl.NumberFormat(undefined, {
-        style: "currency",
-        currency: "KGS",
-        maximumFractionDigits: 0,
-      }).format(value);
-
 const OMarketPage = () => {
   const t = useTranslations("integrations.oMarketPage");
   const tErrors = useTranslations("errors");
   const tCommon = useTranslations("common");
+  const locale = useLocale();
+  const formatDate = (value?: Date | string | null) => {
+    if (!value) return tCommon("notAvailable");
+    const date = value instanceof Date ? value : new Date(value);
+    return Number.isNaN(date.getTime()) ? tCommon("notAvailable") : formatDateTime(date, locale);
+  };
+  const money = (value: number | null) => value === null ? tCommon("notAvailable") : formatCurrency(value, locale, "KGS", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
   const { data: session } = useSession();
   const role = session?.user?.role;
   const canManage = role === "ADMIN" || role === "MANAGER";
@@ -948,7 +933,7 @@ const OMarketPage = () => {
                             <TableCell>{result.sku}</TableCell>
                             <TableCell>{result.name ?? ""}</TableCell>
                             <TableCell>
-                              <Badge variant={statusVariant(result.status)}>{result.status}</Badge>
+                              <Badge variant={statusVariant(result.status)}>{t.has(`jobs.resultStatus.${result.status}`) ? t(`jobs.resultStatus.${result.status}`) : result.status}</Badge>
                             </TableCell>
                             <TableCell>{result.reason ?? ""}</TableCell>
                           </TableRow>

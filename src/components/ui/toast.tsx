@@ -125,56 +125,41 @@ export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
                   else elementsRef.current.delete(toast.id);
                 }}
                 role={toast.variant === "error" ? "alert" : "status"}
-                className={cn(
-                  "rounded-md border bg-card p-4 shadow-lg",
-                  toast.variant === "error"
-                    ? "border-danger/40"
-                    : toast.variant === "success"
-                      ? "border-success/40"
-                      : "border-border",
-                )}
+                data-type={toast.variant ?? "info"}
+                className="es-toast w-full min-w-0 max-w-full"
               >
-                <div className="flex items-start gap-3">
-                  {Icon ? (
-                    <span
-                      className={cn(
-                        "mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-md",
-                        toast.variant === "error"
-                          ? "bg-danger/15 text-danger"
-                          : "bg-success/15 text-success",
-                      )}
-                    >
-                      <Icon className="h-3.5 w-3.5" aria-hidden />
-                    </span>
-                  ) : null}
-                  <div className="min-w-0 flex-1 space-y-1 [overflow-wrap:anywhere]">
-                    {toast.title ? (
-                      <p className="text-sm font-semibold text-foreground">{toast.title}</p>
-                    ) : null}
-                    <p className="text-sm text-muted-foreground">{toast.description}</p>
-                  </div>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => remove(toast.id)}
-                        aria-label={tCommon("close")}
+                {Icon ? <Icon className="h-4 w-4" aria-hidden /> : null}
+                <div className="es-toast__content [overflow-wrap:anywhere]">
+                  {toast.title ? <p className="es-toast__message">{toast.title}</p> : null}
+                  <p className={toast.title ? "es-toast__description" : "es-toast__message"}>
+                    {toast.description}
+                  </p>
+                  {toast.actionLabel && toast.actionHref ? (
+                    <div className="es-toast__body">
+                      <Link
+                        className="es-toast__action button-focus-ring inline-flex max-w-full whitespace-normal text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        href={toast.actionHref}
                       >
-                        <CloseIcon className="h-4 w-4" aria-hidden />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>{tCommon("close")}</TooltipContent>
-                  </Tooltip>
+                        {toast.actionLabel}
+                      </Link>
+                    </div>
+                  ) : null}
                 </div>
-                {toast.actionLabel && toast.actionHref ? (
-                  <div className="mt-3">
-                    <Button asChild variant="secondary">
-                      <Link href={toast.actionHref}>{toast.actionLabel}</Link>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="es-toast__close h-10 w-10 text-inherit hover:bg-transparent hover:text-inherit md:h-8 md:w-8"
+                      onClick={() => remove(toast.id)}
+                      aria-label={tCommon("close")}
+                    >
+                      <CloseIcon className="h-4 w-4" aria-hidden />
                     </Button>
-                  </div>
-                ) : null}
+                  </TooltipTrigger>
+                  <TooltipContent>{tCommon("close")}</TooltipContent>
+                </Tooltip>
               </div>
             );
           })}

@@ -47,8 +47,13 @@ const segmentLabel = (
   tNav: ReturnType<typeof useTranslations>,
   tBreadcrumbs: ReturnType<typeof useTranslations>,
   tPos: ReturnType<typeof useTranslations>,
+  tScanner: ReturnType<typeof useTranslations>,
 ) => {
   switch (segment) {
+    case "dev":
+      return tNav("diagnostics");
+    case "scanner-test":
+      return tScanner("title");
     case "baam":
       return tNav("baam");
     case "dashboard":
@@ -170,6 +175,7 @@ export const PageBreadcrumbs = () => {
   const tNav = useTranslations("nav");
   const tBreadcrumbs = useTranslations("breadcrumbs");
   const tPos = useTranslations("pos");
+  const tScanner = useTranslations("scannerTest");
 
   const crumbs = useMemo(() => {
     const rawSegments = pathname.split("/").filter(Boolean);
@@ -192,7 +198,7 @@ export const PageBreadcrumbs = () => {
 
       pathParts.push(segment);
 
-      const label = segmentLabel(segment, tNav, tBreadcrumbs, tPos);
+      const label = segmentLabel(segment, tNav, tBreadcrumbs, tPos, tScanner);
       const href = LINKABLE_SEGMENTS.has(segment) ? `/${pathParts.join("/")}` : undefined;
       items.push({ label, href });
     }
@@ -223,7 +229,7 @@ export const PageBreadcrumbs = () => {
     }
 
     return items;
-  }, [pathname, tBreadcrumbs, tNav, tPos]);
+  }, [pathname, tBreadcrumbs, tNav, tPos, tScanner]);
 
   if (!crumbs.length) {
     return null;

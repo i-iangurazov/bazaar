@@ -350,5 +350,10 @@
     "Legacy mixed RU/KG terminology and generic English labels remain for the broader copy review; no global translation-completeness claim.",
     "Green tests do not approve the separately disclosed product-form/navigation composition changes or permit new customer workflow rearrangements."
   ],
-  "delivery": "Local reviewable checkpoint on codex/playground only; no main merge, push, deployment or full-goal completion."
+  "delivery": "Local reviewable checkpoint on codex/playground only; no main merge, push, deployment or full-goal completion.",
+  "finalAcceptanceCorrection": {
+    "evidence": "docs/espresso/final-acceptance.json",
+    "roleClaim": "The historical STAFF/CASHIER count-page capture does not establish fresh route access. Existing middleware denies both inventory routes; component count permissions remain defense in depth. No access policy changed.",
+    "datesAndPagination": "Old native-date/page2gap closed by final-warehouse-date-pagination.json: both26Octdate filters committed through native keyboard;17documents split10+7; no stock mutation."
+  }
 }

@@ -1309,6 +1309,7 @@ const CustomerImportPanel = ({
         </CardHeader>
         <CardContent className="space-y-4">
           <Input
+            aria-label={t("customerImport.uploadTitle")}
             type="file"
             accept=".csv,text/csv,.xlsx,.xls"
             onChange={(event) => {
@@ -1372,7 +1373,7 @@ const CustomerImportPanel = ({
                       }))
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger aria-label={t(`customerImport.fields.${field}`)}>
                       <SelectValue placeholder={t("mappingSelectPlaceholder")} />
                     </SelectTrigger>
                     <SelectContent>
@@ -2617,7 +2618,7 @@ const ImportPage = () => {
           onValueChange={(value) => setImportType(value as ImportType)}
           disabled={!isAdmin}
         >
-          <SelectTrigger>
+          <SelectTrigger aria-label={t("importType.title")}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -2729,6 +2730,7 @@ const ImportPage = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           <Input
+            aria-label={t("uploadTitle")}
             type="file"
             accept=".csv,text/csv,.xlsx,.xls"
             onChange={(event) => {
@@ -2767,7 +2769,7 @@ const ImportPage = () => {
                     value={importMode}
                     onValueChange={(value) => setImportMode(value as ImportMode)}
                   >
-                    <SelectTrigger className="max-w-sm">
+                    <SelectTrigger aria-label={t("importModeTitle")} className="max-w-sm">
                       <SelectValue placeholder={t("importModePlaceholder")} />
                     </SelectTrigger>
                     <SelectContent>
@@ -2789,7 +2791,7 @@ const ImportPage = () => {
                         setExistingBehavior(value as ProductExistingBehavior)
                       }
                     >
-                      <SelectTrigger>
+                      <SelectTrigger aria-label={t("existingBehaviorTitle")}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -2808,7 +2810,7 @@ const ImportPage = () => {
                         setEmptyValueBehavior(value as ProductEmptyValueBehavior)
                       }
                     >
-                      <SelectTrigger>
+                      <SelectTrigger aria-label={t("emptyValueBehaviorTitle")}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -2825,7 +2827,7 @@ const ImportPage = () => {
                       value={stockBehavior}
                       onValueChange={(value) => setStockBehavior(value as ProductStockBehavior)}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger aria-label={t("stockBehaviorTitle")}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -2930,7 +2932,7 @@ const ImportPage = () => {
                         }))
                       }
                     >
-                      <SelectTrigger>
+                      <SelectTrigger aria-label={field.label}>
                         <SelectValue placeholder={t("mappingPlaceholder")} />
                       </SelectTrigger>
                       <SelectContent>
@@ -2956,7 +2958,7 @@ const ImportPage = () => {
                   value={defaultUnitCode || "none"}
                   onValueChange={(value) => setDefaultUnitCode(value === "none" ? "" : value)}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger aria-label={t("defaultUnitTitle")}>
                     <SelectValue placeholder={t("defaultUnitPlaceholder")} />
                   </SelectTrigger>
                   <SelectContent>

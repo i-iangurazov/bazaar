@@ -29,7 +29,7 @@ const manifest = resolve(root, ".next/standalone/.next/server/middleware-manifes
 const originalManifest = await readFile(manifest);
 const familyIndex = process.argv.indexOf("--family");
 const requestedFamily = familyIndex >= 0 ? process.argv[familyIndex + 1] : "scanner";
-assert(["scanner", "marketing", "shared-controls"].includes(requestedFamily), "Unknown QA source family");
+assert(["scanner", "marketing", "shared-controls", "final-acceptance"].includes(requestedFamily), "Unknown QA source family");
 assert(!loyaltyOutbox || familyIndex < 0, "Choose either the loyalty outbox or a screen family");
 const family = loyaltyOutbox ? "public-consumer" : requestedFamily;
 const workspace = resolve(root, `artifacts/ux/espresso/${family}-dev-${Date.now()}`);

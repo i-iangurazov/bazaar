@@ -1278,6 +1278,14 @@
           "COMPLETED_WITH_ERRORS": "Completed with issues",
           "FAILED": "Failed",
           "TIMED_OUT": "Timed out"
+        },
+        "resultStatus": {
+          "pending": "Pending",
+          "processing": "Processing",
+          "exported": "Exported",
+          "updated": "Updated",
+          "skipped": "Skipped",
+          "failed": "Failed"
         }
       },
       "toasts": {
@@ -5508,7 +5516,7 @@
     "featureLockedExports": "Feature locked exports",
     "featureLockedAnalytics": "Feature locked analytics",
     "featureLockedCompliance": "Feature locked compliance",
-    "featureLockedSupportToolkit": "Feature locked support toolkit",
+    "featureLockedSupportToolkit": "Support tools are available on the Enterprise plan.",
     "featureLockedPos": "Feature locked POS",
     "featureLockedStockCounts": "Feature locked stock counts",
     "featureLockedPriceTags": "Feature locked price tags",
@@ -5674,7 +5682,9 @@
     "flagKeyPlaceholder": "Enter flag key",
     "flagAdd": "Flag add",
     "flagKeyRequired": "Flag key is required.",
-    "flagUpdatedAt": "Flag updated at {date}"
+    "flagUpdatedAt": "Flag updated at {date}",
+    "planLockedTitle": "Support tools are not included in your plan",
+    "viewPlans": "View plans"
   },
   "adminMetrics": {
     "title": "Business metrics",

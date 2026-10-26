@@ -1,5 +1,7 @@
 @import "../styles/espresso/tokens.css";
 @import "../styles/espresso/components.css";
+@import "../styles/espresso/elevation.css";
+@import "../styles/espresso/overlays.css";
 
 @tailwind base;
 @tailwind components;

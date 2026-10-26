@@ -1,5 +1,5 @@
 {
-  "status": "shared-controls-checkpoint-in-review-final-acceptance-pending",
+  "status": "implementation-complete-bounded-acceptance-passed",
   "scope": "Redesign changes since1fcdfd4 with family checkpoints through public catalog/consumer loyalty; not an audit of every earlier playground improvement.",
   "humanCorrection": "Customer-requested two-column operational layouts must be preserved. A difference from ERPNext is not evidence of a defect.",
   "restored": [
@@ -57,7 +57,7 @@
         "src/components/ui/sidebar.tsx"
       ],
       "changes": [
-        "48px module dock added; contextual sidebar shows selected module",
+        "57px module dock including border (pinned56pxtray) added; contextual sidebar shows selected module",
         "Sidebar collapse now hides contextual panel while dock remains",
         "Sidebar width 240 to 224px"
       ],
@@ -475,7 +475,7 @@
       },
       {
         "path": "src/app/(app)/settings/import/page.tsx",
-        "classification": "jsx-style-attributes-only"
+        "classification": "requires-semantic-review"
       },
       {
         "path": "src/app/(app)/settings/loyalty/page.tsx",
@@ -487,7 +487,7 @@
       },
       {
         "path": "src/app/(app)/settings/printing/page.tsx",
-        "classification": "jsx-style-attributes-only"
+        "classification": "requires-semantic-review"
       },
       {
         "path": "src/app/(app)/settings/store-groups/page.tsx",
@@ -707,7 +707,7 @@
       },
       {
         "path": "src/components/mobile-app-shell.tsx",
-        "classification": "jsx-style-attributes-only"
+        "classification": "requires-semantic-review"
       },
       {
         "path": "src/components/native/native-runtime.tsx",
@@ -926,6 +926,10 @@
         "classification": "added-or-removed-requires-semantic-review"
       },
       {
+        "path": "src/lib/mobile-page-title.ts",
+        "classification": "added-or-removed-requires-semantic-review"
+      },
+      {
         "path": "src/lib/saved-table-views.ts",
         "classification": "requires-semantic-review"
       },
@@ -1077,15 +1081,15 @@
     }
   },
   "limitations": [
-    "This audit identifies source and interaction changes; it does not claim complete acceptance or runtime verification of all 97 routes.",
-    "The unrequested layout acceptance claims in the previous inventory checkpoint are withdrawn.",
-    "No further customer workflow rearrangements are authorized by a mere visual difference from ERPNext.",
-    "Integration sources are in_review only; external operations and remaining editor/translation/plan states are explicitly listed in integrations-verification.json.",
-    "Administration sources are in_review only. Mobile brand-title fallback, Starter support plan-state presentation, remaining state matrices and dev hardware/provider limitations are explicit in administration-verification.json.",
-    "Public guide and field sources remain in_review; documented render/DOM and selected focus evidence is not full editorial, every-browser, provider or whole-redesign acceptance."
+    "97 is the number of page source files, including redirects, dynamic templates and diagnostic pages; it is not a count of distinct URLs or all possible business states. 32 is the shared-control inventory. Final acceptance combines their recorded family reviews with shared-style verification and selected cross-screen tests.",
+    "The source of visual truth is pinned MIT Frappe Espresso e8d41dd0061a32ee781caefe5d0b0d2bb7c15362. The original CSS was rendered in a clearly labelled component probe, not in a running ERPNext instance. No whole-screen pixel-identity claim is made for different Bazaar and ERPNext modules.",
+    "Intentional differences: Bazaar blue and one brand mark; customer-confirmed operational columns; existing POS, print and merchant-brand workflows; mobile touch targets; permanent module dock behavior. Product document/navigation composition changes remain explicitly disclosed in redesign-change-audit.json and were checked through the recorded workflows; test success does not constitute human preference approval.",
+    "Selected RU/KG/EN, desktop/mobile and light/dark states were checked by family and for shared controls. This does not assert a Cartesian product of all routes, roles, stores, plans, themes, languages and states, or full editorial translation of pre-existing public API documentation, email-editor copy and technical provider identifiers.",
+    "No live AI/voice model-quality, real marketplace publication, acquiring, email delivery, physical printer, camera/USB scanner, native mobile or every-browser certification is claimed by this visual redesign. Their configured-provider/device acceptance is independent of the preserved UI and isolated domain regressions.",
+    "Historical family reports are point-in-time evidence. Old pending counts and initial role claims are superseded only where explicitly reconciled below. Local screenshot/log evidence stays in ignored artifacts; tracked reports link to it."
   ],
   "delivery": "codex/playground only; no main merge or production deployment",
-  "currentCheckpoint": "docs/espresso/shared-controls-verification.json",
+  "currentCheckpoint": "docs/espresso/final-acceptance.json",
   "previousCheckpoints": [
     "docs/espresso/directory-verification.json",
     "docs/espresso/auth-verification.json",
@@ -1097,42 +1101,57 @@
     "docs/espresso/administration-verification.json",
     "docs/espresso/public-guide-verification.json",
     "docs/espresso/public-consumer-verification.json",
-    "docs/espresso/marketing-verification.json"
+    "docs/espresso/marketing-verification.json",
+    "docs/espresso/shared-controls-verification.json"
   ],
   "currentCheckpointChecks": {
     "unit": {
       "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
-      "files": 275,
-      "tests": 2131,
-      "newTests": 18,
-      "result": "passed after all application changes;18new cases included in2131",
-      "log": "artifacts/ux/espresso/shared-controls-unit-final.log"
+      "files": 276,
+      "tests": 2148,
+      "result": "passed",
+      "log": "artifacts/ux/espresso/final-release-unit.log"
     },
     "database": {
-      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts settings",
-      "files": 6,
-      "tests": 47,
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts acceptance",
+      "files": 65,
+      "tests": 520,
       "result": "passed",
-      "database": "bazaar_hardening_ci; Redis DB5; separate resettable database, UI fixtures not reset",
-      "scope": "Attributes, catalog sources, profile preferences, product units, users and imports",
-      "log": "artifacts/ux/espresso/shared-controls-database-final.log"
+      "log": "artifacts/ux/espresso/final-acceptance-database.log",
+      "scope": "All twelve existing regression families, deduplicated. Separate resettable bazaar_hardening_ci / Redis DB5; real database, disabled or mocked providers. Ran before final presentation-only Support/O! Market changes; database/server/schema sources unchanged afterwards. Counts are not added to overlapping historical family runs."
+    },
+    "focused": {
+      "files": 2,
+      "tests": 100,
+      "result": "passed",
+      "log": "artifacts/ux/espresso/final-gate-copy-focused.log",
+      "scope": "Final support lock/recovery and integration workspace checks; also included in full unit total."
     },
     "types": {
+      "command": "pnpm typecheck",
       "result": "passed",
-      "log": "artifacts/ux/espresso/shared-controls-types-final.log"
+      "log": "artifacts/ux/espresso/final-release-types.log"
     },
     "lint": {
+      "command": "pnpm lint",
       "result": "passed without warnings",
-      "log": "artifacts/ux/espresso/shared-controls-lint-final.log"
+      "log": "artifacts/ux/espresso/final-release-lint.log"
     },
     "translations": {
-      "result": "passed;existing common.nothingFound/showSecret/hideSecret reused inRU/KG/EN",
-      "log": "artifacts/ux/espresso/shared-controls-i18n.log"
+      "command": "pnpm i18n:check",
+      "result": "passed",
+      "log": "artifacts/ux/espresso/final-release-i18n.log"
     },
     "productionBuild": {
       "command": "UX_SUITE=espresso node --import tsx scripts/ux/build.ts",
-      "result": "passed after all application changes",
-      "log": "artifacts/ux/espresso/build-shared-controls-final.log"
+      "result": "passed after final application changes",
+      "buildId": "PuC7wSf9BuqUMiZzKJX7y",
+      "log": "artifacts/ux/espresso/build-final-release.log",
+      "runtimeLog": "artifacts/ux/espresso/server-final-release.log"
+    },
+    "diff": {
+      "command": "git diff --check; git diff --cached --check",
+      "result": "passed"
     }
   },
   "customerLayoutRecheck": [
@@ -1237,6 +1256,106 @@
       "source": "src/components/ui/password-input.tsx",
       "before": "Default visibility buttons announced English Show value/Hide value inRU/KG.",
       "after": "Existing common.showSecret/hideSecret supply localized defaults. Explicit labels, controlled visibility, value, disabled and toggleDisabled behavior retained."
+    }
+  ],
+  "historicalLimitationsBeforeFinalGate": [
+    "This audit identifies source and interaction changes; it does not claim complete acceptance or runtime verification of all 97 routes.",
+    "The unrequested layout acceptance claims in the previous inventory checkpoint are withdrawn.",
+    "No further customer workflow rearrangements are authorized by a mere visual difference from ERPNext.",
+    "Integration sources are in_review only; external operations and remaining editor/translation/plan states are explicitly listed in integrations-verification.json.",
+    "Administration sources are in_review only. Mobile brand-title fallback, Starter support plan-state presentation, remaining state matrices and dev hardware/provider limitations are explicit in administration-verification.json.",
+    "Public guide and field sources remain in_review; documented render/DOM and selected focus evidence is not full editorial, every-browser, provider or whole-redesign acceptance."
+  ],
+  "finalAcceptanceChanges": [
+    {
+      "area": "Exact shared overlay appearance",
+      "sources": [
+        "src/styles/espresso/elevation.css",
+        "src/styles/espresso/overlays.css",
+        "src/components/ui/alert.tsx",
+        "src/components/ui/dropdown-menu.tsx",
+        "src/components/ui/popover.tsx",
+        "src/components/ui/tooltip.tsx",
+        "src/components/ui/toast.tsx"
+      ],
+      "behavior": "Pinned upstream CSS appearance with Radix positioning/semantics retained. Small adapter preserves existing direct alert-child API; long toasts wrap, close/action/timer/focus remain. Blue field focus is not replaced by upstream neutral focus."
+    },
+    {
+      "area": "Dock and mobile context",
+      "sources": [
+        "src/components/app-shell.tsx",
+        "src/components/mobile-app-shell.tsx",
+        "src/components/page-breadcrumbs.tsx",
+        "src/lib/mobile-page-title.ts"
+      ],
+      "behavior": "Source geometry and one brand retained. Route-boundary helper covers authenticated sources in three languages; diagnostic/scanner breadcrumbs use existing translations; unknown titles no longer duplicateBAZAAR. No new route permissions."
+    },
+    {
+      "area": "Printing/import field names",
+      "behavior": "Only aria-label edits at17printing and10import source sites; AST equality after removing aria-label proved.77desktop/64mobile printing controls named;25CSV mapping controls named. Product CSV preview ready1/error0,locale changes preserve file/SKU; Apply Import not pressed.",
+      "evidence": [
+        "artifacts/ux/espresso/final-source-preservation.json",
+        "artifacts/ux/espresso/final-locale-field-matrix.json",
+        "artifacts/ux/espresso/final-import-mapping-after.json",
+        "artifacts/ux/espresso/final-printing-names-after.json"
+      ]
+    },
+    {
+      "area": "Support plan state",
+      "behavior": "Only exact server FORBIDDEN featureLockedSupportToolkit replaces prohibited forms with translated explanation and billing link. Generic forbidden/read failures retain normal independent recovery/actions. Existing server supportToolkit gate and normal Enterprise controls unchanged; four new targeted cases included in full suite.",
+      "evidence": [
+        "artifacts/ux/espresso/final-support-plan-before.json",
+        "artifacts/ux/espresso/final-production-browser.json"
+      ]
+    },
+    {
+      "area": "O! Market presentation",
+      "behavior": "Null/invalid timestamps and absent prices use existing translated notAvailable; valid timestamps use locale and existing Bishkek format. Channel whole-KGS presentation preserved; six known per-product job statuses translated, unknown raw values preserved. No external job/token/config/mapping mutation.",
+      "evidence": [
+        "artifacts/ux/espresso/final-production-browser.json"
+      ]
+    },
+    {
+      "area": "Marketing assets",
+      "behavior": "Four current1920x1080actual UI captures replace stale dock geometry;WebP/cache hashes updated. Captured on isolated copied-source development preview with no dev indicator, not a claimed production capture. All updated images load on final standalone production root.",
+      "evidence": [
+        "artifacts/ux/espresso/final-marketing-assets.json",
+        "artifacts/ux/espresso/final-marketing-captures.json",
+        "artifacts/ux/espresso/final-marketing-production-images.json"
+      ]
+    },
+    {
+      "area": "QA runner",
+      "behavior": "Acceptance selection deduplicates existing12DBfamilies;dev final-acceptance artifact prefix avoids overwriting historical evidence. Separate safety-guarded CI database and provider-disabled UI startup unchanged."
+    }
+  ],
+  "finalCorrections": [
+    {
+      "area": "Counts",
+      "finding": "Previous messages mixed initial page-source review and final product acceptance. 71/97,87/97,93/97,97/97 were primary inventory checkpoints, never a count of fully tested route permutations.",
+      "resolution": "Final source review97/97, controls32/32; final product gate recorded separately here. No completion percentage inferred from screenshot counts."
+    },
+    {
+      "area": "Real role routes",
+      "finding": "Early product/count reports described STAFF component controls as if the role could reach those routes. That is not valid fresh-session route evidence.",
+      "resolution": "Existing roleAccess/middleware denies STAFF products and inventory; CASHIER may view products but cannot manage them and has no inventory route. MANAGER sees its two granted stores and cannot open billing. Component-level read-only/count states are defense in depth, not route grants. Policies unchanged.",
+      "evidence": "artifacts/ux/espresso/final-production-browser.json"
+    },
+    {
+      "area": "Redirect screenshots",
+      "finding": "Two denied-route checks redirect to the canonical localhost host, which already has a separate QA admin session.",
+      "resolution": "Their records contain requestedRole and redirect marker only; destination screenshots are not labelled as the denied role accessing the page."
+    },
+    {
+      "area": "Studio on Starter",
+      "finding": "ImageStudio was reachable with an unconfigured provider; it was not a verified plan gate.",
+      "resolution": "Evidence renamed to provider-state. The demonstrated Starter gate is supportToolkit, checked before and after the new presentation."
+    },
+    {
+      "area": "Native dates and file chooser",
+      "finding": "DOM date fill alone did not establish React state; earlier file-chooser tool calls also stalled. Those attempts are not accepted as passed tests.",
+      "resolution": "Native arrow events establish both date attributes and URL filters; page-size10 yields10+7 actual rows. Real product CSV selection/preview was later established in copied-source dev QA; no Apply Import/customer-file claim.",
+      "evidence": "artifacts/ux/espresso/final-warehouse-date-pagination.json"
     }
   ]
 }

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 import { PageHeader } from "@/components/page-header";
 import { QueryErrorState } from "@/components/query-error-state";
@@ -101,6 +102,24 @@ const AdminSupportPage = () => {
       <div>
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
         <p role={isForbidden ? "alert" : "status"} className="mt-4 text-sm text-danger">{isForbidden ? tErrors("forbidden") : tCommon("loading")}</p>
+      </div>
+    );
+  }
+
+  const supportPlanLocked = storeFlagsQuery.isError &&
+    storeFlagsQuery.error?.data?.code === "FORBIDDEN" &&
+    storeFlagsQuery.error.message.replace(/^errors\./, "") === "featureLockedSupportToolkit";
+  if (supportPlanLocked) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title={t("title")} subtitle={t("subtitle")} />
+        <Card>
+          <CardHeader><CardTitle>{t("planLockedTitle")}</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">{translateError(tErrors, storeFlagsQuery.error)}</p>
+            <Button asChild><Link href="/billing">{t("viewPlans")}</Link></Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
