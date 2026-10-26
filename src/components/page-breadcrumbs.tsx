@@ -155,6 +155,8 @@ const segmentLabel = (
       return tBreadcrumbs("edit");
     case "compliance":
       return tBreadcrumbs("compliance");
+    case "hardware":
+      return tBreadcrumbs("hardware");
     default:
       return decodeURIComponent(segment).replace(/-/g, " ");
   }

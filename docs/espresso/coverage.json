@@ -45,13 +45,27 @@
     },
     {
       "source": "src/app/(app)/customers/new/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/directory-verification.json",
+        "artifacts/ux/espresso/screenshots/customer-staff-denied-final.png",
+        "artifacts/ux/espresso/screenshots/customer-cashier-denied-final.png"
+      ]
     },
     {
       "source": "src/app/(app)/customers/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/directory-verification.json",
+        "artifacts/ux/espresso/screenshots/customers-desktop-dark.png",
+        "artifacts/ux/espresso/screenshots/customers-mobile-dark.png",
+        "artifacts/ux/espresso/screenshots/customer-detail-mobile-dark.png",
+        "artifacts/ux/espresso/screenshots/customer-forbidden-retry-mobile-final.png",
+        "artifacts/ux/espresso/screenshots/customer-staff-denied-final.png",
+        "artifacts/ux/espresso/screenshots/customer-cashier-denied-final.png",
+        "artifacts/ux/espresso/screenshots/customers-desktop-dark-final.png",
+        "artifacts/ux/espresso/screenshots/customers-mobile-dark-final.png"
+      ]
     },
     {
       "source": "src/app/(app)/dashboard/page.tsx",
@@ -60,6 +74,9 @@
         "artifacts/ux/espresso/screenshots/dashboard-desktop-light.png",
         "artifacts/ux/espresso/screenshots/dashboard-loading-desktop-light.png",
         "artifacts/ux/espresso/screenshots/dashboard-production-desktop-light.png"
+      ],
+      "observations": [
+        "During the directory role matrix, plain /login reached /dashboard for STAFF/CASHIER and dashboard data was denied. Investigate role landing behavior in the authentication family before final acceptance."
       ]
     },
     {
@@ -404,33 +421,60 @@
     },
     {
       "source": "src/app/(app)/stores/[id]/compliance/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/directory-verification.json",
+        "artifacts/ux/espresso/screenshots/store-compliance-desktop-dark.png",
+        "artifacts/ux/espresso/screenshots/store-compliance-mobile-dark.png",
+        "artifacts/ux/espresso/screenshots/store-compliance-manager-light-en.png"
+      ]
     },
     {
       "source": "src/app/(app)/stores/[id]/hardware/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/directory-verification.json",
+        "artifacts/ux/espresso/screenshots/store-hardware-desktop-dark.png",
+        "artifacts/ux/espresso/screenshots/store-hardware-mobile-kg.png",
+        "artifacts/ux/espresso/screenshots/store-hardware-staff-read-only.png"
+      ]
     },
     {
       "source": "src/app/(app)/stores/new/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/directory-verification.json",
+        "artifacts/ux/espresso/screenshots/store-form-desktop-light-en-final.png"
+      ]
     },
     {
       "source": "src/app/(app)/stores/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/directory-verification.json",
+        "artifacts/ux/espresso/screenshots/stores-desktop-dark.png"
+      ]
     },
     {
       "source": "src/app/(app)/suppliers/new/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/directory-verification.json",
+        "artifacts/ux/espresso/screenshots/supplier-form-desktop-dark.png",
+        "artifacts/ux/espresso/screenshots/supplier-form-mobile-dark.png"
+      ]
     },
     {
       "source": "src/app/(app)/suppliers/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/directory-verification.json",
+        "artifacts/ux/espresso/screenshots/suppliers-desktop-light-en-final.png",
+        "artifacts/ux/espresso/screenshots/suppliers-mobile-light-en-final.png",
+        "artifacts/ux/espresso/screenshots/supplier-confirmation-mobile-final.png",
+        "artifacts/ux/espresso/screenshots/suppliers-mobile-dark-kg.png",
+        "artifacts/ux/espresso/screenshots/suppliers-mobile-dark-final.png"
+      ]
     },
     {
       "source": "src/app/(guide)/help/[category]/[guide]/page.tsx",
@@ -485,7 +529,10 @@
     {
       "source": "src/app/login/page.tsx",
       "status": "pending",
-      "evidence": []
+      "evidence": [],
+      "observations": [
+        "During the directory role matrix, plain /login reached /dashboard for STAFF/CASHIER and dashboard data was denied. Investigate role landing behavior in the authentication family before final acceptance."
+      ]
     },
     {
       "source": "src/app/loyalty/card/page.tsx",
@@ -581,8 +628,11 @@
     },
     {
       "source": "src/components/ui/dropdown-menu.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "tests/unit/row-actions-focus.test.tsx",
+        "docs/espresso/directory-verification.json"
+      ]
     },
     {
       "source": "src/components/ui/empty-state.tsx",
@@ -614,7 +664,9 @@
       "status": "in_review",
       "evidence": [
         "artifacts/ux/espresso/document-unit-isolated.log",
-        "artifacts/ux/espresso/document-focus-unit.log"
+        "artifacts/ux/espresso/document-focus-unit.log",
+        "tests/unit/row-actions-focus.test.tsx",
+        "docs/espresso/directory-verification.json"
       ]
     },
     {
@@ -719,7 +771,7 @@
     "customerWorkflows": "Preserve the customer-requested two-column operational layouts and established interactions. The visual reference does not authorize replacing them; see AGENTS.md and redesign-change-audit.json."
   },
   "progress": {
-    "stage": "Redesign in progress; customer operational layouts restored and other composition changes disclosed",
+    "stage": "directory-workflows-and-focus-checked-full-redesign-still-in-progress",
     "foundation": [
       "Pinned MIT Espresso semantic tokens and component CSS",
       "Self-hosted Inter Variable",
@@ -831,6 +883,13 @@
         "evidence": [
           "docs/espresso/redesign-change-audit.json"
         ]
+      },
+      {
+        "check": "Customer, supplier and store directories preserve their normal composition; error and menu focus recovery",
+        "result": "Isolated real UI create/edit/search, customer export controls, directory aliases, mobile cards, store printing settings, manager store scope, read-only and forbidden role states. Confirmation cancellation restores More. Final creation alias consumes add=1 and does not reopen on search changes. Existing normal composition retained.",
+        "evidence": [
+          "docs/espresso/directory-verification.json"
+        ]
       }
     ],
     "remaining": [
@@ -841,13 +900,14 @@
       "Modal, dropdown, focus, keyboard, loading, empty, retry and recovery flows across page families",
       "Broader database integration regression and final production smoke on the isolated app",
       "Audit autofocus dialogs across other route families for explicit return-focus targets; saved-view forms now have explicit trigger refs.",
-      "Review the explicitly disclosed product-form and navigation composition changes with the human; do not treat test success as workflow approval."
+      "Review the explicitly disclosed product-form and navigation composition changes with the human; do not treat test success as workflow approval.",
+      "Investigate the observed STAFF/CASHIER plain-login landing on /dashboard in the authentication family; this checkpoint does not claim that flow is fixed."
     ],
     "unitTests": {
-      "files": 254,
-      "tests": 1856,
-      "status": "passed after layout restoration",
-      "evidence": "artifacts/ux/espresso/restore-layout-unit.log",
+      "files": 256,
+      "tests": 1863,
+      "status": "passed after directory fixes",
+      "evidence": "artifacts/ux/espresso/directories-unit-final.log",
       "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit"
     },
     "databaseRegression": {
@@ -858,6 +918,16 @@
       "database": "bazaar_hardening_ci",
       "postgresPort": 55440,
       "providers": "disabled"
+    },
+    "directoryDatabaseRegression": {
+      "files": 5,
+      "tests": 36,
+      "status": "passed",
+      "evidence": "artifacts/ux/espresso/directories-db.log",
+      "database": "bazaar_hardening_ci",
+      "postgresPort": 55440,
+      "providers": "disabled",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts directories"
     }
   }
 }

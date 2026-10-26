@@ -1,5 +1,5 @@
 {
-  "status": "customer-operational-layouts-restored-full-redesign-in-progress",
+  "status": "customer-operational-layouts-restored-directory-checkpoint-in-review-full-redesign-in-progress",
   "branch": "codex/playground",
   "reference": "Frappe Framework Espresso e8d41dd0061a32ee781caefe5d0b0d2bb7c15362",
   "checks": [
@@ -89,6 +89,27 @@
       "command": "CUA geometry and selection checks",
       "result": "Original simultaneous two-column layouts confirmed for all four operational screens; receiving, transfer and write-off selection works; mobile receiving 390px without page overflow",
       "evidence": "docs/espresso/redesign-change-audit.json"
+    },
+    {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts directories",
+      "result": "5 files, 36 database integration tests passed with disabled providers on a separate resettable local database",
+      "log": "artifacts/ux/espresso/directories-db.log"
+    },
+    {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
+      "result": "256 files, 1863 tests passed after directory and focus fixes",
+      "log": "artifacts/ux/espresso/directories-unit-final.log"
+    },
+    {
+      "command": "pnpm exec vitest run tests/unit/customer-directory-state.test.tsx tests/unit/row-actions-focus.test.tsx",
+      "result": "2 files, 7 focused recovery/permission/focus tests passed",
+      "log": "artifacts/ux/espresso/directory-recovery-unit.log"
+    },
+    {
+      "command": "UX_SUITE=espresso CIRCLE_NODE_TOTAL=3 NODE_OPTIONS=--max-old-space-size=6144 node --import tsx scripts/ux/build.ts",
+      "result": "Final directory build passed, including type/lint checks and 125 static pages; one-shot creation and role/focus recovery verified through CUA",
+      "log": "artifacts/ux/espresso/build-directories-final.log",
+      "evidence": "docs/espresso/directory-verification.json"
     }
   ],
   "environment": {
@@ -113,5 +134,6 @@
     "The browser fixture database was not reset; destructive integration checks used a separately created allowlisted local database, with external providers disabled."
   ],
   "correction": "Warehouse column and interaction rearrangements from 5a1e7ac were rejected by the human and restored. Historical checks do not validate customer workflow suitability.",
-  "currentAudit": "docs/espresso/redesign-change-audit.json"
+  "currentAudit": "docs/espresso/redesign-change-audit.json",
+  "currentDirectoryCheckpoint": "docs/espresso/directory-verification.json"
 }

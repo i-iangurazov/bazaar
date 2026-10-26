@@ -1,6 +1,6 @@
 {
   "status": "operational-layouts-restored-other-redesign-changes-explicitly-disclosed",
-  "scope": "Redesign changes since 1fcdfd4, including the current worktree; not an audit of every earlier playground improvement.",
+  "scope": "Redesign changes since 1fcdfd4, including the directory verification checkpoint; not an audit of every earlier playground improvement.",
   "humanCorrection": "Customer-requested two-column operational layouts must be preserved. A difference from ERPNext is not evidence of a defect.",
   "restored": [
     {
@@ -31,7 +31,7 @@
   "removed": [
     "Collapsed product picker and single-column stock document layout",
     "Relocation of desktop stock posting actions from summary to page header",
-    "Uncommitted stock-count, movement-detail, list, row-action and print-toolbar changes from the interrupted iteration"
+    "Preliminary uncommitted stock-count, movement-detail, list, row-action and print-toolbar changes from the interrupted iteration were discarded. Independently reproduced focus fixes are tracked in currentCheckpoint."
   ],
   "stillPresentLayoutChanges": [
     {
@@ -123,12 +123,29 @@
         "src/components/ui/popover.tsx",
         "src/components/ui/modal.tsx"
       ]
+    },
+    {
+      "area": "Row action menu focus",
+      "changes": "The actual More button is the menu trigger. Escape restores its focus; actions that open confirmations run after menu focus restoration, so cancelling a confirmation returns to More. Action order, button dimensions and tooltip are retained.",
+      "sources": [
+        "src/components/row-actions.tsx"
+      ],
+      "evidence": "docs/espresso/directory-verification.json"
+    },
+    {
+      "area": "Customer error and permission presentation",
+      "changes": "Failed customer queries show an error alert and retry instead of a false empty list. Creation follows the existing manageCustomers policy and assigned-store selection. The add=1 creation command is consumed once while preserving store and filters. Server permissions are unchanged.",
+      "sources": [
+        "src/app/(app)/customers/page.tsx"
+      ],
+      "evidence": "docs/espresso/directory-verification.json"
     }
   ],
   "appearanceChanges": [
     "Espresso neutral colors and Bazaar blue; Inter font; Lucide icons",
     "Control heights, table density, spacing, borders, shadows and radii changed across shared controls",
-    "Russian/Kyrgyz/English saved-view label and English product copy corrections"
+    "Russian/Kyrgyz/English saved-view label and English product copy corrections",
+    "Localized Suppliers mobile title and hardware breadcrumb, corrected English directory/store/compliance copy and Kyrgyz directory heading. Normal directory and store form composition is retained."
   ],
   "serverScopeEvidence": {
     "command": "git diff --name-only 1fcdfd4 -- src/server prisma src/app/api",
@@ -149,7 +166,7 @@
       },
       {
         "path": "src/app/(app)/customers/page.tsx",
-        "classification": "jsx-style-attributes-only"
+        "classification": "requires-semantic-review"
       },
       {
         "path": "src/app/(app)/dashboard/page.tsx",
@@ -357,7 +374,7 @@
       },
       {
         "path": "src/components/page-breadcrumbs.tsx",
-        "classification": "jsx-style-attributes-only"
+        "classification": "requires-semantic-review"
       },
       {
         "path": "src/components/page-header.tsx",
@@ -410,6 +427,10 @@
       {
         "path": "src/components/responsive-data-list.tsx",
         "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/row-actions.tsx",
+        "classification": "requires-semantic-review"
       },
       {
         "path": "src/components/saved-table-views.tsx",
@@ -608,5 +629,6 @@
     "The unrequested layout acceptance claims in the previous inventory checkpoint are withdrawn.",
     "No further customer workflow rearrangements are authorized by a mere visual difference from ERPNext."
   ],
-  "delivery": "codex/playground only; no main merge or production deployment"
+  "delivery": "codex/playground only; no main merge or production deployment",
+  "currentCheckpoint": "docs/espresso/directory-verification.json"
 }

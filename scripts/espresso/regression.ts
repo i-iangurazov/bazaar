@@ -7,7 +7,24 @@ import { uxEnvironment } from "../ux/environment";
 
 if (process.env.UX_SUITE !== "espresso") throw new Error("Set UX_SUITE=espresso explicitly");
 const suite = process.argv[2] ?? "database";
-if (suite !== "database" && suite !== "unit") throw new Error("Choose database or unit");
+const suites = {
+  database: [
+    "tests/integration/products.test.ts",
+    "tests/integration/inventory.test.ts",
+    "tests/integration/inventory-correctness.test.ts",
+  ],
+  directories: [
+    "tests/integration/customers.test.ts",
+    "tests/integration/customer-purchase-report.test.ts",
+    "tests/integration/stores.test.ts",
+    "tests/integration/store-isolation.test.ts",
+    "tests/integration/b0-agent-3-access-cache-p0.test.ts",
+  ],
+  unit: ["tests/unit"],
+} as const;
+if (!Object.prototype.hasOwnProperty.call(suites, suite)) {
+  throw new Error("Choose database, directories or unit");
+}
 const require = createRequire(import.meta.url);
 createRequire(require.resolve("next/package.json"))("@next/env").loadEnvConfig(
   process.cwd(),
@@ -39,13 +56,7 @@ const result = spawnSync(
     "exec",
     "vitest",
     "run",
-    ...(suite === "unit"
-      ? ["tests/unit"]
-      : [
-          "tests/integration/products.test.ts",
-          "tests/integration/inventory.test.ts",
-          "tests/integration/inventory-correctness.test.ts",
-        ]),
+    ...suites[suite as keyof typeof suites],
   ],
   { env, stdio: "inherit" },
 );

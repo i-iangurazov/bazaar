@@ -1094,6 +1094,7 @@
     "productMovements": "Товарлардын кыймылы",
     "counts": "Эсептөөлөр",
     "compliance": "Талаптар",
+    "hardware": "Жабдуулар",
     "bazaarCatalog": "bazaar-каталог",
     "mMarket": "bazaar + MMarket",
     "bakaiStore": "bazaar + Bakai Store",
@@ -4931,7 +4932,7 @@
   "suppliers": {
     "title": "Жеткирүүчүлөр",
     "subtitle": "Жеткирүүчүлөрдүн байланыштары жана жазуулар.",
-    "directory": "Справочник",
+    "directory": "Жеткирүүчүлөрдүн тизмеси",
     "newSupplier": "Жаңы жеткирүүчү",
     "editSupplier": "Жеткирүүчүнү түзөтүү",
     "addSupplier": "Жеткирүүчү кошуу",

@@ -4,7 +4,9 @@ import React, { useRef, useState, type ComponentType } from "react";
 import Link from "next/link";
 
 import { MoreIcon } from "@/components/icons";
+import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,19 +35,12 @@ type RowActionsProps = {
 
 export const RowActions = ({ actions, maxInline = 2, moreLabel, className }: RowActionsProps) => {
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const pendingActionRef = useRef<(() => void) | null>(null);
 
   const runAfterMenuClose = (action?: () => void) => {
     if (!action) return;
     pendingActionRef.current = action;
-  };
-
-  const handleMenuOpenChange = (open: boolean) => {
-    setMenuOpen(open);
-    if (open || !pendingActionRef.current) return;
-    const action = pendingActionRef.current;
-    pendingActionRef.current = null;
-    queueMicrotask(action);
   };
 
   const resolveVariant = (variant?: string): "primary" | "secondary" | "ghost" | "danger" => {
@@ -133,13 +128,37 @@ export const RowActions = ({ actions, maxInline = 2, moreLabel, className }: Row
         />
       ))}
       {menuActions.length ? (
-        <DropdownMenu open={menuOpen} onOpenChange={handleMenuOpenChange}>
-          <DropdownMenuTrigger asChild>
-            <span>
-              <IconButton icon={MoreIcon} label={moreLabel} variant="ghost" />
-            </span>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">{menuActions.map(renderMenuAction)}</DropdownMenuContent>
+        <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  ref={menuTriggerRef}
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label={moreLabel}
+                  className="h-10 w-10 md:h-8 md:w-8"
+                >
+                  <MoreIcon className="h-4 w-4" aria-hidden />
+                </Button>
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent>{moreLabel}</TooltipContent>
+          </Tooltip>
+          <DropdownMenuContent
+            align="end"
+            onCloseAutoFocus={(event) => {
+              const action = pendingActionRef.current;
+              if (!action) return;
+              event.preventDefault();
+              pendingActionRef.current = null;
+              menuTriggerRef.current?.focus();
+              queueMicrotask(action);
+            }}
+          >
+            {menuActions.map(renderMenuAction)}
+          </DropdownMenuContent>
         </DropdownMenu>
       ) : null}
     </div>
