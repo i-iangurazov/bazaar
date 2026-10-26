@@ -10,6 +10,7 @@ import { CustomerOrderStatus } from "@prisma/client";
 import type { ColumnDef, OnChangeFn, SortingState } from "@tanstack/react-table";
 
 import { PageHeader } from "@/components/page-header";
+import { QueryErrorState } from "@/components/query-error-state";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -715,6 +716,7 @@ const ProductMovementsPage = () => {
           <div className="relative">
             <SearchInput
               id="movement-search"
+              aria-label={tCommon("search")}
               value={search}
               onValueChange={(value) =>
                 setFilterParam("search", normalizeOptionalParam(value))
@@ -725,7 +727,7 @@ const ProductMovementsPage = () => {
         </div>
         <div className="space-y-1">
           <Label>{t("dateRange")}</Label>
-          <div className="rounded-lg border border-input bg-card px-2 py-1 shadow-sm">
+          <div className="rounded-lg border border-input bg-card px-2 py-1 shadow-none">
             <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1">
               <Input
                 type="date"
@@ -749,12 +751,12 @@ const ProductMovementsPage = () => {
           </div>
         </div>
         <div className="space-y-1">
-          <Label>{t("store")}</Label>
+          <Label htmlFor="movement-store-filter">{t("store")}</Label>
           <Select
             value={storeId}
             onValueChange={(value) => setFilterParam("storeId", value === allValue ? null : value)}
           >
-            <SelectTrigger>
+            <SelectTrigger id="movement-store-filter">
               <SelectValue placeholder={t("allStores")} />
             </SelectTrigger>
             <SelectContent>
@@ -768,12 +770,12 @@ const ProductMovementsPage = () => {
           </Select>
         </div>
         <div className="space-y-1">
-          <Label>{t("documentType")}</Label>
+          <Label htmlFor="movement-type-filter">{t("documentType")}</Label>
           <Select
             value={type}
             onValueChange={(value) => setFilterParam("type", value === allValue ? null : value)}
           >
-            <SelectTrigger data-testid="movement-type-filter">
+            <SelectTrigger id="movement-type-filter" data-testid="movement-type-filter">
               <SelectValue placeholder={t("allTypes")} />
             </SelectTrigger>
             <SelectContent>
@@ -787,12 +789,12 @@ const ProductMovementsPage = () => {
           </Select>
         </div>
         <div className="space-y-1">
-          <Label>{t("statusLabel")}</Label>
+          <Label htmlFor="movement-status-filter">{t("statusLabel")}</Label>
           <Select
             value={status}
             onValueChange={(value) => setFilterParam("status", value === allValue ? null : value)}
           >
-            <SelectTrigger>
+            <SelectTrigger id="movement-status-filter">
               <SelectValue placeholder={t("allStatuses")} />
             </SelectTrigger>
             <SelectContent>
@@ -806,7 +808,7 @@ const ProductMovementsPage = () => {
           </Select>
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/55 bg-card/70 p-2 shadow-inner shadow-foreground/[0.015]">
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-2 shadow-none">
         <Button
           type="button"
           variant="secondary"
@@ -837,17 +839,17 @@ const ProductMovementsPage = () => {
         </Button>
       </div>
       {additionalFiltersOpen ? (
-        <div className="rounded-lg border border-border/60 bg-card/80 p-3 shadow-sm">
+        <div className="rounded-lg border border-border bg-card p-3 shadow-none">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
             <div className="space-y-1">
-              <Label>{t("paymentStatus")}</Label>
+              <Label htmlFor="movement-payment-filter">{t("paymentStatus")}</Label>
               <Select
                 value={paymentStatus}
                 onValueChange={(value) => {
                   setFilterParam("paymentStatus", value === allValue ? null : value);
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger id="movement-payment-filter">
                   <SelectValue placeholder={t("allPayments")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -861,14 +863,14 @@ const ProductMovementsPage = () => {
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>{t("archiveFilter")}</Label>
+              <Label htmlFor="movement-archive-filter">{t("archiveFilter")}</Label>
               <Select
                 value={archiveMode}
                 onValueChange={(value) => {
                   setFilterParam("archiveMode", value === "ACTIVE" ? null : value);
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger id="movement-archive-filter">
                   <SelectValue placeholder={archiveModeLabel("ACTIVE")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -881,14 +883,14 @@ const ProductMovementsPage = () => {
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>{t("orderStatus")}</Label>
+              <Label htmlFor="movement-order-status-filter">{t("orderStatus")}</Label>
               <Select
                 value={orderStatus}
                 onValueChange={(value) => {
                   setFilterParam("orderStatus", value === allValue ? null : value);
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger id="movement-order-status-filter">
                   <SelectValue placeholder={t("allOrderStatuses")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -980,12 +982,6 @@ const ProductMovementsPage = () => {
         filters={filterControls}
       />
 
-      {movementQuery.error ? (
-        <div className="mb-4 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
-          {translateError(tErrors, movementQuery.error)}
-        </div>
-      ) : null}
-
       <Card className="overflow-hidden">
         <CardHeader className="flex flex-row items-center justify-between gap-3">
           <CardTitle>{t("tableTitle")}</CardTitle>
@@ -994,6 +990,9 @@ const ProductMovementsPage = () => {
           </span>
         </CardHeader>
         <CardContent className="min-w-0 overflow-hidden">
+          {movementQuery.error ? (
+            <QueryErrorState error={movementQuery.error} onRetry={() => void movementQuery.refetch()} />
+          ) : (
           <ResponsiveDataList
             items={items}
             getKey={(movement) => movement.id}
@@ -1032,7 +1031,7 @@ const ProductMovementsPage = () => {
               />
             )}
             renderMobile={(movement) => (
-              <div className="rounded-lg border border-border/65 bg-card p-3 shadow-sm">
+              <div className="rounded-lg border border-border bg-card p-3 shadow-none">
                 <div className="flex items-start justify-between gap-3">
                   {renderDocument(movement)}
                   <Badge variant={statusVariant(movement.status)}>
@@ -1103,6 +1102,7 @@ const ProductMovementsPage = () => {
               </div>
             )}
           />
+          )}
           {movementQuery.isLoading && items.length ? (
             <p className="mt-4 text-sm text-muted-foreground">{tCommon("loading")}</p>
           ) : null}

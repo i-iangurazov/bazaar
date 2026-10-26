@@ -1,5 +1,5 @@
 {
-  "status": "customer-operational-layouts-preserved-settings-checkpoint-in-review-full-redesign-in-progress",
+  "status": "customer-operational-layouts-preserved-warehouse-documents-checkpoint-in-review-full-redesign-in-progress",
   "branch": "codex/playground",
   "reference": "Frappe Framework Espresso e8d41dd0061a32ee781caefe5d0b0d2bb7c15362",
   "checks": [
@@ -204,6 +204,57 @@
       "command": "CUA settings replay on localhost:3122",
       "result": "36 settings route/viewport/theme cases, KG category filter retention, admin/manager/staff/cashier checks, real unit/attribute/template persistence and corrected desktop/mobile paper contrast. Initial visual states and selected functional paths only.",
       "evidence": "docs/espresso/settings-verification.json"
+    },
+    {
+      "files": 260,
+      "tests": 1911,
+      "result": "passed",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
+      "log": "artifacts/ux/espresso/journal-all-unit.log",
+      "evidence": "docs/espresso/warehouse-documents-verification.json"
+    },
+    {
+      "files": 4,
+      "tests": 50,
+      "result": "passed after correcting isolated database locale; includes stock-count selection, scanner idempotency, hidden-product/store rejection, count apply, ledger correctness, receiving/transfer/write-off edits and archive",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts warehouse",
+      "log": "artifacts/ux/espresso/journal-warehouse-db-final.log",
+      "evidence": "docs/espresso/warehouse-documents-verification.json"
+    },
+    {
+      "files": 3,
+      "tests": 87,
+      "result": "passed after locale repair; products and warehouse regression",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts database",
+      "log": "artifacts/ux/espresso/warehouse-checkpoint-catalog-db.log",
+      "note": "Overlaps inventory/inventory-correctness files in the 50-test suite; these are not 137 unique tests.",
+      "evidence": "docs/espresso/warehouse-documents-verification.json"
+    },
+    {
+      "result": "passed; final build also checks types",
+      "log": "artifacts/ux/espresso/journal-typecheck-final.log",
+      "evidence": "docs/espresso/warehouse-documents-verification.json"
+    },
+    {
+      "result": "passed without warnings; final build also runs lint",
+      "log": "artifacts/ux/espresso/journal-lint-final.log",
+      "evidence": "docs/espresso/warehouse-documents-verification.json"
+    },
+    {
+      "result": "passed",
+      "log": "artifacts/ux/espresso/journal-i18n.log",
+      "evidence": "docs/espresso/warehouse-documents-verification.json"
+    },
+    {
+      "result": "passed with final application sources, type/lint and 125 static pages",
+      "command": "UX_SUITE=espresso CIRCLE_NODE_TOTAL=3 NODE_OPTIONS=--max-old-space-size=6144 node --import tsx scripts/ux/build.ts",
+      "log": "artifacts/ux/espresso/build-warehouse-documents-final.log",
+      "evidence": "docs/espresso/warehouse-documents-verification.json"
+    },
+    {
+      "command": "CUA normal UI warehouse replay and Prisma fixture readback",
+      "result": "Original customer columns retained; selected filters, count creation/edit/reload, all four role controls and screen print panning checked. All ledger/snapshot/cost rows unchanged; count not applied.",
+      "evidence": "docs/espresso/warehouse-documents-verification.json"
     }
   ],
   "environment": {
@@ -225,11 +276,13 @@
   "delivery": "Local review checkpoint only; not a full redesign completion; no main merge, main push or deployment",
   "infrastructureNotes": [
     "Do not run the prebuild Prisma client generator concurrently with tests or a running server that loads the same generated library. One overlapping run passed its test assertions but failed with an unhandled partial-library load; the sequential rerun completed 254 files / 1854 tests without that error.",
-    "The browser fixture database was not reset; destructive integration checks used a separately created allowlisted local database, with external providers disabled."
+    "The browser fixture database was not reset; destructive integration checks used a separately created allowlisted local database, with external providers disabled.",
+    "Local PostgreSQL C locale was reproduced as the cause of two Cyrillic-search test failures. Both isolated QA databases were preserved into ICU und databases with all-table row-hash equality and retained backups; regression runner checks the Unicode contract. See warehouse checkpoint."
   ],
   "correction": "Warehouse column and interaction rearrangements from 5a1e7ac were rejected by the human and restored. Historical checks do not validate customer workflow suitability.",
   "currentAudit": "docs/espresso/redesign-change-audit.json",
   "currentDirectoryCheckpoint": "docs/espresso/directory-verification.json",
   "currentAuthenticationCheckpoint": "docs/espresso/auth-verification.json",
-  "currentSettingsCheckpoint": "docs/espresso/settings-verification.json"
+  "currentSettingsCheckpoint": "docs/espresso/settings-verification.json",
+  "currentWarehouseCheckpoint": "docs/espresso/warehouse-documents-verification.json"
 }

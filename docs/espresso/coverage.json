@@ -113,23 +113,31 @@
     },
     {
       "source": "src/app/(app)/inventory/counts/new/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/warehouse-documents-verification.json"
+      ]
     },
     {
       "source": "src/app/(app)/inventory/counts/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/warehouse-documents-verification.json"
+      ]
     },
     {
       "source": "src/app/(app)/inventory/movements/[id]/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/warehouse-documents-verification.json"
+      ]
     },
     {
       "source": "src/app/(app)/inventory/movements/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/warehouse-documents-verification.json"
+      ]
     },
     {
       "source": "src/app/(app)/inventory/page.tsx",
@@ -141,8 +149,10 @@
     },
     {
       "source": "src/app/(app)/inventory/receiving/[id]/edit/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/warehouse-documents-verification.json"
+      ]
     },
     {
       "source": "src/app/(app)/inventory/receiving/page.tsx",
@@ -154,8 +164,10 @@
     },
     {
       "source": "src/app/(app)/inventory/transfers/[id]/edit/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/warehouse-documents-verification.json"
+      ]
     },
     {
       "source": "src/app/(app)/inventory/transfers/page.tsx",
@@ -167,8 +179,10 @@
     },
     {
       "source": "src/app/(app)/inventory/write-offs/[id]/edit/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/warehouse-documents-verification.json"
+      ]
     },
     {
       "source": "src/app/(app)/inventory/write-offs/page.tsx",
@@ -541,8 +555,10 @@
     },
     {
       "source": "src/app/inventory/movements/[id]/print/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/warehouse-documents-verification.json"
+      ]
     },
     {
       "source": "src/app/invite/[token]/page.tsx",
@@ -802,12 +818,12 @@
     }
   ],
   "verification": {
-    "desktop": "partial: 39 route sources have checkpoint evidence; latest settings review includes all 12 at 1440px in dark RU/light EN. Final all-route acceptance remains pending.",
-    "mobile": "partial: latest settings family includes all 12 initial states at 390px in dark RU, plus KG categories; earlier product, inventory, directory, Baam and auth states recorded separately.",
-    "themes": "partial: settings family desktop light/dark, mobile dark; full route/theme/state matrix remains pending.",
-    "rolesAndScopes": "partial: product flows checked under all four roles; manager store scoping verified; other routes/plans/currencies pending",
-    "functionalRegression": "Latest settings checkpoint: 1903 unit tests before final style-only mobile paper refinement, 30 focused tests after it, and 47 real DB tests. Browser fixtures are a separate DB; complete application acceptance remains pending.",
-    "productionBuild": "passed with final settings/mobile paper sources, type/lint and 125 static pages; full redesign remains in progress."
+    "desktop": "partial: 47 of 97 route sources have checkpoint evidence; 50 remain pending. No routes fully accepted.",
+    "mobile": "partial: warehouse journal/detail/count/edit wrappers inspected at 390px in RU/dark, A4 preview viewport measured; earlier family checkpoints retained. Full matrix remains pending.",
+    "themes": "partial: warehouse RU dark desktop/mobile, EN light desktop and selected KG light states; full route/state/theme matrix pending.",
+    "rolesAndScopes": "partial: existing admin/manager/staff/cashier warehouse controls checked, manager store scope retained; all plans/currencies and every role/route permutation pending.",
+    "functionalRegression": "Latest warehouse checkpoint: 1911 unit tests passed; 50 warehouse DB tests and an overlapping 87-test product/inventory suite passed after correcting isolated DB Unicode locale. Browser fixtures use a separate DB; stock balances and costs are preserved, synthetic count remains unapplied.",
+    "productionBuild": "passed with final application sources, type/lint and 125 static pages"
   },
   "requirements": {
     "visualFidelity": "Match Espresso typography, palette, surfaces and components while preserving customer workflows; analogous screen comparison must respect the human-confirmed operational layouts.",
@@ -819,7 +835,7 @@
     "customerWorkflows": "Preserve the customer-requested two-column operational layouts and established interactions. The visual reference does not authorize replacing them; see AGENTS.md and redesign-change-audit.json."
   },
   "progress": {
-    "stage": "settings-two-theme-and-mobile-review-checked-full-redesign-in-progress",
+    "stage": "warehouse-documents-checkpoint-in-review-full-redesign-in-progress",
     "foundation": [
       "Pinned MIT Espresso semantic tokens and component CSS",
       "Self-hosted Inter Variable",
@@ -952,6 +968,13 @@
         "evidence": [
           "docs/espresso/settings-verification.json"
         ]
+      },
+      {
+        "check": "Warehouse journal, count list/create alias and document edit/print wrappers",
+        "result": "Eight route sources reviewed; original 2:3 and 2:1 customer columns preserved. Named filters and query recovery corrected, mobile A4 product-column collapse corrected. Real UI count creation/edit, reload, role/store checks and stock readback recorded.",
+        "evidence": [
+          "docs/espresso/warehouse-documents-verification.json"
+        ]
       }
     ],
     "remaining": [
@@ -965,14 +988,17 @@
       "Review the explicitly disclosed product-form and navigation composition changes with the human; do not treat test success as workflow approval.",
       "Final authentication acceptance: successful invite/signup/onboarding and reset-token lifecycle under isolated tests; live SMTP and browser credential entry are not claimed by the current checkpoint.",
       "Complete the legacy English copy audit; settings-verification.json lists observed unfinished template/import labels.",
-      "Complete bespoke printing/import accessible control labels, successful upload/invitation browser paths and remaining settings state/plan permutations; current in_review status is not full acceptance."
+      "Complete bespoke printing/import accessible control labels, successful upload/invitation browser paths and remaining settings state/plan permutations; current in_review status is not full acceptance.",
+      "Finish warehouse acceptance permutations listed in warehouse-documents-verification.json, including native date-picker/multi-page navigation; current in_review evidence is not full acceptance."
     ],
     "unitTests": {
-      "files": 259,
-      "tests": 1903,
-      "status": "259 files / 1903 tests passed after all query-recovery corrections, before the final style-only mobile-paper refinement",
-      "evidence": "artifacts/ux/espresso/settings-all-unit.log",
-      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit"
+      "files": 260,
+      "tests": 1911,
+      "result": "passed",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
+      "log": "artifacts/ux/espresso/journal-all-unit.log",
+      "status": "passed",
+      "evidence": "artifacts/ux/espresso/journal-all-unit.log"
     },
     "databaseRegression": {
       "files": 3,
@@ -1008,6 +1034,21 @@
       "database": "bazaar_hardening_ci on 127.0.0.1:55440; separate from browser fixtures",
       "log": "artifacts/ux/espresso/settings-db.log",
       "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts settings"
+    },
+    "warehouseDatabaseRegression": {
+      "files": 4,
+      "tests": 50,
+      "result": "passed after correcting isolated database locale; includes stock-count selection, scanner idempotency, hidden-product/store rejection, count apply, ledger correctness, receiving/transfer/write-off edits and archive",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts warehouse",
+      "log": "artifacts/ux/espresso/journal-warehouse-db-final.log"
+    },
+    "catalogDatabaseAfterLocaleRepair": {
+      "files": 3,
+      "tests": 87,
+      "result": "passed after locale repair; products and warehouse regression",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts database",
+      "log": "artifacts/ux/espresso/warehouse-checkpoint-catalog-db.log",
+      "note": "Overlaps inventory/inventory-correctness files in the 50-test suite; these are not 137 unique tests."
     }
   }
 }

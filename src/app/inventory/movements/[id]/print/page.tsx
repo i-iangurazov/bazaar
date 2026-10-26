@@ -121,7 +121,14 @@ const MovementPrintPage = async ({ params, searchParams }: PageProps) => {
           printHint: t("printPageHint"),
         }}
       />
-      <MovementPrintDocument document={document} labels={labels} locale={locale} />
+      <div
+        className="movement-print-viewport w-full overflow-x-auto focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring print:overflow-visible"
+        role="region"
+        aria-label={t("printPreviewLabel")}
+        tabIndex={0}
+      >
+        <MovementPrintDocument document={document} labels={labels} locale={locale} />
+      </div>
     </main>
   );
 };

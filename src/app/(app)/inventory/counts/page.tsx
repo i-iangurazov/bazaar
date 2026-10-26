@@ -10,6 +10,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 import { PageHeader } from "@/components/page-header";
+import { QueryErrorState } from "@/components/query-error-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -219,7 +220,7 @@ const StockCountsPage = () => {
                   setPage(1);
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger aria-label={tCommon("store")}>
                   <SelectValue placeholder={tCommon("selectStore")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -239,7 +240,7 @@ const StockCountsPage = () => {
                   setPage(1);
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger aria-label={t("status")}>
                   <SelectValue placeholder={t("statusAll")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -255,16 +256,16 @@ const StockCountsPage = () => {
         }
       />
 
-      {countsQuery.error ? (
-        <p className="mb-4 text-sm text-danger">{translateError(tErrors, countsQuery.error)}</p>
-      ) : null}
-
       <Card className="overflow-hidden">
         <CardHeader>
           <CardTitle>{t("listTitle")}</CardTitle>
         </CardHeader>
         <CardContent>
-          {countsQuery.isLoading ? (
+          {storesQuery.error ? (
+            <QueryErrorState error={storesQuery.error} onRetry={() => void storesQuery.refetch()} />
+          ) : !storeId && !storesQuery.isLoading ? (
+            <div className="bazaar-doc-empty min-h-[12rem]">{tCommon("selectStore")}</div>
+          ) : storesQuery.isLoading || countsQuery.isLoading ? (
             <div className="space-y-2" data-stock-counts-skeleton>
               {Array.from({ length: 5 }).map((_, index) => (
                 <div
@@ -280,6 +281,8 @@ const StockCountsPage = () => {
                 </div>
               ))}
             </div>
+          ) : countsQuery.error ? (
+            <QueryErrorState error={countsQuery.error} onRetry={() => void countsQuery.refetch()} />
           ) : counts.length ? (
             <ResponsiveDataList
               items={counts}
@@ -345,7 +348,7 @@ const StockCountsPage = () => {
                 </div>
               )}
               renderMobile={(count) => (
-                <div className="rounded-lg border border-border/65 bg-card/95 p-3 shadow-sm">
+                <div className="rounded-lg border border-border bg-card p-3 shadow-none">
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <p className="text-sm font-medium text-foreground">{count.code}</p>

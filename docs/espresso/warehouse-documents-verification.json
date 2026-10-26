@@ -1,0 +1,354 @@
+{
+  "status": "in-review-warehouse-documents-checkpoint-full-redesign-in-progress",
+  "branch": "codex/playground",
+  "baseline": "3e6a0fd",
+  "scope": [
+    "src/app/(app)/inventory/counts/new/page.tsx",
+    "src/app/(app)/inventory/counts/page.tsx",
+    "src/app/(app)/inventory/movements/page.tsx",
+    "src/app/(app)/inventory/movements/[id]/page.tsx",
+    "src/app/(app)/inventory/receiving/[id]/edit/page.tsx",
+    "src/app/(app)/inventory/transfers/[id]/edit/page.tsx",
+    "src/app/(app)/inventory/write-offs/[id]/edit/page.tsx",
+    "src/app/inventory/movements/[id]/print/page.tsx"
+  ],
+  "composition": "Customer workflows retained: receiving/transfer/write-off keep the simultaneous 2:3 picker/lines layout and existing summary actions; count detail keeps 2:1 lines/summary. Field order, posting rules, business amounts and responsive breakpoints unchanged. These four workflow sources are byte-for-byte c276f30.",
+  "changes": [
+    {
+      "area": "Query failure recovery",
+      "before": "Failed movement/count queries could also show empty or not-found content; missing stores could leave a disabled count query looking indefinitely loading.",
+      "after": "Translated failure plus explicit retry replaces the false result. Genuine successful empty/not-found states remain. Store failures have their own retry; missing stores request a selection.",
+      "sources": [
+        "src/components/query-error-state.tsx",
+        "src/app/(app)/inventory/counts/page.tsx",
+        "src/app/(app)/inventory/movements/page.tsx",
+        "src/app/(app)/inventory/movements/[id]/page.tsx"
+      ],
+      "verification": "Eight real-page component tests with mocked transport plus one existing helper test; successful browser paths separately inspected. No live outage/fault injection is claimed."
+    },
+    {
+      "area": "Control names and Espresso surfaces",
+      "after": "Existing six journal select filters and two count filters have translated accessible names. Search has an explicit name. Existing card/filter geometry is retained with flatter borders and shadows.",
+      "sources": [
+        "src/app/(app)/inventory/counts/page.tsx",
+        "src/app/(app)/inventory/movements/page.tsx",
+        "src/app/(app)/inventory/movements/[id]/page.tsx"
+      ]
+    },
+    {
+      "area": "Screen preview of A4 document",
+      "before": "At 390px the paper shrank while fixed mm columns consumed its width: product column measured 0px and the row 335.984px tall.",
+      "after": "Paper retains its 210mm screen width inside a named, keyboard-scrollable viewport. At 390px page width remains 390px, product column is 263.594px and row height 21.141px. ArrowRight moves the region by 40px.",
+      "classification": "Explicit screen geometry and keyboard behavior change, not color-only. Applies to standalone print preview, not the operational two-column forms.",
+      "sources": [
+        "src/app/inventory/movements/[id]/print/page.tsx",
+        "src/components/inventory/movement-print-document.tsx"
+      ],
+      "printContract": "A4 print media, mm columns, white paper, merchant branding, contents, sums and print action retained; viewport overflow removed in print media. No physical printer/native print dialog executed."
+    },
+    {
+      "area": "Isolated QA database locale",
+      "before": "Both local QA databases inherited C locale; LOWER(Терка) returned Терка and ILIKE with терка failed. Two stock-count search assertions failed.",
+      "after": "Only bazaar_hardening_ci and bazaar_espresso_ui on 127.0.0.1:55440 restored into ICU und databases. Dumps and original C databases retained. Count and deterministic row hashes of all 132 tables agreed before switching each database. All 50 warehouse and 87 catalog/database tests passed afterward.",
+      "guard": "Regression runner checks Unicode folding before DB tests and initializes a missing allowlisted regression DB with ICU. It does not silently reset or repair an existing database.",
+      "evidence": "artifacts/ux/espresso/test-database-locale-repair.json",
+      "initialFailure": "artifacts/ux/espresso/journal-warehouse-db.log"
+    }
+  ],
+  "checks": {
+    "unit": {
+      "files": 260,
+      "tests": 1911,
+      "result": "passed",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
+      "log": "artifacts/ux/espresso/journal-all-unit.log"
+    },
+    "focusedRecovery": {
+      "files": 2,
+      "tests": 9,
+      "result": "passed; new real-page recovery tests first reproduced seven failures",
+      "before": "artifacts/ux/espresso/journal-recovery-before.log",
+      "log": "artifacts/ux/espresso/journal-recovery-final.log"
+    },
+    "warehouseDatabase": {
+      "files": 4,
+      "tests": 50,
+      "result": "passed after correcting isolated database locale; includes stock-count selection, scanner idempotency, hidden-product/store rejection, count apply, ledger correctness, receiving/transfer/write-off edits and archive",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts warehouse",
+      "log": "artifacts/ux/espresso/journal-warehouse-db-final.log"
+    },
+    "catalogDatabase": {
+      "files": 3,
+      "tests": 87,
+      "result": "passed after locale repair; products and warehouse regression",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts database",
+      "log": "artifacts/ux/espresso/warehouse-checkpoint-catalog-db.log",
+      "note": "Overlaps inventory/inventory-correctness files in the 50-test suite; these are not 137 unique tests."
+    },
+    "typecheck": {
+      "result": "passed; final build also checks types",
+      "log": "artifacts/ux/espresso/journal-typecheck-final.log"
+    },
+    "lint": {
+      "result": "passed without warnings; final build also runs lint",
+      "log": "artifacts/ux/espresso/journal-lint-final.log"
+    },
+    "i18n": {
+      "result": "passed",
+      "log": "artifacts/ux/espresso/journal-i18n.log"
+    },
+    "productionBuild": {
+      "result": "passed with final application sources, type/lint and 125 static pages",
+      "command": "UX_SUITE=espresso CIRCLE_NODE_TOTAL=3 NODE_OPTIONS=--max-old-space-size=6144 node --import tsx scripts/ux/build.ts",
+      "log": "artifacts/ux/espresso/build-warehouse-documents-final.log"
+    },
+    "stockReadback": {
+      "result": "passed; balances, costs and all ledger records remain unchanged, count is still IN_PROGRESS and not applied",
+      "evidence": "artifacts/ux/espresso/journal-final-stock-readback.json"
+    },
+    "customerWorkflowSources": {
+      "result": "All four sources exactly match c276f30",
+      "sources": [
+        {
+          "source": "src/components/inventory/receiving-workflow.tsx",
+          "baseline": "c276f30",
+          "exactMatch": true,
+          "sha256": "3f77205aeaff4d89947098896c6e86459da522b3c7783110d68ccb1ade6f6c16"
+        },
+        {
+          "source": "src/components/inventory/transfer-workflow.tsx",
+          "baseline": "c276f30",
+          "exactMatch": true,
+          "sha256": "07b1ba3e01544bf470537fe4cd0fc24f23369732aed33f8722c99ee6ccc64307"
+        },
+        {
+          "source": "src/components/inventory/write-off-workflow.tsx",
+          "baseline": "c276f30",
+          "exactMatch": true,
+          "sha256": "d28439fc45ef22a5276e616a8e2088da7b5afb04a40cbde635f2b89a3311ccaa"
+        },
+        {
+          "source": "src/app/(app)/inventory/counts/[id]/page.tsx",
+          "baseline": "c276f30",
+          "exactMatch": true,
+          "sha256": "daf57fddea2b1905c11168a1244994fc8f6b701291de4f6c432160029b97f620"
+        }
+      ]
+    }
+  },
+  "browser": {
+    "url": "http://localhost:3122",
+    "method": "CUA through normal rendered UI; dedicated bazaar_espresso_ui fixtures; external providers disabled",
+    "widths": [
+      1440,
+      390
+    ],
+    "themes": [
+      "RU dark desktop/mobile",
+      "EN light desktop",
+      "selected KG light desktop"
+    ],
+    "flows": [
+      "Journal search ESPRESSO finds the three known fixture documents; store, type and POSTED filters persist after reload. Advanced filter names inspected. Detail and receiving Cancel preserve the full filtered returnTo path.",
+      "Receiving, transfer and write-off edit wrappers inspected at desktop/mobile with the original catalog and lines simultaneously visible on desktop. Their EN/light states inspected after data loading.",
+      "Count list status IN_PROGRESS survives reload. Existing /inventory/counts/new alias opens one create dialog, consumes create=1 and does not reopen after cancel/reload.",
+      "A synthetic count was created before final build through normal UI, exact product selected, counted quantity changed from 1 to 3, saved and reloaded. Final row remains expected 3 / counted 3 / delta 0. No stock correction applied.",
+      "Mobile A4 viewport has readable column widths, no page overflow and keyboard horizontal panning. EN/KG print labels inspected.",
+      "Existing admin and manager can manage count, with apply/cancel controls. Manager store select contains only Bishkek and Osh. An unassigned journal store filter returns an empty scoped result by existing server policy; no foreign records are exposed.",
+      "Existing staff and cashier can open the assigned count and see quantity editing but have no apply/cancel-count controls. Staff edit-quantity modal opens with 3 and cancellation restores focus to the trigger. All three stock edit wrappers deny both staff and cashier.",
+      "Admin preferences restored to RU/dark and confirmed after reload; final role signed out; temporary viewport override reset."
+    ],
+    "geometry": [
+      {
+        "kind": "receiving",
+        "grids": [
+          {
+            "columns": "441.594px 662.406px",
+            "gap": "16px"
+          }
+        ],
+        "pageWidth": 1440,
+        "width": 1440
+      },
+      {
+        "kind": "transfer",
+        "grids": [
+          {
+            "columns": "441.594px 662.406px",
+            "gap": "16px"
+          }
+        ],
+        "pageWidth": 1440,
+        "width": 1440
+      },
+      {
+        "kind": "write-off",
+        "grids": [
+          {
+            "columns": "441.594px 662.406px",
+            "gap": "16px"
+          }
+        ],
+        "pageWidth": 1440,
+        "width": 1440
+      },
+      {
+        "kind": "count",
+        "grids": [
+          {
+            "columns": "736px 368px",
+            "gap": "16px"
+          }
+        ],
+        "pageWidth": 1440,
+        "width": 1440
+      }
+    ],
+    "mobilePrintBefore": {
+      "cells": [
+        {
+          "height": 335.984375,
+          "text": "1",
+          "width": 37.7890625
+        },
+        {
+          "height": 335.984375,
+          "text": "Espresso — проверка документа",
+          "width": 0
+        },
+        {
+          "height": 335.984375,
+          "text": "2",
+          "width": 90.703125
+        },
+        {
+          "height": 335.984375,
+          "text": "each",
+          "width": 68.03125
+        },
+        {
+          "height": 335.984375,
+          "text": "85,00 KGS",
+          "width": 113.3828125
+        },
+        {
+          "height": 335.984375,
+          "text": "170,00 KGS",
+          "width": 113.3828125
+        }
+      ],
+      "pageWidth": 390,
+      "paper": 366,
+      "width": 390
+    },
+    "mobilePrintAfter": {
+      "cells": [
+        {
+          "height": 21.140625,
+          "text": "1",
+          "width": 37.7890625
+        },
+        {
+          "height": 21.140625,
+          "text": "Espresso — проверка документа",
+          "width": 263.59375
+        },
+        {
+          "height": 21.140625,
+          "text": "2",
+          "width": 90.703125
+        },
+        {
+          "height": 21.140625,
+          "text": "each",
+          "width": 68.03125
+        },
+        {
+          "height": 21.140625,
+          "text": "85,00 KGS",
+          "width": 113.3828125
+        },
+        {
+          "height": 21.140625,
+          "text": "170,00 KGS",
+          "width": 113.3828125
+        }
+      ],
+      "pageWidth": 390,
+      "paper": 793.6953125,
+      "region": {
+        "client": 390,
+        "scroll": 818
+      },
+      "width": 390
+    },
+    "screenshots": [
+      "artifacts/ux/espresso/screenshots/count-cashier-controls-final.png",
+      "artifacts/ux/espresso/screenshots/count-create-alias-desktop-dark-final.png",
+      "artifacts/ux/espresso/screenshots/count-draft-desktop-dark-final.png",
+      "artifacts/ux/espresso/screenshots/count-draft-mobile-dark-final.png",
+      "artifacts/ux/espresso/screenshots/count-manager-controls-final.png",
+      "artifacts/ux/espresso/screenshots/count-staff-controls-final.png",
+      "artifacts/ux/espresso/screenshots/counts-list-desktop-dark-final.png",
+      "artifacts/ux/espresso/screenshots/counts-list-desktop-light-en-final.png",
+      "artifacts/ux/espresso/screenshots/counts-list-desktop-light-kg-final.png",
+      "artifacts/ux/espresso/screenshots/counts-list-mobile-dark-final.png",
+      "artifacts/ux/espresso/screenshots/counts-manager-store-scope-final.png",
+      "artifacts/ux/espresso/screenshots/journal-desktop-dark-final.png",
+      "artifacts/ux/espresso/screenshots/journal-desktop-light-en-final.png",
+      "artifacts/ux/espresso/screenshots/journal-mobile-dark-final.png",
+      "artifacts/ux/espresso/screenshots/movement-detail-desktop-dark-final.png",
+      "artifacts/ux/espresso/screenshots/movement-detail-desktop-light-en-final.png",
+      "artifacts/ux/espresso/screenshots/movement-detail-desktop-light-kg-final.png",
+      "artifacts/ux/espresso/screenshots/movement-detail-mobile-dark-final.png",
+      "artifacts/ux/espresso/screenshots/movement-print-desktop-dark-final.png",
+      "artifacts/ux/espresso/screenshots/movement-print-desktop-light-en-final.png",
+      "artifacts/ux/espresso/screenshots/movement-print-desktop-light-kg-final.png",
+      "artifacts/ux/espresso/screenshots/movement-print-mobile-dark-final.png",
+      "artifacts/ux/espresso/screenshots/receiving-edit-cashier-denied-final.png",
+      "artifacts/ux/espresso/screenshots/receiving-edit-desktop-dark-final.png",
+      "artifacts/ux/espresso/screenshots/receiving-edit-desktop-light-en-final.png",
+      "artifacts/ux/espresso/screenshots/receiving-edit-mobile-dark-final.png",
+      "artifacts/ux/espresso/screenshots/receiving-edit-staff-denied-final.png",
+      "artifacts/ux/espresso/screenshots/transfer-edit-cashier-denied-final.png",
+      "artifacts/ux/espresso/screenshots/transfer-edit-desktop-dark-final.png",
+      "artifacts/ux/espresso/screenshots/transfer-edit-desktop-light-en-final.png",
+      "artifacts/ux/espresso/screenshots/transfer-edit-mobile-dark-final.png",
+      "artifacts/ux/espresso/screenshots/transfer-edit-staff-denied-final.png",
+      "artifacts/ux/espresso/screenshots/write-off-edit-cashier-denied-final.png",
+      "artifacts/ux/espresso/screenshots/write-off-edit-desktop-dark-final.png",
+      "artifacts/ux/espresso/screenshots/write-off-edit-desktop-light-en-final.png",
+      "artifacts/ux/espresso/screenshots/write-off-edit-mobile-dark-final.png",
+      "artifacts/ux/espresso/screenshots/write-off-edit-staff-denied-final.png"
+    ]
+  },
+  "observedExistingSemantics": [
+    {
+      "area": "Receiving edit comment",
+      "observation": "A trial changed comment is used by the existing server handler as the edit reason; the historical document comment stays original. The trial save returned successfully but did not replace the displayed original comment.",
+      "source": "src/server/trpc/routers/inventory.ts",
+      "disposition": "Recorded for product acceptance; no backend/comment semantics changed by this redesign. Do not count this as a successful comment replacement test.",
+      "screenshot": "artifacts/ux/espresso/screenshots/receiving-edit-comment-behavior-dark.png"
+    }
+  ],
+  "sourceHashes": {
+    "src/app/(app)/inventory/counts/new/page.tsx": "4f4498ca9fff2704658aba0a1826b9d74e11b305b73035ae618fa84700b39d86",
+    "src/app/(app)/inventory/counts/page.tsx": "249209f48e11f7b6a21ce238e429811ba2f90358dabf61a941bdffa5887f59c5",
+    "src/app/(app)/inventory/movements/page.tsx": "b6677f829b151de18311b14a38b3238fc1f98de7785e6de7138f2cf7e7195a14",
+    "src/app/(app)/inventory/movements/[id]/page.tsx": "37795b4520f6be33899f6837571a0a64d2ee870c2ba95669957d164c01c2dc49",
+    "src/app/(app)/inventory/receiving/[id]/edit/page.tsx": "9d35f91cb5d024718f61f3eb9b0ad3053e2a44880980170531ed75099c4c66bf",
+    "src/app/(app)/inventory/transfers/[id]/edit/page.tsx": "cb5ac13377663275dc624b5d967a82968285da99dae487e3d5be318141eb097d",
+    "src/app/(app)/inventory/write-offs/[id]/edit/page.tsx": "5c60dfecca76782044b09e473545dbfd36af8da4bbaf1ecc6d4e295c02666b84",
+    "src/app/inventory/movements/[id]/print/page.tsx": "f52db1f727a150755827b0d8201ffb93e4f0a698b0bf0ed9ff2c2ee4b63ce4e5",
+    "src/components/inventory/movement-print-document.tsx": "0cba28d5406b7dc8174fa5e693ffccd4e4782fbc43b0a7eabb2b0e5c9606a8e2",
+    "src/components/query-error-state.tsx": "da97104d32be32ea420051f29c1f49db2972ab094c2d0e993e5e84652eca6384"
+  },
+  "limitations": [
+    "This is initial visual and selected functional review for eight route sources; no route is promoted to fully verified and the complete redesign is not finished.",
+    "Full route/theme/state/role/plan/currency matrix, native date-picker interactions, populated multi-page navigation and live network failure recovery remain outside the completed browser acceptance for this checkpoint. Native date fill attempts did not establish an applied URL filter and are not reported as passed.",
+    "No physical print, external AI, email or payment provider verification is claimed by this UI checkpoint.",
+    "Legacy mixed RU/KG terminology and generic English labels remain for the broader copy review; no global translation-completeness claim.",
+    "Green tests do not approve the separately disclosed product-form/navigation composition changes or permit new customer workflow rearrangements."
+  ],
+  "delivery": "Local reviewable checkpoint on codex/playground only; no main merge, push, deployment or full-goal completion."
+}

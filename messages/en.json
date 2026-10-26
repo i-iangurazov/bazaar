@@ -3649,6 +3649,7 @@
       "printDocument": "Print form",
       "printInvoice": "Print waybill",
       "printPageHint": "The printable form is open as a separate page. Review the document, then print it.",
+      "printPreviewLabel": "Print document preview",
       "backToDetails": "Back to document details",
       "printReceivingTitle": "Waybill / Stock receiving",
       "printTransferTitle": "Store transfer",

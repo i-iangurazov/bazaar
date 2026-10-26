@@ -1,6 +1,6 @@
 {
   "status": "operational-layouts-restored-other-redesign-changes-explicitly-disclosed",
-  "scope": "Redesign changes since 1fcdfd4, including directory, authentication and settings checkpoints; not an audit of every earlier playground improvement.",
+  "scope": "Redesign changes since 1fcdfd4, including directory, authentication, settings and warehouse-document checkpoints; not an audit of every earlier playground improvement.",
   "humanCorrection": "Customer-requested two-column operational layouts must be preserved. A difference from ERPNext is not evidence of a defect.",
   "restored": [
     {
@@ -86,6 +86,19 @@
         "Descriptions are no longer clamped to two lines"
       ],
       "acceptance": "Disclosed as tile composition changes."
+    },
+    {
+      "area": "Standalone warehouse print screen preview",
+      "sources": [
+        "src/app/inventory/movements/[id]/print/page.tsx",
+        "src/components/inventory/movement-print-document.tsx"
+      ],
+      "changes": [
+        "At 390px the paper shrank while fixed mm columns consumed its width: product column measured 0px and the row 335.984px tall.",
+        "Paper retains its 210mm screen width inside a named, keyboard-scrollable viewport. At 390px page width remains 390px, product column is 263.594px and row height 21.141px. ArrowRight moves the region by 40px."
+      ],
+      "acceptance": "A demonstrated 0px product-column defect on 390px was corrected with internal scrolling. Operational form layouts and print-media document contents/column sizes are retained. This changes screen geometry and keyboard behavior and is not categorized as color-only.",
+      "evidence": "docs/espresso/warehouse-documents-verification.json"
     }
   ],
   "stillPresentInteractionChanges": [
@@ -167,6 +180,17 @@
         "src/app/(app)/settings/attributes/page.tsx"
       ],
       "evidence": "docs/espresso/settings-verification.json"
+    },
+    {
+      "area": "Warehouse failure recovery and control names",
+      "changes": "Translated failure plus explicit retry replaces the false result. Genuine successful empty/not-found states remain. Store failures have their own retry; missing stores request a selection. Existing six journal select filters and two count filters have translated accessible names. Search has an explicit name. Existing card/filter geometry is retained with flatter borders and shadows.",
+      "sources": [
+        "src/components/query-error-state.tsx",
+        "src/app/(app)/inventory/counts/page.tsx",
+        "src/app/(app)/inventory/movements/page.tsx",
+        "src/app/(app)/inventory/movements/[id]/page.tsx"
+      ],
+      "evidence": "docs/espresso/warehouse-documents-verification.json"
     }
   ],
   "appearanceChanges": [
@@ -178,9 +202,14 @@
     "Administrative helper radii/shadows/rings use flat Espresso styling without changing dimensions or placement. Desktop/mobile receipt paper and desktop label samples use white behind black text. Selected English settings headings/actions replace placeholder copy; the broader copy audit remains pending."
   ],
   "serverScopeEvidence": {
-    "command": "git diff --name-only 1fcdfd4 -- src/server prisma src/app/api",
+    "base": "1fcdfd4",
+    "paths": [
+      "src/server",
+      "src/app/api",
+      "prisma"
+    ],
     "changedFiles": [],
-    "meaning": "No server services, API routes or database schema files changed during this redesign. This alone is not proof that every UI workflow is unaffected."
+    "result": "No business/server/API/schema changes in the redesign diff. QA locale correction is separately disclosed."
   },
   "sourceReview": {
     "base": "1fcdfd4",
@@ -316,7 +345,7 @@
       },
       {
         "path": "src/app/inventory/movements/[id]/print/page.tsx",
-        "classification": "jsx-style-attributes-only"
+        "classification": "requires-semantic-review"
       },
       {
         "path": "src/app/invite/[token]/page.tsx",
@@ -423,6 +452,10 @@
         "classification": "requires-semantic-review"
       },
       {
+        "path": "src/components/inventory/movement-print-document.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
         "path": "src/components/inventory/receiving-workflow.tsx",
         "classification": "jsx-style-attributes-only"
       },
@@ -489,6 +522,10 @@
       {
         "path": "src/components/pwa-install-button.tsx",
         "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/query-error-state.tsx",
+        "classification": "requires-semantic-review"
       },
       {
         "path": "src/components/reports/customer-report-filter.tsx",
@@ -712,56 +749,95 @@
     "No further customer workflow rearrangements are authorized by a mere visual difference from ERPNext."
   ],
   "delivery": "codex/playground only; no main merge or production deployment",
-  "currentCheckpoint": "docs/espresso/settings-verification.json",
+  "currentCheckpoint": "docs/espresso/warehouse-documents-verification.json",
   "previousCheckpoints": [
     "docs/espresso/directory-verification.json",
-    "docs/espresso/auth-verification.json"
+    "docs/espresso/auth-verification.json",
+    "docs/espresso/settings-verification.json"
   ],
   "currentCheckpointChecks": {
-    "focusedRecovery": {
-      "files": 1,
-      "tests": 11,
-      "result": "passed; tests first reproduced five category/unit failures and two user/invitation failures before the corrections",
-      "log": "artifacts/ux/espresso/settings-recovery-final.log"
-    },
     "unit": {
-      "result": "259 files / 1903 tests passed after all query-recovery corrections, before the final style-only mobile-paper refinement",
-      "log": "artifacts/ux/espresso/settings-all-unit.log",
-      "files": 259,
-      "tests": 1903
+      "files": 260,
+      "tests": 1911,
+      "result": "passed",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
+      "log": "artifacts/ux/espresso/journal-all-unit.log"
     },
-    "database": {
-      "files": 6,
-      "tests": 47,
-      "result": "passed; attributes, catalog sources, profile preferences/business settings, unit precision/history, users and import preview/apply/rollback",
-      "database": "bazaar_hardening_ci on 127.0.0.1:55440; separate from browser fixtures",
-      "log": "artifacts/ux/espresso/settings-db.log"
+    "focusedRecovery": {
+      "files": 2,
+      "tests": 9,
+      "result": "passed; new real-page recovery tests first reproduced seven failures",
+      "before": "artifacts/ux/espresso/journal-recovery-before.log",
+      "log": "artifacts/ux/espresso/journal-recovery-final.log"
+    },
+    "warehouseDatabase": {
+      "files": 4,
+      "tests": 50,
+      "result": "passed after correcting isolated database locale; includes stock-count selection, scanner idempotency, hidden-product/store rejection, count apply, ledger correctness, receiving/transfer/write-off edits and archive",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts warehouse",
+      "log": "artifacts/ux/espresso/journal-warehouse-db-final.log"
+    },
+    "catalogDatabase": {
+      "files": 3,
+      "tests": 87,
+      "result": "passed after locale repair; products and warehouse regression",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts database",
+      "log": "artifacts/ux/espresso/warehouse-checkpoint-catalog-db.log",
+      "note": "Overlaps inventory/inventory-correctness files in the 50-test suite; these are not 137 unique tests."
     },
     "typecheck": {
-      "result": "passed",
-      "log": "artifacts/ux/espresso/settings-typecheck.log"
+      "result": "passed; final build also checks types",
+      "log": "artifacts/ux/espresso/journal-typecheck-final.log"
     },
     "lint": {
-      "result": "passed without warnings",
-      "log": "artifacts/ux/espresso/settings-lint.log"
+      "result": "passed without warnings; final build also runs lint",
+      "log": "artifacts/ux/espresso/journal-lint-final.log"
     },
     "i18n": {
       "result": "passed",
-      "log": "artifacts/ux/espresso/settings-i18n.log"
+      "log": "artifacts/ux/espresso/journal-i18n.log"
     },
     "productionBuild": {
-      "result": "passed after the final mobile paper refinement; type/lint checks and 125 static pages completed",
-      "log": "artifacts/ux/espresso/build-settings-final.log"
+      "result": "passed with final application sources, type/lint and 125 static pages",
+      "command": "UX_SUITE=espresso CIRCLE_NODE_TOTAL=3 NODE_OPTIONS=--max-old-space-size=6144 node --import tsx scripts/ux/build.ts",
+      "log": "artifacts/ux/espresso/build-warehouse-documents-final.log"
     },
-    "printingAfterMobileRefinement": {
-      "files": 6,
-      "tests": 30,
-      "result": "passed after mobile paper background correction",
-      "log": "artifacts/ux/espresso/settings-printing-final.log"
+    "stockReadback": {
+      "result": "passed; balances, costs and all ledger records remain unchanged, count is still IN_PROGRESS and not applied",
+      "evidence": "artifacts/ux/espresso/journal-final-stock-readback.json"
+    },
+    "customerWorkflowSources": {
+      "result": "All four sources exactly match c276f30",
+      "sources": [
+        {
+          "source": "src/components/inventory/receiving-workflow.tsx",
+          "baseline": "c276f30",
+          "exactMatch": true,
+          "sha256": "3f77205aeaff4d89947098896c6e86459da522b3c7783110d68ccb1ade6f6c16"
+        },
+        {
+          "source": "src/components/inventory/transfer-workflow.tsx",
+          "baseline": "c276f30",
+          "exactMatch": true,
+          "sha256": "07b1ba3e01544bf470537fe4cd0fc24f23369732aed33f8722c99ee6ccc64307"
+        },
+        {
+          "source": "src/components/inventory/write-off-workflow.tsx",
+          "baseline": "c276f30",
+          "exactMatch": true,
+          "sha256": "d28439fc45ef22a5276e616a8e2088da7b5afb04a40cbde635f2b89a3311ccaa"
+        },
+        {
+          "source": "src/app/(app)/inventory/counts/[id]/page.tsx",
+          "baseline": "c276f30",
+          "exactMatch": true,
+          "sha256": "daf57fddea2b1905c11168a1244994fc8f6b701291de4f6c432160029b97f620"
+        }
+      ]
     }
   },
   "customerLayoutRecheck": {
-    "evidence": "docs/espresso/settings-verification.json",
-    "result": "All four operational sources still exactly match c276f30 after settings changes. Shared helper changes are limited to border radius, shadows and decorative rings."
+    "evidence": "docs/espresso/warehouse-documents-verification.json",
+    "result": "All four operational sources exactly match c276f30; final desktop columns measured 441.594/662.406px and 736/368px with 16px gaps. New standalone print screen viewport is separately disclosed."
   }
 }

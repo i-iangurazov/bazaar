@@ -7,6 +7,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 
 import { PageHeader } from "@/components/page-header";
+import { QueryErrorState } from "@/components/query-error-state";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,7 +36,6 @@ import { formatMovementNote } from "@/lib/i18n/movementNote";
 import { getStockMovementLabel } from "@/lib/i18n/status";
 import { resolveSafeReturnTo } from "@/lib/safeReturnTo";
 import { trpc } from "@/lib/trpc";
-import { translateError } from "@/lib/translateError";
 
 const ProductMovementDocumentPage = () => {
   const params = useParams<{ id?: string }>();
@@ -44,7 +44,6 @@ const ProductMovementDocumentPage = () => {
   const t = useTranslations("inventory.movementJournal");
   const tInventory = useTranslations("inventory");
   const tCommon = useTranslations("common");
-  const tErrors = useTranslations("errors");
   const locale = useLocale();
 
   const documentQuery = trpc.inventory.productMovementDocument.useQuery(
@@ -146,19 +145,15 @@ const ProductMovementDocumentPage = () => {
         }
       />
 
-      {documentQuery.error ? (
-        <div className="mb-4 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
-          {translateError(tErrors, documentQuery.error)}
-        </div>
-      ) : null}
-
       {sourceDocumentMissing ? (
         <div className="mb-4 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-foreground">
           {t("sourceDocumentNotFound")}
         </div>
       ) : null}
 
-      {documentQuery.isLoading ? (
+      {documentQuery.error ? (
+        <QueryErrorState error={documentQuery.error} onRetry={() => void documentQuery.refetch()} />
+      ) : documentQuery.isLoading ? (
         <Card className="overflow-hidden">
           <CardContent className="space-y-4 p-6" data-movement-detail-skeleton>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -338,7 +333,7 @@ const ProductMovementDocumentPage = () => {
                   </div>
                 )}
                 renderMobile={(line) => (
-                  <div className="rounded-lg border border-border/65 bg-card/95 p-3 shadow-sm">
+                  <div className="rounded-lg border border-border bg-card p-3 shadow-none">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <Link
