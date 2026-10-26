@@ -223,6 +223,13 @@ const UnitsPage = () => {
               <Spinner className="h-4 w-4" />
               {tCommon("loading")}
             </div>
+          ) : unitsQuery.error ? (
+            <div role="alert" className="bazaar-admin-error flex flex-wrap items-center gap-2">
+              <span>{translateError(tErrors, unitsQuery.error)}</span>
+              <Button type="button" variant="secondary" size="sm" onClick={() => unitsQuery.refetch()}>
+                {tErrors("tryAgain")}
+              </Button>
+            </div>
           ) : !unitsQuery.data?.length ? (
             <div className="bazaar-admin-empty">
               <EmptyIcon className="h-4 w-4" aria-hidden />
@@ -359,11 +366,6 @@ const UnitsPage = () => {
               )}
             />
           )}
-          {unitsQuery.error ? (
-            <p className="bazaar-admin-error mt-3">
-              {translateError(tErrors, unitsQuery.error)}
-            </p>
-          ) : null}
         </CardContent>
       </Card>
 

@@ -919,7 +919,7 @@ const AttributesPage = () => {
                 onValueChange={(value) => setTemplateDraftKey(value)}
                 disabled={!availableTemplateDefinitions.length}
               >
-                <SelectTrigger className="min-w-[220px]">
+                <SelectTrigger aria-label={t("templateAddAttribute")} className="min-w-[220px]">
                   <SelectValue placeholder={t("templateAddAttribute")} />
                 </SelectTrigger>
                 <SelectContent>

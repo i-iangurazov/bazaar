@@ -365,63 +365,87 @@
     },
     {
       "source": "src/app/(app)/settings/attributes/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/settings-verification.json"
+      ]
     },
     {
       "source": "src/app/(app)/settings/categories/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/settings-verification.json"
+      ]
     },
     {
       "source": "src/app/(app)/settings/diagnostics/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/settings-verification.json"
+      ]
     },
     {
       "source": "src/app/(app)/settings/import/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/settings-verification.json"
+      ]
     },
     {
       "source": "src/app/(app)/settings/loyalty/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/settings-verification.json"
+      ]
     },
     {
       "source": "src/app/(app)/settings/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/settings-verification.json"
+      ]
     },
     {
       "source": "src/app/(app)/settings/printing/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/settings-verification.json"
+      ]
     },
     {
       "source": "src/app/(app)/settings/profile/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/settings-verification.json"
+      ]
     },
     {
       "source": "src/app/(app)/settings/store-groups/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/settings-verification.json"
+      ]
     },
     {
       "source": "src/app/(app)/settings/units/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/settings-verification.json"
+      ]
     },
     {
       "source": "src/app/(app)/settings/users/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/settings-verification.json"
+      ]
     },
     {
       "source": "src/app/(app)/settings/whats-new/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/settings-verification.json"
+      ]
     },
     {
       "source": "src/app/(app)/stores/[id]/compliance/page.tsx",
@@ -778,12 +802,12 @@
     }
   ],
   "verification": {
-    "desktop": "partial: inspected dashboard, product/inventory documents, directories and eight auth route sources at 1440px; no full-application acceptance claim",
-    "mobile": "partial: 390px product/inventory documents, directories, Baam, integrations and auth states; remaining families/states pending",
-    "themes": "partial: product documents and auth family light/dark review; the full route/theme matrix remains pending",
+    "desktop": "partial: 39 route sources have checkpoint evidence; latest settings review includes all 12 at 1440px in dark RU/light EN. Final all-route acceptance remains pending.",
+    "mobile": "partial: latest settings family includes all 12 initial states at 390px in dark RU, plus KG categories; earlier product, inventory, directory, Baam and auth states recorded separately.",
+    "themes": "partial: settings family desktop light/dark, mobile dark; full route/theme/state matrix remains pending.",
     "rolesAndScopes": "partial: product flows checked under all four roles; manager store scoping verified; other routes/plans/currencies pending",
-    "functionalRegression": "checkpoint reports record separate isolated DB suites; latest auth checkpoint has 1892 unit tests and 9 real DB auth-entry tests. Successful browser credential creation/reset and complete application acceptance remain pending.",
-    "productionBuild": "passed for the current authentication checkpoint; full redesign acceptance remains pending"
+    "functionalRegression": "Latest settings checkpoint: 1903 unit tests before final style-only mobile paper refinement, 30 focused tests after it, and 47 real DB tests. Browser fixtures are a separate DB; complete application acceptance remains pending.",
+    "productionBuild": "passed with final settings/mobile paper sources, type/lint and 125 static pages; full redesign remains in progress."
   },
   "requirements": {
     "visualFidelity": "Match Espresso typography, palette, surfaces and components while preserving customer workflows; analogous screen comparison must respect the human-confirmed operational layouts.",
@@ -795,7 +819,7 @@
     "customerWorkflows": "Preserve the customer-requested two-column operational layouts and established interactions. The visual reference does not authorize replacing them; see AGENTS.md and redesign-change-audit.json."
   },
   "progress": {
-    "stage": "authentication-workflows-and-two-theme-review-checked-full-redesign-in-progress",
+    "stage": "settings-two-theme-and-mobile-review-checked-full-redesign-in-progress",
     "foundation": [
       "Pinned MIT Espresso semantic tokens and component CSS",
       "Self-hosted Inter Variable",
@@ -921,6 +945,13 @@
         "evidence": [
           "docs/espresso/auth-verification.json"
         ]
+      },
+      {
+        "check": "Settings family desktop themes, mobile, three interface languages and existing role/store access",
+        "result": "12 route sources inspected in desktop dark/light and mobile dark; no page overflow at 1440/390px. Unit and attribute/template persisted through real UI. Category hide/restore, manager assigned stores/read-only controls, staff denials and cashier printing access checked. Paper contrast and list error recovery corrected; remaining state/copy work explicitly tracked.",
+        "evidence": [
+          "docs/espresso/settings-verification.json"
+        ]
       }
     ],
     "remaining": [
@@ -932,14 +963,15 @@
       "Broader database integration regression and final production smoke on the isolated app",
       "Audit autofocus dialogs across other route families for explicit return-focus targets; saved-view forms now have explicit trigger refs.",
       "Review the explicitly disclosed product-form and navigation composition changes with the human; do not treat test success as workflow approval.",
-      "Final authentication acceptance: successful invite/signup/onboarding and reset-token lifecycle under isolated tests; live SMTP and browser credential entry are not claimed by the current checkpoint."
+      "Final authentication acceptance: successful invite/signup/onboarding and reset-token lifecycle under isolated tests; live SMTP and browser credential entry are not claimed by the current checkpoint.",
+      "Complete the legacy English copy audit; settings-verification.json lists observed unfinished template/import labels.",
+      "Complete bespoke printing/import accessible control labels, successful upload/invitation browser paths and remaining settings state/plan permutations; current in_review status is not full acceptance."
     ],
     "unitTests": {
-      "files": 258,
-      "tests": 1892,
-      "result": "passed",
-      "log": "artifacts/ux/espresso/auth-all-unit.log",
-      "status": "passed after authentication and locale validation corrections",
+      "files": 259,
+      "tests": 1903,
+      "status": "259 files / 1903 tests passed after all query-recovery corrections, before the final style-only mobile-paper refinement",
+      "evidence": "artifacts/ux/espresso/settings-all-unit.log",
       "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit"
     },
     "databaseRegression": {
@@ -968,6 +1000,14 @@
       "database": "bazaar_hardening_ci on 127.0.0.1:55440; separate from browser fixtures",
       "log": "artifacts/ux/espresso/auth-entry-db.log",
       "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts authentication"
+    },
+    "settingsDatabaseRegression": {
+      "files": 6,
+      "tests": 47,
+      "result": "passed; attributes, catalog sources, profile preferences/business settings, unit precision/history, users and import preview/apply/rollback",
+      "database": "bazaar_hardening_ci on 127.0.0.1:55440; separate from browser fixtures",
+      "log": "artifacts/ux/espresso/settings-db.log",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts settings"
     }
   }
 }

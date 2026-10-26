@@ -375,23 +375,23 @@ html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
   }
 
   .bazaar-admin-status-tile {
-    @apply rounded-xl border border-border bg-muted/30 p-3 text-sm shadow-sm dark:shadow-none;
+    @apply rounded-lg border border-border bg-muted/30 p-3 text-sm shadow-none dark:shadow-none;
   }
 
   .bazaar-admin-status-tile-success {
-    @apply rounded-xl border border-success/30 bg-success/10 p-3 text-sm text-success shadow-sm ring-1 ring-success/10 dark:shadow-none;
+    @apply rounded-lg border border-success/30 bg-success/10 p-3 text-sm text-success shadow-none dark:shadow-none;
   }
 
   .bazaar-admin-status-tile-warning {
-    @apply rounded-xl border border-warning/35 bg-warning/10 p-3 text-sm text-warning shadow-sm ring-1 ring-warning/10 dark:shadow-none;
+    @apply rounded-lg border border-warning/35 bg-warning/10 p-3 text-sm text-warning shadow-none dark:shadow-none;
   }
 
   .bazaar-admin-status-tile-danger {
-    @apply rounded-xl border border-danger/30 bg-danger/10 p-3 text-sm text-danger shadow-sm ring-1 ring-danger/10 dark:shadow-none;
+    @apply rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger shadow-none dark:shadow-none;
   }
 
   .bazaar-admin-choice-card {
-    @apply rounded-xl border border-border bg-card p-4 text-left shadow-sm transition hover:border-primary/35 hover:bg-primary/[0.035] dark:shadow-none;
+    @apply rounded-lg border border-border bg-card p-4 text-left shadow-none transition hover:border-primary/35 hover:bg-primary/[0.035] dark:shadow-none;
   }
 
   .bazaar-admin-choice-card-active {
@@ -399,19 +399,19 @@ html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
   }
 
   .bazaar-admin-preview-frame {
-    @apply overflow-auto rounded-xl border border-border bg-muted/25 p-3 shadow-inner;
+    @apply overflow-auto rounded-lg border border-border bg-muted/25 p-3 shadow-none;
   }
 
   .bazaar-admin-empty {
-    @apply flex min-h-[12rem] flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/25 p-6 text-center text-sm text-muted-foreground;
+    @apply flex min-h-[12rem] flex-col items-center justify-center rounded-lg border border-dashed border-border bg-muted/25 p-6 text-center text-sm text-muted-foreground;
   }
 
   .bazaar-admin-notice {
-    @apply rounded-xl border border-border bg-muted/30 p-3 text-sm text-muted-foreground;
+    @apply rounded-lg border border-border bg-muted/30 p-3 text-sm text-muted-foreground;
   }
 
   .bazaar-admin-error {
-    @apply rounded-xl border border-danger/30 bg-danger/5 p-3 text-sm text-danger;
+    @apply rounded-lg border border-danger/30 bg-danger/5 p-3 text-sm text-danger;
   }
 
   .bazaar-admin-modal-card {

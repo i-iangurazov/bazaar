@@ -1074,7 +1074,7 @@ const PrintingSettingsPage = () => {
               </div>
               <div className="overflow-auto">
                 <div
-                  className="border border-border bg-card p-3 text-xs text-black shadow-sm"
+                  className="border border-border bg-white p-3 text-xs text-black shadow-sm"
                   style={{ width: Math.min(300, receiptPreviewWidth) }}
                 >
                   <div className="text-center font-bold">{sample.receiptHeading}</div>
@@ -1773,7 +1773,7 @@ const PrintingSettingsPage = () => {
               <CardContent>
                 <div className="bazaar-admin-preview-frame overflow-auto">
                   <div
-                    className="rounded-lg border border-border bg-card p-4 text-black shadow-sm"
+                    className="rounded-lg border border-border bg-white p-4 text-black shadow-sm"
                     style={{ width: receiptPreviewWidth }}
                   >
                     <div className="text-center font-bold">{sample.receiptHeading}</div>
@@ -1874,7 +1874,7 @@ const PrintingSettingsPage = () => {
                         onClick={() => updateValue("labelLayoutOrder", value)}
                       >
                         <span className="block font-medium text-foreground">{t(label)}</span>
-                        <span className="block rounded-lg border border-border bg-card p-2 text-center text-[10px] text-black">
+                        <span className="block rounded-lg border border-border bg-white p-2 text-center text-[10px] text-black">
                           {value.includes("PRICE") && value.startsWith("PRICE") ? <b>{sample.price}</b> : null}
                           {value.includes("NAME") ? <span className="block">{sample.productName}</span> : null}
                           <span className="my-1 block h-5 bg-[repeating-linear-gradient(90deg,#000_0_2px,#fff_2px_4px,#000_4px_7px,#fff_7px_10px)]" />

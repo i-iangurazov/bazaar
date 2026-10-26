@@ -21,10 +21,18 @@ const suites = {
     "tests/integration/b0-agent-3-access-cache-p0.test.ts",
   ],
   authentication: ["tests/integration/auth-entry.test.ts"],
+  settings: [
+    "tests/integration/attributes.test.ts",
+    "tests/integration/catalog-sources.test.ts",
+    "tests/integration/profile-settings.test.ts",
+    "tests/integration/product-unit-change.test.ts",
+    "tests/integration/users.test.ts",
+    "tests/integration/imports.test.ts",
+  ],
   unit: ["tests/unit"],
 } as const;
 if (!Object.prototype.hasOwnProperty.call(suites, suite)) {
-  throw new Error("Choose database, directories, authentication or unit");
+  throw new Error("Choose database, directories, authentication, settings or unit");
 }
 const require = createRequire(import.meta.url);
 createRequire(require.resolve("next/package.json"))("@next/env").loadEnvConfig(

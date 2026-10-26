@@ -1,6 +1,6 @@
 {
   "status": "operational-layouts-restored-other-redesign-changes-explicitly-disclosed",
-  "scope": "Redesign changes since 1fcdfd4, including directory and authentication checkpoints; not an audit of every earlier playground improvement.",
+  "scope": "Redesign changes since 1fcdfd4, including directory, authentication and settings checkpoints; not an audit of every earlier playground improvement.",
   "humanCorrection": "Customer-requested two-column operational layouts must be preserved. A difference from ERPNext is not evidence of a defect.",
   "restored": [
     {
@@ -156,6 +156,17 @@
         "src/hooks/use-locale-change.ts"
       ],
       "evidence": "docs/espresso/auth-verification.json"
+    },
+    {
+      "area": "Settings query recovery and labels",
+      "changes": "Failed units/categories/users/invitations queries are distinct from successful empty lists and expose retry. Missing store selection no longer stays loading. Category store/search and template attribute controls are named. Existing mutation inputs, permissions, form columns and normal action positions remain.",
+      "sources": [
+        "src/app/(app)/settings/categories/page.tsx",
+        "src/app/(app)/settings/units/page.tsx",
+        "src/app/(app)/settings/users/page.tsx",
+        "src/app/(app)/settings/attributes/page.tsx"
+      ],
+      "evidence": "docs/espresso/settings-verification.json"
     }
   ],
   "appearanceChanges": [
@@ -163,7 +174,8 @@
     "Control heights, table density, spacing, borders, shadows and radii changed across shared controls",
     "Russian/Kyrgyz/English saved-view label and English product copy corrections",
     "Localized Suppliers mobile title and hardware breadcrumb, corrected English directory/store/compliance copy and Kyrgyz directory heading. Normal directory and store form composition is retained.",
-    "Reset and invite pages show the existing AuthBrand once, using shared Espresso controls and alerts; form field order and widths remain unchanged."
+    "Reset and invite pages show the existing AuthBrand once, using shared Espresso controls and alerts; form field order and widths remain unchanged.",
+    "Administrative helper radii/shadows/rings use flat Espresso styling without changing dimensions or placement. Desktop/mobile receipt paper and desktop label samples use white behind black text. Selected English settings headings/actions replace placeholder copy; the broader copy audit remains pending."
   ],
   "serverScopeEvidence": {
     "command": "git diff --name-only 1fcdfd4 -- src/server prisma src/app/api",
@@ -192,19 +204,19 @@
       },
       {
         "path": "src/app/(app)/inventory/counts/[id]/page.tsx",
-        "classification": "jsx-style-attributes-only"
+        "classification": "requires-semantic-review"
       },
       {
         "path": "src/app/(app)/inventory/counts/page.tsx",
-        "classification": "jsx-style-attributes-only"
+        "classification": "requires-semantic-review"
       },
       {
         "path": "src/app/(app)/inventory/movements/[id]/page.tsx",
-        "classification": "jsx-style-attributes-only"
+        "classification": "requires-semantic-review"
       },
       {
         "path": "src/app/(app)/inventory/movements/page.tsx",
-        "classification": "jsx-style-attributes-only"
+        "classification": "requires-semantic-review"
       },
       {
         "path": "src/app/(app)/inventory/page.tsx",
@@ -248,11 +260,19 @@
       },
       {
         "path": "src/app/(app)/reports/exports/page.tsx",
-        "classification": "jsx-style-attributes-only"
+        "classification": "requires-semantic-review"
       },
       {
         "path": "src/app/(app)/reports/page.tsx",
         "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/app/(app)/settings/attributes/page.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/app/(app)/settings/categories/page.tsx",
+        "classification": "requires-semantic-review"
       },
       {
         "path": "src/app/(app)/settings/import/page.tsx",
@@ -273,6 +293,14 @@
       {
         "path": "src/app/(app)/settings/store-groups/page.tsx",
         "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/app/(app)/settings/units/page.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/app/(app)/settings/users/page.tsx",
+        "classification": "requires-semantic-review"
       },
       {
         "path": "src/app/(app)/stores/page.tsx",
@@ -684,49 +712,56 @@
     "No further customer workflow rearrangements are authorized by a mere visual difference from ERPNext."
   ],
   "delivery": "codex/playground only; no main merge or production deployment",
-  "currentCheckpoint": "docs/espresso/auth-verification.json",
+  "currentCheckpoint": "docs/espresso/settings-verification.json",
   "previousCheckpoints": [
-    "docs/espresso/directory-verification.json"
+    "docs/espresso/directory-verification.json",
+    "docs/espresso/auth-verification.json"
   ],
   "currentCheckpointChecks": {
-    "unit": {
-      "files": 258,
-      "tests": 1892,
-      "result": "passed",
-      "log": "artifacts/ux/espresso/auth-all-unit.log"
+    "focusedRecovery": {
+      "files": 1,
+      "tests": 11,
+      "result": "passed; tests first reproduced five category/unit failures and two user/invitation failures before the corrections",
+      "log": "artifacts/ux/espresso/settings-recovery-final.log"
     },
-    "focusedUnit": {
-      "files": 5,
-      "tests": 41,
-      "result": "passed",
-      "log": "artifacts/ux/espresso/auth-focused-unit.log"
+    "unit": {
+      "result": "259 files / 1903 tests passed after all query-recovery corrections, before the final style-only mobile-paper refinement",
+      "log": "artifacts/ux/espresso/settings-all-unit.log",
+      "files": 259,
+      "tests": 1903
     },
     "database": {
-      "files": 1,
-      "tests": 9,
-      "result": "passed; real bcrypt, PostgreSQL users, signed JWTs, session callbacks and Redis auth limiter",
+      "files": 6,
+      "tests": 47,
+      "result": "passed; attributes, catalog sources, profile preferences/business settings, unit precision/history, users and import preview/apply/rollback",
       "database": "bazaar_hardening_ci on 127.0.0.1:55440; separate from browser fixtures",
-      "log": "artifacts/ux/espresso/auth-entry-db.log"
+      "log": "artifacts/ux/espresso/settings-db.log"
     },
     "typecheck": {
       "result": "passed",
-      "log": "artifacts/ux/espresso/auth-typecheck.log"
+      "log": "artifacts/ux/espresso/settings-typecheck.log"
     },
     "lint": {
       "result": "passed without warnings",
-      "log": "artifacts/ux/espresso/auth-lint.log"
+      "log": "artifacts/ux/espresso/settings-lint.log"
     },
     "i18n": {
       "result": "passed",
-      "log": "artifacts/ux/espresso/auth-i18n.log"
+      "log": "artifacts/ux/espresso/settings-i18n.log"
     },
     "productionBuild": {
-      "result": "passed; final application sources, type/lint checks and 125 static pages",
-      "log": "artifacts/ux/espresso/build-auth-final.log"
+      "result": "passed after the final mobile paper refinement; type/lint checks and 125 static pages completed",
+      "log": "artifacts/ux/espresso/build-settings-final.log"
+    },
+    "printingAfterMobileRefinement": {
+      "files": 6,
+      "tests": 30,
+      "result": "passed after mobile paper background correction",
+      "log": "artifacts/ux/espresso/settings-printing-final.log"
     }
   },
   "customerLayoutRecheck": {
-    "evidence": "docs/espresso/auth-verification.json",
-    "result": "All four operational sources still match c276f30 byte for byte after authentication work."
+    "evidence": "docs/espresso/settings-verification.json",
+    "result": "All four operational sources still exactly match c276f30 after settings changes. Shared helper changes are limited to border radius, shadows and decorative rings."
   }
 }
