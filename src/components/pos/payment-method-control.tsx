@@ -37,7 +37,7 @@ export function PosPaymentMethodControl({
             "min-w-0 px-2 text-xs font-medium",
             compact ? "h-6" : "h-11",
             posCheckoutPaymentMethod(value) === method &&
-              "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 hover:text-primary-foreground",
+              "bg-primary text-primary-foreground shadow-none hover:bg-primary/90 hover:text-primary-foreground",
           )}
         >
           {t(method === PosPaymentMethod.CASH ? "payments.cash" : "payments.transfer")}

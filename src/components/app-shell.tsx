@@ -1076,6 +1076,9 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
     if (normalizedPath.startsWith("/sales")) {
       return tNav("sales");
     }
+    if (normalizedPath === appRoutes.purchaseOrders || normalizedPath.startsWith(`${appRoutes.purchaseOrders}/`)) {
+      return tNav("purchaseOrders");
+    }
     if (normalizedPath.startsWith("/customers")) {
       return tNav("customers");
     }

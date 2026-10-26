@@ -1,5 +1,5 @@
 {
-  "status": "operational-layouts-restored-other-redesign-changes-explicitly-disclosed",
+  "status": "commerce-checkpoint-in-review-full-redesign-in-progress",
   "scope": "Redesign changes since 1fcdfd4, including directory, authentication, settings and warehouse-document checkpoints; not an audit of every earlier playground improvement.",
   "humanCorrection": "Customer-requested two-column operational layouts must be preserved. A difference from ERPNext is not evidence of a defect.",
   "restored": [
@@ -191,7 +191,8 @@
         "src/app/(app)/inventory/movements/[id]/page.tsx"
       ],
       "evidence": "docs/espresso/warehouse-documents-verification.json"
-    }
+    },
+    "Commerce checkpoint explicitly records cold receipt metadata bootstrap, read-only authoritative refund quotes and draft totals, stable responsive POS dialog mounting, parent focus recovery, accessible input names and translated purchase mobile context title. See commerce-verification.json; these are not paint-only changes."
   ],
   "appearanceChanges": [
     "Espresso neutral colors and Bazaar blue; Inter font; Lucide icons",
@@ -199,7 +200,8 @@
     "Russian/Kyrgyz/English saved-view label and English product copy corrections",
     "Localized Suppliers mobile title and hardware breadcrumb, corrected English directory/store/compliance copy and Kyrgyz directory heading. Normal directory and store form composition is retained.",
     "Reset and invite pages show the existing AuthBrand once, using shared Espresso controls and alerts; form field order and widths remain unchanged.",
-    "Administrative helper radii/shadows/rings use flat Espresso styling without changing dimensions or placement. Desktop/mobile receipt paper and desktop label samples use white behind black text. Selected English settings headings/actions replace placeholder copy; the broader copy audit remains pending."
+    "Administrative helper radii/shadows/rings use flat Espresso styling without changing dimensions or placement. Desktop/mobile receipt paper and desktop label samples use white behind black text. Selected English settings headings/actions replace placeholder copy; the broader copy audit remains pending.",
+    "Commerce POS surfaces, payment selection and receipt action groups use flatter shared tokens; existing customer document columns and field/action order remain."
   ],
   "serverScopeEvidence": {
     "base": "1fcdfd4",
@@ -208,12 +210,20 @@
       "src/app/api",
       "prisma"
     ],
-    "changedFiles": [],
-    "result": "No business/server/API/schema changes in the redesign diff. QA locale correction is separately disclosed."
+    "changedFiles": [
+      "src/server/services/loyalty/ledger.ts",
+      "src/server/services/pos.ts",
+      "src/server/trpc/routers/pos.ts"
+    ],
+    "result": "Three corrective server sources explicitly disclosed: loyalty reservation timestamp binding and authoritative read-only POS refund quote plus shared existing allocation helper. No REST route or Prisma schema changes.",
+    "evidence": [
+      "docs/espresso/loyalty-timezone-verification.json",
+      "docs/espresso/refund-preview-verification.json"
+    ]
   },
   "sourceReview": {
     "base": "1fcdfd4",
-    "method": "AST comparison excluding JSX className/style and formatting; this does not prove layout approval or semantic equivalence for CSS",
+    "method": "Recursive TypeScript AST comparison omits only JSX className/style attributes, traverses retained attribute initializers and render callbacks. Classification does not establish CSS layout approval or runtime acceptance. Semantic changes require the separate checkpoint explanations and tests.",
     "files": [
       {
         "path": "src/app/(app)/admin/metrics/page.tsx",
@@ -233,7 +243,7 @@
       },
       {
         "path": "src/app/(app)/inventory/counts/[id]/page.tsx",
-        "classification": "requires-semantic-review"
+        "classification": "jsx-style-attributes-only"
       },
       {
         "path": "src/app/(app)/inventory/counts/page.tsx",
@@ -268,7 +278,23 @@
         "classification": "jsx-style-attributes-only"
       },
       {
+        "path": "src/app/(app)/pos/history/page.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/app/(app)/pos/page.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/app/(app)/pos/registers/page.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
         "path": "src/app/(app)/pos/sell/page.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/app/(app)/pos/shifts/page.tsx",
         "classification": "requires-semantic-review"
       },
       {
@@ -284,15 +310,27 @@
         "classification": "requires-semantic-review"
       },
       {
+        "path": "src/app/(app)/purchase-orders/[id]/page.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/app/(app)/purchase-orders/page.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
         "path": "src/app/(app)/reports/analytics/page.tsx",
         "classification": "jsx-style-attributes-only"
       },
       {
         "path": "src/app/(app)/reports/exports/page.tsx",
-        "classification": "requires-semantic-review"
+        "classification": "jsx-style-attributes-only"
       },
       {
         "path": "src/app/(app)/reports/page.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/app/(app)/sales/orders/page.tsx",
         "classification": "jsx-style-attributes-only"
       },
       {
@@ -504,7 +542,15 @@
         "classification": "jsx-style-attributes-only"
       },
       {
+        "path": "src/components/pos/payment-method-control.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
         "path": "src/components/pos/product-photo-dialog.tsx",
+        "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/pos/receipt-registry.tsx",
         "classification": "jsx-style-attributes-only"
       },
       {
@@ -649,10 +695,22 @@
       },
       {
         "path": "src/hooks/use-locale-change.ts",
-        "classification": "requires-semantic-review"
+        "classification": "added-or-removed-requires-semantic-review"
       },
       {
         "path": "src/lib/saved-table-views.ts",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/server/services/loyalty/ledger.ts",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/server/services/pos.ts",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/server/trpc/routers/pos.ts",
         "classification": "requires-semantic-review"
       }
     ]
@@ -749,65 +807,66 @@
     "No further customer workflow rearrangements are authorized by a mere visual difference from ERPNext."
   ],
   "delivery": "codex/playground only; no main merge or production deployment",
-  "currentCheckpoint": "docs/espresso/warehouse-documents-verification.json",
+  "currentCheckpoint": "docs/espresso/commerce-verification.json",
   "previousCheckpoints": [
     "docs/espresso/directory-verification.json",
     "docs/espresso/auth-verification.json",
-    "docs/espresso/settings-verification.json"
+    "docs/espresso/settings-verification.json",
+    "docs/espresso/warehouse-documents-verification.json"
   ],
   "currentCheckpointChecks": {
     "unit": {
-      "files": 260,
-      "tests": 1911,
-      "result": "passed",
+      "files": 261,
+      "tests": 1912,
+      "result": "passed after shared-dialog and refund UI corrections",
       "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
-      "log": "artifacts/ux/espresso/journal-all-unit.log"
+      "log": "artifacts/ux/espresso/commerce-all-unit-focus-final.log",
+      "note": "Final translated mobile purchase-title branch was subsequently checked by the focused suite and final production build."
     },
-    "focusedRecovery": {
-      "files": 2,
-      "tests": 9,
-      "result": "passed; new real-page recovery tests first reproduced seven failures",
-      "before": "artifacts/ux/espresso/journal-recovery-before.log",
-      "log": "artifacts/ux/espresso/journal-recovery-final.log"
-    },
-    "warehouseDatabase": {
+    "finalFocused": {
       "files": 4,
-      "tests": 50,
-      "result": "passed after correcting isolated database locale; includes stock-count selection, scanner idempotency, hidden-product/store rejection, count apply, ledger correctness, receiving/transfer/write-off edits and archive",
-      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts warehouse",
-      "log": "artifacts/ux/espresso/journal-warehouse-db-final.log"
+      "tests": 40,
+      "result": "passed; mobile shell, app-shell navigation, POS source invariants and runtime nested dialog focus case",
+      "log": "artifacts/ux/espresso/commerce-shell-focused-final.log"
     },
-    "catalogDatabase": {
-      "files": 3,
-      "tests": 87,
-      "result": "passed after locale repair; products and warehouse regression",
-      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts database",
-      "log": "artifacts/ux/espresso/warehouse-checkpoint-catalog-db.log",
-      "note": "Overlaps inventory/inventory-correctness files in the 50-test suite; these are not 137 unique tests."
+    "commerceDatabase": {
+      "files": 12,
+      "tests": 133,
+      "result": "passed on bazaar_hardening_ci",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts commerce",
+      "log": "artifacts/ux/espresso/commerce-refund-preview-db.log"
+    },
+    "loyaltyDatabase": {
+      "files": 8,
+      "tests": 36,
+      "result": "passed on bazaar_hardening_ci",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts loyalty",
+      "log": "artifacts/ux/espresso/commerce-final-loyalty-db.log",
+      "note": "Overlaps POS and reservation-timezone cases in commerce; do not add these counts as unique tests."
     },
     "typecheck": {
-      "result": "passed; final build also checks types",
-      "log": "artifacts/ux/espresso/journal-typecheck-final.log"
+      "result": "passed; final build also validates types",
+      "log": "artifacts/ux/espresso/commerce-final-typecheck.log"
     },
     "lint": {
-      "result": "passed without warnings; final build also runs lint",
-      "log": "artifacts/ux/espresso/journal-lint-final.log"
+      "result": "passed; final build also runs lint",
+      "log": "artifacts/ux/espresso/commerce-final-lint.log"
     },
     "i18n": {
       "result": "passed",
-      "log": "artifacts/ux/espresso/journal-i18n.log"
+      "log": "artifacts/ux/espresso/commerce-final-i18n.log"
     },
     "productionBuild": {
-      "result": "passed with final application sources, type/lint and 125 static pages",
+      "result": "passed with final application sources, types/lint and 125 static pages",
       "command": "UX_SUITE=espresso CIRCLE_NODE_TOTAL=3 NODE_OPTIONS=--max-old-space-size=6144 node --import tsx scripts/ux/build.ts",
-      "log": "artifacts/ux/espresso/build-warehouse-documents-final.log"
+      "log": "artifacts/ux/espresso/build-commerce-checkpoint-final.log"
     },
-    "stockReadback": {
-      "result": "passed; balances, costs and all ledger records remain unchanged, count is still IN_PROGRESS and not applied",
-      "evidence": "artifacts/ux/espresso/journal-final-stock-readback.json"
+    "databaseReadback": {
+      "result": "passed; sale/refunds, stock/cost recovery, balanced cash movements, closed shift, original register and warehouse count preserved",
+      "evidence": "artifacts/ux/espresso/commerce-final-assertions.json"
     },
     "customerWorkflowSources": {
-      "result": "All four sources exactly match c276f30",
+      "result": "All four operational sources byte-exact c276f30",
       "sources": [
         {
           "source": "src/components/inventory/receiving-workflow.tsx",
@@ -834,10 +893,14 @@
           "sha256": "daf57fddea2b1905c11168a1244994fc8f6b701291de4f6c432160029b97f620"
         }
       ]
+    },
+    "sourceAudit": {
+      "result": "Recursive AST classification and explicit server-source allowlist; not a claim of CSS layout acceptance",
+      "evidence": "artifacts/ux/espresso/commerce-source-audit-final.json"
     }
   },
   "customerLayoutRecheck": {
-    "evidence": "docs/espresso/warehouse-documents-verification.json",
-    "result": "All four operational sources exactly match c276f30; final desktop columns measured 441.594/662.406px and 736/368px with 16px gaps. New standalone print screen viewport is separately disclosed."
+    "evidence": "docs/espresso/commerce-verification.json",
+    "result": "All four operational sources byte-exact c276f30; original warehouse count and stock preserved after commerce QA cycle."
   }
 }

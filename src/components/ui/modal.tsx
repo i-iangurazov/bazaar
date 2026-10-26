@@ -37,6 +37,7 @@ export const Modal = ({
 }) => {
   const tCommon = useTranslations("common");
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
+  const parentDialogRef = useRef<HTMLElement | null>(null);
 
   const content = (
     <>
@@ -52,14 +53,22 @@ export const Modal = ({
         onOpenAutoFocus={() => {
           previouslyFocusedRef.current =
             document.activeElement instanceof HTMLElement ? document.activeElement : null;
+          parentDialogRef.current = previouslyFocusedRef.current?.closest('[role="dialog"]') ?? null;
         }}
         onCloseAutoFocus={(event) => {
           event.preventDefault();
           const previouslyFocused = returnFocusRef?.current ?? previouslyFocusedRef.current;
+          const parentDialog = parentDialogRef.current;
           previouslyFocusedRef.current = null;
+          parentDialogRef.current = null;
           queueMicrotask(() => {
             if (previouslyFocused?.isConnected) {
               previouslyFocused.focus();
+            }
+            // Responsive views can remove or hide the original trigger while
+            // a child dialog is open. Keep keyboard focus in its open parent.
+            if (document.activeElement !== previouslyFocused && parentDialog?.isConnected) {
+              parentDialog.focus();
             }
           });
         }}

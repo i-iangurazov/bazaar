@@ -40,8 +40,10 @@
     },
     {
       "source": "src/app/(app)/cash/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/commerce-verification.json"
+      ]
     },
     {
       "source": "src/app/(app)/customers/new/page.tsx",
@@ -90,13 +92,17 @@
     },
     {
       "source": "src/app/(app)/finance/expense/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/commerce-verification.json"
+      ]
     },
     {
       "source": "src/app/(app)/finance/income/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/commerce-verification.json"
+      ]
     },
     {
       "source": "src/app/(app)/help/compliance/page.tsx",
@@ -241,8 +247,10 @@
     },
     {
       "source": "src/app/(app)/orders/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/commerce-verification.json"
+      ]
     },
     {
       "source": "src/app/(app)/platform/page.tsx",
@@ -251,43 +259,75 @@
     },
     {
       "source": "src/app/(app)/pos/debts/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/commerce-verification.json",
+        "artifacts/ux/espresso/screenshots/commerce-pos-debts-desktop-dark-final.png",
+        "artifacts/ux/espresso/screenshots/commerce-pos-debts-mobile-dark-final.png"
+      ]
     },
     {
       "source": "src/app/(app)/pos/history/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/commerce-verification.json",
+        "artifacts/ux/espresso/screenshots/commerce-pos-history-desktop-dark-final.png",
+        "artifacts/ux/espresso/screenshots/commerce-pos-history-mobile-dark-final.png"
+      ]
     },
     {
       "source": "src/app/(app)/pos/kkm/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/commerce-verification.json",
+        "artifacts/ux/espresso/screenshots/commerce-pos-kkm-desktop-dark-final.png",
+        "artifacts/ux/espresso/screenshots/commerce-pos-kkm-mobile-dark-final.png"
+      ]
     },
     {
       "source": "src/app/(app)/pos/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/commerce-verification.json",
+        "artifacts/ux/espresso/screenshots/commerce-pos-entry-desktop-dark-final.png",
+        "artifacts/ux/espresso/screenshots/commerce-pos-entry-mobile-dark-final.png"
+      ]
     },
     {
       "source": "src/app/(app)/pos/receipts/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/commerce-verification.json",
+        "artifacts/ux/espresso/screenshots/commerce-pos-receipts-desktop-dark-final.png",
+        "artifacts/ux/espresso/screenshots/commerce-pos-receipts-mobile-dark-final.png"
+      ]
     },
     {
       "source": "src/app/(app)/pos/registers/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/commerce-verification.json",
+        "artifacts/ux/espresso/screenshots/commerce-pos-registers-desktop-dark-final.png",
+        "artifacts/ux/espresso/screenshots/commerce-pos-registers-mobile-dark-final.png"
+      ]
     },
     {
       "source": "src/app/(app)/pos/sell/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/commerce-verification.json",
+        "artifacts/ux/espresso/screenshots/commerce-pos-sell-desktop-dark-final.png",
+        "artifacts/ux/espresso/screenshots/commerce-pos-sell-mobile-dark-final.png"
+      ]
     },
     {
       "source": "src/app/(app)/pos/shifts/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/commerce-verification.json",
+        "artifacts/ux/espresso/screenshots/commerce-pos-shifts-desktop-dark-final.png",
+        "artifacts/ux/espresso/screenshots/commerce-pos-shifts-mobile-dark-final.png"
+      ]
     },
     {
       "source": "src/app/(app)/products/[id]/page.tsx",
@@ -319,18 +359,30 @@
     },
     {
       "source": "src/app/(app)/purchase-orders/[id]/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/commerce-verification.json",
+        "artifacts/ux/espresso/screenshots/commerce-purchase-detail-desktop-dark-final.png",
+        "artifacts/ux/espresso/screenshots/commerce-purchase-detail-mobile-dark-final.png"
+      ]
     },
     {
       "source": "src/app/(app)/purchase-orders/new/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/commerce-verification.json",
+        "artifacts/ux/espresso/screenshots/commerce-purchase-new-desktop-dark-final.png",
+        "artifacts/ux/espresso/screenshots/commerce-purchase-new-mobile-dark-final.png"
+      ]
     },
     {
       "source": "src/app/(app)/purchase-orders/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/commerce-verification.json",
+        "artifacts/ux/espresso/screenshots/commerce-purchase-orders-desktop-dark-final.png",
+        "artifacts/ux/espresso/screenshots/commerce-purchase-orders-mobile-dark-final.png"
+      ]
     },
     {
       "source": "src/app/(app)/reports/analytics/page.tsx",
@@ -359,23 +411,39 @@
     },
     {
       "source": "src/app/(app)/sales/orders/[id]/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/commerce-verification.json",
+        "artifacts/ux/espresso/screenshots/commerce-sales-detail-desktop-dark-final.png",
+        "artifacts/ux/espresso/screenshots/commerce-sales-detail-mobile-dark-final.png"
+      ]
     },
     {
       "source": "src/app/(app)/sales/orders/metrics/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/commerce-verification.json",
+        "artifacts/ux/espresso/screenshots/commerce-sales-metrics-desktop-dark-final.png",
+        "artifacts/ux/espresso/screenshots/commerce-sales-metrics-mobile-dark-final.png"
+      ]
     },
     {
       "source": "src/app/(app)/sales/orders/new/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/commerce-verification.json",
+        "artifacts/ux/espresso/screenshots/commerce-sales-new-desktop-dark-final.png",
+        "artifacts/ux/espresso/screenshots/commerce-sales-new-mobile-dark-final.png"
+      ]
     },
     {
       "source": "src/app/(app)/sales/orders/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/commerce-verification.json",
+        "artifacts/ux/espresso/screenshots/commerce-sales-orders-desktop-dark-final.png",
+        "artifacts/ux/espresso/screenshots/commerce-sales-orders-mobile-dark-final.png"
+      ]
     },
     {
       "source": "src/app/(app)/settings/attributes/page.tsx",
@@ -818,12 +886,12 @@
     }
   ],
   "verification": {
-    "desktop": "partial: 47 of 97 route sources have checkpoint evidence; 50 remain pending. No routes fully accepted.",
-    "mobile": "partial: warehouse journal/detail/count/edit wrappers inspected at 390px in RU/dark, A4 preview viewport measured; earlier family checkpoints retained. Full matrix remains pending.",
-    "themes": "partial: warehouse RU dark desktop/mobile, EN light desktop and selected KG light states; full route/state/theme matrix pending.",
-    "rolesAndScopes": "partial: existing admin/manager/staff/cashier warehouse controls checked, manager store scope retained; all plans/currencies and every role/route permutation pending.",
-    "functionalRegression": "Latest warehouse checkpoint: 1911 unit tests passed; 50 warehouse DB tests and an overlapping 87-test product/inventory suite passed after correcting isolated DB Unicode locale. Browser fixtures use a separate DB; stock balances and costs are preserved, synthetic count remains unapplied.",
-    "productionBuild": "passed with final application sources, type/lint and 125 static pages"
+    "desktop": "partial: 66 of 97 route sources have checkpoint evidence; 31 remain pending. Zero routes fully accepted. Includes 4 commerce compatibility aliases.",
+    "mobile": "partial: 15 commerce screen states inspected at 390px RU/dark; earlier family evidence retained. Full state and theme matrix pending.",
+    "themes": "partial: commerce RU/dark desktop/mobile, four EN/light desktop and two KG/light mobile states; full route/state matrix pending.",
+    "rolesAndScopes": "partial: admin, manager, staff and cashier commerce checks include manager store scope, read-only registers and unassigned-store order rejection. Every role/plan/currency permutation remains pending.",
+    "functionalRegression": "Commerce checkpoint: 1912 unit tests, 40 final focused tests, 133 commerce DB tests and overlapping 36 loyalty DB tests passed. Actual isolated UI sale/refunds and cash close verified; original register, stock costs and warehouse count preserved.",
+    "productionBuild": "passed with final application sources, types/lint and 125 static pages"
   },
   "requirements": {
     "visualFidelity": "Match Espresso typography, palette, surfaces and components while preserving customer workflows; analogous screen comparison must respect the human-confirmed operational layouts.",
@@ -835,7 +903,7 @@
     "customerWorkflows": "Preserve the customer-requested two-column operational layouts and established interactions. The visual reference does not authorize replacing them; see AGENTS.md and redesign-change-audit.json."
   },
   "progress": {
-    "stage": "warehouse-documents-checkpoint-in-review-full-redesign-in-progress",
+    "stage": "commerce-checkpoint-in-review-full-redesign-in-progress",
     "foundation": [
       "Pinned MIT Espresso semantic tokens and component CSS",
       "Self-hosted Inter Variable",
@@ -975,6 +1043,11 @@
         "evidence": [
           "docs/espresso/warehouse-documents-verification.json"
         ]
+      },
+      {
+        "check": "Commerce: 15 distinct screen sources and 4 compatibility aliases",
+        "result": "Desktop/mobile RU/dark states inspected, selected EN/KG/light and role/store checks; actual 270 sale/refund cycle, 5/5 cash movement and zero-balanced close verified; in_review only.",
+        "evidence": "docs/espresso/commerce-verification.json"
       }
     ],
     "remaining": [
@@ -989,16 +1062,16 @@
       "Final authentication acceptance: successful invite/signup/onboarding and reset-token lifecycle under isolated tests; live SMTP and browser credential entry are not claimed by the current checkpoint.",
       "Complete the legacy English copy audit; settings-verification.json lists observed unfinished template/import labels.",
       "Complete bespoke printing/import accessible control labels, successful upload/invitation browser paths and remaining settings state/plan permutations; current in_review status is not full acceptance.",
-      "Finish warehouse acceptance permutations listed in warehouse-documents-verification.json, including native date-picker/multi-page navigation; current in_review evidence is not full acceptance."
+      "Finish warehouse acceptance permutations listed in warehouse-documents-verification.json, including native date-picker/multi-page navigation; current in_review evidence is not full acceptance.",
+      "Complete commerce acceptance permutations listed in commerce-verification.json; current screen and cash-cycle evidence is not acceptance of every order, provider or state flow."
     ],
     "unitTests": {
-      "files": 260,
-      "tests": 1911,
-      "result": "passed",
+      "files": 261,
+      "tests": 1912,
+      "result": "passed after shared-dialog and refund UI corrections",
       "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
-      "log": "artifacts/ux/espresso/journal-all-unit.log",
-      "status": "passed",
-      "evidence": "artifacts/ux/espresso/journal-all-unit.log"
+      "log": "artifacts/ux/espresso/commerce-all-unit-focus-final.log",
+      "note": "Final translated mobile purchase-title branch was subsequently checked by the focused suite and final production build."
     },
     "databaseRegression": {
       "files": 3,
@@ -1049,6 +1122,21 @@
       "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts database",
       "log": "artifacts/ux/espresso/warehouse-checkpoint-catalog-db.log",
       "note": "Overlaps inventory/inventory-correctness files in the 50-test suite; these are not 137 unique tests."
+    },
+    "commerceDatabaseRegression": {
+      "files": 12,
+      "tests": 133,
+      "result": "passed on bazaar_hardening_ci",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts commerce",
+      "log": "artifacts/ux/espresso/commerce-refund-preview-db.log"
+    },
+    "loyaltyDatabaseRegression": {
+      "files": 8,
+      "tests": 36,
+      "result": "passed on bazaar_hardening_ci",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts loyalty",
+      "log": "artifacts/ux/espresso/commerce-final-loyalty-db.log",
+      "note": "Overlaps POS and reservation-timezone cases in commerce; do not add these counts as unique tests."
     }
   }
 }

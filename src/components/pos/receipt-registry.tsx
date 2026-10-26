@@ -603,7 +603,7 @@ export const ReceiptRegistry = ({ title, subtitle, compact = false }: ReceiptReg
                                 </TableCell>
                                 <TableCell className="sticky right-0 z-10 min-w-[340px] bg-card px-4 py-3 align-top shadow-[-12px_0_16px_-16px_rgba(15,23,42,0.35)] group-hover:bg-muted/25">
                                   <div className="flex justify-end">
-                                    <div className="inline-flex overflow-hidden rounded-md border border-border bg-background shadow-sm">
+                                    <div className="inline-flex overflow-hidden rounded-md border border-border bg-background shadow-none">
                                       <Button
                                         type="button"
                                         variant="ghost"

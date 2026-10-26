@@ -1,5 +1,5 @@
 {
-  "status": "customer-operational-layouts-preserved-warehouse-documents-checkpoint-in-review-full-redesign-in-progress",
+  "status": "commerce-checkpoint-in-review-full-redesign-in-progress",
   "branch": "codex/playground",
   "reference": "Frappe Framework Espresso e8d41dd0061a32ee781caefe5d0b0d2bb7c15362",
   "checks": [
@@ -255,6 +255,78 @@
       "command": "CUA normal UI warehouse replay and Prisma fixture readback",
       "result": "Original customer columns retained; selected filters, count creation/edit/reload, all four role controls and screen print panning checked. All ledger/snapshot/cost rows unchanged; count not applied.",
       "evidence": "docs/espresso/warehouse-documents-verification.json"
+    },
+    {
+      "name": "unit",
+      "files": 261,
+      "tests": 1912,
+      "result": "passed after shared-dialog and refund UI corrections",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
+      "log": "artifacts/ux/espresso/commerce-all-unit-focus-final.log",
+      "note": "Final translated mobile purchase-title branch was subsequently checked by the focused suite and final production build.",
+      "evidence": "docs/espresso/commerce-verification.json"
+    },
+    {
+      "name": "finalFocused",
+      "files": 4,
+      "tests": 40,
+      "result": "passed; mobile shell, app-shell navigation, POS source invariants and runtime nested dialog focus case",
+      "log": "artifacts/ux/espresso/commerce-shell-focused-final.log",
+      "evidence": "docs/espresso/commerce-verification.json"
+    },
+    {
+      "name": "commerceDatabase",
+      "files": 12,
+      "tests": 133,
+      "result": "passed on bazaar_hardening_ci",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts commerce",
+      "log": "artifacts/ux/espresso/commerce-refund-preview-db.log",
+      "evidence": "docs/espresso/commerce-verification.json"
+    },
+    {
+      "name": "loyaltyDatabase",
+      "files": 8,
+      "tests": 36,
+      "result": "passed on bazaar_hardening_ci",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts loyalty",
+      "log": "artifacts/ux/espresso/commerce-final-loyalty-db.log",
+      "note": "Overlaps POS and reservation-timezone cases in commerce; do not add these counts as unique tests.",
+      "evidence": "docs/espresso/commerce-verification.json"
+    },
+    {
+      "name": "typecheck",
+      "result": "passed; final build also validates types",
+      "log": "artifacts/ux/espresso/commerce-final-typecheck.log",
+      "evidence": "docs/espresso/commerce-verification.json"
+    },
+    {
+      "name": "lint",
+      "result": "passed; final build also runs lint",
+      "log": "artifacts/ux/espresso/commerce-final-lint.log",
+      "evidence": "docs/espresso/commerce-verification.json"
+    },
+    {
+      "name": "i18n",
+      "result": "passed",
+      "log": "artifacts/ux/espresso/commerce-final-i18n.log",
+      "evidence": "docs/espresso/commerce-verification.json"
+    },
+    {
+      "name": "productionBuild",
+      "result": "passed with final application sources, types/lint and 125 static pages",
+      "command": "UX_SUITE=espresso CIRCLE_NODE_TOTAL=3 NODE_OPTIONS=--max-old-space-size=6144 node --import tsx scripts/ux/build.ts",
+      "log": "artifacts/ux/espresso/build-commerce-checkpoint-final.log",
+      "evidence": "docs/espresso/commerce-verification.json"
+    },
+    {
+      "name": "databaseReadback",
+      "result": "passed; sale/refunds, stock/cost recovery, balanced cash movements, closed shift, original register and warehouse count preserved",
+      "evidence": "artifacts/ux/espresso/commerce-final-assertions.json"
+    },
+    {
+      "name": "sourceAudit",
+      "result": "Recursive AST classification and explicit server-source allowlist; not a claim of CSS layout acceptance",
+      "evidence": "artifacts/ux/espresso/commerce-source-audit-final.json"
     }
   ],
   "environment": {
@@ -284,5 +356,6 @@
   "currentDirectoryCheckpoint": "docs/espresso/directory-verification.json",
   "currentAuthenticationCheckpoint": "docs/espresso/auth-verification.json",
   "currentSettingsCheckpoint": "docs/espresso/settings-verification.json",
-  "currentWarehouseCheckpoint": "docs/espresso/warehouse-documents-verification.json"
+  "currentWarehouseCheckpoint": "docs/espresso/warehouse-documents-verification.json",
+  "currentCommerceCheckpoint": "docs/espresso/commerce-verification.json"
 }

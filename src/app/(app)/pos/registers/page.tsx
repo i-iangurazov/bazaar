@@ -290,7 +290,7 @@ const PosRegistersPage = () => {
 
       {canManage ? (
         <Card className="bazaar-admin-surface">
-          <CardHeader className="border-b border-border/60 bg-muted/20">
+          <CardHeader className="border-b border-border bg-muted/20">
             <CardTitle>{t("registers.createTitle")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -313,6 +313,7 @@ const PosRegistersPage = () => {
               <div className="space-y-1.5">
                 <p className="text-sm font-medium">{t("registers.name")}</p>
                 <Input
+                  aria-label={t("registers.name")}
                   value={createName}
                   onChange={(event) => setCreateName(event.target.value)}
                   maxLength={120}
@@ -321,6 +322,7 @@ const PosRegistersPage = () => {
               <div className="space-y-1.5">
                 <p className="text-sm font-medium">{t("registers.code")}</p>
                 <Input
+                  aria-label={t("registers.code")}
                   value={createCode}
                   onChange={(event) => setCreateCode(event.target.value)}
                   maxLength={32}
@@ -336,7 +338,7 @@ const PosRegistersPage = () => {
       ) : null}
 
       <Card className="bazaar-admin-surface">
-        <CardHeader className="gap-4 border-b border-border/60 bg-muted/20">
+        <CardHeader className="gap-4 border-b border-border bg-muted/20">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <CardTitle>{t("registers.listTitle")}</CardTitle>
@@ -507,11 +509,11 @@ const PosRegistersPage = () => {
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <p className="text-sm font-medium">{t("registers.name")}</p>
-              <Input value={editName} onChange={(event) => setEditName(event.target.value)} maxLength={120} />
+              <Input aria-label={t("registers.name")} value={editName} onChange={(event) => setEditName(event.target.value)} maxLength={120} />
             </div>
             <div className="space-y-1.5">
               <p className="text-sm font-medium">{t("registers.code")}</p>
-              <Input value={editCode} onChange={(event) => setEditCode(event.target.value)} maxLength={32} />
+              <Input aria-label={t("registers.code")} value={editCode} onChange={(event) => setEditCode(event.target.value)} maxLength={32} />
             </div>
             <div className="space-y-1.5">
               <p className="text-sm font-medium">{tCommon("store")}</p>

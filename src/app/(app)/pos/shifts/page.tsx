@@ -816,6 +816,7 @@ const PosShiftsPage = () => {
                 <div className="min-w-0">
                   <Input
                     value={cashAmount}
+                    aria-label={t("shifts.amount")}
                     onChange={(event) => setCashAmount(event.target.value)}
                     placeholder={t("shifts.amount")}
                     inputMode="decimal"
@@ -837,6 +838,7 @@ const PosShiftsPage = () => {
                     </Select>
                     <Input
                       value={cashComment}
+                      aria-label={t("shifts.comment")}
                       onChange={(event) => setCashComment(event.target.value)}
                       placeholder={t("shifts.comment")}
                     />
@@ -844,6 +846,7 @@ const PosShiftsPage = () => {
                 ) : (
                   <Input
                     value={cashReason}
+                    aria-label={t("shifts.reason")}
                     onChange={(event) => setCashReason(event.target.value)}
                     placeholder={t("shifts.reason")}
                   />
@@ -921,6 +924,7 @@ const PosShiftsPage = () => {
                     </label>
                     <Input
                       value={countedCash}
+                      aria-label={t("shifts.countedCash")}
                       onChange={(event) => setCountedCash(event.target.value)}
                       placeholder={t("shifts.countedCash")}
                       inputMode="decimal"
@@ -932,6 +936,7 @@ const PosShiftsPage = () => {
                     </label>
                     <Textarea
                       value={closeNote}
+                      aria-label={t("shifts.closingNote")}
                       onChange={(event) => setCloseNote(event.target.value)}
                       placeholder={t("shifts.closingNotePlaceholder")}
                       rows={3}
@@ -999,7 +1004,7 @@ const PosShiftsPage = () => {
                         {returnDrafts.map((saleReturn) => (
                           <div
                             key={saleReturn.id}
-                            className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/70 bg-background/70 p-2"
+                            className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-background p-2"
                           >
                             <div className="min-w-0">
                               <p className="truncate text-sm font-medium text-foreground">

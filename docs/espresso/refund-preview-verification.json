@@ -1,8 +1,8 @@
 {
-  "status": "database-verified-browser-check-in-progress",
+  "status": "database-and-browser-verified-checkpoint-in-review",
   "branch": "codex/playground",
   "baseline": "f77aac4",
-  "problem": "The POS return dialog displayed 150 KGS for one unit of a discounted sale, while the authoritative return correctly posted 135 KGS. History used the same gross-price preview and submitted that incorrect client amount.",
+  "problem": "POS browser preview showed 150 KGS while the actual discounted return posted 135. Source inspection showed standalone history also derived its preview and submission from gross unit prices; no incorrect history transaction was attempted before correction.",
   "evidenceBefore": {
     "ui": "artifacts/ux/espresso/screenshots/commerce-partial-return-preview-before.png",
     "database": "artifacts/ux/espresso/commerce-after-partial-return-readback.json",
@@ -55,5 +55,16 @@
     "Browser replay after the final build is recorded in commerce-verification.json.",
     "Final posting continues to validate availability, remaining tender and idempotency; the read-only quote does not reserve goods or money."
   ],
-  "delivery": "Local playground only. No schema migration, permission expansion, main merge/push or deployment."
+  "delivery": "Local playground only. No schema migration, permission expansion, main merge/push or deployment.",
+  "browser": {
+    "evidence": "docs/espresso/commerce-verification.json",
+    "embeddedJournalKgs": 135,
+    "standaloneHistoryQuotedAndPostedKgs": 135,
+    "totalRefundedKgs": 270,
+    "readback": "artifacts/ux/espresso/commerce-final-assertions.json",
+    "screenshots": [
+      "artifacts/ux/espresso/screenshots/commerce-return-quote-mobile-final.png",
+      "artifacts/ux/espresso/screenshots/commerce-history-return-135-final.png"
+    ]
+  }
 }

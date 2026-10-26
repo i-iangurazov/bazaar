@@ -620,6 +620,7 @@ const PosEntryPage = () => {
             <label className="text-sm font-medium text-foreground">{t("entry.openingCash")}</label>
             <Input
               value={openingCash}
+              aria-label={t("entry.openingCash")}
               onChange={(event) => setOpeningCash(event.target.value)}
               placeholder={t("entry.openingCashPlaceholder")}
               inputMode="decimal"
@@ -670,6 +671,7 @@ const PosEntryPage = () => {
             <label className="text-sm font-medium text-foreground">{t("entry.openingNote")}</label>
             <Textarea
               value={openingNote}
+              aria-label={t("entry.openingNote")}
               onChange={(event) => setOpeningNote(event.target.value)}
               placeholder={t("entry.openingNotePlaceholder")}
               rows={3}
