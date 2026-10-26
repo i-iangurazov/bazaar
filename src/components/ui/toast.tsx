@@ -1,6 +1,14 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -46,20 +54,46 @@ export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
   const pathname = usePathname();
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const timersRef = useRef(new Map<string, number>());
+  const elementsRef = useRef(new Map<string, HTMLDivElement>());
+  const originsRef = useRef(new Map<string, HTMLElement>());
   const isPosCashierRoute = pathname === "/pos/sell" || pathname.endsWith("/pos/sell");
 
   const remove = useCallback((id: string) => {
+    const origin = originsRef.current.get(id);
+    const restoreFocus = elementsRef.current.get(id)?.contains(document.activeElement);
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
+    elementsRef.current.delete(id);
+    originsRef.current.delete(id);
     const timer = timersRef.current.get(id);
     if (timer) {
       window.clearTimeout(timer);
       timersRef.current.delete(id);
     }
+    if (restoreFocus && origin?.isConnected) {
+      queueMicrotask(() => {
+        if (origin.isConnected) origin.focus();
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    const timers = timersRef.current;
+    const elements = elementsRef.current;
+    const origins = originsRef.current;
+    return () => {
+      timers.forEach((timer) => window.clearTimeout(timer));
+      timers.clear();
+      elements.clear();
+      origins.clear();
+    };
   }, []);
 
   const push = useCallback(
     (toast: ToastInput) => {
       const id = generateId();
+      if (document.activeElement instanceof HTMLElement) {
+        originsRef.current.set(id, document.activeElement);
+      }
       setToasts((prev) => [...prev, { id, ...toast }]);
       const timer = window.setTimeout(() => remove(id), 5000);
       timersRef.current.set(id, timer);
@@ -86,6 +120,10 @@ export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
             return (
               <div
                 key={toast.id}
+                ref={(element) => {
+                  if (element) elementsRef.current.set(toast.id, element);
+                  else elementsRef.current.delete(toast.id);
+                }}
                 role={toast.variant === "error" ? "alert" : "status"}
                 className={cn(
                   "rounded-md border bg-card p-4 shadow-lg",
@@ -109,7 +147,7 @@ export const ToastProvider = ({ children }: { children: React.ReactNode }) => {
                       <Icon className="h-3.5 w-3.5" aria-hidden />
                     </span>
                   ) : null}
-                  <div className="flex-1 space-y-1">
+                  <div className="min-w-0 flex-1 space-y-1 [overflow-wrap:anywhere]">
                     {toast.title ? (
                       <p className="text-sm font-semibold text-foreground">{toast.title}</p>
                     ) : null}

@@ -788,48 +788,66 @@
   "components": [
     {
       "source": "src/components/ui/action-menu.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/shared-controls-verification.json"
+      ]
     },
     {
       "source": "src/components/ui/alert.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/shared-controls-verification.json"
+      ]
     },
     {
       "source": "src/components/ui/badge.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/shared-controls-verification.json"
+      ]
     },
     {
       "source": "src/components/ui/breadcrumb.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/shared-controls-verification.json"
+      ]
     },
     {
       "source": "src/components/ui/button.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/shared-controls-verification.json"
+      ]
     },
     {
       "source": "src/components/ui/card.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/shared-controls-verification.json"
+      ]
     },
     {
       "source": "src/components/ui/checkbox.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/shared-controls-verification.json"
+      ]
     },
     {
       "source": "src/components/ui/data-table.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/shared-controls-verification.json"
+      ]
     },
     {
       "source": "src/components/ui/dialog.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/shared-controls-verification.json"
+      ]
     },
     {
       "source": "src/components/ui/dropdown-menu.tsx",
@@ -841,18 +859,24 @@
     },
     {
       "source": "src/components/ui/empty-state.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/shared-controls-verification.json"
+      ]
     },
     {
       "source": "src/components/ui/form.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/shared-controls-verification.json"
+      ]
     },
     {
       "source": "src/components/ui/icon-button.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/shared-controls-verification.json"
+      ]
     },
     {
       "source": "src/components/ui/input.tsx",
@@ -864,8 +888,10 @@
     },
     {
       "source": "src/components/ui/label.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/shared-controls-verification.json"
+      ]
     },
     {
       "source": "src/components/ui/modal.tsx",
@@ -879,18 +905,24 @@
     },
     {
       "source": "src/components/ui/pagination.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/shared-controls-verification.json"
+      ]
     },
     {
       "source": "src/components/ui/password-input.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/shared-controls-verification.json"
+      ]
     },
     {
       "source": "src/components/ui/popover.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/shared-controls-verification.json"
+      ]
     },
     {
       "source": "src/components/ui/select.tsx",
@@ -902,38 +934,52 @@
     },
     {
       "source": "src/components/ui/separator.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/shared-controls-verification.json"
+      ]
     },
     {
       "source": "src/components/ui/sheet.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/shared-controls-verification.json"
+      ]
     },
     {
       "source": "src/components/ui/sidebar.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/shared-controls-verification.json"
+      ]
     },
     {
       "source": "src/components/ui/skeleton.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/shared-controls-verification.json"
+      ]
     },
     {
       "source": "src/components/ui/spinner.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/shared-controls-verification.json"
+      ]
     },
     {
       "source": "src/components/ui/switch.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/shared-controls-verification.json"
+      ]
     },
     {
       "source": "src/components/ui/table.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/shared-controls-verification.json"
+      ]
     },
     {
       "source": "src/components/ui/tabs.tsx",
@@ -953,27 +999,33 @@
     },
     {
       "source": "src/components/ui/toast.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/shared-controls-verification.json"
+      ]
     },
     {
       "source": "src/components/ui/tooltip.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/shared-controls-verification.json"
+      ]
     },
     {
       "source": "src/components/ui/use-confirm-dialog.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/shared-controls-verification.json"
+      ]
     }
   ],
   "verification": {
-    "desktop": "partial:97/97page sources in_review, zero pending/accepted; primary source inventory only",
-    "mobile": "partial:marketing12language/theme/width combinations,60section captures and4supplemental; historical family evidence retained; final acceptance pending",
+    "desktop": "Primary inventory97/97page sources and32/32shared controls in_review;zero pending/accepted. Final visual and cross-screen acceptance remains.",
+    "mobile": "Shared-control selected states at390px inboth themes;KG/EN default labels checked. Previous family evidence/limits retained.",
     "themes": "Marketing selected-state matrix passed in both themes/RU/KG/EN; earlier family limits retained",
     "rolesAndScopes": "Authenticated root redirect and actual QA logout/login preserved;9real DB authentication cases passed; existing policy unchanged",
-    "functionalRegression": "2113full unit/9authentication DB tests passed; marketing keyboard/locale real-network recovery and485business-row preservation verified",
-    "productionBuild": "passed after all marketing application changes; no live provider acceptance"
+    "functionalRegression": "2131full unit/47settings-family DB tests passed;30shared-control captures and actual standalone profile validation/save/focus recovery;485business-row hashes unchanged",
+    "productionBuild": "passed after final shared-component changes;actual profile workflow verified on the standalone build"
   },
   "requirements": {
     "visualFidelity": "Match Espresso typography, palette, surfaces and components while preserving customer workflows; analogous screen comparison must respect the human-confirmed operational layouts.",
@@ -985,7 +1037,7 @@
     "customerWorkflows": "Preserve the customer-requested two-column operational layouts and established interactions. The visual reference does not authorize replacing them; see AGENTS.md and redesign-change-audit.json."
   },
   "progress": {
-    "stage": "marketing-checkpoint-in-review-full-redesign-in-progress",
+    "stage": "shared-controls-checkpoint-in-review-final-acceptance-pending",
     "foundation": [
       "Pinned MIT Espresso semantic tokens and component CSS",
       "Self-hosted Inter Variable",
@@ -1160,6 +1212,11 @@
         "check": "Public marketing: theme/localization/keyboard/real-network recovery and current product captures",
         "result": "12combinations/60section captures plus4supplemental, one source;297existing CSSrule geometry preserved; authenticated redirect and485business rows unchanged; in_review only",
         "evidence": "docs/espresso/marketing-verification.json"
+      },
+      {
+        "check": "Dedicated shared-control review and actual final profile workflow",
+        "result": "26previously pending controls now in_review;30selected captures,18new unit cases,47DB cases and final standalone profile validation/save/focus. Final whole-product acceptance pending.",
+        "evidence": "docs/espresso/shared-controls-verification.json"
       }
     ],
     "remaining": [
@@ -1179,16 +1236,15 @@
       "Complete report/shared-component acceptance permutations listed in reports-verification.json; page captures and DB regressions do not establish final overall redesign acceptance.",
       "Complete integration/provider/editor/query-state and legacy translation acceptance listed in integrations-verification.json; base captures and mocks are not live provider acceptance.",
       "Complete administration/shared-shell plan, title-fallback and state permutations listed in administration-verification.json. Current page/control totals are recorded in the public-consumer checkpoint; administration limitations still apply.",
-      "No primary page-source pending:97in_review/0accepted.26shared controls pending; legacy copy/accessibility, mobile title fallback and complete shared/state/visual acceptance remain."
+      "No primary source/control inventory remains pending:97page sources and32shared controls in_review, zero fully accepted. Finish final visual/state/cross-screen acceptance and tracked concrete issues."
     ],
     "unitTests": {
       "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
-      "files": 274,
-      "tests": 2113,
-      "result": "passed after all application changes",
-      "log": "artifacts/ux/espresso/marketing-unit-final.log",
-      "newTests": 22,
-      "note": "Net increase relative to the2091-case public-consumer checkpoint. New cases are included in2113."
+      "files": 275,
+      "tests": 2131,
+      "newTests": 18,
+      "result": "passed after all application changes;18new cases included in2131",
+      "log": "artifacts/ux/espresso/shared-controls-unit-final.log"
     },
     "databaseRegression": {
       "files": 3,
@@ -1309,6 +1365,15 @@
       "database": "bazaar_hardening_ci; Redis DB5; isolated resettable regression infrastructure",
       "result": "passed",
       "log": "artifacts/ux/espresso/marketing-auth-database-final.log"
+    },
+    "sharedControlsDatabaseRegression": {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts settings",
+      "files": 6,
+      "tests": 47,
+      "result": "passed",
+      "database": "bazaar_hardening_ci; Redis DB5; separate resettable database, UI fixtures not reset",
+      "scope": "Attributes, catalog sources, profile preferences, product units, users and imports",
+      "log": "artifacts/ux/espresso/shared-controls-database-final.log"
     }
   }
 }

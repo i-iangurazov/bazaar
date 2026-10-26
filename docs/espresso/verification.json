@@ -1,5 +1,5 @@
 {
-  "status": "marketing-checkpoint-in-review-full-redesign-in-progress",
+  "status": "shared-controls-checkpoint-in-review-final-acceptance-pending",
   "branch": "codex/playground",
   "reference": "Frappe Framework Espresso e8d41dd0061a32ee781caefe5d0b0d2bb7c15362",
   "checks": [
@@ -537,6 +537,11 @@
       "command": "Marketing checkpoint: full unit, isolated authentication DB, types/lint/i18n/build and actual production browser",
       "result": "2113unit/9DB passed;60matrix section captures across12states plus4supplemental; locale network recovery, keyboard/focus and485business-row preservation verified",
       "evidence": "docs/espresso/marketing-verification.json"
+    },
+    {
+      "command": "Shared-control checkpoint: full unit/isolated DB/types/lint/i18n/production build and actual browser",
+      "result": "2131unit/47DB passed;30selected fixture captures plus actual production profile validation/save/focus;485business rows unchanged",
+      "evidence": "docs/espresso/shared-controls-verification.json"
     }
   ],
   "environment": {
@@ -575,5 +580,6 @@
   "currentAdministrationCheckpoint": "docs/espresso/administration-verification.json",
   "currentPublicGuideCheckpoint": "docs/espresso/public-guide-verification.json",
   "currentPublicConsumerCheckpoint": "docs/espresso/public-consumer-verification.json",
-  "currentMarketingCheckpoint": "docs/espresso/marketing-verification.json"
+  "currentMarketingCheckpoint": "docs/espresso/marketing-verification.json",
+  "currentSharedControlsCheckpoint": "docs/espresso/shared-controls-verification.json"
 }

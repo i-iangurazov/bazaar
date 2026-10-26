@@ -1,5 +1,5 @@
 {
-  "status": "marketing-checkpoint-in-review-full-redesign-in-progress",
+  "status": "shared-controls-checkpoint-in-review-final-acceptance-pending",
   "scope": "Redesign changes since1fcdfd4 with family checkpoints through public catalog/consumer loyalty; not an audit of every earlier playground improvement.",
   "humanCorrection": "Customer-requested two-column operational layouts must be preserved. A difference from ERPNext is not evidence of a defect.",
   "restored": [
@@ -298,14 +298,15 @@
       "src/server/services/reports.ts",
       "src/server/trpc/routers/pos.ts"
     ],
-    "result": "Seven previously disclosed corrective service/router/API files remain relative to1fcdfd4. No new server/API/Prisma source change in the marketing checkpoint. Middleware cookie agreement remains separately disclosed.",
+    "result": "Seven previously disclosed corrective service/router/API files remain relative to1fcdfd4. No new server/API/Prisma changes in marketing or shared-control checkpoints. Middleware cookie agreement remains separately disclosed.",
     "evidence": [
       "docs/espresso/loyalty-timezone-verification.json",
       "docs/espresso/refund-preview-verification.json",
       "docs/espresso/report-timestamps-verification.json",
       "docs/espresso/legacy-report-dates-verification.json",
       "docs/espresso/public-consumer-verification.json",
-      "docs/espresso/marketing-verification.json"
+      "docs/espresso/marketing-verification.json",
+      "docs/espresso/shared-controls-verification.json"
     ]
   },
   "sourceReview": {
@@ -822,7 +823,7 @@
       },
       {
         "path": "src/components/ui/data-table.tsx",
-        "classification": "jsx-style-attributes-only"
+        "classification": "requires-semantic-review"
       },
       {
         "path": "src/components/ui/dialog.tsx",
@@ -835,6 +836,10 @@
       {
         "path": "src/components/ui/empty-state.tsx",
         "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/ui/form.tsx",
+        "classification": "requires-semantic-review"
       },
       {
         "path": "src/components/ui/icon-button.tsx",
@@ -855,6 +860,10 @@
       {
         "path": "src/components/ui/pagination.tsx",
         "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/ui/password-input.tsx",
+        "classification": "requires-semantic-review"
       },
       {
         "path": "src/components/ui/popover.tsx",
@@ -887,6 +896,10 @@
       {
         "path": "src/components/ui/textarea.tsx",
         "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/components/ui/toast.tsx",
+        "classification": "requires-semantic-review"
       },
       {
         "path": "src/components/ui/tooltip.tsx",
@@ -1072,7 +1085,7 @@
     "Public guide and field sources remain in_review; documented render/DOM and selected focus evidence is not full editorial, every-browser, provider or whole-redesign acceptance."
   ],
   "delivery": "codex/playground only; no main merge or production deployment",
-  "currentCheckpoint": "docs/espresso/marketing-verification.json",
+  "currentCheckpoint": "docs/espresso/shared-controls-verification.json",
   "previousCheckpoints": [
     "docs/espresso/directory-verification.json",
     "docs/espresso/auth-verification.json",
@@ -1083,42 +1096,43 @@
     "docs/espresso/integrations-verification.json",
     "docs/espresso/administration-verification.json",
     "docs/espresso/public-guide-verification.json",
-    "docs/espresso/public-consumer-verification.json"
+    "docs/espresso/public-consumer-verification.json",
+    "docs/espresso/marketing-verification.json"
   ],
   "currentCheckpointChecks": {
     "unit": {
       "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
-      "files": 274,
-      "tests": 2113,
-      "result": "passed after all application changes",
-      "log": "artifacts/ux/espresso/marketing-unit-final.log",
-      "newTests": 22,
-      "note": "Net increase relative to the2091-case public-consumer checkpoint. New cases are included in2113."
+      "files": 275,
+      "tests": 2131,
+      "newTests": 18,
+      "result": "passed after all application changes;18new cases included in2131",
+      "log": "artifacts/ux/espresso/shared-controls-unit-final.log"
     },
     "database": {
-      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts authentication",
-      "files": 1,
-      "tests": 9,
-      "database": "bazaar_hardening_ci; Redis DB5; isolated resettable regression infrastructure",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts settings",
+      "files": 6,
+      "tests": 47,
       "result": "passed",
-      "log": "artifacts/ux/espresso/marketing-auth-database-final.log"
+      "database": "bazaar_hardening_ci; Redis DB5; separate resettable database, UI fixtures not reset",
+      "scope": "Attributes, catalog sources, profile preferences, product units, users and imports",
+      "log": "artifacts/ux/espresso/shared-controls-database-final.log"
     },
     "types": {
       "result": "passed",
-      "log": "artifacts/ux/espresso/marketing-types-final.log"
+      "log": "artifacts/ux/espresso/shared-controls-types-final.log"
     },
     "lint": {
       "result": "passed without warnings",
-      "log": "artifacts/ux/espresso/marketing-lint-final.log"
+      "log": "artifacts/ux/espresso/shared-controls-lint-final.log"
     },
     "translations": {
-      "result": "passed; marketing dictionary shapes/SSR additionally checked by TypeScript and runtime unit tests",
-      "log": "artifacts/ux/espresso/marketing-i18n-final.log"
+      "result": "passed;existing common.nothingFound/showSecret/hideSecret reused inRU/KG/EN",
+      "log": "artifacts/ux/espresso/shared-controls-i18n.log"
     },
     "productionBuild": {
       "command": "UX_SUITE=espresso node --import tsx scripts/ux/build.ts",
-      "result": "passed after final application changes; includes types/lint and125 generated static pages",
-      "log": "artifacts/ux/espresso/build-marketing-final.log"
+      "result": "passed after all application changes",
+      "log": "artifacts/ux/espresso/build-shared-controls-final.log"
     }
   },
   "customerLayoutRecheck": [
@@ -1188,5 +1202,41 @@
     "New native footer locale select calls the existing locale API and refreshes. Busy state prevents duplicate requests; HTTP/network failure retains the confirmed language and provides translated retry feedback. Public cookie only; no staff preference mutation.",
     "Footer privacy opens the actual privacy page. Other external contact destinations retained; no external message sent.",
     "Connected-channel copy and static integration graphic are explicitly described as configured integrations/a demonstration. Unqualified fiscal-result claim removed. No invented testimonials or business statistics added."
+  ],
+  "sharedControlBehaviorChanges": [
+    {
+      "source": "src/components/ui/toast.tsx",
+      "before": "An unbroken180-character description expanded toast content to1709px inside a384px card and put its close button right edge at2581.55px in a1280px viewport.",
+      "after": "The text flex child can shrink and wraps anywhere. Measured content382px inside384px; close right edge1239px inside1280px. Mobile390px also captured.",
+      "evidence": [
+        "artifacts/ux/espresso/screenshots/shared-toast-overflow-before.png",
+        "artifacts/ux/espresso/screenshots/shared-toast-wrap-after.png",
+        "artifacts/ux/espresso/screenshots/shared-390-final-long-toast.png"
+      ]
+    },
+    {
+      "source": "src/components/ui/toast.tsx",
+      "before": "Closing a focused toast removed its button and left focus onBODY.",
+      "after": "Each toast remembers its invoker. Dismissal/expiry returns focus only when it was inside that toast and the invoker still exists; unrelated focused fields retain focus. Outstanding timers/element/origin references are cleared on provider unmount. Existing5second duration, placement and action links retained.",
+      "evidence": [
+        "artifacts/ux/espresso/shared-controls-workflows.json",
+        "artifacts/ux/espresso/shared-controls-production.json"
+      ]
+    },
+    {
+      "source": "src/components/ui/form.tsx",
+      "before": "An optional field without a description referenced a nonexistent description ID. Explicit undefined/custom IDs could also disagree with generated references.",
+      "after": "Description/message components register their actual rendered IDs; the control references only mounted content and updates after validation recovery/unmount. Error-only fields and explicit custom IDs are covered. Validation rules and submissions unchanged."
+    },
+    {
+      "source": "src/components/ui/data-table.tsx",
+      "before": "The built-in empty state displayed No results inRU/KG.",
+      "after": "Default empty state uses existing common.nothingFound forRU/KG/EN. Caller-supplied empty content remains authoritative; populated/loading/custom-empty tables do not gain an unnecessary translation-context dependency. Sorting, paging and row data unchanged."
+    },
+    {
+      "source": "src/components/ui/password-input.tsx",
+      "before": "Default visibility buttons announced English Show value/Hide value inRU/KG.",
+      "after": "Existing common.showSecret/hideSecret supply localized defaults. Explicit labels, controlled visibility, value, disabled and toggleDisabled behavior retained."
+    }
   ]
 }

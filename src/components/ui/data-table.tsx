@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useTranslations } from "next-intl";
 import {
   flexRender,
   getCoreRowModel,
@@ -73,6 +74,16 @@ export type DataTableProps<TData, TValue> = {
 const getColumnMeta = (column: unknown): ColumnMeta => {
   const columnDef = column as { columnDef?: { meta?: ColumnMeta } };
   return columnDef.columnDef?.meta ?? {};
+};
+
+const DefaultEmptyState = () => {
+  const tCommon = useTranslations("common");
+  return (
+    <div className="flex min-h-[12rem] flex-col items-center justify-center p-6 text-center text-sm text-muted-foreground">
+      <EmptyIcon className="mb-3 h-8 w-8" aria-hidden />
+      {tCommon("nothingFound")}
+    </div>
+  );
 };
 
 export const DataTable = <TData, TValue>({
@@ -201,14 +212,14 @@ export const DataTable = <TData, TValue>({
           <tbody>
             {isLoading && !rows.length ? (
               Array.from({ length: 5 }).map((_, rowIndex) => (
-                <tr
-                  key={`loading-${rowIndex}`}
-                  className="border-b border-border last:border-b-0"
-                >
+                <tr key={`loading-${rowIndex}`} className="border-b border-border last:border-b-0">
                   {table.getAllLeafColumns().map((column) => {
                     const meta = getColumnMeta(column);
                     return (
-                      <td key={column.id} className={cn("px-3 py-2.5 align-middle", meta.className)}>
+                      <td
+                        key={column.id}
+                        className={cn("px-3 py-2.5 align-middle", meta.className)}
+                      >
                         <Skeleton className="h-4 w-full max-w-[12rem]" />
                       </td>
                     );
@@ -245,12 +256,7 @@ export const DataTable = <TData, TValue>({
             ) : (
               <tr>
                 <td colSpan={table.getAllLeafColumns().length} className="p-0">
-                  {empty ?? (
-                    <div className="flex min-h-[12rem] flex-col items-center justify-center p-6 text-center text-sm text-muted-foreground">
-                      <EmptyIcon className="mb-3 h-8 w-8" aria-hidden />
-                      No results
-                    </div>
-                  )}
+                  {empty ?? <DefaultEmptyState />}
                 </td>
               </tr>
             )}

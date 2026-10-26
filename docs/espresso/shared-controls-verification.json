@@ -1,0 +1,313 @@
+{
+  "status": "shared-controls-checkpoint-in-review-final-acceptance-pending",
+  "branch": "codex/playground",
+  "date": "2026-10-26",
+  "baseline": "fbfcb48",
+  "mainUnchanged": "5a27b8e",
+  "scope": {
+    "newlyReviewedControls": 26,
+    "previouslyInReview": 6,
+    "totalInReview": 32,
+    "fullyAccepted": 0,
+    "note": "Dedicated primary shared-control review.97page sources and32shared controls now have primary evidence. This inventory does not establish final whole-product acceptance.",
+    "components": [
+      {
+        "source": "src/components/ui/action-menu.tsx",
+        "group": "overlays",
+        "status": "in_review"
+      },
+      {
+        "source": "src/components/ui/alert.tsx",
+        "group": "base",
+        "status": "in_review"
+      },
+      {
+        "source": "src/components/ui/badge.tsx",
+        "group": "base",
+        "status": "in_review"
+      },
+      {
+        "source": "src/components/ui/breadcrumb.tsx",
+        "group": "base",
+        "status": "in_review"
+      },
+      {
+        "source": "src/components/ui/button.tsx",
+        "group": "base",
+        "status": "in_review"
+      },
+      {
+        "source": "src/components/ui/card.tsx",
+        "group": "base",
+        "status": "in_review"
+      },
+      {
+        "source": "src/components/ui/checkbox.tsx",
+        "group": "forms",
+        "status": "in_review"
+      },
+      {
+        "source": "src/components/ui/data-table.tsx",
+        "group": "tables",
+        "status": "in_review"
+      },
+      {
+        "source": "src/components/ui/dialog.tsx",
+        "group": "overlays",
+        "status": "in_review"
+      },
+      {
+        "source": "src/components/ui/empty-state.tsx",
+        "group": "base",
+        "status": "in_review"
+      },
+      {
+        "source": "src/components/ui/form.tsx",
+        "group": "forms",
+        "status": "in_review"
+      },
+      {
+        "source": "src/components/ui/icon-button.tsx",
+        "group": "base",
+        "status": "in_review"
+      },
+      {
+        "source": "src/components/ui/label.tsx",
+        "group": "forms",
+        "status": "in_review"
+      },
+      {
+        "source": "src/components/ui/pagination.tsx",
+        "group": "tables",
+        "status": "in_review"
+      },
+      {
+        "source": "src/components/ui/password-input.tsx",
+        "group": "forms",
+        "status": "in_review"
+      },
+      {
+        "source": "src/components/ui/popover.tsx",
+        "group": "overlays",
+        "status": "in_review"
+      },
+      {
+        "source": "src/components/ui/separator.tsx",
+        "group": "base",
+        "status": "in_review"
+      },
+      {
+        "source": "src/components/ui/sheet.tsx",
+        "group": "overlays",
+        "status": "in_review"
+      },
+      {
+        "source": "src/components/ui/sidebar.tsx",
+        "group": "sidebar",
+        "status": "in_review"
+      },
+      {
+        "source": "src/components/ui/skeleton.tsx",
+        "group": "base",
+        "status": "in_review"
+      },
+      {
+        "source": "src/components/ui/spinner.tsx",
+        "group": "base",
+        "status": "in_review"
+      },
+      {
+        "source": "src/components/ui/switch.tsx",
+        "group": "forms",
+        "status": "in_review"
+      },
+      {
+        "source": "src/components/ui/table.tsx",
+        "group": "tables",
+        "status": "in_review"
+      },
+      {
+        "source": "src/components/ui/toast.tsx",
+        "group": "overlays",
+        "status": "in_review"
+      },
+      {
+        "source": "src/components/ui/tooltip.tsx",
+        "group": "base",
+        "status": "in_review"
+      },
+      {
+        "source": "src/components/ui/use-confirm-dialog.tsx",
+        "group": "overlays",
+        "status": "in_review"
+      }
+    ]
+  },
+  "demonstratedDefects": [
+    {
+      "source": "src/components/ui/toast.tsx",
+      "before": "An unbroken180-character description expanded toast content to1709px inside a384px card and put its close button right edge at2581.55px in a1280px viewport.",
+      "after": "The text flex child can shrink and wraps anywhere. Measured content382px inside384px; close right edge1239px inside1280px. Mobile390px also captured.",
+      "evidence": [
+        "artifacts/ux/espresso/screenshots/shared-toast-overflow-before.png",
+        "artifacts/ux/espresso/screenshots/shared-toast-wrap-after.png",
+        "artifacts/ux/espresso/screenshots/shared-390-final-long-toast.png"
+      ]
+    },
+    {
+      "source": "src/components/ui/toast.tsx",
+      "before": "Closing a focused toast removed its button and left focus onBODY.",
+      "after": "Each toast remembers its invoker. Dismissal/expiry returns focus only when it was inside that toast and the invoker still exists; unrelated focused fields retain focus. Outstanding timers/element/origin references are cleared on provider unmount. Existing5second duration, placement and action links retained.",
+      "evidence": [
+        "artifacts/ux/espresso/shared-controls-workflows.json",
+        "artifacts/ux/espresso/shared-controls-production.json"
+      ]
+    },
+    {
+      "source": "src/components/ui/form.tsx",
+      "before": "An optional field without a description referenced a nonexistent description ID. Explicit undefined/custom IDs could also disagree with generated references.",
+      "after": "Description/message components register their actual rendered IDs; the control references only mounted content and updates after validation recovery/unmount. Error-only fields and explicit custom IDs are covered. Validation rules and submissions unchanged."
+    },
+    {
+      "source": "src/components/ui/data-table.tsx",
+      "before": "The built-in empty state displayed No results inRU/KG.",
+      "after": "Default empty state uses existing common.nothingFound forRU/KG/EN. Caller-supplied empty content remains authoritative; populated/loading/custom-empty tables do not gain an unnecessary translation-context dependency. Sorting, paging and row data unchanged."
+    },
+    {
+      "source": "src/components/ui/password-input.tsx",
+      "before": "Default visibility buttons announced English Show value/Hide value inRU/KG.",
+      "after": "Existing common.showSecret/hideSecret supply localized defaults. Explicit labels, controlled visibility, value, disabled and toggleDisabled behavior retained."
+    }
+  ],
+  "tests": {
+    "unit": {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
+      "files": 275,
+      "tests": 2131,
+      "newTests": 18,
+      "result": "passed after all application changes;18new cases included in2131",
+      "log": "artifacts/ux/espresso/shared-controls-unit-final.log"
+    },
+    "database": {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts settings",
+      "files": 6,
+      "tests": 47,
+      "result": "passed",
+      "database": "bazaar_hardening_ci; Redis DB5; separate resettable database, UI fixtures not reset",
+      "scope": "Attributes, catalog sources, profile preferences, product units, users and imports",
+      "log": "artifacts/ux/espresso/shared-controls-database-final.log"
+    },
+    "types": {
+      "result": "passed",
+      "log": "artifacts/ux/espresso/shared-controls-types-final.log"
+    },
+    "lint": {
+      "result": "passed without warnings",
+      "log": "artifacts/ux/espresso/shared-controls-lint-final.log"
+    },
+    "translations": {
+      "result": "passed;existing common.nothingFound/showSecret/hideSecret reused inRU/KG/EN",
+      "log": "artifacts/ux/espresso/shared-controls-i18n.log"
+    },
+    "productionBuild": {
+      "command": "UX_SUITE=espresso node --import tsx scripts/ux/build.ts",
+      "result": "passed after all application changes",
+      "log": "artifacts/ux/espresso/build-shared-controls-final.log"
+    }
+  },
+  "browser": {
+    "fixture": {
+      "environment": "Separate copied-source development QA workspace on3123; actual production shared components/CSS, no provider or business actions",
+      "source": "artifacts/ux/espresso/shared-controls-dev-1793020486114/src/app/espresso-controls-qa/page.tsx",
+      "notShipped": true,
+      "note": "The test-only fixture intentionally supplies English sample labels/content. Product defaults are separately checked in all3languages."
+    },
+    "matrix": {
+      "evidence": "artifacts/ux/espresso/shared-controls-matrix.json",
+      "captures": 30,
+      "base": "24captures:6component views ×1280/390 ×light/dark inRU",
+      "supplemental": "4KG/EN mobile forms/empty-table captures, one keyboard tooltip/empty/loading view and one final long mobile toast; total30captures",
+      "result": "No document overflow or missing description/label/open-control references in the captured states. Closed Radix controls may name their lazily unmounted content; those closed aria-controls are excluded from this check."
+    },
+    "workflows": {
+      "evidence": "artifacts/ux/espresso/shared-controls-workflows.json",
+      "observations": 32,
+      "passed": [
+        "Checkbox and switch Space toggles; disabled and indeterminate states inspected",
+        "Password visibility toggles retain value and localized labels",
+        "Form required-name failure, actual message reference, recovery and omitted-description state",
+        "DataTable numeric sort, actual next/previous page, page-size change, empty and skeleton states; native Table numeric sort also covered by runtime unit cases",
+        "Dialog nested Popover firstEscape closes only popover; secondEscape/settled observation returns to dialog launcher. MobileTab/ShiftTab wrap remains inside the dialog.",
+        "Four Sheet sides:right,left,bottom,fullscreen; correct bounds, scrollable bodies, Escape and launcher focus",
+        "Popover Escape, action menu selection and disabled item. Existing ActionMenuItem intentionally keeps its menu open onSelect; behavior retained, closes withEscape.",
+        "Confirmation cancel/accept resolves false/true and returns to invoking button; fixture changes no business data",
+        "Offcanvas sidebar collapse has width0 and aria-hidden=true, then reopens; mobile sidebar remains CSS-hidden",
+        "Tooltip appears through Tab focus, and EmptyState retry callback executes",
+        "Toast long-text wrap and actual keyboard dismissal return focus on desktop/mobile"
+      ]
+    },
+    "production": {
+      "evidence": "artifacts/ux/espresso/shared-controls-production.json",
+      "url": "http://localhost:3122/settings/profile",
+      "width": 984,
+      "description": "Final standalone build. Empty name rejected with actual localized message and one1px border/outline:none. Restored originalAdmin User and submitted through real profile API, observed Личные данные сохранены. Keyboard-dismissed toast returned focus to name field. Existing record values retained; no new user or credentials.",
+      "screenshot": "artifacts/ux/espresso/screenshots/shared-profile-production-final.png",
+      "validationScreenshot": "artifacts/ux/espresso/screenshots/shared-profile-validation-production.png",
+      "result": "RU/DARK, no missing field descriptions, one visibleBazaar brand and no document overflow"
+    }
+  },
+  "preservation": {
+    "before": "artifacts/ux/espresso/shared-controls-business-before.json",
+    "baselineOrigin": "artifacts/ux/espresso/marketing-business-after.json",
+    "after": "artifacts/ux/espresso/shared-controls-business-after.json",
+    "result": "485selected records across11business models retain exact hashes. No order/shift/stock/payment creation in this checkpoint. QAprofile remainsAdmin User/RU/DARK; profile save updated no business totals.",
+    "protectedSources": [
+      {
+        "source": "src/components/inventory/receiving-workflow.tsx",
+        "baseline": "c276f30",
+        "exactMatch": true,
+        "sha256": "3f77205aeaff4d89947098896c6e86459da522b3c7783110d68ccb1ade6f6c16"
+      },
+      {
+        "source": "src/components/inventory/transfer-workflow.tsx",
+        "baseline": "c276f30",
+        "exactMatch": true,
+        "sha256": "07b1ba3e01544bf470537fe4cd0fc24f23369732aed33f8722c99ee6ccc64307"
+      },
+      {
+        "source": "src/components/inventory/write-off-workflow.tsx",
+        "baseline": "c276f30",
+        "exactMatch": true,
+        "sha256": "d28439fc45ef22a5276e616a8e2088da7b5afb04a40cbde635f2b89a3311ccaa"
+      },
+      {
+        "source": "src/app/(app)/inventory/counts/[id]/page.tsx",
+        "baseline": "c276f30",
+        "exactMatch": true,
+        "sha256": "daf57fddea2b1905c11168a1244994fc8f6b701291de4f6c432160029b97f620"
+      }
+    ],
+    "serverFiles": [
+      "src/app/api/loyalty/card/qr/route.ts",
+      "src/app/api/loyalty/card/route.ts",
+      "src/server/services/loyalty/ledger.ts",
+      "src/server/services/pos.ts",
+      "src/server/services/reporting/operations.ts",
+      "src/server/services/reports.ts",
+      "src/server/trpc/routers/pos.ts"
+    ],
+    "newServerOrSchemaChanges": []
+  },
+  "isolation": {
+    "evidence": "artifacts/ux/espresso/shared-controls-dev-isolation.json",
+    "result": "Dedicated source-copy fixture never enters production route inventory. Production middleware manifest unchanged across the preview; preview stopped before legitimate final rebuild. Final production QA serves3122; user3121server/tabs untouched; real providers disabled."
+  },
+  "sourceAudit": "artifacts/ux/espresso/shared-controls-source-audit-final.json",
+  "remaining": [
+    "Finish final Espresso visual-fidelity review across analogous screen families and consolidate whole-product acceptance; primary inventory is not final acceptance.",
+    "Close concrete legacy copy/accessibility/mobile-title issues and resolve previously disclosed composition decisions recorded by family reports.",
+    "Final cross-screen critical flows, roles/store/plan boundaries and accumulated-branch regression acceptance remain. Existing isolated family checks are evidence, not a claim of every possible state or every browser.",
+    "Live merchant/AI/email/provider acceptance and physical-device hardware are outside this visual component checkpoint."
+  ],
+  "delivery": "Local playground checkpoint only. No main merge, push or production deployment."
+}
