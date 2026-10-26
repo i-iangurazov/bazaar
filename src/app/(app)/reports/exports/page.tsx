@@ -6,6 +6,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 
 import { PageHeader } from "@/components/page-header";
+import { QueryErrorState } from "@/components/query-error-state";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -145,7 +146,7 @@ const ExportsPage = () => {
   const tErrors = useTranslations("errors");
   const locale = useLocale();
   const { data: session, status } = useSession();
-  const canGenerate = session?.user?.role && session.user.role !== "STAFF";
+  const canGenerate = ["ADMIN", "MANAGER"].includes(session?.user?.role ?? "");
   const { toast } = useToast();
 
   const storesQuery = trpc.stores.list.useQuery(undefined, { enabled: status === "authenticated" });
@@ -163,7 +164,7 @@ const ExportsPage = () => {
 
   const jobsQuery = trpc.exports.list.useQuery(
     { storeId: storeId || undefined, limit: 100 },
-    { enabled: status === "authenticated" },
+    { enabled: status === "authenticated" && canGenerate },
   );
 
   const createMutation = trpc.exports.create.useMutation({
@@ -269,6 +270,15 @@ const ExportsPage = () => {
     }
   };
 
+  if (status === "authenticated" && !canGenerate) {
+    return (
+      <div>
+        <PageHeader title={t("title")} subtitle={t("subtitle")} />
+        <p role="alert" className="mt-4 text-sm text-danger">{tErrors("forbidden")}</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
@@ -315,7 +325,7 @@ const ExportsPage = () => {
 
       {canGenerate ? (
         <Card className="overflow-hidden">
-          <CardHeader className="bg-muted/35">
+          <CardHeader className="bg-card">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <CardTitle>{t("requestTitle")}</CardTitle>
@@ -327,6 +337,9 @@ const ExportsPage = () => {
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
+            {storesQuery.error ? (
+              <QueryErrorState error={storesQuery.error} onRetry={() => void storesQuery.refetch()} />
+            ) : null}
             <FormGrid className="lg:grid-cols-5">
               <Field htmlFor="export-storeLabel" label={t("storeLabel")}>
                 <Select value={storeId} onValueChange={setStoreId}>
@@ -457,8 +470,8 @@ const ExportsPage = () => {
                         "rounded-lg border bg-card p-4 text-left transition hover:border-primary/40 hover:bg-primary/5",
                         "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-2",
                         isSelected
-                          ? "border-primary/60 bg-primary/10 shadow-sm"
-                          : "border-border/70",
+                          ? "border-primary bg-primary/5 shadow-none"
+                          : "border-border",
                       )}
                       aria-pressed={isSelected}
                     >
@@ -479,7 +492,7 @@ const ExportsPage = () => {
               </div>
             </div>
 
-            {!storeOptions.length && !storesQuery.isLoading ? (
+            {!storeOptions.length && !storesQuery.isLoading && !storesQuery.error ? (
               <Alert variant="warning">
                 <AlertTitle>{t("noStoresTitle")}</AlertTitle>
                 <AlertDescription>{t("noStoresDescription")}</AlertDescription>
@@ -502,7 +515,7 @@ const ExportsPage = () => {
       ) : null}
 
       <Card>
-        <CardHeader className="bg-muted/30">
+        <CardHeader className="bg-card">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <CardTitle>{t("jobsTitle")}</CardTitle>
@@ -538,7 +551,7 @@ const ExportsPage = () => {
                 />
               }
               renderDesktop={(visibleItems) => (
-                <div className="overflow-x-auto rounded-lg border border-border/70">
+                <div className="overflow-x-auto rounded-lg border border-border">
                   <Table className="min-w-[860px]" data-tour="exports-jobs">
                     <TableHeader>
                       <TableRow>
@@ -684,7 +697,7 @@ const ExportsPage = () => {
                 ];
 
                 return (
-                  <div className="rounded-lg border border-border/70 bg-card p-4 shadow-sm">
+                  <div className="rounded-lg border border-border bg-card p-4 shadow-none">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold text-foreground">

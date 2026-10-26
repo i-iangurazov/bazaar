@@ -386,28 +386,48 @@
     },
     {
       "source": "src/app/(app)/reports/analytics/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/reports-verification.json",
+        "artifacts/ux/espresso/screenshots/reports-analytics-desktop-dark-final.png",
+        "artifacts/ux/espresso/screenshots/reports-analytics-mobile-dark-final.png"
+      ]
     },
     {
       "source": "src/app/(app)/reports/close/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/reports-verification.json",
+        "artifacts/ux/espresso/screenshots/reports-period-close-desktop-dark-final.png",
+        "artifacts/ux/espresso/screenshots/reports-period-close-mobile-dark-final.png"
+      ]
     },
     {
       "source": "src/app/(app)/reports/exports/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/reports-verification.json",
+        "artifacts/ux/espresso/screenshots/reports-exports-desktop-dark-final.png",
+        "artifacts/ux/espresso/screenshots/reports-exports-mobile-dark-final.png"
+      ]
     },
     {
       "source": "src/app/(app)/reports/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/reports-verification.json",
+        "artifacts/ux/espresso/screenshots/reports-hub-desktop-dark-final.png",
+        "artifacts/ux/espresso/screenshots/reports-hub-mobile-dark-final.png"
+      ]
     },
     {
       "source": "src/app/(app)/reports/receipts/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/reports-verification.json",
+        "artifacts/ux/espresso/screenshots/reports-receipt-registry-desktop-dark-final.png",
+        "artifacts/ux/espresso/screenshots/reports-receipt-registry-mobile-dark-final.png"
+      ]
     },
     {
       "source": "src/app/(app)/sales/orders/[id]/page.tsx",
@@ -886,12 +906,12 @@
     }
   ],
   "verification": {
-    "desktop": "partial: 66 of 97 route sources have checkpoint evidence; 31 remain pending. Zero routes fully accepted. Includes 4 commerce compatibility aliases.",
-    "mobile": "partial: 15 commerce screen states inspected at 390px RU/dark; earlier family evidence retained. Full state and theme matrix pending.",
-    "themes": "partial: commerce RU/dark desktop/mobile, four EN/light desktop and two KG/light mobile states; full route/state matrix pending.",
-    "rolesAndScopes": "partial: admin, manager, staff and cashier commerce checks include manager store scope, read-only registers and unassigned-store order rejection. Every role/plan/currency permutation remains pending.",
-    "functionalRegression": "Commerce checkpoint: 1912 unit tests, 40 final focused tests, 133 commerce DB tests and overlapping 36 loyalty DB tests passed. Actual isolated UI sale/refunds and cash close verified; original register, stock costs and warehouse count preserved.",
-    "productionBuild": "passed with final application sources, types/lint and 125 static pages"
+    "desktop": "partial: 71 of 97 route sources have checkpoint evidence; 26 remain pending. Zero routes fully accepted.",
+    "mobile": "partial: reports inspected at 390px, including internal table keyboard panning. Prior family evidence retained; complete route/state/theme matrix remains pending.",
+    "themes": "partial: report RU/dark desktop/mobile and selected EN/light desktop, KG/light mobile states; complete matrix pending.",
+    "rolesAndScopes": "partial: report admin/manager/staff/cashier feedback and manager granted/unassigned-store cases verified. All role/plan/currency permutations remain pending.",
+    "functionalRegression": "Reports checkpoint: 1926 unit tests and 41 database tests passed. UTC timestamp output correction has 3 DB zones x 3 runtime zones x 6 populations x normal/export mode coverage. Selected 11 business-model hashes remained unchanged.",
+    "productionBuild": "passed with final application/copy sources, type/lint and 125 static pages"
   },
   "requirements": {
     "visualFidelity": "Match Espresso typography, palette, surfaces and components while preserving customer workflows; analogous screen comparison must respect the human-confirmed operational layouts.",
@@ -903,7 +923,7 @@
     "customerWorkflows": "Preserve the customer-requested two-column operational layouts and established interactions. The visual reference does not authorize replacing them; see AGENTS.md and redesign-change-audit.json."
   },
   "progress": {
-    "stage": "commerce-checkpoint-in-review-full-redesign-in-progress",
+    "stage": "reports-checkpoint-in-review-full-redesign-in-progress",
     "foundation": [
       "Pinned MIT Espresso semantic tokens and component CSS",
       "Self-hosted Inter Variable",
@@ -1048,6 +1068,11 @@
         "check": "Commerce: 15 distinct screen sources and 4 compatibility aliases",
         "result": "Desktop/mobile RU/dark states inspected, selected EN/KG/light and role/store checks; actual 270 sale/refund cycle, 5/5 cash movement and zero-balanced close verified; in_review only.",
         "evidence": "docs/espresso/commerce-verification.json"
+      },
+      {
+        "check": "Reports family, all ten operational/eight sales dimensions, online, role and selected locale/theme states",
+        "result": "in_review; original totals retained, report instants corrected, mobile keyboard pan/pagination/filter/customer and chart/document drilldown verified; business-row hashes unchanged.",
+        "evidence": "docs/espresso/reports-verification.json"
       }
     ],
     "remaining": [
@@ -1063,15 +1088,16 @@
       "Complete the legacy English copy audit; settings-verification.json lists observed unfinished template/import labels.",
       "Complete bespoke printing/import accessible control labels, successful upload/invitation browser paths and remaining settings state/plan permutations; current in_review status is not full acceptance.",
       "Finish warehouse acceptance permutations listed in warehouse-documents-verification.json, including native date-picker/multi-page navigation; current in_review evidence is not full acceptance.",
-      "Complete commerce acceptance permutations listed in commerce-verification.json; current screen and cash-cycle evidence is not acceptance of every order, provider or state flow."
+      "Complete commerce acceptance permutations listed in commerce-verification.json; current screen and cash-cycle evidence is not acceptance of every order, provider or state flow.",
+      "Complete report/shared-component acceptance permutations listed in reports-verification.json; page captures and DB regressions do not establish final overall redesign acceptance."
     ],
     "unitTests": {
-      "files": 261,
-      "tests": 1912,
-      "result": "passed after shared-dialog and refund UI corrections",
+      "files": 262,
+      "tests": 1926,
+      "result": "passed after all runtime changes",
       "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
-      "log": "artifacts/ux/espresso/commerce-all-unit-focus-final.log",
-      "note": "Final translated mobile purchase-title branch was subsequently checked by the focused suite and final production build."
+      "log": "artifacts/ux/espresso/reports-all-unit-complete-final.log",
+      "note": "Final copy-only English Sales source label was subsequently validated by i18n and final production build."
     },
     "databaseRegression": {
       "files": 3,
@@ -1137,6 +1163,14 @@
       "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts loyalty",
       "log": "artifacts/ux/espresso/commerce-final-loyalty-db.log",
       "note": "Overlaps POS and reservation-timezone cases in commerce; do not add these counts as unique tests."
+    },
+    "reportsDatabaseRegression": {
+      "files": 10,
+      "tests": 41,
+      "result": "passed on separate bazaar_hardening_ci database",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts reports",
+      "log": "artifacts/ux/espresso/reports-db-timestamp-final.log",
+      "scope": "Sales, operational and online populations, customer reports, historical cost evidence, roles/store/organization access, all export types, duplicate period closing and timestamp transport."
     }
   }
 }

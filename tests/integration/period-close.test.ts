@@ -16,6 +16,24 @@ describeDb("period close", () => {
     await resetDatabase();
   });
 
+  it.each(["STAFF", "CASHIER"])("rejects existing period-close access for %s without writes", async (role) => {
+    const { org, store, staffUser, cashierUser } = await seedBase({ plan: "BUSINESS" });
+    const user = role === "STAFF" ? staffUser : cashierUser;
+    const caller = createTestCaller({
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      organizationId: org.id,
+    });
+    await expect(caller.periodClose.list()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.periodClose.close({
+      storeId: store.id,
+      periodStart: new Date("2025-01-01T00:00:00Z"),
+      periodEnd: new Date("2025-01-31T23:59:59Z"),
+    })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(await prisma.periodClose.count()).toBe(0);
+  });
+
   it("prevents duplicate period close", async () => {
     const { org, store, managerUser } = await seedBase({ plan: "BUSINESS" });
     const caller = createTestCaller({

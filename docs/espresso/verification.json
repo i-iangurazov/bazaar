@@ -1,5 +1,5 @@
 {
-  "status": "commerce-checkpoint-in-review-full-redesign-in-progress",
+  "status": "reports-checkpoint-in-review-full-redesign-in-progress",
   "branch": "codex/playground",
   "reference": "Frappe Framework Espresso e8d41dd0061a32ee781caefe5d0b0d2bb7c15362",
   "checks": [
@@ -327,6 +327,78 @@
       "name": "sourceAudit",
       "result": "Recursive AST classification and explicit server-source allowlist; not a claim of CSS layout acceptance",
       "evidence": "artifacts/ux/espresso/commerce-source-audit-final.json"
+    },
+    {
+      "name": "unit",
+      "files": 262,
+      "tests": 1926,
+      "result": "passed after all runtime changes",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
+      "log": "artifacts/ux/espresso/reports-all-unit-complete-final.log",
+      "note": "Final copy-only English Sales source label was subsequently validated by i18n and final production build.",
+      "evidence": "docs/espresso/reports-verification.json"
+    },
+    {
+      "name": "recovery",
+      "files": 1,
+      "tests": 14,
+      "result": "passed within the full suite; real report pages and shared controls rendered in jsdom with deterministic query failures",
+      "evidence": "tests/unit/report-recovery.test.tsx",
+      "before": [
+        "artifacts/ux/espresso/reports-recovery-before.log",
+        "artifacts/ux/espresso/reports-role-feedback-before.log",
+        "artifacts/ux/espresso/reports-filter-recovery-before.log"
+      ],
+      "beforeResults": [
+        "Initial store/analytics recovery: 7 failed, 1 passed",
+        "Existing export/period-close role feedback: 3 failed, 1 passed, 8 skipped",
+        "Customer and auxiliary filters: 2 failed, 12 skipped"
+      ]
+    },
+    {
+      "name": "database",
+      "files": 10,
+      "tests": 41,
+      "result": "passed on separate bazaar_hardening_ci database",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts reports",
+      "log": "artifacts/ux/espresso/reports-db-timestamp-final.log",
+      "scope": "Sales, operational and online populations, customer reports, historical cost evidence, roles/store/organization access, all export types, duplicate period closing and timestamp transport.",
+      "evidence": "docs/espresso/reports-verification.json"
+    },
+    {
+      "name": "typecheck",
+      "result": "passed; final build also validates types",
+      "log": "artifacts/ux/espresso/reports-typecheck-complete-final.log",
+      "evidence": "docs/espresso/reports-verification.json"
+    },
+    {
+      "name": "lint",
+      "result": "passed; final build also runs lint",
+      "log": "artifacts/ux/espresso/reports-lint-complete-final.log",
+      "evidence": "docs/espresso/reports-verification.json"
+    },
+    {
+      "name": "i18n",
+      "result": "passed after final English label refinement",
+      "log": "artifacts/ux/espresso/reports-i18n-acceptance-final.log",
+      "evidence": "docs/espresso/reports-verification.json"
+    },
+    {
+      "name": "productionBuild",
+      "result": "passed with final application/copy sources, type/lint and 125 static pages",
+      "command": "UX_SUITE=espresso CIRCLE_NODE_TOTAL=3 NODE_OPTIONS=--max-old-space-size=6144 node --import tsx scripts/ux/build.ts",
+      "log": "artifacts/ux/espresso/build-reports-acceptance-final.log",
+      "evidence": "docs/espresso/reports-verification.json"
+    },
+    {
+      "name": "businessReadback",
+      "result": "Selected 11 business models, 485 rows: all pre/post record hashes match. This is not a claim that authentication/session records were unchanged.",
+      "evidence": "artifacts/ux/espresso/reports-business-after.json"
+    },
+    {
+      "name": "sourceAudit",
+      "result": "Four customer operational sources exactly match c276f30; server diff since this checkpoint baseline is limited to operational timestamp transport.",
+      "evidence": "artifacts/ux/espresso/reports-source-audit-final.json"
     }
   ],
   "environment": {
@@ -357,5 +429,6 @@
   "currentAuthenticationCheckpoint": "docs/espresso/auth-verification.json",
   "currentSettingsCheckpoint": "docs/espresso/settings-verification.json",
   "currentWarehouseCheckpoint": "docs/espresso/warehouse-documents-verification.json",
-  "currentCommerceCheckpoint": "docs/espresso/commerce-verification.json"
+  "currentCommerceCheckpoint": "docs/espresso/commerce-verification.json",
+  "currentReportsCheckpoint": "docs/espresso/reports-verification.json"
 }

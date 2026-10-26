@@ -1,0 +1,60 @@
+{
+  "status": "database-and-production-browser-verified",
+  "branch": "codex/playground",
+  "baseline": "f8bf61c",
+  "problem": "Operational SQL JSON rows returned timezone-less timestamp strings despite declaring Date fields. Browser-local parsing shifted the displayed instant: a drawer movement stored at 2026-10-26T02:30:15.000Z appeared at 02:30 instead of 08:30 Asia/Bishkek. A fixture near UTC midnight also appeared on the wrong business date.",
+  "before": {
+    "browser": "artifacts/ux/espresso/screenshots/reports-cash-timestamp-before.png",
+    "sourceInstants": "artifacts/ux/espresso/reports-cash-source-timestamps.json",
+    "databaseRegression": "artifacts/ux/espresso/reports-timestamps-before.log",
+    "result": "All three new database-zone cases failed at the Asia/Bishkek runtime check: 25 Oct 23:30 instead of 26 Oct 05:30; 38 existing DB tests passed.",
+    "browserObservation": "The CUA table read showed 26 Oct 02:30 for both drawer movements. The linked before screenshot captures the page above the table, so it provides page context rather than visible date cells."
+  },
+  "correction": "Reconstruct Date objects from the explicitly UTC PostgreSQL timestamp JSON values before returning normal or export rows. Sorting, filtering, period bounds, monetary calculations and stored records are unchanged. The returned value now matches the existing Date type contract.",
+  "checks": {
+    "database": {
+      "files": 10,
+      "tests": 41,
+      "result": "passed",
+      "log": "artifacts/ux/espresso/reports-db-timestamp-final.log"
+    },
+    "matrix": {
+      "databaseTimeZones": [
+        "UTC",
+        "Asia/Bishkek",
+        "Asia/Shanghai"
+      ],
+      "runtimeTimeZones": [
+        "UTC",
+        "Asia/Bishkek",
+        "Asia/Shanghai"
+      ],
+      "populations": [
+        "cash",
+        "payments",
+        "movements",
+        "receipts",
+        "suppliers",
+        "stock"
+      ],
+      "modes": [
+        "page",
+        "exportAll"
+      ],
+      "note": "Three database test cases each loop over the runtime zones, six populations and both modes; these are not 108 separate Vitest tests."
+    },
+    "browser": {
+      "result": "Source movements now display 26 Oct 08:30; amounts remain +5 and -5, total zero.",
+      "evidence": "artifacts/ux/espresso/reports-cash-time-final.json"
+    },
+    "storedData": {
+      "result": "All selected business rows retain their pre-review hashes",
+      "evidence": "artifacts/ux/espresso/reports-business-after.json"
+    }
+  },
+  "sourceHashes": {
+    "src/server/services/reporting/operations.ts": "b07dc29d6aaa95ef62852b04501478842a6d841b9ffc324569031154c1b82fd3",
+    "tests/integration/reporting-operation-timestamps.test.ts": "ab78559671954b321905954dab45e725f6398fbbc2dc288defed2a3de67c5a2a"
+  },
+  "delivery": "Read-only report serialization correction on playground; no schema, stored timestamp, permission or money-policy change."
+}

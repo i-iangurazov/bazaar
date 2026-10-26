@@ -146,7 +146,7 @@ export async function getOperationsReport(
   };
   const [result] = await client.$queryRaw<
     Array<{
-      items: OperationRow[];
+      items: Array<Omit<OperationRow, "date"> & { date: string | null }>;
       total: number;
       summary: Summary;
       organizationName: string;
@@ -191,6 +191,12 @@ export async function getOperationsReport(
     throw new AppError("analyticsExportRowLimit", "BAD_REQUEST", 400);
   return {
     ...result,
+    // JSON aggregation omits the zone on Prisma's UTC timestamp columns.
+    // Restore the instant before tRPC or export consumers parse it as local time.
+    items: result.items.map((row) => ({
+      ...row,
+      date: row.date === null ? null : new Date(`${row.date}Z`),
+    })),
     summary: {
       ...result.summary,
       // Movement amount conventions belong to their source document (e.g. a

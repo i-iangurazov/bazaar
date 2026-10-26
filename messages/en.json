@@ -7593,7 +7593,7 @@
     "openAnalytics": "Sales and profit overview",
     "filters": "Report scope",
     "refine": "Refine results",
-    "channel": "Sales channel",
+    "channel": "Sales source",
     "channels": {
       "all": "All sales",
       "pos": "POS sales",

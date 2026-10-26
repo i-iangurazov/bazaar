@@ -6,7 +6,7 @@ import { SearchInput } from "@/components/search-input";
 import { Spinner } from "@/components/ui/spinner";
 import { ReportPagination } from "@/components/reports/report-controls";
 import { trpc } from "@/lib/trpc";
-import { translateError } from "@/lib/translateError";
+import { QueryErrorState } from "@/components/query-error-state";
 
 export function CustomerReportFilter(props: {
   enabled: boolean;
@@ -15,8 +15,7 @@ export function CustomerReportFilter(props: {
   customerName?: string;
   onChange: (customerId?: string) => void;
 }) {
-  const t = useTranslations("customerPurchases"),
-    errors = useTranslations("errors");
+  const t = useTranslations("customerPurchases");
   const [open, setOpen] = useState(false),
     [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState(""),
@@ -32,6 +31,7 @@ export function CustomerReportFilter(props: {
     { storeId: props.storeId, search: debounced || undefined, page },
     { enabled: props.enabled && open, keepPreviousData: false },
   );
+  const data = props.enabled && !query.error ? query.data : undefined;
   return (
     <div className="space-y-3 rounded-lg border border-border bg-card p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -39,7 +39,7 @@ export function CustomerReportFilter(props: {
           {props.customerId ? (props.customerName ?? t("selected")) : t("allCustomers")}
         </p>
         <div className="flex gap-2">
-          <Button variant="secondary" aria-expanded={open} onClick={() => setOpen(!open)}>
+          <Button variant="secondary" disabled={!props.enabled} aria-expanded={open} onClick={() => setOpen(!open)}>
             {t("select")}
           </Button>
           {props.customerId ? (
@@ -57,13 +57,15 @@ export function CustomerReportFilter(props: {
             value={search}
             onValueChange={setSearch}
           />
-          {query.isLoading ? <Spinner /> : null}
-          {query.error ? <p role="alert">{translateError(errors, query.error)}</p> : null}
-          {query.data?.total === 0 ? (
+          {props.enabled && query.isLoading ? <Spinner /> : null}
+          {props.enabled && query.error ? (
+            <QueryErrorState error={query.error} onRetry={() => void query.refetch()} />
+          ) : null}
+          {data?.total === 0 ? (
             <p className="text-sm text-muted-foreground">{t("noCustomers")}</p>
           ) : null}
           <ul className="divide-y">
-            {query.data?.items.map((customer) => (
+            {data?.items.map((customer) => (
               <li key={customer.id}>
                 <button
                   type="button"
@@ -84,7 +86,7 @@ export function CustomerReportFilter(props: {
           <ReportPagination
             page={page}
             pageSize={25}
-            total={query.data?.total ?? 0}
+            total={data?.total ?? 0}
             onPage={setPage}
           />
         </div>

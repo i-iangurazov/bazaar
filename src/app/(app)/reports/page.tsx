@@ -192,7 +192,7 @@ function ReportsContent() {
           ))}
         </ReportSelect>
       </ReportPeriodControls>
-      {scope.error && (
+      {scope.error && (!scope.allowed || !scope.stores.error) && (
         <p role="alert" className="rounded-lg border border-danger/30 p-4 text-sm text-danger">
           {scope.error}
         </p>

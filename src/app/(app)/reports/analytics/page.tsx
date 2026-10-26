@@ -449,6 +449,9 @@ function AnalyticsReportContent() {
             </ReportSelect>
           </div>
         </div>
+        {enabled && options.error ? (
+          <QueryErrorState error={options.error} onRetry={() => void options.refetch()} />
+        ) : null}
         {activeFilters.length > 0 || scope.search ? (
           <div className="flex flex-wrap items-center gap-2">
             {activeFilters.map((key) => (
@@ -490,7 +493,7 @@ function AnalyticsReportContent() {
           </div>
         ) : null}
       </section>
-      {scope.error && (
+      {scope.error && (!scope.allowed || !scope.stores.error) && (
         <p
           role="alert"
           className="rounded-lg border border-danger/30 bg-danger/5 p-4 text-sm text-danger"

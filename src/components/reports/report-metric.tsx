@@ -23,7 +23,7 @@ export function ReportMetric({
       <span
         className={cn(
           "text-xs font-medium",
-          accent ? "text-primary-foreground/80" : "text-muted-foreground",
+          accent ? "text-primary" : "text-muted-foreground",
         )}
       >
         {title}
@@ -34,7 +34,7 @@ export function ReportMetric({
       <span
         className={cn(
           "mt-2 block text-xs leading-5",
-          accent ? "text-primary-foreground/80" : "text-muted-foreground",
+          "text-muted-foreground",
         )}
       >
         {note}
@@ -44,7 +44,7 @@ export function ReportMetric({
           className={cn(
             "mt-4 block border-t pt-2 text-xs",
             accent
-              ? "border-primary-foreground/20 text-primary-foreground/80"
+              ? "border-primary/20 text-muted-foreground"
               : "border-border text-muted-foreground",
           )}
         >
@@ -54,16 +54,16 @@ export function ReportMetric({
     </>
   );
   const style = cn(
-    "min-w-0 rounded-xl border p-4 text-left sm:p-5",
+    "min-w-0 rounded-lg border p-4 text-left sm:p-5",
     accent
-      ? "border-primary bg-primary text-primary-foreground"
+      ? "border-primary/30 bg-primary/5 text-foreground"
       : "border-border bg-card text-card-foreground",
   );
   return onClick ? (
     <button
       className={cn(
         style,
-        "transition-shadow hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none",
+        "transition-colors hover:border-primary/40 hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none",
       )}
       onClick={onClick}
     >
