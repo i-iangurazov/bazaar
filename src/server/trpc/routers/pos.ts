@@ -50,6 +50,7 @@ import {
   listRegisterShifts,
   listSaleReturns,
   openRegisterShift,
+  previewSaleReturn,
   recordCashDrawerMovement,
   retryPosSaleKkm,
   removePosSaleLine,
@@ -984,6 +985,23 @@ export const posRouter = router({
   }),
 
   returns: router({
+    preview: cashierProcedure
+      .input(z.object({
+        originalSaleId: z.string().min(1),
+        lines: z.array(z.object({
+          customerOrderLineId: z.string().min(1),
+          qty: z.number().multipleOf(0.001).positive(),
+        })).min(1).max(1000),
+      }))
+      .query(async ({ ctx, input }) => {
+        try {
+          return await previewSaleReturn({
+            ...input, organizationId: ctx.user.organizationId, user: ctx.user,
+          });
+        } catch (error) {
+          throw toTRPCError(error);
+        }
+      }),
     list: protectedProcedure
       .input(
         z

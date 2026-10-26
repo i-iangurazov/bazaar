@@ -1,0 +1,59 @@
+{
+  "status": "database-verified-browser-check-in-progress",
+  "branch": "codex/playground",
+  "baseline": "f77aac4",
+  "problem": "The POS return dialog displayed 150 KGS for one unit of a discounted sale, while the authoritative return correctly posted 135 KGS. History used the same gross-price preview and submitted that incorrect client amount.",
+  "evidenceBefore": {
+    "ui": "artifacts/ux/espresso/screenshots/commerce-partial-return-preview-before.png",
+    "database": "artifacts/ux/espresso/commerce-after-partial-return-readback.json",
+    "sale": {
+      "quantity": 2,
+      "unitPriceKgs": 150,
+      "discountKgs": 30,
+      "totalKgs": 270,
+      "partialRefundKgs": 135
+    }
+  },
+  "correction": {
+    "endpoint": "pos.returns.preview",
+    "behavior": "Authenticated, store-scoped read-only quote uses the existing server refund caps, previously completed returns and the same cumulative Decimal rounding function as posting. Batched receipt/return reads, no draft or payment creation.",
+    "sharedAllocation": "Existing allocatedReturnAmount arithmetic extracted unchanged into allocatedReturnDelta and reused for quoting; no pricing, discount or refund policy change.",
+    "ui": "Both POS journal and history wait for a successful quote, expose loading/error/retry, and fetch the actual draft amount immediately before completion. Zero-value merchandise returns use no payment."
+  },
+  "checks": {
+    "commerce": {
+      "files": 12,
+      "tests": 133,
+      "result": "passed",
+      "log": "artifacts/ux/espresso/commerce-refund-preview-db.log"
+    },
+    "newCases": [
+      "Discounted partial return quotes 135, with no draft/payment/stock/audit writes",
+      "Quote matches every actual return through a 0.01 / 0 / 0.01 cumulative cent split",
+      "Rejects excess quantities, duplicate lines, foreign-receipt lines, non-whole quantities and uncompleted sources",
+      "Rejects unassigned-store and foreign-organization access"
+    ],
+    "typecheck": {
+      "result": "passed",
+      "log": "artifacts/ux/espresso/commerce-preview-typecheck-final.log"
+    },
+    "lint": {
+      "result": "passed without warnings",
+      "log": "artifacts/ux/espresso/commerce-preview-lint.log"
+    },
+    "i18n": {
+      "result": "passed",
+      "log": "artifacts/ux/espresso/commerce-preview-i18n.log"
+    }
+  },
+  "sourceHashes": {
+    "src/server/services/pos.ts": "24ffa2c2978d60edc6b5232840241dbc47c91e5d29d2d2e7389a0cd7c73dba3f",
+    "src/server/trpc/routers/pos.ts": "ed266dc144daaa6a9133fa0c0d58a794d8b5387e4d668c49eb0fc89e22cbb572",
+    "tests/integration/pos-return-preview.test.ts": "9cbd3c045ffeaa20e59d2791dedca91755c9a73adcc7fc099e15d25e049bb332"
+  },
+  "limits": [
+    "Browser replay after the final build is recorded in commerce-verification.json.",
+    "Final posting continues to validate availability, remaining tender and idempotency; the read-only quote does not reserve goods or money."
+  ],
+  "delivery": "Local playground only. No schema migration, permission expansion, main merge/push or deployment."
+}

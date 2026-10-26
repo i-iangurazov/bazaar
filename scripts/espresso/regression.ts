@@ -37,6 +37,7 @@ const suites = {
     "tests/integration/stock-count-search.test.ts",
   ],
   commerce: [
+    "tests/integration/pos-return-preview.test.ts",
     "tests/integration/pos.test.ts",
     "tests/integration/pos-p0-verification.test.ts",
     "tests/integration/pos-idempotent-events.test.ts",
