@@ -60,6 +60,8 @@ type ReportPage<T> = {
 
 type CountedRow = { totalCount: number; pageRowPresent: boolean };
 
+// Movement DateTime columns contain UTC timestamp(3) without a zone. Bind ISO
+// text explicitly as timestamp, matching Prisma storage rather than session TimeZone.
 const normalizePagination = (input: ReportRangeInput) => ({
   page: Math.max(1, Math.trunc(input.page ?? 1)),
   pageSize: Math.min(100, Math.max(10, Math.trunc(input.pageSize ?? 25))),
@@ -97,6 +99,7 @@ const emptyPage = <T>(page: number, pageSize: number): ReportPage<T> => ({
 
 export const getStockoutsReport = async (
   input: ReportRangeInput,
+  database: Pick<Prisma.TransactionClient, "$queryRaw"> = prisma,
 ): Promise<ReportPage<StockoutRow>> => {
   const { page, pageSize } = normalizePagination(input);
   const storeScope = buildStoreScope(input);
@@ -104,14 +107,14 @@ export const getStockoutsReport = async (
     return emptyPage(page, pageSize);
   }
   const offset = (page - 1) * pageSize;
-  const rows = await prisma.$queryRaw<Array<StockoutRow & CountedRow>>(Prisma.sql`
+  const rows = await database.$queryRaw<Array<StockoutRow & CountedRow>>(Prisma.sql`
     WITH later_movements AS (
       SELECT m."storeId", m."productId", m."variantId", SUM(m."qtyDelta") AS delta
       FROM "StockMovement" m
       INNER JOIN "Store" s ON s.id = m."storeId"
       WHERE s."organizationId" = ${input.organizationId}
         ${storeScope}
-        AND m."createdAt" > ${input.to}
+        AND m."createdAt" > ${input.to.toISOString()}::timestamp
       GROUP BY m."storeId", m."productId", m."variantId"
     ), scoped_movements AS (
       SELECT
@@ -142,8 +145,8 @@ export const getStockoutsReport = async (
         AND snapshot."variantId" IS NOT DISTINCT FROM m."variantId"
       WHERE s."organizationId" = ${input.organizationId}
         ${storeScope}
-        AND m."createdAt" >= ${input.from}
-        AND m."createdAt" <= ${input.to}
+        AND m."createdAt" >= ${input.from.toISOString()}::timestamp
+        AND m."createdAt" <= ${input.to.toISOString()}::timestamp
     ), crossings AS (
       SELECT
         *,
@@ -202,6 +205,7 @@ export const getStockoutsReport = async (
 
 export const getSlowMoversReport = async (
   input: ReportRangeInput,
+  database: Pick<Prisma.TransactionClient, "$queryRaw"> = prisma,
 ): Promise<ReportPage<SlowMoverRow>> => {
   const { page, pageSize } = normalizePagination(input);
   const storeScope = buildStoreScope(input);
@@ -209,7 +213,7 @@ export const getSlowMoversReport = async (
     return emptyPage(page, pageSize);
   }
   const offset = (page - 1) * pageSize;
-  const rows = await prisma.$queryRaw<Array<SlowMoverRow & CountedRow>>(Prisma.sql`
+  const rows = await database.$queryRaw<Array<SlowMoverRow & CountedRow>>(Prisma.sql`
     WITH last_movements AS (
       SELECT
         m."storeId",
@@ -220,7 +224,7 @@ export const getSlowMoversReport = async (
       INNER JOIN "Store" s ON s.id = m."storeId"
       WHERE s."organizationId" = ${input.organizationId}
         ${storeScope}
-        AND m."createdAt" <= ${input.to}
+        AND m."createdAt" <= ${input.to.toISOString()}::timestamp
       GROUP BY m."storeId", m."productId", m."variantId"
     ), candidates AS (
       SELECT
@@ -240,7 +244,7 @@ export const getSlowMoversReport = async (
         AND snapshot."onHand" > 0
         AND (
           last_movements."lastMovementAt" IS NULL
-          OR last_movements."lastMovementAt" < ${input.from}
+          OR last_movements."lastMovementAt" < ${input.from.toISOString()}::timestamp
         )
     ), totals AS (
       SELECT COUNT(*)::int AS "totalCount" FROM candidates
@@ -282,6 +286,7 @@ export const getSlowMoversReport = async (
 
 export const getShrinkageReport = async (
   input: ReportRangeInput,
+  database: Pick<Prisma.TransactionClient, "$queryRaw"> = prisma,
 ): Promise<ReportPage<ShrinkageRow>> => {
   const { page, pageSize } = normalizePagination(input);
   const storeScope = buildStoreScope(input);
@@ -289,7 +294,7 @@ export const getShrinkageReport = async (
     return emptyPage(page, pageSize);
   }
   const offset = (page - 1) * pageSize;
-  const rows = await prisma.$queryRaw<Array<ShrinkageRow & CountedRow>>(Prisma.sql`
+  const rows = await database.$queryRaw<Array<ShrinkageRow & CountedRow>>(Prisma.sql`
     WITH grouped AS (
       SELECT
         m."storeId",
@@ -303,8 +308,8 @@ export const getShrinkageReport = async (
       WHERE s."organizationId" = ${input.organizationId}
         ${storeScope}
         AND (m.type = ${StockMovementType.WRITE_OFF}::"StockMovementType" OR m."referenceType" = 'WRITE_OFF')
-        AND m."createdAt" >= ${input.from}
-        AND m."createdAt" <= ${input.to}
+        AND m."createdAt" >= ${input.from.toISOString()}::timestamp
+        AND m."createdAt" <= ${input.to.toISOString()}::timestamp
       GROUP BY m."storeId", m."productId", m."variantId", m."createdById"
     ), totals AS (
       SELECT COUNT(*)::int AS "totalCount" FROM grouped

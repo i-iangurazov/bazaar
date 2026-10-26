@@ -1,0 +1,74 @@
+{
+  "status": "verified-corrective-server-change-separate-from-appearance",
+  "branch": "codex/playground",
+  "date": "2026-10-26",
+  "discoveredDuring": "Administration regression after Espresso page review; original B0 Bishkek-day test failed on the existing Asia/Bishkek regression database.",
+  "source": "src/server/services/reports.ts",
+  "before": {
+    "administration": "artifacts/ux/espresso/admin-database.log",
+    "rangeMatrix": "artifacts/ux/espresso/admin-date-binding-before.log",
+    "results": "Original existing test missed a 19:30Z write-off belonging to the following Bishkek business day. Added matrix: UTC case passed; Asia/Bishkek and Asia/Shanghai cases failed. Combined baseline was 3 failed / 55 passed."
+  },
+  "cause": "Prisma Date query parameters are bound with a timezone while movement columns contain UTC timestamp values without a zone. Implicit comparisons can reinterpret stored times in the PostgreSQL session TimeZone.",
+  "change": "Bind ISO date text explicitly as ::timestamp in seven comparisons across stockouts, slow movers and shrinkage. This matches the already established UTC timestamp storage contract and the loyalty correction. Functions optionally accept a transaction query client so the same report SQL can be tested under controlled DB sessions; callers retain the default Prisma client.",
+  "retained": [
+    "Existing role/store/organization scope, inclusive range boundaries, pagination and grouping",
+    "Stockout crossing and later-movement reconstruction formulas",
+    "Slow-mover selection semantics and current on-hand values",
+    "Shrinkage quantities, grouping and source rows; no data migration or monetary computation change"
+  ],
+  "tests": {
+    "source": "tests/integration/legacy-report-date-binding.test.ts",
+    "databaseTimeZones": [
+      "UTC",
+      "Asia/Bishkek",
+      "Asia/Shanghai"
+    ],
+    "runtimeTimeZones": [
+      "UTC",
+      "Asia/Bishkek",
+      "Asia/Shanghai"
+    ],
+    "reports": [
+      "shrinkage",
+      "stockouts",
+      "slowMovers"
+    ],
+    "range": {
+      "from": "2026-07-21T18:00:00.000Z",
+      "to": "2026-07-22T17:59:59.999Z"
+    },
+    "edges": "Source movements 1ms before, exactly at the start, inside, exactly at the end and 1ms after. Three in-range write-offs total 3; two zero-stock crossings retained; only the actual idle product is returned. Last movement timestamps retain exact instants. Empty page 2 retains total 1.",
+    "realReportQueries": 54,
+    "matrixTestCases": 3,
+    "note": "54 is the number of real SQL report calls, not 54 distinct automated test cases."
+  },
+  "checks": {
+    "administration": {
+      "files": 8,
+      "tests": 58,
+      "result": "passed",
+      "log": "artifacts/ux/espresso/admin-database-final.log"
+    },
+    "reports": {
+      "files": 11,
+      "tests": 44,
+      "result": "passed",
+      "log": "artifacts/ux/espresso/admin-reports-regression-final.log"
+    },
+    "overlap": "The same three date-binding cases appear in both suite selections; do not add the suite counts as distinct tests.",
+    "unit": {
+      "files": 265,
+      "tests": 2028,
+      "result": "passed",
+      "log": "artifacts/ux/espresso/admin-unit-final.log"
+    },
+    "typecheck": "artifacts/ux/espresso/admin-types-final.log",
+    "lint": "artifacts/ux/espresso/admin-lint-final.log",
+    "productionBuild": {
+      "result": "passed with current sources, types/lint and 125 static pages",
+      "log": "artifacts/ux/espresso/build-admin-final.log"
+    }
+  },
+  "delivery": "Isolated test infrastructure and local playground branch only. No production data, main merge or deployment."
+}
