@@ -36,10 +36,35 @@ const suites = {
     "tests/integration/stock-counts.test.ts",
     "tests/integration/stock-count-search.test.ts",
   ],
+  commerce: [
+    "tests/integration/pos.test.ts",
+    "tests/integration/pos-p0-verification.test.ts",
+    "tests/integration/pos-idempotent-events.test.ts",
+    "tests/integration/pos-shift-close-resolution.test.ts",
+    "tests/integration/sales-orders.test.ts",
+    "tests/integration/sales-orders-pos-boundary.test.ts",
+    "tests/integration/purchase-orders.test.ts",
+    "tests/integration/purchase-order-line-concurrency.test.ts",
+    "tests/integration/sale-channel.test.ts",
+    "tests/integration/loyalty-pos.test.ts",
+    "tests/integration/loyalty-reservation-timezone.test.ts",
+  ],
+  loyalty: [
+    "tests/integration/loyalty-ledger.test.ts",
+    "tests/integration/loyalty-member-auth.test.ts",
+    "tests/integration/loyalty-qr.test.ts",
+    "tests/integration/loyalty-pos.test.ts",
+    "tests/integration/loyalty-online-order.test.ts",
+    "tests/integration/loyalty-orders.test.ts",
+    "tests/integration/loyalty-email-delivery.test.ts",
+    "tests/integration/loyalty-reservation-timezone.test.ts",
+  ],
   unit: ["tests/unit"],
 } as const;
 if (!Object.prototype.hasOwnProperty.call(suites, suite)) {
-  throw new Error("Choose database, directories, authentication, settings, warehouse or unit");
+  throw new Error(
+    "Choose database, directories, authentication, settings, warehouse, commerce, loyalty or unit",
+  );
 }
 const require = createRequire(import.meta.url);
 createRequire(require.resolve("next/package.json"))("@next/env").loadEnvConfig(

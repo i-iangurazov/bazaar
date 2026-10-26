@@ -1,0 +1,52 @@
+{
+  "status": "verified-database-regression",
+  "branch": "codex/playground",
+  "baseline": "55c91dc",
+  "discoveredDuring": "Espresso commerce UI regression; separate correction from appearance changes",
+  "problem": "Prisma DateTime columns hold UTC wall time without time zone. Raw SQL comparing them with Date parameters used the PostgreSQL session time zone. Active points holds could appear expired in Asia/Bishkek/Asia/Shanghai, exposing reserved points as available and releasing holds early.",
+  "reproduction": {
+    "existingPosTest": "tests/integration/loyalty-pos.test.ts: expected 525 available after reserving 475 from 1000, got 1000",
+    "newRegression": "tests/integration/loyalty-reservation-timezone.test.ts",
+    "before": "UTC case passed; Bishkek and Shanghai both returned 500 instead of 150 after reserving 350 from 500",
+    "log": "artifacts/ux/espresso/commerce-timezone-before.log"
+  },
+  "correction": {
+    "source": "src/server/services/loyalty/ledger.ts",
+    "changes": "Bind now.toISOString() as timestamp in available-points read and expiry sweep/releasedAt update, matching UTC storage representation already used by reporting SQL.",
+    "preserved": "No change to earn/spend formulas, percentages, TTL length, authorization, account locking, idempotency, read-only availability behavior, models or migrations."
+  },
+  "checks": {
+    "commerce": {
+      "files": 11,
+      "tests": 129,
+      "result": "passed",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts commerce",
+      "log": "artifacts/ux/espresso/commerce-db-final.log"
+    },
+    "loyalty": {
+      "files": 8,
+      "tests": 36,
+      "result": "passed; overlaps POS and three timezone tests in commerce suite",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts loyalty",
+      "log": "artifacts/ux/espresso/commerce-loyalty-db-final.log"
+    },
+    "timeZones": [
+      "UTC",
+      "Asia/Bishkek",
+      "Asia/Shanghai"
+    ],
+    "regressionAssertions": [
+      "Live hold is subtracted from available points",
+      "Correct 1ms-before / exact expiry boundary across UTC midnight",
+      "Availability reads do not change reservation rows",
+      "Sweep releases old hold with exact UTC releasedAt and reuses funds safely",
+      "Expired reservation cannot be confirmed; no extra ledger entry"
+    ]
+  },
+  "environment": "Separate allowlisted bazaar_hardening_ci on 127.0.0.1:55440, Redis DB5; no browser fixture resets. New timezone cases use transaction-local TimeZone and preserve database settings. Provider email branch is mocked; no external delivery claimed.",
+  "sourceHashes": {
+    "src/server/services/loyalty/ledger.ts": "7cb7e2cf72778c47b03edd62185cd71e6b1e5a7b8abfd62a72ded0ff8634264c",
+    "tests/integration/loyalty-reservation-timezone.test.ts": "910140999dd30f26af4ea850860a179def8dffaafc6bc4e0aeea228787e37037"
+  },
+  "delivery": "Separate local correction on playground. Production build/browser acceptance are recorded in the ensuing commerce checkpoint. No main merge/push/deployment."
+}
