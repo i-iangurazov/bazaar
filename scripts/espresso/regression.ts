@@ -162,9 +162,13 @@ if (suite === "unit") {
   }
 }
 
+const focusedUnitFiles = process.argv.slice(3);
+if (focusedUnitFiles.length && (suite !== "unit" || focusedUnitFiles.some((path) => !/^tests\/unit\/[a-z0-9-]+\.test\.tsx?$/.test(path)))) {
+  throw new Error("Focused files must be named tests/unit/*.test.ts or .tsx and use the unit suite");
+}
 const result = spawnSync(
   "pnpm",
-  ["exec", "vitest", "run", ...suites[suite as keyof typeof suites]],
+  ["exec", "vitest", "run", ...(focusedUnitFiles.length ? focusedUnitFiles : suites[suite as keyof typeof suites])],
   { env, stdio: "inherit" },
 );
 process.exit(result.status ?? 1);

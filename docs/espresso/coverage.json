@@ -639,28 +639,38 @@
     },
     {
       "source": "src/app/(guide)/help/[category]/[guide]/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/public-guide-verification.json"
+      ]
     },
     {
       "source": "src/app/(guide)/help/[category]/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/public-guide-verification.json"
+      ]
     },
     {
       "source": "src/app/(guide)/help/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/public-guide-verification.json"
+      ]
     },
     {
       "source": "src/app/[locale]/[...slug]/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/public-guide-verification.json"
+      ]
     },
     {
       "source": "src/app/[locale]/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/public-guide-verification.json"
+      ]
     },
     {
       "source": "src/app/c/[slug]/page.tsx",
@@ -726,8 +736,10 @@
     },
     {
       "source": "src/app/privacy/page.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/public-guide-verification.json"
+      ]
     },
     {
       "source": "src/app/register-business/[token]/page.tsx",
@@ -836,8 +848,11 @@
     },
     {
       "source": "src/components/ui/input.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/public-guide-verification.json",
+        "artifacts/ux/espresso/public-field-focus-final.json"
+      ]
     },
     {
       "source": "src/components/ui/label.tsx",
@@ -871,8 +886,11 @@
     },
     {
       "source": "src/components/ui/select.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/public-guide-verification.json",
+        "artifacts/ux/espresso/public-field-focus-final.json"
+      ]
     },
     {
       "source": "src/components/ui/separator.tsx",
@@ -919,8 +937,11 @@
     },
     {
       "source": "src/components/ui/textarea.tsx",
-      "status": "pending",
-      "evidence": []
+      "status": "in_review",
+      "evidence": [
+        "docs/espresso/public-guide-verification.json",
+        "artifacts/ux/espresso/public-field-focus-final.json"
+      ]
     },
     {
       "source": "src/components/ui/toast.tsx",
@@ -939,12 +960,12 @@
     }
   ],
   "verification": {
-    "desktop": "partial: 87 of 97 page sources have checkpoint evidence; 10 pending and zero fully accepted.",
-    "mobile": "partial: administrative family captured at 390px; separate actual dev-scanner keyboard input verified. Previous family evidence retained; complete shared/state matrix pending.",
-    "themes": "partial: seven production administrative sources RU light/dark desktop and dark mobile, selected EN/KG light states. Full matrix pending.",
-    "rolesAndScopes": "partial: 21 fresh manager/staff/cashier checks, ordinary ADMIN owner-panel denial and actual QA owner access. Starter plan lock and canceled dialogs inspected. Full policy/state matrix remains pending.",
-    "functionalRegression": "Current full unit suite 2028 passed; administration DB 58 and reports DB 44 passed with three overlapping date cases. Eleven selected business-model hashes unchanged; additive administrative fixtures disclosed.",
-    "productionBuild": "passed with final administrative/date-binding sources, type/lint and 125 generated static pages; dev build isolated and final production manifest retained"
+    "desktop": "partial: 93/97 page sources in_review, four pending and zero fully accepted; see public guide checkpoint",
+    "mobile": "partial: final public four-screen matrix at390 plus all33 help addresses in three languages; selected global-field focus checks; full shared/state acceptance pending",
+    "themes": "partial: public four-screen full RU/KG/EN light/dark desktop/mobile matrix complete; earlier family limitations retained",
+    "rolesAndScopes": "partial: true signed-out public access, actual QA sign-out/sign-in restoration and nine real authentication DB cases; existing policy unchanged",
+    "functionalRegression": "2066 full unit tests and nine isolated authentication DB tests passed; 16 real field-focus cases, 99 help URL/language render checks, selected workflows and 485 selected business rows retained",
+    "productionBuild": "passed with final public/search/field-focus sources, types/lint and125 generated static pages"
   },
   "requirements": {
     "visualFidelity": "Match Espresso typography, palette, surfaces and components while preserving customer workflows; analogous screen comparison must respect the human-confirmed operational layouts.",
@@ -956,7 +977,7 @@
     "customerWorkflows": "Preserve the customer-requested two-column operational layouts and established interactions. The visual reference does not authorize replacing them; see AGENTS.md and redesign-change-audit.json."
   },
   "progress": {
-    "stage": "administration-checkpoint-in-review-full-redesign-in-progress",
+    "stage": "public-guide-and-field-focus-checkpoint-in-review-full-redesign-in-progress",
     "foundation": [
       "Pinned MIT Espresso semantic tokens and component CSS",
       "Self-hosted Inter Variable",
@@ -1116,6 +1137,11 @@
         "check": "Administration, billing, onboarding, compliance and dev scanner",
         "result": "26 production captures, 21 fresh-role checks, dialogs canceled with focus return, metrics search/filter/pagination/keyboard pan and separate dev scanner input; in_review only.",
         "evidence": "docs/espresso/administration-verification.json"
+      },
+      {
+        "check": "Public guide/privacy, compatibility entries and field focus",
+        "result": "48 final base captures, 99 actual help URL/language renders, 16 pointer/keyboard field states and successful workflow checks; in_review only.",
+        "evidence": "docs/espresso/public-guide-verification.json"
       }
     ],
     "remaining": [
@@ -1134,14 +1160,15 @@
       "Complete commerce acceptance permutations listed in commerce-verification.json; current screen and cash-cycle evidence is not acceptance of every order, provider or state flow.",
       "Complete report/shared-component acceptance permutations listed in reports-verification.json; page captures and DB regressions do not establish final overall redesign acceptance.",
       "Complete integration/provider/editor/query-state and legacy translation acceptance listed in integrations-verification.json; base captures and mocks are not live provider acceptance.",
-      "Complete administration/shared-shell plan, title-fallback and state permutations listed in administration-verification.json. Ten public/help page sources and 29 separately unreviewed shared controls remain before final whole-system acceptance."
+      "Complete administration/shared-shell plan, title-fallback and state permutations listed in administration-verification.json. Current page/control totals are recorded in the public-guide checkpoint; administration limitations still apply.",
+      "Four public page sources and 26 separately unreviewed shared controls remain; finish legacy help/public copy, mobile title fallback and complete shared/state/visual acceptance. Field focus now has direct browser evidence but no every-browser claim."
     ],
     "unitTests": {
-      "files": 265,
-      "tests": 2028,
-      "result": "passed after all application changes",
+      "files": 268,
+      "tests": 2066,
+      "result": "passed with final TS/TSX; the subsequent CSS selector-specificity refinement is verified by final production build and actual browser focus checks",
       "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
-      "log": "artifacts/ux/espresso/admin-all-unit-final.log"
+      "log": "artifacts/ux/espresso/public-help-inputs-unit-final.log"
     },
     "databaseRegression": {
       "files": 3,
@@ -1238,6 +1265,13 @@
       "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts administration",
       "log": "artifacts/ux/espresso/admin-database-final.log",
       "scope": "Admin metrics, tariff/subscription policies, signed payment processing/idempotency, platform security/export, support roles/plan gate, onboarding evidence and legacy report date binding. Provider protocol tests are not live merchant acceptance."
+    },
+    "publicAuthenticationDatabaseRegression": {
+      "files": 1,
+      "tests": 9,
+      "result": "passed on separate bazaar_hardening_ci and Redis DB5; real credentials/claims/role homes, providers disabled",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts authentication",
+      "log": "artifacts/ux/espresso/public-help-auth-database-final.log"
     }
   }
 }

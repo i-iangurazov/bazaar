@@ -73,8 +73,9 @@ const SelectTrigger = React.forwardRef<
     <SelectPrimitive.Trigger
       ref={mergedRef}
       {...attributes}
+      data-bazaar-field="select"
       className={cn(
-        "flex h-[var(--control-height)] w-full min-w-0 items-center justify-between gap-2 rounded-[var(--radius)] border border-transparent bg-secondary px-2.5 py-1.5 text-base text-foreground transition-colors hover:bg-accent focus:border-input focus:bg-card focus:outline-none focus:ring-2 focus:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm [&>span]:min-w-0 [&>span]:truncate [&>svg]:shrink-0",
+        "flex h-[var(--control-height)] w-full min-w-0 items-center justify-between gap-2 rounded-[var(--radius)] border border-transparent bg-secondary px-2.5 py-1.5 text-base text-foreground transition-colors hover:bg-accent focus:border-primary focus:bg-card focus:outline-none focus:shadow-none disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-danger sm:text-sm [&>span]:min-w-0 [&>span]:truncate [&>svg]:shrink-0",
         className,
       )}
       {...props}

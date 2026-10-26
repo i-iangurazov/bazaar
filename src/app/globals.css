@@ -179,7 +179,7 @@ html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
   input,
   select,
   textarea {
-    @apply w-full rounded-md border border-transparent bg-secondary px-2.5 py-2 text-base text-foreground shadow-none transition-colors placeholder:text-muted-foreground hover:bg-accent focus:bg-card focus:outline-none focus:ring-2 focus:ring-ring/25 sm:text-sm;
+    @apply w-full rounded-md border border-transparent bg-secondary px-2.5 py-2 text-base text-foreground shadow-none transition-colors placeholder:text-muted-foreground hover:bg-accent focus:border-primary focus:bg-card focus:outline-none focus:shadow-none sm:text-sm;
     touch-action: manipulation;
   }
 
@@ -205,6 +205,18 @@ html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
   td {
     @apply text-sm text-foreground;
   }
+}
+
+/* Text fields use one focus border. Native outlines and nested Tailwind rings
+   must not add another frame around a field or a composite search/editor. */
+:is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"], [type="button"], [type="submit"], [type="reset"], [type="hidden"]), textarea, select, [data-bazaar-field]):focus {
+  outline: none;
+  box-shadow: none;
+  border-color: hsl(var(--ring));
+}
+
+:is(input, textarea, select, [data-bazaar-field])[aria-invalid="true"]:focus {
+  border-color: hsl(var(--danger));
 }
 
 @layer components {

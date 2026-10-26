@@ -1,5 +1,5 @@
 {
-  "status": "administration-checkpoint-in-review-full-redesign-in-progress",
+  "status": "public-guide-and-field-focus-checkpoint-in-review-full-redesign-in-progress",
   "branch": "codex/playground",
   "reference": "Frappe Framework Espresso e8d41dd0061a32ee781caefe5d0b0d2bb7c15362",
   "checks": [
@@ -492,6 +492,41 @@
       "command": "CUA production administrative matrix and isolated dev scanner",
       "result": "26 production captures, 21 role checks and actual dev keyboard input; limitations retained",
       "evidence": "docs/espresso/administration-verification.json"
+    },
+    {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
+      "result": "passed with final TS/TSX; the subsequent CSS selector-specificity refinement is verified by final production build and actual browser focus checks;268files/2066tests",
+      "log": "artifacts/ux/espresso/public-help-inputs-unit-final.log"
+    },
+    {
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts authentication",
+      "result": "1file/9passed on isolated CI database",
+      "log": "artifacts/ux/espresso/public-help-auth-database-final.log"
+    },
+    {
+      "command": "pnpm exec tsc --noEmit --incremental",
+      "result": "passed; final production build also validates types",
+      "log": "artifacts/ux/espresso/public-fields-types-final.log"
+    },
+    {
+      "command": "pnpm lint",
+      "result": "passed without warnings; final build also runs lint",
+      "log": "artifacts/ux/espresso/public-fields-lint-final.log"
+    },
+    {
+      "command": "pnpm i18n:check",
+      "result": "passed; no new displayed strings or translation keys; search aliases retain the existing multilingual content contract",
+      "log": "artifacts/ux/espresso/public-fields-i18n-final.log"
+    },
+    {
+      "command": "UX_SUITE=espresso CIRCLE_NODE_TOTAL=3 NODE_OPTIONS=--max-old-space-size=6144 node --import tsx scripts/ux/build.ts",
+      "result": "passed with final source, types/lint and 125 generated static pages",
+      "log": "artifacts/ux/espresso/build-public-fields-acceptance-final.log"
+    },
+    {
+      "command": "CUA final public and field-focus checks",
+      "result": "48 base captures,99 localized guide/category renders,16 focus cases and selected workflows",
+      "evidence": "docs/espresso/public-guide-verification.json"
     }
   ],
   "environment": {
@@ -509,7 +544,7 @@
     "Admin/manager/staff/cashier and store/plan gates in the rendered UI",
     "Modal, dropdown, focus, keyboard, loading, empty, retry and recovery flows across page families",
     "Broader database integration regression and final production smoke on the isolated app",
-    "87/97 sources in_review is partial checkpoint coverage. Remaining ten pages, shared components and final acceptance are listed in administration-verification.json."
+    "93/97 page sources in_review is partial checkpoint coverage; four public sources, shared components and final acceptance remain. See public-guide-verification.json."
   ],
   "delivery": "Local review checkpoint only; not a full redesign completion; no main merge, main push or deployment",
   "infrastructureNotes": [
@@ -527,5 +562,6 @@
   "currentCommerceCheckpoint": "docs/espresso/commerce-verification.json",
   "currentReportsCheckpoint": "docs/espresso/reports-verification.json",
   "currentIntegrationsCheckpoint": "docs/espresso/integrations-verification.json",
-  "currentAdministrationCheckpoint": "docs/espresso/administration-verification.json"
+  "currentAdministrationCheckpoint": "docs/espresso/administration-verification.json",
+  "currentPublicGuideCheckpoint": "docs/espresso/public-guide-verification.json"
 }

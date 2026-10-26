@@ -137,7 +137,7 @@ export function BaamComposer({ c }: { c: BaamController }) {
             e.preventDefault();
             void c.ask();
           }}
-          className="rounded-lg border border-border bg-background p-2 shadow-sm focus-within:border-primary/60 focus-within:ring-2 focus-within:ring-primary/10"
+          className="rounded-lg border border-border bg-background p-2 shadow-none focus-within:border-primary"
         >
           <textarea
             ref={c.inputRef}

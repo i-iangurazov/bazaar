@@ -1,6 +1,6 @@
 {
-  "status": "administration-checkpoint-in-review-full-redesign-in-progress",
-  "scope": "Redesign changes since 1fcdfd4, with separate family checkpoints through administration; not an audit of every earlier playground improvement.",
+  "status": "public-guide-and-field-focus-checkpoint-in-review-full-redesign-in-progress",
+  "scope": "Redesign changes since1fcdfd4, with separate family checkpoints through public guide/privacy and field focus; not an audit of every earlier playground improvement.",
   "humanCorrection": "Customer-requested two-column operational layouts must be preserved. A difference from ERPNext is not evidence of a defect.",
   "restored": [
     {
@@ -225,6 +225,25 @@
         "src/app/(app)/platform/page.tsx"
       ],
       "evidence": "docs/espresso/administration-verification.json"
+    },
+    {
+      "area": "Public help keyboard/recovery and corrected navigation/search aliases",
+      "changes": [
+        "Help search Escape clears even a zero-result query; popup ARIA references exist only when their targets exist. Advertised Ctrl/Command K now focuses the search. Role tabs support arrows/Home/End with a single tab stop and linked active panel.",
+        "Getting-started progress survives normal reload and stays usable for the current visit if browser storage rejects writes/removal. The language switcher shows a translated failure and permits retry after HTTP/network failure instead of leaving an unhandled rejection.",
+        "Employee task now opens settings/add-employee; first store setup step opens getting-started/choose-store. Those two links were swapped in the original catalog. No instruction body, workflow permission or operational action was rewritten.",
+        "All twelve advertised quick searches are tested. Receiving gains the missing Russian noun alias; normalization now retains Unicode letters/numbers, including Kyrgyz characters, instead of deleting them. Ranking/scoring remains unchanged.",
+        "Guide HowTo structured data uses the displayed locale rather than always Russian. Canonical routes and article sourceRoute transport remain; legacy redirect policy is unchanged."
+      ],
+      "sources": [
+        "src/app/(guide)/help/[category]/[guide]/page.tsx",
+        "src/app/(guide)/help/[category]/page.tsx",
+        "src/app/(guide)/help/page.tsx",
+        "src/app/[locale]/[...slug]/page.tsx",
+        "src/app/[locale]/page.tsx",
+        "src/app/privacy/page.tsx"
+      ],
+      "evidence": "docs/espresso/public-guide-verification.json"
     }
   ],
   "appearanceChanges": [
@@ -252,6 +271,15 @@
         "Existing shared Espresso controls apply to admin, subscription and onboarding screens. Seven mobile title prefixes now use existing localized navigation titles instead of falling back to the brand; navigation membership/order and permissions are unchanged."
       ],
       "evidence": "docs/espresso/administration-verification.json"
+    },
+    {
+      "area": "Public guide/privacy and consistent field focus",
+      "changes": [
+        "Guide surfaces, borders, radii, font weights and shadows now use Espresso/Bazaar theme tokens instead of an independent blue-black gradient palette. Existing page grids, widths, section order, image aspect ratios/positions and breakpoints remain. Hover lift and glow effects are flattened.",
+        "Privacy uses themed foreground/muted text, borders and the existing shared button. The old light-theme main/section headings were almost white/white on white; the real browser reproduced it before the correction. Legal text, six section order, dates, destinations and content width are unchanged."
+      ],
+      "focus": "Text-like native inputs, textarea, native select and shared select triggers now have outline:none, box-shadow:none and one blue focus border. Composite Guide search and Baam editor put that border on their existing outer container, with no inner border/ring. aria-invalid=true retains the red border. Shared field dimensions, values, events, refs, masks, validation and disabled behavior are unchanged.",
+      "evidence": "docs/espresso/public-guide-verification.json"
     }
   ],
   "serverScopeEvidence": {
@@ -477,6 +505,10 @@
         "classification": "jsx-style-attributes-only"
       },
       {
+        "path": "src/app/(guide)/help/[category]/[guide]/page.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
         "path": "src/app/developers/bazaar-api/page.tsx",
         "classification": "requires-semantic-review"
       },
@@ -510,7 +542,7 @@
       },
       {
         "path": "src/app/privacy/page.tsx",
-        "classification": "jsx-style-attributes-only"
+        "classification": "requires-semantic-review"
       },
       {
         "path": "src/app/register-business/[token]/page.tsx",
@@ -585,7 +617,15 @@
         "classification": "jsx-style-attributes-only"
       },
       {
+        "path": "src/components/help/HelpHome.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
         "path": "src/components/help/HelpIcon.tsx",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/components/help/HelpLocaleSwitcher.tsx",
         "classification": "requires-semantic-review"
       },
       {
@@ -774,7 +814,7 @@
       },
       {
         "path": "src/components/ui/select.tsx",
-        "classification": "jsx-style-attributes-only"
+        "classification": "requires-semantic-review"
       },
       {
         "path": "src/components/ui/sheet.tsx",
@@ -803,6 +843,14 @@
       {
         "path": "src/components/ui/tooltip.tsx",
         "classification": "jsx-style-attributes-only"
+      },
+      {
+        "path": "src/content/help/catalog.ts",
+        "classification": "requires-semantic-review"
+      },
+      {
+        "path": "src/content/help/search-core.ts",
+        "classification": "requires-semantic-review"
       },
       {
         "path": "src/hooks/use-locale-change.ts",
@@ -962,10 +1010,11 @@
     "The unrequested layout acceptance claims in the previous inventory checkpoint are withdrawn.",
     "No further customer workflow rearrangements are authorized by a mere visual difference from ERPNext.",
     "Integration sources are in_review only; external operations and remaining editor/translation/plan states are explicitly listed in integrations-verification.json.",
-    "Administration sources are in_review only. Mobile brand-title fallback, Starter support plan-state presentation, remaining state matrices and dev hardware/provider limitations are explicit in administration-verification.json."
+    "Administration sources are in_review only. Mobile brand-title fallback, Starter support plan-state presentation, remaining state matrices and dev hardware/provider limitations are explicit in administration-verification.json.",
+    "Public guide and field sources remain in_review; documented render/DOM and selected focus evidence is not full editorial, every-browser, provider or whole-redesign acceptance."
   ],
   "delivery": "codex/playground only; no main merge or production deployment",
-  "currentCheckpoint": "docs/espresso/administration-verification.json",
+  "currentCheckpoint": "docs/espresso/public-guide-verification.json",
   "previousCheckpoints": [
     "docs/espresso/directory-verification.json",
     "docs/espresso/auth-verification.json",
@@ -973,73 +1022,63 @@
     "docs/espresso/warehouse-documents-verification.json",
     "docs/espresso/commerce-verification.json",
     "docs/espresso/reports-verification.json",
-    "docs/espresso/integrations-verification.json"
+    "docs/espresso/integrations-verification.json",
+    "docs/espresso/administration-verification.json"
   ],
   "currentCheckpointChecks": {
     "unit": {
-      "files": 265,
-      "tests": 2028,
-      "result": "passed after all application changes",
+      "files": 268,
+      "tests": 2066,
+      "result": "passed with final TS/TSX; the subsequent CSS selector-specificity refinement is verified by final production build and actual browser focus checks",
       "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
-      "log": "artifacts/ux/espresso/admin-all-unit-final.log"
+      "log": "artifacts/ux/espresso/public-help-inputs-unit-final.log"
     },
-    "recovery": {
-      "source": "tests/unit/admin-workspace-recovery.test.tsx",
-      "tests": 40,
-      "result": "passed within final full suite; real pages and payment components rendered with explicit deterministic procedure mocks",
-      "before": "artifacts/ux/espresso/admin-recovery-before.log",
-      "beforeResult": "40 failed before corrections",
-      "focusedLog": "artifacts/ux/espresso/admin-recovery-after.log",
-      "focusedResult": "48 passed across two files, including eight existing jobs UI cases; these are included in the full unit count",
-      "scope": "Thirteen failed-read retries refetch only the failed query and invoke no mutation. Existing ADMIN/platform-owner policy, session-loading cached data, compliance expanded state and direct article hash are covered."
+    "newCases": {
+      "tests": 38,
+      "files": 3,
+      "includedInFullSuite": true,
+      "sources": [
+        "tests/unit/help-workspace-navigation.test.tsx",
+        "tests/unit/help-quick-search.test.ts",
+        "tests/unit/public-help-entrypoints.test.tsx"
+      ],
+      "scope": "17 rendered navigation/recovery cases across RU/KG/EN; 14 advertised-search/Unicode cases; seven structured-language/not-found/legacy-component redirect characterizations. These counts are part of 2066, not additional tests.",
+      "before": [
+        "artifacts/ux/espresso/public-help-navigation-before.log",
+        "artifacts/ux/espresso/public-help-quick-search-before.log"
+      ],
+      "beforeResult": "Initial navigation/recovery: 17 failed and one unhandled network rejection in the old component. Advertised searches/normalization: 2 failed, 12 passed. The actual browser also reproduced Escape retaining an unsuccessful query and the receiving chip returning no results.",
+      "focusedLog": "artifacts/ux/espresso/public-help-search-final.log",
+      "focusedResult": "52 passed across four files, including pre-existing search cases; not 52 new cases."
     },
-    "database": {
-      "files": 8,
-      "tests": 58,
-      "result": "passed on separate bazaar_hardening_ci; providers disabled or mocked",
-      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts administration",
-      "log": "artifacts/ux/espresso/admin-database-final.log",
-      "scope": "Admin metrics, tariff/subscription policies, signed payment processing/idempotency, platform security/export, support roles/plan gate, onboarding evidence and legacy report date binding. Provider protocol tests are not live merchant acceptance."
-    },
-    "reportsDatabase": {
-      "files": 11,
-      "tests": 44,
-      "result": "passed after report date-binding correction",
-      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts reports",
-      "log": "artifacts/ux/espresso/admin-reports-regression-final.log",
-      "overlap": "The same three date-binding test cases also run in the 58-test administration selection; do not count 102 distinct tests."
-    },
-    "onboardingDatabase": {
-      "source": "tests/integration/onboarding-workspace-access.test.ts",
-      "tests": 4,
-      "result": "passed within administration selection; non-admin get/skip rejected before progress creation; repeated admin reads derive persisted facts, retain pending steps and create one metadata progress row without operational transactions"
+    "authenticationDatabase": {
+      "files": 1,
+      "tests": 9,
+      "result": "passed on separate bazaar_hardening_ci and Redis DB5; real credentials/claims/role homes, providers disabled",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts authentication",
+      "log": "artifacts/ux/espresso/public-help-auth-database-final.log"
     },
     "typecheck": {
       "result": "passed; final production build also validates types",
-      "log": "artifacts/ux/espresso/admin-types-acceptance.log"
+      "log": "artifacts/ux/espresso/public-fields-types-final.log"
     },
     "lint": {
-      "result": "passed without warnings; final production build includes the last label-only change",
-      "log": "artifacts/ux/espresso/admin-lint-acceptance.log"
+      "result": "passed without warnings; final build also runs lint",
+      "log": "artifacts/ux/espresso/public-fields-lint-final.log"
     },
     "i18n": {
-      "result": "passed; existing RU/KG/EN keys reused",
-      "log": "artifacts/ux/espresso/admin-i18n-acceptance.log"
+      "result": "passed; no new displayed strings or translation keys; search aliases retain the existing multilingual content contract",
+      "log": "artifacts/ux/espresso/public-fields-i18n-final.log"
     },
     "productionBuild": {
-      "result": "passed with all final application sources, types/lint and 125 generated static pages",
+      "result": "passed with final source, types/lint and 125 generated static pages",
       "command": "UX_SUITE=espresso CIRCLE_NODE_TOTAL=3 NODE_OPTIONS=--max-old-space-size=6144 node --import tsx scripts/ux/build.ts",
-      "log": "artifacts/ux/espresso/build-admin-recovered-final.log"
-    },
-    "developmentIsolation": {
-      "result": "actual scanner dev run completed; production manifest byte-identical after shutdown",
-      "evidence": "artifacts/ux/espresso/scanner-dev-isolation.json",
-      "source": "scripts/espresso/dev.mjs"
+      "log": "artifacts/ux/espresso/build-public-fields-acceptance-final.log"
     }
   },
   "customerLayoutRecheck": {
-    "evidence": "docs/espresso/administration-verification.json",
-    "result": "Four operational sources remain byte-exact c276f30. Eleven selected pre/post administrative-review business-model hashes unchanged. Additive isolated QA fixtures and normal metadata writes disclosed separately."
+    "evidence": "docs/espresso/public-guide-verification.json",
+    "result": "All four protected operational sources remain byte-exact c276f30;485 selected pre/post UI business rows retain exact hashes. No new server/schema change."
   },
   "authenticationTransportCorrection": {
     "source": "src/middleware.ts",

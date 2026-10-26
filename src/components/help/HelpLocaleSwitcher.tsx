@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useLocale } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 
 import { defaultLocale, locales, normalizeLocale, type Locale } from "@/lib/locales";
@@ -14,40 +14,53 @@ export const HelpLocaleSwitcher = () => {
   const locale = normalizeLocale(useLocale()) ?? defaultLocale;
   const router = useRouter();
   const [pending, setPending] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const tErrors = useTranslations("errors");
 
   const switchLocale = async (nextLocale: Locale) => {
     if (nextLocale === locale || pending) return;
     setPending(true);
+    setFailed(false);
     try {
       const response = await fetch("/api/locale", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ locale: nextLocale }),
       });
-      if (response.ok) router.refresh();
+      if (!response.ok) throw new Error("localeUpdateFailed");
+      router.refresh();
+    } catch {
+      setFailed(true);
     } finally {
       setPending(false);
     }
   };
 
   return (
-    <div
-      className={styles.localeSwitcher}
-      role="group"
-      aria-label={localize(helpUi.language, locale)}
-    >
-      {locales.map((item) => (
-        <button
-          key={item}
-          type="button"
-          className={item === locale ? styles.localeActive : styles.localeButton}
-          aria-pressed={item === locale}
-          disabled={pending}
-          onClick={() => void switchLocale(item)}
-        >
-          {labels[item]}
-        </button>
-      ))}
+    <div className={styles.localeControl}>
+      <div
+        className={styles.localeSwitcher}
+        role="group"
+        aria-label={localize(helpUi.language, locale)}
+      >
+        {locales.map((item) => (
+          <button
+            key={item}
+            type="button"
+            className={item === locale ? styles.localeActive : styles.localeButton}
+            aria-pressed={item === locale}
+            disabled={pending}
+            onClick={() => void switchLocale(item)}
+          >
+            {labels[item]}
+          </button>
+        ))}
+      </div>
+      {failed ? (
+        <p role="alert" className={styles.localeError}>
+          {tErrors("genericMessage")}
+        </p>
+      ) : null}
     </div>
   );
 };

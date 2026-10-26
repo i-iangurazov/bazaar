@@ -3,7 +3,7 @@ const normalize = (value: string) =>
     .toLocaleLowerCase()
     .replaceAll("ё", "е")
     .replace(/[’'`]/g, "")
-    .replace(/[^a-zа-я0-9]+/gi, " ")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim()
     .replace(/\s+/g, " ");
 

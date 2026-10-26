@@ -473,7 +473,7 @@ export const helpGuides: HelpGuide[] = [
       "receiving stock cost delivery purchase",
     ),
     aliases: t(
-      "добавить остаток пришел товар поступление закупка",
+      "оприходование добавить остаток пришел товар поступление закупка",
       "калдык кошуу товар келди сатып алуу",
       "add inventory goods arrived restock",
     ),
@@ -1882,7 +1882,7 @@ export const helpTasks: HelpTask[] = [
       "Роль жана жеткиликтүү дүкөндөр",
       "Role and store access",
     ),
-    guideId: "getting-started/choose-store",
+    guideId: "settings/add-employee",
     icon: "users",
   },
   {
@@ -1919,7 +1919,7 @@ export const helpJourney: HelpJourneyItem[] = [
       "Товар жана касса үчүн иш орду",
       "The location for products and POS",
     ),
-    guideId: "settings/add-employee",
+    guideId: "getting-started/choose-store",
     estimatedMinutes: 2,
   },
   {

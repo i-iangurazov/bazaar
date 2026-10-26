@@ -30,7 +30,7 @@ export const generateMetadata = async ({
   };
 };
 
-const GuidePage = ({
+const GuidePage = async ({
   params,
   searchParams,
 }: {
@@ -39,7 +39,7 @@ const GuidePage = ({
 }) => {
   const item = getHelpGuide(params.category, params.guide);
   if (!item) notFound();
-  const locale = defaultLocale;
+  const locale = normalizeLocale(await getLocale()) ?? defaultLocale;
   const url = `https://www.bazaar.kg/help/${item.category}/${item.slug}`;
   const structuredData = {
     "@context": "https://schema.org",

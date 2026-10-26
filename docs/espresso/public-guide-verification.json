@@ -1,0 +1,201 @@
+{
+  "status": "public-guide-and-field-focus-checkpoint-in-review-full-redesign-in-progress",
+  "branch": "codex/playground",
+  "baseline": "6d403e6",
+  "date": "2026-10-26",
+  "mainUnchanged": "5a27b8e",
+  "scope": {
+    "routeSources": [
+      "src/app/(guide)/help/[category]/[guide]/page.tsx",
+      "src/app/(guide)/help/[category]/page.tsx",
+      "src/app/(guide)/help/page.tsx",
+      "src/app/[locale]/[...slug]/page.tsx",
+      "src/app/[locale]/page.tsx",
+      "src/app/privacy/page.tsx"
+    ],
+    "sharedControlSources": [
+      "src/components/ui/input.tsx",
+      "src/components/ui/textarea.tsx",
+      "src/components/ui/select.tsx"
+    ],
+    "note": "Six page sources, including two legacy compatibility handlers. Dynamic help URLs are counted separately below; 97 is the page-source inventory, not every possible dynamic address."
+  },
+  "appearance": [
+    "Guide surfaces, borders, radii, font weights and shadows now use Espresso/Bazaar theme tokens instead of an independent blue-black gradient palette. Existing page grids, widths, section order, image aspect ratios/positions and breakpoints remain. Hover lift and glow effects are flattened.",
+    "Privacy uses themed foreground/muted text, borders and the existing shared button. The old light-theme main/section headings were almost white/white on white; the real browser reproduced it before the correction. Legal text, six section order, dates, destinations and content width are unchanged."
+  ],
+  "fieldFocus": {
+    "humanRequest": "Remove unattractive native/duplicate field outlines or restyle them consistently.",
+    "reproduced": "Guide search drew a 2px ring on the raw input plus another 2px ring on its container. Ordinary fields also drew a surrounding Tailwind ring. Evidence: artifacts/ux/espresso/input-focus-before.json and screenshots/input-help-focus-before.png.",
+    "change": "Text-like native inputs, textarea, native select and shared select triggers now have outline:none, box-shadow:none and one blue focus border. Composite Guide search and Baam editor put that border on their existing outer container, with no inner border/ring. aria-invalid=true retains the red border. Shared field dimensions, values, events, refs, masks, validation and disabled behavior are unchanged.",
+    "sources": [
+      "src/app/globals.css",
+      "src/components/ui/input.tsx",
+      "src/components/ui/textarea.tsx",
+      "src/components/ui/select.tsx",
+      "src/components/baam-composer.tsx",
+      "src/components/help/help.module.css"
+    ],
+    "evidence": "artifacts/ux/espresso/public-field-focus-final.json",
+    "cases": 16,
+    "observed": "Actual text, keyboard Tab, custom select, native mobile select, email, phone, empty password and reveal toggle, number, textarea, product search, invalid profile field and Baam composer. Selected desktop/mobile light/dark states all have outlineStyle none and boxShadow none. Error is a 1px red border; ordinary/composite focus is a 1px blue border. The Baam inner textarea stays borderless.",
+    "finalCompositeEvidence": "artifacts/ux/espresso/public-help-composite-focus-final.json",
+    "limits": "Codex in-app browser on macOS; no browser engine, every-browser, physical mobile keyboard or OS picker claim. Checkbox/radio/range/color/file/button controls retain their own control styling; this is a targeted field rule, not a global removal of keyboard focus."
+  },
+  "explicitBehaviorChanges": [
+    "Help search Escape clears even a zero-result query; popup ARIA references exist only when their targets exist. Advertised Ctrl/Command K now focuses the search. Role tabs support arrows/Home/End with a single tab stop and linked active panel.",
+    "Getting-started progress survives normal reload and stays usable for the current visit if browser storage rejects writes/removal. The language switcher shows a translated failure and permits retry after HTTP/network failure instead of leaving an unhandled rejection.",
+    "Employee task now opens settings/add-employee; first store setup step opens getting-started/choose-store. Those two links were swapped in the original catalog. No instruction body, workflow permission or operational action was rewritten.",
+    "All twelve advertised quick searches are tested. Receiving gains the missing Russian noun alias; normalization now retains Unicode letters/numbers, including Kyrgyz characters, instead of deleting them. Ranking/scoring remains unchanged.",
+    "Guide HowTo structured data uses the displayed locale rather than always Russian. Canonical routes and article sourceRoute transport remain; legacy redirect policy is unchanged."
+  ],
+  "browser": {
+    "environment": "Final standalone production build localhost:3122, isolated bazaar_espresso_ui on PostgreSQL 55440 and Redis DB4/prefix espresso-ui-test; providers disabled.",
+    "baseline": [
+      "artifacts/ux/espresso/public-help-before.json",
+      "artifacts/ux/espresso/public-privacy-contrast-before.json",
+      "artifacts/ux/espresso/public-help-keyboard-before.json"
+    ],
+    "matrix": {
+      "evidence": "artifacts/ux/espresso/public-help-base-matrix-final.json",
+      "captures": 48,
+      "composition": "Help home, inventory category, receiving guide and privacy × RU/KG/EN × light/dark × desktop1280/mobile390. Final screenshots were replayed on the final build. These are 48 states of four actual screens, not 48 new routes.",
+      "overflow": "All page widths equal the actual viewport width; selected screenshots visually inspected."
+    },
+    "documentInventory": {
+      "evidence": "artifacts/ux/espresso/public-help-all-document-renders-final.json",
+      "sourceInventory": "artifacts/ux/espresso/public-help-document-inventory.json",
+      "categories": 9,
+      "guides": 24,
+      "renderChecks": 99,
+      "scope": "Each of 33 authoritative catalog URLs rendered at 390px in each language; exact localized h1, full-page scroll width and every same-document step anchor checked. This is DOM/render evidence, not a claim of manual visual inspection of 99 screenshots or acceptance of every instruction's business copy."
+    },
+    "workflows": {
+      "evidence": "artifacts/ux/espresso/public-help-workflows-final.json",
+      "scope": "Ctrl K, zero-result Escape, role-tab focus, receiving chip + Enter navigation, native illustration zoom + Escape/focus return, progress toggle/reload/reset with original state restored, both corrected links, genuine empty orders category, unknown guide404, localized nested alias preserving from and repeated tags, authenticated localized home and genuinely signed-out public home/help, then ordinary QA admin sign-in restored.",
+      "redirectNote": "With real middleware, localized home removes the locale prefix: authenticated admin reaches /dashboard and genuinely signed-out visitor reaches the marketing /. The direct legacy Home component's old login/dashboard return is characterized separately in unit tests; it is not substituted for the observed routed behavior."
+    },
+    "restoration": "QA admin restored to ru/DARK with original Admin User name; disabled KGS conversion field remains disabled. No profile personal-data save, supplier creation, min-stock apply, AI prompt, subscription payment or provider operation."
+  },
+  "preservation": {
+    "geometryEvidence": "artifacts/ux/espresso/public-help-style-preservation.json",
+    "protectedSources": [
+      {
+        "source": "src/components/inventory/receiving-workflow.tsx",
+        "baseline": "c276f30",
+        "exactMatch": true,
+        "sha256": "3f77205aeaff4d89947098896c6e86459da522b3c7783110d68ccb1ade6f6c16"
+      },
+      {
+        "source": "src/components/inventory/transfer-workflow.tsx",
+        "baseline": "c276f30",
+        "exactMatch": true,
+        "sha256": "07b1ba3e01544bf470537fe4cd0fc24f23369732aed33f8722c99ee6ccc64307"
+      },
+      {
+        "source": "src/components/inventory/write-off-workflow.tsx",
+        "baseline": "c276f30",
+        "exactMatch": true,
+        "sha256": "d28439fc45ef22a5276e616a8e2088da7b5afb04a40cbde635f2b89a3311ccaa"
+      },
+      {
+        "source": "src/app/(app)/inventory/counts/[id]/page.tsx",
+        "baseline": "c276f30",
+        "exactMatch": true,
+        "sha256": "daf57fddea2b1905c11168a1244994fc8f6b701291de4f6c432160029b97f620"
+      }
+    ],
+    "businessEvidence": [
+      "artifacts/ux/espresso/public-help-business-before.json",
+      "artifacts/ux/espresso/public-help-business-after.json"
+    ],
+    "result": "Exact row-JSON SHA256 equality for 485 rows across eleven selected main-organization business models, not every DB table. Normal sign-in/preferences/onboarding-evidence/guide-analytics metadata is outside that comparison.",
+    "counts": {
+      "inventorySnapshot": 155,
+      "stockMovement": 166,
+      "productCost": 146,
+      "customerOrder": 4,
+      "saleReturn": 2,
+      "salePayment": 4,
+      "cashDrawerMovement": 2,
+      "registerShift": 2,
+      "purchaseOrder": 1,
+      "stockCount": 3,
+      "periodClose": 0
+    },
+    "serverScope": {
+      "base": "1fcdfd4",
+      "changedFiles": [
+        "src/server/services/loyalty/ledger.ts",
+        "src/server/services/pos.ts",
+        "src/server/services/reporting/operations.ts",
+        "src/server/services/reports.ts",
+        "src/server/trpc/routers/pos.ts"
+      ],
+      "note": "No new server/REST/schema change in this checkpoint. The five previously disclosed corrective server sources remain; middleware cookie correction remains separately recorded."
+    }
+  },
+  "checks": {
+    "unit": {
+      "files": 268,
+      "tests": 2066,
+      "result": "passed with final TS/TSX; the subsequent CSS selector-specificity refinement is verified by final production build and actual browser focus checks",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts unit",
+      "log": "artifacts/ux/espresso/public-help-inputs-unit-final.log"
+    },
+    "newCases": {
+      "tests": 38,
+      "files": 3,
+      "includedInFullSuite": true,
+      "sources": [
+        "tests/unit/help-workspace-navigation.test.tsx",
+        "tests/unit/help-quick-search.test.ts",
+        "tests/unit/public-help-entrypoints.test.tsx"
+      ],
+      "scope": "17 rendered navigation/recovery cases across RU/KG/EN; 14 advertised-search/Unicode cases; seven structured-language/not-found/legacy-component redirect characterizations. These counts are part of 2066, not additional tests.",
+      "before": [
+        "artifacts/ux/espresso/public-help-navigation-before.log",
+        "artifacts/ux/espresso/public-help-quick-search-before.log"
+      ],
+      "beforeResult": "Initial navigation/recovery: 17 failed and one unhandled network rejection in the old component. Advertised searches/normalization: 2 failed, 12 passed. The actual browser also reproduced Escape retaining an unsuccessful query and the receiving chip returning no results.",
+      "focusedLog": "artifacts/ux/espresso/public-help-search-final.log",
+      "focusedResult": "52 passed across four files, including pre-existing search cases; not 52 new cases."
+    },
+    "authenticationDatabase": {
+      "files": 1,
+      "tests": 9,
+      "result": "passed on separate bazaar_hardening_ci and Redis DB5; real credentials/claims/role homes, providers disabled",
+      "command": "UX_SUITE=espresso node --import tsx scripts/espresso/regression.ts authentication",
+      "log": "artifacts/ux/espresso/public-help-auth-database-final.log"
+    },
+    "typecheck": {
+      "result": "passed; final production build also validates types",
+      "log": "artifacts/ux/espresso/public-fields-types-final.log"
+    },
+    "lint": {
+      "result": "passed without warnings; final build also runs lint",
+      "log": "artifacts/ux/espresso/public-fields-lint-final.log"
+    },
+    "i18n": {
+      "result": "passed; no new displayed strings or translation keys; search aliases retain the existing multilingual content contract",
+      "log": "artifacts/ux/espresso/public-fields-i18n-final.log"
+    },
+    "productionBuild": {
+      "result": "passed with final source, types/lint and 125 generated static pages",
+      "command": "UX_SUITE=espresso CIRCLE_NODE_TOTAL=3 NODE_OPTIONS=--max-old-space-size=6144 node --import tsx scripts/ux/build.ts",
+      "log": "artifacts/ux/espresso/build-public-fields-acceptance-final.log"
+    }
+  },
+  "qaNotes": [
+    "The first DB invocation was denied access to the already-live local port by the sandbox; the same guarded authentication selection passed after local-loopback execution was allowed. No customer DB reset or server restart was used to hide that failure.",
+    "A long documentation inventory browser call timed out and reset the control session. It was rerun in bounded batches with per-page saved evidence; the final file independently validates 99 unique locale/URL records. The application server remained live."
+  ],
+  "remainingAcceptance": [
+    "Full redesign remains active: 93 of 97 page sources in_review, four pending, zero fully accepted. The remaining four are marketing root, public merchant catalog, loyalty join and loyalty card.",
+    "Three field controls advance to in_review on the focus evidence; shared component inventory is six in_review and 26 pending. Full state, value/editing, overlay, keyboard and analogous Espresso comparison remains before overall acceptance.",
+    "Retain earlier family limitations and explicit product/navigation composition disclosures. Four customer-confirmed operational layouts remain byte-exact c276f30.",
+    "Complete legacy public/help copy and browser-title/accessible-label audit. Current home help title and certain navigation labels retain existing copy; all 24 instructions have rendered-language evidence, not a full editorial/business revalidation of their bodies or screenshot annotations.",
+    "Global mobile brand-title fallback and remaining plan/provider/native-device/final acceptance work from previous checkpoints remain pending. No live provider acceptance is claimed by this visual checkpoint."
+  ],
+  "delivery": "Local codex/playground checkpoint only; no push, PR, main merge or production deployment. Goal stays active."
+}
