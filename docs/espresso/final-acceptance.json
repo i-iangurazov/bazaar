@@ -286,5 +286,12 @@
     "push": false,
     "deployment": false,
     "acceptanceMeaning": "Agent implementation and bounded local acceptance complete; user review and any eventual main merge remain under human control."
-  }
+  },
+  "runtimeFollowups": [
+    {
+      "date": "2026-10-27",
+      "report": "docs/espresso/local-login-recovery-20261027.json",
+      "note": "Temporary QA cluster failed after missing internal files;login restored from26Oct07:29snapshot in persistent project directory. Earlier485-row hash evidence is historical;current restored dataset differs. Application code unchanged."
+    }
+  ]
 }
