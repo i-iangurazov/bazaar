@@ -36,9 +36,7 @@
     {
       "requirement": "Bazaar blue and single logo",
       "result": "passed",
-      "evidence": [
-        "artifacts/ux/espresso/final-production-browser.json"
-      ],
+      "evidence": ["artifacts/ux/espresso/final-production-browser.json"],
       "finding": "Final production expanded navigation has only sidebar brand; collapsed navigation has only dock brand. Blue actions, selection and keyboard focus retained."
     },
     {
@@ -134,9 +132,7 @@
     {
       "area": "O! Market presentation",
       "behavior": "Null/invalid timestamps and absent prices use existing translated notAvailable; valid timestamps use locale and existing Bishkek format. Channel whole-KGS presentation preserved; six known per-product job statuses translated, unknown raw values preserved. No external job/token/config/mapping mutation.",
-      "evidence": [
-        "artifacts/ux/espresso/final-production-browser.json"
-      ]
+      "evidence": ["artifacts/ux/espresso/final-production-browser.json"]
     },
     {
       "area": "Marketing assets",
@@ -292,6 +288,11 @@
       "date": "2026-10-27",
       "report": "docs/espresso/local-login-recovery-20261027.json",
       "note": "Temporary QA cluster failed after missing internal files;login restored from26Oct07:29snapshot in persistent project directory. Earlier485-row hash evidence is historical;current restored dataset differs. Application code unchanged."
+    },
+    {
+      "date": "2026-10-27",
+      "report": "docs/local-runtime.json",
+      "note": "Persistent supervised local stack implemented and verified, including actual crash recovery and separate backup restores. Current 472 recovered business-row hashes match; historical 485-row acceptance evidence is not a claim that the thirteen later rows were recovered."
     }
   ]
 }

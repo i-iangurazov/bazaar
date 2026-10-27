@@ -39,12 +39,14 @@
     "vitest.config.ts",
     ".next/types/**/*.ts",
     "scripts/stabilization/**/*.ts",
+    "scripts/local/**/*.ts",
     "scripts/qa/**/*.tsx",
     "scripts/qa/playground-pricing-browser.ts",
     "scripts/qa/playground-payments-browser.ts",
     "vitest.stabilization*.ts"
   ],
   "exclude": [
+    ".local",
     "node_modules"
   ]
 }

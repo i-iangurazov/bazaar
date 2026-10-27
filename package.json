@@ -4,6 +4,11 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "local": "node --import tsx scripts/local/cli.ts start",
+    "local:status": "node --import tsx scripts/local/cli.ts status",
+    "local:stop": "node --import tsx scripts/local/cli.ts stop",
+    "local:backup": "node --import tsx scripts/local/cli.ts backup",
+    "local:logs": "node --import tsx scripts/local/cli.ts logs",
     "db:up": "docker compose up -d",
     "db:down": "docker compose down",
     "db:reset": "pnpm db:up && pnpm prisma:reset",

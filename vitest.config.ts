@@ -21,6 +21,7 @@ export default defineConfig({
       "artifacts/**",
       "tmp/**",
       ".next/**",
+      ".local/**",
     ],
     environment: "node",
     setupFiles: ["./tests/setup.ts"],

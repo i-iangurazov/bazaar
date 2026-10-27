@@ -8,7 +8,7 @@ const nextConfig = {
   output: "standalone",
   experimental: {
     outputFileTracingExcludes: {
-      "*": ["./tmp/**/*", "./artifacts/**/*"],
+      "*": ["./tmp/**/*", "./artifacts/**/*", "./.local/**/*"],
     },
     serverComponentsExternalPackages: ["pdfkit", "heic-convert", "heic-decode", "libheif-js"],
   },
