@@ -2563,7 +2563,6 @@ const ProductsPage = () => {
                     row={product}
                     value={product.name}
                     definition={inlineEditRegistry.products.name}
-                    navigationHref={buildProductListLaunchedHref(`/products/${product.id}`)}
                     context={inlineProductsContext}
                     role={role}
                     locale={locale}
@@ -2845,7 +2844,6 @@ const ProductsPage = () => {
 
     return columns;
   }, [
-    buildProductListLaunchedHref,
     allSelected,
     canSelectProducts,
     executeInlineProductMutation,
@@ -4088,7 +4086,6 @@ const ProductsPage = () => {
                       columns={productColumns}
                       data={visibleItems}
                       getRowId={(product) => product.id}
-                      getRowHref={(product) => buildProductListLaunchedHref(`/products/${product.id}`)}
                       isLoading={productsBootstrapQuery.isLoading}
                       sorting={productSorting}
                       onSortingChange={handleProductSortingChange}
@@ -4277,9 +4274,12 @@ const ProductsPage = () => {
                     <div className="rounded-lg border border-border bg-card p-3">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
-                          <Link data-product-name
+                          <p
+                            data-product-name
                             className="whitespace-normal break-words text-base font-semibold leading-snug text-foreground [overflow-wrap:anywhere]"
-                           href={buildProductListLaunchedHref(`/products/${product.id}`)} target="_blank" rel="noopener noreferrer" prefetch={false}>{product.name}</Link>
+                          >
+                            {product.name}
+                          </p>
                         </div>
                         <RowActions
                           actions={mobileActions}

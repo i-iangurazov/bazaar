@@ -52,7 +52,9 @@
       "behavior": "Clicking a noninteractive area of a product table row or its name opens the product in a new tab. List filter/store/page/returnTo context retained; opener protected.",
       "independence": "Checkboxes, text selection, inline editors, action controls and existing links keep their own events. Real name links support native keyboard and modifier/context-menu behavior.",
       "editing": "A separate pencil beside the linked name preserves inline editing; desktop and touch triggers use the existing policy. Keyboard editing and cancel remain covered.",
-      "mobile": "Product card title is also a real new-tab link."
+      "mobile": "Product card title is also a real new-tab link.",
+      "status": "withdrawn-by-human",
+      "supersededBy": "docs/espresso/product-navigation-revert-20261027.json"
     },
     "display": {
       "automatic": "App-only rem sizing on screens: normal16px; 1600px viewport→17px; 1920px→18px; 2560px→20px. Content may fill up to112.5rem on wide screens. No browser zoom override.",
@@ -242,5 +244,12 @@
     "mainMerge": false,
     "push": false,
     "deployment": false
-  }
+  },
+  "followups": [
+    {
+      "date": "2026-10-27",
+      "report": "docs/espresso/product-navigation-revert-20261027.json",
+      "note": "The human explicitly withdrew row/name new-tab navigation. Remaining UI improvements stay in playground. Earlier navigation test records describe the superseded implementation."
+    }
+  ]
 }
