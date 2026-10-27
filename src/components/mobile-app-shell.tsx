@@ -163,7 +163,7 @@ export const MobileTopBar = ({
           </div>
         ) : null}
       </div>
-      <div className="flex shrink-0 items-center gap-1">
+      <div className="flex shrink-0 items-center gap-1" data-mobile-header-actions>
         <PageTipsButton className="bazaar-mobile-header-button" />
         {showAssistant ? (
           <div data-baam-mobile-slot className="h-11 w-11 shrink-0" />

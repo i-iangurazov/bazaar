@@ -9,6 +9,8 @@ import { PageHeader } from "@/components/page-header";
 import { QueryErrorState } from "@/components/query-error-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CheckIcon, CloseIcon, BillingIcon } from "@/components/icons";
+import { IconButton } from "@/components/ui/icon-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Modal, ModalFooter } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
@@ -314,9 +316,8 @@ const PlatformPage = () => {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <Button
+                          <IconButton
                             type="button"
-                            size="sm"
                             onClick={() =>
                               reviewUpgradeMutation.mutate({
                                 requestId: request.id,
@@ -324,12 +325,11 @@ const PlatformPage = () => {
                               })
                             }
                             disabled={reviewUpgradeMutation.isLoading}
-                          >
-                            {t("upgradeApprove")}
-                          </Button>
-                          <Button
+                            icon={CheckIcon}
+                            label={t("upgradeApprove")}
+                          />
+                          <IconButton
                             type="button"
-                            size="sm"
                             variant="secondary"
                             onClick={() =>
                               reviewUpgradeMutation.mutate({
@@ -338,9 +338,9 @@ const PlatformPage = () => {
                               })
                             }
                             disabled={reviewUpgradeMutation.isLoading}
-                          >
-                            {t("upgradeReject")}
-                          </Button>
+                            icon={CloseIcon}
+                            label={t("upgradeReject")}
+                          />
                         </div>
                       </TableCell>
                     </TableRow>
@@ -433,10 +433,9 @@ const PlatformPage = () => {
                       </TableCell>
                       <TableCell>{formatSafeDateTime(org.createdAt)}</TableCell>
                       <TableCell>
-                        <Button
+                        <IconButton
                           type="button"
                           variant="secondary"
-                          size="sm"
                           onClick={() =>
                             setBillingModal({
                               organizationId: org.id,
@@ -448,9 +447,9 @@ const PlatformPage = () => {
                               currentPeriodDays: 30,
                             })
                           }
-                        >
-                          {t("editBilling")}
-                        </Button>
+                          icon={BillingIcon}
+                          label={t("editBilling")}
+                        />
                       </TableCell>
                     </TableRow>
                   ))}

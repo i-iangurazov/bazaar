@@ -9,6 +9,8 @@ import { PageHeader } from "@/components/page-header";
 import { QueryErrorState } from "@/components/query-error-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { LockIcon } from "@/components/icons";
+import { IconButton } from "@/components/ui/icon-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Modal, ModalFooter } from "@/components/ui/modal";
@@ -227,14 +229,16 @@ const BazaarApiSettingsPage = () => {
                           </Badge>
                         </TableCell>
                             <TableCell className="text-right">
-                          <Button
+                          <IconButton
                             type="button"
                             variant="danger"
                             disabled={Boolean(apiKey.revokedAt) || revokeMutation.isLoading}
-                            onClick={() => revokeMutation.mutate({ storeId, apiKeyId: apiKey.id })}
-                          >
-                            {t("revoke")}
-                          </Button>
+                            onClick={() =>
+                              revokeMutation.mutate({ storeId, apiKeyId: apiKey.id })
+                            }
+                            icon={LockIcon}
+                            label={t("revoke")}
+                          />
                         </TableCell>
                           </TableRow>
                         ))

@@ -7,6 +7,8 @@ import { useLocale, useTranslations } from "next-intl";
 import { PageHeader } from "@/components/page-header";
 import { QueryErrorState } from "@/components/query-error-state";
 import { Button } from "@/components/ui/button";
+import { CheckIcon } from "@/components/icons";
+import { IconButton } from "@/components/ui/icon-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
@@ -285,16 +287,15 @@ const PosDebtsPage = () => {
                         {formatDebtMoney(debt)}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
+                        <IconButton
                           type="button"
                           variant="secondary"
-                          size="sm"
                           onClick={() => void handleSettleDebt(debt.id)}
                           disabled={!currentShift || settleDebtMutation.isLoading}
-                        >
-                          {settleDebtMutation.isLoading ? <Spinner className="h-4 w-4" /> : null}
-                          {t("debts.returnedDebt")}
-                        </Button>
+                          icon={CheckIcon}
+                          label={t("debts.returnedDebt")}
+                          loading={settleDebtMutation.isLoading}
+                        />
                       </TableCell>
                     </TableRow>
                   ))}

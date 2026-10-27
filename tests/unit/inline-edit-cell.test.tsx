@@ -157,3 +157,50 @@ describe("inline stock editor behavior", () => {
     expect(execute.mock.calls[1][0]).toEqual(execute.mock.calls[0][0]);
   });
 });
+
+describe("navigable product name without losing inline editing", () => {
+  afterEach(cleanup);
+  const renderName = (enabled = true, role: "MANAGER" | "CASHIER" = "MANAGER") =>
+    render(
+      <NextIntlClientProvider
+        locale="en"
+        messages={{ inlineEditing: en.inlineEditing, errors: en.errors }}
+      >
+        <InlineEditableCell
+          rowId="product"
+          row={item}
+          value={item.name}
+          definition={inlineEditRegistry.products.name}
+          context={{ storeId: "store", categories: [], stockAdjustReason: "Counted" }}
+          role={role}
+          locale="en"
+          columnLabel="Name"
+          tTable={(k) => k}
+          tCommon={(k) => k}
+          enabled={enabled}
+          executeMutation={vi.fn()}
+          navigationHref="/products/product?storeId=store"
+        />
+      </NextIntlClientProvider>,
+    );
+  it("exposes a real new-tab link and an independent keyboard-accessible edit action", () => {
+    renderName();
+    const link = screen.getByRole("link", { name: "Product" });
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.getAttribute("href")).toContain("storeId=store");
+    const edit = screen.getByRole("button", { name: /Name/ });
+    fireEvent.click(edit);
+    expect(screen.getByRole("textbox")).toBeTruthy();
+    fireEvent.keyDown(screen.getByRole("textbox"), { key: "Escape" });
+    expect(screen.getByRole("link", { name: "Product" })).toBeTruthy();
+  });
+  it.each([true, false])(
+    "retains navigation without granting a cashier edit access (enabled=%s)",
+    (enabled) => {
+      renderName(enabled, "CASHIER");
+      expect(screen.getByRole("link", { name: "Product" })).toBeTruthy();
+      expect(screen.queryByRole("button")).toBeNull();
+      expect(screen.queryByRole("textbox")).toBeNull();
+    },
+  );
+});

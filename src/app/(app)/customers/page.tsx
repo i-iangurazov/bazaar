@@ -16,6 +16,8 @@ import { PageHeader } from "@/components/page-header";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { DownloadIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
+import { EditIcon, DeleteIcon, PhoneIcon, ViewIcon } from "@/components/icons";
+import { IconButton } from "@/components/ui/icon-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -588,14 +590,14 @@ const CustomerDatabasePage = () => {
                         <TableCell>{formatDateTime(customer.createdAt, locale)}</TableCell>
                         <TableCell>
                           <div className="flex justify-end gap-2">
-                            <Button
+                            <IconButton
                               type="button"
                               variant="secondary"
                               onClick={() => openEdit(customer)}
-                            >
-                              {tCommon("edit")}
-                            </Button>
-                            <Button
+                              icon={EditIcon}
+                              label={tCommon("edit")}
+                            />
+                            <IconButton
                               type="button"
                               variant="outline"
                               disabled={deleteMutation.isLoading}
@@ -604,9 +606,9 @@ const CustomerDatabasePage = () => {
                                   deleteMutation.mutate({ customerId: customer.id });
                                 }
                               }}
-                            >
-                              {tCommon("delete")}
-                            </Button>
+                              icon={DeleteIcon}
+                              label={tCommon("delete")}
+                            />
                           </div>
                         </TableCell>
                       </TableRow>
@@ -635,15 +637,14 @@ const CustomerDatabasePage = () => {
                       {selectedStore?.name} · {renderSource(customer.source)}
                     </p>
                   </div>
-                  <Button
+                  <IconButton
                     type="button"
                     variant="ghost"
-                    size="sm"
                     className="min-h-10 shrink-0"
                     onClick={() => viewCustomerSales(customer)}
-                  >
-                    {t("actions.viewSales")}
-                  </Button>
+                    icon={ViewIcon}
+                    label={t("actions.viewSales")}
+                  />
                 </div>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
@@ -671,34 +672,25 @@ const CustomerDatabasePage = () => {
                     </div>
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {customer.phone ? (
-                    <Button asChild variant="secondary" size="sm" className="min-h-10">
-                      <a href={`tel:${customer.phone}`}>{t("actions.call")}</a>
-                    </Button>
-                  ) : (
-                    <Button type="button" variant="secondary" size="sm" className="min-h-10" disabled>
-                      {t("actions.call")}
-                    </Button>
-                  )}
-                  <Button
+                <div className="flex flex-wrap items-center gap-2">
+                  <IconButton icon={PhoneIcon} label={t("actions.call")} variant="secondary"
+                    href={customer.phone ? `tel:${customer.phone}` : undefined} disabled={!customer.phone} />
+                  <IconButton
                     type="button"
                     variant="secondary"
-                    size="sm"
-                    className="min-h-10"
                     onClick={() => openEdit(customer)}
-                  >
-                    {tCommon("edit")}
-                  </Button>
-                  <Button
+                    className="min-h-10"
+                    icon={EditIcon}
+                    label={tCommon("edit")}
+                  />
+                  <IconButton
                     type="button"
                     variant="secondary"
-                    size="sm"
                     className="min-h-10"
                     onClick={() => viewCustomerSales(customer)}
-                  >
-                    {t("actions.viewSales")}
-                  </Button>
+                    icon={ViewIcon}
+                    label={t("actions.viewSales")}
+                  />
                 </div>
               </CardContent>
             </Card>

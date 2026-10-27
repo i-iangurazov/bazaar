@@ -26,6 +26,8 @@ import { HelpLink } from "@/components/help-link";
 import { SavedTableViews } from "@/components/saved-table-views";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { HelpIcon } from "@/components/icons";
+import { IconButton } from "@/components/ui/icon-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { RowActions } from "@/components/row-actions";
@@ -2711,18 +2713,17 @@ const InventoryPage = () => {
                                           <div className="font-medium">
                                             {formatNumber(reorder.suggestedOrderQty, locale)}
                                           </div>
-                                          <Button
+                                          <IconButton
                                             type="button"
                                             variant="ghost"
-                                            className="h-8 px-2 text-xs"
                                             onClick={() =>
                                               setExpandedReorderId(
                                                 isExpanded ? null : item.snapshot.id,
                                               )
                                             }
-                                          >
-                                            {isExpanded ? t("hideWhy") : t("why")}
-                                          </Button>
+                                            icon={HelpIcon}
+                                            label={isExpanded ? t("hideWhy") : t("why")}
+                                          />
                                         </div>
                                       ) : (
                                         <span className="text-xs text-muted-foreground/80">

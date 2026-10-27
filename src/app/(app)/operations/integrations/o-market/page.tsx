@@ -10,6 +10,8 @@ import { PageHeader } from "@/components/page-header";
 import { QueryErrorState } from "@/components/query-error-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { HideIcon, AddIcon } from "@/components/icons";
+import { IconButton } from "@/components/ui/icon-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -771,9 +773,8 @@ const OMarketPage = () => {
                         </Badge>
                       </TableCell>
                         <TableCell>
-                        <Button
+                        <IconButton
                           type="button"
-                          size="sm"
                           variant={product.included ? "outline" : "secondary"}
                           disabled={!canManage || updateProductsMutation.isLoading}
                           onClick={() =>
@@ -783,9 +784,13 @@ const OMarketPage = () => {
                               included: !product.included,
                             })
                           }
-                        >
-                          {product.included ? t("productExport.exclude") : t("productExport.include")}
-                        </Button>
+                          icon={product.included ? HideIcon : AddIcon}
+                          label={
+                            product.included
+                              ? t("productExport.exclude")
+                              : t("productExport.include")
+                          }
+                        />
                       </TableCell>
                       </TableRow>
                     ))}

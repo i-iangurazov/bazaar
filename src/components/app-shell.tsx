@@ -12,6 +12,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { GuidanceOverlay } from "@/components/guidance/guidance-overlay";
 import { BaamAssistant, BaamAssistantProvider } from "@/components/baam-assistant";
 import { BaamLauncher } from "@/components/baam-launcher";
+import { DisplayScaleProvider } from "@/components/display-scale";
 import { GuidanceProvider } from "@/components/guidance/guidance-provider";
 import { PageTipsButton } from "@/components/guidance/page-tips-button";
 import { LanguageSwitcher } from "@/components/language-switcher";
@@ -1074,6 +1075,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
   return (
     <GuidanceProvider role={guidanceRole}>
       <BaamAssistantProvider>
+        <DisplayScaleProvider enabled={!normalizedPath.startsWith("/printing/")}>
         {normalizedPath === "/pos/sell" ? (
           <div data-bazaar-app className="min-h-screen bg-background">
             {impersonation ? (
@@ -1278,11 +1280,11 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                   </div>
                   <div className="flex shrink-0 items-center gap-2 justify-self-end">
                     {hasPermission(access, "viewReports") ? (
-                      <div data-baam-desktop-slot className="h-8 w-[6.25rem] shrink-0" />
+                      <div data-baam-desktop-slot className="h-9 w-[6.25rem] shrink-0" />
                     ) : null}
-                    <PageTipsButton />
-                    <PwaInstallButton />
-                    <LanguageSwitcher />
+                    <PageTipsButton className="h-9 w-9" />
+                    <PwaInstallButton className="h-9 w-9" />
+                    <LanguageSwitcher className="h-9 p-0.5" />
                   </div>
                 </header>
                 <main
@@ -1291,7 +1293,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
                   className="min-w-0 flex-1 px-4 py-4 outline-none sm:px-5 lg:px-6 lg:py-5"
                 >
                   <MobilePageContainer>
-                    <div className="mx-auto max-w-[1500px]">{children}</div>
+                    <div className="mx-auto max-w-[1500px] 2xl:max-w-[112.5rem]">{children}</div>
                   </MobilePageContainer>
                 </main>
               </SidebarInset>
@@ -1353,6 +1355,7 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
         <BaamLauncher access={access} pathname={normalizedPath}>
           <BaamAssistant compact />
         </BaamLauncher>
+        </DisplayScaleProvider>
       </BaamAssistantProvider>
     </GuidanceProvider>
   );

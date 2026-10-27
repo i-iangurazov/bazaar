@@ -55,6 +55,7 @@ import {
   Megaphone,
   MessageCircle,
   Mic,
+  Phone,
   Minus,
   Monitor,
   Package,
@@ -224,6 +225,7 @@ export const CoinsIcon = actionIcon(Coins);
 export const HashIcon = actionIcon(Hash);
 export const ChatIcon = actionIcon(MessageCircle);
 export const MicrophoneIcon = actionIcon(Mic);
+export const PhoneIcon = actionIcon(Phone);
 export const StopIcon = actionIcon(Square);
 export const SpeakerIcon = actionIcon(Volume2);
 

@@ -48,6 +48,8 @@ export type DataTableProps<TData, TValue> = {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
   getRowId?: (row: TData, index: number) => string;
+  /** Optional entity navigation. Field editors, selections and action controls retain their events. */
+  getRowHref?: (row: TData) => string;
   isLoading?: boolean;
   empty?: React.ReactNode;
   sorting?: SortingState;
@@ -90,6 +92,7 @@ export const DataTable = <TData, TValue>({
   columns,
   data,
   getRowId,
+  getRowHref,
   isLoading = false,
   empty,
   sorting,
@@ -230,9 +233,27 @@ export const DataTable = <TData, TValue>({
               rows.map((row) => (
                 <tr
                   key={row.id}
+                  onClick={
+                    getRowHref
+                      ? (event) => {
+                          const target = event.target as Element;
+                          if (
+                            event.defaultPrevented ||
+                            event.button !== 0 ||
+                            target.closest(
+                              "a,button,input,select,textarea,[role=button],[role=checkbox],[role=switch],[data-inline-cell],[contenteditable=true]",
+                            ) ||
+                            window.getSelection()?.toString()
+                          )
+                            return;
+                          window.open(getRowHref(row.original), "_blank", "noopener,noreferrer");
+                        }
+                      : undefined
+                  }
                   data-testid={typeof rowTestId === "function" ? rowTestId(row) : rowTestId}
                   className={cn(
                     "border-b border-border transition-colors last:border-b-0 hover:bg-muted",
+                    getRowHref && "cursor-pointer",
                     rowClassName?.(row),
                   )}
                 >

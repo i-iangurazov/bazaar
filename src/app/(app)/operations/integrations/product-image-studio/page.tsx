@@ -16,6 +16,8 @@ import { QueryErrorState } from "@/components/query-error-state";
 import { ProductSearchResultItem } from "@/components/product-search-result-item";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ViewIcon, RestoreIcon } from "@/components/icons";
+import { IconButton } from "@/components/ui/icon-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -1112,21 +1114,21 @@ const ProductImageStudioPage = () => {
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-2">
-                          <Button
+                          <IconButton
                             type="button"
                             variant="outline"
                             onClick={() => setSelectedJobId(job.id)}
-                          >
-                            {t("actions.preview")}
-                          </Button>
-                          <Button
+                            icon={ViewIcon}
+                            label={t("actions.preview")}
+                          />
+                          <IconButton
                             type="button"
                             variant="outline"
                             onClick={() => retryJobMutation.mutate({ jobId: job.id })}
                             disabled={!canEdit || !job.canRetry}
-                          >
-                            {t("actions.regenerate")}
-                          </Button>
+                            icon={RestoreIcon}
+                            label={t("actions.regenerate")}
+                          />
                         </div>
                       </TableCell>
                     </TableRow>

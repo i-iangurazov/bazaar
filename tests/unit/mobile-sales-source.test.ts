@@ -31,7 +31,7 @@ describe("mobile sales and receipts source", () => {
     expect(source).toContain("renderMobile={(item) => (");
     expect(source).toContain('t("previewShort")');
     expect(source).toContain("handleShareReceiptPdf");
-    expect(source).toContain('t("shareShort")');
+    expect(source).toContain('label={tPos("history.shareReceipt")}');
     expect(source).toContain('tPos("history.shareReceipt")');
   });
 

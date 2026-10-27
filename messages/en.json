@@ -4294,7 +4294,7 @@
     "quickAvgCost": "Cost",
     "quickAvgCostHint": "Used as the starting margin cost; receiving later recalculates it as average cost.",
     "effectivePrice": "Effective price",
-    "priceOverridden": "Price overridden",
+    "priceOverridden": "Store price",
     "priceInherited": "Price inherited",
     "priceSaved": "Price saved.",
     "purchasePriceHint": "Purchase price hint",
@@ -5011,6 +5011,13 @@
     "saved": "Category settings saved."
   },
   "profile": {
+    "display": {
+      "title": "Display",
+      "scale": "Large-screen scale",
+      "automatic": "Automatic",
+      "hint": "The interface grows moderately on wide screens. Choose a scale to apply it immediately and save it in this browser. Phones keep their normal size.",
+      "sessionOnly": "This browser cannot save the preference. The scale applies until you close the page."
+    },
     "title": "Profile",
     "subtitle": "Personal details, interface settings, and business details.",
     "mobileHub": {

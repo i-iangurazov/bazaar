@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/page-header";
 import { QueryErrorState } from "@/components/query-error-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -146,24 +147,22 @@ const AdminJobsPage = () => {
                               <span className="text-xs text-muted-foreground/80">{t("resolved")}</span>
                             ) : (
                               <div className="flex justify-end gap-2">
-                                <Button
+                                <IconButton
                                   type="button"
                                   variant="ghost"
-                                  size="sm"
                                   onClick={() => retryMutation.mutate({ jobId: job.id })}
                                   disabled={actionsBusy || Boolean(job.retryAttemptId)}
-                                >
-                                  {t("retry")}
-                                </Button>
-                                <Button
+                                  icon={RestoreIcon}
+                                  label={t("retry")}
+                                />
+                                <IconButton
                                   type="button"
                                   variant="secondary"
-                                  size="sm"
                                   onClick={() => openResolve(job)}
                                   disabled={actionsBusy}
-                                >
-                                  {t("resolve")}
-                                </Button>
+                                  icon={CheckIcon}
+                                  label={t("resolve")}
+                                />
                               </div>
                             )}
                           </TableCell>

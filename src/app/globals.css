@@ -797,3 +797,20 @@ html.native-app[data-native-keyboard="visible"] [data-native-keyboard-aware] {
     grid-column: span 4;
   }
 }
+
+/* Application-only readable desktop sizing. Browser zoom and mobile sizing stay native. */
+@media screen and (min-width: 1024px) {
+  html[data-bazaar-scale="100"] { font-size: 16px; }
+  html[data-bazaar-scale="110"] { font-size: 17.6px; }
+  html[data-bazaar-scale="125"] { font-size: 20px; }
+  html[data-bazaar-scale] body { font-size: 0.875rem; }
+}
+@media screen and (min-width: 1600px) {
+  html[data-bazaar-scale="auto"] { font-size: 17px; }
+}
+@media screen and (min-width: 1920px) {
+  html[data-bazaar-scale="auto"] { font-size: 18px; }
+}
+@media screen and (min-width: 2560px) {
+  html[data-bazaar-scale="auto"] { font-size: 20px; }
+}

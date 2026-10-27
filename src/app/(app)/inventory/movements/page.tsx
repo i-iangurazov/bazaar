@@ -403,14 +403,13 @@ const ProductMovementsPage = () => {
     const viewButton = movement.detailUrl ? (
       <Button
         variant={layout === "desktop" ? "ghost" : "secondary"}
-        size={layout === "desktop" ? "icon" : undefined}
+        size="icon"
         asChild
         aria-label={tCommon("view")}
-        className={layout === "mobile" ? "w-full justify-center" : undefined}
+        className="h-10 w-10 md:h-8 md:w-8"
       >
         <Link href={withJournalReturn(movement.detailUrl)} prefetch={false}>
           <ViewIcon className="h-4 w-4" aria-hidden />
-          {layout === "mobile" ? tCommon("view") : null}
         </Link>
       </Button>
     ) : null;
@@ -425,40 +424,38 @@ const ProductMovementsPage = () => {
     const editButton = editTarget.href ? (
       <Button
         variant={layout === "desktop" ? "ghost" : "secondary"}
-        size={layout === "desktop" ? "icon" : undefined}
+        size="icon"
         asChild
         aria-label={tCommon("edit")}
         data-testid="movement-edit-button"
-        className={layout === "mobile" ? "w-full justify-center" : undefined}
+        className="h-10 w-10 md:h-8 md:w-8"
       >
         <Link href={editTarget.href} prefetch={false}>
           <EditIcon className="h-4 w-4" aria-hidden />
-          {layout === "mobile" ? tCommon("edit") : null}
         </Link>
       </Button>
     ) : (
       <Button
         variant={layout === "desktop" ? "ghost" : "secondary"}
-        size={layout === "desktop" ? "icon" : undefined}
+        size="icon"
         aria-label={editDisabledReasonLabel(disabledReason)}
         title={editDisabledReasonLabel(disabledReason)}
         data-testid="movement-edit-button-disabled"
-        className={layout === "mobile" ? "w-full justify-center" : undefined}
+        className="h-10 w-10 md:h-8 md:w-8"
         disabled
       >
         <EditIcon className="h-4 w-4" aria-hidden />
-        {layout === "mobile" ? editDisabledReasonLabel(disabledReason) : null}
       </Button>
     );
     const printButton =
       movement.id && canPrintMovementDocument(movement.documentType) ? (
         <Button
           variant={layout === "desktop" ? "ghost" : "secondary"}
-          size={layout === "desktop" ? "icon" : undefined}
+          size="icon"
           asChild
           aria-label={t("printDocument")}
           title={t("printDocument")}
-          className={layout === "mobile" ? "w-full justify-center" : undefined}
+          className="h-10 w-10 md:h-8 md:w-8"
         >
           <Link
             href={`/inventory/movements/${encodeURIComponent(movement.id)}/print?${new URLSearchParams(
@@ -469,7 +466,6 @@ const ProductMovementsPage = () => {
             rel="noreferrer"
           >
             <PrintIcon className="h-4 w-4" aria-hidden />
-            {layout === "mobile" ? t("printDocument") : null}
           </Link>
         </Button>
       ) : null;
@@ -478,18 +474,17 @@ const ProductMovementsPage = () => {
         <Button
           type="button"
           variant={layout === "desktop" ? "ghost" : "secondary"}
-          size={layout === "desktop" ? "icon" : undefined}
+          size="icon"
           aria-label={t("archiveDocument")}
           title={t("archiveDocument")}
           data-testid="movement-archive-button"
-          className={layout === "mobile" ? "w-full justify-center" : undefined}
+          className="h-10 w-10 md:h-8 md:w-8"
           onClick={() => {
             setArchiveTarget(movement);
           }}
           disabled={archiveMutation.isLoading}
         >
           <ArchiveIcon className="h-4 w-4" aria-hidden />
-          {layout === "mobile" ? t("archiveDocument") : null}
         </Button>
       ) : null;
 
@@ -497,7 +492,7 @@ const ProductMovementsPage = () => {
       <div
         className={
           layout === "mobile"
-            ? "mt-3 grid grid-cols-2 gap-2"
+            ? "mt-3 flex flex-wrap items-center gap-2"
             : "flex items-center justify-end gap-1"
         }
       >

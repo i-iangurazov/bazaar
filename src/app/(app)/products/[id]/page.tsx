@@ -1486,9 +1486,6 @@ const ProductDetailPage = () => {
                 <div className="rounded-md border border-border/70 bg-card p-3">
                   <div className="flex items-center gap-2">
                     <p className="text-xs text-muted-foreground">{t("salePrice")}</p>
-                    {pricingQuery.data?.priceOverridden ? (
-                      <Badge variant="muted">{t("priceOverridden")}</Badge>
-                    ) : null}
                   </div>
                   <p className="text-sm font-semibold">
                     {effectivePrice !== null

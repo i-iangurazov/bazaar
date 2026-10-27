@@ -554,6 +554,7 @@ const UsersPage = () => {
                                     </span>
                                   </DropdownMenuItem>
                                   <DropdownMenuItem disabled={transferPermission.isLoading} onSelect={() => transferPermission.mutate({userId:user.id,enabled:!user.canTransferStock})}>
+                                    <TransferIcon className="h-4 w-4" aria-hidden />
                                     {t(user.canTransferStock ? "disableTransfer" : "enableTransfer")}
                                   </DropdownMenuItem>
                                   <DropdownMenuItem onSelect={() => setResetUser(user)}>

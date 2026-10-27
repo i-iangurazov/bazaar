@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { TooltipProvider } from "@/components/ui/tooltip";
 import type { ReactNode } from "react";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
@@ -16,7 +17,7 @@ vi.mock("@/components/row-actions", () => ({ RowActions: ({ actions }: { actions
 import AdminJobsPage from "@/app/(app)/admin/jobs/page";
 
 const job = (claim: string | null = null): Job => ({ id: "synthetic-job", jobName: "Synthetic reporting job", attempts: 2, lastError: "Synthetic failure", lastErrorAt: new Date("2026-09-05T12:00:00Z"), resolvedAt: null, retryAttemptId: claim, retryStartedAt: claim ? new Date("2026-09-05T12:05:00Z") : null });
-const renderPage = () => render(<NextIntlClientProvider locale="en" messages={{ adminJobs: messages.adminJobs, errors: messages.errors, common: messages.common }}><AdminJobsPage /></NextIntlClientProvider>);
+const renderPage = () => render(<NextIntlClientProvider locale="en" messages={{ adminJobs: messages.adminJobs, errors: messages.errors, common: messages.common }}><TooltipProvider><AdminJobsPage /></TooltipProvider></NextIntlClientProvider>);
 
 describe("admin jobs retry outcomes and reconciliation acknowledgement", () => {
   beforeEach(() => {

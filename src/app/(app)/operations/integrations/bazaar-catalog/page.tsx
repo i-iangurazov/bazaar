@@ -18,6 +18,8 @@ import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { SelectionToolbar } from "@/components/selection-toolbar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { HideIcon } from "@/components/icons";
+import { IconButton } from "@/components/ui/icon-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -704,19 +706,20 @@ const BazaarCatalogSettingsPage = () => {
                                 </TableCell>
                                 {canEdit ? (
                                   <TableCell>
-                                    <Button
+                                    <IconButton
                                       type="button"
-                                      size="sm"
                                       variant={product.hidden ? "secondary" : "outline"}
                                       onClick={() =>
                                         handleUpdateProducts(!product.hidden, [product.id])
                                       }
                                       disabled={updateProductsMutation.isLoading}
-                                    >
-                                      {product.hidden
-                                        ? t("productsVisibility.rowShow")
-                                        : t("productsVisibility.rowHide")}
-                                    </Button>
+                                      icon={product.hidden ? ViewIcon : HideIcon}
+                                      label={
+                                        product.hidden
+                                          ? t("productsVisibility.rowShow")
+                                          : t("productsVisibility.rowHide")
+                                      }
+                                    />
                                   </TableCell>
                                 ) : null}
                               </TableRow>
@@ -773,18 +776,19 @@ const BazaarCatalogSettingsPage = () => {
                             />
                             {t("productsVisibility.selectProductShort")}
                           </label>
-                          <Button
+                          <IconButton
                             type="button"
-                            size="sm"
                             variant={product.hidden ? "secondary" : "outline"}
-                            className="ml-auto"
                             onClick={() => handleUpdateProducts(!product.hidden, [product.id])}
                             disabled={updateProductsMutation.isLoading}
-                          >
-                            {product.hidden
-                              ? t("productsVisibility.rowShow")
-                              : t("productsVisibility.rowHide")}
-                          </Button>
+                            className="ml-auto"
+                            icon={product.hidden ? ViewIcon : HideIcon}
+                            label={
+                              product.hidden
+                                ? t("productsVisibility.rowShow")
+                                : t("productsVisibility.rowHide")
+                            }
+                          />
                         </div>
                       ) : null}
                     </div>

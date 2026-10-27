@@ -14,6 +14,7 @@ import {
   type SetStateAction,
 } from "react";
 import { useTranslations } from "next-intl";
+import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -131,6 +132,7 @@ type InlineEditableCellProps<TRow, TValue, TContext> = {
   executeMutation: (operation: InlineMutationOperation) => Promise<void>;
   onMutationSuccess?: () => void;
   className?: string;
+  navigationHref?: string;
 };
 
 export const InlineEditableCell = <
@@ -152,6 +154,7 @@ export const InlineEditableCell = <
   executeMutation,
   onMutationSuccess,
   className,
+  navigationHref,
 }: InlineEditableCellProps<TRow, TValue, TContext>) => {
   const tableState = useContext(InlineEditTableContext);
   const { toast } = useToast();
@@ -411,9 +414,22 @@ export const InlineEditableCell = <
   const disabledHint = definition.disabledHintKey?.(row, context);
   const editorType =
     definition.inputType === "money" ? "number" : definition.inputType === "date" ? "date" : "text";
+  const content = navigationHref ? (
+    <Link
+      href={navigationHref}
+      target="_blank"
+      rel="noopener noreferrer"
+      prefetch={false}
+      className="rounded-sm hover:text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+    >
+      {displayText}
+    </Link>
+  ) : (
+    <span>{displayText}</span>
+  );
 
   if (!enabled) {
-    return <span className={cn("text-inherit", className)}>{displayText}</span>;
+    return <span className={cn("text-inherit", className)}>{content}</span>;
   }
 
   if (isEditing) {
@@ -505,14 +521,18 @@ export const InlineEditableCell = <
       ref={cellRef}
       data-inline-cell={cellId}
       tabIndex={canEdit && !isTouch ? 0 : undefined}
-      role={canEdit && !isTouch ? "button" : undefined}
+      role={canEdit && !isTouch && !navigationHref ? "button" : undefined}
       aria-label={
         canEdit && !isTouch
           ? `${tInline("editButtonAria", { field: columnLabel })}: ${displayText}`
           : undefined
       }
       onKeyDown={(event) => {
-        if (canEdit && ["Enter", "F2", " "].includes(event.key)) {
+        if (
+          canEdit &&
+          event.target === event.currentTarget &&
+          ["Enter", "F2", " "].includes(event.key)
+        ) {
           event.preventDefault();
           event.stopPropagation();
           beginEdit("keyboard");
@@ -520,9 +540,10 @@ export const InlineEditableCell = <
       }}
       onClick={(event) => {
         if (canEdit) event.stopPropagation();
-        if (canEdit && !isTouch && event.detail === 0) beginEdit("keyboard");
+        if (canEdit && !navigationHref && !isTouch && event.detail === 0) beginEdit("keyboard");
       }}
       onDoubleClick={(event) => {
+        if (navigationHref && (event.target as Element).closest("a")) return;
         event.preventDefault();
         event.stopPropagation();
         beginEdit("doubleClick");
@@ -535,15 +556,15 @@ export const InlineEditableCell = <
             : undefined
       }
     >
-      <span>{displayText}</span>
+      {content}
       {isSaving ? <Spinner className="h-3.5 w-3.5" aria-label={tInline("savingAria")} /> : null}
-      {canEdit && isTouch ? (
+      {canEdit && (isTouch || navigationHref) ? (
         <Button
           type="button"
           variant="ghost"
           size="icon"
           className="h-11 w-11 shrink-0 shadow-none"
-          onClick={() => beginEdit("mobileButton")}
+          onClick={() => beginEdit(isTouch ? "mobileButton" : "keyboard")}
           aria-label={tInline("editButtonAria", { field: columnLabel })}
         >
           <EditIcon className="h-3.5 w-3.5" aria-hidden />

@@ -17,6 +17,8 @@ import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { SelectionToolbar } from "@/components/selection-toolbar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { HideIcon, AddIcon } from "@/components/icons";
+import { IconButton } from "@/components/ui/icon-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -1681,19 +1683,20 @@ const MMarketSettingsPage = () => {
                             </TableCell>
                             {canEdit ? (
                               <TableCell>
-                                <Button
+                                <IconButton
                                   type="button"
                                   variant={product.included ? "outline" : "secondary"}
-                                  size="sm"
                                   onClick={() =>
                                     handleUpdateProducts(!product.included, [product.id])
                                   }
                                   disabled={updateProductsMutation.isLoading}
-                                >
-                                  {product.included
-                                    ? t("productsSelection.rowExclude")
-                                    : t("productsSelection.rowInclude")}
-                                </Button>
+                                  icon={product.included ? HideIcon : AddIcon}
+                                  label={
+                                    product.included
+                                      ? t("productsSelection.rowExclude")
+                                      : t("productsSelection.rowInclude")
+                                  }
+                                />
                               </TableCell>
                             ) : null}
                           </TableRow>
@@ -1761,18 +1764,19 @@ const MMarketSettingsPage = () => {
                         />
                         {t("productsSelection.selectProductShort")}
                       </label>
-                      <Button
+                      <IconButton
                         type="button"
-                        size="sm"
                         variant={product.included ? "outline" : "secondary"}
-                        className="ml-auto"
                         onClick={() => handleUpdateProducts(!product.included, [product.id])}
                         disabled={updateProductsMutation.isLoading}
-                      >
-                        {product.included
-                          ? t("productsSelection.rowExclude")
-                          : t("productsSelection.rowInclude")}
-                      </Button>
+                        className="ml-auto"
+                        icon={product.included ? HideIcon : AddIcon}
+                        label={
+                          product.included
+                            ? t("productsSelection.rowExclude")
+                            : t("productsSelection.rowInclude")
+                        }
+                      />
                     </div>
                   ) : null}
                 </div>

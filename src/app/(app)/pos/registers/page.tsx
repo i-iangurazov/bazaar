@@ -11,6 +11,7 @@ import { PageHeader } from "@/components/page-header";
 import { QueryErrorState } from "@/components/query-error-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   DropdownMenu,
@@ -472,15 +473,21 @@ const PosRegistersPage = () => {
                 </dl>
                 {canManage ? (
                   <div className="mt-4 grid grid-cols-3 gap-2">
-                    <Button variant="secondary" size="sm" onClick={() => openEditDialog(register)}>
-                      {tCommon("edit")}
-                    </Button>
+                    <IconButton
+                      variant="secondary"
+                      onClick={() => openEditDialog(register)}
+                      icon={EditIcon}
+                      label={tCommon("edit")}
+                    />
                     <Button variant="outline" size="sm" onClick={() => handleToggleActive(register)}>
                       {register.isActive ? t("registers.deactivate") : t("registers.activate")}
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => handleDelete(register)}>
-                      {tCommon("delete")}
-                    </Button>
+                    <IconButton
+                      variant="outline"
+                      onClick={() => handleDelete(register)}
+                      icon={DeleteIcon}
+                      label={tCommon("delete")}
+                    />
                   </div>
                 ) : null}
               </div>
