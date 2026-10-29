@@ -172,6 +172,8 @@ export const bazaarCatalogRouter = router({
         accentColor: z.string().max(7).optional().nullable(),
         fontFamily: z.nativeEnum(BazaarCatalogFontFamily).optional(),
         headerStyle: z.nativeEnum(BazaarCatalogHeaderStyle).optional(),
+        hideOutOfStock: z.boolean().optional(),
+        hideWithoutPhoto: z.boolean().optional(),
         logoImageId: z.string().optional().nullable(),
         status: z.nativeEnum(BazaarCatalogStatus),
       }),
@@ -188,6 +190,8 @@ export const bazaarCatalogRouter = router({
           accentColor: input.accentColor,
           fontFamily: input.fontFamily,
           headerStyle: input.headerStyle,
+          hideOutOfStock: input.hideOutOfStock,
+          hideWithoutPhoto: input.hideWithoutPhoto,
           logoImageId: input.logoImageId,
           status: input.status,
         });

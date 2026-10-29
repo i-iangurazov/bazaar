@@ -56,6 +56,8 @@ type CatalogFormState = {
   logoImageId: string | null;
   logoUrl: string | null;
   publish: boolean;
+  hideOutOfStock: boolean;
+  hideWithoutPhoto: boolean;
 };
 
 const DEFAULT_ACCENT_COLOR = "#2a6be4";
@@ -241,7 +243,7 @@ const BazaarCatalogSettingsPage = () => {
   );
   const upsertMutation = trpc.bazaarCatalog.upsert.useMutation({
     onSuccess: async () => {
-      await Promise.all([settingsQuery.refetch(), storesQuery.refetch()]);
+      await Promise.all([settingsQuery.refetch(), storesQuery.refetch(), productsQuery.refetch()]);
       toast({ variant: "success", description: t("saved") });
     },
     onError: (error) => {
@@ -280,6 +282,8 @@ const BazaarCatalogSettingsPage = () => {
       logoImageId: catalog.logoImageId ?? null,
       logoUrl: catalog.logoUrl ?? null,
       publish: catalog.status === BazaarCatalogStatus.PUBLISHED,
+      hideOutOfStock: catalog.hideOutOfStock,
+      hideWithoutPhoto: catalog.hideWithoutPhoto,
     });
   }, [settingsQuery.data]);
 
@@ -437,6 +441,8 @@ const BazaarCatalogSettingsPage = () => {
       accentColor: formState.accentColor.trim(),
       fontFamily: formState.fontFamily,
       headerStyle: formState.headerStyle,
+      hideOutOfStock: formState.hideOutOfStock,
+      hideWithoutPhoto: formState.hideWithoutPhoto,
       logoImageId: formState.logoImageId ?? null,
       status: formState.publish ? BazaarCatalogStatus.PUBLISHED : BazaarCatalogStatus.DRAFT,
     });
@@ -698,8 +704,8 @@ const BazaarCatalogSettingsPage = () => {
                                 </TableCell>
                                 <TableCell>{product.onHandQty}</TableCell>
                                 <TableCell>
-                                  <Badge variant={product.hidden ? "muted" : "success"}>
-                                    {product.hidden
+                                  <Badge variant={product.hidden || product.excludedByRules ? "muted" : "success"}>
+                                    {product.excludedByRules ? t("productsVisibility.statusFiltered") : product.hidden
                                       ? t("productsVisibility.statusHidden")
                                       : t("productsVisibility.statusVisible")}
                                   </Badge>
@@ -744,8 +750,8 @@ const BazaarCatalogSettingsPage = () => {
                             <p className="text-xs text-muted-foreground">{product.sku}</p>
                           </div>
                         </div>
-                        <Badge variant={product.hidden ? "muted" : "success"}>
-                          {product.hidden
+                        <Badge variant={product.hidden || product.excludedByRules ? "muted" : "success"}>
+                          {product.excludedByRules ? t("productsVisibility.statusFiltered") : product.hidden
                             ? t("productsVisibility.statusHidden")
                             : t("productsVisibility.statusVisible")}
                         </Badge>
@@ -825,6 +831,26 @@ const BazaarCatalogSettingsPage = () => {
               <p className="text-sm text-muted-foreground">{t("brandingSubtitle")}</p>
             </CardHeader>
             <CardContent className="space-y-6">
+              <div className="space-y-3 rounded-lg border border-border p-4">
+                <p className="text-sm font-medium">{t("visibilityRules.title")}</p>
+                <p className="text-xs text-muted-foreground">{t("visibilityRules.hint")}</p>
+                {(["hideOutOfStock", "hideWithoutPhoto"] as const).map((key) => (
+                  <div key={key} className="flex items-center justify-between gap-4">
+                    <Label htmlFor={`catalog-${key}`}>{t(`visibilityRules.${key}`)}</Label>
+                    <Switch
+                      id={`catalog-${key}`}
+                      checked={formState[key]}
+                      onCheckedChange={(checked) =>
+                        setFormState((current) =>
+                          current ? { ...current, [key]: checked } : current,
+                        )
+                      }
+                      disabled={!canEdit || upsertMutation.isLoading}
+                    />
+                  </div>
+                ))}
+              </div>
+
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="catalog-title">{t("titleLabel")}</Label>

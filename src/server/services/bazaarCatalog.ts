@@ -1,3 +1,5 @@
+import { catalogVariantLabel } from "@/lib/catalogVariantLabel";
+import { catalogVisibilityWhere } from "./catalogVisibility";
 import { randomBytes } from "node:crypto";
 import {
   Prisma,
@@ -81,8 +83,13 @@ const sanitizeImageUrl = (value?: string | null) => {
 const resolveProductListImageUrl = (product: {
   photoUrl: string | null;
   images: Array<{ url: string }>;
+  variants?: Array<{ image: { url: string } | null }>;
 }) => {
-  for (const candidate of [product.images[0]?.url, product.photoUrl]) {
+  for (const candidate of [
+    product.images[0]?.url,
+    product.photoUrl,
+    ...(product.variants ?? []).map((variant) => variant.image?.url),
+  ]) {
     const normalized = normalizeProductImageUrl(candidate);
     if (normalized && !nonDataImagePattern.test(normalized)) {
       return normalized;
@@ -312,6 +319,8 @@ export const getBazaarCatalogSettings = async (input: {
           accentColor: catalog.accentColor,
           fontFamily: catalog.fontFamily,
           headerStyle: catalog.headerStyle,
+          hideOutOfStock: catalog.hideOutOfStock,
+          hideWithoutPhoto: catalog.hideWithoutPhoto,
           logoImageId: catalog.logoImageId ?? null,
           logoUrl: sanitizeImageUrl(catalog.logoImage?.url),
           publishedAt: catalog.publishedAt,
@@ -326,6 +335,8 @@ export const getBazaarCatalogSettings = async (input: {
           accentColor: DEFAULT_ACCENT_COLOR,
           fontFamily: DEFAULT_FONT_FAMILY,
           headerStyle: DEFAULT_HEADER_STYLE,
+          hideOutOfStock: false,
+          hideWithoutPhoto: false,
           logoImageId: null,
           logoUrl: null,
           publishedAt: null,
@@ -369,18 +380,36 @@ export const listBazaarCatalogProducts = async (input: {
       }
     : {};
 
+  const catalog = await prisma.bazaarCatalog.findUnique({
+    where: {
+      organizationId_storeId: { organizationId: input.organizationId, storeId: input.storeId },
+    },
+    select: { hideOutOfStock: true, hideWithoutPhoto: true },
+  });
+  const rules = await catalogVisibilityWhere(prisma, {
+    organizationId: input.organizationId,
+    storeId: input.storeId,
+    hideOutOfStock: catalog?.hideOutOfStock ?? false,
+    hideWithoutPhoto: catalog?.hideWithoutPhoto ?? false,
+  });
+  const visibleWhere: Prisma.ProductWhereInput = {
+    ...baseWhere,
+    hiddenInBazaarCatalogs: { none: { storeId: input.storeId } },
+    AND: rules,
+  };
   const visibilityWhere: Prisma.ProductWhereInput =
-    visibility === "hidden"
-      ? {
-          hiddenInBazaarCatalogs: {
-            some: { storeId: input.storeId },
-          },
-        }
-      : visibility === "visible"
+    visibility === "visible"
+      ? { hiddenInBazaarCatalogs: { none: { storeId: input.storeId } }, AND: rules }
+      : visibility === "hidden"
         ? {
-            hiddenInBazaarCatalogs: {
-              none: { storeId: input.storeId },
-            },
+            AND: [
+              {
+                OR: [
+                  { hiddenInBazaarCatalogs: { some: { storeId: input.storeId } } },
+                  ...(rules.length ? [{ NOT: { AND: rules } }] : []),
+                ],
+              },
+            ],
           }
         : {};
 
@@ -390,18 +419,11 @@ export const listBazaarCatalogProducts = async (input: {
     ...visibilityWhere,
   };
 
-  const [totalProducts, hiddenProducts, total, products] = await Promise.all([
+  const [totalProducts, visibleProducts, total, products] = await Promise.all([
     prisma.product.count({
       where: baseWhere,
     }),
-    prisma.product.count({
-      where: {
-        ...baseWhere,
-        hiddenInBazaarCatalogs: {
-          some: { storeId: input.storeId },
-        },
-      },
-    }),
+    prisma.product.count({ where: visibleWhere }),
     prisma.product.count({ where }),
     prisma.product.findMany({
       where,
@@ -412,6 +434,7 @@ export const listBazaarCatalogProducts = async (input: {
         category: true,
         basePriceKgs: true,
         photoUrl: true,
+        variants: { where: { isActive: true }, select: { image: { select: { url: true } } } },
         images: {
           where: {
             AND: [{ url: { not: "" } }, { NOT: { url: { startsWith: "data:image/" } } }],
@@ -433,7 +456,7 @@ export const listBazaarCatalogProducts = async (input: {
   ]);
 
   const productIds = products.map((product) => product.id);
-  const [storePrices, snapshots] = await Promise.all([
+  const [storePrices, snapshots, eligibleRows] = await Promise.all([
     productIds.length
       ? prisma.storePrice.findMany({
           where: {
@@ -453,7 +476,10 @@ export const listBazaarCatalogProducts = async (input: {
           where: {
             storeId: input.storeId,
             productId: { in: productIds },
-            variantKey: "BASE",
+            OR: [
+              { variantKey: "BASE", product: { variants: { none: { isActive: true } } } },
+              { variant: { isActive: true } },
+            ],
           },
           select: {
             productId: true,
@@ -461,10 +487,18 @@ export const listBazaarCatalogProducts = async (input: {
           },
         })
       : Promise.resolve([]),
+    rules.length && productIds.length
+      ? prisma.product.findMany({
+          where: { ...baseWhere, id: { in: productIds }, AND: rules },
+          select: { id: true },
+        })
+      : Promise.resolve(products.map((product) => ({ id: product.id }))),
   ]);
 
   const storePriceByProductId = new Map(
-    storePrices.filter((storePrice) => storePrice.priceKgs != null).map((storePrice) => [storePrice.productId, Number(storePrice.priceKgs)]),
+    storePrices
+      .filter((storePrice) => storePrice.priceKgs != null)
+      .map((storePrice) => [storePrice.productId, Number(storePrice.priceKgs)]),
   );
   const onHandByProductId = new Map<string, number>();
   for (const snapshot of snapshots) {
@@ -474,6 +508,7 @@ export const listBazaarCatalogProducts = async (input: {
     );
   }
 
+  const eligibleIds = new Set(eligibleRows.map((row) => row.id));
   return {
     items: products.map((product) => ({
       id: product.id,
@@ -488,6 +523,7 @@ export const listBazaarCatalogProducts = async (input: {
       imageUrl: resolveProductListImageUrl(product),
       onHandQty: onHandByProductId.get(product.id) ?? 0,
       hidden: product.hiddenInBazaarCatalogs.length > 0,
+      excludedByRules: !eligibleIds.has(product.id),
     })),
     total,
     page,
@@ -495,8 +531,8 @@ export const listBazaarCatalogProducts = async (input: {
     currencyCode,
     summary: {
       totalProducts,
-      hiddenProducts,
-      visibleProducts: Math.max(0, totalProducts - hiddenProducts),
+      hiddenProducts: totalProducts - visibleProducts,
+      visibleProducts,
     },
   };
 };
@@ -570,6 +606,8 @@ export const upsertBazaarCatalogSettings = async (input: {
   accentColor?: string | null;
   fontFamily?: BazaarCatalogFontFamily;
   headerStyle?: BazaarCatalogHeaderStyle;
+  hideOutOfStock?: boolean;
+  hideWithoutPhoto?: boolean;
   logoImageId?: string | null;
   status?: BazaarCatalogStatus;
 }) =>
@@ -612,6 +650,8 @@ export const upsertBazaarCatalogSettings = async (input: {
         accentColor: true,
         fontFamily: true,
         headerStyle: true,
+        hideOutOfStock: true,
+        hideWithoutPhoto: true,
         logoImageId: true,
         publishedAt: true,
       },
@@ -623,6 +663,8 @@ export const upsertBazaarCatalogSettings = async (input: {
       accentColor: normalizeAccentColor(input.accentColor),
       fontFamily: input.fontFamily ?? DEFAULT_FONT_FAMILY,
       headerStyle: input.headerStyle ?? DEFAULT_HEADER_STYLE,
+      hideOutOfStock: input.hideOutOfStock ?? existing?.hideOutOfStock ?? false,
+      hideWithoutPhoto: input.hideWithoutPhoto ?? existing?.hideWithoutPhoto ?? false,
       status: nextStatus,
       updatedById: input.actorId,
     };
@@ -668,6 +710,8 @@ export const upsertBazaarCatalogSettings = async (input: {
             accentColor: existing.accentColor,
             fontFamily: existing.fontFamily,
             headerStyle: existing.headerStyle,
+            hideOutOfStock: existing.hideOutOfStock,
+            hideWithoutPhoto: existing.hideWithoutPhoto,
             logoImageId: existing.logoImageId,
             publishedAt: existing.publishedAt,
           })
@@ -679,6 +723,8 @@ export const upsertBazaarCatalogSettings = async (input: {
         accentColor: catalog.accentColor,
         fontFamily: catalog.fontFamily,
         headerStyle: catalog.headerStyle,
+        hideOutOfStock: catalog.hideOutOfStock,
+        hideWithoutPhoto: catalog.hideWithoutPhoto,
         logoImageId: catalog.logoImageId,
         publishedAt: catalog.publishedAt,
       }),
@@ -701,6 +747,8 @@ export const upsertBazaarCatalogSettings = async (input: {
         accentColor: catalog.accentColor,
         fontFamily: catalog.fontFamily,
         headerStyle: catalog.headerStyle,
+        hideOutOfStock: catalog.hideOutOfStock,
+        hideWithoutPhoto: catalog.hideWithoutPhoto,
         logoImageId: catalog.logoImageId ?? null,
         logoUrl: sanitizeImageUrl(catalog.logoImage?.url),
         publishedAt: catalog.publishedAt,
@@ -831,6 +879,8 @@ export const getPublicBazaarCatalog = async (
       accentColor: true,
       fontFamily: true,
       headerStyle: true,
+      hideOutOfStock: true,
+      hideWithoutPhoto: true,
       store: {
         select: {
           name: true,
@@ -867,6 +917,7 @@ export const getPublicBazaarCatalog = async (
       none: { storeId: catalog.storeId },
     },
     storeProducts: { some: { storeId: catalog.storeId, isActive: true } },
+    AND: await catalogVisibilityWhere(prisma, catalog),
   };
   const filters: Prisma.ProductWhereInput[] = [
     ...(search ? [{ name: { contains: search, mode: Prisma.QueryMode.insensitive } }] : []),
@@ -879,7 +930,7 @@ export const getPublicBazaarCatalog = async (
   ];
   const where: Prisma.ProductWhereInput = {
     ...baseWhere,
-    ...(filters.length ? { AND: filters } : {}),
+    AND: [...(Array.isArray(baseWhere.AND) ? baseWhere.AND : []), ...filters],
   };
 
   const [total, products, categoryRows] = await Promise.all([
@@ -894,15 +945,21 @@ export const getPublicBazaarCatalog = async (
         photoUrl: true,
         basePriceKgs: true,
         variants: {
-          where: { isActive: true },
+          where: {
+            isActive: true,
+            ...(catalog.hideOutOfStock && {
+              inventorySnapshots: { some: { storeId: catalog.storeId, onHand: { gt: 0 } } },
+            }),
+          },
           select: {
             id: true,
             image: {
               select: { url: true },
             },
             name: true,
+            attributes: true,
           },
-          orderBy: { name: "asc" },
+          orderBy: [{ name: "asc" }, { id: "asc" }],
         },
         images: {
           where: {
@@ -997,7 +1054,7 @@ export const getPublicBazaarCatalog = async (
       currency: "KGS",
     });
     const imageUrl = resolveProductListImageUrl(product);
-    const variants = product.variants.map((variant) => {
+    const variants = product.variants.map((variant, index) => {
       const variantRow = priceByProductVariantKey.get(`${product.id}:${variant.id}`) ?? baseRow;
       const variantPricing = getEffectiveProductPrice({
         basePrice: variantRow?.priceKgs ?? product.basePriceKgs ?? 0,
@@ -1015,7 +1072,7 @@ export const getPublicBazaarCatalog = async (
       });
       return {
         id: variant.id,
-        name: normalizeOptionalText(variant.name) ?? variant.id.slice(0, 8),
+        name: catalogVariantLabel(variant, index),
         priceKgs: roundCatalogPrice(
           variantPricing.effectivePrice.toNumber(),
           currencyCode,
@@ -1188,6 +1245,8 @@ const createCatalogCheckoutOrderTx = async (
       organizationId: true,
       storeId: true,
       status: true,
+      hideOutOfStock: true,
+      hideWithoutPhoto: true,
       store: {
         select: {
           currencyCode: true,
@@ -1227,6 +1286,7 @@ const createCatalogCheckoutOrderTx = async (
           none: { storeId: catalog.storeId },
         },
         storeProducts: { some: { storeId: catalog.storeId, isActive: true } },
+        AND: await catalogVisibilityWhere(tx, catalog),
       },
       select: {
         id: true,
@@ -1238,6 +1298,9 @@ const createCatalogCheckoutOrderTx = async (
           where: {
             id: { in: variantIds },
             isActive: true,
+            ...(catalog.hideOutOfStock && {
+              inventorySnapshots: { some: { storeId: catalog.storeId, onHand: { gt: 0 } } },
+            }),
           },
           select: {
             id: true,

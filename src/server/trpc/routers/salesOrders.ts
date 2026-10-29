@@ -27,6 +27,7 @@ import {
   getSalesOrderMetrics,
   getCustomerOrder,
   listCustomerOrders,
+  setCustomerOrderArchived,
   markCustomerOrderReady,
   removeCustomerOrderLine,
   sendCustomerOrderEmail,
@@ -113,6 +114,23 @@ const assertCustomerOrderLineStoreAccess = async (ctx: SalesOrdersContext, lineI
 };
 
 export const salesOrdersRouter = router({
+  setArchived: salesOrdersManagerProcedure
+    .input(z.object({ customerOrderId: z.string().min(1), archived: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        await assertCustomerOrderStoreAccess(ctx, input.customerOrderId);
+        return await setCustomerOrderArchived({
+          ...input,
+          organizationId: ctx.user.organizationId,
+          actorId: ctx.user.id,
+          requestId: ctx.requestId,
+        });
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+
   paymentInfo: salesOrdersProtectedProcedure.input(z.object({ customerOrderId: z.string() })).query(async ({ ctx, input }) => {
     try { return await getOrderPaymentInfo(ctx.user, input.customerOrderId); } catch (error) { throw toTRPCError(error); }
   }),
@@ -157,6 +175,7 @@ export const salesOrdersRouter = router({
           sortBy: z.enum(["createdAt", "number", "totalKgs", "customerName"]).optional(),
           sortDirection: z.enum(["asc", "desc"]).optional(),
           lifecycleView: z.enum(salesOrderLifecycleViews).optional(),
+          archiveFilter: z.enum(["VISIBLE", "ARCHIVED", "ALL"]).optional(),
         })
         .optional(),
     )
@@ -175,6 +194,7 @@ export const salesOrdersRouter = router({
           sortBy: input?.sortBy,
           sortDirection: input?.sortDirection,
           lifecycleView: input?.lifecycleView,
+          archiveFilter: input?.archiveFilter,
         });
       } catch (error) {
         throw toTRPCError(error);

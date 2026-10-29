@@ -398,6 +398,7 @@ export const listCustomerOrders = async (input: {
   sortBy?: "createdAt" | "number" | "totalKgs" | "customerName";
   sortDirection?: "asc" | "desc";
   lifecycleView?: SalesOrderLifecycleView;
+  archiveFilter?: "VISIBLE" | "ARCHIVED" | "ALL";
 }) => {
   const lifecycleWhere: Prisma.CustomerOrderWhereInput =
     input.lifecycleView === "ACTIVE"
@@ -413,6 +414,7 @@ export const listCustomerOrders = async (input: {
   const where: Prisma.CustomerOrderWhereInput = {
     organizationId: input.organizationId,
     isPosSale: false,
+    ...(input.archiveFilter === "ALL" ? {} : { archivedAt: input.archiveFilter === "ARCHIVED" ? { not: null } : null }),
     ...(input.storeId
       ? { storeId: input.storeId }
       : input.storeIds
@@ -1657,3 +1659,35 @@ export const completeCustomerOrder = async (input: {
 
   return result;
 };
+
+/** Visibility only. Financial, stock and order lifecycle state are untouched. */
+export const setCustomerOrderArchived = async (input: {
+  organizationId: string;
+  customerOrderId: string;
+  actorId: string;
+  requestId: string;
+  archived: boolean;
+}) =>
+  prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "CustomerOrder" WHERE id = ${input.customerOrderId} AND "organizationId" = ${input.organizationId} AND "isPosSale" = false FOR UPDATE`;
+    const order = await tx.customerOrder.findFirst({
+      where: { id: input.customerOrderId, organizationId: input.organizationId, isPosSale: false },
+    });
+    if (!order) throw new AppError("salesOrderNotFound", "NOT_FOUND", 404);
+    if (Boolean(order.archivedAt) === input.archived) return serializeOrder(order);
+    const updated = await tx.customerOrder.update({
+      where: { id: order.id },
+      data: { archivedAt: input.archived ? new Date() : null },
+    });
+    await writeAuditLog(tx, {
+      organizationId: input.organizationId,
+      actorId: input.actorId,
+      action: input.archived ? "CUSTOMER_ORDER_ARCHIVED" : "CUSTOMER_ORDER_RESTORED",
+      entity: "CustomerOrder",
+      entityId: order.id,
+      before: toJson({ archivedAt: order.archivedAt }),
+      after: toJson({ archivedAt: updated.archivedAt }),
+      requestId: input.requestId,
+    });
+    return serializeOrder(updated);
+  });

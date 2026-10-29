@@ -8,6 +8,7 @@ import { useSession } from "next-auth/react";
 import { CustomerOrderStatus } from "@prisma/client";
 
 import { ListToolbar, ListSearch, FilterField } from "@/components/list-toolbar";
+import { QueryErrorState } from "@/components/query-error-state";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,7 +21,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { AddIcon, CheckIcon, CloseIcon, EmptyIcon, ViewIcon } from "@/components/icons";
+import {
+  AddIcon,
+  ArchiveIcon,
+  RestoreIcon,
+  CheckIcon,
+  CloseIcon,
+  EmptyIcon,
+  ViewIcon,
+} from "@/components/icons";
 import { ResponsiveDataList } from "@/components/responsive-data-list";
 import { RowActions } from "@/components/row-actions";
 import {
@@ -60,7 +69,12 @@ const SalesOrdersPage = () => {
   const pathname = usePathname() ?? "/sales/orders";
   const searchParams = useSearchParams();
   const currentQueryString = searchParams.toString();
-  const lifecycleView = searchParams.get("view") === "history" ? "HISTORY" : "ACTIVE";
+  const archiveView = searchParams.get("view") === "archive";
+  const lifecycleView = archiveView
+    ? "ALL"
+    : searchParams.get("view") === "history"
+      ? "HISTORY"
+      : "ACTIVE";
   const page = parsePositiveInteger(searchParams.get("page"), 1, 10_000);
   const pageSize = parsePositiveInteger(searchParams.get("pageSize"), 25, 200);
   const search = searchParams.get("search") ?? "";
@@ -118,6 +132,7 @@ const SalesOrdersPage = () => {
       sortBy,
       sortDirection,
       lifecycleView,
+      archiveFilter: archiveView ? "ARCHIVED" : "VISIBLE",
     },
     { keepPreviousData: true },
   );
@@ -171,6 +186,36 @@ const SalesOrdersPage = () => {
     },
   });
 
+  const archiveMutation = trpc.salesOrders.setArchived.useMutation({
+    onSuccess: async (_order, variables) => {
+      await Promise.all([
+        utils.salesOrders.list.invalidate(),
+        utils.salesOrders.getById.invalidate({ customerOrderId: variables.customerOrderId }),
+      ]);
+      if (items.length === 1 && page > 1) setPage(page - 1);
+      toast({
+        variant: "success",
+        description: t(variables.archived ? "archive.saved" : "archive.restored"),
+      });
+    },
+    onError: (error) => toast({ variant: "error", description: translateError(tErrors, error) }),
+  });
+  const archiveActions = (order: { id: string; archivedAt: Date | null }) =>
+    canFinalize
+      ? [
+          {
+            key: "archive",
+            label: t(order.archivedAt ? "archive.restore" : "archive.action"),
+            icon: order.archivedAt ? RestoreIcon : ArchiveIcon,
+            disabled: archiveMutation.isLoading,
+            onSelect: async () => {
+              if (!order.archivedAt && !(await confirm({ description: t("archive.confirm") })))
+                return;
+              archiveMutation.mutate({ customerOrderId: order.id, archived: !order.archivedAt });
+            },
+          },
+        ]
+      : [];
   const items = useMemo(() => listQuery.data?.items ?? [], [listQuery.data?.items]);
   const totalItems = listQuery.data?.total ?? 0;
 
@@ -235,25 +280,23 @@ const SalesOrdersPage = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           <div
-            className="grid grid-cols-2 gap-2 rounded-md border border-border bg-muted/35 p-1"
+            className="grid grid-cols-3 gap-2 rounded-md border border-border bg-muted/35 p-1"
             role="tablist"
             aria-label={t("lifecycleViewLabel")}
             onKeyDown={(event) => {
               if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
               event.preventDefault();
+              const views = ["active", "history", "archive"];
+              const current = archiveView ? 2 : lifecycleView === "HISTORY" ? 1 : 0;
               const next =
                 event.key === "Home"
-                  ? "ACTIVE"
+                  ? 0
                   : event.key === "End"
-                    ? "HISTORY"
-                    : lifecycleView === "ACTIVE"
-                      ? "HISTORY"
-                      : "ACTIVE";
-              updateListParams({ view: next === "ACTIVE" ? null : "history", page: null });
+                    ? 2
+                    : (current + (event.key === "ArrowRight" ? 1 : 2)) % 3;
+              updateListParams({ view: next === 0 ? null : views[next], page: null });
               (
-                event.currentTarget.querySelectorAll('[role="tab"]')[
-                  next === "ACTIVE" ? 0 : 1
-                ] as HTMLButtonElement
+                event.currentTarget.querySelectorAll('[role="tab"]')[next] as HTMLButtonElement
               )?.focus();
             }}
           >
@@ -281,9 +324,25 @@ const SalesOrdersPage = () => {
             >
               {t("historyView")}
             </Button>
+            <Button
+              type="button"
+              role="tab"
+              aria-selected={archiveView}
+              tabIndex={archiveView ? 0 : -1}
+              data-testid="sales-orders-archive-tab"
+              variant={archiveView ? "default" : "ghost"}
+              className="min-h-11"
+              onClick={() => updateListParams({ view: "archive", page: null })}
+            >
+              {t("archive.view")}
+            </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            {lifecycleView === "ACTIVE" ? t("activeViewHint") : t("historyViewHint")}
+            {archiveView
+              ? t("archive.hint")
+              : lifecycleView === "ACTIVE"
+                ? t("activeViewHint")
+                : t("historyViewHint")}
           </p>
           <ListToolbar
             total={totalItems}
@@ -319,7 +378,7 @@ const SalesOrdersPage = () => {
               />
               <FilterField id="sales-order-store" label={t("store")}>
                 <Select
-                  value={storeId}
+                  value={storeId === "all" && stores.length === 1 ? stores[0].id : storeId}
                   onValueChange={(value) => {
                     setFilter("storeId", value === "all" ? null : value);
                   }}
@@ -396,6 +455,9 @@ const SalesOrdersPage = () => {
             </div>
           </ListToolbar>
 
+          {listQuery.error ? (
+            <QueryErrorState error={listQuery.error} onRetry={() => void listQuery.refetch()} />
+          ) : null}
           <ResponsiveDataList
             key={`sales-orders-${pageSize}`}
             items={items}
@@ -469,6 +531,7 @@ const SalesOrdersPage = () => {
                           <TableCell>
                             <div className="flex justify-end">
                               <RowActions
+                                maxInline={4}
                                 moreLabel={tCommon("moreActions")}
                                 actions={[
                                   {
@@ -477,7 +540,9 @@ const SalesOrdersPage = () => {
                                     icon: ViewIcon,
                                     href: orderHref(order.id),
                                   },
-                                  ...(canFinalize && order.status === CustomerOrderStatus.READY
+                                  ...(canFinalize &&
+                                  !order.archivedAt &&
+                                  order.status === CustomerOrderStatus.READY
                                     ? [
                                         {
                                           key: "complete",
@@ -497,7 +562,7 @@ const SalesOrdersPage = () => {
                                         },
                                       ]
                                     : []),
-                                  ...(canFinalize && canCancel(order.status)
+                                  ...(canFinalize && !order.archivedAt && canCancel(order.status)
                                     ? [
                                         {
                                           key: "cancel",
@@ -521,6 +586,7 @@ const SalesOrdersPage = () => {
                                         },
                                       ]
                                     : []),
+                                  ...archiveActions(order),
                                 ]}
                               />
                             </div>
@@ -592,6 +658,7 @@ const SalesOrdersPage = () => {
                   </div>
                   <div className="flex justify-end">
                     <RowActions
+                      maxInline={4}
                       moreLabel={tCommon("moreActions")}
                       actions={[
                         {
@@ -600,7 +667,9 @@ const SalesOrdersPage = () => {
                           icon: ViewIcon,
                           href: orderHref(order.id),
                         },
-                        ...(canFinalize && order.status === CustomerOrderStatus.READY
+                        ...(canFinalize &&
+                        !order.archivedAt &&
+                        order.status === CustomerOrderStatus.READY
                           ? [
                               {
                                 key: "complete",
@@ -619,7 +688,7 @@ const SalesOrdersPage = () => {
                               },
                             ]
                           : []),
-                        ...(canFinalize && canCancel(order.status)
+                        ...(canFinalize && !order.archivedAt && canCancel(order.status)
                           ? [
                               {
                                 key: "cancel",
@@ -641,6 +710,7 @@ const SalesOrdersPage = () => {
                               },
                             ]
                           : []),
+                        ...archiveActions(order),
                       ]}
                     />
                   </div>
@@ -653,11 +723,15 @@ const SalesOrdersPage = () => {
             <div className="bazaar-admin-empty mt-4 min-h-[9rem] gap-2">
               <span>{tCommon("loading")}</span>
             </div>
-          ) : totalItems === 0 ? (
+          ) : !listQuery.error && totalItems === 0 ? (
             <div className="bazaar-admin-empty mt-4">
               <div className="flex items-center gap-2">
                 <EmptyIcon className="h-4 w-4" aria-hidden />
-                {lifecycleView === "ACTIVE" ? t("noActiveOrders") : t("noHistoryOrders")}
+                {archiveView
+                  ? t("archive.empty")
+                  : lifecycleView === "ACTIVE"
+                    ? t("noActiveOrders")
+                    : t("noHistoryOrders")}
               </div>
             </div>
           ) : null}

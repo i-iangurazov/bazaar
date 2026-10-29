@@ -49,3 +49,5 @@ ios/*.xcarchive
 # Disposable rollback candidates, synthetic databases, dumps and browser evidence.
 /artifacts/deployment-rollback/
 /artifacts/ui-provider-20261029/
+
+/artifacts/catalog-orders-20261030/

@@ -1562,22 +1562,22 @@
     "productsVisibility": {
       "title": "Products visibility",
       "subtitle": "Products visibility overview",
-      "note": "Note",
+      "note": "Only active store products are eligible. Manual hiding and availability/photo rules apply together.",
       "search": "Search",
       "selectedLabel": "Selected label {count}",
       "clearSelection": "Clear selection",
-      "showSelected": "Show selected",
+      "showSelected": "Unhide selected",
       "hideSelected": "Hide selected",
       "statusVisible": "Status visible",
       "statusHidden": "Status hidden",
-      "rowShow": "Row show",
-      "rowHide": "Row hide",
+      "rowShow": "Remove manual hiding",
+      "rowHide": "Hide manually",
       "selectAll": "Select all",
       "selectProduct": "Select product {name}",
       "selectProductShort": "Select product short",
       "empty": "No products visibility.",
-      "visibleSuccess": "Visible success {count}",
-      "hiddenSuccess": "Hidden success {count}",
+      "visibleSuccess": "Manual hiding removed for {count} products. Publishing rules still apply.",
+      "hiddenSuccess": "{count} products hidden manually.",
       "metrics": {
         "total": "Total",
         "visible": "Visible",
@@ -1597,7 +1597,8 @@
         "onHand": "On hand",
         "status": "Status",
         "actions": "Actions"
-      }
+      },
+      "statusFiltered": "Hidden by rule"
     },
     "brandingTitle": "Branding",
     "brandingSubtitle": "Branding overview",
@@ -1661,7 +1662,13 @@
       "revoke": "Revoke",
       "empty": "No API keys yet."
     },
-    "readOnlyHint": "Read only hint"
+    "readOnlyHint": "Read only hint",
+    "visibilityRules": {
+      "title": "Product publishing",
+      "hint": "Rules apply to this store’s public catalog after saving. Availability uses this store’s stock, active variants and bundle components.",
+      "hideOutOfStock": "Hide out-of-stock products",
+      "hideWithoutPhoto": "Hide products without photos"
+    }
   },
   "mMarketSettings": {
     "title": "bazaar + MMarket",
@@ -4957,6 +4964,16 @@
       "retry": "Retry request",
       "success": "Return recorded.",
       "manualRequired": "Check the money refund in your banking app and the manual refund request in the receipt journal."
+    },
+    "archive": {
+      "view": "Archive",
+      "action": "Archive order",
+      "restore": "Restore from archive",
+      "confirm": "Hide this order in the archive? Its status, payments, stock and reporting remain intact. You can restore it from the Archive tab.",
+      "hint": "Manually hidden orders. Archiving does not cancel an order or change payments, stock or reporting. Restoring returns it to the appropriate regular list.",
+      "empty": "No archived orders yet.",
+      "saved": "Order archived.",
+      "restored": "Order restored from archive."
     }
   },
   "suppliers": {

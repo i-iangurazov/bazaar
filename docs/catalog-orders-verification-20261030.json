@@ -1,0 +1,172 @@
+{
+  "date": "2026-10-30",
+  "scope": "Bazaar Catalog publishing and customer order archive; local evidence before publication",
+  "baseCommit": "a57dc846b3d346af232375459759b18726f54641",
+  "sourceDigest": "78d384960009238471feb76924a7c0abac579b5404f78e660cf507e9fe8c0ae3",
+  "sourceFiles": [
+    "messages/en.json",
+    "messages/kg.json",
+    "messages/ru.json",
+    "prisma/migrations/20261030100000_catalog_visibility_and_order_archive/migration.sql",
+    "prisma/schema.prisma",
+    "scripts/deployment/migrations.ts",
+    "src/app/(app)/operations/integrations/bazaar-catalog/page.tsx",
+    "src/app/(app)/sales/orders/page.tsx",
+    "src/lib/catalogVariantLabel.ts",
+    "src/server/services/bazaarCatalog.ts",
+    "src/server/services/catalogVisibility.ts",
+    "src/server/services/salesOrders.ts",
+    "src/server/trpc/routers/bazaarCatalog.ts",
+    "src/server/trpc/routers/salesOrders.ts",
+    "tests/integration/catalog-improvements.test.ts",
+    "tests/integration/sales-order-archive.test.ts",
+    "tests/unit/catalog-variant-label.test.ts"
+  ],
+  "delivered": [
+    "Store-specific hide-out-of-stock and hide-without-photo switches using existing Switch and Label components; defaults preserve all existing catalogs",
+    "Store stock, active variants and bundle component quantities determine availability before pagination, category counts and cart recovery",
+    "Photo presence includes gallery, product photo and active variant images; manual hiding and automatic rules compose consistently, including nullable photos",
+    "Human-readable variant characteristics and stable numbered fallbacks replace internal-ID fallback labels",
+    "Customer order archive/restore through existing icon row actions on desktop/mobile; archive is separate from lifecycle status",
+    "Existing order actions retain their order and remain visible beside archive; single-store Select displays its selected store",
+    "Russian, Kyrgyz and English copy, retry/error handling and accessible names use existing application components"
+  ],
+  "deferred": [
+    "AI product renaming: no endpoint, button, provider request, title override model or migration was included"
+  ],
+  "invariants": [
+    "No inventory or financial calculations changed",
+    "Archive preserves status, amounts, payments, reporting, currency snapshots, creation/business dates and store/organization ownership",
+    "Archiving does not cancel fulfillment, emails or automation; repeating the same state is a no-op, including simultaneous requests",
+    "Server enforces manager/admin mutation rights, assigned stores, organization boundaries and the existing customerOrders plan gate; POS sales are excluded",
+    "Existing receiving, transfer, write-off and stock-count layout sources are untouched in this delivery",
+    "Existing shared product names, prices and variant records are not renamed"
+  ],
+  "verification": {
+    "typecheck": {
+      "command": "pnpm exec tsc --noEmit",
+      "result": "passed",
+      "log": "artifacts/catalog-orders-20261030/typecheck-publication.log"
+    },
+    "lint": {
+      "command": "pnpm lint",
+      "result": "passed"
+    },
+    "translations": {
+      "command": "pnpm i18n:check",
+      "result": "passed"
+    },
+    "productionBuild": {
+      "command": "pnpm exec next build",
+      "environment": "production runtime against isolated PostgreSQL/Redis; provider calls disabled",
+      "result": "passed",
+      "pages": 128,
+      "log": "artifacts/catalog-orders-20261030/build-publication.log"
+    },
+    "fullRegression": {
+      "command": "vitest run",
+      "environment": "fresh temporary PostgreSQL, en_US.UTF-8 and UTC, isolated Redis; no provider calls",
+      "initial": {
+        "passed": 3063,
+        "failed": 2,
+        "skipped": 3,
+        "durationSeconds": 534.85
+      },
+      "failureCause": "Only two local-runtime backup tests hit the filesystem safety guard: 395 MiB available versus 513 MiB required. The running build cache caused the resource shortage.",
+      "recovery": "Removed only the generated .next/cache and repeated the entire local-runtime file: 20/20 passed.",
+      "distinctTestsVerifiedAfterRecovery": 3065,
+      "log": "artifacts/catalog-orders-20261030/full-final-tests.log",
+      "recheckLog": "artifacts/catalog-orders-20261030/local-runtime-recheck.log"
+    },
+    "focusedDatabaseRegression": {
+      "passed": 48,
+      "scope": "Catalog, orders, publishing rules, labels, permission boundaries, existing sorting and pagination"
+    },
+    "finalArchiveRegression": {
+      "passed": 8,
+      "scope": "Five statuses, concurrent repeated requests, audit idempotency, assigned managers, forbidden roles/stores/organizations/POS, metrics and currency/date preservation",
+      "log": "artifacts/catalog-orders-20261030/archive-concurrency-final.log"
+    },
+    "browser": {
+      "status": "passed",
+      "checks": [
+        "ru: stock/photo save, server payload/counts, variant label, settings desktop/mobile",
+        "ru: desktop archive, mobile restore, persisted archive view, regular list recovery",
+        "ru: public catalog variant selection desktop/mobile, no exposed variant ID",
+        "kg: stock/photo save, server payload/counts, variant label, settings desktop/mobile",
+        "kg: desktop archive, mobile restore, persisted archive view, regular list recovery",
+        "kg: public catalog variant selection desktop/mobile, no exposed variant ID",
+        "en: stock/photo save, server payload/counts, variant label, settings desktop/mobile",
+        "en: desktop archive, mobile restore, persisted archive view, regular list recovery",
+        "en: public catalog variant selection desktop/mobile, no exposed variant ID"
+      ],
+      "errors": [],
+      "providerCalls": 0,
+      "fixture": "disposable synthetic database",
+      "screenshots": 22,
+      "additionalChecks": [
+        "All previous READY order actions remain visible beside archive on desktop and mobile",
+        "Three lifecycle tabs support Home, End and arrow navigation",
+        "No completion or cancellation action executed"
+      ],
+      "totalScreenshots": 24,
+      "viewports": [
+        390,
+        1440
+      ],
+      "locales": [
+        "ru",
+        "kg",
+        "en"
+      ],
+      "themes": [
+        "light",
+        "dark"
+      ],
+      "scope": "Synthetic database only; error-free scripted user flows plus visual screenshot inspection"
+    },
+    "databaseIsolation": {
+      "host": "127.0.0.1",
+      "port": 55458,
+      "dataDirectory": "/private/tmp/bazaar-catalog-orders-20261030-pg",
+      "redisPort": 56408,
+      "customerAndProductionRecordsUsed": false
+    },
+    "rollbackCompatibility": {
+      "status": "passed",
+      "baseline": "pre-change locally packaged main a57dc84",
+      "environment": "synthetic isolated database on 55458; no production records",
+      "checks": [
+        "Previous compiled application reads the additive schema",
+        "Previous orders list reads archived rows without SQL errors",
+        "New list honors archive visibility",
+        "Previous public catalog ignores new optional publishing rules; new catalog honors them",
+        "Order status, totals, source and ownership remain unchanged"
+      ],
+      "rollback": "Promote the previous ready Vercel deployment; retain added columns, index and migration history. Do not drop columns or restore an older database."
+    }
+  },
+  "migration": {
+    "id": "20261030100000_catalog_visibility_and_order_archive",
+    "sha256": "c3fe73baae37a01f36ce410a409a1c500a0970387c8435fdaac30415388f52dd",
+    "kind": "Additive columns/defaults and an index; no business-row UPDATE, DELETE, DROP or backfill",
+    "approvedByReleaseGuard": true
+  },
+  "rollout": {
+    "previousReadyDeployment": {
+      "id": "dpl_BbHQnqaVQFE9itee2EMhgarxtfSn",
+      "url": "bazaar-4nl9ydaf8-ilyas0707s-projects.vercel.app",
+      "state": "READY",
+      "checkedAt": "2026-10-29T21:42:59.027Z",
+      "gitSha": "a57dc846b3d346af232375459759b18726f54641"
+    },
+    "rollback": "Promote the previous ready deployment; keep additive columns, index and migration history. Source reverts must retain the Prisma schema additions, migration SQL and approved checksum.",
+    "ci": "The publication commit must pass the complete GitHub Actions workflow before delivery is declared complete.",
+    "freshProductionDump": "Not created: automatic approval rejected a new full customer-data extraction without separate authorization. No bypass or further extraction was attempted. Rollback compatibility was instead verified with synthetic records."
+  },
+  "limits": [
+    "Presence of a saved photo URL does not verify the remote image server on every catalog read.",
+    "Provider calls and customer/production order mutations were excluded from automated checks.",
+    "Skipped pooling tests are covered by the dedicated CI pooling job."
+  ]
+}

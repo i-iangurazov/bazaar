@@ -2061,6 +2061,7 @@ model CustomerOrder {
   readyAt                 DateTime?
   completedAt             DateTime?
   canceledAt              DateTime?
+  archivedAt              DateTime?
   completedEventId        String?             @unique
   createdById             String?
   updatedById             String?
@@ -2089,6 +2090,7 @@ model CustomerOrder {
   @@index([organizationId, createdAt])
   @@index([organizationId, saleChannel, storeId, status, completedAt], map: "CustomerOrder_commercial_channel_report_idx")
   @@index([organizationId, customerId, storeId, status, completedAt], map: "CustomerOrder_customer_report_idx")
+  @@index([organizationId, isPosSale, archivedAt, createdAt])
   @@index([organizationId, isPosSale, createdAt])
   @@index([organizationId, isPosSale, isHeld, status, createdAt])
   @@index([registerId, isHeld, status, createdAt])
@@ -3068,6 +3070,8 @@ model BazaarCatalog {
   accentColor    String                   @default("#2a6be4")
   fontFamily     BazaarCatalogFontFamily  @default(NotoSans)
   headerStyle    BazaarCatalogHeaderStyle @default(STANDARD)
+  hideOutOfStock Boolean                  @default(false)
+  hideWithoutPhoto Boolean                @default(false)
   publishedAt    DateTime?
   updatedAt      DateTime                 @updatedAt
   updatedById    String?
