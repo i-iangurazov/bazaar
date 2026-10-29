@@ -2306,9 +2306,13 @@ export const updateProduct = async (input: UpdateProductInput) => {
       throw new AppError("productNotFound", "NOT_FOUND", 404);
     }
 
-    const retailPriceKgs = input.requireRetailPrice
+    const validatedRetailPriceKgs = input.requireRetailPrice
       ? await resolveProductFormRetailPrice(tx, input)
       : input.retailPriceKgs;
+    // Validation may read the current shared price. A metadata-only save must
+    // not turn that fallback into an individual store price.
+    const retailPriceKgs = input.retailPriceKgs !== undefined || input.storePriceKgs !== undefined
+      ? validatedRetailPriceKgs : undefined;
 
     const selectedStore = input.storeId
       ? await tx.store.findFirst({
@@ -2325,6 +2329,9 @@ export const updateProduct = async (input: UpdateProductInput) => {
     await applyArchivedBarcodeTransfers(tx, { ...input, targetProductId: input.productId, barcodes, transfers: input.barcodeTransfers });
     await ensureBarcodesAvailable(tx, input.organizationId, barcodes, input.productId);
     if (before.baseUnitId !== baseUnit.id) {
+      if (await tx.priceBookEntry.count({ where: { organizationId: input.organizationId, productId: input.productId } })) {
+        throw new AppError("priceBookUnitConflict", "CONFLICT", 409);
+      }
       const previousUnit = await ensureUnit(tx, input.organizationId, before.baseUnitId);
       if (baseUnit.quantityPrecision < previousUnit.quantityPrecision) {
         await assertProductUnitPrecision(tx, input.productId, baseUnit.quantityPrecision);
@@ -4814,6 +4821,10 @@ export const deleteProduct = async (input: DeleteProductInput) =>
     const before = await tx.product.findUnique({ where: { id: input.productId } });
     if (!before || before.organizationId !== input.organizationId) {
       throw new AppError("productNotFound", "NOT_FOUND", 404);
+    }
+
+    if (await tx.priceBookEntry.count({ where: { organizationId: input.organizationId, productId: input.productId } })) {
+      throw new AppError("priceBookProductInUse", "CONFLICT", 409);
     }
 
     const [

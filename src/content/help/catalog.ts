@@ -1,5 +1,6 @@
 import { helpText as t } from "./ui";
 import { loyaltyGuides } from "./loyalty";
+import { priceBookGuides } from "./price-books";
 import { sharedCatalogGuides } from "./shared-catalog";
 import type {
   HelpAnnotation,
@@ -200,6 +201,7 @@ export const helpCategories: HelpCategory[] = [
 
 export const helpGuides: HelpGuide[] = [
   ...sharedCatalogGuides,
+  ...priceBookGuides,
   ...loyaltyGuides,
   guide({
     slug: "add-product",

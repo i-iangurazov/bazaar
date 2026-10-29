@@ -31,6 +31,7 @@ export function getMobilePageTitle(
     ["/reports", "reports"],
     ["/operations/integrations", "integrations"],
     ["/stores", "stores"],
+    ["/settings/price-lists", "priceLists"],
     ["/settings/printing", "printing"],
   ] as const;
   const route = routes.find(([prefix]) => matches(prefix));

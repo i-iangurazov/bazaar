@@ -18,6 +18,7 @@ type SettingsLink = {
 };
 
 const LINKS: SettingsLink[] = [
+  { key: "priceLists", href: "/settings/price-lists", adminOnly: true, permission: "manageSettings" },
   { key: "profile", href: "/settings/profile" },
   { key: "users", href: "/settings/users", adminOnly: true, permission: "manageUsers" },
   { key: "loyalty", href: "/settings/loyalty", adminOnly: true, permission: "manageSettings" },

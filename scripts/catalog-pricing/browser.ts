@@ -413,4 +413,7 @@ try {
 } finally {
   await browser.close();
   await prisma.$disconnect();
+  const { getRedisPublisher, getRedisSubscriber } = await import("../../src/server/redis");
+  getRedisPublisher()?.disconnect();
+  getRedisSubscriber()?.disconnect();
 }

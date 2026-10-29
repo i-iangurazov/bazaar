@@ -1,4 +1,5 @@
 export const contextualHelpRoutes = [
+  { match: /^\/settings\/price-lists(?:\/|$)/, guideId: "products/shared-prices" },
   { match: /^\/settings\/store-groups(?:\/|$)/, guideId: "products/shared-catalog" },
   { match: /^\/settings\/loyalty(?:\/|$)/, guideId: "loyalty/get-started" },
   { match: /^\/products(?:\/|$)/, guideId: "products/add-product" },
@@ -36,6 +37,10 @@ import type { LocalizedText } from "./types";
 type ContextualHelpSummary = { title: LocalizedText; steps: LocalizedText[] };
 
 const contextualHelpSummaries: Record<string, ContextualHelpSummary> = {
+  "products/shared-prices": {
+    title: t("Общие прайсы", "Жалпы баа тизмелери", "Shared price lists"),
+    steps: [t("Подготовьте цены и выберите магазины", "Бааларды даярдап, дүкөндөрдү тандаңыз", "Stage prices and choose stores"), t("Сохраните индивидуальные цены по умолчанию", "Жеке бааларды демейки боюнча сактаңыз", "Preserve individual prices by default"), t("Проверьте изменения до применения", "Колдонуудан мурун өзгөртүүлөрдү текшериңиз", "Review changes before applying")],
+  },
   "products/shared-catalog": {
     title: t("Ассортимент магазинов", "Дүкөндөрдүн ассортименти", "Store assortment"),
     steps: [

@@ -442,6 +442,7 @@ const ProductDetailPage = () => {
     },
   });
   useSse({
+    "pricing.updated": () => { void storePricingQuery.refetch(); },
     "inventory.updated": () => {
       void Promise.all([storePricingQuery.refetch(), productQuery.refetch()]);
     },

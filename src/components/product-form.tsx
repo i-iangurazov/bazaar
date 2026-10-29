@@ -678,10 +678,11 @@ export const ProductForm = ({
     currencyRateKgsPerUnit,
     moneyCurrencyCode,
   );
-  const displayMoneyFromKgs = (value?: number | null) =>
+  const displayMoneyFromKgs = useCallback((value?: number | null) =>
     value === null || value === undefined
       ? undefined
-      : convertFromKgs(value, moneyCurrencyRateKgsPerUnit, moneyCurrencyCode);
+      : convertFromKgs(value, moneyCurrencyRateKgsPerUnit, moneyCurrencyCode),
+    [moneyCurrencyRateKgsPerUnit, moneyCurrencyCode]);
   const submitMoneyToKgs = (value?: number | null) =>
     Number.isFinite(value ?? NaN)
       ? convertToKgs(value as number, moneyCurrencyRateKgsPerUnit, moneyCurrencyCode)
@@ -968,6 +969,33 @@ export const ProductForm = ({
   const formIsDirty = form.formState.isDirty;
   const formDirtyFields = form.formState.dirtyFields;
   const savedRevisionRef = useRef(savedRevision);
+
+  // A price publication may arrive while a product is being described or photographed.
+  // Refresh only untouched price fields; preserve every in-progress edit.
+  useEffect(() => {
+    if (!productId) return;
+    const current = form.formState.dirtyFields;
+    const prices = {
+      basePriceKgs: initialValues.basePriceKgs,
+      storePriceKgs: initialValues.storePriceKgs,
+      retailPriceKgs: initialValues.retailPriceKgs ?? initialValues.storePriceKgs ?? initialValues.basePriceKgs,
+      wholesalePriceKgs: initialValues.wholesalePriceKgs,
+    };
+    for (const name of ["basePriceKgs", "storePriceKgs", "retailPriceKgs", "wholesalePriceKgs"] as const) {
+      if (!current[name]) form.resetField(name, { defaultValue: displayMoneyFromKgs(prices[name]) });
+    }
+    form.getValues("variants").forEach((variant, index) => {
+      const initial = initialValues.variants.find(v => v.id === variant.id);
+      if (!variant.id || !initial) return;
+      for (const name of ["storePriceKgs", "retailPriceKgs", "wholesalePriceKgs"] as const) {
+        if (!current.variants?.[index]?.[name]) {
+          const value = name === "retailPriceKgs" ? initial.retailPriceKgs ?? initial.storePriceKgs : initial[name];
+          form.resetField(`variants.${index}.${name}`, { defaultValue: displayMoneyFromKgs(value) });
+        }
+      }
+    });
+  }, [form, initialValues, productId, displayMoneyFromKgs]);
+
 
   useEffect(() => {
     onDirtyChange?.(formIsDirty);
@@ -3144,10 +3172,10 @@ export const ProductForm = ({
         name: variant.name?.trim() || undefined,
         sku: enableSku ? variant.sku?.trim() || undefined : undefined,
         initialOnHand: variant.initialOnHand,
-        ...(!retailWholesaleEnabled ? { storePriceKgs: submitMoneyToKgs(variant.storePriceKgs) } : {}),
+        ...(!retailWholesaleEnabled && (!variant.id || formDirtyFields.variants?.[index]?.storePriceKgs) ? { storePriceKgs: submitMoneyToKgs(variant.storePriceKgs) } : {}),
         ...(retailWholesaleEnabled ? {
-          retailPriceKgs: submitMoneyToKgs(variant.retailPriceKgs) ?? null,
-          wholesalePriceKgs: submitMoneyToKgs(variant.wholesalePriceKgs) ?? null,
+          ...(!variant.id || formDirtyFields.variants?.[index]?.retailPriceKgs ? { retailPriceKgs: submitMoneyToKgs(variant.retailPriceKgs) ?? null } : {}),
+          ...(!variant.id || formDirtyFields.variants?.[index]?.wholesalePriceKgs ? { wholesalePriceKgs: submitMoneyToKgs(variant.wholesalePriceKgs) ?? null } : {}),
         } : {}),
         attributes: parsedAttributes,
       });
@@ -3198,12 +3226,12 @@ export const ProductForm = ({
       categories: categoryValues,
       baseUnitId: values.baseUnitId,
       ...(!retailWholesaleEnabled ? {
-        basePriceKgs: showBasePriceField ? submitMoneyToKgs(values.basePriceKgs) ?? null : undefined,
-        storePriceKgs: submitMoneyToKgs(values.storePriceKgs),
+        ...(!productId || formDirtyFields.basePriceKgs ? { basePriceKgs: showBasePriceField ? submitMoneyToKgs(values.basePriceKgs) ?? null : undefined } : {}),
+        ...(!productId || formDirtyFields.storePriceKgs ? { storePriceKgs: submitMoneyToKgs(values.storePriceKgs) } : {}),
       } : {}),
       ...(retailWholesaleEnabled ? {
-        retailPriceKgs: submitMoneyToKgs(values.retailPriceKgs) ?? null,
-        wholesalePriceKgs: submitMoneyToKgs(values.wholesalePriceKgs) ?? null,
+        ...(!productId || formDirtyFields.retailPriceKgs ? { retailPriceKgs: submitMoneyToKgs(values.retailPriceKgs) ?? null } : {}),
+        ...(!productId || formDirtyFields.wholesalePriceKgs ? { wholesalePriceKgs: submitMoneyToKgs(values.wholesalePriceKgs) ?? null } : {}),
       } : {}),
       purchasePriceKgs: submitMoneyToKgs(values.purchasePriceKgs),
       avgCostKgs: submitMoneyToKgs(values.avgCostKgs),

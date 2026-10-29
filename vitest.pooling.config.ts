@@ -12,6 +12,9 @@ export default mergeConfig(base, defineConfig({
       "tests/integration/large-transfer.test.ts",
       "tests/integration/store-product-visibility.test.ts",
       "tests/integration/product-price-types.test.ts",
+      "tests/integration/price-books.test.ts",
+      "tests/integration/catalog-pricing-regressions.test.ts",
+      "tests/integration/transfer-line-context.test.ts",
     ],
   },
 }));

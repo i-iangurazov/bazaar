@@ -86,6 +86,7 @@ import {
   UserIcon,
   ChevronDownIcon,
   TagIcon,
+  PriceIcon,
   GridViewIcon,
 } from "@/components/icons";
 import { cn } from "@/lib/utils";
@@ -394,6 +395,10 @@ export const AppShell = ({ children, user, impersonation }: AppShellProps) => {
             href: "/settings/printing",
             icon: PrintIcon,
             requiredPermission: "managePrinting",
+          },
+          {
+            key: "priceLists", href: "/settings/price-lists", icon: PriceIcon,
+            adminOnly: true, requiredPermission: "manageSettings",
           },
           {
             key: "storeGroups",

@@ -1596,6 +1596,7 @@ const PosSellPage = () => {
 
   useSse({
     "assortment.updated": () => { void trpcUtils.products.invalidate(); },
+    "pricing.updated": () => { void trpcUtils.products.invalidate(); },
     "inventory.updated": () => {
       void Promise.all([catalogProductsQuery.refetch()]);
     },

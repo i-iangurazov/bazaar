@@ -157,7 +157,11 @@ describe("product movement journal source", () => {
     expect(transferWorkflowSource).toContain("sourceStoreId: fromStoreId");
     expect(transferWorkflowSource).toContain("destinationStoreId: toStoreId");
     expect(writeOffWorkflowSource).toContain("if (!isEditMode)");
-    expect(transferWorkflowSource.match(/if \(!isEditMode\)/g)).toHaveLength(2);
+    // New-document recovery now guards by mode before loading a saved draft.
+    // Source/destination changes preserve lines and validate them instead of clearing them.
+    expect(transferWorkflowSource).toContain("isEditMode || !draftIdentity");
+    expect(transferWorkflowSource).toContain("useTransferLineContext");
+    expect(transferWorkflowSource).not.toContain("if (!isEditMode) {\n      setLines([])");
     await expect(
       access(
         path.join(process.cwd(), "src/components/inventory/product-movement-document-editor.tsx"),

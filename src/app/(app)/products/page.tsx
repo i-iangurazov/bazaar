@@ -1409,6 +1409,7 @@ const ProductsPage = () => {
 
   useSse({
     "assortment.updated": () => { void trpcUtils.products.invalidate(); },
+    "pricing.updated": () => { void trpcUtils.products.invalidate(); },
     "inventory.updated": () => {
       void trpcUtils.products.bootstrap.invalidate();
     },
