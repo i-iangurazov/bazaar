@@ -180,6 +180,15 @@ export async function prepareRollback(
       JSON.stringify(manifest, null, 2) + "\n",
       { flag: "wx" },
     );
+    await writeFile(
+      resolve(destination, "PULL_REQUEST.md"),
+      `Restore Bazaar application behavior to ${plan.base} after release ${plan.release}.\n\n` +
+        `Keep the five reviewed migration files, their strict production history approvals and private-data Git exclusions. ` +
+        `Do not remove applied schema or restore a pre-release database: sales, payments, stock operations, shared-price history and later edits must remain.\n\n` +
+        `Preparation verified that the binary patch reconstructs tree ${candidate}; all other tracked files match the baseline. ` +
+        `Run the rollback PR checks before merging. Local cross-version runtime and backup rehearsal: docs/deployment-rollback-verification-20261029.json in the original release.\n`,
+      { flag: "wx" },
+    );
     return manifest;
   } finally {
     await rm(index, { force: true });
