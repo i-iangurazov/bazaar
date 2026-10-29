@@ -8,6 +8,16 @@ import { useSession } from "next-auth/react";
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 
+import { useSse } from "@/lib/useSse";
+import { Modal } from "@/components/ui/modal";
+import {
+  readTransferDraft,
+  writeTransferDraft,
+  removeTransferDraft,
+  type TransferDraftLine,
+} from "./transfer-draft-storage";
+import { useTransferLineContext } from "./use-transfer-line-context";
+
 import { PageHeader } from "@/components/page-header";
 import { PageLoading } from "@/components/page-loading";
 import {
@@ -40,21 +50,11 @@ import { trpc } from "@/lib/trpc";
 import { translateError } from "@/lib/translateError";
 import { cn } from "@/lib/utils";
 
-type TransferLine = {
-  key: string;
-  productId: string;
-  variantId: string | null;
-  productName: string;
-  variantName: string | null;
-  sku: string;
-  barcode: string | null;
-  imageUrl: string | null;
-  unitLabel: string;
-  sourceStock: number;
-  destinationStock: number;
-  unitCostKgs: number | null;
-  quantityInput: string;
+type TransferLine = TransferDraftLine & {
   duplicateHint?: boolean;
+  unavailable?: boolean;
+  destinationInAssortment?: boolean;
+  destinationRequiresAssortment?: boolean;
 };
 
 type TransferInputViewport = "desktop" | "mobile";
@@ -136,7 +136,101 @@ export const InventoryTransfersPage = ({
   const transferInputRefs = useRef(new Map<string, HTMLInputElement>());
   const searchInputRef = useRef<HTMLInputElement>(null);
   const handledPrefillRef = useRef("");
-  const postingOperationRef = useRef<{ signature: string; key: string } | null>(null);
+  const postingOperationRef = useRef<{ signature: string; key: string; pending?: boolean } | null>(
+    null,
+  );
+  const completedRef = useRef(false);
+  const uncertainRef = useRef(false);
+  const [postingUncertain, setPostingUncertain] = useState(false);
+  const postingInFlightRef = useRef(false);
+  const selectedStoresRef = useRef({ fromStoreId, toStoreId });
+  selectedStoresRef.current = { fromStoreId, toStoreId };
+  const loadedDraftIdentity = useRef("");
+  const [draftReady, setDraftReady] = useState(isEditMode);
+  const [draftNotice, setDraftNotice] = useState("");
+  const [storageWarning, setStorageWarning] = useState(false);
+  const [clearRequested, setClearRequested] = useState(false);
+  const draftIdentity = useMemo(
+    () =>
+      session?.user?.id && session.user.organizationId
+        ? { userId: session.user.id, organizationId: session.user.organizationId }
+        : null,
+    [session?.user?.id, session?.user?.organizationId],
+  );
+
+  useEffect(() => {
+    if (isEditMode || !draftIdentity || !canManageStock || !storesQuery.isSuccess) return;
+    const identityKey = JSON.stringify(draftIdentity);
+    if (loadedDraftIdentity.current === identityKey) return;
+    loadedDraftIdentity.current = identityKey;
+    const stored = readTransferDraft(draftIdentity);
+    // Explicit deep links start their own workflow instead of restoring unrelated work.
+    if (stored && !requestedProductId && !initialFromStoreId && !initialToStoreId) {
+      if (
+        stores.some((store) => store.id === stored.fromStoreId) &&
+        stores.some((store) => store.id === stored.toStoreId)
+      ) {
+        setFromStoreId(stored.fromStoreId);
+        setToStoreId(stored.toStoreId);
+        setLines(stored.lines);
+        setNote(stored.note);
+        setSearch(stored.search);
+        postingOperationRef.current = stored.operation;
+        uncertainRef.current = Boolean(stored.operation && stored.operation.pending !== false);
+        postingInFlightRef.current = uncertainRef.current;
+        setPostingUncertain(uncertainRef.current);
+        setDraftNotice(t("transferDraftRestored"));
+      } else {
+        removeTransferDraft(draftIdentity);
+        setDraftNotice(t("transferDraftAccessChanged"));
+      }
+    }
+    setDraftReady(true);
+  }, [
+    isEditMode,
+    draftIdentity,
+    canManageStock,
+    storesQuery.isSuccess,
+    stores,
+    requestedProductId,
+    initialFromStoreId,
+    initialToStoreId,
+    t,
+  ]);
+
+  const persistDraft = useCallback(() => {
+    if (
+      isEditMode ||
+      !draftReady ||
+      !draftIdentity ||
+      completedRef.current ||
+      !fromStoreId ||
+      !toStoreId
+    )
+      return true;
+    if (!lines.length && !note.trim()) {
+      removeTransferDraft(draftIdentity);
+      return true;
+    }
+    return writeTransferDraft(draftIdentity, {
+      fromStoreId,
+      toStoreId,
+      note,
+      search,
+      lines,
+      operation: postingOperationRef.current,
+    });
+  }, [isEditMode, draftReady, draftIdentity, fromStoreId, toStoreId, note, search, lines]);
+  useEffect(() => {
+    setStorageWarning(!persistDraft());
+  }, [persistDraft]);
+  useEffect(() => {
+    const flush = () => {
+      persistDraft();
+    };
+    window.addEventListener("pagehide", flush);
+    return () => window.removeEventListener("pagehide", flush);
+  }, [persistDraft]);
 
   const fromStore = stores.find((store) => store.id === fromStoreId) ?? null;
   const toStore = stores.find((store) => store.id === toStoreId) ?? null;
@@ -161,12 +255,57 @@ export const InventoryTransfersPage = ({
     {
       enabled: canSearch,
       keepPreviousData: false,
+      staleTime: 0,
+      refetchOnWindowFocus: "always",
     },
   );
   type SearchResult = NonNullable<typeof searchQuery.data>[number];
+  const selectedLineIds = useMemo(
+    () => lines.map(({ productId, variantId }) => ({ productId, variantId })),
+    [lines],
+  );
+  const lineContextQuery = useTransferLineContext(
+    { fromStoreId, toStoreId, lines: selectedLineIds },
+    !isEditMode && draftReady && canSearch && selectedLineIds.length > 0,
+  );
+  useEffect(() => {
+    if (!lineContextQuery.data || isEditMode) return;
+    const contexts = new Map(lineContextQuery.data.map((item) => [item.key, item]));
+    setLines((current) => {
+      const next = current.map((line) => {
+        const context = contexts.get(line.key);
+        if (!context) return line;
+        if (!context.available) return { ...line, unavailable: true };
+        return {
+          ...line,
+          unavailable: false,
+          sourceStock: context.sourceStock,
+          destinationStock: context.destinationStock,
+          productName: context.productName,
+          variantName: context.variantName,
+          quantityPrecision: context.quantityPrecision,
+          destinationInAssortment: context.destinationInAssortment,
+          destinationRequiresAssortment: context.destinationRequiresAssortment,
+          unitCostKgs: context.unitCostKgs,
+        };
+      });
+      return JSON.stringify(next) === JSON.stringify(current) ? current : next;
+    });
+  }, [lineContextQuery.data, isEditMode]);
+  const { refetch: refetchLineContext } = lineContextQuery;
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const refreshTransferData = useCallback(() => {
+    clearTimeout(refreshTimerRef.current);
+    refreshTimerRef.current = setTimeout(() => {
+      void trpcUtils.inventory.searchProducts.invalidate();
+      refetchLineContext();
+    }, 150);
+  }, [trpcUtils, refetchLineContext]);
+  useEffect(() => () => clearTimeout(refreshTimerRef.current), []);
+  useSse({ "assortment.updated": refreshTransferData, "inventory.updated": refreshTransferData });
 
   useEffect(() => {
-    if (!stores.length || isEditMode) {
+    if (!stores.length || isEditMode || !draftReady) {
       return;
     }
     if (!fromStoreId) {
@@ -180,7 +319,15 @@ export const InventoryTransfersPage = ({
       );
       setToStoreId(initialToStoreId ? (queryStore?.id ?? "") : (fallbackStore?.id ?? ""));
     }
-  }, [fromStoreId, initialFromStoreId, initialToStoreId, isEditMode, stores, toStoreId]);
+  }, [
+    fromStoreId,
+    initialFromStoreId,
+    initialToStoreId,
+    isEditMode,
+    stores,
+    toStoreId,
+    draftReady,
+  ]);
 
   useEffect(() => {
     if (
@@ -279,15 +426,12 @@ export const InventoryTransfersPage = ({
   }, []);
 
   const handleFromStoreChange = (nextStoreId: string) => {
-    if (nextStoreId === fromStoreId) {
+    if (postingInFlightRef.current || nextStoreId === fromStoreId) {
       return;
     }
     setFromStoreId(nextStoreId);
-    if (nextStoreId === toStoreId) {
+    if (postingInFlightRef.current || nextStoreId === toStoreId) {
       setToStoreId(stores.find((store) => store.id !== nextStoreId)?.id ?? "");
-    }
-    if (!isEditMode) {
-      setLines([]);
     }
     setSearch("");
   };
@@ -297,9 +441,6 @@ export const InventoryTransfersPage = ({
       return;
     }
     setToStoreId(nextStoreId);
-    if (!isEditMode) {
-      setLines([]);
-    }
   };
 
   const addSearchResult = useCallback(
@@ -308,6 +449,7 @@ export const InventoryTransfersPage = ({
       mode: "manual" | "scan",
       options?: { selectQuantity?: boolean },
     ) => {
+      if (postingInFlightRef.current) return;
       if (!toStoreId) {
         toast({ variant: "error", description: t("transferValidationNoDestinationStore") });
         return;
@@ -329,6 +471,12 @@ export const InventoryTransfersPage = ({
           (item) => lineKey(item.product.id, item.snapshot.variantId) === key,
         );
         destinationStock = destination?.snapshot.onHand ?? 0;
+        if (
+          selectedStoresRef.current.fromStoreId !== fromStoreId ||
+          selectedStoresRef.current.toStoreId !== toStoreId ||
+          postingInFlightRef.current
+        )
+          return;
       } catch (error) {
         toast({
           variant: "error",
@@ -367,6 +515,7 @@ export const InventoryTransfersPage = ({
             barcode: enableBarcode ? result.primaryBarcode : null,
             imageUrl: getPreviewUrl(result),
             unitLabel: getBaseUnitLabel(result),
+            quantityPrecision: result.product.baseUnit.quantityPrecision,
             sourceStock: result.snapshot.onHand,
             destinationStock,
             unitCostKgs: result.unitCostKgs,
@@ -504,10 +653,12 @@ export const InventoryTransfersPage = ({
   };
 
   const updateLine = (key: string, patch: Partial<TransferLine>) => {
+    if (postingInFlightRef.current) return;
     setLines((current) => current.map((line) => (line.key === key ? { ...line, ...patch } : line)));
   };
 
   const removeLine = (key: string) => {
+    if (postingInFlightRef.current) return;
     setLines((current) => current.filter((line) => line.key !== key));
   };
 
@@ -515,7 +666,8 @@ export const InventoryTransfersPage = ({
     () =>
       lines.map((line) => {
         const quantity = parseDecimalInput(line.quantityInput);
-        const quantityValid = isValidQuantity(quantity) && quantity > 0;
+        const quantityValid =
+          isValidQuantity(quantity, line.quantityPrecision ?? 3) && quantity > 0;
         const lineTotal =
           quantityValid && typeof line.unitCostKgs === "number"
             ? quantity * line.unitCostKgs
@@ -560,25 +712,59 @@ export const InventoryTransfersPage = ({
         ? t("transferValidationSameStore")
         : !lines.length
           ? t("transferValidationNoProducts")
-          : invalidQuantity
-            ? t("transferValidationInvalidQuantity")
-            : "";
+          : !isEditMode && lineContextQuery.isError
+            ? t("transferCheckFailed")
+            : !isEditMode && (!lineContextQuery.data || lineContextQuery.isFetching)
+              ? t("transferCheckingLines")
+              : lines.some((line) => line.unavailable)
+                ? t("transferUnavailableLine")
+                : invalidQuantity
+                  ? t("transferValidationInvalidQuantity")
+                  : "";
 
+  const finishPostedTransfer = async (transferId: string) => {
+    postingInFlightRef.current = false;
+    uncertainRef.current = false;
+    setPostingUncertain(false);
+    completedRef.current = true;
+    if (draftIdentity) removeTransferDraft(draftIdentity);
+    setPostingError(null);
+    await trpcUtils.products.invalidate();
+    await trpcUtils.inventory.list.invalidate();
+    await trpcUtils.inventory.searchProducts.invalidate();
+    await trpcUtils.inventory.productMovements.invalidate();
+    await trpcUtils.inventory.productMovementDocument.invalidate();
+    toast({ variant: "success", description: t("transferSuccess") });
+    router.push(`/inventory/movements/${encodeURIComponent(`TRANSFER:TRANSFER:${transferId}`)}`);
+  };
   const transferMutation = trpc.inventory.transfer.useMutation({
+    onSuccess: (result) => finishPostedTransfer(result.transferId),
+    onError: (error) => {
+      const unknown =
+        uncertainRef.current || !error.data || error.data.code === "INTERNAL_SERVER_ERROR";
+      uncertainRef.current = unknown;
+      postingInFlightRef.current = unknown;
+      setPostingUncertain(unknown);
+      if (postingOperationRef.current) postingOperationRef.current.pending = unknown;
+      persistDraft();
+      setPostingError(unknown ? t("transferPostFailed") : translateError(tErrors, error));
+    },
+  });
+  const reconcileMutation = trpc.inventory.reconcileTransferAttempt.useMutation({
     onSuccess: async (result) => {
+      if (result.status === "POSTED" && result.transferId)
+        return finishPostedTransfer(result.transferId);
+      postingInFlightRef.current = false;
+      uncertainRef.current = false;
+      postingOperationRef.current = null;
+      setPostingUncertain(false);
       setPostingError(null);
-      await trpcUtils.inventory.list.invalidate();
-      await trpcUtils.inventory.searchProducts.invalidate();
-      await trpcUtils.inventory.productMovements.invalidate();
-      await trpcUtils.inventory.productMovementDocument.invalidate();
-      toast({ variant: "success", description: t("transferSuccess") });
-      router.push(
-        `/inventory/movements/${encodeURIComponent(`TRANSFER:TRANSFER:${result.transferId}`)}`,
-      );
+      persistDraft();
+      refreshTransferData();
+      toast({ variant: "success", description: t("transferAttemptNotPosted") });
     },
     onError: (error) => {
-      setPostingError(!error.data || error.data.code === "INTERNAL_SERVER_ERROR"
-        ? t("transferPostFailed") : translateError(tErrors, error));
+      setPostingError(translateError(tErrors, error));
     },
   });
   const editMutation = trpc.inventory.editProductMovementDocument.useMutation({
@@ -596,8 +782,12 @@ export const InventoryTransfersPage = ({
       );
     },
     onError: (error) => {
-      setPostingError(!error.data || error.data.code === "INTERNAL_SERVER_ERROR"
-        ? t("transferPostFailed") : translateError(tErrors, error));
+      postingInFlightRef.current = false;
+      setPostingError(
+        !error.data || error.data.code === "INTERNAL_SERVER_ERROR"
+          ? t("transferPostFailed")
+          : translateError(tErrors, error),
+      );
     },
   });
 
@@ -621,14 +811,21 @@ export const InventoryTransfersPage = ({
       fromStoreId,
       toStoreId,
       note: note.trim() || null,
-      lines: isEditMode ? normalizedLines : normalizedLines.map((line) => ({
-        productId: line.productId, variantId: line.variantId, qty: line.quantity,
-      })),
+      lines: isEditMode
+        ? normalizedLines
+        : normalizedLines.map((line) => ({
+            productId: line.productId,
+            variantId: line.variantId,
+            qty: line.quantity,
+          })),
     });
     if (postingOperationRef.current?.signature !== signature) {
       postingOperationRef.current = { signature, key: crypto.randomUUID() };
     }
+    postingOperationRef.current.pending = true;
     const idempotencyKey = postingOperationRef.current.key;
+    setStorageWarning(!persistDraft());
+    postingInFlightRef.current = true;
 
     if (isEditMode && editDocumentKey) {
       editMutation.mutate({
@@ -661,11 +858,16 @@ export const InventoryTransfersPage = ({
   const pageTitle = isEditMode ? t("transferEditTitle") : t("transferStock");
   const pageSubtitle = isEditMode ? t("transferEditSubtitle") : t("transferStockSubtitle");
   const backHref = isEditMode ? editBackHref : "/inventory";
-  const saving = transferMutation.isLoading || editMutation.isLoading;
+  const saving =
+    transferMutation.isLoading || editMutation.isLoading || reconcileMutation.isLoading;
+  const fieldsLocked = saving || postingUncertain;
   const submitLabel = isEditMode ? t("saveChanges") : t("transferPost");
   const submitShortLabel = isEditMode ? t("saveChangesShort") : t("transferPostShort");
 
-  if (sessionStatus === "loading") {
+  if (
+    sessionStatus === "loading" ||
+    (canManageStock && !isEditMode && !draftReady && !storesQuery.isError)
+  ) {
     return <PageLoading />;
   }
 
@@ -749,6 +951,80 @@ export const InventoryTransfersPage = ({
         actionClassName="hidden md:flex"
       />
 
+      {!isEditMode && postingUncertain ? (
+        <div
+          role="alert"
+          className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-md border border-warning/30 bg-warning/10 p-3 text-sm"
+        >
+          <p>{t("transferPendingLocked")}</p>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={saving}
+            onClick={() => {
+              if (postingOperationRef.current)
+                reconcileMutation.mutate({
+                  fromStoreId,
+                  toStoreId,
+                  idempotencyKey: postingOperationRef.current.key,
+                });
+            }}
+          >
+            {reconcileMutation.isLoading ? tCommon("loading") : t("transferCheckAttempt")}
+          </Button>
+        </div>
+      ) : null}
+      {!isEditMode && (lines.length > 0 || draftNotice || storageWarning) ? (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/40 p-3 text-sm">
+          <p role="status" className={storageWarning ? "text-warning" : "text-muted-foreground"}>
+            {storageWarning ? t("transferDraftSaveFailed") : draftNotice || t("transferDraftSaved")}
+          </p>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={fieldsLocked}
+            onClick={() => setClearRequested(true)}
+          >
+            <DeleteIcon className="h-4 w-4" aria-hidden />
+            {t("transferClearDraft")}
+          </Button>
+        </div>
+      ) : null}
+      {!isEditMode && lineContextQuery.isError ? (
+        <div role="alert" className="mb-4 rounded-md border border-danger/30 p-3 text-sm">
+          {t("transferCheckFailed")}
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={() => lineContextQuery.refetch()}
+          >
+            {tCommon("tryAgain")}
+          </Button>
+        </div>
+      ) : null}
+      <Modal open={clearRequested} onOpenChange={setClearRequested} title={t("transferClearDraft")}>
+        <p className="text-sm text-muted-foreground">{t("transferClearDraftConfirm")}</p>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="secondary" onClick={() => setClearRequested(false)}>
+            {tCommon("cancel")}
+          </Button>
+          <Button
+            onClick={() => {
+              setLines([]);
+              setNote("");
+              setSearch("");
+              setDraftNotice("");
+              postingOperationRef.current = null;
+              if (draftIdentity) removeTransferDraft(draftIdentity);
+              setClearRequested(false);
+            }}
+          >
+            {t("transferClearDraft")}
+          </Button>
+        </div>
+      </Modal>
       <div className="space-y-6">
         <section className="bazaar-doc-surface p-4">
           <div className="mb-4 flex items-center justify-between gap-3">
@@ -763,7 +1039,11 @@ export const InventoryTransfersPage = ({
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="transfer-source">{t("transferSourceStore")}</Label>
-              <Select value={fromStoreId} onValueChange={handleFromStoreChange}>
+              <Select
+                disabled={fieldsLocked}
+                value={fromStoreId}
+                onValueChange={handleFromStoreChange}
+              >
                 <SelectTrigger id="transfer-source">
                   <SelectValue placeholder={tCommon("selectStore")} />
                 </SelectTrigger>
@@ -778,7 +1058,7 @@ export const InventoryTransfersPage = ({
             </div>
             <div className="space-y-2">
               <Label htmlFor="transfer-destination">{t("transferDestinationStore")}</Label>
-              <Select value={toStoreId} onValueChange={handleToStoreChange}>
+              <Select disabled={fieldsLocked} value={toStoreId} onValueChange={handleToStoreChange}>
                 <SelectTrigger id="transfer-destination">
                   <SelectValue placeholder={tCommon("selectStore")} />
                 </SelectTrigger>
@@ -795,6 +1075,7 @@ export const InventoryTransfersPage = ({
               <Label htmlFor="transfer-note">{t("transferNote")}</Label>
               <Textarea
                 id="transfer-note"
+                disabled={fieldsLocked}
                 value={note}
                 onChange={(event) => setNote(event.target.value)}
                 placeholder={t("notePlaceholder")}
@@ -826,9 +1107,7 @@ export const InventoryTransfersPage = ({
                 onKeyDown={handleSearchKeyDown}
                 placeholder={t("transferSearchPlaceholderShort")}
                 aria-label={t("transferSearchPlaceholderShort")}
-                disabled={!canSearch}
-
-
+                disabled={!canSearch || fieldsLocked}
               />
             </div>
             <div className="bazaar-doc-search-list">
@@ -847,7 +1126,7 @@ export const InventoryTransfersPage = ({
                         type="button"
                         className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left text-sm disabled:cursor-wait disabled:opacity-60"
                         onClick={() => void addSearchResult(result, "manual")}
-                        disabled={!canSearch}
+                        disabled={!canSearch || fieldsLocked}
                       >
                         <span className="bazaar-doc-thumb">
                           {getPreviewUrl(result) ? (
@@ -955,6 +1234,14 @@ export const InventoryTransfersPage = ({
                             {t("transferDestinationStock")}:{" "}
                             {formatNumber(line.destinationStock, locale)}
                           </p>
+                          {line.unavailable ? (
+                            <p className="text-xs text-danger">{t("transferUnavailableLine")}</p>
+                          ) : null}
+                          {line.destinationRequiresAssortment ? (
+                            <p className="text-xs text-warning">
+                              {t("transferDestinationAssortmentHint")}
+                            </p>
+                          ) : null}
                           {line.duplicateHint ? (
                             <p className="whitespace-normal break-words text-xs leading-snug text-warning">
                               {t("transferDuplicateHint")}
@@ -980,6 +1267,7 @@ export const InventoryTransfersPage = ({
                           min={1}
                           step={0.001}
                           data-transfer-input="quantity"
+                          disabled={fieldsLocked}
                           className={cn("h-8 px-2", !metric?.quantityValid && "border-danger/60")}
                         />
                       </div>
@@ -1028,6 +1316,7 @@ export const InventoryTransfersPage = ({
                         size="icon"
                         className="self-start lg:h-8 lg:w-8 lg:self-center lg:justify-self-end"
                         aria-label={t("transferRemoveLine")}
+                        disabled={fieldsLocked}
                         onClick={() => removeLine(line.key)}
                       >
                         <DeleteIcon className="h-4 w-4" aria-hidden />
@@ -1047,7 +1336,14 @@ export const InventoryTransfersPage = ({
 
         <section className="hidden md:block">
           <div className="bazaar-doc-summary">
-            {postingError ? <p role="alert" className="mb-3 rounded-md border border-danger/30 bg-danger/5 p-3 text-sm text-danger">{postingError}</p> : null}
+            {postingError ? (
+              <p
+                role="alert"
+                className="mb-3 rounded-md border border-danger/30 bg-danger/5 p-3 text-sm text-danger"
+              >
+                {postingError}
+              </p>
+            ) : null}
             <div className="flex flex-wrap items-center justify-between gap-4">
               <h3 className="text-base font-semibold text-foreground">
                 {t("transferSummaryTitle")}
@@ -1118,7 +1414,14 @@ export const InventoryTransfersPage = ({
 
       <div className="bazaar-doc-mobile-actions bottom-[calc(4.25rem+env(safe-area-inset-bottom))] md:hidden">
         <div className="mx-auto max-w-screen-sm space-y-2 pb-[env(safe-area-inset-bottom)]">
-          {postingError ? <p role="alert" className="rounded-md border border-danger/30 bg-danger/5 p-2 text-xs text-danger">{postingError}</p> : null}
+          {postingError ? (
+            <p
+              role="alert"
+              className="rounded-md border border-danger/30 bg-danger/5 p-2 text-xs text-danger"
+            >
+              {postingError}
+            </p>
+          ) : null}
           <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
             <div className="min-w-0">
               <span className="font-semibold text-foreground">

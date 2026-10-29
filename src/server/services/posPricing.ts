@@ -32,7 +32,7 @@ export async function changePosPriceMode(input: { saleId: string; mode: StorePri
       }
       const price = priceByKey.get(`${row.productId}:${row.variantKey}`);
       const extra = extrasByKey.get(`${row.productId}:${row.variantKey}`);
-      const selected = resolveStoreSellingPrice({enabled: true, mode: input.mode, standard: price?.priceKgs ?? row.product.basePriceKgs ?? new Prisma.Decimal(0), retail: extra?.retailPriceKgs, wholesale: extra?.wholesalePriceKgs});
+      const selected = resolveStoreSellingPrice({enabled: true, mode: input.mode, standard: price?.priceKgs ?? row.product.basePriceKgs ?? new Prisma.Decimal(0), preferStandard: price?.priceKgs != null || (!row.variantId && row.product.basePriceKgs != null), retail: extra?.retailPriceKgs, wholesale: extra?.wholesalePriceKgs});
       const discount = price?.discountType === "PERCENTAGE" && price.discountPercentage ? {type: "PERCENTAGE" as const, percentage: price.discountPercentage, startsAt: price.discountStartsAt, endsAt: price.discountEndsAt} : null;
       const effective = getEffectiveProductPrice({basePrice: selected.price, discount, now: new Date(), currency: "KGS"});
       return {id: row.id, qty: row.qty, manual: false, unitPriceKgs: effective.effectivePrice, baseUnitPriceKgs: effective.basePrice, lineTotalKgs: effective.effectivePrice.mul(row.qty).toDecimalPlaces(2), source: selected.source, discountType: effective.hasActiveDiscount ? "PERCENTAGE" as const : null, discountPercentage: effective.hasActiveDiscount ? effective.discountPercentage : null, discountAmountKgs: effective.hasActiveDiscount ? effective.basePrice.minus(effective.effectivePrice) : null};

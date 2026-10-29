@@ -1,0 +1,72 @@
+{
+  "date": "2026-10-29",
+  "branch": "codex/playground",
+  "base": "337d56e",
+  "package": "1 of catalog/pricing delivery",
+  "overallComplete": false,
+  "mergeReady": false,
+  "mainChanged": false,
+  "productionDeployed": false,
+  "customerDatabaseUsed": false,
+  "isolation": {
+    "postgresPort": 55448,
+    "redisPort": 56398,
+    "qaAppPort": 3124,
+    "ciDatabase": "bazaar_hardening_ci",
+    "qaDatabase": "bazaar_hardening_agent4_platform"
+  },
+  "verification": {
+    "before-regressions": {
+      "numTotalTests": 3,
+      "numPassedTests": 1,
+      "numFailedTests": 2,
+      "numPendingTests": 0,
+      "success": false
+    },
+    "prices-quantities": {
+      "numTotalTests": 18,
+      "numPassedTests": 18,
+      "numFailedTests": 0,
+      "numPendingTests": 0,
+      "success": true
+    },
+    "stock-catalog-regressions": {
+      "numTotalTests": 57,
+      "numPassedTests": 57,
+      "numFailedTests": 0,
+      "numPendingTests": 0,
+      "success": true
+    },
+    "package-one": {
+      "numTotalTests": 14,
+      "numPassedTests": 14,
+      "numFailedTests": 0,
+      "numPendingTests": 0,
+      "success": true
+    },
+    "productionBrowser": {
+      "checks": [
+        "Reload restores quantities, note and stores",
+        "Changing destination preserves lines and validates fresh balances",
+        "Changing source retains input and blocks unavailable products",
+        "Product created through the authenticated API in another tab appears via SSE",
+        "Validation network error preserves the document and retries successfully",
+        "Desktop/mobile inspection and no horizontal page overflow",
+        "Lost response + reload + replay uses the same idempotency key, posts once, clears draft",
+        "Unknown result locks edits; server reconciliation closes an unposted attempt and blocks late posting",
+        "Inline retail editor preserves legacy 325 over wholesale 300 and saves/reloads 350",
+        "Fractional stock saves through the product table and product card using real editors",
+        "Shared product, archive and barcode guide is available in RU/KG/EN"
+      ],
+      "errors": [],
+      "organizationId": "cmvtgxask0000e6hh1c4cg7nt"
+    },
+    "productionBuild": "passed in isolated source copy; standard next start production runtime",
+    "recovery": {
+      "numTotalTests": 6,
+      "numPassedTests": 6,
+      "numFailedTests": 0,
+      "success": true
+    }
+  }
+}

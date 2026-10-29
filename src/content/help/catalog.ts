@@ -1,5 +1,6 @@
 import { helpText as t } from "./ui";
 import { loyaltyGuides } from "./loyalty";
+import { sharedCatalogGuides } from "./shared-catalog";
 import type {
   HelpAnnotation,
   HelpCategory,
@@ -55,9 +56,9 @@ const productPriceTypesStep = step(
   ),
   {
     note: t(
-      "Пустое поле означает, что цена не задана; 0 — настоящая нулевая цена. Если выбранная цена не задана, касса использует другую, а если обе пустые — обычную цену продажи. Выключение функции сохраняет введённые цены.",
-      "Бош талаа баа коюлбаганын билдирет; 0 — чыныгы нөл баа. Тандалган баа бош болсо, касса башкасын, экөө тең бош болсо кадимки сатуу баасын колдонот. Функцияны өчүргөндө киргизилген баалар сакталат.",
-      "An empty field means no price is set; 0 is a real zero price. If the selected price is empty, checkout uses the other price; if both are empty, it uses the regular sale price. Turning the feature off keeps saved prices.",
+      "Пустое поле означает отсутствие цены; 0 — настоящая нулевая цена. В рознице собственная обычная цена не подменяется оптовой. При отсутствии розничной и собственной обычной цены возможна подстановка оптовой; в оптовом режиме сначала применяется оптовая цена. Выключение функции сохраняет введённые цены.",
+      "Бош талаа баа коюлбаганын билдирет; 0 — чыныгы нөл баа. Чекене режимде өзүнүн кадимки баасы дүң баага алмаштырылбайт. Чекене жана өзүнүн кадимки баасы жок болсо, дүң баа колдонулушу мүмкүн; дүң режимде ал биринчи колдонулат. Функция өчүрүлгөндө баалар сакталат.",
+      "An empty field means no price is set; 0 is a real zero price. Retail mode preserves an explicit regular price before a wholesale fallback. Without retail or an explicit regular price, wholesale can be used; wholesale mode prefers the wholesale price. Turning the feature off keeps saved prices.",
     ),
   },
 );
@@ -198,6 +199,7 @@ export const helpCategories: HelpCategory[] = [
 ];
 
 export const helpGuides: HelpGuide[] = [
+  ...sharedCatalogGuides,
   ...loyaltyGuides,
   guide({
     slug: "add-product",
