@@ -2136,7 +2136,11 @@
         "lastGenerated": "Последняя генерация"
       },
       "never": "Пока не было",
-      "providerMissing": "OpenAI API key не задан на сервере. Генерация будет недоступна, пока ключ не добавят."
+      "processingDetails": "Как обрабатывается фото",
+      "deepseekAnalysis": "DeepSeek анализирует исходное фото и отмечает детали товара, которые нужно сохранить.",
+      "presetAnalysis": "Для подготовки используются выбранные настройки фона, кадрирования и освещения.",
+      "imageRetouching": "Ретушь выполняет отдельная модель изображений OpenAI. Проверьте результат перед сохранением: оригинал остаётся доступен.",
+      "providerMissing": "Обработка фотографий ещё не подключена. Обратитесь к администратору Bazaar."
     },
     "input": {
       "title": "Исходное изображение",
@@ -2160,14 +2164,14 @@
       "productLabel": "Товар для привязки",
       "productPlaceholder": "Найдите товар по SKU или названию",
       "clearProduct": "Очистить",
-      "reviewNote": "V1 не публикует результат автоматически. Сначала проверьте изображение, затем сохраните его в галерею товара.",
+      "reviewNote": "Проверьте изображение перед сохранением в галерею товара. Оригинал остаётся доступен.",
       "sourceUploadSuccess": "Исходное изображение загружено.",
       "preparing": "Подготавливаем фото…",
       "uploading": "Загружаем фото…"
     },
     "presets": {
       "title": "Пресеты результата",
-      "subtitle": "Только контролируемые каталожные настройки. Произвольный prompt для пользователя в V1 не доступен.",
+      "subtitle": "Выберите фон и подачу товара. Форма, цвет и детали исходного товара должны сохраниться.",
       "backgroundLabel": "Фон",
       "outputLabel": "Формат",
       "background": {
@@ -2234,7 +2238,7 @@
       }
     },
     "jobQueuedSuccess": "Задача поставлена в очередь на обработку.",
-    "jobReused": "Похожая задача уже выполняется. Открыт существующий job.",
+    "jobReused": "Это фото уже обрабатывается. Открыта текущая задача.",
     "jobRetrySuccess": "Повторная генерация поставлена в очередь.",
     "saveSuccess": "Сгенерированное изображение сохранено в карточку товара.",
     "status": {
@@ -5422,16 +5426,22 @@
     "bakaiStoreTemplateInvalid": "Не удалось прочитать шаблон Bakai Store. Проверьте лист и заголовки колонок.",
     "bakaiStoreTemplateInvalidType": "Поддерживаются только файлы Excel (.xlsx, .xls, .xlsm).",
     "bakaiStoreTemplateTooLarge": "Файл шаблона слишком большой.",
-    "productImageStudioNotConfigured": "OpenAI для Product Image Studio не настроен на сервере.",
+    "productImageStudioNotConfigured": "Обработка фотографий ещё не подключена. Обратитесь к администратору Bazaar.",
     "productImageStudioJobNotFound": "Задача Product Image Studio не найдена.",
     "productImageStudioSourceImageMissing": "Исходное изображение не найдено.",
     "productImageStudioSourceImageAccessDenied": "Нет доступа к исходному изображению.",
-    "productImageStudioUnsupportedFileType": "Поддерживаются только JPG, PNG, WEBP, HEIC и HEIF.",
+    "productImageStudioUnsupportedFileType": "Поддерживаются JPG, PNG, WEBP, AVIF, GIF, TIFF, BMP, HEIC и HEIF.",
     "productImageStudioImageTooSmall": "Изображение слишком маленькое для каталожной обработки.",
     "productImageStudioImageUnreadable": "Не удалось прочитать изображение.",
     "productImageStudioInvalidPreset": "Выбран некорректный набор пресетов.",
-    "productImageStudioProviderFailed": "OpenAI не смог обработать изображение.",
-    "productImageStudioProviderOutputMissing": "OpenAI не вернул готовое изображение.",
+    "productImageStudioProviderAccessDenied": "Обработка фото временно недоступна: администратору нужно восстановить подключение сервиса.",
+    "productImageStudioProviderModelUnavailable": "Сервис обработки фото временно недоступен. Сообщите администратору Bazaar.",
+    "productImageStudioProviderQuotaExceeded": "Лимит сервиса обработки фото исчерпан. Обратитесь к администратору Bazaar.",
+    "productImageStudioProviderRateLimited": "Сейчас обрабатывается слишком много фотографий. Подождите немного и повторите попытку.",
+    "productImageStudioProviderTimedOut": "Обработка заняла слишком много времени. Исходник сохранён. Проверьте историю перед повторной попыткой.",
+    "productImageStudioSourceRejected": "Сервис не смог обработать это фото. Попробуйте другой снимок товара.",
+    "productImageStudioProviderFailed": "Не удалось обработать фото. Исходник сохранён — попробуйте ещё раз немного позже.",
+    "productImageStudioProviderOutputMissing": "Сервис обработки не вернул готовое фото. Исходник сохранён — повторите попытку.",
     "productImageStudioOutputPersistFailed": "Не удалось сохранить сгенерированное изображение.",
     "productImageStudioAttachFailed": "Не удалось прикрепить изображение к товару.",
     "productImageStudioRetryUnavailable": "Эту задачу пока нельзя запустить повторно.",

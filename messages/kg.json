@@ -2136,7 +2136,11 @@
         "lastGenerated": "Акыркы генерация"
       },
       "never": "Азырынча жок",
-      "providerMissing": "OpenAI API key серверде көрсөтүлгөн эмес. Ачкыч кошулмайынча генерация жеткиликсиз болот."
+      "processingDetails": "Сүрөт кантип иштетилет",
+      "deepseekAnalysis": "DeepSeek түп нуска сүрөттү талдап, товардын сакталууга тийиш болгон деталдарын аныктайт.",
+      "presetAnalysis": "Иштетүү тандалган фон, кадрлоо жана жарык жөндөөлөрүнө негизделет.",
+      "imageRetouching": "Ретушту OpenAI сүрөт модели аткарат. Сактоодон мурун натыйжаны текшериңиз: түп нуска жеткиликтүү бойдон калат.",
+      "providerMissing": "Сүрөттөрдү иштетүү азырынча туташтырылган эмес. Bazaar администраторуна кайрылыңыз."
     },
     "input": {
       "title": "Баштапкы сүрөт",
@@ -2160,14 +2164,14 @@
       "productLabel": "Байлануучу товар",
       "productPlaceholder": "SKU же аталышы боюнча товар табыңыз",
       "clearProduct": "Тазалоо",
-      "reviewNote": "V1 натыйжаны автоматтык жарыялабайт. Адегенде сүрөттү текшерип, анан товар галереясына сактаңыз.",
+      "reviewNote": "Сүрөттү товар галереясына сактоодон мурун текшериңиз. Түп нуска жеткиликтүү бойдон калат.",
       "sourceUploadSuccess": "Баштапкы сүрөт жүктөлдү.",
       "preparing": "Сүрөт даярдалууда…",
       "uploading": "Сүрөт жүктөлүүдө…"
     },
     "presets": {
       "title": "Натыйжа пресеттери",
-      "subtitle": "Каталог үчүн гана башкарылуучу орнотуулар. V1'де колдонуучу үчүн эркин prompt берилбейт.",
+      "subtitle": "Фонду жана товардын көрүнүшүн тандаңыз. Товардын формасы, түсү жана деталдары сакталууга тийиш.",
       "backgroundLabel": "Фон",
       "outputLabel": "Формат",
       "background": {
@@ -2234,7 +2238,7 @@
       }
     },
     "jobQueuedSuccess": "Тапшырма кезекке коюлду.",
-    "jobReused": "Окшош тапшырма азыр иштеп жатат. Мурдагы job ачылды.",
+    "jobReused": "Бул сүрөт мурунтан иштетилип жатат. Учурдагы тапшырма ачылды.",
     "jobRetrySuccess": "Кайра генерация кезекке коюлду.",
     "saveSuccess": "Генерацияланган сүрөт товар карточкасына сакталды.",
     "status": {
@@ -5421,16 +5425,22 @@
     "bakaiStoreTemplateInvalid": "Bakai Store шаблонун окуу мүмкүн болгон жок. Баракты жана колонка аталыштарын текшериңиз.",
     "bakaiStoreTemplateInvalidType": "Excel файлдары гана колдоого алынат (.xlsx, .xls, .xlsm).",
     "bakaiStoreTemplateTooLarge": "Шаблон файлы өтө чоң.",
-    "productImageStudioNotConfigured": "Product Image Studio үчүн OpenAI серверде жөндөлгөн эмес.",
+    "productImageStudioNotConfigured": "Сүрөттөрдү иштетүү азырынча туташтырылган эмес. Bazaar администраторуна кайрылыңыз.",
     "productImageStudioJobNotFound": "Product Image Studio тапшырмасы табылган жок.",
     "productImageStudioSourceImageMissing": "Баштапкы сүрөт табылган жок.",
     "productImageStudioSourceImageAccessDenied": "Баштапкы сүрөткө жетүү укугу жок.",
-    "productImageStudioUnsupportedFileType": "JPG, PNG, WEBP, HEIC жана HEIF гана колдоого алынат.",
+    "productImageStudioUnsupportedFileType": "JPG, PNG, WEBP, AVIF, GIF, TIFF, BMP, HEIC жана HEIF колдоого алынат.",
     "productImageStudioImageTooSmall": "Каталог иштетүүсү үчүн сүрөт өтө кичине.",
     "productImageStudioImageUnreadable": "Сүрөттү окуу мүмкүн болгон жок.",
     "productImageStudioInvalidPreset": "Тандалган пресеттер жараксыз.",
-    "productImageStudioProviderFailed": "OpenAI сүрөттү иштете алган жок.",
-    "productImageStudioProviderOutputMissing": "OpenAI даяр сүрөттү кайтарган жок.",
+    "productImageStudioProviderAccessDenied": "Сүрөт иштетүү убактылуу жеткиликсиз. Администратор кызматтын байланышын калыбына келтириши керек.",
+    "productImageStudioProviderModelUnavailable": "Сүрөт иштетүү кызматы убактылуу жеткиликсиз. Bazaar администраторуна кабарлаңыз.",
+    "productImageStudioProviderQuotaExceeded": "Сүрөт иштетүү кызматынын лимити түгөндү. Bazaar администраторуна кайрылыңыз.",
+    "productImageStudioProviderRateLimited": "Азыр өтө көп сүрөт иштетилип жатат. Бир аз күтүп, кайра аракет кылыңыз.",
+    "productImageStudioProviderTimedOut": "Сүрөттү иштетүү өтө узакка созулду. Түп нуска сакталган. Кайра аракет кылуудан мурун таржымалды текшериңиз.",
+    "productImageStudioSourceRejected": "Кызмат бул сүрөттү иштете алган жок. Товардын башка сүрөтүн колдонуп көрүңүз.",
+    "productImageStudioProviderFailed": "Сүрөттү иштетүү мүмкүн болгон жок. Түп нуска сакталган — бир аздан кийин кайра аракет кылыңыз.",
+    "productImageStudioProviderOutputMissing": "Иштетүү кызматы даяр сүрөттү кайтарган жок. Түп нуска сакталган — кайра аракет кылыңыз.",
     "productImageStudioOutputPersistFailed": "Генерацияланган сүрөттү сактоо мүмкүн болгон жок.",
     "productImageStudioAttachFailed": "Сүрөттү товарга байлоо мүмкүн болгон жок.",
     "productImageStudioRetryUnavailable": "Бул тапшырманы азырынча кайра иштетүү мүмкүн эмес.",

@@ -57,6 +57,7 @@ describeDb("product image studio integration", () => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
+    vi.stubEnv("DEEPSEEK_API_KEY", "");
   });
 
   it("lets a receiving-store manager save a shared card image without granting source-store access", async () => {
@@ -156,13 +157,12 @@ describeDb("product image studio integration", () => {
         JSON.stringify({
           id: "resp_1",
           status: "completed",
-          output: [
+          data: [
             {
               id: "ig_1",
-              type: "image_generation_call",
               status: "completed",
               revised_prompt: "Edited product on clean studio background.",
-              result: generatedBuffer.toString("base64"),
+              b64_json: generatedBuffer.toString("base64"),
             },
           ],
         }),
@@ -202,20 +202,18 @@ describeDb("product image studio integration", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const fetchRequestInit = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
     const fetchBody = fetchRequestInit?.body ? JSON.parse(String(fetchRequestInit.body)) : null;
-    expect(fetchBody?.model).toBe("gpt-5-nano");
-    expect(fetchBody?.tools?.[0]).toMatchObject({
-      type: "image_generation",
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.openai.com/v1/images/edits");
+    expect(fetchBody).toMatchObject({
       model: "gpt-image-1-mini",
-      action: "edit",
       size: "1024x1024",
       quality: "medium",
       output_format: "jpeg",
       output_compression: 95,
       background: "opaque",
     });
-    expect(fetchBody?.tools?.[0]).not.toHaveProperty("input_fidelity");
-    expect(fetchBody?.tools?.[0]).not.toHaveProperty("format");
-    expect(fetchBody?.tools?.[0]).not.toHaveProperty("compression");
+    expect(fetchBody).not.toHaveProperty("input_fidelity");
+    expect(fetchBody).not.toHaveProperty("tools");
+    expect(fetchBody.images[0].image_url).toMatch(/^data:image\/png;base64,/);
 
     const saved = await saveGeneratedImageToProduct({
       organizationId: org.id,
@@ -272,7 +270,7 @@ describeDb("product image studio integration", () => {
     const fetchMock = vi.fn().mockImplementation(async () =>
       Response.json({
         status: "completed",
-        output: [{ type: "image_generation_call", result: output.toString("base64") }],
+        data: [{ b64_json: output.toString("base64") }],
       }),
     );
     vi.stubGlobal("fetch", fetchMock);
@@ -294,12 +292,14 @@ describeDb("product image studio integration", () => {
     }
     expect(ids[0]).not.toBe(ids[1]);
     for (const id of ids) await runProductImageStudioJob({ jobId: id });
-    expect(
-      fetchMock.mock.calls.map((call) => JSON.parse(String(call[1].body)).tools[0].quality),
-    ).toEqual(["medium", "high"]);
-    expect(
-      fetchMock.mock.calls.map((call) => JSON.parse(String(call[1].body)).tools[0].model),
-    ).toEqual(["gpt-image-2.5-sunburst", "gpt-image-2.5-sunburst"]);
+    expect(fetchMock.mock.calls.map((call) => JSON.parse(String(call[1].body)).quality)).toEqual([
+      "medium",
+      "high",
+    ]);
+    expect(fetchMock.mock.calls.map((call) => JSON.parse(String(call[1].body)).model)).toEqual([
+      "gpt-image-2.5-sunburst",
+      "gpt-image-2.5-sunburst",
+    ]);
   });
 
   it.each(["network-timeout", "empty-success"])(
@@ -336,6 +336,127 @@ describeDb("product image studio integration", () => {
     },
   );
 
+  it("persists DeepSeek analysis and the direct image execution in one finished job", async () => {
+    vi.stubEnv("AI_PROVIDER", "deepseek");
+    vi.stubEnv("DEEPSEEK_API_KEY", "deepseek-synthetic-test-key");
+    vi.stubEnv("OPENAI_API_KEY", "openai-synthetic-test-key");
+    vi.stubEnv("PRODUCT_IMAGE_STUDIO_IMAGE_MODEL", "gpt-image-1");
+    const { org, adminUser } = await seedBase();
+    const buffer = await createImageBuffer();
+    const source = await uploadProductImageBuffer({
+      organizationId: org.id,
+      buffer,
+      contentType: "image/png",
+      sourceFileName: "deepseek-source.png",
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({
+          status: "completed",
+          output: [
+            {
+              type: "message",
+              content: [
+                {
+                  type: "output_text",
+                  text: JSON.stringify({
+                    subject: "Synthetic product",
+                    detailsToPreserve: ["Original shape"],
+                  }),
+                },
+              ],
+            },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json(
+          { data: [{ b64_json: buffer.toString("base64") }] },
+          { headers: { "x-request-id": "req-synthetic-studio" } },
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const created = await createProductImageStudioJob({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "deepseek-job",
+      sourceImageUrl: source.url,
+      backgroundMode: ProductImageStudioBackground.WHITE,
+      outputFormat: ProductImageStudioOutputFormat.SQUARE,
+      centered: true,
+      improveVisibility: true,
+    });
+    await runProductImageStudioJob({ jobId: created.jobId });
+    const job = await getProductImageStudioJob(org.id, created.jobId);
+    expect(job).toMatchObject({
+      status: "SUCCEEDED",
+      provider: "openai",
+      providerJobId: "req-synthetic-studio",
+    });
+    expect(job.providerRequestJson).toMatchObject({
+      model: "gpt-image-2.5-sunburst",
+      endpoint: "images/edits",
+      analysis: {
+        provider: "deepseek",
+        status: "completed",
+        observations: { subject: "Synthetic product" },
+      },
+    });
+    expect(JSON.stringify(job.providerRequestJson)).not.toContain("base64");
+    expect(JSON.stringify(job.providerRequestJson)).not.toContain("synthetic-test-key");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps actionable errors and safe provider diagnostics when image access is rejected", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "synthetic-test-key");
+    const { org, adminUser } = await seedBase();
+    const source = await uploadProductImageBuffer({
+      organizationId: org.id,
+      buffer: await createImageBuffer(),
+      contentType: "image/png",
+      sourceFileName: "rejected-source.png",
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          Response.json(
+            {
+              error: { message: "Raw gpt-image provider secret details", code: "invalid_api_key" },
+            },
+            { status: 401, headers: { "x-request-id": "req-image-rejected" } },
+          ),
+        ),
+    );
+    const created = await createProductImageStudioJob({
+      organizationId: org.id,
+      actorId: adminUser.id,
+      requestId: "rejected-job",
+      sourceImageUrl: source.url,
+      backgroundMode: ProductImageStudioBackground.WHITE,
+      outputFormat: ProductImageStudioOutputFormat.SQUARE,
+      centered: true,
+      improveVisibility: true,
+    });
+    await runProductImageStudioJob({ jobId: created.jobId });
+    const job = await getProductImageStudioJob(org.id, created.jobId);
+    expect(job).toMatchObject({
+      status: "FAILED",
+      errorMessage: "productImageStudioProviderAccessDenied",
+      sourceImageUrl: source.url,
+      outputImageUrl: null,
+      canRetry: true,
+    });
+    expect(job.providerResponseJson).toMatchObject({
+      provider: "openai",
+      status: 401,
+      requestId: "req-image-rejected",
+    });
+    expect(JSON.stringify(job.providerResponseJson)).not.toContain("secret details");
+  });
+
   it("enforces organization scoping for job reads", async () => {
     vi.stubEnv("OPENAI_API_KEY", "sk-test");
 
@@ -359,12 +480,11 @@ describeDb("product image studio integration", () => {
         new Response(
           JSON.stringify({
             status: "completed",
-            output: [
+            data: [
               {
                 id: "ig_2",
-                type: "image_generation_call",
                 status: "completed",
-                result: generatedBuffer.toString("base64"),
+                b64_json: generatedBuffer.toString("base64"),
               },
             ],
           }),
@@ -448,12 +568,11 @@ describeDb("product image studio integration", () => {
       new Response(
         JSON.stringify({
           status: "completed",
-          output: [
+          data: [
             {
               id: "ig-concurrent",
-              type: "image_generation_call",
               status: "completed",
-              result: generatedBuffer.toString("base64"),
+              b64_json: generatedBuffer.toString("base64"),
             },
           ],
         }),
@@ -514,12 +633,11 @@ describeDb("product image studio integration", () => {
           new Response(
             JSON.stringify({
               status: "completed",
-              output: [
+              data: [
                 {
                   id: "ig-stale",
-                  type: "image_generation_call",
                   status: "completed",
-                  result: generatedBuffer.toString("base64"),
+                  b64_json: generatedBuffer.toString("base64"),
                 },
               ],
             }),

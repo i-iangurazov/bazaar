@@ -137,7 +137,9 @@ const formatJobErrorMessage = (
   if (!value) {
     return null;
   }
-  return tErrors.has?.(value) ? tErrors(value) : value;
+  // Historical jobs may contain raw provider errors, including retired model
+  // names. Keep diagnostics out of the operator's workflow as well as new jobs.
+  return tErrors.has?.(value) ? tErrors(value) : tErrors("productImageStudioProviderFailed");
 };
 
 type UploadedSource = {
@@ -531,10 +533,10 @@ const ProductImageStudioPage = () => {
       : !overview
         ? tCommon("loading")
         : !sourceImage?.url
-      ? t("actions.generateDisabledNoSource")
-      : providerMissing
-        ? t("overview.providerMissing")
-        : null;
+          ? t("actions.generateDisabledNoSource")
+          : providerMissing
+            ? t("overview.providerMissing")
+            : null;
   const generateDisabled =
     !canEdit ||
     !overview ||
@@ -606,12 +608,12 @@ const ProductImageStudioPage = () => {
                 {overviewQuery.error
                   ? tCommon("notAvailable")
                   : overviewLoading
-                  ? tCommon("loading")
-                  : overviewStatus === "READY"
-                    ? t("overview.status.ready")
-                    : overviewStatus === "ERROR"
-                      ? t("overview.status.error")
-                      : t("overview.status.notConfigured")}
+                    ? tCommon("loading")
+                    : overviewStatus === "READY"
+                      ? t("overview.status.ready")
+                      : overviewStatus === "ERROR"
+                        ? t("overview.status.error")
+                        : t("overview.status.notConfigured")}
               </Badge>
             </div>
           </CardHeader>
@@ -624,39 +626,52 @@ const ProductImageStudioPage = () => {
             ) : (
               <>
                 <div className="grid gap-4 md:grid-cols-4">
-              <div className="bazaar-admin-info-tile p-4">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                  {t("overview.metrics.totalJobs")}
-                </p>
-                <p className="mt-2 text-2xl font-semibold">{overview?.totalJobs ?? 0}</p>
-              </div>
-              <div className="bazaar-admin-info-tile p-4">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                  {t("overview.metrics.succeeded")}
-                </p>
-                <p className="mt-2 text-2xl font-semibold">{overview?.succeededJobs ?? 0}</p>
-              </div>
-              <div className="bazaar-admin-info-tile p-4">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                  {t("overview.metrics.failed")}
-                </p>
-                <p className="mt-2 text-2xl font-semibold">{overview?.failedJobs ?? 0}</p>
-              </div>
-              <div className="bazaar-admin-info-tile p-4">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                  {t("overview.metrics.lastGenerated")}
-                </p>
-                <p className="mt-2 text-sm font-medium">
-                  {overview?.lastGeneratedAt
-                    ? formatDateTime(overview.lastGeneratedAt, locale)
-                    : t("overview.never")}
-                </p>
-              </div>
-            </div>
+                  <div className="bazaar-admin-info-tile p-4">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                      {t("overview.metrics.totalJobs")}
+                    </p>
+                    <p className="mt-2 text-2xl font-semibold">{overview?.totalJobs ?? 0}</p>
+                  </div>
+                  <div className="bazaar-admin-info-tile p-4">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                      {t("overview.metrics.succeeded")}
+                    </p>
+                    <p className="mt-2 text-2xl font-semibold">{overview?.succeededJobs ?? 0}</p>
+                  </div>
+                  <div className="bazaar-admin-info-tile p-4">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                      {t("overview.metrics.failed")}
+                    </p>
+                    <p className="mt-2 text-2xl font-semibold">{overview?.failedJobs ?? 0}</p>
+                  </div>
+                  <div className="bazaar-admin-info-tile p-4">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                      {t("overview.metrics.lastGenerated")}
+                    </p>
+                    <p className="mt-2 text-sm font-medium">
+                      {overview?.lastGeneratedAt
+                        ? formatDateTime(overview.lastGeneratedAt, locale)
+                        : t("overview.never")}
+                    </p>
+                  </div>
+                </div>
                 {providerMissing ? (
                   <p className="bazaar-admin-notice mt-4 text-sm">
                     {t("overview.providerMissing")}
                   </p>
+                ) : null}
+                {!providerMissing && overview ? (
+                  <details className="mt-4 text-sm text-muted-foreground">
+                    <summary className="w-fit cursor-pointer rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                      {t("overview.processingDetails")}
+                    </summary>
+                    <p className="mt-2 max-w-2xl leading-relaxed">
+                      {overview.analysisProvider === "deepseek"
+                        ? t("overview.deepseekAnalysis")
+                        : t("overview.presetAnalysis")}{" "}
+                      {t("overview.imageRetouching")}
+                    </p>
+                  </details>
                 ) : null}
               </>
             )}
@@ -1069,73 +1084,76 @@ const ProductImageStudioPage = () => {
               <TableContainer className="bazaar-admin-table-shell">
                 <Table className="min-w-[860px]">
                   <TableHeader>
-                  <TableRow>
-                    <TableHead>{t("history.columns.status")}</TableHead>
-                    <TableHead>{t("history.columns.product")}</TableHead>
-                    <TableHead>{t("history.columns.createdBy")}</TableHead>
-                    <TableHead>{t("history.columns.createdAt")}</TableHead>
-                    <TableHead>{t("history.columns.completedAt")}</TableHead>
-                    <TableHead>{t("history.columns.actions")}</TableHead>
-                  </TableRow>
-                </TableHeader>
+                    <TableRow>
+                      <TableHead>{t("history.columns.status")}</TableHead>
+                      <TableHead>{t("history.columns.product")}</TableHead>
+                      <TableHead>{t("history.columns.createdBy")}</TableHead>
+                      <TableHead>{t("history.columns.createdAt")}</TableHead>
+                      <TableHead>{t("history.columns.completedAt")}</TableHead>
+                      <TableHead>{t("history.columns.actions")}</TableHead>
+                    </TableRow>
+                  </TableHeader>
                   <TableBody>
                     {(jobsQuery.data ?? []).map((job) => (
-                    <TableRow
-                      key={job.id}
-                      className={selectedJobId === job.id ? "bg-secondary/30" : undefined}
-                    >
-                      <TableCell>
-                        <Badge variant={jobBadgeVariant(job.status)}>
-                          {t(`status.${job.status}`)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {job.product ? (
-                          <div className="flex items-center gap-3">
-                            <ProductImageThumb
-                              imageUrl={job.productImageUrl}
-                              name={job.product.name}
-                            />
-                            <div>
-                              <p className="text-sm font-medium">{job.product.name}</p>
-                              <p className="text-xs text-muted-foreground">{job.product.sku}</p>
+                      <TableRow
+                        key={job.id}
+                        className={selectedJobId === job.id ? "bg-secondary/30" : undefined}
+                      >
+                        <TableCell>
+                          <Badge variant={jobBadgeVariant(job.status)}>
+                            {t(`status.${job.status}`)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {job.product ? (
+                            <div className="flex items-center gap-3">
+                              <ProductImageThumb
+                                imageUrl={job.productImageUrl}
+                                name={job.product.name}
+                              />
+                              <div>
+                                <p className="text-sm font-medium">{job.product.name}</p>
+                                <p className="text-xs text-muted-foreground">{job.product.sku}</p>
+                              </div>
                             </div>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">
+                              {t("history.unlinkedProduct")}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell>{job.createdBy.name}</TableCell>
+                        <TableCell>{formatDateTime(job.createdAt, locale)}</TableCell>
+                        <TableCell>
+                          {job.completedAt ? formatDateTime(job.completedAt, locale) : "—"}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-2">
+                            <IconButton
+                              type="button"
+                              variant="outline"
+                              onClick={() => setSelectedJobId(job.id)}
+                              icon={ViewIcon}
+                              label={t("actions.preview")}
+                            />
+                            <IconButton
+                              type="button"
+                              variant="outline"
+                              onClick={() => retryJobMutation.mutate({ jobId: job.id })}
+                              disabled={!canEdit || !job.canRetry}
+                              icon={RestoreIcon}
+                              label={t("actions.regenerate")}
+                            />
                           </div>
-                        ) : (
-                          <span className="text-sm text-muted-foreground">
-                            {t("history.unlinkedProduct")}
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell>{job.createdBy.name}</TableCell>
-                      <TableCell>{formatDateTime(job.createdAt, locale)}</TableCell>
-                      <TableCell>
-                        {job.completedAt ? formatDateTime(job.completedAt, locale) : "—"}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-2">
-                          <IconButton
-                            type="button"
-                            variant="outline"
-                            onClick={() => setSelectedJobId(job.id)}
-                            icon={ViewIcon}
-                            label={t("actions.preview")}
-                          />
-                          <IconButton
-                            type="button"
-                            variant="outline"
-                            onClick={() => retryJobMutation.mutate({ jobId: job.id })}
-                            disabled={!canEdit || !job.canRetry}
-                            icon={RestoreIcon}
-                            label={t("actions.regenerate")}
-                          />
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                        </TableCell>
+                      </TableRow>
+                    ))}
                     {!jobsQuery.data?.length ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
+                        <TableCell
+                          colSpan={6}
+                          className="text-center text-sm text-muted-foreground"
+                        >
                           {jobsQuery.isLoading ? tCommon("loading") : t("history.empty")}
                         </TableCell>
                       </TableRow>
