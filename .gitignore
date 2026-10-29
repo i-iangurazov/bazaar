@@ -46,3 +46,5 @@ ios/*.xcarchive
 /artifacts/directional/
 /artifacts/assortment-sources/
 /artifacts/catalog-pricing-20261029/
+# Disposable rollback candidates, synthetic databases, dumps and browser evidence.
+/artifacts/deployment-rollback/

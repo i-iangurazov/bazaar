@@ -40,6 +40,7 @@
     ".next/types/**/*.ts",
     "scripts/stabilization/**/*.ts",
     "scripts/local/**/*.ts",
+    "scripts/deployment/**/*.ts",
     "scripts/qa/**/*.tsx",
     "scripts/qa/playground-pricing-browser.ts",
     "scripts/qa/playground-payments-browser.ts",

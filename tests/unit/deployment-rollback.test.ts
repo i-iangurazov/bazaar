@@ -48,6 +48,7 @@ async function fixture() {
   await put("src/runtime.ts", "new application\n");
   await put("src/new-feature.ts", "new feature\n");
   await put("logo.bin", Buffer.from([0, 2, 3, 0]));
+  await put(".gitignore", "artifacts/\n/.local/\n");
   for (const name of Object.keys(retainedMigrations))
     await put(
       `prisma/migrations/${name}/migration.sql`,
@@ -80,7 +81,8 @@ describe("reviewed whole-release rollback preparation", () => {
       Buffer.from([0, 255, 1, 0]),
     );
     await expect(readFile(resolve(f.output, "candidate/src/new-feature.ts"))).rejects.toThrow();
-    expect(result.retained).toHaveLength(6);
+    expect(result.retained).toHaveLength(7);
+    expect(await readFile(resolve(f.output, "candidate/.gitignore"), "utf8")).toContain("/.local/");
     expect(result.databaseWrites).toBe(0);
     expect(f.git("rev-parse", "HEAD")).toBe(f.release);
     expect(f.git("status", "--porcelain")).toBe(before);

@@ -89,7 +89,9 @@ export function reviewRollback(repository: string, baseRef: string, releaseRef: 
   );
   if (git(repository, ["show", `${release}:${guardPath}`]).toString() !== expectedGuard)
     throw new Error("Migration guard contains changes beyond the five reviewed approvals.");
-  const retainedPaths = [...added, guardPath];
+  // Keep private local databases/backups and recovery artifacts excluded from Git
+  // even after application code returns to the old release.
+  const retainedPaths = [...added, guardPath, ".gitignore"];
   const retained = retainedPaths.map((path) => {
     const entry = currentFiles.get(path);
     if (!entry || entry.mode !== "100644") throw new Error(`Unexpected retained file: ${path}`);
@@ -219,6 +221,10 @@ async function main() {
         "Merge contains additional/conflict-resolution changes; rehearse that release separately.",
       );
   }
+  if (commit(repository, base) !== "5a27b8e37f03df2d73603fe37e4975d44888ddf5")
+    throw new Error(
+      "Baseline changed since the rollback rehearsal; review and rehearse that release before preparing recovery.",
+    );
   console.log(
     JSON.stringify(await prepareRollback(repository, base, release, values.output), null, 2),
   );
