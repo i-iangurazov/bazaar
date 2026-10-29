@@ -134,6 +134,7 @@ async function snapshot(client: PrismaClient) {
   return result;
 }
 let cookie = "";
+let fixtureCertificate: Buffer;
 function localRequest(
   port: number,
   path: string,
@@ -143,7 +144,7 @@ function localRequest(
 ): Promise<{ status: number; body: any }> {
   assert([3124, 3127].includes(port));
   return new Promise((done, reject) => {
-    // TLS exception is confined to these two synthetic localhost servers.
+    // Trust only this rehearsal's certificate, with normal hostname validation.
     const request = secureRequest(
       {
         hostname: "localhost",
@@ -151,7 +152,7 @@ function localRequest(
         path,
         method,
         headers,
-        rejectUnauthorized: false,
+        ca: fixtureCertificate,
         timeout: 30_000,
       },
       (response) => {
@@ -233,6 +234,7 @@ try {
     "/CN=localhost",
   ]);
   await chmod(resolve(directory, `tls-${stamp}.key`), 0o600);
+  fixtureCertificate = await readFile(resolve(directory, `tls-${stamp}.crt`));
   await admin.$executeRawUnsafe(`CREATE DATABASE "${databaseName}"`);
   await mkdir(resolve(directory, "baseline"), { recursive: true });
   execFileSync(

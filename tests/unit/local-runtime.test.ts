@@ -234,8 +234,8 @@ describe("persistent local runtime boundaries", () => {
     const root = await temporaryRepository(),
       pidFile = join(root, "child.pid"),
       abort = new AbortController();
-    const source = `const fs=require('fs'),{spawn}=require('child_process');const c=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'});fs.writeFileSync(${JSON.stringify(pidFile)},String(c.pid));setInterval(()=>{},1000);`;
-    const running = run(process.execPath, ["-e", source], { signal: abort.signal });
+    const source = `const fs=require('fs'),{spawn}=require('child_process');const c=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'});fs.writeFileSync(process.argv[1],String(c.pid));setInterval(()=>{},1000);`;
+    const running = run(process.execPath, ["-e", source, pidFile], { signal: abort.signal });
     const outcome = expect(running).rejects.toThrow("exited");
     await waitForService(async () => {
       await readFile(pidFile);

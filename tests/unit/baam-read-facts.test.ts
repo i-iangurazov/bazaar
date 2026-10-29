@@ -84,6 +84,15 @@ describe("Baam answer grounding", () => {
     expect(isBaamLink(href)).toBe(true);
     expect(renderBaamFactAnswer("[Поставщик]({{L1}})", facts, new Set([href]))).toContain(href);
   });
+  it("validates long malformed links in linear time and keeps application link boundaries", () => {
+    expect(isBaamLink("/" + "a".repeat(100_000) + "!")).toBe(false);
+    for (const href of ["/products", "/products/", "/products/product_1", "/products/123", "/reports/analytics?dateFrom=2026-10-01"]) {
+      expect(isBaamLink(href)).toBe(true);
+    }
+    for (const href of ["//evil.example", "/api/products", "/products//x", "/products/../admin", "/products#fragment", "/products?x=1?y=2", "/inventory/movements/%2fadmin"]) {
+      expect(isBaamLink(href)).toBe(false);
+    }
+  });
   it("escapes untrusted stored names as text rather than new links/markup", () => {
     expect(
       renderBaamFactAnswer(

@@ -85,6 +85,14 @@ export const baamUriComponent = (value: string) =>
   );
 
 // Only application links are rendered. Provider content can never create a URL.
-export const isBaamLink = (value: string) =>
-  /^\/(?:[a-z][a-z0-9-]*\/?)+(?:[a-zA-Z0-9_-]|%3[aA])*(?:\?[a-zA-Z0-9_%=&.-]*)?$/.test(value) &&
-  !value.startsWith("/api/");
+export const isBaamLink = (value: string) => {
+  if (!value.startsWith("/") || value.startsWith("/api/")) return false;
+  const parts = value.split("?");
+  if (parts.length > 2 || (parts.length === 2 && !/^[a-zA-Z0-9_%=&.-]*$/.test(parts[1]))) return false;
+  const segments = parts[0].slice(1).split("/");
+  // Validate each segment once. Nested optional separators in a whole-path
+  // regex permit exponential backtracking on a long, invalid model response.
+  if (segments.length === 1) return /^[a-z](?:[a-zA-Z0-9_-]|%3[aA])*$/.test(segments[0]);
+  return segments.slice(0, -1).every((segment) => /^[a-z][a-z0-9-]*$/.test(segment)) &&
+    /^(?:[a-zA-Z0-9_-]|%3[aA])*$/.test(segments[segments.length - 1]);
+};
