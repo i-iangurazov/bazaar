@@ -1,0 +1,195 @@
+{
+  "date": "2026-10-29",
+  "timezone": "Asia/Bishkek",
+  "branch": "codex/playground",
+  "status": "passed",
+  "decision": "Rollback rehearsal passed; one forward merge PR and a reviewed data-preserving reverse PR are supported. Explicit human authorization and fresh PR CI are still required before merging.",
+  "base": "5a27b8e37f03df2d73603fe37e4975d44888ddf5",
+  "rehearsedRelease": "2f3661878e3d604a483423f69799b4f1f5ac72ec",
+  "candidateTree": "608ace994673d1c9a1eed4ed415464607309d2d5",
+  "implementationCommits": [
+    "fa496ff",
+    "2f36618"
+  ],
+  "mainChanged": false,
+  "productionDeployed": false,
+  "productionTrafficSwitched": false,
+  "productionBackupCreated": false,
+  "userLocalRuntimePortUntouched": 3122,
+  "verification": {
+    "runtimeChecks": [
+      "Legacy rows, zero prices and fractional stock survive the five additive migrations",
+      "Upgraded production runtime creates a paid sale, fractional transfer and audited common prices; store restrictions hold",
+      "Old application production build succeeds against the upgraded ledger and changes no database rows",
+      "Post-release backup restores into another empty disposable database with every table hash unchanged",
+      "Old runtime reads post-release receipt/prices and enforces store rights; boot and reads preserve every table hash",
+      "Paid sale and transfer retries across versions replay without duplicate payments, stock moves or other writes",
+      "Rolled-back runtime completes a new sale and changes a local price; new constraints/triggers remain compatible",
+      "Returning to the new runtime preserves the rollback-period sale, payments, balances and individual price override",
+      "Both actual production bundles render dashboard/products/POS history/transfers and mobile products without page errors"
+    ],
+    "unit": {
+      "passed": 2203,
+      "failed": 0,
+      "pending": 0,
+      "files": 286
+    },
+    "typescript": "passed",
+    "lint": "passed without warnings",
+    "translations": "passed RU/KG/EN",
+    "currentProductionBuild": "passed with isolated local QA environment",
+    "rollbackProductionBuild": "passed with VERCEL=1 and VERCEL_ENV=production, strict migration guard active; no row changes",
+    "tablesPreservedOnRollbackBootAndReads": 137,
+    "rowsBeforeRollback": 179,
+    "beforeRollbackSnapshotSha256": "45c4febbdf3ed3d607668d06a73fe1a9532c78fdb364ae4a0df85079404e7f4e",
+    "afterReentrySnapshotSha256": "1dede3139448929bd78f05bc0e65e183460d324cfa21f90d20e785403fd037e1",
+    "backupRestoreAllTablesIdentical": true,
+    "backupSha256": "aa7f3f7ec57fb8eb8739d773a819799d354ad91c9f1922d5d99ee192f3586fd1",
+    "syntheticMergePatch": {
+      "base": "5a27b8e37f03df2d73603fe37e4975d44888ddf5",
+      "release": "2f3661878e3d604a483423f69799b4f1f5ac72ec",
+      "syntheticMerge": "7d8d09a394aed2298da507af46ebc26aa669452c",
+      "refsChanged": false,
+      "candidateTree": "608ace994673d1c9a1eed4ed415464607309d2d5",
+      "retainedPaths": [
+        "prisma/migrations/20261021170000_subscription_payments/migration.sql",
+        "prisma/migrations/20261022090000_studio_quality/migration.sql",
+        "prisma/migrations/20261029180000_shared_price_books/migration.sql",
+        "prisma/migrations/20261029190000_price_book_references/migration.sql",
+        "prisma/migrations/20261029200000_price_book_snapshots/migration.sql",
+        "scripts/deployment/migrations.ts",
+        ".gitignore"
+      ],
+      "allCandidateFilesVerified": true
+    },
+    "retainedFiles": [
+      {
+        "mode": "100644",
+        "hash": "dd2ae8dcce69563fc675298433fd0b8f392671df",
+        "path": "prisma/migrations/20261021170000_subscription_payments/migration.sql",
+        "sha256": "82dce9c6cf1511cb8c970071d9849bf54e9f919bdcf2db639dc131de86275203"
+      },
+      {
+        "mode": "100644",
+        "hash": "96586d96b63fca4e361480734edadb8997b4f219",
+        "path": "prisma/migrations/20261022090000_studio_quality/migration.sql",
+        "sha256": "1c4ef58753f96ff3697cabb969eafc5840178d482e3f7b3232b3186b7589c8a4"
+      },
+      {
+        "mode": "100644",
+        "hash": "96cc9b238d1ac1ba030297925b2115e955cb1170",
+        "path": "prisma/migrations/20261029180000_shared_price_books/migration.sql",
+        "sha256": "34caf7ee88c4cfb69c3e949cd72e7fe44e6bb78449923b774beaf88f9c31b14a"
+      },
+      {
+        "mode": "100644",
+        "hash": "3c09e3e51cd2e0d36d30518a3a38e93b5ea38656",
+        "path": "prisma/migrations/20261029190000_price_book_references/migration.sql",
+        "sha256": "29aa80564b641431c59525b1ba562940d1146cb86e4fa6ac9970ecab554c8707"
+      },
+      {
+        "mode": "100644",
+        "hash": "ed3132bc84af36dcbcd7079f3faf5ba7733a9845",
+        "path": "prisma/migrations/20261029200000_price_book_snapshots/migration.sql",
+        "sha256": "3ce9eec33b1c15556774fa4ec2117b47f7e6bda159defb69a15127d0e37fb775"
+      },
+      {
+        "mode": "100644",
+        "hash": "f0124e047538e03983349287ddbc2b46fdb30495",
+        "path": "scripts/deployment/migrations.ts",
+        "sha256": "8bf9c715c5a596ca33513571b55647dfeb74135a976e082d2a65728cab3f61cb"
+      },
+      {
+        "mode": "100644",
+        "hash": "78e036d615fb35d2cd94bfd77859ec612de75c7c",
+        "path": ".gitignore",
+        "sha256": "7586a2d05465f2837b12946552bbf488617ea52196aa60303a69dc0121cde5df"
+      }
+    ],
+    "roleCheck": "Restricted STAFF cannot read the other store before or after rollback",
+    "idempotency": "Paid receipt and transfer created on new runtime replay on old runtime with all table hashes unchanged",
+    "continuedOperations": "Old runtime completes another paid sale and edits a local price; returning to new runtime preserves both payments, fractional stock and per-kind inheritance",
+    "browser": "Both real production bundles: dashboard, products, POS history, transfers and mobile products via HTTPS; zero page errors",
+    "finalMergePatch": {
+      "base": "5a27b8e37f03df2d73603fe37e4975d44888ddf5",
+      "release": "c517f2bd2aafe1e75319298b7c866fc5f446d7de",
+      "syntheticMerge": "6fa41672fe7efddb6d3c873d7599f3528e28c641",
+      "refsChanged": false,
+      "indexAndWorkingTreeUnchanged": true,
+      "candidateTree": "608ace994673d1c9a1eed4ed415464607309d2d5",
+      "retainedPaths": [
+        "prisma/migrations/20261021170000_subscription_payments/migration.sql",
+        "prisma/migrations/20261022090000_studio_quality/migration.sql",
+        "prisma/migrations/20261029180000_shared_price_books/migration.sql",
+        "prisma/migrations/20261029190000_price_book_references/migration.sql",
+        "prisma/migrations/20261029200000_price_book_snapshots/migration.sql",
+        "scripts/deployment/migrations.ts",
+        ".gitignore"
+      ],
+      "matchesActualRuntimeRehearsal": true,
+      "prDescriptionExists": true
+    }
+  },
+  "isolation": {
+    "postgresPort": 55448,
+    "redisPort": 56398,
+    "ports": [
+      3124,
+      3127
+    ],
+    "databaseName": "bazaar_hardening_rollback_1793290156243",
+    "customerDatabaseUsed": false,
+    "providerCalls": 0,
+    "dataDirectoryPrefix": "/private/tmp/bazaar-catalog-20261029.",
+    "resets": 0,
+    "truncateCalls": 0,
+    "syntheticPaymentFixturesOnly": true
+  },
+  "productionReadOnlyMetadata": {
+    "source": "GitHub deployment metadata only; no production SQL or mutations in this task",
+    "deploymentId": 7305413460,
+    "commit": "5a27b8e37f03df2d73603fe37e4975d44888ddf5",
+    "status": "success",
+    "at": "2026-10-24T22:37:14Z",
+    "environmentUrl": "https://bazaar-9vknwdodo-ilyas0707s-projects.vercel.app"
+  },
+  "rollbackSemantics": {
+    "restoreOldApplication": true,
+    "retainFiveAppliedMigrations": true,
+    "retainStrictHistoryGuard": true,
+    "retainPrivateDataGitExclusions": true,
+    "retainSalesPaymentsStockAndPriceHistory": true,
+    "automaticDatabaseRestore": false,
+    "reversePRRequired": true,
+    "oldVersionRuntimeCompatible": true
+  },
+  "remainingReleasePreflight": [
+    "Refresh main; if it differs from the pinned baseline, review and repeat the rehearsal.",
+    "One whole-playground PR with ordinary merge commit; require its exact CI checks before merge.",
+    "Immediately before production release, confirm eligible prior Vercel deployment and create/verify a real provider backup. This rehearsal used only synthetic local data.",
+    "After Vercel Instant Rollback, review domain auto-assignment/Promote before assuming subsequent Git deployments are live."
+  ],
+  "limitations": [
+    "Local rehearsal of traffic switching; no Vercel production alias was changed.",
+    "Application rollback retains the five migrations and subsequent business data; it is not a database time rewind.",
+    "Providers and physical devices were not exercised.",
+    "Not an exhaustive old-version acceptance of all pages/roles/data combinations.",
+    "Real Vercel production rollback and production backup creation were not executed.",
+    "The GitHub Production status identifies the old SHA; availability/eligibility in Vercel must be checked immediately before release.",
+    "Shared-price edits and all later business operations remain after application rollback; correcting them requires separate audited business actions."
+  ],
+  "artifacts": {
+    "runtime": "artifacts/deployment-rollback/rehearsal-20261029/verification.json",
+    "mergeProof": "artifacts/deployment-rollback/merge-proof.json",
+    "unit": "artifacts/deployment-rollback/unit-final.json",
+    "types": "artifacts/deployment-rollback/types.log",
+    "lint": "artifacts/deployment-rollback/lint.log",
+    "currentBuild": "artifacts/deployment-rollback/current-production-build.log",
+    "backupDirectory": "artifacts/deployment-rollback/rehearsal-20261029",
+    "previousBranchCI": "https://github.com/i-iangurazov/bazaar/actions/runs/40894511924",
+    "previousBranchCICommit": "7ee1f53d62ff1bad2c2afa775ce453e1b61a4858",
+    "finalMergeProof": "artifacts/deployment-rollback/final-merge-proof.json"
+  },
+  "runbook": "docs/deployment-rollback.md",
+  "preparedCodeRelease": "c517f2bd2aafe1e75319298b7c866fc5f446d7de"
+}
