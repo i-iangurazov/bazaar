@@ -1,4 +1,3 @@
-import { marketingCaptures } from "@/content/marketing/assets";
 import Image from "next/image";
 import Link from "next/link";
 import { Fragment, type ReactNode } from "react";
@@ -12,15 +11,12 @@ import { MarketingPricing } from "./MarketingPricing";
 import { FeatureShowcase } from "./FeatureShowcase";
 import { MarketingMotion } from "./MarketingMotion";
 import { MarketingNav } from "./MarketingNav";
+import { MarketingPreview } from "./MarketingPreview";
+import { getMarketingPreviewData } from "@/content/marketing/preview";
+import { PosIcon, InventoryIcon, ReportsIcon } from "@/components/icons";
 import styles from "./marketing.module.css";
 
 const whatsappUrl = "https://wa.me/996709911300";
-
-const Glyph = ({ children }: { children: ReactNode }) => (
-  <span className={styles.glyph} aria-hidden="true">
-    {children}
-  </span>
-);
 
 const Arrow = () => (
   <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -44,37 +40,6 @@ const Check = () => (
       strokeLinejoin="round"
     />
   </svg>
-);
-
-const ProductWindow = ({
-  src,
-  alt,
-  priority = false,
-  className,
-}: {
-  src: string;
-  alt: string;
-  priority?: boolean;
-  className?: string;
-}) => (
-  <div className={`${styles.productWindow} ${className ?? ""}`}>
-    <div className={styles.windowBar} aria-hidden="true">
-      <span />
-      <span />
-      <span />
-      <p>app.bazaar.kg</p>
-    </div>
-    <div className={styles.productWindowViewport}>
-      <Image
-        src={src}
-        alt={alt}
-        width={1920}
-        height={1080}
-        sizes="(max-width: 767px) 94vw, (max-width: 1199px) 88vw, 1120px"
-        priority={priority}
-      />
-    </div>
-  </div>
 );
 
 const Story = ({
@@ -177,6 +142,7 @@ export const MarketingLanding = async () => {
   const [t, locale] = await Promise.all([getTranslations("billing"), getLocale()]);
   const plans = getPlanCatalogEntries();
   const copy = getMarketingCopy(locale);
+  const previewData = getMarketingPreviewData(locale);
   const structuredData = {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
@@ -210,7 +176,9 @@ export const MarketingLanding = async () => {
               <span />
               {copy.hero.kicker}
             </p>
-            <h1 id="hero-title">{copy.hero.title}</h1>
+            <h1 id="hero-title">
+              {copy.hero.titleStart} <span>{copy.hero.titleEnd}</span>
+            </h1>
             <p className={styles.heroLead}>{copy.hero.lead}</p>
             <div className={styles.heroActions}>
               <Link className={styles.primaryCta} href="/signup">
@@ -225,54 +193,14 @@ export const MarketingLanding = async () => {
           </div>
 
           <div className={styles.heroVisual}>
-            <div className={styles.heroDesktop}>
-              <ProductWindow
-                src={marketingCaptures.posDesktop}
-                alt={copy.hero.desktopAlt}
-                priority
-              />
+            <div className={styles.heroPreviewLabel}>
+              <span />
+              {copy.hero.demo}
             </div>
-            <div className={styles.heroProducts} aria-hidden="true">
-              <Image
-                src={marketingCaptures.products}
-                alt=""
-                width={1920}
-                height={1080}
-                sizes="360px"
-              />
-            </div>
-            <div className={styles.heroPhone}>
-              <div className={styles.phoneSpeaker} aria-hidden="true" />
-              <Image
-                src={marketingCaptures.posMobile}
-                alt={copy.hero.mobileAlt}
-                width={780}
-                height={1688}
-                sizes="(max-width: 767px) 36vw, 230px"
-              />
-            </div>
-            <div className={styles.activityStack} aria-label={copy.hero.activityLabel}>
-              <div>
-                <Glyph>✓</Glyph>
-                <p>
-                  <b>{copy.hero.sale}</b>
-                  <span>{formatCurrency(3220, locale, "KGS")}</span>
-                </p>
-              </div>
-              <div>
-                <Glyph>−2</Glyph>
-                <p>
-                  <b>{copy.hero.stock}</b>
-                  <span>{copy.hero.product}</span>
-                </p>
-              </div>
-              <div>
-                <Glyph>O!</Glyph>
-                <p>
-                  <b>O! Market</b>
-                  <span>{copy.hero.channelActivity}</span>
-                </p>
-              </div>
+            <MarketingPreview copy={copy.preview} data={previewData} />
+            <div className={styles.heroCaption}>
+              <Check />
+              <span>{copy.hero.demoHint}</span>
             </div>
           </div>
         </div>
@@ -282,6 +210,24 @@ export const MarketingLanding = async () => {
           ))}
         </div>
       </section>
+
+      <div className={styles.benefitStrip} aria-label={copy.benefits.label}>
+        {copy.benefits.items.map((item, index) => {
+          const Icon = [PosIcon, InventoryIcon, ReportsIcon][index];
+          return (
+            <a href={item.href} key={item.href}>
+              <span className={styles.benefitIcon}>
+                <Icon size={23} aria-hidden="true" />
+              </span>
+              <div>
+                <h2>{item.title}</h2>
+                <p>{item.body}</p>
+              </div>
+              <Arrow />
+            </a>
+          );
+        })}
+      </div>
 
       <section id="platform" className={styles.platformIntro}>
         <div className={styles.sectionHeading} data-reveal>
@@ -296,24 +242,26 @@ export const MarketingLanding = async () => {
           </h2>
           <p>{copy.platform.body}</p>
         </div>
-        <FeatureShowcase featureCopy={copy.features} label={copy.platform.tabs} />
+        <FeatureShowcase
+          featureCopy={copy.features}
+          previewCopy={copy.preview}
+          previewData={previewData}
+          label={copy.platform.tabs}
+        />
       </section>
 
       <Story
         id="pos"
         number="02"
         {...copy.stories.pos}
-        visual={<ProductWindow src={marketingCaptures.posDesktop} alt={copy.stories.pos.alt} />}
-        dark
+        visual={<MarketingPreview view="cashier" copy={copy.preview} data={previewData} />}
       />
 
       <Story
         id="inventory"
         number="03"
         {...copy.stories.inventory}
-        visual={
-          <ProductWindow src={marketingCaptures.movements} alt={copy.stories.inventory.alt} />
-        }
+        visual={<MarketingPreview view="inventory" copy={copy.preview} data={previewData} />}
         reverse
       />
 
@@ -333,7 +281,7 @@ export const MarketingLanding = async () => {
         <div className={styles.commerceGrid}>
           <IntegrationFlow copy={copy} />
           <div className={styles.commerceScreenshot} data-reveal>
-            <ProductWindow src={marketingCaptures.integrations} alt={copy.commerce.alt} />
+            <MarketingPreview view="commerce" copy={copy.preview} data={previewData} />
           </div>
         </div>
       </section>
@@ -342,9 +290,7 @@ export const MarketingLanding = async () => {
         id="analytics"
         number="05"
         {...copy.stories.analytics}
-        visual={
-          <ProductWindow src={marketingCaptures.dashboard} alt={copy.stories.analytics.alt} />
-        }
+        visual={<MarketingPreview view="analytics" copy={copy.preview} data={previewData} />}
         dark
       />
 
@@ -364,39 +310,83 @@ export const MarketingLanding = async () => {
         </div>
         <div className={styles.deviceStage} data-reveal>
           <div className={styles.tabletFrame}>
-            <Image
-              src={marketingCaptures.dashboard}
-              alt={copy.mobile.tabletAlt}
-              width={1920}
-              height={1080}
-              sizes="700px"
-            />
+            <MarketingPreview copy={copy.preview} data={previewData} />
           </div>
-          <div className={styles.mobilePhoneFrame}>
-            <div aria-hidden="true" />
-            <Image
-              src={marketingCaptures.posMobile}
-              alt={copy.mobile.phoneAlt}
-              width={780}
-              height={1688}
-              sizes="240px"
-            />
+          <div className={styles.mobilePhoneFrame} role="img" aria-label={copy.mobile.phoneAlt}>
+            <div className={styles.phoneSpeaker} aria-hidden="true" />
+            <div className={styles.mobileReceipt} aria-hidden="true">
+              <div>
+                <Image src="/brand/icon.png" width={24} height={24} alt="" />
+                <span>BAZAAR</span>
+              </div>
+              <small>{copy.preview.demo}</small>
+              <h3>{copy.preview.cart}</h3>
+              <p>{copy.preview.retail}</p>
+              {copy.preview.items.slice(0, 2).map((name, index) => (
+                <article key={name}>
+                  <span>{name}</span>
+                  <strong>{formatCurrency(index ? 290 : 750, locale, "KGS")}</strong>
+                  <small>
+                    {index ? "1" : "2"} × {formatCurrency(index ? 290 : 375, locale, "KGS")}
+                  </small>
+                </article>
+              ))}
+              <div className={styles.mobileTotal}>
+                <span>{copy.preview.total}</span>
+                <strong>{formatCurrency(1040, locale, "KGS")}</strong>
+              </div>
+              <span className={styles.mobilePayment}>{copy.preview.payment}</span>
+            </div>
           </div>
         </div>
       </section>
 
-      <section className={styles.proofSection} aria-labelledby="proof-title">
-        <div data-reveal>
+      <section id="getting-started" className={styles.startSection} aria-labelledby="start-title">
+        <div className={styles.sectionHeading} data-reveal>
           <p className={styles.eyebrow}>
             <span>07</span>
-            {copy.proof.eyebrow}
+            {copy.gettingStarted.eyebrow}
           </p>
-          <h2 id="proof-title">{copy.proof.title}</h2>
+          <h2 id="start-title">{copy.gettingStarted.title}</h2>
+          <p>{copy.gettingStarted.body}</p>
         </div>
-        <p data-reveal>{copy.proof.body}</p>
+        <ol className={styles.startSteps}>
+          {copy.gettingStarted.steps.map((step, index) => (
+            <li key={step.title} data-reveal>
+              <span>{String(index + 1).padStart(2, "0")}</span>
+              <h3>{step.title}</h3>
+              <p>{step.body}</p>
+            </li>
+          ))}
+        </ol>
+        <div className={styles.startHelp}>
+          <span>{copy.gettingStarted.help}</span>
+          <a href={whatsappUrl}>
+            {copy.gettingStarted.contact}
+            <Arrow />
+          </a>
+        </div>
       </section>
 
       <MarketingPricing plans={plans} locale={locale} t={t} />
+
+      <section id="faq" className={styles.faqSection} aria-labelledby="faq-title">
+        <div>
+          <p className={styles.eyebrow}>{copy.faq.eyebrow}</p>
+          <h2 id="faq-title">{copy.faq.title}</h2>
+        </div>
+        <div className={styles.faqList}>
+          {copy.faq.items.map((item) => (
+            <details key={item.question}>
+              <summary>
+                {item.question}
+                <span aria-hidden="true">+</span>
+              </summary>
+              <p>{item.answer}</p>
+            </details>
+          ))}
+        </div>
+      </section>
 
       <section className={styles.finalCta}>
         <div data-reveal>
@@ -406,9 +396,12 @@ export const MarketingLanding = async () => {
             <br />
             {copy.final.line2}
           </h2>
-          <Link href="/signup">
-            {copy.final.start} <Arrow />
-          </Link>
+          <div className={styles.finalActions}>
+            <Link href="/signup">
+              {copy.final.start} <Arrow />
+            </Link>
+            <a href={whatsappUrl}>{copy.final.contact}</a>
+          </div>
         </div>
       </section>
 

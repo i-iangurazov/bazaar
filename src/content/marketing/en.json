@@ -23,9 +23,9 @@
   "hero": {
     "kicker": "A system for the modern store",
     "title": "Your entire store. In one system.",
-    "lead": "Sales, products, stock, customers and analytics are connected in one system. Add online stores and sales channels as your business grows.",
+    "lead": "From the first sale to your next purchasing decision. POS, products, stock and analytics work together — right in your browser.",
     "view": "See Bazaar in action",
-    "note": "No installation · Works in your browser · Mobile/PWA",
+    "note": "In your browser, on desktop, tablet and phone",
     "desktopAlt": "The actual Bazaar desktop POS with a product catalog and current receipt",
     "mobileAlt": "The actual Bazaar mobile POS interface",
     "activityLabel": "Example store activity",
@@ -43,7 +43,11 @@
       "Marketplaces",
       "Bazaar API",
       "Mobile / PWA"
-    ]
+    ],
+    "titleStart": "Your entire store.",
+    "titleEnd": "In one system.",
+    "demo": "Demo data",
+    "demoHint": "See how the everyday work of a store connects."
   },
   "platform": {
     "eyebrow": "One operating system",
@@ -161,16 +165,12 @@
     "tabletAlt": "Bazaar on a tablet",
     "phoneAlt": "Bazaar mobile POS"
   },
-  "proof": {
-    "eyebrow": "Trust",
-    "title": "Verified customer experience.",
-    "body": "Only verified case studies, logos and results will appear here, with customer permission. Until then, Bazaar does not publish invented reviews or statistics."
-  },
   "final": {
-    "tag": "A system for your store · Bazaar",
-    "line1": "Your store is already running.",
-    "line2": "Bring its work together in one system.",
-    "start": "Start with Bazaar"
+    "tag": "Good work starts with a clear system",
+    "line1": "Fewer disconnected tasks.",
+    "line2": "More focus on your store.",
+    "start": "Start with Bazaar",
+    "contact": "Ask a question"
   },
   "footer": {
     "description": "A system for the modern store.",
@@ -184,5 +184,117 @@
     "marketplaces": "Marketplaces",
     "privacy": "Privacy",
     "made": "Built for retail in Kyrgyzstan"
+  },
+  "preview": {
+    "demo": "Demo data",
+    "label": "Bazaar interface illustration with demo data",
+    "store": "Bishkek · Central",
+    "today": "Today",
+    "overview": "Store overview",
+    "revenue": "Revenue",
+    "receipts": "Receipts",
+    "average": "Average receipt",
+    "sales": "Weekly sales",
+    "products": "Products",
+    "product": "Product",
+    "price": "Price",
+    "stock": "In stock",
+    "search": "Name, SKU or barcode",
+    "all": "All products",
+    "cart": "Current receipt",
+    "total": "Total",
+    "payment": "Proceed to payment",
+    "retail": "Retail customer",
+    "items": ["Coffee beans, 250 g", "Green tea, 100 g", "A5 notebook", "Mineral water, 1 l"],
+    "days": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+    "units": "pcs",
+    "movement": "Stock movements",
+    "document": "Document",
+    "operation": "Operation",
+    "quantity": "Quantity",
+    "completed": "Posted",
+    "operations": ["Receipt", "Transfer", "Sale"],
+    "customers": "Customers",
+    "customer": "Customer",
+    "orders": "Purchases",
+    "customersList": ["Aidana K.", "Nurlan A.", "Elina S."],
+    "customerNote": "Purchase history in every customer profile",
+    "channels": "Channels to connect",
+    "configure": "Configure",
+    "channelNote": "Exchange capabilities and schedules depend on each connected channel.",
+    "inventoryNote": "Receipts, sales and transfers in one movement log",
+    "report": "Reports by store and period",
+    "domain": "bazaar.kg"
+  },
+  "benefits": {
+    "label": "Everyday work in one system",
+    "items": [
+      {
+        "title": "Keep sales moving",
+        "body": "The catalog, customer and current receipt on one screen.",
+        "href": "#pos"
+      },
+      {
+        "title": "Know what is in stock",
+        "body": "Stock levels and movement history for each store.",
+        "href": "#inventory"
+      },
+      {
+        "title": "Make decisions with numbers",
+        "body": "Revenue, costs and the products that earn their place.",
+        "href": "#analytics"
+      }
+    ]
+  },
+  "gettingStarted": {
+    "eyebrow": "Getting started",
+    "title": "Start with one store. Grow at your own pace.",
+    "body": "Set up your working environment: products, team and permissions. Connect additional capabilities as you need them.",
+    "steps": [
+      {
+        "title": "Create your workspace",
+        "body": "Register your business, add a store and choose your working settings."
+      },
+      {
+        "title": "Prepare your products and team",
+        "body": "Add your catalog and opening stock, invite staff and assign permissions."
+      },
+      {
+        "title": "Bring your work together",
+        "body": "Make sales and record stock operations. Review results using the reports included in your plan."
+      }
+    ],
+    "help": "Need a hand getting started?",
+    "contact": "Talk about setup"
+  },
+  "faq": {
+    "eyebrow": "Questions and answers",
+    "title": "Before you get started",
+    "items": [
+      {
+        "question": "Do I need to install Bazaar?",
+        "answer": "You can start in a regular browser. The interface adapts to computers, tablets and phones. On supported devices, you can add Bazaar to your home screen as a PWA."
+      },
+      {
+        "question": "Can I manage more than one store?",
+        "answer": "Yes. Your plan defines the number of stores, products and users. Bazaar supports stock by store, transfers and staff access permissions."
+      },
+      {
+        "question": "Can I bring my existing catalog?",
+        "answer": "You can add products manually. Import and export are included in the two larger plans; prepare a file matching the catalog fields before importing. Contact us if you need help."
+      },
+      {
+        "question": "Are all integrations connected when I sign up?",
+        "answer": "Each channel is connected and configured separately. Data exchange depends on the provider and your plan. POS hardware and fiscal services also require compatible equipment and their own setup."
+      },
+      {
+        "question": "What can BAAM help with?",
+        "answer": "The assistant accepts text and voice questions about your store, such as sales over a period or popular products. It uses the data and permissions available to the current user. Check AI answers before making important business decisions."
+      },
+      {
+        "question": "How do I choose and pay for a plan?",
+        "answer": "Compare limits and capabilities in the pricing section. Contact support to activate or renew your plan; public online subscription payments are not enabled yet."
+      }
+    ]
   }
 }

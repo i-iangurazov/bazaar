@@ -23,7 +23,7 @@ await mkdir(output, { recursive: true });
 const report = {
   base,
   expectedSha: sha,
-  baseline: "4b5e5ce379031bb9f51737c3c193875ff5432b2a",
+  baseline: "5c62c41979cd612b1097da1413db83f0cd3ad764",
   checks: [],
   errors: [],
   status: "running",
@@ -232,7 +232,7 @@ try {
               .filter((img) => img.getClientRects().length > 0)
               .every((img) => img.complete && img.naturalWidth > 0),
           ),
-        "Original captures load",
+        "Brand images load",
       );
       const structured = JSON.parse(
         await page.locator('script[type="application/ld+json"]').textContent(),
@@ -291,6 +291,26 @@ try {
       }
       await page.keyboard.press("ArrowLeft");
       assert.equal(await page.getByRole("tab").last().getAttribute("aria-selected"), "true");
+      const demo = page.locator('[data-marketing-preview="overview"]').first();
+      assert.equal(await demo.getAttribute("role"), "img");
+      assert((await demo.getAttribute("aria-label")).includes(copy.preview.label));
+      assert((await demo.innerText()).includes(copy.preview.demo));
+      assert.equal(await page.locator('a[href*="app.bazaar.kg"]').count(), 0);
+      assert.equal(await page.locator("#getting-started ol > li").count(), 3);
+      const questions = page.locator("#faq details");
+      assert.equal(await questions.count(), copy.faq.items.length);
+      for (let index = 0; index < copy.faq.items.length; index++) {
+        const question = questions.nth(index);
+        await question.locator("summary").focus();
+        await page.keyboard.press("Enter");
+        assert.equal(await question.getAttribute("open"), "");
+        assert.equal(
+          (await question.locator("p").innerText()).trim(),
+          copy.faq.items[index].answer,
+        );
+        await page.keyboard.press("Enter");
+        assert.equal(await question.getAttribute("open"), null);
+      }
       const comparison = page.locator("#pricing details");
       await comparison.locator("summary").focus();
       await page.keyboard.press("Enter");
@@ -336,7 +356,7 @@ try {
         );
       }
       record(
-        `${label}: original story/captures/prices/SEO, complete page, menu, anchors, six tabs and comparison`,
+        `${label}: localized demo illustrations, three onboarding steps, six FAQ answers, prices/SEO, menu, anchors, six tabs and comparison`,
       );
       await context.close();
     }

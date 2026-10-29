@@ -7,20 +7,23 @@ const readSource = (relativePath: string) =>
   readFile(path.join(process.cwd(), relativePath), "utf8");
 
 describe("Bazaar Retail OS marketing landing", () => {
-  it("uses isolated marketing components and real optimized Bazaar captures", async () => {
+  it("uses isolated marketing components and clearly labelled product illustrations", async () => {
     const page = await readSource("src/app/page.tsx");
     const landing = await readSource("src/components/marketing/MarketingLanding.tsx");
-    const assets = await readSource("src/content/marketing/assets.ts");
+    const preview = await readSource("src/components/marketing/MarketingPreview.tsx");
 
     expect(page).toContain("@/components/marketing/MarketingLanding");
     expect(page).not.toContain("@/components/ui/");
     expect(landing).toContain('from "next/image"');
-    expect(assets).toContain("/marketing/captures/pos-desktop-wide.webp");
-    expect(assets).toContain("/marketing/captures/pos-mobile.webp");
-    expect(assets).toContain("/marketing/captures/products-wide.webp");
-    expect(assets).toContain("/marketing/captures/movements-wide.webp");
-    expect(assets).toContain("/marketing/captures/dashboard-wide.webp");
-    expect(assets).toContain("/marketing/captures/integrations-wide.webp");
+    expect(landing).toContain("<MarketingPreview");
+    expect(preview).toContain("copy.demo");
+    expect(preview).toContain('role="img"');
+    expect(preview).toContain("copy.label");
+    expect(preview).not.toContain("fetch(");
+    expect(preview).not.toContain("/api/");
+    expect(preview).not.toContain("marketingCaptures");
+    expect(landing).not.toContain("app.bazaar.kg");
+    expect(preview).not.toContain("app.bazaar.kg");
     expect(landing).not.toContain("data:image");
   });
 
@@ -58,14 +61,16 @@ describe("Bazaar Retail OS marketing landing", () => {
     expect(styles).toContain("@media (prefers-reduced-motion: reduce)");
   });
 
-  it("uses a readable 16:9 product frame and a structured channel status surface", async () => {
+  it("provides usable onboarding, FAQ and structured channel information instead of placeholder testimonials", async () => {
     const landing = await readSource("src/components/marketing/MarketingLanding.tsx");
     const styles = await readSource("src/components/marketing/marketing.module.css");
 
-    expect(landing).toContain("width={1920}");
-    expect(landing).toContain("height={1080}");
+    expect(landing).toContain('id="getting-started"');
+    expect(landing).toContain('id="faq"');
+    expect(landing).toContain("<summary>");
+    expect(landing).not.toContain("copy.proof");
     expect(landing).toContain("integrationConsole");
-    expect(styles).toContain("aspect-ratio: 16 / 9");
+    expect(styles).toContain("container-type: inline-size");
     expect(styles).not.toContain(".flowLines");
     expect(styles).not.toContain(".integrationNode");
   });

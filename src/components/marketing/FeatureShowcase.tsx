@@ -1,34 +1,34 @@
 "use client";
 
-import { marketingCaptures } from "@/content/marketing/assets";
-
-import Image from "next/image";
 import { useRef, useState } from "react";
 
 import type { MarketingCopy, MarketingFeatureId } from "@/content/marketing";
 
 import styles from "./marketing.module.css";
+import { MarketingPreview } from "./MarketingPreview";
+import type { MarketingPreviewData } from "@/content/marketing/preview";
 
-const featureImages = [
-  { id: "cashier", image: marketingCaptures.posDesktop },
-  { id: "inventory", image: marketingCaptures.movements },
-  { id: "products", image: marketingCaptures.products },
-  { id: "customers", image: marketingCaptures.dashboard },
-  { id: "commerce", image: marketingCaptures.integrations },
-  { id: "analytics", image: marketingCaptures.dashboard },
-] as const;
+const featureIds: MarketingFeatureId[] = [
+  "cashier",
+  "inventory",
+  "products",
+  "customers",
+  "commerce",
+  "analytics",
+];
 
 export const FeatureShowcase = ({
   featureCopy,
+  previewCopy,
+  previewData,
   label,
 }: {
   featureCopy: MarketingCopy["features"];
+  previewCopy: MarketingCopy["preview"];
+  previewData: MarketingPreviewData;
   label: string;
 }) => {
-  const features = featureImages.map((feature) => ({
-    ...feature,
-    ...featureCopy[feature.id],
-  }));
+  const features = featureIds.map((id) => ({ id, ...featureCopy[id] }));
   const [activeId, setActiveId] = useState<MarketingFeatureId>("cashier");
   const buttonRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const active = features.find((feature) => feature.id === activeId) ?? features[0];
@@ -93,19 +93,7 @@ export const FeatureShowcase = ({
           </ul>
         </div>
         <div className={styles.featureImage} key={`${active.id}-image`}>
-          <div className={styles.windowBar} aria-hidden="true">
-            <span />
-            <span />
-            <span />
-            <p>app.bazaar.kg</p>
-          </div>
-          <Image
-            src={active.image}
-            alt={active.alt}
-            width={1920}
-            height={1080}
-            sizes="(max-width: 767px) 92vw, (max-width: 1199px) 62vw, 820px"
-          />
+          <MarketingPreview view={active.id} copy={previewCopy} data={previewData} />
         </div>
       </div>
     </div>

@@ -8,6 +8,7 @@ import ru from "../../messages/ru.json";
 import kg from "../../messages/kg.json";
 import en from "../../messages/en.json";
 import { getMarketingCopy } from "@/content/marketing";
+import { getMarketingPreviewData } from "@/content/marketing/preview";
 import { getPlanCatalogEntries } from "@/server/billing/planCatalog";
 
 const state = vi.hoisted(() => ({
@@ -142,7 +143,14 @@ describe("marketing feature tabs", () => {
     "supports arrows, wrap, Home/End and valid panel references in %s",
     (locale) => {
       const copy = getMarketingCopy(locale);
-      render(<FeatureShowcase featureCopy={copy.features} label={copy.platform.tabs} />);
+      render(
+        <FeatureShowcase
+          featureCopy={copy.features}
+          previewCopy={copy.preview}
+          previewData={getMarketingPreviewData(locale)}
+          label={copy.platform.tabs}
+        />,
+      );
       const tabs = screen.getAllByRole("tab");
       const active = () => tabs.find((tab) => tab.getAttribute("aria-selected") === "true")!;
       fireEvent.keyDown(tabs[0], { key: "ArrowLeft" });
@@ -164,6 +172,32 @@ describe("marketing feature tabs", () => {
       expect(screen.getByRole("tabpanel").getAttribute("aria-labelledby")).toBe(tabs[2].id);
     },
   );
+});
+
+describe("marketing preview hydration", () => {
+  it("preserves server-formatted Kyrgyz amounts when the browser cannot format that locale", () => {
+    const copy = getMarketingCopy("kg");
+    const previewData = getMarketingPreviewData("kg");
+    const browserFormatter = vi.spyOn(Intl, "NumberFormat").mockImplementation(() => {
+      throw new Error("Browser ICU does not support the server locale");
+    });
+    try {
+      render(
+        <FeatureShowcase
+          featureCopy={copy.features}
+          previewCopy={copy.preview}
+          previewData={previewData}
+          label={copy.platform.tabs}
+        />,
+      );
+      fireEvent.click(screen.getAllByRole("tab").at(-1)!);
+      expect(screen.getByRole("tabpanel").textContent).toContain(previewData.revenue);
+      expect(screen.getByRole("tabpanel").textContent).toContain(previewData.average);
+      expect(browserFormatter).not.toHaveBeenCalled();
+    } finally {
+      browserFormatter.mockRestore();
+    }
+  });
 });
 
 describe("marketing mobile menu", () => {
